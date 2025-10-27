@@ -37,14 +37,15 @@ extern const int SYNTAX_ERROR;
 namespace DB::FailPoints
 {
 extern const char sync_schema_request_failure[];
+extern const char force_return_store_status[];
 } // namespace DB::FailPoints
 
 namespace DB::tests
 {
-class SyncSchemaTest : public ::testing::Test
+class StatusServerTest : public ::testing::Test
 {
 public:
-    SyncSchemaTest() = default;
+    StatusServerTest() = default;
     static void SetUpTestCase()
     {
         try
@@ -78,7 +79,7 @@ public:
     }
 };
 
-TEST_F(SyncSchemaTest, TestNormal)
+TEST_F(StatusServerTest, TestNormal)
 try
 {
     auto ctx = TiFlashTestEnv::getContext();
@@ -162,6 +163,54 @@ try
     }
 
     dropDataBase("db_1");
+}
+CATCH
+
+TEST_F(StatusServerTest, TestReadyz)
+try
+{
+    auto ctx = TiFlashTestEnv::getContext();
+
+    EngineStoreServerWrap store_server_wrap{};
+    store_server_wrap.tmt = &ctx->getTMTContext();
+    auto helper = GetEngineStoreServerHelper(&store_server_wrap);
+
+    {
+        FailPointHelper::enableFailPoint(FailPoints::force_return_store_status, TMTContext::StoreStatus::Running);
+        SCOPE_EXIT(FailPointHelper::disableFailPoint(FailPoints::force_return_store_status));
+        // is ready for serving
+        String path = "/tiflash/readyz";
+        String query = "verbose";
+        auto res = helper.fn_handle_http_request(
+            &store_server_wrap,
+            BaseBuffView{path.data(), path.length()},
+            BaseBuffView{query.data(), query.length()},
+            BaseBuffView{"", 0});
+        EXPECT_EQ(res.status, HttpRequestStatus::Ok) << magic_enum::enum_name(res.status);
+        // normal response body is non-nil.
+        EXPECT_NE(res.res.view.len, 0);
+        // normal response contains store_status ok info
+        EXPECT_NE(std::string_view(res.res.view.data).find("[+]store_status ok"), std::string_view::npos);
+        delete (static_cast<RawCppString *>(res.res.inner.ptr));
+    }
+
+    {
+        FailPointHelper::enableFailPoint(FailPoints::force_return_store_status, TMTContext::StoreStatus::Ready);
+        SCOPE_EXIT(FailPointHelper::disableFailPoint(FailPoints::force_return_store_status));
+        String path = "/tiflash/readyz";
+        String query = "verbose";
+        auto res = helper.fn_handle_http_request(
+            &store_server_wrap,
+            BaseBuffView{path.data(), path.length()},
+            BaseBuffView{query.data(), query.length()},
+            BaseBuffView{"", 0});
+        EXPECT_EQ(res.status, HttpRequestStatus::InternalError) << magic_enum::enum_name(res.status);
+        // normal response body is non-nil.
+        EXPECT_NE(res.res.view.len, 0);
+        // error response contains store_status fail info
+        EXPECT_NE(std::string_view(res.res.view.data).find("[-]store_status fail:"), std::string_view::npos);
+        delete (static_cast<RawCppString *>(res.res.inner.ptr));
+    }
 }
 CATCH
 
