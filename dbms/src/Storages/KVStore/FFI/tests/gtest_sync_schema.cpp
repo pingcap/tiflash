@@ -53,7 +53,7 @@ public:
         }
         catch (DB::Exception &)
         {
-            // Maybe another test has already registed, ignore exception here.
+            // Maybe another test has already register, ignore exception here.
         }
     }
     void SetUp() override { recreateMetadataPath(); }
@@ -134,7 +134,7 @@ try
             BaseBuffView{path.data(), path.length()},
             BaseBuffView{path.data(), path.length()},
             BaseBuffView{"", 0});
-        EXPECT_EQ(res_err.status, HttpRequestStatus::ErrorParam);
+        EXPECT_EQ(res_err.status, HttpRequestStatus::BadRequest);
         StringRef sr(res_err.res.view.data, res_err.res.view.len);
         {
             EXPECT_EQ(sr.toString(), "{\"errMsg\":\"sync schema failed\"}");
@@ -151,7 +151,7 @@ try
             BaseBuffView{path.data(), path.length()},
             BaseBuffView{path.data(), path.length()},
             BaseBuffView{"", 0});
-        EXPECT_EQ(res_err1.status, HttpRequestStatus::ErrorParam);
+        EXPECT_EQ(res_err1.status, HttpRequestStatus::BadRequest);
         StringRef sr(res_err1.res.view.data, res_err1.res.view.len);
         {
             EXPECT_EQ(
