@@ -203,7 +203,7 @@ HttpRequestRes HandleHttpRequestReadyz(
     bool is_ready = true;
     std::string response_lines;
 
-    // Check whether store_status == "running", 
+    // Check whether store_status == "running",
     auto store_status = server->tmt->getStoreStatus(std::memory_order_relaxed);
     switch (store_status)
     {
