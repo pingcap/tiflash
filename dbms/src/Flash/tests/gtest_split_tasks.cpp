@@ -75,7 +75,7 @@ try
            "    Expression: <before TopN>\n"
            "     Filter\n"
            "      Expression: <expr after aggregation>\n"
-           "       Aggregating\n"
+           "       Aggregating, enable_two_level_hashtable: false\n"
            "        MockExchangeReceiver"};
     for (size_t i = 0; i < task_size; ++i)
     {
