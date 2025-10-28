@@ -64,7 +64,7 @@ try
         = {"MockExchangeSender\n"
            " Expression: <final projection>\n"
            "  Expression: <expr after aggregation>\n"
-           "   Aggregating\n"
+           "   Aggregating, enable_two_level_hashtable: false\n"
            "    Expression: <before aggregation>\n"
            "     Filter\n"
            "      MockTableScan",
