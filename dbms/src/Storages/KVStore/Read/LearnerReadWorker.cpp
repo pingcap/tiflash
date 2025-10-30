@@ -21,6 +21,7 @@
 #include <Storages/KVStore/Types.h>
 #include <Storages/RegionQueryInfo.h>
 #include <common/likely.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -37,8 +38,23 @@ void UnavailableRegions::tryThrowRegionException()
     if (!batch_cop && !region_locks.empty())
         throw LockException(std::move(region_locks));
 
-    if (!ids.empty())
+    if (!unavailable_ids.empty())
+    {
+        RegionException::UnavailableRegions ids;
+        RegionException::RegionReadStatus status = RegionException::RegionReadStatus::NOT_FOUND;
+        String extra_msg;
+        for (auto iter = unavailable_ids.begin(); iter != unavailable_ids.end(); ++iter)
+        {
+            const auto & [region_id, desc] = *iter;
+            ids.emplace(region_id);
+            if (iter == unavailable_ids.begin())
+            {
+                status = desc.s;
+                extra_msg = desc.extra_msg;
+            }
+        }
         throw RegionException(std::move(ids), status, extra_msg.c_str());
+    }
 }
 
 void UnavailableRegions::addRegionWaitIndexTimeout(
@@ -48,7 +64,7 @@ void UnavailableRegions::addRegionWaitIndexTimeout(
 {
     if (!batch_cop)
     {
-        // If server is being terminated / time-out, add the region_id into `unavailable_regions` to other store.
+        // If server is being terminated or wait-index time-out, add the region_id into `unavailable_regions` to other store.
         addStatus(region_id, RegionException::RegionReadStatus::NOT_FOUND, "");
         return;
     }
@@ -62,6 +78,47 @@ void UnavailableRegions::addRegionWaitIndexTimeout(
         region_id,
         index_to_wait,
         current_applied_index);
+}
+
+String UnavailableRegions::toDebugString(size_t num_show) const
+{
+    FmtBuffer buffer;
+    buffer.append("{ids=[");
+    {
+        auto beg_it = unavailable_ids.begin();
+        auto end_it = beg_it;
+        if (num_show == 0) // show all
+            end_it = unavailable_ids.end();
+        else
+            end_it = std::next(beg_it, std::min(num_show, unavailable_ids.size()));
+        buffer.joinStr(
+            beg_it,
+            end_it,
+            [](const auto & v, FmtBuffer & f) {
+                f.fmtAppend(
+                    "{{region_id:{},s:{},msg:{}}}",
+                    v.first,
+                    magic_enum::enum_name(v.second.s),
+                    v.second.extra_msg);
+            },
+            "|");
+    }
+    buffer.append("] locks=[");
+    {
+        auto beg_it = region_locks.begin();
+        auto end_it = beg_it;
+        if (num_show == 0) // show all
+            end_it = region_locks.end();
+        else
+            end_it = std::next(beg_it, std::min(num_show, region_locks.size()));
+        buffer.joinStr(
+            region_locks.begin(),
+            region_locks.end(),
+            [](const auto & v, FmtBuffer & f) { f.fmtAppend("{}({})", v.first, v.second->DebugString()); },
+            "|");
+    }
+    buffer.append("]}");
+    return buffer.toString();
 }
 
 LearnerReadWorker::LearnerReadWorker(
@@ -93,15 +150,16 @@ LearnerReadSnapshot LearnerReadWorker::buildRegionsSnapshot()
             LOG_WARNING(log, "region not found in KVStore, region_id={}", info.region_id);
             throw RegionException({info.region_id}, RegionException::RegionReadStatus::NOT_FOUND, nullptr);
         }
-        regions_snapshot.emplace(info.region_id, std::move(region));
+        auto ins_res = regions_snapshot.emplace(info.region_id, RegionLearnerReadSnapshot{std::move(region)});
+        // make sure regions are not duplicated.
+        if (unlikely(!ins_res.second))
+            throw TiFlashException(
+                Errors::Coprocessor::BadRequest,
+                "Duplicate region_id, region_id={} n_request={} tracing_id={}",
+                info.region_id,
+                regions_info.size(),
+                log->identifier());
     }
-    // make sure regions are not duplicated.
-    if (unlikely(regions_snapshot.size() != regions_info.size()))
-        throw TiFlashException(
-            Errors::Coprocessor::BadRequest,
-            "Duplicate region id, n_request={} n_actual={}",
-            regions_info.size(),
-            regions_snapshot.size());
     return regions_snapshot;
 }
 
@@ -176,6 +234,7 @@ void LearnerReadWorker::doBatchReadIndex(
     };
     kvstore->addReadIndexEvent(1);
     SCOPE_EXIT({ kvstore->addReadIndexEvent(-1); });
+    // tiflash is just up or is shutting down, not ready for serving
     if (!tmt.checkRunning())
     {
         make_default_batch_read_index_result(true);
@@ -198,6 +257,7 @@ void LearnerReadWorker::doBatchReadIndex(
     }
 }
 
+// Update `unavailable_regions` according to `read_index_result`.
 void LearnerReadWorker::recordReadIndexError(
     const LearnerReadSnapshot & regions_snapshot,
     RegionsReadIndexResult & read_index_result)
@@ -206,7 +266,7 @@ void LearnerReadWorker::recordReadIndexError(
     for (auto & [region_id, resp] : read_index_result)
     {
         std::string extra_msg;
-        if (resp.has_region_error())
+        if (resp.has_region_error()) // proto id = 5
         {
             const auto & region_error = resp.region_error();
             auto region_status = RegionException::RegionReadStatus::OTHER;
@@ -228,69 +288,91 @@ void LearnerReadWorker::recordReadIndexError(
                     extra_msg = fmt::format("read_index_resp error, region_id={} not found in snapshot", region_id);
                 }
                 GET_METRIC(tiflash_raft_learner_read_failures_count, type_epoch_not_match).Increment();
+                LOG_WARNING(
+                    log,
+                    "meet epoch not match region error {}, region_id={}",
+                    resp.ShortDebugString(),
+                    region_id);
                 region_status = RegionException::RegionReadStatus::EPOCH_NOT_MATCH;
             }
-            else if (region_error.has_not_leader())
+            else if (region_error.has_not_leader()) // proto id = 2
             {
                 GET_METRIC(tiflash_raft_learner_read_failures_count, type_not_leader).Increment();
+                LOG_WARNING(log, "meet not leader region error {}, region_id={}", resp.ShortDebugString(), region_id);
                 region_status = RegionException::RegionReadStatus::NOT_LEADER;
             }
-            else if (region_error.has_region_not_found())
+            else if (region_error.has_region_not_found()) // proto id = 3
             {
                 // 1. From TiKV
                 // 2. Can't send read index request
-                // 3. Read index timeout
+                // 3. Read index timeout in `ReadIndexWorkerManager::batchReadIndex`
                 GET_METRIC(tiflash_raft_learner_read_failures_count, type_not_found_tikv).Increment();
+                LOG_WARNING(log, "meet region not found error {}, region_id={}", resp.ShortDebugString(), region_id);
                 region_status = RegionException::RegionReadStatus::NOT_FOUND_TIKV;
             }
             // Below errors seldomly happens in raftstore-v1, however, we are not sure if they will happen in v2.
-            else if (region_error.has_flashbackinprogress() || region_error.has_flashbacknotprepared())
-            {
-                GET_METRIC(tiflash_raft_learner_read_failures_count, type_flashback).Increment();
-                region_status = RegionException::RegionReadStatus::FLASHBACK;
-            }
-            else if (region_error.has_bucket_version_not_match())
-            {
-                GET_METRIC(tiflash_raft_learner_read_failures_count, type_bucket_epoch_not_match).Increment();
-                LOG_DEBUG(
-                    log,
-                    "meet abnormal region error {}, [region_id={}]",
-                    resp.region_error().DebugString(),
-                    region_id);
-                region_status = RegionException::RegionReadStatus::BUCKET_EPOCH_NOT_MATCH;
-            }
-            else if (region_error.has_key_not_in_region())
+            else if (region_error.has_key_not_in_region()) // proto id = 4
             {
                 GET_METRIC(tiflash_raft_learner_read_failures_count, type_key_not_in_region).Increment();
-                LOG_DEBUG(
-                    log,
-                    "meet abnormal region error {}, [region_id={}]",
-                    resp.region_error().DebugString(),
-                    region_id);
+                LOG_WARNING(log, "meet abnormal region error {}, region_id={}", resp.ShortDebugString(), region_id);
                 region_status = RegionException::RegionReadStatus::KEY_NOT_IN_REGION;
             }
-            else if (region_error.has_server_is_busy())
+            else if (region_error.has_server_is_busy()) // proto id = 6
             {
-                // 1. From TiKV
+                // 1. From TiKV/TiFlash-Proxy
                 // 2. Read index request timeout
-                GET_METRIC(tiflash_raft_learner_read_failures_count, type_read_index_timeout).Increment();
-                LOG_DEBUG(log, "meet abnormal region error {}, [region_id={}]", resp.ShortDebugString(), region_id);
+                GET_METRIC(tiflash_raft_learner_read_failures_count, type_server_is_busy).Increment();
+                LOG_WARNING(log, "meet abnormal region error {}, region_id={}", resp.ShortDebugString(), region_id);
                 region_status = RegionException::RegionReadStatus::READ_INDEX_TIMEOUT;
             }
+            else if (region_error.has_stale_command()) // proto id = 7
+            {
+                GET_METRIC(tiflash_raft_learner_read_failures_count, type_stale_command).Increment();
+                LOG_WARNING(log, "meet abnormal region error {}, region_id={}", resp.ShortDebugString(), region_id);
+                region_status = RegionException::RegionReadStatus::STALE_COMMAND;
+            }
+            else if (region_error.has_store_not_match()) // proto id = 8
+            {
+                GET_METRIC(tiflash_raft_learner_read_failures_count, type_store_not_match).Increment();
+                LOG_WARNING(log, "meet abnormal region error {}, region_id={}", resp.ShortDebugString(), region_id);
+                region_status = RegionException::RegionReadStatus::STORE_NOT_MATCH;
+            }
             else if (
-                region_error.has_raft_entry_too_large() || region_error.has_region_not_initialized()
-                || region_error.has_disk_full() || region_error.has_read_index_not_ready()
-                || region_error.has_proposal_in_merging_mode())
+                region_error.has_raft_entry_too_large() // proto id = 9
+                || region_error.has_max_timestamp_not_synced() // proto id = 10
+                || region_error.has_read_index_not_ready() // proto id = 11
+                || region_error.has_proposal_in_merging_mode() // proto id = 12
+                || region_error.has_data_is_not_ready() // proto id = 13
+                || region_error.has_region_not_initialized() // proto id = 14
+                || region_error.has_disk_full() // proto id = 15
+                || region_error.has_recoveryinprogress() // proto id = 16
+                || region_error.has_is_witness() // proto id = 19
+                || region_error.has_mismatch_peer_id() // proto id = 20
+            )
             {
                 GET_METRIC(tiflash_raft_learner_read_failures_count, type_tikv_server_issue).Increment();
-                LOG_DEBUG(log, "meet abnormal region error {}, [region_id={}]", resp.ShortDebugString(), region_id);
+                LOG_WARNING(log, "meet abnormal region error {}, region_id={}", resp.ShortDebugString(), region_id);
                 region_status = RegionException::RegionReadStatus::TIKV_SERVER_ISSUE;
+            }
+            else if (
+                region_error.has_flashbackinprogress() || region_error.has_flashbacknotprepared()) // proto id = 17/18
+            {
+                GET_METRIC(tiflash_raft_learner_read_failures_count, type_flashback).Increment();
+                LOG_WARNING(log, "meet flashback region error {}, region_id={}", resp.ShortDebugString(), region_id);
+                region_status = RegionException::RegionReadStatus::FLASHBACK;
+            }
+            else if (region_error.has_bucket_version_not_match()) // proto id = 21
+            {
+                GET_METRIC(tiflash_raft_learner_read_failures_count, type_bucket_epoch_not_match).Increment();
+                LOG_WARNING(log, "meet abnormal region error {}, region_id={}", resp.ShortDebugString(), region_id);
+                region_status = RegionException::RegionReadStatus::BUCKET_EPOCH_NOT_MATCH;
             }
             else
             {
                 GET_METRIC(tiflash_raft_learner_read_failures_count, type_other).Increment();
-                LOG_DEBUG(log, "meet abnormal region error {}, [region_id={}]", resp.ShortDebugString(), region_id);
+                LOG_WARNING(log, "meet abnormal region error {}, region_id={}", resp.ShortDebugString(), region_id);
             }
+            // set `region_status`, `extra_msg` and mark the region_id as unavailable.
             unavailable_regions.addStatus(region_id, region_status, std::move(extra_msg));
         }
         else if (resp.has_locked())
@@ -338,14 +420,15 @@ RegionsReadIndexResult LearnerReadWorker::readIndex(
         log,
         log_lvl,
         "[Learner Read] Batch read index, num_regions={} num_requests={} num_stale_read={} num_cached_index={} "
-        "num_unavailable={} cost={}ms, start_ts={}",
+        "n_unavailable={} read_cost={}ms start_ts={} unavailable_regions={}",
         stats.num_regions,
         stats.num_read_index_request,
         stats.num_stale_read,
         stats.num_cached_read_index,
         unavailable_regions.size(),
         stats.read_index_elapsed_ms,
-        mvcc_query_info.start_ts);
+        mvcc_query_info.start_ts,
+        unavailable_regions.toDebugString(5));
 
     return batch_read_index_result;
 }
@@ -443,11 +526,14 @@ void LearnerReadWorker::waitIndex(
     LOG_IMPL(
         log,
         log_lvl,
-        "[Learner Read] Finish wait index and resolve locks, wait_cost={}ms n_regions={} n_unavailable={}, start_ts={}",
+        "[Learner Read] Finish wait index and resolve locks, wait_cost={}ms n_regions={} n_unavailable={} start_ts={} "
+        "unavailable_regions={}",
         stats.wait_index_elapsed_ms,
         stats.num_regions,
         unavailable_regions.size(),
-        mvcc_query_info.start_ts);
+        mvcc_query_info.start_ts,
+        unavailable_regions.toDebugString(5) // show first 5 details
+    );
 
     auto bypass_formatter = [](const RegionQueryInfo & query_info) -> String {
         if (query_info.bypass_lock_ts == nullptr)
@@ -483,9 +569,9 @@ void LearnerReadWorker::waitIndex(
 
     LOG_DEBUG(
         log,
-        "[Learner Read] Learner Read Summary, regions_info={}, unavailable_regions_info={}, start_ts={}",
+        "[Learner Read] Learner Read Summary, regions_info={} unavailable_regions={} start_ts={}",
         region_info_formatter(),
-        unavailable_regions.toDebugString(),
+        unavailable_regions.toDebugString(0), // show all
         mvcc_query_info.start_ts);
 }
 
@@ -525,7 +611,7 @@ LearnerReadWorker::waitUntilDataAvailable(
         log,
         log_lvl,
         "[Learner Read] batch read index | wait index"
-        " total_cost={} read_cost={} wait_cost={} n_regions={} n_stale_read={} n_unavailable={}, start_ts={}",
+        " total_cost={} read_cost={} wait_cost={} n_regions={} n_stale_read={} n_unavailable={} start_ts={}",
         time_elapsed_ms,
         stats.read_index_elapsed_ms,
         stats.wait_index_elapsed_ms,
