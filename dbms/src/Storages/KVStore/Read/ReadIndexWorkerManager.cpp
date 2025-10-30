@@ -246,16 +246,16 @@ BatchReadIndexRes ReadIndexWorkerManager::batchReadIndex(
             }
             else
             {
-                // Possible meet the tikv known issue: https://github.com/tikv/tikv/issues/18417#issuecomment-3018069916
-                // If read index request is sent to a region leader, then transfer leader to another peer before read index is applied,
-                // the read index request may never be responded. So here we just log a warning and generate a "region not found" error response for upper layer to retry.
-                LOG_WARNING(log, "read index timeout, region_id={} timeout={}", it.first, timeout_ms);
+                // The read index request might be dropped by a leader/candidate/follower.
+                // The learner will retry the read index request internally in raftstore.
+                // See https://github.com/tikv/tikv/pull/19071. The default retry interval is 4s at the time of writing.
+                // Reaching this point means the request still timed out after retries.
                 GET_METRIC(tiflash_raft_learner_read_failures_count, type_read_index_timeout).Increment();
                 // Generate a "region not found" error response for the region that still has no response after timeout
                 kvrpcpb::ReadIndexResponse tmp;
                 auto * e = tmp.mutable_region_error();
                 e->mutable_region_not_found()->set_region_id(it.first);
-                e->set_message("tiflash read index timeout");
+                e->set_message("tiflash read index timeout(" + std::to_string(timeout_ms) + "ms)");
                 resps.emplace_back(std::move(tmp), it.first);
             }
             tasks.pop();
