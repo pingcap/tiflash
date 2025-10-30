@@ -216,7 +216,7 @@ try
         /*expected_streams=*/R"(
 Expression: <final projection>
  Expression: <expr after aggregation>
-  Aggregating
+  Aggregating, enable_two_level_hashtable: false
    MockExchangeReceiver)",
         {toNullableVec<String>({{}, "banana"}), toNullableVec<String>({{}, "banana"})});
 }
