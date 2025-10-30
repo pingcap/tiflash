@@ -73,12 +73,14 @@ TEST_P(DeltaMergeStoreRWTest, TestFastScanWithOnlyInsertWithoutRangeFilter)
 
     {
         // read all columns from store with all range in fast mode
+        auto read_queue = std::make_shared<ActiveSegmentReadTaskQueue>(2, Logger::get());
         const auto & columns = store->getTableColumns();
         BlockInputStreamPtr in = store->read(
             *db_context,
             db_context->getSettingsRef(),
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            read_queue,
             /* num_streams= */ 1,
             /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
@@ -89,6 +91,7 @@ TEST_P(DeltaMergeStoreRWTest, TestFastScanWithOnlyInsertWithoutRangeFilter)
                 .is_fast_scan = true,
             },
             /* expected_block_size= */ 1024)[0];
+        read_queue->finishQueueIfEmpty();
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_str_define.name, col_i8_define.name}),
@@ -161,11 +164,13 @@ TEST_P(DeltaMergeStoreRWTest, TestFastScanWithOnlyInsertWithRangeFilter)
             RowKeyValue(false, std::make_shared<String>(end_key_ss.releaseStr()), /*int_val_*/ read_nums_limit),
             false,
             store->getRowKeyColumnSize())};
+        auto read_queue = std::make_shared<ActiveSegmentReadTaskQueue>(2, Logger::get());
         BlockInputStreamPtr in = store->read(
             *db_context,
             db_context->getSettingsRef(),
             columns,
             key_ranges,
+            read_queue,
             /* num_streams= */ 1,
             /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
@@ -176,6 +181,7 @@ TEST_P(DeltaMergeStoreRWTest, TestFastScanWithOnlyInsertWithRangeFilter)
                 .is_fast_scan = true,
             },
             /* expected_block_size= */ 1024)[0];
+        read_queue->finishQueueIfEmpty();
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_str_define.name, col_i8_define.name}),
@@ -241,12 +247,14 @@ try
     }
 
     {
+        auto read_queue = std::make_shared<ActiveSegmentReadTaskQueue>(2, Logger::get());
         const auto & columns = store->getTableColumns();
         BlockInputStreamPtr in = store->read(
             *db_context,
             db_context->getSettingsRef(),
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            read_queue,
             /* num_streams= */ 1,
             /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
@@ -257,6 +265,7 @@ try
                 .is_fast_scan = true,
             },
             /* expected_block_size= */ 1024)[0];
+        read_queue->finishQueueIfEmpty();
         switch (mode)
         {
         case TestMode::PageStorageV2_MemoryOnly:
@@ -376,12 +385,14 @@ try
     }
 
     {
+        auto read_queue = std::make_shared<ActiveSegmentReadTaskQueue>(2, Logger::get());
         const auto & columns = store->getTableColumns();
         BlockInputStreamPtr in = store->read(
             *db_context,
             db_context->getSettingsRef(),
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            read_queue,
             /* num_streams= */ 1,
             /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
@@ -392,6 +403,7 @@ try
                 .is_fast_scan = true,
             },
             /* expected_block_size= */ 1024)[0];
+        read_queue->finishQueueIfEmpty();
         switch (mode)
         {
         case TestMode::PageStorageV2_MemoryOnly:
@@ -490,12 +502,14 @@ try
     store->compact(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
 
     {
+        auto read_queue = std::make_shared<ActiveSegmentReadTaskQueue>(2, Logger::get());
         const auto & columns = store->getTableColumns();
         BlockInputStreamPtr in = store->read(
             *db_context,
             db_context->getSettingsRef(),
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            read_queue,
             /* num_streams= */ 1,
             /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
@@ -506,6 +520,7 @@ try
                 .is_fast_scan = true,
             },
             /* expected_block_size= */ 1024)[0];
+        read_queue->finishQueueIfEmpty();
         switch (mode)
         {
         case TestMode::PageStorageV2_MemoryOnly:
@@ -607,12 +622,14 @@ try
     store->mergeDeltaAll(*db_context);
 
     {
+        auto read_queue = std::make_shared<ActiveSegmentReadTaskQueue>(2, Logger::get());
         const auto & columns = store->getTableColumns();
         BlockInputStreamPtr in = store->read(
             *db_context,
             db_context->getSettingsRef(),
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            read_queue,
             /* num_streams= */ 1,
             /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
@@ -623,6 +640,7 @@ try
                 .is_fast_scan = true,
             },
             /* expected_block_size= */ 1024)[0];
+        read_queue->finishQueueIfEmpty();
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
@@ -692,12 +710,14 @@ try
     store->compact(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
 
     {
+        auto read_queue = std::make_shared<ActiveSegmentReadTaskQueue>(2, Logger::get());
         const auto & columns = store->getTableColumns();
         BlockInputStreamPtr in = store->read(
             *db_context,
             db_context->getSettingsRef(),
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            read_queue,
             /* num_streams= */ 1,
             /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
@@ -708,6 +728,7 @@ try
                 .is_fast_scan = true,
             },
             /* expected_block_size= */ 1024)[0];
+        read_queue->finishQueueIfEmpty();
 
         switch (mode)
         {
@@ -864,12 +885,14 @@ try
 
     // Read after deletion
     {
+        auto read_queue = std::make_shared<ActiveSegmentReadTaskQueue>(2, Logger::get());
         const auto & columns = store->getTableColumns();
         BlockInputStreamPtr in = store->read(
             *db_context,
             db_context->getSettingsRef(),
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            read_queue,
             /* num_streams= */ 1,
             /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
@@ -880,6 +903,7 @@ try
                 .is_fast_scan = true,
             },
             /* expected_block_size= */ 1024)[0];
+        read_queue->finishQueueIfEmpty();
         // filter del mark = 1， thus just read the insert data before delete
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -894,12 +918,14 @@ try
     store->mergeDeltaAll(*db_context);
 
     {
+        auto read_queue = std::make_shared<ActiveSegmentReadTaskQueue>(2, Logger::get());
         const auto & columns = store->getTableColumns();
         BlockInputStreamPtr in = store->read(
             *db_context,
             db_context->getSettingsRef(),
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            read_queue,
             /* num_streams= */ 1,
             /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
@@ -910,6 +936,7 @@ try
                 .is_fast_scan = true,
             },
             /* expected_block_size= */ 1024)[0];
+        read_queue->finishQueueIfEmpty();
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
@@ -943,12 +970,14 @@ try
     }
     // Test Reading first
     {
+        auto read_queue = std::make_shared<ActiveSegmentReadTaskQueue>(2, Logger::get());
         const auto & columns = store->getTableColumns();
         BlockInputStreamPtr in = store->read(
             *db_context,
             db_context->getSettingsRef(),
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            read_queue,
             /* num_streams= */ 1,
             /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
@@ -959,6 +988,7 @@ try
                 .is_fast_scan = true,
             },
             /* expected_block_size= */ 1024)[0];
+        read_queue->finishQueueIfEmpty();
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
@@ -972,12 +1002,14 @@ try
     }
     // Read after deletion
     {
+        auto read_queue = std::make_shared<ActiveSegmentReadTaskQueue>(2, Logger::get());
         const auto & columns = store->getTableColumns();
         BlockInputStreamPtr in = store->read(
             *db_context,
             db_context->getSettingsRef(),
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            read_queue,
             /* num_streams= */ 1,
             /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
@@ -988,6 +1020,7 @@ try
                 .is_fast_scan = true,
             },
             /* expected_block_size= */ 1024)[0];
+        read_queue->finishQueueIfEmpty();
         // filter del mark = 1， thus just read the insert data before delete
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -1035,12 +1068,14 @@ try
 
     // Read after merge delta
     {
+        auto read_queue = std::make_shared<ActiveSegmentReadTaskQueue>(2, Logger::get());
         const auto & columns = store->getTableColumns();
         BlockInputStreamPtr in = store->read(
             *db_context,
             db_context->getSettingsRef(),
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            read_queue,
             /* num_streams= */ 1,
             /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
@@ -1051,6 +1086,7 @@ try
                 .is_fast_scan = true,
             },
             /* expected_block_size= */ 1024)[0];
+        read_queue->finishQueueIfEmpty();
         auto pk_coldata = createNumbers<Int64>(num_deleted_rows, num_rows_write);
         ASSERT_EQ(pk_coldata.size(), num_rows_write - num_deleted_rows);
         ASSERT_INPUTSTREAM_COLS_UR(in, Strings({DMTestEnv::pk_name}), createColumns({createColumn<Int64>(pk_coldata)}));
@@ -1123,12 +1159,14 @@ try
 
     // Read in fast mode
     {
+        auto read_queue = std::make_shared<ActiveSegmentReadTaskQueue>(2, Logger::get());
         const auto & columns = store->getTableColumns();
         BlockInputStreamPtr in = store->read(
             *db_context,
             db_context->getSettingsRef(),
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            read_queue,
             /* num_streams= */ 1,
             /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
@@ -1139,6 +1177,7 @@ try
                 .is_fast_scan = true,
             },
             /* expected_block_size= */ 1024)[0];
+        read_queue->finishQueueIfEmpty();
 
         switch (mode)
         {
@@ -1218,12 +1257,14 @@ try
 
     // Read with version in normal case
     {
+        auto read_queue = std::make_shared<ActiveSegmentReadTaskQueue>(2, Logger::get());
         const auto & columns = store->getTableColumns();
         BlockInputStreamPtr in = store->read(
             *db_context,
             db_context->getSettingsRef(),
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            read_queue,
             /* num_streams= */ 1,
             /* start_ts= */ static_cast<UInt64>(1),
             EMPTY_FILTER,
@@ -1235,6 +1276,7 @@ try
                 .is_fast_scan = false,
             },
             /* expected_block_size= */ 1024)[0];
+        read_queue->finishQueueIfEmpty();
         // Data is not guaranteed to be returned in order.
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
@@ -1276,12 +1318,14 @@ try
 
     // could do clean read with no optimization
     {
+        auto read_queue = std::make_shared<ActiveSegmentReadTaskQueue>(2, Logger::get());
         const auto & columns = store->getTableColumns();
         BlockInputStreamPtr in = store->read(
             *db_context,
             db_context->getSettingsRef(),
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            read_queue,
             /* num_streams= */ 1,
             /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
@@ -1292,6 +1336,7 @@ try
                 .is_fast_scan = true,
             },
             /* expected_block_size= */ 1024)[0];
+        read_queue->finishQueueIfEmpty();
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
@@ -1325,11 +1370,13 @@ try
             }
         }
 
+        auto read_queue = std::make_shared<ActiveSegmentReadTaskQueue>(2, Logger::get());
         BlockInputStreamPtr in = store->read(
             *db_context,
             db_context->getSettingsRef(),
             real_columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            read_queue,
             /* num_streams= */ 1,
             /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
@@ -1340,6 +1387,7 @@ try
                 .is_fast_scan = true,
             },
             /* expected_block_size= */ 1024)[0];
+        read_queue->finishQueueIfEmpty();
         ASSERT_INPUTSTREAM_NROWS(in, num_rows_write - num_deleted_rows);
     }
 }
@@ -1406,12 +1454,14 @@ try
     store->mergeDeltaAll(*db_context);
 
     auto fastscan_rows = [&]() {
+        auto read_queue = std::make_shared<ActiveSegmentReadTaskQueue>(2, Logger::get());
         const auto & columns = store->getTableColumns();
         BlockInputStreamPtr in = store->read(
             *db_context,
             db_context->getSettingsRef(),
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            read_queue,
             /* num_streams= */ 1,
             /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
@@ -1422,6 +1472,7 @@ try
                 .is_fast_scan = true,
             },
             /* expected_block_size= */ 1024)[0];
+        read_queue->finishQueueIfEmpty();
         size_t rows = 0;
         in->readPrefix();
         while (true)

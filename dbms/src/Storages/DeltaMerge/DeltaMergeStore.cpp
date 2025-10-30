@@ -1024,6 +1024,7 @@ BlockInputStreams DeltaMergeStore::readRaw(
     const Context & db_context,
     const DB::Settings & db_settings,
     const ColumnDefines & columns_to_read,
+    const ActiveSegmentReadTaskQueuePtr & read_queue,
     size_t num_streams,
     bool keep_order,
     const SegmentIdSet & read_segments,
@@ -1073,6 +1074,7 @@ BlockInputStreams DeltaMergeStore::readRaw(
     if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
         req_info = db_context.getDAGContext()->getMPPTaskId().toString();
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
+        read_queue,
         extra_table_id_index,
         columns_to_read,
         EMPTY_FILTER,
@@ -1085,6 +1087,7 @@ BlockInputStreams DeltaMergeStore::readRaw(
         enable_read_thread,
         final_num_stream,
         dm_context->scan_context->keyspace_id,
+        physical_table_id,
         dm_context->scan_context->resource_group_name);
 
     BlockInputStreams res;
@@ -1128,6 +1131,7 @@ void DeltaMergeStore::readRaw(
     const Context & db_context,
     const DB::Settings & db_settings,
     const ColumnDefines & columns_to_read,
+    const ActiveSegmentReadTaskQueuePtr & read_queue,
     size_t num_streams,
     bool keep_order,
     const SegmentIdSet & read_segments,
@@ -1178,6 +1182,7 @@ void DeltaMergeStore::readRaw(
     if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
         req_info = db_context.getDAGContext()->getMPPTaskId().toString();
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
+        read_queue,
         extra_table_id_index,
         columns_to_read,
         EMPTY_FILTER,
@@ -1190,6 +1195,7 @@ void DeltaMergeStore::readRaw(
         enable_read_thread,
         final_num_stream,
         dm_context->scan_context->keyspace_id,
+        physical_table_id,
         dm_context->scan_context->resource_group_name);
 
     if (enable_read_thread)
@@ -1270,6 +1276,7 @@ BlockInputStreams DeltaMergeStore::read(
     const DB::Settings & db_settings,
     const ColumnDefines & columns_to_read,
     const RowKeyRanges & sorted_ranges,
+    const ActiveSegmentReadTaskQueuePtr & read_queue,
     size_t num_streams,
     UInt64 start_ts,
     const PushDownExecutorPtr & executor,
@@ -1310,6 +1317,7 @@ BlockInputStreams DeltaMergeStore::read(
     const auto & final_columns_to_read
         = executor && executor->extra_cast ? *executor->columns_after_cast : columns_to_read;
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
+        read_queue,
         extra_table_id_index,
         final_columns_to_read,
         executor,
@@ -1322,6 +1330,7 @@ BlockInputStreams DeltaMergeStore::read(
         enable_read_thread,
         final_num_stream,
         dm_context->scan_context->keyspace_id,
+        physical_table_id,
         dm_context->scan_context->resource_group_name);
     dm_context->scan_context->read_mode = read_mode;
 
@@ -1381,6 +1390,7 @@ void DeltaMergeStore::read(
     const DB::Settings & db_settings,
     const ColumnDefines & columns_to_read,
     const RowKeyRanges & sorted_ranges,
+    const ActiveSegmentReadTaskQueuePtr & read_queue,
     size_t num_streams,
     UInt64 start_ts,
     const PushDownExecutorPtr & executor,
@@ -1437,6 +1447,7 @@ void DeltaMergeStore::read(
     const auto & final_columns_to_read
         = executor && executor->extra_cast ? *executor->columns_after_cast : columns_to_read;
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
+        read_queue,
         extra_table_id_index,
         final_columns_to_read,
         executor,
@@ -1449,6 +1460,7 @@ void DeltaMergeStore::read(
         enable_read_thread,
         final_num_stream,
         dm_context->scan_context->keyspace_id,
+        physical_table_id,
         dm_context->scan_context->resource_group_name);
     dm_context->scan_context->read_mode = read_mode;
 

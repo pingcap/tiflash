@@ -62,7 +62,12 @@ void SegmentReadTaskScheduler::submitPendingPool(SegmentReadTaskPoolPtr pool)
     assert(pool != nullptr);
     if (pool->getPendingSegmentCount() <= 0)
     {
-        LOG_INFO(pool->getLogger(), "Ignored for no segment to read, pool_id={}", pool->pool_id);
+        LOG_INFO(
+            pool->getLogger(),
+            "Ignored for no segment to read, keyspace={} table_id={} pool_id={}",
+            pool->keyspace_id,
+            pool->table_id,
+            pool->pool_id);
         return;
     }
     Stopwatch sw;
@@ -70,7 +75,9 @@ void SegmentReadTaskScheduler::submitPendingPool(SegmentReadTaskPoolPtr pool)
     pending_pools.push_back(pool);
     LOG_INFO(
         pool->getLogger(),
-        "Submitted, pool_id={} segment_count={} pending_pools={} cost={}ns",
+        "Submitted, keyspace={} table_id={} pool_id={} segment_count={} pending_pools={} cost={}ns",
+        pool->keyspace_id,
+        pool->table_id,
         pool->pool_id,
         pool->getPendingSegmentCount(),
         pending_pools.size(),
@@ -244,7 +251,12 @@ std::tuple<UInt64, UInt64, UInt64> SegmentReadTaskScheduler::scheduleOneRound()
         // TODO: `weak_ptr` may be more suitable.
         if (pool.use_count() == 1)
         {
-            LOG_INFO(pool->getLogger(), "Erase pool_id={}", pool->pool_id);
+            LOG_INFO(
+                pool->getLogger(),
+                "Erase keyspace={} table_id={} pool_id={}",
+                pool->keyspace_id,
+                pool->table_id,
+                pool->pool_id);
             ++erased_pool_count;
             itr = read_pools.erase(itr);
             continue;

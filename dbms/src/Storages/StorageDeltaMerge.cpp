@@ -847,6 +847,7 @@ BlockInputStreams StorageDeltaMerge::read(
             context,
             context.getSettingsRef(),
             columns_to_read,
+            query_info.read_queue,
             num_streams,
             query_info.keep_order,
             parseSegmentSet(select_query.segment_expression_list),
@@ -889,6 +890,7 @@ BlockInputStreams StorageDeltaMerge::read(
         context.getSettingsRef(),
         columns_to_read,
         ranges,
+        query_info.read_queue,
         num_streams,
         /*start_ts=*/mvcc_query_info.start_ts,
         pushdown_executor,
@@ -940,6 +942,7 @@ void StorageDeltaMerge::read(
             context,
             context.getSettingsRef(),
             columns_to_read,
+            query_info.read_queue,
             num_streams,
             query_info.keep_order,
             parseSegmentSet(select_query.segment_expression_list),
@@ -985,6 +988,7 @@ void StorageDeltaMerge::read(
         context.getSettingsRef(),
         columns_to_read,
         ranges,
+        query_info.read_queue,
         num_streams,
         /*start_ts=*/mvcc_query_info.start_ts,
         pushdown_executor,
@@ -1143,7 +1147,7 @@ UInt64 StorageDeltaMerge::onSyncGc(Int64 limit, const GCOptions & gc_options)
 // just for testing
 size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM::RowKeyRange & range)
 {
-    size_t rows = 0;
+    auto read_queue = std::make_shared<ActiveSegmentReadTaskQueue>(2, Logger::get("getRows"));
 
     ColumnDefines to_read{getExtraHandleColumnDefine(store->isCommonHandle())};
     auto stream = store->read(
@@ -1151,6 +1155,7 @@ size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM
         context.getSettingsRef(),
         to_read,
         {range},
+        read_queue,
         1,
         std::numeric_limits<UInt64>::max(),
         EMPTY_FILTER,
@@ -1158,8 +1163,11 @@ size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM
         0,
         /*tracing_id*/ "getRows",
         DMReadOptions{})[0];
+
+    read_queue->finishQueueIfEmpty();
     stream->readPrefix();
     Block block;
+    size_t rows = 0;
     while ((block = stream->read()))
         rows += block.rows();
     stream->readSuffix();
@@ -1170,6 +1178,8 @@ size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM
 // just for testing
 DM::RowKeyRange getRange(DM::DeltaMergeStorePtr & store, const Context & context, size_t total_rows, size_t delete_rows)
 {
+    auto read_queue = std::make_shared<ActiveSegmentReadTaskQueue>(2, Logger::get("getRange"));
+
     auto start_index = rand() % (total_rows - delete_rows + 1); // NOLINT(cert-msc50-cpp)
     DM::RowKeyRange range = DM::RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize());
     {
@@ -1179,6 +1189,7 @@ DM::RowKeyRange getRange(DM::DeltaMergeStorePtr & store, const Context & context
             context.getSettingsRef(),
             to_read,
             {DM::RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            read_queue,
             1,
             std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
@@ -1186,6 +1197,8 @@ DM::RowKeyRange getRange(DM::DeltaMergeStorePtr & store, const Context & context
             0,
             /*tracing_id*/ "getRange",
             DMReadOptions{})[0];
+
+        read_queue->finishQueueIfEmpty();
         stream->readPrefix();
         Block block;
         size_t index = 0;

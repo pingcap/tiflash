@@ -340,12 +340,14 @@ CATCH
 
 void verifyRows(Context & ctx, DM::DeltaMergeStorePtr store, const DM::RowKeyRange & range, size_t rows)
 {
+    auto read_queue = std::make_shared<DM::ActiveSegmentReadTaskQueue>(2, Logger::get("verifyRows"));
     const auto & columns = store->getTableColumns();
     BlockInputStreamPtr in = store->read(
         ctx,
         ctx.getSettingsRef(),
         columns,
         {range},
+        read_queue,
         /* num_streams= */ 1,
         /* start_ts= */ std::numeric_limits<UInt64>::max(),
         DM::EMPTY_FILTER,
@@ -354,6 +356,7 @@ void verifyRows(Context & ctx, DM::DeltaMergeStorePtr store, const DM::RowKeyRan
         "KVStoreFastAddPeer",
         DM::DMReadOptions{},
         /* expected_block_size= */ 1024)[0];
+    read_queue->finishQueueIfEmpty();
     ASSERT_INPUTSTREAM_NROWS(in, rows);
 }
 

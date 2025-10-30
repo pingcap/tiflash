@@ -254,11 +254,13 @@ protected:
     void verifyRows(const RowKeyRange & range, size_t rows)
     {
         const auto & columns = store->getTableColumns();
+        auto read_queue = std::make_shared<ActiveSegmentReadTaskQueue>(2, Logger::get("verifyRows"));
         BlockInputStreamPtr in = store->read(
             *db_context,
             db_context->getSettingsRef(),
             columns,
             {range},
+            read_queue,
             /* num_streams= */ 1,
             /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
@@ -267,6 +269,7 @@ protected:
             TRACING_NAME,
             DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
+        read_queue->finishQueueIfEmpty();
         ASSERT_INPUTSTREAM_NROWS(in, rows);
     }
 

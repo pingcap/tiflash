@@ -83,6 +83,11 @@ bool SegmentReadTasksWrapper::empty() const
     return ordered_tasks.empty() && unordered_tasks.empty();
 }
 
+size_t SegmentReadTasksWrapper::size() const
+{
+    return ordered_tasks.size() + unordered_tasks.size();
+}
+
 BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t)
 {
     MemoryTrackerSetter setter(true, mem_tracker.get());
@@ -103,14 +108,17 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
         t->dm_context->physical_table_id);
     LOG_DEBUG(
         log,
-        "buildInputStream: read_mode={}, pool_id={} segment={}",
+        "buildInputStream: read_mode={} keyspace={} table_id={} pool_id={} segment={}",
         magic_enum::enum_name(read_mode),
+        keyspace_id,
+        table_id,
         pool_id,
         t);
     return stream;
 }
 
 SegmentReadTaskPool::SegmentReadTaskPool(
+    const ActiveSegmentReadTaskQueuePtr & shared_q_,
     int extra_table_id_index_,
     const ColumnDefines & columns_to_read_,
     const PushDownExecutorPtr & executor_,
@@ -121,10 +129,13 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     AfterSegmentRead after_segment_read_,
     const String & tracing_id,
     bool enable_read_thread_,
-    Int64 num_streams_,
-    const KeyspaceID & keyspace_id_,
+    Int64 /*num_streams_*/,
+    KeyspaceID keyspace_id_,
+    TableID table_id_,
     const String & res_group_name_)
-    : pool_id(nextPoolId())
+    : keyspace_id(keyspace_id_)
+    , table_id(table_id_)
+    , pool_id(nextPoolId())
     , mem_tracker(current_memory_tracker == nullptr ? nullptr : current_memory_tracker->shared_from_this())
     , extra_table_id_index(extra_table_id_index_)
     , columns_to_read(columns_to_read_)
@@ -135,73 +146,58 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     , total_read_tasks(tasks_.size())
     , tasks_wrapper(enable_read_thread_, std::move(tasks_))
     , after_segment_read(after_segment_read_)
-    , peak_active_segments(0)
+    , shared_q(shared_q_)
     , log(Logger::get(tracing_id))
     , unordered_input_stream_ref_count(0)
     , exception_happened(false)
-    // If the queue is too short, only 1 in the extreme case, it may cause the computation thread
-    // to encounter empty queues frequently, resulting in too much waiting and thread context switching.
-    // We limit the length of block queue to be 1.5 times of `num_streams_`, and in the extreme case,
-    // when `num_streams_` is 1, `block_slot_limit` is at least 2.
-    , block_slot_limit(std::ceil(num_streams_ * 1.5))
-    // Limiting the minimum number of reading segments to 2 is to avoid, as much as possible,
-    // situations where the computation may be faster and the storage layer may not be able to keep up.
-    , active_segment_limit(std::max(num_streams_, 2))
-    , keyspace_id(keyspace_id_)
     , res_group_name(res_group_name_)
 {
-    if (tasks_wrapper.empty())
+    RUNTIME_CHECK_MSG(
+        shared_q != nullptr,
+        "SegmentReadTaskPool requires a valid ActiveSegmentReadTaskQueuePtr, tracing_id={}",
+        tracing_id);
+
+    if (!tasks_wrapper.empty())
     {
-        q.finish();
+        shared_q->addTableTask(table_id, total_read_tasks);
     }
 }
 
 SegmentReadTaskPool::~SegmentReadTaskPool()
 {
-    auto [pop_times, pop_empty_times, peak_blocks_in_queue] = q.getStat();
-    auto pop_empty_ratio = pop_times > 0 ? pop_empty_times * 1.0 / pop_times : 0.0;
-    auto total_count = blk_stat.totalCount();
-    auto total_bytes = blk_stat.totalBytes();
-    auto blk_avg_bytes = total_count > 0 ? total_bytes / total_count : 0;
-    auto approx_max_pending_block_bytes = blk_avg_bytes * peak_blocks_in_queue;
-    auto total_rows = blk_stat.totalRows();
-    LOG_INFO(
-        log,
-        "Done. pool_id={} pop={} pop_empty={} pop_empty_ratio={:.3f} "
-        "active_segment_limit={} peak_active_segments={} "
-        "block_slot_limit={} peak_blocks_in_queue={} blk_avg_bytes={} approx_max_pending_block_bytes={:.2f}MB "
-        "total_count={} total_bytes={:.2f}MB total_rows={} avg_block_rows={} avg_rows_bytes={}B",
-        pool_id,
-        pop_times,
-        pop_empty_times,
-        pop_empty_ratio,
-        active_segment_limit,
-        peak_active_segments,
-        block_slot_limit,
-        peak_blocks_in_queue,
-        blk_avg_bytes,
-        approx_max_pending_block_bytes / 1024.0 / 1024.0,
-        total_count,
-        total_bytes / 1024.0 / 1024.0,
-        total_rows,
-        total_count > 0 ? total_rows / total_count : 0,
-        total_rows > 0 ? total_bytes / total_rows : 0);
+    LOG_DEBUG(log, "SegmentReadTaskPool finished. keyspace={} table_id={} pool_id={}", keyspace_id, table_id, pool_id);
 }
 
 void SegmentReadTaskPool::finishSegment(const SegmentReadTaskPtr & seg)
 {
     after_segment_read(seg->dm_context, seg->segment);
     bool pool_finished = false;
+    size_t num_act_segs = shared_q->finishActiveSegment(table_id, seg->getGlobalSegmentID());
+    size_t num_task_left = 0;
     {
         std::lock_guard lock(mutex);
-        active_segment_ids.erase(seg->getGlobalSegmentID());
-        pool_finished = active_segment_ids.empty() && tasks_wrapper.empty();
+        num_task_left = tasks_wrapper.size();
+        pool_finished = num_act_segs == 0 && tasks_wrapper.empty();
     }
-    LOG_DEBUG(log, "finishSegment pool_id={} segment={} pool_finished={}", pool_id, seg, pool_finished);
+    LOG_DEBUG(
+        log,
+        "finishSegment pool_id={} segment={} num_act_segs={} num_task_left={} pool_finished={}",
+        pool_id,
+        seg,
+        num_act_segs,
+        num_task_left,
+        pool_finished);
+
     if (pool_finished)
     {
-        q.finish();
-        LOG_INFO(log, "pool_id={} finished", pool_id);
+        // notify the queue this table_id is finished only when all segments are finished.
+        shared_q->removeTableTask(table_id, pool_id);
+        LOG_DEBUG(
+            log,
+            "SegmentReadTaskPool all segments are finished, keyspace={} table_id={} pool_id={}",
+            keyspace_id,
+            table_id,
+            pool_id);
     }
 }
 
@@ -213,11 +209,13 @@ SegmentReadTaskPtr SegmentReadTaskPool::nextTask()
 
 SegmentReadTaskPtr SegmentReadTaskPool::getTask(const GlobalSegmentID & seg_id)
 {
-    std::lock_guard lock(mutex);
-    auto t = tasks_wrapper.getTask(seg_id);
-    RUNTIME_CHECK(t != nullptr, pool_id, seg_id);
-    active_segment_ids.insert(seg_id);
-    peak_active_segments = std::max(peak_active_segments, active_segment_ids.size());
+    SegmentReadTaskPtr t;
+    {
+        std::lock_guard lock(mutex);
+        t = tasks_wrapper.getTask(seg_id);
+        RUNTIME_CHECK(t != nullptr, pool_id, seg_id);
+    }
+    shared_q->addActiveSegment(table_id, seg_id);
     return t;
 }
 
@@ -260,11 +258,12 @@ MergingSegments::iterator SegmentReadTaskPool::scheduleSegment(
     bool enable_data_sharing)
 {
     auto target = segments.end();
-    std::lock_guard lock(mutex);
-    if (getFreeActiveSegmentsUnlock() <= 0)
+    if (getFreeActiveSegments() <= 0)
     {
         return target;
     }
+
+    std::lock_guard lock(mutex);
     static constexpr int max_iter_count = 32;
     int iter_count = 0;
     const auto & tasks = tasks_wrapper.getTasks();
@@ -309,8 +308,7 @@ bool SegmentReadTaskPool::readOneBlock(BlockInputStreamPtr & stream, const Segme
 
 void SegmentReadTaskPool::popBlock(Block & block)
 {
-    q.pop(block);
-    blk_stat.pop(block);
+    shared_q->popBlock(block);
     global_blk_stat.pop(block);
     if (exceptionHappened())
     {
@@ -320,9 +318,8 @@ void SegmentReadTaskPool::popBlock(Block & block)
 
 bool SegmentReadTaskPool::tryPopBlock(Block & block)
 {
-    if (q.tryPop(block))
+    if (shared_q->tryPopBlock(block))
     {
-        blk_stat.pop(block);
         global_blk_stat.pop(block);
         if (exceptionHappened())
             throw exception;
@@ -336,12 +333,11 @@ bool SegmentReadTaskPool::tryPopBlock(Block & block)
 
 void SegmentReadTaskPool::pushBlock(Block && block)
 {
-    blk_stat.push(block);
     global_blk_stat.push(block);
     auto bytes = block.bytes();
     read_bytes_after_last_check += bytes;
     GET_METRIC(tiflash_storage_read_thread_counter, type_push_block_bytes).Increment(bytes);
-    q.push(std::move(block), nullptr);
+    shared_q->pushBlock(std::move(block));
 }
 
 Int64 SegmentReadTaskPool::increaseUnorderedInputStreamRefCount()
@@ -355,18 +351,12 @@ Int64 SegmentReadTaskPool::decreaseUnorderedInputStreamRefCount()
 
 Int64 SegmentReadTaskPool::getFreeBlockSlots() const
 {
-    return block_slot_limit - blk_stat.pendingCount();
+    return shared_q->getFreeBlockSlots();
 }
 
 Int64 SegmentReadTaskPool::getFreeActiveSegments() const
 {
-    std::lock_guard lock(mutex);
-    return getFreeActiveSegmentsUnlock();
-}
-
-Int64 SegmentReadTaskPool::getFreeActiveSegmentsUnlock() const
-{
-    return active_segment_limit - static_cast<Int64>(active_segment_ids.size());
+    return shared_q->getFreeActiveSegments();
 }
 
 Int64 SegmentReadTaskPool::getPendingSegmentCount() const
@@ -391,7 +381,7 @@ void SegmentReadTaskPool::setException(const DB::Exception & e)
     {
         exception = e;
         exception_happened.store(true, std::memory_order_relaxed);
-        q.finish();
+        shared_q->finishQueue();
     }
 }
 
