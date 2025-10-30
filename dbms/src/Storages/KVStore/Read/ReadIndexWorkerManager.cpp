@@ -255,7 +255,7 @@ BatchReadIndexRes ReadIndexWorkerManager::batchReadIndex(
                 kvrpcpb::ReadIndexResponse tmp;
                 auto * e = tmp.mutable_region_error();
                 e->mutable_region_not_found()->set_region_id(it.first);
-                e->set_message("tiflash read index timeout " + std::to_string(timeout_ms) + "ms");
+                e->set_message("tiflash read index timeout(" + std::to_string(timeout_ms) + "ms)");
                 resps.emplace_back(std::move(tmp), it.first);
             }
             tasks.pop();
