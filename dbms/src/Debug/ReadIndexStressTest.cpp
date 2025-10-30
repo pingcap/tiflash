@@ -198,7 +198,7 @@ ReadIndexStressTest::TimeCost ReadIndexStressTest::run(std::vector<kvrpcpb::Read
                     req.context().region_id() + MockStressTestCfg::RegionIdPrefix * (i + 1));
             }
             LOG_INFO(logger, "add prefix {} to each region id", MockStressTestCfg::RegionIdPrefix);
-            auto resps = kvstore.batchReadIndex(reqs, timeout_ms, logger);
+            auto resps = kvstore.batchReadIndex(reqs, timeout_ms);
             for (const auto & resp : resps)
             {
                 if (resp.first.read_index() == 0)
