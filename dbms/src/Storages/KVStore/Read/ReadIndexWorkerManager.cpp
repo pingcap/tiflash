@@ -193,8 +193,7 @@ ReadIndexWorkerManager::ReadIndexRunner::ReadIndexRunner(
 
 BatchReadIndexRes ReadIndexWorkerManager::batchReadIndex(
     const std::vector<kvrpcpb::ReadIndexRequest> & reqs,
-    uint64_t timeout_ms,
-    const LoggerPtr & log)
+    uint64_t timeout_ms)
 {
     TEST_LOG_FMT("reqs size {}, timeout {}ms", reqs.size(), timeout_ms);
 

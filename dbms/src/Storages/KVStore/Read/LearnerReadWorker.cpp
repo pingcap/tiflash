@@ -250,7 +250,7 @@ void LearnerReadWorker::doBatchReadIndex(
 
     /// Blocking learner read. Note that learner read must be performed ahead of data read,
     /// otherwise the desired index will be blocked by the lock of data read.
-    auto res = kvstore->batchReadIndex(batch_read_index_req, timeout_ms, log);
+    auto res = kvstore->batchReadIndex(batch_read_index_req, timeout_ms);
     for (auto && [resp, region_id] : res)
     {
         batch_read_index_result.emplace(region_id, std::move(resp));

@@ -94,10 +94,7 @@ public:
     void runOneRound(SteadyClock::duration min_dur, size_t id);
     void stop();
     ~ReadIndexWorkerManager();
-    BatchReadIndexRes batchReadIndex(
-        const std::vector<kvrpcpb::ReadIndexRequest> & reqs,
-        uint64_t timeout_ms,
-        const LoggerPtr & log);
+    BatchReadIndexRes batchReadIndex(const std::vector<kvrpcpb::ReadIndexRequest> & reqs, uint64_t timeout_ms);
 
     static std::unique_ptr<ReadIndexWorkerManager> newReadIndexWorkerManager(
         const TiFlashRaftProxyHelper & proxy_helper,
