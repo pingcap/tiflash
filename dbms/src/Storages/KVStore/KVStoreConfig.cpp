@@ -25,8 +25,8 @@ const UInt64 DEFAULT_COMPACT_LOG_BYTES = 32 * 1024 * 1024;
 const UInt64 DEFAULT_COMPACT_LOG_GAP = 200;
 const UInt64 DEFAULT_EAGER_GC_LOG_GAP = 512;
 
-// default batch-read-index timeout is 10_000ms.
-const uint64_t DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS = 10 * 1000;
+// default batch-read-index timeout is 4_000ms.
+const uint64_t DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS = 4 * 1000;
 // default wait-index timeout is 5 * 60_000ms.
 const uint64_t DEFAULT_WAIT_INDEX_TIMEOUT_MS = 5 * 60 * 1000;
 
