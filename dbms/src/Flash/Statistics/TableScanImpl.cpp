@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/formatReadable.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Flash/Statistics/TableScanImpl.h>
@@ -24,9 +25,17 @@ namespace DB
 {
 String TableScanTimeDetail::toJson() const
 {
+    if (num_streams == 0)
+        return R"("num_streams":0)";
     auto max_cost_ms = max_stream_cost_ns < 0 ? 0 : max_stream_cost_ns / 1'000'000.0;
     auto min_cost_ms = min_stream_cost_ns < 0 ? 0 : min_stream_cost_ns / 1'000'000.0;
-    return fmt::format(R"("max":{},"min":{})", max_cost_ms, min_cost_ms);
+    return fmt::format(
+        R"("max":{},"min":{},"num_streams":{},"rows_per_sec":{:.3f},"bytes_per_sec":"{}")",
+        max_cost_ms,
+        min_cost_ms,
+        num_streams,
+        total_speed_rows_per_sec,
+        ReadableSize(total_speed_bytes_per_sec));
 }
 String LocalTableScanDetail::toJson() const
 {
@@ -109,6 +118,21 @@ void TableScanStatistics::collectExtraRuntimeDetail()
                 const auto & prof = local_stream->getProfileInfo();
                 local_table_scan_detail.bytes += prof.bytes;
                 const double this_execution_time = prof.execution_time * 1.0;
+                // collect the avg rows_per_second and bytes_per_second of local read
+                const double this_execution_time_sec = this_execution_time / 1'000'000'000.0;
+                double bytes_per_second = prof.bytes / this_execution_time_sec;
+                double rows_per_second = prof.rows / this_execution_time_sec;
+                local_table_scan_detail.time_detail.num_streams += 1;
+                local_table_scan_detail.time_detail.total_speed_bytes_per_sec += bytes_per_second;
+                local_table_scan_detail.time_detail.total_speed_rows_per_sec += rows_per_second;
+                LOG_INFO(
+                    dag_context.log,
+                    "TableScan local stream details, rows={} bytes={} cost={:.3f}s rows_speed={:.3f} bytes_speed={}",
+                    prof.rows,
+                    ReadableSize(prof.bytes),
+                    this_execution_time_sec,
+                    rows_per_second,
+                    ReadableSize(bytes_per_second));
                 if (local_table_scan_detail.time_detail.max_stream_cost_ns < 0.0 // not inited
                     || local_table_scan_detail.time_detail.max_stream_cost_ns < this_execution_time)
                     local_table_scan_detail.time_detail.max_stream_cost_ns = this_execution_time;
@@ -128,6 +152,22 @@ void TableScanStatistics::collectExtraRuntimeDetail()
             {
                 local_table_scan_detail.bytes += profile_info.operator_info->bytes;
                 const double this_execution_time = profile_info.operator_info->execution_time * 1.0;
+                // collect the avg rows_per_second and bytes_per_second of local read
+                const double this_execution_time_sec = this_execution_time / 1'000'000'000.0;
+                double bytes_per_second = profile_info.operator_info->bytes / this_execution_time_sec;
+                double rows_per_second = profile_info.operator_info->rows / this_execution_time_sec;
+                local_table_scan_detail.time_detail.num_streams += 1;
+                local_table_scan_detail.time_detail.total_speed_bytes_per_sec += bytes_per_second;
+                local_table_scan_detail.time_detail.total_speed_rows_per_sec += rows_per_second;
+                LOG_INFO(
+                    dag_context.log,
+                    "TableScan local stream details, rows={} bytes={} cost={:.3f}s rows_speed={:.3f}/s "
+                    "bytes_speed={}/s",
+                    profile_info.operator_info->rows,
+                    ReadableSize(profile_info.operator_info->bytes),
+                    this_execution_time_sec,
+                    rows_per_second,
+                    ReadableSize(bytes_per_second));
                 if (local_table_scan_detail.time_detail.max_stream_cost_ns < 0.0 // not inited
                     || local_table_scan_detail.time_detail.max_stream_cost_ns < this_execution_time)
                     local_table_scan_detail.time_detail.max_stream_cost_ns = this_execution_time;
@@ -139,6 +179,22 @@ void TableScanStatistics::collectExtraRuntimeDetail()
             {
                 updateTableScanDetail(profile_info.connection_profile_infos);
                 const double this_execution_time = profile_info.operator_info->execution_time * 1.0;
+                // collect the avg rows_per_second and bytes_per_second of remote read
+                const double this_execution_time_sec = this_execution_time / 1'000'000'000.0;
+                double bytes_per_second = profile_info.operator_info->bytes / this_execution_time_sec;
+                double rows_per_second = profile_info.operator_info->rows / this_execution_time_sec;
+                remote_table_scan_detail.time_detail.num_streams += 1;
+                remote_table_scan_detail.time_detail.total_speed_bytes_per_sec += bytes_per_second;
+                remote_table_scan_detail.time_detail.total_speed_rows_per_sec += rows_per_second;
+                LOG_INFO(
+                    dag_context.log,
+                    "TableScan remote stream details, rows={} bytes={} cost={:.3f}s rows_speed={:.3f}/s "
+                    "bytes_speed={}/s",
+                    profile_info.operator_info->rows,
+                    ReadableSize(profile_info.operator_info->bytes),
+                    this_execution_time_sec,
+                    rows_per_second,
+                    ReadableSize(bytes_per_second));
                 if (remote_table_scan_detail.time_detail.max_stream_cost_ns < 0.0 // not inited
                     || remote_table_scan_detail.time_detail.max_stream_cost_ns < this_execution_time)
                     remote_table_scan_detail.time_detail.max_stream_cost_ns = this_execution_time;
