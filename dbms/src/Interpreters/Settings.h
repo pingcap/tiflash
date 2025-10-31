@@ -182,6 +182,12 @@ struct Settings
     M(SettingUInt64, dt_merged_file_max_size, 16 * 1024 * 1024, "Small files are merged into one or more files not larger than dt_merged_file_max_size")                                                                                \
     M(SettingDouble, dt_page_gc_threshold, 0.5, "Max valid rate of deciding to do a GC in PageStorage")                                                                                                                                 \
     M(SettingDouble, dt_page_gc_threshold_raft_data, 0.05, "Max valid rate of deciding to do a GC for BlobFile storing PageData in PageStorage")                                                                                        \
+<<<<<<< HEAD
+=======
+    M(SettingInt64, enable_version_chain, 0, "Enable version chain or not: 0 - disable, 1 - enabled. "                                                                                                                                  \
+                                             "More details are in the comments of `enum class VersionChainMode`."                                                                                                                       \
+                                             "Modifying this configuration requires a restart to reset the in-memory state.")                                                                                                           \
+>>>>>>> 0db8e7ecb2 (Storages: Disable VersionChain by default (#10507))
     /* DeltaTree engine testing settings */\
     M(SettingUInt64, dt_insert_max_rows, 0, "[testing] Max rows of insert blocks when write into DeltaTree Engine. By default 0 means no limit.")                                                                                       \
     M(SettingBool, dt_raw_filter_range, true, "[unused] Do range filter or not when read data in raw mode in DeltaTree Engine.")                                                                                                        \
