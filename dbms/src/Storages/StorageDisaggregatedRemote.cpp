@@ -256,6 +256,11 @@ DM::SegmentReadTasks StorageDisaggregated::buildReadTask(
         futures.add(std::move(f));
     }
     futures.getAllResults();
+    LOG_INFO(
+        log,
+        "build read tasks for all write nodes done, num_write_nodes={} total_seg_tasks={}",
+        batch_cop_tasks.size(),
+        output_seg_tasks.size());
 
     // Do some integrity checks for the build seg tasks. For example, we should not
     // ever read from the same store+table+segment multiple times.
@@ -299,7 +304,7 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
             log->identifier());
 
     const DM::DisaggTaskId snapshot_id(resp.snapshot_id());
-    LOG_DEBUG(
+    LOG_INFO(
         log,
         "Received EstablishDisaggTask response, error={} store={} snap_id={} addr={} resp.num_tables={}",
         resp.has_error(),
@@ -407,8 +412,9 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
         GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_parse_read_tasks).Observe(elapsed_seconds);
         LOG_INFO(
             log,
-            "build read task for write node done, wn_addr={} elapsed_s={:.3f}",
+            "build read task for write node done, wn_addr={} num_tables={} elapsed_s={:.3f}",
             req->address(),
+            resp.tables_size(),
             elapsed_seconds);
     });
     // Now we have successfully established disaggregated read for this write node.
@@ -472,6 +478,13 @@ void StorageDisaggregated::buildReadTaskForWriteNodeTable(
     auto table_tracing_logger = log->getChild(
         fmt::format("store_id={} keyspace={} table_id={}", store_id, table.keyspace_id(), table.table_id()));
 
+    LOG_INFO(
+        table_tracing_logger,
+        "build read tasks for write node table begin, num_segments={}",
+        store_id,
+        table.keyspace_id(),
+        table.table_id(),
+        table.segments().size());
     IOPoolHelper::FutureContainer futures(log, table.segments().size());
     for (auto i = 0; i < table.segments().size(); ++i)
     {
@@ -498,6 +511,13 @@ void StorageDisaggregated::buildReadTaskForWriteNodeTable(
         futures.add(std::move(f));
     }
     futures.getAllResults();
+    LOG_INFO(
+        table_tracing_logger,
+        "build read tasks for write node table done, num_segments={}",
+        store_id,
+        table.keyspace_id(),
+        table.table_id(),
+        table.segments().size());
 }
 
 /**
