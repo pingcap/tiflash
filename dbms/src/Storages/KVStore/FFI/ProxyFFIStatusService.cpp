@@ -484,6 +484,60 @@ HttpRequestRes HandleHttpRequestSyncSchema(
     return buildOkResp(api_name, "");
 }
 
+// Request memory consumed from table
+HttpRequestRes HandleHttpRequestStatsTableMemory(
+    EngineStoreServerWrap * server,
+    std::string_view path,
+    const std::string & api_name,
+    std::string_view,
+    std::string_view)
+{
+    auto log = Logger::get("HandleHttpRequestStatsTableMemory");
+    TableID table_id = 0;
+    pingcap::pd::KeyspaceID keyspace_id = NullspaceID;
+    // /keyspace/{keyspace_id}/table/{table_id}
+    auto query = path.substr(api_name.size());
+    std::vector<std::string> query_parts;
+    boost::split(query_parts, query, boost::is_any_of("/"));
+
+    auto status = HttpRequestStatus::Ok;
+    
+    if (query_parts.size() < 4 || query_parts[0] != "keyspace" || query_parts[2] != "table")
+    {
+        LOG_ERROR(log, "invalid StatsTableMemory request: {}", query);
+        status = HttpRequestStatus::ErrorParam;
+    }
+
+    try
+    {
+        keyspace_id = std::stoll(query_parts[1]);
+        table_id = std::stoll(query_parts[3]);
+    }
+    catch (...)
+    {
+        status = HttpRequestStatus::ErrorParam;
+    }
+
+    if (status == HttpRequestStatus::ErrorParam)
+    {
+        return HttpRequestRes{
+            .status = status,
+            .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}},
+        };
+    }
+
+    const auto & region_table = server->tmt->getRegionTable();
+    size_t kvstore_bytes = region_table.getTableRegionSize(keyspace_id, table_id);
+    auto * body = RawCppString::New(fmt::format(R"json({{"kvstore_bytes":"{}"}})json", kvstore_bytes));
+    return HttpRequestRes{
+        .status = HttpRequestStatus::Ok,
+        .res = CppStrWithView{
+            .inner = GenRawCppPtr(body, RawCppPtrTypeImpl::String),
+            .view = BaseBuffView{body->data(), body->size()},
+        },
+    };
+}
+
 using HANDLE_HTTP_URI_METHOD = HttpRequestRes (*)(
     EngineStoreServerWrap *,
     std::string_view,
@@ -510,6 +564,7 @@ static const std::map<std::string, HANDLE_HTTP_URI_METHOD> AVAILABLE_HTTP_URI = 
     {"/tiflash/remote/owner/resign", HandleHttpRequestRemoteOwnerResign},
     {"/tiflash/remote/gc", HandleHttpRequestRemoteGC},
     {"/tiflash/remote/upload", HandleHttpRequestRemoteReUpload},
+    {"/tiflash/stats/table/memory/", HandleHttpRequestStatsTableMemory},
 };
 
 uint8_t CheckHttpUriAvailable(BaseBuffView path_)
