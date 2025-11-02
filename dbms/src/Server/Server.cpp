@@ -241,7 +241,7 @@ void printGRPCLog(gpr_log_func_args * args)
 // Later we will adjust it by `adjustThreadPoolSize`
 void initThreadPool(DisaggregatedMode disaggregated_mode)
 {
-    size_t default_num_threads = std::max(4UL, 2 * std::thread::hardware_concurrency());
+    size_t default_num_threads = std::max(4UL, 6 * std::thread::hardware_concurrency());
 
     // Note: Global Thread Pool must be larger than sub thread pools.
     GlobalThreadPool::initialize(
@@ -1007,13 +1007,19 @@ try
     LOG_INFO(log, "Init S3 GC Manager");
     global_context->getTMTContext().initS3GCManager(proxy_machine.getProxyHelper());
     // Initialize the thread pool of storage before the storage engine is initialized.
-    LOG_INFO(log, "dt_enable_read_thread {}", global_context->getSettingsRef().dt_enable_read_thread);
-    // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
-    DM::DMFileReaderPool::instance();
-    DM::SegmentReaderPoolManager::instance().init(
-        server_info.cpu_info.logical_cores,
-        settings.dt_read_thread_count_scale);
-    DM::SegmentReadTaskScheduler::instance().updateConfig(global_context->getSettingsRef());
+    {
+        LOG_INFO(log, "dt_enable_read_thread {}", global_context->getSettingsRef().dt_enable_read_thread);
+        // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
+        DM::DMFileReaderPool::instance();
+        double read_thread_final_scale = settings.dt_read_thread_count_scale;
+        if (is_disagg_compute_mode)
+        {
+            // disagg compute node needs more read threads to handle blocking IO from S3.
+            read_thread_final_scale *= 5;
+        }
+        DM::SegmentReaderPoolManager::instance().init(server_info.cpu_info.logical_cores, read_thread_final_scale);
+        DM::SegmentReadTaskScheduler::instance().updateConfig(global_context->getSettingsRef());
+    }
 
     auto schema_cache_size = config().getInt("schema_cache_size", 10000);
     global_context->initializeSharedBlockSchemas(schema_cache_size);
