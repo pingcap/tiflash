@@ -191,7 +191,14 @@ void SegmentReaderPoolManager::init(UInt32 logical_cpu_cores, double read_thread
         auto ids = reader_pools.back()->getReaderIds();
         reader_ids.insert(ids.begin(), ids.end());
     }
-    LOG_INFO(log, "numa_nodes={} number_of_readers={}", numa_nodes, reader_ids.size());
+    LOG_INFO(
+        log,
+        "SegmentReaderPoolManager inited, "
+        "logical_cpu_cores={} read_thread_count_scale={} numa_nodes={} number_of_readers={}",
+        logical_cpu_cores,
+        read_thread_count_scale,
+        numa_nodes,
+        reader_ids.size());
 }
 
 void SegmentReaderPoolManager::addTask(MergedTaskPtr && task)

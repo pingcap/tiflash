@@ -651,6 +651,7 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
     scan_context->read_mode = read_mode;
     const UInt64 start_ts = sender_target_mpp_task_id.gather_id.query_id.start_ts;
     const auto enable_read_thread = db_context.getSettingsRef().dt_enable_read_thread;
+    RUNTIME_CHECK(num_streams > 0, num_streams);
     LOG_INFO(
         log,
         "packSegmentReadTasks: enable_read_thread={} read_mode={} is_fast_scan={} keep_order={} task_count={} "
@@ -665,6 +666,9 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
 
     if (enable_read_thread)
     {
+        // Under disagg arch, now we use blocking IO to read data from cloud storage. So it require more active
+        // segments to fully utilize the read threads.
+        const size_t read_thread_num_active_seg = 5 * num_streams;
         return std::make_shared<DM::SegmentReadTaskPool>(
             extra_table_id_index,
             *column_defines,
@@ -677,6 +681,7 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
             log->identifier(),
             /*enable_read_thread*/ true,
             num_streams,
+            read_thread_num_active_seg,
             context.getDAGContext()->getKeyspaceID(),
             context.getDAGContext()->getResourceGroupName());
     }
@@ -742,7 +747,6 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
         scan_context,
         num_streams,
         extra_table_id_index);
-    RUNTIME_CHECK(num_streams > 0, num_streams);
     pipeline.streams.reserve(num_streams);
 
     InputStreamBuilder builder{
@@ -815,7 +819,6 @@ void StorageDisaggregated::buildRemoteSegmentSourceOps(
         num_streams,
         extra_table_id_index);
 
-    RUNTIME_CHECK(num_streams > 0, num_streams);
     SourceOpBuilder builder{
         .tracing_id = log->identifier(),
         .column_defines = column_defines,
