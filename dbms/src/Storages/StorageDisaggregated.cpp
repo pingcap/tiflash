@@ -35,8 +35,7 @@ StorageDisaggregated::StorageDisaggregated(
     Context & context_,
     const TiDBTableScan & table_scan_,
     const FilterConditions & filter_conditions_)
-    : IStorage()
-    , context(context_)
+    : context(context_)
     , table_scan(table_scan_)
     , log(Logger::get(context_.getDAGContext()->log ? context_.getDAGContext()->log->identifier() : ""))
     , sender_target_mpp_task_id(context_.getDAGContext()->getMPPTaskMeta())
