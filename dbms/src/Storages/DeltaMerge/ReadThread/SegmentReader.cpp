@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Logger.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
 #include <Storages/DeltaMerge/ReadThread/CPU.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
@@ -60,6 +61,9 @@ private:
                 LOG_INFO(log, "Pop fail, stop={}", isStop());
                 return;
             }
+
+            GET_METRIC(tiflash_storage_read_thread_gauge, type_merged_task_active).Increment();
+            SCOPE_EXIT({ GET_METRIC(tiflash_storage_read_thread_gauge, type_merged_task_active).Decrement(); });
 
             int read_count = 0;
             while (!merged_task->allStreamsFinished() && !isStop())
