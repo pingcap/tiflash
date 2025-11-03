@@ -1015,7 +1015,7 @@ try
         if (is_disagg_compute_mode)
         {
             // disagg compute node needs more read threads to handle blocking IO from S3.
-            read_thread_final_scale *= 5;
+            read_thread_final_scale *= 10;
         }
         DM::SegmentReaderPoolManager::instance().init(server_info.cpu_info.logical_cores, read_thread_final_scale);
         DM::SegmentReadTaskScheduler::instance().updateConfig(global_context->getSettingsRef());
