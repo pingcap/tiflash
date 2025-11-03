@@ -32,6 +32,7 @@
 #include <fiu.h>
 
 #include <optional>
+#include <random>
 #include <string_view>
 
 namespace ProfileEvents
@@ -47,6 +48,8 @@ namespace DB::FailPoints
 {
 extern const char force_s3_random_access_file_init_fail[];
 extern const char force_s3_random_access_file_read_fail[];
+extern const char random_s3_access_file_read_latency_failpoint[];
+extern const char random_s3_access_file_seek_latency_failpoint[];
 } // namespace DB::FailPoints
 
 namespace DB::S3
@@ -114,6 +117,14 @@ ssize_t S3RandomAccessFile::readImpl(char * buf, size_t size)
     istr.read(buf, size);
     size_t gcount = istr.gcount();
 
+    fiu_do_on(FailPoints::random_s3_access_file_read_latency_failpoint, {
+        // Introduce random latency between 10ms to 100ms
+        static thread_local std::default_random_engine engine{std::random_device{}()};
+        std::normal_distribution<int> dist(80, 25);
+        int latency_ms = std::max(5, dist(engine));
+        LOG_INFO(log, "failpoint random_s3_access_file_read_latency_failpoint sleep {} ms", latency_ms);
+        std::this_thread::sleep_for(std::chrono::milliseconds(latency_ms));
+    });
     fiu_do_on(FailPoints::force_s3_random_access_file_read_fail, {
         LOG_WARNING(log, "failpoint force_s3_random_access_file_read_fail is triggered, return S3StreamError");
         return S3StreamError;
@@ -217,6 +228,15 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
             sw.elapsed());
         return (state & std::ios_base::failbit || state & std::ios_base::badbit) ? S3StreamError : S3UnknownError;
     }
+
+    fiu_do_on(FailPoints::random_s3_access_file_seek_latency_failpoint, {
+        // Introduce random latency between 10ms to 100ms
+        static thread_local std::default_random_engine engine{std::random_device{}()};
+        std::normal_distribution<int> dist(80, 25);
+        int latency_ms = std::max(5, dist(engine));
+        LOG_INFO(log, "failpoint random_s3_access_file_seek_latency_failpoint sleep {} ms", latency_ms);
+        std::this_thread::sleep_for(std::chrono::milliseconds(latency_ms));
+    });
     auto elapsed_secs = sw.elapsedSeconds();
     if (scan_context)
     {

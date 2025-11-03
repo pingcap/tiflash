@@ -195,7 +195,9 @@ namespace DB
     M(random_fail_in_resize_callback)                        \
     M(random_marked_for_auto_spill)                          \
     M(random_trigger_remote_read)                            \
-    M(random_cop_send_failure_failpoint)
+    M(random_cop_send_failure_failpoint)                     \
+    M(random_s3_access_file_read_latency_failpoint)          \
+    M(random_s3_access_file_seek_latency_failpoint)
 
 namespace FailPoints
 {
