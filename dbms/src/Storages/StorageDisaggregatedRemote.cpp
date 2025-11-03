@@ -668,7 +668,7 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
     {
         // Under disagg arch, now we use blocking IO to read data from cloud storage. So it require more active
         // segments to fully utilize the read threads.
-        const size_t read_thread_num_active_seg = 5 * num_streams;
+        const size_t read_thread_num_active_seg = 10 * num_streams;
         return std::make_shared<DM::SegmentReadTaskPool>(
             extra_table_id_index,
             *column_defines,
