@@ -36,6 +36,7 @@
 #include <Storages/AlterCommands.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/TiKVHelpers/PDTiKVClient.h>
 #include <Storages/MutableSupport.h>
 #include <TiDB/Decode/TypeMapping.h>
 #include <TiDB/Schema/SchemaBuilder.h>
