@@ -122,6 +122,7 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     const String & tracing_id,
     bool enable_read_thread_,
     Int64 num_streams_,
+    Int64 active_segment_limit_,
     const KeyspaceID & keyspace_id_,
     const String & res_group_name_)
     : pool_id(nextPoolId())
@@ -146,7 +147,7 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     , block_slot_limit(std::ceil(num_streams_ * 1.5))
     // Limiting the minimum number of reading segments to 2 is to avoid, as much as possible,
     // situations where the computation may be faster and the storage layer may not be able to keep up.
-    , active_segment_limit(std::max(num_streams_, 2))
+    , active_segment_limit(std::max(active_segment_limit_, 2))
     , keyspace_id(keyspace_id_)
     , res_group_name(res_group_name_)
 {
