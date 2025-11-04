@@ -232,7 +232,14 @@ bool SchemaSyncService::gcImpl(Timestamp gc_safepoint, KeyspaceID keyspace_id, b
     const std::optional<Timestamp> last_gc_safepoint = lastGcSafePoint(keyspace_id);
     // for new deploy cluster, there is an interval that gc_safepoint return 0, skip it
     if (gc_safepoint == 0)
+    {
+        LOG_WARNING(
+            log,
+            "Schema GC skipped for invalid gc_safepoint, keyspace={} last_safepoint={} gc_safepoint=0",
+            keyspace_id,
+            last_gc_safepoint);
         return false;
+    }
     // the gc safepoint is not changed since last schema gc run, skip it
     if (last_gc_safepoint.has_value() && gc_safepoint == *last_gc_safepoint)
         return false;

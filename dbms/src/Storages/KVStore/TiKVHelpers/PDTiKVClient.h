@@ -118,6 +118,50 @@ struct PDClientHelper
         bool ignore_cache = true,
         Int64 safe_point_update_interval_seconds = 30)
     {
+#if 1
+        if (!ignore_cache)
+        {
+            // In order to avoid too frequent requests to PD,
+            // we cache the safe point for a while.
+            auto now = std::chrono::steady_clock::now();
+
+            auto ks_gc_info = getKeyspaceGCSafepoint(keyspace_id);
+            const auto duration
+                = std::chrono::duration_cast<std::chrono::seconds>(now - ks_gc_info.ks_gc_sp_update_time.load());
+            const auto min_interval
+                = std::max(static_cast<Int64>(1), safe_point_update_interval_seconds); // at least one second
+            if (duration.count() < min_interval)
+                return ks_gc_info.ks_gc_sp;
+        }
+        pingcap::kv::Backoffer bo(get_safepoint_maxtime);
+        for (;;)
+        {
+            try
+            {
+                auto gc_state = pd_client->getGCState(keyspace_id);
+                auto safe_point = gc_state.gc_state().gc_safe_point();
+                if (safe_point != 0)
+                {
+                    updateKeyspaceGCSafepointMap(keyspace_id, safe_point);
+                }
+#ifndef NDEBUG
+                else
+                {
+                    LOG_WARNING(
+                        Logger::get(),
+                        "getGCSafePointWithRetry keyspace_id={} gc_safe_point=0 gc_state={}",
+                        keyspace_id,
+                        gc_state.ShortDebugString());
+                }
+#endif
+                return safe_point;
+            }
+            catch (pingcap::Exception & e)
+            {
+                bo.backoff(pingcap::kv::boPDRPC, e);
+            }
+        }
+#else
         // If keyspace id is `NullspaceID` it need to use safe point v1.
         if (enable_safepoint_v2 && keyspace_id != NullspaceID)
         {
@@ -155,6 +199,7 @@ struct PDClientHelper
                 bo.backoff(pingcap::kv::boPDRPC, e);
             }
         }
+#endif
     }
 
     static Timestamp getGCSafePointV2WithRetry(
@@ -197,6 +242,10 @@ struct PDClientHelper
 
     static void updateKeyspaceGCSafepointMap(KeyspaceID keyspace_id, Timestamp ks_gc_sp)
     {
+        // guard for invalid gc safe point
+        if (ks_gc_sp == 0)
+            return;
+
         std::unique_lock<std::shared_mutex> lock(ks_gc_sp_mutex);
         KeyspaceGCInfo new_keyspace_gc_info;
         new_keyspace_gc_info.ks_gc_sp = ks_gc_sp;
