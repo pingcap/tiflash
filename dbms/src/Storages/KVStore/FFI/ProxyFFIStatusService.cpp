@@ -164,6 +164,7 @@ HttpRequestRes HandleHttpRequestSyncStatus(
 }
 
 // Return store status of this tiflash node
+// TiUP/tidb-operator rely on this API to check whether the tiflash node is ready
 HttpRequestRes HandleHttpRequestStoreStatus(
     EngineStoreServerWrap * server,
     std::string_view,
@@ -354,6 +355,61 @@ HttpRequestRes HandleHttpRequestRemoteGC(
     return buildOkResp(api_name, std::move(body));
 }
 
+HttpRequestRes HandleHttpRequestRemoteCacheEvict(
+    EngineStoreServerWrap * server,
+    std::string_view path,
+    const std::string & api_name,
+    std::string_view,
+    std::string_view)
+{
+    auto & global_ctx = server->tmt->getContext();
+    if (auto err_resp
+        = allowDisaggAPI(global_ctx, api_name, DisaggregatedMode::Compute, "can not trigger remote cache evict");
+        err_resp)
+    {
+        return err_resp.value();
+    }
+
+    auto log = Logger::get("HandleHttpRequestRemoteCacheEvict");
+    LOG_INFO(log, "handling remote cache evict request, path={} api_name={}", path, api_name);
+    FileSegment::FileType evict_until_type;
+    {
+        // schema: /tiflash/remote/cache/evict/{file_type_int}
+        auto query = path.substr(api_name.size());
+        if (query.empty() || query[0] != '/')
+        {
+            auto body = fmt::format(R"json({{"message":"invalid remote cache evict request: {}"}})json", path);
+            return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, std::move(body));
+        }
+        query.remove_prefix(1);
+        std::optional<FileSegment::FileType> opt_evict_until_type = std::nullopt;
+        try
+        {
+            auto itype = std::stoll(query.data());
+            opt_evict_until_type = magic_enum::enum_cast<FileSegment::FileType>(itype);
+        }
+        catch (...)
+        {
+            // ignore
+        }
+        if (!opt_evict_until_type.has_value())
+        {
+            auto body
+                = fmt::format(R"json({{"message":"invalid file_type in remote cache evict request: {}"}})json", path);
+            return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, std::move(body));
+        }
+        // successfully parse the file type
+        evict_until_type = opt_evict_until_type.value();
+    }
+
+    auto released_size = DB::FileCache::instance()->evictUntil(evict_until_type);
+    auto body = fmt::format(
+        R"json({{"file_type":"{}","released_size":"{}"}})json",
+        magic_enum::enum_name(evict_until_type),
+        released_size);
+    return buildOkResp(api_name, std::move(body));
+}
+
 // Acquiring the all the region ids created in this TiFlash node with given keyspace id.
 HttpRequestRes HandleHttpRequestSyncRegion(
     EngineStoreServerWrap * server,
@@ -510,6 +566,7 @@ static const std::map<std::string, HANDLE_HTTP_URI_METHOD> AVAILABLE_HTTP_URI = 
     {"/tiflash/remote/owner/resign", HandleHttpRequestRemoteOwnerResign},
     {"/tiflash/remote/gc", HandleHttpRequestRemoteGC},
     {"/tiflash/remote/upload", HandleHttpRequestRemoteReUpload},
+    {"/tiflash/remote/cache/evict", HandleHttpRequestRemoteCacheEvict},
 };
 
 uint8_t CheckHttpUriAvailable(BaseBuffView path_)

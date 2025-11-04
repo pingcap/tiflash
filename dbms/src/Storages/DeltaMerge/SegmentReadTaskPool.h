@@ -121,6 +121,7 @@ public:
         const String & tracing_id,
         bool enable_read_thread_,
         Int64 num_streams_,
+        Int64 active_segment_limit_,
         const KeyspaceID & keyspace_id_,
         const String & res_group_name_);
 
