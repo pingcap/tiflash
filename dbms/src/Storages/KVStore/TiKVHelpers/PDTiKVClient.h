@@ -44,30 +44,71 @@ namespace FailPoints
 extern const char force_pd_grpc_error[];
 } // namespace FailPoints
 
+// The GC safepoint and its update time for a keyspace.
 struct KeyspaceGCInfo
 {
-    DB::Timestamp ks_gc_sp{};
-    TimePoint ks_gc_sp_update_time;
+    DB::Timestamp gc_safepoint{0};
+    TimePoint update_time;
 
-    KeyspaceGCInfo() { ks_gc_sp_update_time = std::chrono::steady_clock::now(); }
+    KeyspaceGCInfo() { update_time = std::chrono::steady_clock::now(); }
+    explicit KeyspaceGCInfo(Timestamp gc_safepoint_)
+        : gc_safepoint(gc_safepoint_)
+    {
+        update_time = std::chrono::steady_clock::now();
+    }
 
     KeyspaceGCInfo(const KeyspaceGCInfo & other)
     {
-        ks_gc_sp = other.ks_gc_sp;
-        ks_gc_sp_update_time = std::chrono::steady_clock::now();
+        gc_safepoint = other.gc_safepoint;
+        update_time = std::chrono::steady_clock::now();
     }
 
     KeyspaceGCInfo & operator=(const KeyspaceGCInfo & other)
     {
         if (this != &other)
         {
-            ks_gc_sp = other.ks_gc_sp;
-            ks_gc_sp_update_time = std::chrono::steady_clock::now();
+            gc_safepoint = other.gc_safepoint;
+            update_time = std::chrono::steady_clock::now();
         }
         return *this;
     }
 };
 
+class KeyspacesGcInfo
+{
+public:
+    KeyspacesGcInfo() = default;
+
+    // Update GCSafepoint for a keyspace.
+    void updateGCSafepoint(KeyspaceID keyspace_id, Timestamp gc_safepoint)
+    {
+        // guard for invalid gc safe point
+        if (gc_safepoint == 0)
+            return;
+
+        std::unique_lock lock(mtx);
+        gc_safepoint_map[keyspace_id] = KeyspaceGCInfo(gc_safepoint);
+    }
+
+    // Get GCSafepoint for a keyspace.
+    KeyspaceGCInfo getGCSafepoint(KeyspaceID keyspace_id)
+    {
+        std::shared_lock lock(mtx);
+        return gc_safepoint_map[keyspace_id];
+    }
+
+    // Remove the GCSafepoint info for a keyspace.
+    void removeGCSafepoint(KeyspaceID keyspace_id)
+    {
+        std::unique_lock lock(mtx);
+        gc_safepoint_map.erase(keyspace_id);
+    }
+
+private:
+    std::shared_mutex mtx;
+    // keyspace_id -> KeyspaceGCInfo
+    std::unordered_map<KeyspaceID, KeyspaceGCInfo> gc_safepoint_map;
+};
 
 struct PDClientHelper
 {
@@ -76,8 +117,6 @@ struct PDClientHelper
     // 10 seconds timeout for getting TSO
     // https://github.com/pingcap/tidb/blob/069631e2ecfedc000ffb92c67207bea81380f020/pkg/store/mockstore/unistore/pd/client.go#L256-L276
     static constexpr int get_tso_maxtime = 10'000;
-
-    static bool enable_safepoint_v2;
 
     static UInt64 getTSO(const pingcap::pd::ClientPtr & pd_client, size_t timeout_ms)
     {
@@ -118,31 +157,34 @@ struct PDClientHelper
         bool ignore_cache = true,
         Int64 safe_point_update_interval_seconds = 30)
     {
-#if 1
         if (!ignore_cache)
         {
             // In order to avoid too frequent requests to PD,
             // we cache the safe point for a while.
             auto now = std::chrono::steady_clock::now();
 
-            auto ks_gc_info = getKeyspaceGCSafepoint(keyspace_id);
-            const auto duration
-                = std::chrono::duration_cast<std::chrono::seconds>(now - ks_gc_info.ks_gc_sp_update_time.load());
+            auto ks_gc_info = ks_gc_sp_map.getGCSafepoint(keyspace_id);
+            const auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - ks_gc_info.update_time.load());
             const auto min_interval
                 = std::max(static_cast<Int64>(1), safe_point_update_interval_seconds); // at least one second
             if (duration.count() < min_interval)
-                return ks_gc_info.ks_gc_sp;
+                return ks_gc_info.gc_safepoint;
         }
+
         pingcap::kv::Backoffer bo(get_safepoint_maxtime);
         for (;;)
         {
             try
             {
+                // Fetch the gc safepoint from PD.
+                // - When deployed with classic cluster, the gc safepoint is cluster-based, keyspace_id=NullspaceID.
+                // - When deployed with next-gen cluster, the gc safepoint is keyspace-based.
                 auto gc_state = pd_client->getGCState(keyspace_id);
                 auto safe_point = gc_state.gc_state().gc_safe_point();
                 if (safe_point != 0)
                 {
-                    updateKeyspaceGCSafepointMap(keyspace_id, safe_point);
+                    // add to cache
+                    ks_gc_sp_map.updateGCSafepoint(keyspace_id, safe_point);
                 }
 #ifndef NDEBUG
                 else
@@ -161,118 +203,13 @@ struct PDClientHelper
                 bo.backoff(pingcap::kv::boPDRPC, e);
             }
         }
-#else
-        // If keyspace id is `NullspaceID` it need to use safe point v1.
-        if (enable_safepoint_v2 && keyspace_id != NullspaceID)
-        {
-            auto gc_safe_point
-                = getGCSafePointV2WithRetry(pd_client, keyspace_id, ignore_cache, safe_point_update_interval_seconds);
-            LOG_TRACE(Logger::get(), "use safe point v2, keyspace={} gc_safe_point={}", keyspace_id, gc_safe_point);
-            return gc_safe_point;
-        }
-
-        if (!ignore_cache)
-        {
-            // In case we cost too much to update safe point from PD.
-            auto now = std::chrono::steady_clock::now();
-            const auto duration
-                = std::chrono::duration_cast<std::chrono::seconds>(now - safe_point_last_update_time.load());
-            const auto min_interval
-                = std::max(static_cast<Int64>(1), safe_point_update_interval_seconds); // at least one second
-            if (duration.count() < min_interval)
-                return cached_gc_safe_point;
-        }
-
-        pingcap::kv::Backoffer bo(get_safepoint_maxtime);
-        for (;;)
-        {
-            try
-            {
-                auto safe_point = pd_client->getGCSafePoint();
-                cached_gc_safe_point = safe_point;
-                LOG_TRACE(Logger::get(), "use safe point v1, gc_safe_point={}", safe_point);
-                safe_point_last_update_time = std::chrono::steady_clock::now();
-                return safe_point;
-            }
-            catch (pingcap::Exception & e)
-            {
-                bo.backoff(pingcap::kv::boPDRPC, e);
-            }
-        }
-#endif
     }
 
-    static Timestamp getGCSafePointV2WithRetry(
-        const pingcap::pd::ClientPtr & pd_client,
-        KeyspaceID keyspace_id,
-        bool ignore_cache = false,
-        Int64 safe_point_update_interval_seconds = 30)
-    {
-        if (!ignore_cache)
-        {
-            // In case we cost too much to update safe point from PD.
-            auto now = std::chrono::steady_clock::now();
-
-            auto ks_gc_info = getKeyspaceGCSafepoint(keyspace_id);
-            const auto duration
-                = std::chrono::duration_cast<std::chrono::seconds>(now - ks_gc_info.ks_gc_sp_update_time.load());
-            const auto min_interval
-                = std::max(static_cast<Int64>(1), safe_point_update_interval_seconds); // at least one second
-            if (duration.count() < min_interval)
-            {
-                return ks_gc_info.ks_gc_sp;
-            }
-        }
-
-        pingcap::kv::Backoffer bo(get_safepoint_maxtime);
-        for (;;)
-        {
-            try
-            {
-                auto ks_gc_sp = pd_client->getGCSafePointV2(keyspace_id);
-                updateKeyspaceGCSafepointMap(keyspace_id, ks_gc_sp);
-                return ks_gc_sp;
-            }
-            catch (pingcap::Exception & e)
-            {
-                bo.backoff(pingcap::kv::boPDRPC, e);
-            }
-        }
-    }
-
-    static void updateKeyspaceGCSafepointMap(KeyspaceID keyspace_id, Timestamp ks_gc_sp)
-    {
-        // guard for invalid gc safe point
-        if (ks_gc_sp == 0)
-            return;
-
-        std::unique_lock<std::shared_mutex> lock(ks_gc_sp_mutex);
-        KeyspaceGCInfo new_keyspace_gc_info;
-        new_keyspace_gc_info.ks_gc_sp = ks_gc_sp;
-        new_keyspace_gc_info.ks_gc_sp_update_time = std::chrono::steady_clock::now();
-        ks_gc_sp_map[keyspace_id] = new_keyspace_gc_info;
-    }
-
-    static KeyspaceGCInfo getKeyspaceGCSafepoint(KeyspaceID keyspace_id)
-    {
-        std::shared_lock<std::shared_mutex> lock(ks_gc_sp_mutex);
-        return ks_gc_sp_map[keyspace_id];
-    }
-
-    static void removeKeyspaceGCSafepoint(KeyspaceID keyspace_id)
-    {
-        std::unique_lock<std::shared_mutex> lock(ks_gc_sp_mutex);
-        ks_gc_sp_map.erase(keyspace_id);
-    }
-
+    static void removeKeyspaceGCSafepoint(KeyspaceID keyspace_id) { ks_gc_sp_map.removeGCSafepoint(keyspace_id); }
 
 private:
-    static std::atomic<Timestamp> cached_gc_safe_point;
-    static std::atomic<std::chrono::time_point<std::chrono::steady_clock>> safe_point_last_update_time;
-
     // Keyspace gc safepoint cache and update time.
-    static std::unordered_map<KeyspaceID, KeyspaceGCInfo> ks_gc_sp_map;
-    static std::shared_mutex ks_gc_sp_mutex;
+    static KeyspacesGcInfo ks_gc_sp_map;
 };
 
 

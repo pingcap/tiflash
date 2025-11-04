@@ -572,8 +572,8 @@ try
         }
     }
 
-    // Set whether to use safe point v2.
-    PDClientHelper::enable_safepoint_v2 = config().getBool("enable_safe_point_v2", false);
+    // Safe point v2 is deprecated and replaced by keyspace-based safe point.
+    // config().getBool("enable_safe_point_v2", false);
 
     /** Context contains all that query execution is dependent:
       *  settings, available functions, data types, aggregate functions, databases...
