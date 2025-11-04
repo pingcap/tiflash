@@ -74,10 +74,10 @@ struct KeyspaceGCInfo
     }
 };
 
-class KeyspacesGcInfo
+class KeyspacesGCInfo
 {
 public:
-    KeyspacesGcInfo() = default;
+    KeyspacesGCInfo() = default;
 
     // Update GCSafepoint for a keyspace.
     void updateGCSafepoint(KeyspaceID keyspace_id, Timestamp gc_safepoint)
@@ -91,10 +91,28 @@ public:
     }
 
     // Get GCSafepoint for a keyspace.
-    KeyspaceGCInfo getGCSafepoint(KeyspaceID keyspace_id)
+    std::optional<KeyspaceGCInfo> getGCSafepoint(KeyspaceID keyspace_id)
     {
         std::shared_lock lock(mtx);
-        return gc_safepoint_map[keyspace_id];
+        auto iter = gc_safepoint_map.find(keyspace_id);
+        if (iter == gc_safepoint_map.end())
+            return std::nullopt;
+        return iter->second;
+    }
+
+    std::optional<KeyspaceGCInfo> getGCSafepointIfValid(KeyspaceID keyspace_id, Int64 valid_seconds)
+    {
+        std::shared_lock lock(mtx);
+        auto iter = gc_safepoint_map.find(keyspace_id);
+        if (iter == gc_safepoint_map.end())
+            return std::nullopt;
+
+        const auto now = std::chrono::steady_clock::now();
+        const auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - iter->second.update_time.load());
+        if (duration.count() < valid_seconds)
+            return iter->second;
+        // Expired, return nullopt
+        return std::nullopt;
     }
 
     // Remove the GCSafepoint info for a keyspace.
@@ -161,14 +179,15 @@ struct PDClientHelper
         {
             // In order to avoid too frequent requests to PD,
             // we cache the safe point for a while.
-            auto now = std::chrono::steady_clock::now();
-
-            auto ks_gc_info = ks_gc_sp_map.getGCSafepoint(keyspace_id);
-            const auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - ks_gc_info.update_time.load());
-            const auto min_interval
-                = std::max(static_cast<Int64>(1), safe_point_update_interval_seconds); // at least one second
-            if (duration.count() < min_interval)
-                return ks_gc_info.gc_safepoint;
+            // at least one second
+            const auto min_interval = std::max(static_cast<Int64>(1), safe_point_update_interval_seconds);
+            auto ks_gc_info = ks_gc_sp_map.getGCSafepointIfValid(keyspace_id, min_interval);
+            if (ks_gc_info.has_value())
+            {
+                // Still valid, return the cached gc safepoint
+                return ks_gc_info->gc_safepoint;
+            }
+            // else fallback to fetch from PD
         }
 
         pingcap::kv::Backoffer bo(get_safepoint_maxtime);
@@ -209,7 +228,7 @@ struct PDClientHelper
 
 private:
     // Keyspace gc safepoint cache and update time.
-    static KeyspacesGcInfo ks_gc_sp_map;
+    static KeyspacesGCInfo ks_gc_sp_map;
 };
 
 

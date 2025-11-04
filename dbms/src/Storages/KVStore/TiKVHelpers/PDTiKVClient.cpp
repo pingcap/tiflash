@@ -23,6 +23,6 @@ extern const int LOGICAL_ERROR;
 }
 
 // Keyspace gc safepoint cache and update time.
-KeyspacesGcInfo PDClientHelper::ks_gc_sp_map;
+KeyspacesGCInfo PDClientHelper::ks_gc_sp_map;
 
 } // namespace DB
