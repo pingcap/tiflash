@@ -20,6 +20,7 @@
 #ifdef __clang__
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #endif
+#include <kvproto/pdpb.pb.h>
 #include <pingcap/kv/RegionClient.h>
 #include <pingcap/pd/IClient.h>
 #pragma GCC diagnostic pop
@@ -199,6 +200,19 @@ struct PDClientHelper
                 // - When deployed with classic cluster, the gc safepoint is cluster-based, keyspace_id=NullspaceID.
                 // - When deployed with next-gen cluster, the gc safepoint is keyspace-based.
                 auto gc_state = pd_client->getGCState(keyspace_id);
+                if (unlikely(gc_state.header().error().type() != pdpb::ErrorType::OK))
+                {
+                    LOG_WARNING(
+                        Logger::get(),
+                        "getGCSafePointWithRetry keyspace={} message={} resp={}",
+                        keyspace_id,
+                        gc_state.header().error().message(),
+                        gc_state.ShortDebugString());
+                    bo.backoff(
+                        pingcap::kv::boPDRPC,
+                        pingcap::Exception(gc_state.header().error().message(), pingcap::ErrorCodes::InternalError));
+                    continue; // retry
+                }
                 auto safe_point = gc_state.gc_state().gc_safe_point();
                 if (safe_point != 0)
                 {
