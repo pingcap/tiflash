@@ -20,6 +20,7 @@
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/TiKVHelpers/PDTiKVClient.h>
 #include <Storages/KVStore/Types.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <TiDB/Schema/SchemaSyncService.h>
