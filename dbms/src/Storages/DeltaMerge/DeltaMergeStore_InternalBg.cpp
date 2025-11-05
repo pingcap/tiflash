@@ -24,6 +24,7 @@
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/TiKVHelpers/PDTiKVClient.h>
 #include <Storages/PathPool.h>
 
 #include <magic_enum.hpp>
