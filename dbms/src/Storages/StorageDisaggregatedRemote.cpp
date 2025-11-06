@@ -105,6 +105,8 @@ BlockInputStreams StorageDisaggregated::readThroughS3(const Context & db_context
     // Build InputStream according to the remote segment read tasks
     DAGPipeline pipeline;
     buildRemoteSegmentInputStreams(db_context, buildReadTaskWithBackoff(db_context), num_streams, pipeline);
+    // handle generated column if necessary.
+    executeGeneratedColumnPlaceholder(generated_column_infos, log, pipeline);
 
     NamesAndTypes source_columns;
     source_columns.reserve(table_scan.getColumnSize());
@@ -134,6 +136,8 @@ void StorageDisaggregated::readThroughS3(
         db_context,
         buildReadTaskWithBackoff(db_context),
         num_streams);
+    // handle generated column if necessary.
+    executeGeneratedColumnPlaceholder(exec_context, group_builder, generated_column_infos, log);
 
     NamesAndTypes source_columns;
     auto header = group_builder.getCurrentHeader();
@@ -695,7 +699,10 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
     DAGPipeline & pipeline)
 {
     // Build the input streams to read blocks from remote segments
-    auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
+    DM::ColumnDefinesPtr column_defines;
+    int extra_table_id_index;
+    std::tie(column_defines, extra_table_id_index, generated_column_infos)
+        = genColumnDefinesForDisaggregatedRead(table_scan);
     auto [packed_read_tasks, final_column_defines]
         = packSegmentReadTasks(db_context, std::move(read_tasks), column_defines, num_streams, extra_table_id_index);
     RUNTIME_CHECK(num_streams > 0, num_streams);
@@ -761,7 +768,10 @@ void StorageDisaggregated::buildRemoteSegmentSourceOps(
     size_t num_streams)
 {
     // Build the input streams to read blocks from remote segments
-    auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
+    DM::ColumnDefinesPtr column_defines;
+    int extra_table_id_index;
+    std::tie(column_defines, extra_table_id_index, generated_column_infos)
+        = genColumnDefinesForDisaggregatedRead(table_scan);
     auto [packed_read_tasks, final_column_defines]
         = packSegmentReadTasks(db_context, std::move(read_tasks), column_defines, num_streams, extra_table_id_index);
 

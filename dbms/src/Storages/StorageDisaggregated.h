@@ -157,5 +157,7 @@ private:
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
     static constexpr auto ZONE_LABEL_KEY = "zone";
     std::optional<String> zone_label;
+    // For generated column, just need a placeholder, and TiDB will fill this column.
+    std::vector<std::tuple<UInt64, String, DataTypePtr>> generated_column_infos;
 };
 } // namespace DB
