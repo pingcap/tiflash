@@ -589,6 +589,9 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_key_not_in_region, {{"type", "key_not_in_region"}}),                                                                   \
       F(type_tikv_server_issue, {{"type", "tikv_server_issue"}}),                                                                   \
       F(type_tikv_lock, {{"type", "tikv_lock"}}),                                                                                   \
+      F(type_server_is_busy, {{"type", "server_is_busy"}}),                                                                         \
+      F(type_stale_command, {{"type", "stale_command"}}),                                                                           \
+      F(type_store_not_match, {{"type", "store_not_match"}}),                                                                       \
       F(type_other, {{"type", "other"}}))                                                                                           \
     M(tiflash_raft_classes_count,                                                                                                   \
       "Raft classes counter",                                                                                                       \
@@ -662,7 +665,8 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
     M(tiflash_storage_read_thread_gauge,                                                                                            \
       "The gauge of storage read thread",                                                                                           \
       Gauge,                                                                                                                        \
-      F(type_merged_task, {"type", "merged_task"}))                                                                                 \
+      F(type_merged_task, {"type", "merged_task"}),                                                                                 \
+      F(type_merged_task_active, {"type", "merged_task_active"}))                                                                   \
     M(tiflash_storage_read_thread_seconds,                                                                                          \
       "Bucketed histogram of read thread",                                                                                          \
       Histogram,                                                                                                                    \

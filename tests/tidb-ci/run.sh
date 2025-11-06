@@ -37,6 +37,14 @@ clean_data_log
 
 ${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml up -d
 wait_env
+
+echo "PD version:"
+${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml exec -T pd0 bash -c '/pd-server -V'
+echo "TiDB version:"
+${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml exec -T tidb0 bash -c '/tidb-server -V'
+echo "TiKV version:"
+${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml exec -T tikv0 bash -c '/tikv-server -V'
+
 ${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/fail-point-tests && ./run-test.sh tidb-ci/fullstack-test true'
 
 ${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml down

@@ -38,6 +38,10 @@
 
 #include <magic_enum.hpp>
 
+namespace DB::FailPoints
+{
+extern const char force_return_store_status[];
+} // namespace DB::FailPoints
 namespace DB
 {
 
@@ -369,6 +373,13 @@ void TMTContext::setStatusRunning()
 
 TMTContext::StoreStatus TMTContext::getStoreStatus(std::memory_order memory_order) const
 {
+    fiu_do_on(FailPoints::force_return_store_status, {
+        if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_return_store_status); v)
+        {
+            auto hack_status = std::any_cast<StoreStatus>(*v);
+            return hack_status;
+        }
+    });
     return store_status.load(memory_order);
 }
 

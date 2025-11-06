@@ -25,7 +25,7 @@ UnorderedSourceOp::UnorderedSourceOp(
     const DM::ColumnDefines & columns_to_read_,
     int extra_table_id_index_,
     const String & req_id,
-    const RuntimeFilteList & runtime_filter_list_,
+    const RuntimeFilterList & runtime_filter_list_,
     int max_wait_time_ms_,
     bool is_disagg_)
     : SourceOp(exec_context_, req_id)
@@ -89,7 +89,7 @@ void UnorderedSourceOp::operatePrefixImpl()
         else
         {
             // Check if the RuntimeFilters is ready immediately.
-            RuntimeFilteList ready_rf_list;
+            RuntimeFilterList ready_rf_list;
             RFWaitTask::filterAndMoveReadyRfs(waiting_rf_list, ready_rf_list);
 
             if (max_wait_time_ms <= 0 || waiting_rf_list.empty())

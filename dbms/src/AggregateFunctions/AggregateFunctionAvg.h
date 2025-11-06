@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/AggregateFunctions/AggregateFunctionAvg.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,6 +23,8 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 
+#include <type_traits>
+
 namespace DB
 {
 template <typename T>
@@ -43,17 +47,17 @@ struct AggregateFunctionAvgData
 
 
 /// Calculates arithmetic mean of numbers.
-template <typename T, typename TResult = Float64>
+template <typename T, typename CalculateType, typename TResult = Float64>
 class AggregateFunctionAvg final
     : public IAggregateFunctionDataHelper<
-          AggregateFunctionAvgData<std::conditional_t<IsDecimal<T>, TResult, typename NearestFieldType<T>::Type>>,
-          AggregateFunctionAvg<T, TResult>>
+          AggregateFunctionAvgData<
+              std::conditional_t<IsDecimal<CalculateType>, CalculateType, typename NearestFieldType<T>::Type>>,
+          AggregateFunctionAvg<T, CalculateType, TResult>>
 {
     PrecType prec;
     ScaleType scale;
     PrecType result_prec;
     ScaleType result_scale;
-    ScaleType div_precincrement;
 
 public:
     AggregateFunctionAvg() = default;
@@ -117,12 +121,14 @@ public:
 
     void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
-        if constexpr (IsDecimal<TResult>)
+        if constexpr (IsDecimal<CalculateType>)
         {
             ScaleType left_scale = result_scale - scale;
-            TResult result = this->data(place).sum.value * getScaleMultiplier<TResult>(left_scale)
-                / static_cast<typename TResult::NativeType>(this->data(place).count);
-            static_cast<ColumnDecimal<TResult> &>(to).getData().push_back(result);
+            typename CalculateType::NativeType result = this->data(place).sum.value
+                * getScaleMultiplier<CalculateType>(left_scale)
+                / static_cast<typename CalculateType::NativeType>(this->data(place).count);
+            static_cast<ColumnDecimal<TResult> &>(to).getData().push_back(
+                TResult(static_cast<typename TResult::NativeType>(result)));
         }
         else
         {
@@ -136,10 +142,11 @@ public:
         if constexpr (IsDecimal<TResult>)
         {
             ScaleType left_scale = result_scale - scale;
-            TResult result = this->data(place).sum.value * getScaleMultiplier<TResult>(left_scale)
-                / static_cast<typename TResult::NativeType>(this->data(place).count);
+            typename CalculateType::NativeType result = this->data(place).sum.value
+                * getScaleMultiplier<CalculateType>(left_scale)
+                / static_cast<typename CalculateType::NativeType>(this->data(place).count);
             auto & container = static_cast<ColumnDecimal<TResult> &>(to).getData();
-            container.resize_fill(container.size() + num, result);
+            container.resize_fill(container.size() + num, TResult(static_cast<typename TResult::NativeType>(result)));
         }
         else
         {
@@ -152,8 +159,8 @@ public:
 
     void create(AggregateDataPtr __restrict place) const override
     {
-        using Data
-            = AggregateFunctionAvgData<std::conditional_t<IsDecimal<T>, TResult, typename NearestFieldType<T>::Type>>;
+        using Data = AggregateFunctionAvgData<
+            std::conditional_t<IsDecimal<CalculateType>, CalculateType, typename NearestFieldType<T>::Type>>;
         new (place) Data;
     }
 

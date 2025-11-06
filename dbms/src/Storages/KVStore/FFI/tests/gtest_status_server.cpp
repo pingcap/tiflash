@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Inc.
+// Copyright 2024 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,37 +23,36 @@
 #include <Parsers/ASTDropQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
-#include <Poco/File.h>
 #include <Storages/IManageableStorage.h>
-#include <Storages/KVStore/Decode/SafeTsManager.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/FFI/ProxyFFICommon.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/TMTStorages.h>
-#include <Storages/MutableSupport.h>
+#include <Storages/KVStore/Types.h>
+#include <Storages/KVStore/tests/region_kvstore_test.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/registerStorages.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
-#include <common/logger_useful.h>
+#include <TiDB/Schema/TiDBSchemaManager.h>
 
-namespace DB
-{
-namespace ErrorCodes
+namespace DB::ErrorCodes
 {
 extern const int SYNTAX_ERROR;
-} // namespace ErrorCodes
+} // namespace DB::ErrorCodes
 
-namespace FailPoints
+namespace DB::FailPoints
 {
-} // namespace FailPoints
+extern const char sync_schema_request_failure[];
+extern const char force_return_store_status[];
+} // namespace DB::FailPoints
 
-namespace tests
+namespace DB::tests
 {
-class SyncStatusTest : public ::testing::Test
+class StatusServerTest : public ::testing::Test
 {
 public:
-    SyncStatusTest() = default;
+    StatusServerTest() = default;
     static void SetUpTestCase()
     {
         try
@@ -62,7 +61,7 @@ public:
         }
         catch (DB::Exception &)
         {
-            // Maybe another test has already registed, ignore exception here.
+            // Maybe another test has already register, ignore exception here.
         }
     }
     void SetUp() override { recreateMetadataPath(); }
@@ -85,7 +84,142 @@ public:
         p = path + "/data/";
         TiFlashTestEnv::tryRemovePath(p, /*recreate=*/true);
     }
+
+    static void releaseResp(const EngineStoreServerHelper & helper, HttpRequestRes && res)
+    {
+        // release all raw cpp ptr in HttpRequestRes
+        helper.fn_gc_raw_cpp_ptr(res.res.inner.ptr, res.res.inner.type);
+        helper.fn_gc_raw_cpp_ptr(res.api_name.inner.ptr, res.api_name.inner.type);
+    }
 };
+
+TEST_F(StatusServerTest, TestSyncSchema)
+try
+{
+    auto ctx = TiFlashTestEnv::getContext();
+    auto pd_client = ctx->getGlobalContext().getTMTContext().getPDClient();
+
+    MockTiDB::instance().newDataBase("db_1");
+    auto cols = ColumnsDescription({
+        {"col1", typeFromString("Int64")},
+    });
+    auto table_id = MockTiDB::instance().newTable("db_1", "t_1", cols, pd_client->getTS(), "");
+    auto schema_syncer = ctx->getTMTContext().getSchemaSyncerManager();
+    KeyspaceID keyspace_id = NullspaceID;
+    schema_syncer->syncSchemas(ctx->getGlobalContext(), keyspace_id);
+
+    EngineStoreServerWrap store_server_wrap{};
+    store_server_wrap.tmt = &ctx->getTMTContext();
+    auto helper = GetEngineStoreServerHelper(&store_server_wrap);
+
+    {
+        String path = fmt::format("/tiflash/sync-schema/keyspace/{}/table/{}", keyspace_id, table_id);
+        auto res = helper.fn_handle_http_request(
+            &store_server_wrap,
+            BaseBuffView{path.data(), path.length()},
+            BaseBuffView{path.data(), path.length()},
+            BaseBuffView{"", 0});
+        EXPECT_EQ(res.status, HttpRequestStatus::Ok);
+        // normal errmsg is nil.
+        EXPECT_EQ(res.res.view.len, 0);
+        releaseResp(helper, std::move(res));
+    }
+
+    {
+        // do sync table schema twice
+        String path = fmt::format("/tiflash/sync-schema/keyspace/{}/table/{}", keyspace_id, table_id);
+        auto res = helper.fn_handle_http_request(
+            &store_server_wrap,
+            BaseBuffView{path.data(), path.length()},
+            BaseBuffView{path.data(), path.length()},
+            BaseBuffView{"", 0});
+        EXPECT_EQ(res.status, HttpRequestStatus::Ok) << magic_enum::enum_name(res.status);
+        // normal errmsg is nil.
+        EXPECT_EQ(res.res.view.len, 0);
+        releaseResp(helper, std::move(res));
+    }
+
+    {
+        // test wrong table ID
+        TableID wrong_table_id = table_id + 1;
+        String path = fmt::format("/tiflash/sync-schema/keyspace/{}/table/{}", keyspace_id, wrong_table_id);
+        auto res_err = helper.fn_handle_http_request(
+            &store_server_wrap,
+            BaseBuffView{path.data(), path.length()},
+            BaseBuffView{path.data(), path.length()},
+            BaseBuffView{"", 0});
+        EXPECT_EQ(res_err.status, HttpRequestStatus::InternalError) << magic_enum::enum_name(res_err.status);
+        StringRef sr(res_err.res.view.data, res_err.res.view.len);
+        EXPECT_EQ(sr.toString(), "{\"errMsg\":\"sync schema failed\"}");
+        releaseResp(helper, std::move(res_err));
+    }
+
+    // test sync schema failed
+    {
+        String path = fmt::format("/tiflash/sync-schema/keyspace/{}/table/{}", keyspace_id, table_id);
+        FailPointHelper::enableFailPoint(FailPoints::sync_schema_request_failure);
+        auto res_err1 = helper.fn_handle_http_request(
+            &store_server_wrap,
+            BaseBuffView{path.data(), path.length()},
+            BaseBuffView{path.data(), path.length()},
+            BaseBuffView{"", 0});
+        EXPECT_EQ(res_err1.status, HttpRequestStatus::InternalError) << magic_enum::enum_name(res_err1.status);
+        StringRef sr(res_err1.res.view.data, res_err1.res.view.len);
+        EXPECT_EQ(sr.toString(), "{\"errMsg\":\"Fail point FailPoints::sync_schema_request_failure is triggered.\"}");
+        releaseResp(helper, std::move(res_err1));
+    }
+
+    dropDataBase("db_1");
+}
+CATCH
+
+TEST_F(StatusServerTest, TestReadyz)
+try
+{
+    auto ctx = TiFlashTestEnv::getContext();
+
+    EngineStoreServerWrap store_server_wrap{};
+    store_server_wrap.tmt = &ctx->getTMTContext();
+    auto helper = GetEngineStoreServerHelper(&store_server_wrap);
+
+    {
+        FailPointHelper::enableFailPoint(FailPoints::force_return_store_status, TMTContext::StoreStatus::Running);
+        SCOPE_EXIT(FailPointHelper::disableFailPoint(FailPoints::force_return_store_status));
+        // is ready for serving
+        String path = "/tiflash/readyz";
+        String query = "verbose";
+        auto res = helper.fn_handle_http_request(
+            &store_server_wrap,
+            BaseBuffView{path.data(), path.length()},
+            BaseBuffView{query.data(), query.length()},
+            BaseBuffView{"", 0});
+        EXPECT_EQ(res.status, HttpRequestStatus::Ok) << magic_enum::enum_name(res.status);
+        // normal response body is non-nil.
+        EXPECT_NE(res.res.view.len, 0);
+        // normal response contains store_status ok info
+        EXPECT_NE(std::string_view(res.res.view.data).find("[+]store_status ok"), std::string_view::npos);
+        releaseResp(helper, std::move(res));
+    }
+
+    {
+        FailPointHelper::enableFailPoint(FailPoints::force_return_store_status, TMTContext::StoreStatus::Ready);
+        SCOPE_EXIT(FailPointHelper::disableFailPoint(FailPoints::force_return_store_status));
+        String path = "/tiflash/readyz";
+        String query = "verbose";
+        auto res = helper.fn_handle_http_request(
+            &store_server_wrap,
+            BaseBuffView{path.data(), path.length()},
+            BaseBuffView{query.data(), query.length()},
+            BaseBuffView{"", 0});
+        EXPECT_EQ(res.status, HttpRequestStatus::InternalError) << magic_enum::enum_name(res.status);
+        // normal response body is non-nil.
+        EXPECT_NE(res.res.view.len, 0);
+        // error response contains store_status fail info
+        EXPECT_NE(std::string_view(res.res.view.data).find("[-]store_status fail:"), std::string_view::npos);
+        releaseResp(helper, std::move(res));
+    }
+}
+CATCH
 
 
 ASTPtr parseCreateStatement(const String & statement)
@@ -200,7 +334,7 @@ void makeRegionsLag(size_t lag_num)
     }
 }
 
-TEST_F(SyncStatusTest, TestLagRegion)
+TEST_F(StatusServerTest, TestSyncStatusLagRegion)
 try
 {
     TableID table_id = createDBAndTable("db_1", "t_1");
@@ -235,12 +369,12 @@ try
         }
         ASSERT_EQ(region_ids.size(), 10) << fmt::format("{} ", region_ids);
     }
-    delete (static_cast<RawCppString *>(res.res.inner.ptr));
+    releaseResp(helper, std::move(res));
     dropDataBase("db_1");
 }
 CATCH
 
-TEST_F(SyncStatusTest, TestNormalRegion)
+TEST_F(StatusServerTest, TestSyncStatusNormalRegion)
 try
 {
     TableID table_id = createDBAndTable("db_1", "t_1");
@@ -273,10 +407,9 @@ try
         }
         ASSERT_EQ(region_ids.size(), 20) << fmt::format("{} ", region_ids);
     }
-    delete (static_cast<RawCppString *>(res.res.inner.ptr));
+    releaseResp(helper, std::move(res));
     dropDataBase("db_1");
 }
 CATCH
 
-} // namespace tests
-} // namespace DB
+} // namespace DB::tests

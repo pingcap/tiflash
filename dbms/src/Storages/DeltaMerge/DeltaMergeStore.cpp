@@ -1084,6 +1084,7 @@ BlockInputStreams DeltaMergeStore::readRaw(
         req_info,
         enable_read_thread,
         final_num_stream,
+        final_num_stream,
         dm_context->scan_context->keyspace_id,
         dm_context->scan_context->resource_group_name);
 
@@ -1189,6 +1190,7 @@ void DeltaMergeStore::readRaw(
         req_info,
         enable_read_thread,
         final_num_stream,
+        final_num_stream,
         dm_context->scan_context->keyspace_id,
         dm_context->scan_context->resource_group_name);
 
@@ -1273,11 +1275,10 @@ BlockInputStreams DeltaMergeStore::read(
     size_t num_streams,
     UInt64 start_ts,
     const PushDownExecutorPtr & executor,
-    const RuntimeFilteList & runtime_filter_list,
+    const RuntimeFilterList & runtime_filter_list,
     int rf_max_wait_time_ms,
     const String & tracing_id,
-    bool keep_order,
-    bool is_fast_scan,
+    const DMReadOptions & read_opts,
     size_t expected_block_size,
     const SegmentIdSet & read_segments,
     size_t extra_table_id_index,
@@ -1287,7 +1288,7 @@ BlockInputStreams DeltaMergeStore::read(
     auto dm_context = newDMContext(db_context, db_settings, tracing_id, scan_context);
 
     // If keep order is required, disable read thread.
-    auto enable_read_thread = db_context.getSettingsRef().dt_enable_read_thread && !keep_order;
+    auto enable_read_thread = db_context.getSettingsRef().dt_enable_read_thread && !read_opts.keep_order;
     // SegmentReadTaskScheduler and SegmentReadTaskPool use table_id + segment id as unique ID when read thread is enabled.
     // 'try_split_task' can result in several read tasks with the same id that can cause some trouble.
     // Also, too many read tasks of a segment with different small ranges is not good for data sharing cache.
@@ -1307,7 +1308,7 @@ BlockInputStreams DeltaMergeStore::read(
 
     GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
     size_t final_num_stream = std::max(1, std::min(num_streams, tasks.size()));
-    auto read_mode = getReadMode(db_context, is_fast_scan, keep_order, executor);
+    auto read_mode = getReadMode(db_context, read_opts.is_fast_scan, read_opts.keep_order, executor);
     const auto & final_columns_to_read
         = executor && executor->extra_cast ? *executor->columns_after_cast : columns_to_read;
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
@@ -1321,6 +1322,7 @@ BlockInputStreams DeltaMergeStore::read(
         after_segment_read,
         log_tracing_id,
         enable_read_thread,
+        final_num_stream,
         final_num_stream,
         dm_context->scan_context->keyspace_id,
         dm_context->scan_context->resource_group_name);
@@ -1362,10 +1364,10 @@ BlockInputStreams DeltaMergeStore::read(
         "Read create stream done, keep_order={} dt_enable_read_thread={} enable_read_thread={} "
         "is_fast_scan={} is_push_down_executor_empty={} pool_id={} num_streams={} columns_to_read={} "
         "final_columns_to_read={}",
-        keep_order,
+        read_opts.keep_order,
         db_context.getSettingsRef().dt_enable_read_thread,
         enable_read_thread,
-        is_fast_scan,
+        read_opts.is_fast_scan,
         executor == nullptr || executor->before_where == nullptr,
         read_task_pool->pool_id,
         final_num_stream,
@@ -1385,11 +1387,10 @@ void DeltaMergeStore::read(
     size_t num_streams,
     UInt64 start_ts,
     const PushDownExecutorPtr & executor,
-    const RuntimeFilteList & runtime_filter_list,
+    const RuntimeFilterList & runtime_filter_list,
     int rf_max_wait_time_ms,
     const String & tracing_id,
-    bool keep_order,
-    bool is_fast_scan,
+    const DMReadOptions & read_opts,
     size_t expected_block_size,
     const SegmentIdSet & read_segments,
     size_t extra_table_id_index,
@@ -1399,7 +1400,7 @@ void DeltaMergeStore::read(
     auto dm_context = newDMContext(db_context, db_settings, tracing_id, scan_context);
 
     // If keep order is required, disable read thread.
-    auto enable_read_thread = db_context.getSettingsRef().dt_enable_read_thread && !keep_order;
+    auto enable_read_thread = db_context.getSettingsRef().dt_enable_read_thread && !read_opts.keep_order;
     // SegmentReadTaskScheduler and SegmentReadTaskPool use table_id + segment id as unique ID when read thread is enabled.
     // 'try_split_task' can result in several read tasks with the same id that can cause some trouble.
     // Also, too many read tasks of a segment with different small ranges is not good for data sharing cache.
@@ -1418,9 +1419,24 @@ void DeltaMergeStore::read(
     };
 
     GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
-    size_t final_num_stream
-        = enable_read_thread ? std::max(1, num_streams) : std::max(1, std::min(num_streams, tasks.size()));
-    auto read_mode = getReadMode(db_context, is_fast_scan, keep_order, executor);
+    size_t final_num_stream = 0;
+    if (enable_read_thread)
+    {
+        // For limited tasks size under `enable_read_thread`, too much source ops actually lead to
+        // the table scan speed can not match the compute layer speed and lead to more concurrency
+        // overhead. So we limit the final_num_stream to tasks.size() * 4 when read thread is enabled
+        // under multiple partitions.
+        if (read_opts.has_multiple_partitions)
+            final_num_stream = std::min(num_streams, tasks.size() * 4);
+        else
+            final_num_stream = num_streams;
+        final_num_stream = std::max(1, final_num_stream);
+    }
+    else
+    {
+        final_num_stream = std::max(1, std::min(num_streams, tasks.size()));
+    }
+    auto read_mode = getReadMode(db_context, read_opts.is_fast_scan, read_opts.keep_order, executor);
     const auto & final_columns_to_read
         = executor && executor->extra_cast ? *executor->columns_after_cast : columns_to_read;
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
@@ -1434,6 +1450,7 @@ void DeltaMergeStore::read(
         after_segment_read,
         log_tracing_id,
         enable_read_thread,
+        final_num_stream,
         final_num_stream,
         dm_context->scan_context->keyspace_id,
         dm_context->scan_context->resource_group_name);
@@ -1484,10 +1501,10 @@ void DeltaMergeStore::read(
         "Read create PipelineExec done, keep_order={} dt_enable_read_thread={} enable_read_thread={} "
         "is_fast_scan={} is_push_down_executor_empty={} pool_id={} num_streams={} columns_to_read={} "
         "final_columns_to_read={}",
-        keep_order,
+        read_opts.keep_order,
         db_context.getSettingsRef().dt_enable_read_thread,
         enable_read_thread,
-        is_fast_scan,
+        read_opts.is_fast_scan,
         executor == nullptr || executor->before_where == nullptr,
         read_task_pool->pool_id,
         final_num_stream,

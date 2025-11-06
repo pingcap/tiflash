@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Parsers/ASTWithAlias.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -47,7 +49,8 @@ public:
         const override final;
 
     virtual void formatImplWithoutAlias(const FormatSettings & settings, FormatState & state, FormatStateStacked frame)
-        const = 0;
+        const
+        = 0;
 
 protected:
     virtual String getColumnNameImpl() const = 0;
@@ -58,7 +61,7 @@ inline ASTPtr setAlias(ASTPtr ast, const String & alias)
 {
     ast->setAlias(alias);
     return ast;
-};
+}
 
 
 } // namespace DB

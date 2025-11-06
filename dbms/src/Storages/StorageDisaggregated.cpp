@@ -17,6 +17,7 @@
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/RequestUtils.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Operators/ExpressionTransformOp.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/TMTContext.h>
@@ -25,6 +26,8 @@
 #include <Storages/StorageDisaggregated.h>
 #include <kvproto/kvrpcpb.pb.h>
 
+#include <magic_enum.hpp>
+
 
 namespace DB
 {
@@ -32,8 +35,7 @@ StorageDisaggregated::StorageDisaggregated(
     Context & context_,
     const TiDBTableScan & table_scan_,
     const FilterConditions & filter_conditions_)
-    : IStorage()
-    , context(context_)
+    : context(context_)
     , table_scan(table_scan_)
     , log(Logger::get(context_.getDAGContext()->log ? context_.getDAGContext()->log->identifier() : ""))
     , sender_target_mpp_task_id(context_.getDAGContext()->getMPPTaskMeta())
@@ -57,7 +59,10 @@ BlockInputStreams StorageDisaggregated::read(
     size_t,
     unsigned num_streams)
 {
-    RUNTIME_CHECK_MSG(S3::ClientFactory::instance().isEnabled(), "storage disaggregated mode must with S3.");
+    RUNTIME_CHECK_MSG(
+        db_context.getSharedContextDisagg()->disaggregated_mode != DisaggregatedMode::None,
+        "storage disaggregated mode must disaggregated, mode={}",
+        magic_enum::enum_name(db_context.getSharedContextDisagg()->disaggregated_mode));
     return readThroughS3(db_context, num_streams);
 }
 
@@ -70,7 +75,10 @@ void StorageDisaggregated::read(
     size_t /*max_block_size*/,
     unsigned num_streams)
 {
-    RUNTIME_CHECK_MSG(S3::ClientFactory::instance().isEnabled(), "storage disaggregated mode must with S3.");
+    RUNTIME_CHECK_MSG(
+        db_context.getSharedContextDisagg()->disaggregated_mode != DisaggregatedMode::None,
+        "storage disaggregated mode must disaggregated, mode={}",
+        magic_enum::enum_name(db_context.getSharedContextDisagg()->disaggregated_mode));
     return readThroughS3(exec_context, group_builder, db_context, num_streams);
 }
 

@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Functions/FunctionsString.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -65,7 +67,7 @@ template <bool>
 UInt8 xor_or_identity(const UInt8 c, const int mask)
 {
     return c ^ mask;
-};
+}
 template <>
 inline UInt8 xor_or_identity<false>(const UInt8 c, const int)
 {

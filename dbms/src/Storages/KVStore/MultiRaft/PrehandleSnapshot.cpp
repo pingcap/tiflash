@@ -30,6 +30,7 @@
 #include <Storages/KVStore/MultiRaft/PreHandlingTrace.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/TiKVHelpers/PDTiKVClient.h>
 #include <Storages/KVStore/Types.h>
 #include <Storages/KVStore/Utils/AsyncTasks.h>
 #include <Storages/StorageDeltaMerge.h>

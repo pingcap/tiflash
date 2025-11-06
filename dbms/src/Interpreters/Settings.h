@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Interpreters/Settings.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -182,7 +184,7 @@ struct Settings
     M(SettingUInt64, dt_merged_file_max_size, 16 * 1024 * 1024, "Small files are merged into one or more files not larger than dt_merged_file_max_size")                                                                                \
     M(SettingDouble, dt_page_gc_threshold, 0.5, "Max valid rate of deciding to do a GC in PageStorage")                                                                                                                                 \
     M(SettingDouble, dt_page_gc_threshold_raft_data, 0.05, "Max valid rate of deciding to do a GC for BlobFile storing PageData in PageStorage")                                                                                        \
-    M(SettingInt64, enable_version_chain, 1, "Enable version chain or not: 0 - disable, 1 - enabled. "                                                                                                                                  \
+    M(SettingInt64, enable_version_chain, 0, "Enable version chain or not: 0 - disable, 1 - enabled. "                                                                                                                                  \
                                              "More details are in the comments of `enum class VersionChainMode`."                                                                                                                       \
                                              "Modifying this configuration requires a restart to reset the in-memory state.")                                                                                                           \
     /* DeltaTree engine testing settings */\

@@ -137,7 +137,9 @@ void WaitCheckRegionReadyImpl(
 
     LOG_INFO(
         log,
-        "start to check regions ready, min_wait_tick={:.3f}s max_wait_tick={:.3f}s wait_region_ready_timeout={:.3f}s",
+        "start to check regions ready, read_index_timeout={} min_wait_tick={:.3f}s max_wait_tick={:.3f}s "
+        "wait_region_ready_timeout={:.3f}s",
+        read_index_timeout,
         wait_tick_time,
         max_wait_tick_time,
         get_wait_region_ready_timeout_sec);
