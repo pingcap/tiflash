@@ -39,10 +39,7 @@ bool isAllowToUseTwoLevelGroupBy(size_t before_agg_streams_size, const Settings 
       * 1. Parallel aggregation is done, and the results should be merged in parallel.
       * 2. An aggregation is done with store of temporary data on the disk, and they need to be merged in a memory efficient way.
       */
-    auto may_need_spill = settings.max_bytes_before_external_group_by != 0;
-    may_need_spill |= settings.max_memory_usage.getActualBytes(1024 * 1024 * 1024) > 0
-        && settings.auto_memory_revoke_trigger_threshold > 0;
-    return before_agg_streams_size > 1 || may_need_spill;
+    return before_agg_streams_size > 1 || settings.max_bytes_before_external_group_by != 0;
 }
 } // namespace
 

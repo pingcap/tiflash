@@ -115,35 +115,6 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
     return physical_agg;
 }
 
-Aggregator::Params PhysicalAggregation::genAggregatorParams(
-    const Block & before_agg_header,
-    Context & context,
-    size_t before_agg_streams_size,
-    size_t agg_streams_size) const
-{
-    SpillConfig spill_config(
-        context.getTemporaryPath(),
-        log->identifier(),
-        context.getSettingsRef().max_cached_data_bytes_in_spiller,
-        context.getSettingsRef().max_spilled_rows_per_file,
-        context.getSettingsRef().max_spilled_bytes_per_file,
-        context.getFileProvider(),
-        context.getSettingsRef().max_threads,
-        context.getSettingsRef().max_block_size);
-    return *AggregationInterpreterHelper::buildParams(
-        context,
-        before_agg_header,
-        before_agg_streams_size,
-        agg_streams_size,
-        aggregation_keys,
-        key_ref_agg_func,
-        agg_func_ref_key,
-        aggregation_collators,
-        aggregate_descriptions,
-        is_final_agg,
-        spill_config);
-}
-
 void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
     // Agg cannot be both auto pass through and fine grained shuffle at the same time.
@@ -156,13 +127,27 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
 
     Block before_agg_header = pipeline.firstStream()->getHeader();
     AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_descriptions, before_agg_header);
-
-    auto params = genAggregatorParams(
-        before_agg_header,
+    SpillConfig spill_config(
+        context.getTemporaryPath(),
+        log->identifier(),
+        context.getSettingsRef().max_cached_data_bytes_in_spiller,
+        context.getSettingsRef().max_spilled_rows_per_file,
+        context.getSettingsRef().max_spilled_bytes_per_file,
+        context.getFileProvider(),
+        context.getSettingsRef().max_threads,
+        context.getSettingsRef().max_block_size);
+    auto params = *AggregationInterpreterHelper::buildParams(
         context,
-        // for fine grained shuffle or auto pass through mode, each aggregator is independent, so the concurrency is hardcoded to 1
-        fine_grained_shuffle.enabled() || auto_pass_through_switcher.enabled() ? 1 : pipeline.streams.size(),
-        fine_grained_shuffle.enabled() ? pipeline.streams.size() : 1);
+        before_agg_header,
+        pipeline.streams.size(),
+        fine_grained_shuffle.enabled() ? pipeline.streams.size() : 1,
+        aggregation_keys,
+        key_ref_agg_func,
+        agg_func_ref_key,
+        aggregation_collators,
+        aggregate_descriptions,
+        is_final_agg,
+        spill_config);
 
     if (fine_grained_shuffle.enabled())
     {
@@ -295,9 +280,27 @@ void PhysicalAggregation::buildPipelineExecGroupImpl(
     if (context.getDAGContext() != nullptr && context.getDAGContext()->isInAutoSpillMode() && concurrency > 1)
         fine_grained_spill_context = std::make_shared<FineGrainedOperatorSpillContext>("aggregation", log);
     AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_descriptions, before_agg_header);
-    // 1. this function will only be called if fine_grained_shuffle or auto_pass_through is true.
-    // 2. for fine grained shuffle or auto pass through mode, each aggregator is independent, so the before_agg_stream_size is hardcoded to 1
-    auto params = genAggregatorParams(before_agg_header, context, 1, concurrency);
+    SpillConfig spill_config(
+        context.getTemporaryPath(),
+        log->identifier(),
+        context.getSettingsRef().max_cached_data_bytes_in_spiller,
+        context.getSettingsRef().max_spilled_rows_per_file,
+        context.getSettingsRef().max_spilled_bytes_per_file,
+        context.getFileProvider(),
+        context.getSettingsRef().max_threads,
+        context.getSettingsRef().max_block_size);
+    auto params = *AggregationInterpreterHelper::buildParams(
+        context,
+        before_agg_header,
+        concurrency,
+        concurrency,
+        aggregation_keys,
+        key_ref_agg_func,
+        agg_func_ref_key,
+        aggregation_collators,
+        aggregate_descriptions,
+        is_final_agg,
+        spill_config);
     if (fine_grained_shuffle.enabled())
     {
         group_builder.transform([&](auto & builder) {

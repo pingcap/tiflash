@@ -67,12 +67,6 @@ public:
     const Block & getSampleBlock() const override;
 
 private:
-    Aggregator::Params genAggregatorParams(
-        const Block & before_agg_header,
-        Context & context,
-        size_t before_agg_streams_size,
-        size_t agg_streams_size) const;
-
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 
     void buildPipelineExecGroupImpl(
