@@ -117,27 +117,11 @@ Union: <for test>
 ~result:
 Expression: <final projection>
  Expression: <expr after aggregation>
-  Aggregating, enable_two_level_hashtable: false
+  Aggregating
    MockTableScan
 @
 ~test_suite_name: ParallelQuery
 ~result_index: 5
-~result:
-Expression: <final projection>
- Expression: <expr after aggregation>
-  Aggregating, enable_two_level_hashtable: true
-   MockTableScan
-@
-~test_suite_name: ParallelQuery
-~result_index: 6
-~result:
-Expression: <final projection>
- Expression: <expr after aggregation>
-  Aggregating, enable_two_level_hashtable: true
-   MockTableScan
-@
-~test_suite_name: ParallelQuery
-~result_index: 7
 ~result:
 Union: <for test>
  Expression x 5: <final projection>
@@ -147,7 +131,7 @@ Union: <for test>
      MockTableScan x 5
 @
 ~test_suite_name: ParallelQuery
-~result_index: 8
+~result_index: 6
 ~result:
 Expression: <final projection>
  MergeSorting, limit = 10
@@ -155,7 +139,7 @@ Expression: <final projection>
    MockTableScan
 @
 ~test_suite_name: ParallelQuery
-~result_index: 9
+~result_index: 7
 ~result:
 Union: <for test>
  Expression x 5: <final projection>
@@ -166,14 +150,14 @@ Union: <for test>
       MockTableScan
 @
 ~test_suite_name: ParallelQuery
-~result_index: 10
+~result_index: 8
 ~result:
 Expression: <final projection>
  Filter
   MockTableScan
 @
 ~test_suite_name: ParallelQuery
-~result_index: 11
+~result_index: 9
 ~result:
 Union: <for test>
  Expression x 5: <final projection>
@@ -181,7 +165,7 @@ Union: <for test>
    MockTableScan
 @
 ~test_suite_name: ParallelQuery
-~result_index: 12
+~result_index: 10
 ~result:
 Union: <for test>
  Expression x 10: <final projection>
@@ -195,16 +179,16 @@ Union: <for test>
          MockTableScan
 @
 ~test_suite_name: ParallelQuery
-~result_index: 13
+~result_index: 11
 ~result:
 Expression: <final projection>
  Expression: <expr after aggregation>
-  Aggregating, enable_two_level_hashtable: false
+  Aggregating
    Limit, limit = 10
     MockTableScan
 @
 ~test_suite_name: ParallelQuery
-~result_index: 14
+~result_index: 12
 ~result:
 Union: <for test>
  Expression x 10: <final projection>
@@ -218,17 +202,17 @@ Union: <for test>
          MockTableScan
 @
 ~test_suite_name: ParallelQuery
-~result_index: 15
+~result_index: 13
 ~result:
 Expression: <final projection>
  Expression: <expr after aggregation>
-  Aggregating, enable_two_level_hashtable: false
+  Aggregating
    MergeSorting, limit = 10
     PartialSorting: limit = 10
      MockTableScan
 @
 ~test_suite_name: ParallelQuery
-~result_index: 16
+~result_index: 14
 ~result:
 Union: <for test>
  Expression x 10: <final projection>
@@ -242,18 +226,18 @@ Union: <for test>
          MockTableScan x 10
 @
 ~test_suite_name: ParallelQuery
-~result_index: 17
+~result_index: 15
 ~result:
 Expression: <final projection>
  Expression: <expr after aggregation>
-  Aggregating, enable_two_level_hashtable: false
+  Aggregating
    Expression: <projection>
     Expression: <expr after aggregation>
-     Aggregating, enable_two_level_hashtable: false
+     Aggregating
       MockTableScan
 @
 ~test_suite_name: ParallelQuery
-~result_index: 18
+~result_index: 16
 ~result:
 Union: <for test>
  MockExchangeSender x 10
@@ -264,16 +248,16 @@ Union: <for test>
       MockTableScan x 10
 @
 ~test_suite_name: ParallelQuery
-~result_index: 19
+~result_index: 17
 ~result:
 MockExchangeSender
  Expression: <final projection>
   Expression: <expr after aggregation>
-   Aggregating, enable_two_level_hashtable: false
+   Aggregating
     MockTableScan
 @
 ~test_suite_name: ParallelQuery
-~result_index: 20
+~result_index: 18
 ~result:
 Union: <for test>
  MockExchangeSender x 10
@@ -285,7 +269,7 @@ Union: <for test>
        MockTableScan
 @
 ~test_suite_name: ParallelQuery
-~result_index: 21
+~result_index: 19
 ~result:
 MockExchangeSender
  Expression: <final projection>
@@ -294,7 +278,7 @@ MockExchangeSender
     MockTableScan
 @
 ~test_suite_name: ParallelQuery
-~result_index: 22
+~result_index: 20
 ~result:
 Union: <for test>
  MockExchangeSender x 10
@@ -306,7 +290,7 @@ Union: <for test>
        MockTableScan
 @
 ~test_suite_name: ParallelQuery
-~result_index: 23
+~result_index: 21
 ~result:
 MockExchangeSender
  Expression: <final projection>
@@ -314,7 +298,7 @@ MockExchangeSender
    MockTableScan
 @
 ~test_suite_name: ParallelQuery
-~result_index: 24
+~result_index: 22
 ~result:
 CreatingSets
  Union: <for join>
@@ -534,7 +518,7 @@ CreatingSets
 Union: <for test>
  Expression x 8: <final projection>
   Expression: <expr after aggregation>
-   Aggregating: <enable fine grained shuffle>, enable_two_level_hashtable: false
+   Aggregating: <enable fine grained shuffle>
     Expression: <before aggregation>
      MockExchangeReceiver
 @
@@ -679,7 +663,7 @@ Expression: <final projection>
  Limit, limit = 10
   Filter
    Expression: <expr after aggregation>
-    Aggregating, enable_two_level_hashtable: false
+    Aggregating
      Expression: <before aggregation>
       Filter
        MockTableScan

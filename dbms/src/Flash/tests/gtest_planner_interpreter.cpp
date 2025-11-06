@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Interpreters/Context.h>
 #include <TestUtils/InterpreterTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
@@ -114,27 +113,7 @@ try
 
     request
         = context.scan("test_db", "test_table_1").aggregation({Max(col("s1"))}, {col("s2"), col("s3")}).build(context);
-    auto org_agg_spill_threshold = context.context->getSettingsRef().max_bytes_before_external_group_by;
-    auto org_auto_memory_revoke_trigger_threshold
-        = context.context->getSettingsRef().auto_memory_revoke_trigger_threshold;
-    auto org_max_memory_usage = context.context->getSettingsRef().max_memory_usage.getActualBytes(1024 * 1024 * 1024);
-    // first disable spill
-    context.context->getSettingsRef().max_bytes_before_external_group_by = 0;
-    context.context->getSettingsRef().auto_memory_revoke_trigger_threshold = 0.0;
-    context.context->getSettingsRef().max_memory_usage = 0.0;
     runAndAssert(request, 1);
-    // enable spill using executor's spill
-    context.context->getSettingsRef().max_bytes_before_external_group_by = 1 << 10;
-    runAndAssert(request, 1);
-    // enable spill using auto spill
-    context.context->getSettingsRef().max_bytes_before_external_group_by = 0;
-    context.context->getSettingsRef().auto_memory_revoke_trigger_threshold = 0.7;
-    context.context->getSettingsRef().max_memory_usage.set(static_cast<UInt64>(1024ULL * 1024 * 1024));
-    runAndAssert(request, 1);
-    // set back to org value
-    context.context->getSettingsRef().max_bytes_before_external_group_by = org_agg_spill_threshold;
-    context.context->getSettingsRef().auto_memory_revoke_trigger_threshold = org_auto_memory_revoke_trigger_threshold;
-    context.context->getSettingsRef().max_memory_usage.set(org_max_memory_usage);
     runAndAssert(request, 5);
 
     request = context.scan("test_db", "test_table_1").topN("s2", false, 10).build(context);
