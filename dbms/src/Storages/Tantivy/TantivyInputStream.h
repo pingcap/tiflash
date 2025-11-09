@@ -267,6 +267,36 @@ private:
             case tipb::ScalarFuncSig::LogicalOr:
             case tipb::ScalarFuncSig::UnaryNotInt:
             case tipb::ScalarFuncSig::UnaryNotReal:
+            case tipb::ScalarFuncSig::EQInt:
+            case tipb::ScalarFuncSig::NEInt:
+            case tipb::ScalarFuncSig::LTInt:
+            case tipb::ScalarFuncSig::LEInt:
+            case tipb::ScalarFuncSig::GTInt:
+            case tipb::ScalarFuncSig::GEInt:
+            case tipb::ScalarFuncSig::EQDecimal:
+            case tipb::ScalarFuncSig::NEDecimal:
+            case tipb::ScalarFuncSig::LTDecimal:
+            case tipb::ScalarFuncSig::LEDecimal:
+            case tipb::ScalarFuncSig::GTDecimal:
+            case tipb::ScalarFuncSig::GEDecimal:
+            case tipb::ScalarFuncSig::EQString:
+            case tipb::ScalarFuncSig::NEString:
+            case tipb::ScalarFuncSig::LTString:
+            case tipb::ScalarFuncSig::LEString:
+            case tipb::ScalarFuncSig::GTString:
+            case tipb::ScalarFuncSig::GEString:
+            case tipb::ScalarFuncSig::EQReal:
+            case tipb::ScalarFuncSig::NEReal:
+            case tipb::ScalarFuncSig::LTReal:
+            case tipb::ScalarFuncSig::LEReal:
+            case tipb::ScalarFuncSig::GTReal:
+            case tipb::ScalarFuncSig::GEReal:
+            case tipb::ScalarFuncSig::EQTime:
+            case tipb::ScalarFuncSig::NETime:
+            case tipb::ScalarFuncSig::LTTime:
+            case tipb::ScalarFuncSig::LETime:
+            case tipb::ScalarFuncSig::GTTime:
+            case tipb::ScalarFuncSig::GETime:
                 ret.sig = expr.sig();
                 break;
             default:
@@ -284,8 +314,74 @@ private:
         }
         case tipb::ExprType::String:
         {
-            ret.tp = tipb::ExprType::String;
+            ret.tp = expr.sig();
             ret.val = expr.val();
+            return {ret, {}};
+        }
+        case tipb::ExprType::Int64:
+        {
+            ret.tp = expr.sig();
+            ret.val = fmt::format("{}", decodeDAGInt64(expr.val()));
+            return {ret, {}};
+        }
+        case tipb::ExprType::Uint64:
+        {
+            ret.tp = expr.sig();
+            ret.val = fmt::format("{}", decodeDAGUInt64(expr.val()));
+            return {ret, {}};
+        }
+        case tipb::ExprType::Float32:
+        {
+            ret.tp = expr.sig();
+            ret.val = fmt::format("{}", decodeDAGFloat32(expr.val()));
+            return {ret, {}};
+        }
+        case tipb::ExprType::Float64:
+        {
+            ret.tp = expr.sig();
+            ret.val = fmt::format("{}", decodeDAGFloat64(expr.val()));
+            return {ret, {}};
+        }
+        case tipb::ExprType::MysqlDecimal:
+        {
+            ret.tp = expr.sig();
+            auto field = decodeDAGDecimal(expr.val());
+            if (field.getType() == Field::Types::Decimal32)
+            {
+                auto val = field.get<DecimalField<Decimal32>>().toString();
+                auto scale = field.get<DecimalField<Decimal32>>().getScale();
+                auto prec = field.get<DecimalField<Decimal32>>().getPrec();
+                ret.val = fmt::format("{:0>2}{:0>2}{}", scale, prec, val);
+            }
+            else if (field.getType() == Field::Types::Decimal64)
+            {
+                auto val = field.get<DecimalField<Decimal64>>().toString();
+                auto scale = field.get<DecimalField<Decimal64>>().getScale();
+                auto prec = field.get<DecimalField<Decimal64>>().getPrec();
+                ret.val = fmt::format("{:0>2}{:0>2}{}", scale, prec, val);
+            }
+            else if (field.getType() == Field::Types::Decimal128)
+            {
+                auto val = field.get<DecimalField<Decimal128>>().toString();
+                auto scale = field.get<DecimalField<Decimal128>>().getScale();
+                auto prec = field.get<DecimalField<Decimal128>>().getPrec();
+                ret.val = fmt::format("{:0>2}{:0>2}{}", scale, prec, val);
+            }
+            else if (field.getType() == Field::Types::Decimal256)
+            {
+                auto val = field.get<DecimalField<Decimal256>>().toString();
+                auto scale = field.get<DecimalField<Decimal256>>().getScale();
+                auto prec = field.get<DecimalField<Decimal256>>().getPrec();
+                ret.val = fmt::format("{:0>2}{:0>2}{}", scale, prec, val);
+            }
+            else
+                throw TiFlashException("Not decimal literal" + expr.DebugString(), Errors::Coprocessor::BadRequest);
+            return {ret, {}};
+        }
+        case tipb::ExprType::MysqlTime:
+        {
+            ret.tp = expr.sig();
+            ret.val = fmt::format("{}", decodeDAGUInt64(expr.val()));
             return {ret, {}};
         }
         default:
