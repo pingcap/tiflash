@@ -20,6 +20,7 @@
 #include <Storages/KVStore/Read/LearnerRead.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TiKVHelpers/DecodedLockCFValue.h>
+#include <Storages/KVStore/TiKVHelpers/PDTiKVClient.h>
 #include <Storages/KVStore/Utils/AsyncTasks.h>
 #include <Storages/KVStore/tests/region_kvstore_test.h>
 #include <Storages/Page/V3/PageDefines.h>
@@ -33,6 +34,7 @@
 #include <common/config_common.h> // Included for `USE_JEMALLOC`
 
 #include <limits>
+#include <thread>
 
 
 namespace DB::tests
@@ -1060,5 +1062,31 @@ try
     }
 }
 CATCH
+
+TEST(KeyspacesGCInfoTest, Basic)
+{
+    KeyspacesGCInfo info;
+    ASSERT_EQ(info.getGCSafepoint(1), std::nullopt);
+    info.updateGCSafepoint(1, 10086);
+    // get hit cache
+    auto gc_info = info.getGCSafepoint(1);
+    ASSERT_TRUE(gc_info.has_value());
+    ASSERT_EQ(gc_info->gc_safepoint, 10086);
+    // get hit cache second time
+    gc_info = info.getGCSafepoint(1);
+    ASSERT_TRUE(gc_info.has_value());
+    ASSERT_EQ(gc_info->gc_safepoint, 10086);
+    // get with valid seconds, not expired
+    gc_info = info.getGCSafepointIfValid(1, 10);
+    ASSERT_TRUE(gc_info.has_value());
+    ASSERT_EQ(gc_info->gc_safepoint, 10086);
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    // get with valid seconds, expired
+    gc_info = info.getGCSafepointIfValid(1, 1);
+    ASSERT_EQ(gc_info, std::nullopt);
+    // remove keyspace
+    info.removeGCSafepoint(1);
+    ASSERT_EQ(info.getGCSafepoint(1), std::nullopt);
+}
 
 } // namespace DB::tests

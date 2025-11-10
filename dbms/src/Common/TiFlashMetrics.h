@@ -665,7 +665,8 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
     M(tiflash_storage_read_thread_gauge,                                                                                            \
       "The gauge of storage read thread",                                                                                           \
       Gauge,                                                                                                                        \
-      F(type_merged_task, {"type", "merged_task"}))                                                                                 \
+      F(type_merged_task, {"type", "merged_task"}),                                                                                 \
+      F(type_merged_task_active, {"type", "merged_task_active"}))                                                                   \
     M(tiflash_storage_read_thread_seconds,                                                                                          \
       "Bucketed histogram of read thread",                                                                                          \
       Histogram,                                                                                                                    \
