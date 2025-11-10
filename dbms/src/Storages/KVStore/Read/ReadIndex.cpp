@@ -137,13 +137,9 @@ void WaitCheckRegionReadyImpl(
     static constexpr double BATCH_READ_INDEX_TIME_RATE = 0.2;
     auto log = Logger::get(__FUNCTION__);
 
-    UInt64 read_index_timeout = tmt.batchReadIndexTimeout();
-
     LOG_INFO(
         log,
-        "start to check regions ready, read_index_timeout={} min_wait_tick={:.3f}s max_wait_tick={:.3f}s "
-        "wait_region_ready_timeout={:.3f}s",
-        read_index_timeout,
+        "start to check regions ready, min_wait_tick={:.3f}s max_wait_tick={:.3f}s wait_region_ready_timeout={:.3f}s",
         wait_tick_time,
         max_wait_tick_time,
         get_wait_region_ready_timeout_sec);
@@ -176,7 +172,7 @@ void WaitCheckRegionReadyImpl(
         }
 
         // Record the latest commit index in TiKV
-        auto read_index_res = kvstore.batchReadIndex(batch_read_index_req, read_index_timeout);
+        auto read_index_res = kvstore.batchReadIndex(batch_read_index_req, tmt.batchReadIndexTimeout());
         for (auto && [resp, region_id] : read_index_res)
         {
             bool need_retry = resp.read_index() == 0;
