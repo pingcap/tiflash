@@ -17,12 +17,15 @@
 #include <Interpreters/Context.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/Read/LearnerReadWorker.h>
+#include <Storages/KVStore/Read/RegionException.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/Types.h>
 #include <Storages/PathPool.h>
 #include <Storages/RegionQueryInfo.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <kvproto/kvrpcpb.pb.h>
+
+#include <magic_enum.hpp>
 
 namespace DB::tests
 {
@@ -260,5 +263,24 @@ try
     }
 }
 CATCH
+
+TEST_F(LearnerReadTest, SetRespByRegionException)
+{
+    RegionID reg_id = 12345;
+    RegionException::UnavailableRegions regs{reg_id};
+
+    size_t num_enum_values = 0;
+    for (auto s : magic_enum::enum_values<RegionException::RegionReadStatus>())
+    {
+        auto tmp_regs = regs;
+        RegionException e(std::move(tmp_regs), s, "test");
+        coprocessor::Response response;
+        setResponseByRegionException(&response, e, reg_id);
+        // response must have region_error set
+        ASSERT_TRUE(response.has_region_error());
+        num_enum_values++;
+    }
+    LOG_INFO(Logger::get(), "SetRespByRegionException test passed with {} enum values.", num_enum_values);
+}
 
 } // namespace DB::tests

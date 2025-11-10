@@ -19,6 +19,11 @@
 
 #include <magic_enum.hpp>
 
+namespace coprocessor
+{
+class Response;
+}
+
 namespace DB
 {
 
@@ -58,5 +63,7 @@ public:
     UnavailableRegions unavailable_region;
     RegionReadStatus status;
 };
+
+void setResponseByRegionException(coprocessor::Response * response, const RegionException & e, RegionID region_id);
 
 } // namespace DB
