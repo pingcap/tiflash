@@ -39,7 +39,7 @@ uint64_t ResourceGroup::getPriority(uint64_t max_ru_per_sec) const
     const auto remaining_token = bucket->peek();
     if (!burstable && remaining_token <= 0.0)
     {
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_compute_ru_exhausted, name_with_keyspace_id).Increment();
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group_counter, type_compute_ru_exhausted, name_with_keyspace_id).Increment();
         return std::numeric_limits<uint64_t>::max();
     }
 
@@ -245,7 +245,7 @@ void ResourceGroup::updateDegradeMode(const SteadyClock::time_point & now)
             bucket->toString(),
             magic_enum::enum_name(bucket_mode),
             std::chrono::duration_cast<std::chrono::seconds>(LocalAdmissionController::DEGRADE_MODE_DURATION).count());
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_enter_degrade_mode, name_with_keyspace_id).Increment();
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group_counter, type_enter_degrade_mode, name_with_keyspace_id).Increment();
     }
 }
 
@@ -283,7 +283,7 @@ LACRUConsumptionDeltaInfo ResourceGroup::updateRUConsumptionDeltaInfoWithoutLock
     info.speed = smooth_ru_consumption_speed;
     info.delta = ru_consumption_delta;
 
-    GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_total_consumption, name_with_keyspace_id)
+    GET_RESOURCE_GROUP_METRIC(tiflash_resource_group_counter, type_total_consumption, name_with_keyspace_id)
         .Increment(ru_consumption_delta);
 
     ru_consumption_delta = 0;
@@ -489,10 +489,10 @@ std::optional<resource_manager::TokenBucketsRequest> LocalAdmissionController::b
             auto * tiflash_consumption = group_request->mutable_consumption_since_last_request();
             tiflash_consumption->set_r_r_u(info.ru_consumption_delta);
             GET_RESOURCE_GROUP_METRIC(
-                tiflash_resource_group,
+                tiflash_resource_group_counter,
                 type_gac_req_ru_consumption_delta,
                 getResourceGroupMetricName(info.keyspace_id, info.resource_group_name))
-                .Set(info.ru_consumption_delta);
+                .Add(info.ru_consumption_delta);
         }
     }
 
@@ -557,7 +557,7 @@ void LocalAdmissionController::doRequestGAC()
             const auto req_rg_names = extractGACReqNames(req);
             for (const auto & req_rg_name : req_rg_names)
                 GET_RESOURCE_GROUP_METRIC(
-                    tiflash_resource_group,
+                    tiflash_resource_group_counter,
                     type_request_gac_count,
                     getResourceGroupMetricName(req_rg_name.first, req_rg_name.second))
                     .Increment();
