@@ -381,7 +381,8 @@ private:
         case tipb::ExprType::MysqlTime:
         {
             ret.tp = expr.sig();
-            ret.val = fmt::format("{}", decodeDAGUInt64(expr.val()));
+            MyDateTime time(decodeDAGUInt64(expr.val()));
+            ret.val = fmt::format("{}", time.toString(DefaultFsp));
             return {ret, {}};
         }
         default:
