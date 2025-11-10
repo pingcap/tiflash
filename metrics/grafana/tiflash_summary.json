@@ -22386,7 +22386,7 @@
             },
             {
               "exemplar": true,
-              "expr": "max(tiflash_resource_group_counter{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"total_consumption\", instance=~\"$instance\"}) by (instance,resource_group)",
+              "expr": "sum(rate(tiflash_resource_group_counter{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"total_consumption\", instance=~\"$instance\"}[1m])) by (instance,resource_group)",
               "hide": true,
               "interval": "",
               "legendFormat": "total_consumption-{{instance}}-{{resource_group}}",
@@ -22410,11 +22410,35 @@
             },
             {
               "exemplar": true,
-              "expr": "max(tiflash_resource_group_counter{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"request_gac_count\", instance=~\"$instance\"}) by (instance,resource_group)",
+              "expr": "sum(rate(tiflash_resource_group_counter{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"request_gac_count\", instance=~\"$instance\"}[1m])) by (instance,resource_group)",
               "hide": true,
               "interval": "",
               "legendFormat": "request_gac_count-{{instance}}-{{resource_group}}",
               "refId": "F"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_resource_group_counter{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"gac_req_ru_consumption_delta\", instance=~\"$instance\"}[1m])) by (instance,resource_group)",
+              "hide": true,
+              "interval": "",
+              "legendFormat": "gac_req_ru_consumption_delta-{{instance}}-{{resource_group}}",
+              "refId": "G"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_resource_group_counter{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"compute_ru_consumption\", instance=~\"$instance\"}[1m])) by (instance,resource_group)",
+              "hide": true,
+              "interval": "",
+              "legendFormat": "compute_ru_consumption-{{instance}}-{{resource_group}}",
+              "refId": "H"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_resource_group_counter{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"storage_ru_consumption\", instance=~\"$instance\"}[1m])) by (instance,resource_group)",
+              "hide": true,
+              "interval": "",
+              "legendFormat": "storage_ru_consumption-{{instance}}-{{resource_group}}",
+              "refId": "I"
             }
           ],
           "thresholds": [],
