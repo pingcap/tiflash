@@ -22386,7 +22386,7 @@
             },
             {
               "exemplar": true,
-              "expr": "max(tiflash_resource_group{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"total_consumption\", instance=~\"$instance\"}) by (instance,resource_group)",
+              "expr": "max(tiflash_resource_group_counter{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"total_consumption\", instance=~\"$instance\"}) by (instance,resource_group)",
               "hide": true,
               "interval": "",
               "legendFormat": "total_consumption-{{instance}}-{{resource_group}}",
@@ -22410,10 +22410,10 @@
             },
             {
               "exemplar": true,
-              "expr": "max(tiflash_resource_group{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"fetch_tokens_from_gac_count\", instance=~\"$instance\"}) by (instance,resource_group)",
+              "expr": "max(tiflash_resource_group_counter{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"request_gac_count\", instance=~\"$instance\"}) by (instance,resource_group)",
               "hide": true,
               "interval": "",
-              "legendFormat": "fetch_tokens_from_gac_count-{{instance}}-{{resource_group}}",
+              "legendFormat": "request_gac_count-{{instance}}-{{resource_group}}",
               "refId": "F"
             }
           ],

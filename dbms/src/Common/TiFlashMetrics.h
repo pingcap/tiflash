@@ -864,7 +864,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_fsync, {{"type", "fsync"}}, ExpBuckets{0.0001, 2, 20}))                                                                \
     M(tiflash_storage_mvcc_index_cache, "", Counter, F(type_hit, {"type", "hit"}), F(type_miss, {"type", "miss"}))                  \
     M(tiflash_resource_group,                                                                                                       \
-      "meta info of resource group",                                                                                                \
+      "RU usage of each resource group",                                                                                                \
       Gauge,                                                                                                                        \
       F(type_remaining_tokens, {"type", "remaining_tokens"}),                                                                       \
       F(type_avg_speed, {"type", "avg_speed"}),                                                                                     \
@@ -874,16 +874,16 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_gac_req_acquire_tokens, {"type", "gac_req_acquire_tokens"}),                                                           \
       F(type_gac_resp_tokens, {"type", "gac_resp_tokens"}),                                                                         \
       F(type_gac_resp_capacity, {"type", "gac_resp_capacity"}))                                                                     \
-    M(tiflash_resource_group_counter,                                                                                                       \
-      "meta info of resource group",                                                                                                \
-      Counter,                                                                                                                        \
+    M(tiflash_resource_group_counter,                                                                                               \
+      "RU usage of each resource group",                                                                                                \
+      Counter,                                                                                                                      \
       F(type_total_consumption, {"type", "total_consumption"}),                                                                     \
       F(type_request_gac_count, {"type", "request_gac_count"}),                                                                     \
       F(type_enter_degrade_mode, {"type", "enter_degrade_mode"}),                                                                   \
       F(type_compute_ru_consumption, {"type", "compute_ru_consumption"}),                                                           \
       F(type_storage_ru_consumption, {"type", "storage_ru_consumption"}),                                                           \
       F(type_compute_ru_exhausted, {"type", "compute_ru_exhausted"}),                                                               \
-      F(type_gac_req_ru_consumption_delta, {"type", "gac_req_ru_consumption_delta"}),                                               \
+      F(type_gac_req_ru_consumption_delta, {"type", "gac_req_ru_consumption_delta"}))                                               \
     M(tiflash_request_count_per_resource_group,                                                                                     \
       "mpp request count for each resource group",                                                                                  \
       Counter,                                                                                                                      \
