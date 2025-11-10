@@ -39,7 +39,8 @@ uint64_t ResourceGroup::getPriority(uint64_t max_ru_per_sec) const
     const auto remaining_token = bucket->peek();
     if (!burstable && remaining_token <= 0.0)
     {
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group_counter, type_compute_ru_exhausted, name_with_keyspace_id).Increment();
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group_counter, type_compute_ru_exhausted, name_with_keyspace_id)
+            .Increment();
         return std::numeric_limits<uint64_t>::max();
     }
 
@@ -245,7 +246,8 @@ void ResourceGroup::updateDegradeMode(const SteadyClock::time_point & now)
             bucket->toString(),
             magic_enum::enum_name(bucket_mode),
             std::chrono::duration_cast<std::chrono::seconds>(LocalAdmissionController::DEGRADE_MODE_DURATION).count());
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group_counter, type_enter_degrade_mode, name_with_keyspace_id).Increment();
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group_counter, type_enter_degrade_mode, name_with_keyspace_id)
+            .Increment();
     }
 }
 
