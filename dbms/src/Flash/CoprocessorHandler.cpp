@@ -252,6 +252,15 @@ grpc::Status CoprocessorHandler<is_stream>::execute()
         errorpb::Error * region_err;
         switch (e.status)
         {
+        case RegionException::RegionReadStatus::OK:
+        case RegionException::RegionReadStatus::MEET_LOCK:
+            // Should not happen RegionException with RegionReadStatus::OK status
+            // And RegionReadStatus::MEET_LOCK should be handled in LockException
+            region_err = response->mutable_region_error();
+            region_err->set_message(
+                fmt::format("Unexpected RegionException with status {}", magic_enum::enum_name(e.status)));
+            region_err->mutable_region_not_found()->set_region_id(cop_request->context().region_id());
+            break;
         case RegionException::RegionReadStatus::OTHER:
         case RegionException::RegionReadStatus::BUCKET_EPOCH_NOT_MATCH:
         case RegionException::RegionReadStatus::FLASHBACK:
@@ -261,6 +270,8 @@ grpc::Status CoprocessorHandler<is_stream>::execute()
         case RegionException::RegionReadStatus::NOT_LEADER:
         case RegionException::RegionReadStatus::NOT_FOUND_TIKV:
         case RegionException::RegionReadStatus::NOT_FOUND:
+        case RegionException::RegionReadStatus::STALE_COMMAND:
+        case RegionException::RegionReadStatus::STORE_NOT_MATCH:
             GET_METRIC(tiflash_coprocessor_request_error, reason_region_not_found).Increment();
             region_err = response->mutable_region_error();
             region_err->mutable_region_not_found()->set_region_id(cop_request->context().region_id());
@@ -270,9 +281,10 @@ grpc::Status CoprocessorHandler<is_stream>::execute()
             region_err = response->mutable_region_error();
             region_err->mutable_epoch_not_match();
             break;
-        default:
-            // should not happen
-            break;
+            // Notice: We need to handle all enum cases here to ensure correctly retrying.
+            // Do NOT add a default case here.
+            // default:
+            //     break;
         }
         if constexpr (is_stream)
         {
