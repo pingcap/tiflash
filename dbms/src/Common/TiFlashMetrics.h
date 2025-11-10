@@ -864,7 +864,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_fsync, {{"type", "fsync"}}, ExpBuckets{0.0001, 2, 20}))                                                                \
     M(tiflash_storage_mvcc_index_cache, "", Counter, F(type_hit, {"type", "hit"}), F(type_miss, {"type", "miss"}))                  \
     M(tiflash_resource_group,                                                                                                       \
-      "RU usage of each resource group",                                                                                                \
+      "RU usage of each resource group",                                                                                            \
       Gauge,                                                                                                                        \
       F(type_remaining_tokens, {"type", "remaining_tokens"}),                                                                       \
       F(type_avg_speed, {"type", "avg_speed"}),                                                                                     \
@@ -875,7 +875,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_gac_resp_tokens, {"type", "gac_resp_tokens"}),                                                                         \
       F(type_gac_resp_capacity, {"type", "gac_resp_capacity"}))                                                                     \
     M(tiflash_resource_group_counter,                                                                                               \
-      "RU usage of each resource group",                                                                                                \
+      "RU usage of each resource group",                                                                                            \
       Counter,                                                                                                                      \
       F(type_total_consumption, {"type", "total_consumption"}),                                                                     \
       F(type_request_gac_count, {"type", "request_gac_count"}),                                                                     \
