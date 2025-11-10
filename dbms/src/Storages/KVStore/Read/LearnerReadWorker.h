@@ -48,40 +48,57 @@ struct UnavailableRegions
         , is_wn_disagg_read(is_wn_disagg_read_)
     {}
 
-    size_t size() const { return unavailable_ids.size(); }
+    size_t size() const { return ids.size(); }
 
-    bool empty() const { return unavailable_ids.empty(); }
+    bool empty() const { return ids.empty(); }
 
-    bool contains(RegionID region_id) const { return unavailable_ids.contains(region_id); }
+    bool contains(RegionID region_id) const { return ids.contains(region_id); }
 
-    void addStatus(RegionID region_id, RegionException::RegionReadStatus status_, std::string && extra_msg_)
+    void addStatus(RegionID id, RegionException::RegionReadStatus status_, std::string && extra_msg_)
     {
-        unavailable_ids[region_id] = UnavailableDesc{status_, std::move(extra_msg_)};
+        status = status_;
+        ids.emplace(id);
+        extra_msg = std::move(extra_msg_);
     }
 
     void addRegionLock(RegionID region_id_, LockInfoPtr && region_lock_)
     {
         region_locks.emplace_back(region_id_, std::move(region_lock_));
-        unavailable_ids[region_id_] = UnavailableDesc{RegionException::RegionReadStatus::MEET_LOCK, ""};
+        ids.emplace(region_id_);
     }
 
     void tryThrowRegionException();
 
     void addRegionWaitIndexTimeout(RegionID region_id, UInt64 index_to_wait, UInt64 current_applied_index);
 
-    String toDebugString(size_t num_show) const;
+    String toDebugString() const
+    {
+        FmtBuffer buffer;
+        buffer.append("{ids=[");
+        buffer.joinStr(
+            ids.begin(),
+            ids.end(),
+            [](const auto & v, FmtBuffer & f) { f.fmtAppend("{}", v); },
+            "|");
+        buffer.append("] locks=");
+        buffer.append("[");
+        buffer.joinStr(
+            region_locks.begin(),
+            region_locks.end(),
+            [](const auto & v, FmtBuffer & f) { f.fmtAppend("{}({})", v.first, v.second->DebugString()); },
+            "|");
+        buffer.append("]}");
+        return buffer.toString();
+    }
 
 private:
     const bool batch_cop;
     const bool is_wn_disagg_read;
 
-    struct UnavailableDesc
-    {
-        RegionException::RegionReadStatus s;
-        std::string extra_msg;
-    };
-    std::unordered_map<RegionID, UnavailableDesc> unavailable_ids;
+    RegionException::UnavailableRegions ids;
     std::vector<std::pair<RegionID, LockInfoPtr>> region_locks;
+    RegionException::RegionReadStatus status{RegionException::RegionReadStatus::NOT_FOUND};
+    std::string extra_msg;
 };
 
 using RegionsReadIndexResult = std::unordered_map<RegionID, kvrpcpb::ReadIndexResponse>;
