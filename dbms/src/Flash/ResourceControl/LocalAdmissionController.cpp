@@ -494,7 +494,7 @@ std::optional<resource_manager::TokenBucketsRequest> LocalAdmissionController::b
                 tiflash_resource_group_counter,
                 type_gac_req_ru_consumption_delta,
                 getResourceGroupMetricName(info.keyspace_id, info.resource_group_name))
-                .Add(info.ru_consumption_delta);
+                .Increment(info.ru_consumption_delta);
         }
     }
 
