@@ -19,6 +19,7 @@
 #include <Core/NamesAndTypes.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
@@ -273,12 +274,6 @@ private:
             case tipb::ScalarFuncSig::LEInt:
             case tipb::ScalarFuncSig::GTInt:
             case tipb::ScalarFuncSig::GEInt:
-            case tipb::ScalarFuncSig::EQDecimal:
-            case tipb::ScalarFuncSig::NEDecimal:
-            case tipb::ScalarFuncSig::LTDecimal:
-            case tipb::ScalarFuncSig::LEDecimal:
-            case tipb::ScalarFuncSig::GTDecimal:
-            case tipb::ScalarFuncSig::GEDecimal:
             case tipb::ScalarFuncSig::EQString:
             case tipb::ScalarFuncSig::NEString:
             case tipb::ScalarFuncSig::LTString:
@@ -299,6 +294,33 @@ private:
             case tipb::ScalarFuncSig::GETime:
                 ret.sig = expr.sig();
                 break;
+            case tipb::ScalarFuncSig::EQDecimal:
+            case tipb::ScalarFuncSig::NEDecimal:
+            case tipb::ScalarFuncSig::LTDecimal:
+            case tipb::ScalarFuncSig::LEDecimal:
+            case tipb::ScalarFuncSig::GTDecimal:
+            case tipb::ScalarFuncSig::GEDecimal:
+            {
+                ret.sig = expr.sig();
+                size_t col_idx = 0;
+                if (ret.children[0].tp != tipb::ExprType::ColumnRef)
+                    col_idx = 1;
+                auto & column_ref = ret.children[col_idx];
+                auto & val_expr = ret.children[1 - col_idx];
+                for (auto & name_and_type : return_columns)
+                {
+                    if (name_and_type.name == column_ref.val.c_str())
+                    {
+                        // TiCI need scale and precision to encode decimal compared binary representation.
+                        auto type = removeNullable(name_and_type.type);
+                        auto scale = getDecimalScale(*type, 0);
+                        auto prec = getDecimalPrecision(*type, 0);
+                        val_expr.val = fmt::format("{:0>2}{:0>2}{}", scale, prec, val_expr.val.c_str());
+                        break;
+                    }
+                }
+                break;
+            }
             default:
                 throw std::runtime_error("Unsupported expression sig");
             }
@@ -347,33 +369,13 @@ private:
             ret.tp = expr.sig();
             auto field = decodeDAGDecimal(expr.val());
             if (field.getType() == Field::Types::Decimal32)
-            {
-                auto val = field.get<DecimalField<Decimal32>>().toString();
-                auto scale = field.get<DecimalField<Decimal32>>().getScale();
-                auto prec = field.get<DecimalField<Decimal32>>().getPrec();
-                ret.val = fmt::format("{:0>2}{:0>2}{}", scale, prec, val);
-            }
+                ret.val = field.get<DecimalField<Decimal32>>().toString();
             else if (field.getType() == Field::Types::Decimal64)
-            {
-                auto val = field.get<DecimalField<Decimal64>>().toString();
-                auto scale = field.get<DecimalField<Decimal64>>().getScale();
-                auto prec = field.get<DecimalField<Decimal64>>().getPrec();
-                ret.val = fmt::format("{:0>2}{:0>2}{}", scale, prec, val);
-            }
+                ret.val = field.get<DecimalField<Decimal64>>().toString();
             else if (field.getType() == Field::Types::Decimal128)
-            {
-                auto val = field.get<DecimalField<Decimal128>>().toString();
-                auto scale = field.get<DecimalField<Decimal128>>().getScale();
-                auto prec = field.get<DecimalField<Decimal128>>().getPrec();
-                ret.val = fmt::format("{:0>2}{:0>2}{}", scale, prec, val);
-            }
+                ret.val = field.get<DecimalField<Decimal128>>().toString();
             else if (field.getType() == Field::Types::Decimal256)
-            {
-                auto val = field.get<DecimalField<Decimal256>>().toString();
-                auto scale = field.get<DecimalField<Decimal256>>().getScale();
-                auto prec = field.get<DecimalField<Decimal256>>().getPrec();
-                ret.val = fmt::format("{:0>2}{:0>2}{}", scale, prec, val);
-            }
+                ret.val = field.get<DecimalField<Decimal256>>().toString();
             else
                 throw TiFlashException("Not decimal literal" + expr.DebugString(), Errors::Coprocessor::BadRequest);
             return {ret, {}};
