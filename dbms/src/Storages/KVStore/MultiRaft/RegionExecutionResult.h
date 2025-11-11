@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Storages/KVStore/Read/RegionException.h>
 #include <Storages/KVStore/Region_fwd.h>
 #include <Storages/KVStore/Types.h>
 
