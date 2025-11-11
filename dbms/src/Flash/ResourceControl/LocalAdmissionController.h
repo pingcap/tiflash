@@ -155,13 +155,13 @@ private:
     void consumeCPUResource(double ru, uint64_t cpu_time_in_ns_)
     {
         consumeResource(ru, cpu_time_in_ns_);
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_compute_ru_consumption, name_with_keyspace_id)
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group_counter, type_compute_ru_consumption, name_with_keyspace_id)
             .Increment(ru);
     }
     void consumeBytesResource(double ru, uint64_t cpu_time_in_ns_)
     {
         consumeResource(ru, cpu_time_in_ns_);
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_storage_ru_consumption, name_with_keyspace_id)
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group_counter, type_storage_ru_consumption, name_with_keyspace_id)
             .Increment(ru);
     }
 
