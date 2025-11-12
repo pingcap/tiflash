@@ -19,7 +19,6 @@
 #include <Core/NamesAndTypes.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
@@ -292,35 +291,14 @@ private:
             case tipb::ScalarFuncSig::LETime:
             case tipb::ScalarFuncSig::GTTime:
             case tipb::ScalarFuncSig::GETime:
-                ret.sig = expr.sig();
-                break;
             case tipb::ScalarFuncSig::EQDecimal:
             case tipb::ScalarFuncSig::NEDecimal:
             case tipb::ScalarFuncSig::LTDecimal:
             case tipb::ScalarFuncSig::LEDecimal:
             case tipb::ScalarFuncSig::GTDecimal:
             case tipb::ScalarFuncSig::GEDecimal:
-            {
                 ret.sig = expr.sig();
-                size_t col_idx = 0;
-                if (ret.children[0].tp != tipb::ExprType::ColumnRef)
-                    col_idx = 1;
-                auto & column_ref = ret.children[col_idx];
-                auto & val_expr = ret.children[1 - col_idx];
-                for (auto & name_and_type : return_columns)
-                {
-                    if (name_and_type.name == column_ref.val.c_str())
-                    {
-                        // TiCI need scale and precision to encode decimal compared binary representation.
-                        auto type = removeNullable(name_and_type.type);
-                        auto scale = getDecimalScale(*type, 0);
-                        auto prec = getDecimalPrecision(*type, 0);
-                        val_expr.val = fmt::format("{:0>2}{:0>2}{}", scale, prec, val_expr.val.c_str());
-                        break;
-                    }
-                }
                 break;
-            }
             default:
                 throw std::runtime_error("Unsupported expression sig");
             }
