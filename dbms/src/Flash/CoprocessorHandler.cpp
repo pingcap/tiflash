@@ -249,31 +249,8 @@ grpc::Status CoprocessorHandler<is_stream>::execute()
             response = cop_response;
         }
 
-        errorpb::Error * region_err;
-        switch (e.status)
-        {
-        case RegionException::RegionReadStatus::OTHER:
-        case RegionException::RegionReadStatus::BUCKET_EPOCH_NOT_MATCH:
-        case RegionException::RegionReadStatus::FLASHBACK:
-        case RegionException::RegionReadStatus::KEY_NOT_IN_REGION:
-        case RegionException::RegionReadStatus::TIKV_SERVER_ISSUE:
-        case RegionException::RegionReadStatus::READ_INDEX_TIMEOUT:
-        case RegionException::RegionReadStatus::NOT_LEADER:
-        case RegionException::RegionReadStatus::NOT_FOUND_TIKV:
-        case RegionException::RegionReadStatus::NOT_FOUND:
-            GET_METRIC(tiflash_coprocessor_request_error, reason_region_not_found).Increment();
-            region_err = response->mutable_region_error();
-            region_err->mutable_region_not_found()->set_region_id(cop_request->context().region_id());
-            break;
-        case RegionException::RegionReadStatus::EPOCH_NOT_MATCH:
-            GET_METRIC(tiflash_coprocessor_request_error, reason_epoch_not_match).Increment();
-            region_err = response->mutable_region_error();
-            region_err->mutable_epoch_not_match();
-            break;
-        default:
-            // should not happen
-            break;
-        }
+        setResponseByRegionException(response, e, cop_request->context().region_id());
+
         if constexpr (is_stream)
         {
             cop_writer->Write(stream_response);

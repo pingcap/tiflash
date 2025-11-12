@@ -263,6 +263,10 @@ void LearnerReadWorker::recordReadIndexError(
     const LearnerReadSnapshot & regions_snapshot,
     RegionsReadIndexResult & read_index_result)
 {
+    // Now TiFlash set `unavailable_regions` by `read_index_result`, then `unavailable_regions` will check
+    // and throw `LockException` or `RegionException` in `tryThrowRegionException`. Then `CoprocessorHandler`
+    // or other similar logic handle the exceptions and retry the read request.
+
     // if size of batch_read_index_result is not equal with batch_read_index_req, there must be region_error/lock, find and return directly.
     for (auto & [region_id, resp] : read_index_result)
     {
