@@ -307,62 +307,39 @@ private:
         }
         case tipb::ExprType::ColumnRef:
         {
-            ret.tp = tipb::ExprType::ColumnRef;
+            ret.tp = expr.tp();
             auto id = decodeDAGInt64(expr.val());
-            ret.val = fmt::format("column_{}", id);
+            auto str = fmt::format("column_{}", id);
+            std::copy(str.begin(), str.end(), std::back_inserter(ret.val));
             return {ret, {id}};
         }
         case tipb::ExprType::String:
-        {
-            ret.tp = expr.sig();
-            ret.val = expr.val();
-            return {ret, {}};
-        }
         case tipb::ExprType::Int64:
-        {
-            ret.tp = expr.sig();
-            ret.val = fmt::format("{}", decodeDAGInt64(expr.val()));
-            return {ret, {}};
-        }
         case tipb::ExprType::Uint64:
-        {
-            ret.tp = expr.sig();
-            ret.val = fmt::format("{}", decodeDAGUInt64(expr.val()));
-            return {ret, {}};
-        }
         case tipb::ExprType::Float32:
-        {
-            ret.tp = expr.sig();
-            ret.val = fmt::format("{}", decodeDAGFloat32(expr.val()));
-            return {ret, {}};
-        }
         case tipb::ExprType::Float64:
+        case tipb::ExprType::MysqlTime:
         {
-            ret.tp = expr.sig();
-            ret.val = fmt::format("{}", decodeDAGFloat64(expr.val()));
+            ret.tp = expr.tp();
+            std::copy(expr.val().begin(), expr.val().end(), std::back_inserter(ret.val));
             return {ret, {}};
         }
         case tipb::ExprType::MysqlDecimal:
         {
-            ret.tp = expr.sig();
+            ret.tp = expr.tp();
             auto field = decodeDAGDecimal(expr.val());
+            String str;
             if (field.getType() == Field::Types::Decimal32)
-                ret.val = field.get<DecimalField<Decimal32>>().toString();
+                str = field.get<DecimalField<Decimal32>>().toString();
             else if (field.getType() == Field::Types::Decimal64)
-                ret.val = field.get<DecimalField<Decimal64>>().toString();
+                str = field.get<DecimalField<Decimal64>>().toString();
             else if (field.getType() == Field::Types::Decimal128)
-                ret.val = field.get<DecimalField<Decimal128>>().toString();
+                str = field.get<DecimalField<Decimal128>>().toString();
             else if (field.getType() == Field::Types::Decimal256)
-                ret.val = field.get<DecimalField<Decimal256>>().toString();
+                str = field.get<DecimalField<Decimal256>>().toString();
             else
                 throw TiFlashException("Not decimal literal" + expr.DebugString(), Errors::Coprocessor::BadRequest);
-            return {ret, {}};
-        }
-        case tipb::ExprType::MysqlTime:
-        {
-            ret.tp = expr.sig();
-            MyDateTime time(decodeDAGUInt64(expr.val()));
-            ret.val = fmt::format("{}", time.toString(DefaultFsp));
+            std::copy(str.begin(), str.end(), std::back_inserter(ret.val));
             return {ret, {}};
         }
         default:
