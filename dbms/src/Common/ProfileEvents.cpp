@@ -37,8 +37,6 @@
     M(ContextLock)                             \
     M(CreatedHTTPConnections)                  \
     M(DNSError)                                \
-    M(S3ReadMicroseconds)                      \
-    M(S3WriteMicroseconds)                     \
     M(S3ReadRequestsCount)                     \
     M(S3WriteRequestsCount)                    \
     M(S3ReadRequestsErrors)                    \
