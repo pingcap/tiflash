@@ -267,6 +267,36 @@ private:
             case tipb::ScalarFuncSig::LogicalOr:
             case tipb::ScalarFuncSig::UnaryNotInt:
             case tipb::ScalarFuncSig::UnaryNotReal:
+            case tipb::ScalarFuncSig::EQInt:
+            case tipb::ScalarFuncSig::NEInt:
+            case tipb::ScalarFuncSig::LTInt:
+            case tipb::ScalarFuncSig::LEInt:
+            case tipb::ScalarFuncSig::GTInt:
+            case tipb::ScalarFuncSig::GEInt:
+            case tipb::ScalarFuncSig::EQString:
+            case tipb::ScalarFuncSig::NEString:
+            case tipb::ScalarFuncSig::LTString:
+            case tipb::ScalarFuncSig::LEString:
+            case tipb::ScalarFuncSig::GTString:
+            case tipb::ScalarFuncSig::GEString:
+            case tipb::ScalarFuncSig::EQReal:
+            case tipb::ScalarFuncSig::NEReal:
+            case tipb::ScalarFuncSig::LTReal:
+            case tipb::ScalarFuncSig::LEReal:
+            case tipb::ScalarFuncSig::GTReal:
+            case tipb::ScalarFuncSig::GEReal:
+            case tipb::ScalarFuncSig::EQTime:
+            case tipb::ScalarFuncSig::NETime:
+            case tipb::ScalarFuncSig::LTTime:
+            case tipb::ScalarFuncSig::LETime:
+            case tipb::ScalarFuncSig::GTTime:
+            case tipb::ScalarFuncSig::GETime:
+            case tipb::ScalarFuncSig::EQDecimal:
+            case tipb::ScalarFuncSig::NEDecimal:
+            case tipb::ScalarFuncSig::LTDecimal:
+            case tipb::ScalarFuncSig::LEDecimal:
+            case tipb::ScalarFuncSig::GTDecimal:
+            case tipb::ScalarFuncSig::GEDecimal:
                 ret.sig = expr.sig();
                 break;
             default:
@@ -277,15 +307,39 @@ private:
         }
         case tipb::ExprType::ColumnRef:
         {
-            ret.tp = tipb::ExprType::ColumnRef;
+            ret.tp = expr.tp();
             auto id = decodeDAGInt64(expr.val());
-            ret.val = fmt::format("column_{}", id);
+            auto str = fmt::format("column_{}", id);
+            std::copy(str.begin(), str.end(), std::back_inserter(ret.val));
             return {ret, {id}};
         }
         case tipb::ExprType::String:
+        case tipb::ExprType::Int64:
+        case tipb::ExprType::Uint64:
+        case tipb::ExprType::Float32:
+        case tipb::ExprType::Float64:
+        case tipb::ExprType::MysqlTime:
         {
-            ret.tp = tipb::ExprType::String;
-            ret.val = expr.val();
+            ret.tp = expr.tp();
+            std::copy(expr.val().begin(), expr.val().end(), std::back_inserter(ret.val));
+            return {ret, {}};
+        }
+        case tipb::ExprType::MysqlDecimal:
+        {
+            ret.tp = expr.tp();
+            auto field = decodeDAGDecimal(expr.val());
+            String str;
+            if (field.getType() == Field::Types::Decimal32)
+                str = field.get<DecimalField<Decimal32>>().toString();
+            else if (field.getType() == Field::Types::Decimal64)
+                str = field.get<DecimalField<Decimal64>>().toString();
+            else if (field.getType() == Field::Types::Decimal128)
+                str = field.get<DecimalField<Decimal128>>().toString();
+            else if (field.getType() == Field::Types::Decimal256)
+                str = field.get<DecimalField<Decimal256>>().toString();
+            else
+                throw TiFlashException("Not decimal literal" + expr.DebugString(), Errors::Coprocessor::BadRequest);
+            std::copy(str.begin(), str.end(), std::back_inserter(ret.val));
             return {ret, {}};
         }
         default:
