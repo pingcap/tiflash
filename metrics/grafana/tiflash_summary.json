@@ -20613,7 +20613,7 @@
               "hide": false,
               "interval": "",
               "intervalFactor": 1,
-              "legendFormat": "S3GetObjectRetry",
+              "legendFormat": "S3GetObjectRetry {{$additional_groupby}}",
               "refId": "B"
             },
             {
@@ -20621,7 +20621,7 @@
               "expr": "sum(rate(tiflash_system_profile_event_S3PutObjectRetry{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
               "hide": false,
               "interval": "",
-              "legendFormat": "S3PutObjectRetry",
+              "legendFormat": "S3PutObjectRetry {{$additional_groupby}}",
               "refId": "A"
             },
             {
@@ -20629,7 +20629,7 @@
               "expr": "sum(rate(tiflash_system_profile_event_S3PutDMFileRetry{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
               "hide": false,
               "interval": "",
-              "legendFormat": "S3PutDMFileRetry",
+              "legendFormat": "S3PutDMFileRetry {{$additional_groupby}}",
               "refId": "C"
             }
           ],
@@ -20733,7 +20733,7 @@
               "hide": true,
               "interval": "",
               "intervalFactor": 1,
-              "legendFormat": "{{type}}-max",
+              "legendFormat": "{{type}}-max {{$additional_groupby}}",
               "refId": "A"
             },
             {
@@ -20743,7 +20743,7 @@
               "hide": false,
               "interval": "",
               "intervalFactor": 1,
-              "legendFormat": "{{type}}-9999",
+              "legendFormat": "{{type}}-9999 {{$additional_groupby}}",
               "refId": "B"
             },
             {
@@ -20751,7 +20751,7 @@
               "expr": "histogram_quantile(0.99, sum(rate(tiflash_storage_s3_request_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (le, type, $additional_groupby))",
               "hide": false,
               "interval": "",
-              "legendFormat": "{{type}}-99",
+              "legendFormat": "{{type}}-99 {{$additional_groupby}}",
               "refId": "C"
             }
           ],
@@ -20850,7 +20850,7 @@
               "expr": "sum(rate(tiflash_system_profile_event_S3ReadRequestsCount{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
               "hide": false,
               "interval": "",
-              "legendFormat": "read-count",
+              "legendFormat": "read-count {{$additional_groupby}}",
               "refId": "K"
             },
             {
@@ -20858,7 +20858,7 @@
               "expr": "sum(rate(tiflash_system_profile_event_S3WriteRequestsCount{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
               "hide": false,
               "interval": "",
-              "legendFormat": "write-count",
+              "legendFormat": "write-count {{$additional_groupby}}",
               "refId": "L"
             },
             {
@@ -20866,7 +20866,7 @@
               "expr": "sum(rate(tiflash_system_profile_event_S3ReadRequestsErrors{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
               "hide": false,
               "interval": "",
-              "legendFormat": "read-error",
+              "legendFormat": "read-error {{$additional_groupby}}",
               "refId": "M"
             },
             {
@@ -20874,7 +20874,7 @@
               "expr": "sum(rate(tiflash_system_profile_event_S3WriteRequestsErrors{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
               "hide": false,
               "interval": "",
-              "legendFormat": "write-error",
+              "legendFormat": "write-error {{$additional_groupby}}",
               "refId": "N"
             },
             {
@@ -20882,7 +20882,7 @@
               "expr": "sum(rate(tiflash_system_profile_event_S3ReadRequestsThrottling{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
               "hide": false,
               "interval": "",
-              "legendFormat": "read-throttling",
+              "legendFormat": "read-throttling {{$additional_groupby}}",
               "refId": "O"
             },
             {
@@ -20890,7 +20890,7 @@
               "expr": "sum(rate(tiflash_system_profile_event_S3WriteRequestsThrottling{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
               "hide": false,
               "interval": "",
-              "legendFormat": "write-throttling",
+              "legendFormat": "write-throttling {{$additional_groupby}}",
               "refId": "P"
             },
             {
@@ -20898,7 +20898,7 @@
               "expr": "sum(rate(tiflash_system_profile_event_S3ReadRequestsRedirects{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
               "hide": false,
               "interval": "",
-              "legendFormat": "read-redirects",
+              "legendFormat": "read-redirects {{$additional_groupby}}",
               "refId": "Q"
             },
             {
@@ -20906,7 +20906,7 @@
               "expr": "sum(rate(tiflash_system_profile_event_S3WriteRequestsRedirects{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
               "hide": false,
               "interval": "",
-              "legendFormat": "write-redirects",
+              "legendFormat": "write-redirects {{$additional_groupby}}",
               "refId": "R"
             }
           ],
@@ -21010,7 +21010,7 @@
               "hide": true,
               "interval": "",
               "intervalFactor": 1,
-              "legendFormat": "{{type}}-max",
+              "legendFormat": "{{type}}-max {{$additional_groupby}}",
               "refId": "A"
             },
             {
@@ -21018,7 +21018,7 @@
               "expr": "histogram_quantile(0.9999, sum(rate(tiflash_storage_s3_http_request_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (le, type, $additional_groupby))",
               "hide": false,
               "interval": "",
-              "legendFormat": "{{type}}-9999",
+              "legendFormat": "{{type}}-9999 {{$additional_groupby}}",
               "refId": "C"
             },
             {
@@ -21026,7 +21026,7 @@
               "expr": "histogram_quantile(0.99, sum(rate(tiflash_storage_s3_http_request_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (le, type, $additional_groupby))",
               "hide": false,
               "interval": "",
-              "legendFormat": "{{type}}-99",
+              "legendFormat": "{{type}}-99 {{$additional_groupby}}",
               "refId": "B"
             }
           ],
@@ -21136,7 +21136,7 @@
               "hide": false,
               "interval": "",
               "intervalFactor": 1,
-              "legendFormat": "{{type}}",
+              "legendFormat": "{{type}} {{$additional_groupby}}",
               "refId": "B"
             },
             {
@@ -21254,7 +21254,7 @@
               "hide": false,
               "interval": "",
               "intervalFactor": 1,
-              "legendFormat": "{{type}}",
+              "legendFormat": "{{type}} {{$additional_groupby}}",
               "refId": "B"
             }
           ],
@@ -23001,7 +23001,12 @@
     "list": [
       {
         "allValue": null,
-        "current": {},
+        "current": {
+          "isNone": true,
+          "selected": false,
+          "text": "None",
+          "value": ""
+        },
         "datasource": "${DS_TEST-CLUSTER}",
         "definition": "",
         "description": null,
@@ -23028,7 +23033,12 @@
       },
       {
         "allValue": null,
-        "current": {},
+        "current": {
+          "isNone": true,
+          "selected": false,
+          "text": "None",
+          "value": ""
+        },
         "datasource": "${DS_TEST-CLUSTER}",
         "definition": "",
         "description": null,
@@ -23055,7 +23065,11 @@
       },
       {
         "allValue": null,
-        "current": {},
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "$__all"
+        },
         "datasource": "${DS_TEST-CLUSTER}",
         "definition": "label_values(tiflash_system_profile_event_Query{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\"}, instance)",
         "description": null,
