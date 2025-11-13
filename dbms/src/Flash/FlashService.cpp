@@ -1083,13 +1083,34 @@ grpc::Status FlashService::FetchDisaggPages(
         context->getSharedContextDisagg()->isDisaggregatedStorageMode(),
         "FetchDisaggPages should only be called on write node");
 
-    GET_METRIC(tiflash_coprocessor_request_count, type_disagg_fetch_pages).Increment();
-    GET_METRIC(tiflash_coprocessor_handling_request_count, type_disagg_fetch_pages).Increment();
+    if (request->page_ids_size() == 0)
+    {
+        // Totally hit the cache on compute node, no need to fetch any page from write node.
+        // Use separate metrics to monitor this case.
+        GET_METRIC(tiflash_coprocessor_request_count, type_disagg_fetch_pages_empty).Increment();
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_disagg_fetch_pages_empty).Increment();
+    }
+    else
+    {
+        GET_METRIC(tiflash_coprocessor_request_count, type_disagg_fetch_pages).Increment();
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_disagg_fetch_pages).Increment();
+    }
     Stopwatch watch;
     SCOPE_EXIT({
-        GET_METRIC(tiflash_coprocessor_handling_request_count, type_disagg_fetch_pages).Decrement();
-        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_disagg_fetch_pages)
-            .Observe(watch.elapsedSeconds());
+        if (request->page_ids_size() == 0)
+        {
+            // Totally hit the cache on compute node, no need to fetch any page from write node.
+            // Use separate metrics to monitor this case.
+            GET_METRIC(tiflash_coprocessor_handling_request_count, type_disagg_fetch_pages_empty).Decrement();
+            GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_disagg_fetch_pages_empty)
+                .Observe(watch.elapsedSeconds());
+        }
+        else
+        {
+            GET_METRIC(tiflash_coprocessor_handling_request_count, type_disagg_fetch_pages).Decrement();
+            GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_disagg_fetch_pages)
+                .Observe(watch.elapsedSeconds());
+        }
     });
 
     auto snaps = context->getSharedContextDisagg()->wn_snapshot_manager;
