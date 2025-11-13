@@ -8782,7 +8782,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 9
+            "y": 41
           },
           "hiddenSeries": false,
           "id": 41,
@@ -8895,7 +8895,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 9
+            "y": 41
           },
           "hiddenSeries": false,
           "id": 38,
@@ -9053,7 +9053,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 17
+            "y": 49
           },
           "hiddenSeries": false,
           "id": 40,
@@ -9154,7 +9154,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 25
+            "y": 57
           },
           "height": "",
           "hiddenSeries": false,
@@ -9269,7 +9269,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 25
+            "y": 57
           },
           "height": "",
           "hiddenSeries": false,
@@ -9383,7 +9383,7 @@
             "h": 5,
             "w": 12,
             "x": 0,
-            "y": 33
+            "y": 65
           },
           "hiddenSeries": false,
           "id": 39,
@@ -9486,7 +9486,7 @@
             "h": 5,
             "w": 12,
             "x": 12,
-            "y": 33
+            "y": 65
           },
           "hiddenSeries": false,
           "id": 42,
@@ -9590,7 +9590,7 @@
             "h": 5,
             "w": 12,
             "x": 0,
-            "y": 38
+            "y": 70
           },
           "hiddenSeries": false,
           "id": 130,
@@ -9693,7 +9693,7 @@
             "h": 5,
             "w": 12,
             "x": 12,
-            "y": 38
+            "y": 70
           },
           "hiddenSeries": false,
           "id": 131,
@@ -9797,7 +9797,7 @@
             "h": 7,
             "w": 8,
             "x": 0,
-            "y": 43
+            "y": 75
           },
           "hiddenSeries": false,
           "id": 50,
@@ -9931,7 +9931,7 @@
             "h": 7,
             "w": 8,
             "x": 8,
-            "y": 43
+            "y": 75
           },
           "hiddenSeries": false,
           "id": 22,
@@ -10045,7 +10045,7 @@
             "h": 7,
             "w": 8,
             "x": 16,
-            "y": 43
+            "y": 75
           },
           "hiddenSeries": false,
           "id": 52,
@@ -10162,7 +10162,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 50
+            "y": 82
           },
           "hiddenSeries": false,
           "id": 46,
@@ -10278,7 +10278,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 50
+            "y": 82
           },
           "hiddenSeries": false,
           "id": 47,
@@ -10395,7 +10395,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 57
+            "y": 89
           },
           "height": "",
           "hiddenSeries": false,
@@ -10517,7 +10517,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 57
+            "y": 89
           },
           "height": "",
           "hiddenSeries": false,
@@ -10639,7 +10639,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 65
+            "y": 97
           },
           "hiddenSeries": false,
           "id": 67,
@@ -10753,7 +10753,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 65
+            "y": 97
           },
           "hiddenSeries": false,
           "id": 237,
@@ -10855,7 +10855,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 73
+            "y": 105
           },
           "hiddenSeries": false,
           "id": 132,
@@ -10980,7 +10980,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 73
+            "y": 105
           },
           "hiddenSeries": false,
           "id": 269,
@@ -11086,7 +11086,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 81
+            "y": 113
           },
           "hiddenSeries": false,
           "id": 292,
@@ -11213,7 +11213,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 81
+            "y": 113
           },
           "hiddenSeries": false,
           "id": 88,
@@ -11416,7 +11416,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 89
+            "y": 121
           },
           "hiddenSeries": false,
           "id": 294,
@@ -11522,7 +11522,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 89
+            "y": 121
           },
           "hiddenSeries": false,
           "id": 293,
@@ -11620,7 +11620,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 96
+            "y": 128
           },
           "hiddenSeries": false,
           "id": 301,
@@ -20282,7 +20282,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 16
+            "y": 17
           },
           "hiddenSeries": false,
           "id": 178,
@@ -20316,28 +20316,28 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_system_profile_event_S3WriteBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(rate(tiflash_system_profile_event_S3WriteBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
               "format": "time_series",
               "hide": false,
               "interval": "",
               "intervalFactor": 1,
-              "legendFormat": "S3WriteBytes",
+              "legendFormat": "S3WriteBytes {{$additional_groupby}}",
               "refId": "B"
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_system_profile_event_S3ReadBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(rate(tiflash_system_profile_event_S3ReadBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
               "hide": false,
               "interval": "",
-              "legendFormat": "S3ReadBytes",
+              "legendFormat": "S3ReadBytes {{$additional_groupby}}",
               "refId": "A"
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_system_profile_event_S3WriteDMFileBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(rate(tiflash_system_profile_event_S3WriteDMFileBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
               "hide": false,
               "interval": "",
-              "legendFormat": "S3WriteDMFileBytes",
+              "legendFormat": "S3WriteDMFileBytes {{$additional_groupby}}",
               "refId": "C"
             }
           ],
@@ -20400,7 +20400,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 16
+            "y": 17
           },
           "hiddenSeries": false,
           "id": 179,
@@ -20434,84 +20434,84 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_system_profile_event_S3PutObject{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(rate(tiflash_system_profile_event_S3PutObject{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
               "format": "time_series",
               "hide": false,
               "interval": "",
               "intervalFactor": 1,
-              "legendFormat": "S3PutObject",
+              "legendFormat": "S3PutObject {{$additional_groupby}}",
               "refId": "B"
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_system_profile_event_S3GetObject{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(rate(tiflash_system_profile_event_S3GetObject{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
               "hide": false,
               "interval": "",
-              "legendFormat": "S3GetObject",
+              "legendFormat": "S3GetObject {{$additional_groupby}}",
               "refId": "A"
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_system_profile_event_S3HeadObject{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(rate(tiflash_system_profile_event_S3HeadObject{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
               "hide": false,
               "interval": "",
-              "legendFormat": "S3HeadObject",
+              "legendFormat": "S3HeadObject {{$additional_groupby}}",
               "refId": "C"
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_system_profile_event_S3ListObjects{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(rate(tiflash_system_profile_event_S3ListObjects{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
               "hide": false,
               "interval": "",
-              "legendFormat": "S3ListObjects",
+              "legendFormat": "S3ListObjects {{$additional_groupby}}",
               "refId": "D"
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_system_profile_event_S3DeleteObject{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(rate(tiflash_system_profile_event_S3DeleteObject{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
               "hide": false,
               "interval": "",
-              "legendFormat": "S3DeleteObject",
+              "legendFormat": "S3DeleteObject {{$additional_groupby}}",
               "refId": "E"
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_system_profile_event_S3CopyObject{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(rate(tiflash_system_profile_event_S3CopyObject{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
               "hide": false,
               "interval": "",
-              "legendFormat": "S3CopyObject",
+              "legendFormat": "S3CopyObject {{$additional_groupby}}",
               "refId": "F"
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_system_profile_event_S3CreateMultipartUpload{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(rate(tiflash_system_profile_event_S3CreateMultipartUpload{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
               "hide": false,
               "interval": "",
-              "legendFormat": "S3CreateMultipartUpload",
+              "legendFormat": "S3CreateMultipartUpload {{$additional_groupby}}",
               "refId": "G"
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_system_profile_event_S3UploadPart{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(rate(tiflash_system_profile_event_S3UploadPart{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
               "hide": false,
               "interval": "",
-              "legendFormat": "S3UploadPart",
+              "legendFormat": "S3UploadPart {{$additional_groupby}}",
               "refId": "H"
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_system_profile_event_S3CompleteMultipartUpload{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(rate(tiflash_system_profile_event_S3CompleteMultipartUpload{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
               "hide": false,
               "interval": "",
-              "legendFormat": "S3CompleteMultipartUpload",
+              "legendFormat": "S3CompleteMultipartUpload {{$additional_groupby}}",
               "refId": "I"
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_system_profile_event_S3PutDMFile{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(rate(tiflash_system_profile_event_S3PutDMFile{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
               "hide": false,
               "interval": "",
-              "legendFormat": "S3PutDMFile",
+              "legendFormat": "S3PutDMFile {{$additional_groupby}}",
               "refId": "J"
             }
           ],
@@ -20574,7 +20574,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 24
+            "y": 25
           },
           "hiddenSeries": false,
           "id": 182,
@@ -20608,7 +20608,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_system_profile_event_S3GetObjectRetry{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(rate(tiflash_system_profile_event_S3GetObjectRetry{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type, $additional_groupby)",
               "format": "time_series",
               "hide": false,
               "interval": "",
@@ -20618,7 +20618,7 @@
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_system_profile_event_S3PutObjectRetry{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(rate(tiflash_system_profile_event_S3PutObjectRetry{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type, $additional_groupby)",
               "hide": false,
               "interval": "",
               "legendFormat": "S3PutObjectRetry",
@@ -20626,7 +20626,7 @@
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_system_profile_event_S3PutDMFileRetry{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(rate(tiflash_system_profile_event_S3PutDMFileRetry{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type, $additional_groupby)",
               "hide": false,
               "interval": "",
               "legendFormat": "S3PutDMFileRetry",
@@ -20692,7 +20692,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 24
+            "y": 25
           },
           "hiddenSeries": false,
           "id": 180,
@@ -20728,9 +20728,9 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_s3_request_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le, type) / 1000000000)",
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_s3_request_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le, type, $additional_groupby) / 1000000000)",
               "format": "time_series",
-              "hide": false,
+              "hide": true,
               "interval": "",
               "intervalFactor": 1,
               "legendFormat": "{{type}}-max",
@@ -20738,27 +20738,21 @@
             },
             {
               "exemplar": true,
-              "expr": "histogram_quantile(0.99, sum(rate(tiflash_storage_s3_request_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
+              "expr": "histogram_quantile(0.9999, sum(rate(tiflash_storage_s3_request_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type, $additional_groupby))",
+              "format": "time_series",
+              "hide": false,
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "{{type}}-9999",
+              "refId": "B"
+            },
+            {
+              "exemplar": true,
+              "expr": "histogram_quantile(0.99, sum(rate(tiflash_storage_s3_request_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type, $additional_groupby))",
               "hide": false,
               "interval": "",
               "legendFormat": "{{type}}-99",
               "refId": "C"
-            },
-            {
-              "exemplar": true,
-              "expr": "histogram_quantile(0.90, sum(rate(tiflash_storage_s3_request_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
-              "hide": true,
-              "interval": "",
-              "legendFormat": "{{type}}-90",
-              "refId": "D"
-            },
-            {
-              "exemplar": true,
-              "expr": "histogram_quantile(0.80, sum(rate(tiflash_storage_s3_request_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
-              "hide": true,
-              "interval": "",
-              "legendFormat": "{{type}}-80",
-              "refId": "E"
             }
           ],
           "thresholds": [],
@@ -20766,6 +20760,281 @@
           "timeRegions": [],
           "timeShift": null,
           "title": "S3 Request Duration",
+          "tooltip": {
+            "shared": true,
+            "sort": 2,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "format": "s",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "S3 HTTP OPS",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 0,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 33
+          },
+          "hiddenSeries": false,
+          "id": 343,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "max": false,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_system_profile_event_S3ReadRequestsCount{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type, $additional_groupby)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "read-count",
+              "refId": "K"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_system_profile_event_S3WriteRequestsCount{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type, $additional_groupby)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "write-count",
+              "refId": "L"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_system_profile_event_S3ReadRequestsErrors{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type, $additional_groupby)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "read-error",
+              "refId": "M"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_system_profile_event_S3WriteRequestsErrors{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type, $additional_groupby)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "write-error",
+              "refId": "N"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_system_profile_event_S3ReadRequestsThrottling{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type, $additional_groupby)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "read-throttling",
+              "refId": "O"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_system_profile_event_S3WriteRequestsThrottling{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type, $additional_groupby)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "write-throttling",
+              "refId": "P"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_system_profile_event_S3ReadRequestsRedirects{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type, $additional_groupby)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "read-redirects",
+              "refId": "Q"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_system_profile_event_S3WriteRequestsRedirects{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type, $additional_groupby)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "write-redirects",
+              "refId": "R"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "S3 HTTP OPS",
+          "tooltip": {
+            "shared": true,
+            "sort": 2,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": null,
+              "format": "ops",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "opm",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "S3 HTTP Request Duration",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 1,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 33
+          },
+          "hiddenSeries": false,
+          "id": 344,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "max": true,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "sort": "max",
+            "sortDesc": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_s3_http_request_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le, type, $additional_groupby) / 1000000000)",
+              "format": "time_series",
+              "hide": true,
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "{{type}}-max",
+              "refId": "A"
+            },
+            {
+              "exemplar": true,
+              "expr": "histogram_quantile(0.9999, sum(rate(tiflash_storage_s3_http_request_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type, $additional_groupby))",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "{{type}}-9999",
+              "refId": "C"
+            },
+            {
+              "exemplar": true,
+              "expr": "histogram_quantile(0.99, sum(rate(tiflash_storage_s3_http_request_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type, $additional_groupby))",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "{{type}}-99",
+              "refId": "B"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "S3 HTTP Request Duration",
           "tooltip": {
             "shared": true,
             "sort": 2,
@@ -20819,7 +21088,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 32
+            "y": 41
           },
           "hiddenSeries": false,
           "id": 185,
@@ -20862,7 +21131,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_storage_remote_cache{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(rate(tiflash_storage_remote_cache{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type, $additional_groupby)",
               "format": "time_series",
               "hide": false,
               "interval": "",
@@ -20946,7 +21215,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 32
+            "y": 41
           },
           "hiddenSeries": false,
           "id": 186,
@@ -20980,7 +21249,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_storage_remote_cache_bytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "expr": "sum(rate(tiflash_storage_remote_cache_bytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type, $additional_groupby)",
               "format": "time_series",
               "hide": false,
               "interval": "",
@@ -21048,7 +21317,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 40
+            "y": 49
           },
           "hiddenSeries": false,
           "id": 188,
@@ -21060,6 +21329,8 @@
             "min": false,
             "rightSide": true,
             "show": true,
+            "sort": "current",
+            "sortDesc": true,
             "total": false,
             "values": true
           },
@@ -21121,7 +21392,7 @@
           "title": "Remote Cache Usage",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -22808,6 +23079,73 @@
         "tagsQuery": "",
         "type": "query",
         "useTags": false
+      },
+      {
+        "allValue": null,
+        "current": {
+          "selected": true,
+          "text": "none",
+          "value": "none"
+        },
+        "description": null,
+        "error": null,
+        "hide": 0,
+        "includeAll": false,
+        "label": "additional_groupby",
+        "multi": false,
+        "name": "additional_groupby",
+        "options": [
+          {
+            "selected": true,
+            "text": "none",
+            "value": "none"
+          },
+          {
+            "selected": false,
+            "text": "instance",
+            "value": "instance"
+          }
+        ],
+        "query": "none,instance",
+        "queryValue": "",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "allValue": null,
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": ".*"
+        },
+        "description": null,
+        "error": null,
+        "hide": 0,
+        "includeAll": false,
+        "label": "Role",
+        "multi": false,
+        "name": "tiflash_role",
+        "options": [
+          {
+            "selected": true,
+            "text": "All",
+            "value": ".*"
+          },
+          {
+            "selected": false,
+            "text": "Write",
+            "value": ".*write-tiflash.*"
+          },
+          {
+            "selected": false,
+            "text": "Compute",
+            "value": ".*compute-tiflash.*"
+          }
+        ],
+        "query": "All : .*, Write : .*write-tiflash.*, Compute : .*compute-tiflash.*",
+        "queryValue": "",
+        "skipUrlSync": false,
+        "type": "custom"
       }
     ]
   },
