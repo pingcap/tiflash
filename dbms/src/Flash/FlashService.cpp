@@ -39,6 +39,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Interpreters/executeQuery.h>
+#include <Poco/Message.h>
 #include <Server/IServer.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
@@ -1156,8 +1157,10 @@ grpc::Status FlashService::FetchDisaggPages(
             context->getSettingsRef());
         auto summary = stream_writer->syncWrite();
 
-        LOG_INFO(
+        auto lvl = watch.elapsedSeconds() > 10 ? Poco::Message::PRIO_WARNING : Poco::Message::PRIO_INFORMATION;
+        LOG_IMPL(
             logger,
+            lvl,
             "FetchDisaggPages respond finished, keyspace={} table_id={} segment_id={} num_fetch={} summary={}",
             keyspace_id,
             request->table_id(),
