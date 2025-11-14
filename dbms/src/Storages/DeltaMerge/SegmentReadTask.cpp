@@ -40,6 +40,7 @@ namespace DB::ErrorCodes
 {
 extern const int DT_DELTA_INDEX_ERROR;
 extern const int FETCH_PAGES_ERROR;
+extern const int TIMEOUT_EXCEEDED;
 } // namespace DB::ErrorCodes
 
 namespace DB::DM
@@ -818,13 +819,34 @@ void SegmentReadTask::finishPagesPacketStream(
     }
     else
     {
-        RUNTIME_CHECK_MSG(
-            status.ok(),
-            "Failed to fetch all pages for {}, wn_address={} status={} message={}",
-            *this,
-            extra_remote_info->store_address,
-            static_cast<int>(status.error_code()),
-            status.error_message());
+        switch (status.error_code())
+        {
+        case grpc::StatusCode::OK:
+            break;
+        case grpc::StatusCode::DEADLINE_EXCEEDED:
+        {
+            LOG_WARNING(
+                read_snapshot->log,
+                "Fetch pages timeout for {}, wn_address={} message={}",
+                *this,
+                extra_remote_info->store_address,
+                status.error_message());
+            // throw exception without wn address to avoid returning internal info to user
+            throw Exception(
+                ErrorCodes::TIMEOUT_EXCEEDED,
+                "Fetch pages timeout for {}, message={}",
+                *this,
+                status.error_message());
+        }
+        default:
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Failed to fetch all pages for {}, wn_address={} status={} message={}",
+                *this,
+                extra_remote_info->store_address,
+                static_cast<int>(status.error_code()),
+                status.error_message());
+        }
     }
 }
 
