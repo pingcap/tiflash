@@ -76,6 +76,8 @@ public:
     {
         UInt64 size = 0; // File size of `remote_fname` or `merged_filename`, mainly used for FileCache.
         DB::DM::ScanContextPtr scan_context;
+        // Whether to block and wait downloaded to local when read from S3.
+        bool block_wait = false;
     };
 
     [[nodiscard]] static auto setReadFileInfo(ReadFileInfo && read_file_info_)
