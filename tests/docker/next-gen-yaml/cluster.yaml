@@ -49,6 +49,19 @@ services:
       - "pd0"
       - "minio0"
     restart: on-failure
+  tikv-worker0:
+    image: ${TIKV_IMAGE:-us-docker.pkg.dev/pingcap-testing-account/hub/tikv/tikv/image:dedicated-next-gen}
+    security_opt:
+      - seccomp:unconfined
+    volumes:
+      - ./next-gen-config/tikv-worker.toml:/tikv-worker.toml:ro
+      - ./data/tikv-worker0:/data
+      - ./log/tikv-worker0:/log
+    entrypoint: /tikv-worker
+    command: --config=/tikv-worker.toml --data-dir=/data --addr=0.0.0.0:19000 --advertise-addr=tikv-worker0:19000 --pd-endpoints=pd0:2379 --log-file=/log/tikv-worker.log
+    depends_on:
+      - "pd0"
+    restart: on-failure
   tidb0:
     image: ${TIDB_IMAGE:-us-docker.pkg.dev/pingcap-testing-account/hub/pingcap/tidb/images/tidb-server:master-next-gen}
     security_opt:
@@ -60,3 +73,4 @@ services:
     depends_on:
       - "tikv0"
     restart: on-failure
+
