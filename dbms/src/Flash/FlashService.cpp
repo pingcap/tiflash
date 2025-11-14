@@ -39,6 +39,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Interpreters/executeQuery.h>
+#include <Poco/Message.h>
 #include <Server/IServer.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
@@ -1083,13 +1084,34 @@ grpc::Status FlashService::FetchDisaggPages(
         context->getSharedContextDisagg()->isDisaggregatedStorageMode(),
         "FetchDisaggPages should only be called on write node");
 
-    GET_METRIC(tiflash_coprocessor_request_count, type_disagg_fetch_pages).Increment();
-    GET_METRIC(tiflash_coprocessor_handling_request_count, type_disagg_fetch_pages).Increment();
+    if (request->page_ids_size() == 0)
+    {
+        // Totally hit the cache on compute node, no need to fetch any page from write node.
+        // Use separate metrics to monitor this case.
+        GET_METRIC(tiflash_coprocessor_request_count, type_disagg_fetch_pages_empty).Increment();
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_disagg_fetch_pages_empty).Increment();
+    }
+    else
+    {
+        GET_METRIC(tiflash_coprocessor_request_count, type_disagg_fetch_pages).Increment();
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_disagg_fetch_pages).Increment();
+    }
     Stopwatch watch;
     SCOPE_EXIT({
-        GET_METRIC(tiflash_coprocessor_handling_request_count, type_disagg_fetch_pages).Decrement();
-        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_disagg_fetch_pages)
-            .Observe(watch.elapsedSeconds());
+        if (request->page_ids_size() == 0)
+        {
+            // Totally hit the cache on compute node, no need to fetch any page from write node.
+            // Use separate metrics to monitor this case.
+            GET_METRIC(tiflash_coprocessor_handling_request_count, type_disagg_fetch_pages_empty).Decrement();
+            GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_disagg_fetch_pages_empty)
+                .Observe(watch.elapsedSeconds());
+        }
+        else
+        {
+            GET_METRIC(tiflash_coprocessor_handling_request_count, type_disagg_fetch_pages).Decrement();
+            GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_disagg_fetch_pages)
+                .Observe(watch.elapsedSeconds());
+        }
     });
 
     auto snaps = context->getSharedContextDisagg()->wn_snapshot_manager;
@@ -1129,14 +1151,20 @@ grpc::Status FlashService::FetchDisaggPages(
             read_ids.emplace_back(page_id);
 
         auto stream_writer = std::make_unique<WNFetchPagesStreamWriter>(
-            [sync_writer](const disaggregated::PagesPacket & packet) { sync_writer->Write(packet); },
+            [sync_writer](const disaggregated::PagesPacket & packet) {
+                GET_METRIC(tiflash_coprocessor_response_bytes, type_disagg_fetch_pages)
+                    .Increment(packet.ByteSizeLong());
+                sync_writer->Write(packet);
+            },
             task.seg_task,
             read_ids,
             context->getSettingsRef());
         auto summary = stream_writer->syncWrite();
 
-        LOG_INFO(
+        auto lvl = watch.elapsedSeconds() > 10 ? Poco::Message::PRIO_WARNING : Poco::Message::PRIO_INFORMATION;
+        LOG_IMPL(
             logger,
+            lvl,
             "FetchDisaggPages respond finished, keyspace={} table_id={} segment_id={} num_fetch={} summary={}",
             keyspace_id,
             request->table_id(),

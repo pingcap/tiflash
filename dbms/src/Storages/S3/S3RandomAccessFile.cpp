@@ -30,6 +30,7 @@
 #include <fiu.h>
 
 #include <optional>
+#include <random>
 #include <string_view>
 
 namespace ProfileEvents
@@ -242,6 +243,17 @@ String S3RandomAccessFile::readRangeOfObject()
     return fmt::format("bytes={}-", cur_offset);
 }
 
+namespace details
+{
+Int64 calculateDelayForNextRetry(Int64 attempted_retries)
+{
+    static thread_local std::mt19937 rng;
+    static thread_local std::uniform_int_distribution<Int32> dist;
+    // Maximum left shift factor is capped by ceil(log2(max_delay)), to avoid wrap-around and overflow into negative values:
+    return std::min(dist(rng) % 1000 * (1 << std::min(attempted_retries, 15L)), 20000);
+}
+} // namespace details
+
 void S3RandomAccessFile::initialize(std::string_view action)
 {
     while (cur_retry < max_retry)
@@ -276,17 +288,22 @@ void S3RandomAccessFile::initialize(std::string_view action)
         });
         if (!outcome.IsSuccess())
         {
+            Int64 delay_ms = details::calculateDelayForNextRetry(cur_retry);
             cur_retry += 1;
             auto el = sw_get_object.elapsedSeconds();
             LOG_WARNING(
                 log,
-                "S3 GetObject failed: {}, retry={}/{}, key={}, elapsed{}={:.3f}s",
+                "S3 GetObject failed: {}, retry={}/{}, key={}, elapsed{}={:.3f}s,"
+                " now waiting {} ms before attempting again",
                 S3::S3ErrorMessage(outcome.GetError()),
                 cur_retry,
                 max_retry,
                 req.GetKey(),
                 el > 60.0 ? "(long)" : "",
-                el);
+                el,
+                delay_ms);
+            // Sleep before next retry
+            std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
             continue;
         }
 

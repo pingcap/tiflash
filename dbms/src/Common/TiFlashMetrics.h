@@ -65,6 +65,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_remote_read_constructed, {"type", "remote_read_constructed"}),                                                         \
       F(type_remote_read_sent, {"type", "remote_read_sent"}),                                                                       \
       F(type_disagg_establish_task, {"type", "disagg_establish_task"}),                                                             \
+      F(type_disagg_fetch_pages_empty, {"type", "disagg_fetch_pages_empty"}),                                                       \
       F(type_disagg_fetch_pages, {"type", "disagg_fetch_pages"}))                                                                   \
     M(tiflash_coprocessor_handling_request_count,                                                                                   \
       "Number of handling request",                                                                                                 \
@@ -82,6 +83,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_remote_read, {"type", "remote_read"}),                                                                                 \
       F(type_remote_read_executing, {"type", "remote_read_executing"}),                                                             \
       F(type_disagg_establish_task, {"type", "disagg_establish_task"}),                                                             \
+      F(type_disagg_fetch_pages_empty, {"type", "disagg_fetch_pages_empty"}),                                                       \
       F(type_disagg_fetch_pages, {"type", "disagg_fetch_pages"}))                                                                   \
     M(tiflash_coprocessor_executor_count,                                                                                           \
       "Total number of each executor",                                                                                              \
@@ -113,7 +115,8 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_cancel_mpp_task, {{"type", "cancel_mpp_task"}}, ExpBuckets{0.001, 2, 20}),                                             \
       F(type_run_mpp_task, {{"type", "run_mpp_task"}}, ExpBuckets{0.001, 2, 20}),                                                   \
       F(type_disagg_establish_task, {{"type", "disagg_establish_task"}}, ExpBuckets{0.001, 2, 20}),                                 \
-      F(type_disagg_fetch_pages, {{"type", "type_disagg_fetch_pages"}}, ExpBuckets{0.001, 2, 20}))                                  \
+      F(type_disagg_fetch_pages_empty, {{"type", "disagg_fetch_pages_empty"}}, ExpBuckets{0.001, 2, 20}),                           \
+      F(type_disagg_fetch_pages, {{"type", "disagg_fetch_pages"}}, ExpBuckets{0.001, 2, 20}))                                       \
     M(tiflash_coprocessor_request_memory_usage,                                                                                     \
       "Bucketed histogram of request memory usage",                                                                                 \
       Histogram,                                                                                                                    \
@@ -147,7 +150,8 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_mpp_establish_conn, {{"type", "mpp_tunnel"}}),                                                                         \
       F(type_mpp_establish_conn_local, {{"type", "mpp_tunnel_local"}}),                                                             \
       F(type_cancel_mpp_task, {{"type", "cancel_mpp_task"}}),                                                                       \
-      F(type_disagg_establish_task, {{"type", "type_disagg_establish_task"}}))                                                      \
+      F(type_disagg_fetch_pages, {{"type", "disagg_fetch_pages"}}),                                                                 \
+      F(type_disagg_establish_task, {{"type", "disagg_establish_task"}}))                                                           \
     M(tiflash_exchange_data_bytes,                                                                                                  \
       "Total bytes sent by exchange operators",                                                                                     \
       Counter,                                                                                                                      \
