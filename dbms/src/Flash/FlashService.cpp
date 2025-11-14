@@ -1151,7 +1151,11 @@ grpc::Status FlashService::FetchDisaggPages(
             read_ids.emplace_back(page_id);
 
         auto stream_writer = std::make_unique<WNFetchPagesStreamWriter>(
-            [sync_writer](const disaggregated::PagesPacket & packet) { sync_writer->Write(packet); },
+            [sync_writer](const disaggregated::PagesPacket & packet) {
+                GET_METRIC(tiflash_coprocessor_response_bytes, type_disagg_fetch_pages)
+                    .Increment(packet.ByteSizeLong());
+                sync_writer->Write(packet);
+            },
             task.seg_task,
             read_ids,
             context->getSettingsRef());

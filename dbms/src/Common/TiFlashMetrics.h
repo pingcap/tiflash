@@ -150,6 +150,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_mpp_establish_conn, {{"type", "mpp_tunnel"}}),                                                                         \
       F(type_mpp_establish_conn_local, {{"type", "mpp_tunnel_local"}}),                                                             \
       F(type_cancel_mpp_task, {{"type", "cancel_mpp_task"}}),                                                                       \
+      F(type_disagg_fetch_pages, {{"type", "disagg_fetch_pages"}}),                                                                 \
       F(type_disagg_establish_task, {{"type", "disagg_establish_task"}}))                                                           \
     M(tiflash_exchange_data_bytes,                                                                                                  \
       "Total bytes sent by exchange operators",                                                                                     \
