@@ -1724,6 +1724,7 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
                 {
                 case EditRecordType::PUT_EXTERNAL:
                 {
+                    GET_METRIC(tiflash_storage_page_apply_edit_type, type_put_external).Increment();
                     auto holder = version_list->createNewExternal(r.version, r.entry);
                     if (holder)
                     {
@@ -1734,14 +1735,31 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
                     break;
                 }
                 case EditRecordType::PUT:
+                {
+                    GET_METRIC(tiflash_storage_page_apply_edit_type, type_put).Increment();
                     version_list->createNewEntry(r.version, r.entry);
                     break;
+                }
                 case EditRecordType::DEL:
+                {
+                    if (created)
+                    {
+                        // Deleting a non-existing page
+                        GET_METRIC(tiflash_storage_page_apply_edit_type, type_del_not_exist).Increment();
+                    }
+                    else
+                    {
+                        GET_METRIC(tiflash_storage_page_apply_edit_type, type_del).Increment();
+                    }
                     version_list->createDelete(r.version);
                     break;
+                }
                 case EditRecordType::REF:
+                {
+                    GET_METRIC(tiflash_storage_page_apply_edit_type, type_ref).Increment();
                     applyRefEditRecord(mvcc_table_directory, version_list, r, r.version);
                     break;
+                }
                 case EditRecordType::UPSERT:
                 case EditRecordType::VAR_DELETE:
                 case EditRecordType::VAR_ENTRY:

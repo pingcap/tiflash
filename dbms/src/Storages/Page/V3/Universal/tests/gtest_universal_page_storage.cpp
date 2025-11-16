@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Storages/Page/V3/Universal/RaftDataReader.h>
+#include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
 #include <TestUtils/MockDiskDelegator.h>
@@ -114,6 +115,107 @@ try
     }
     DB::Page page2 = page_storage->read(UniversalPageIdFormat::toFullPageId(prefix, 500), nullptr, {}, false);
     ASSERT_TRUE(!page2.isValid());
+}
+CATCH
+
+namespace
+{
+struct ProcessMemoryUsage
+{
+    double resident_set; // in KB
+    Int64 cur_proc_num_threads;
+    UInt64 cur_virt_size; // in Byte
+};
+
+bool process_mem_usage(double & resident_set, Int64 & cur_proc_num_threads, UInt64 & cur_virt_size)
+{
+    resident_set = 0.0;
+
+    // 'file' stat seems to give the most reliable results
+    std::ifstream stat_stream("/proc/self/stat", std::ios_base::in);
+    // if "/proc/self/stat" is not supported
+    if (!stat_stream.is_open())
+        return false;
+
+    // dummy vars for leading entries in stat that we don't care about
+    std::string pid, comm, state, ppid, pgrp, session, tty_nr;
+    std::string tpgid, flags, minflt, cminflt, majflt, cmajflt;
+    std::string utime, stime, cutime, cstime, priority, nice;
+    std::string itrealvalue, starttime;
+
+    // the field we want
+    Int64 rss;
+
+    stat_stream >> pid >> comm >> state >> ppid >> pgrp >> session >> tty_nr >> tpgid >> flags >> minflt >> cminflt
+        >> majflt >> cmajflt >> utime >> stime >> cutime >> cstime >> priority >> nice >> cur_proc_num_threads
+        >> itrealvalue >> starttime >> cur_virt_size >> rss; // don't care about the rest
+
+    stat_stream.close();
+
+    Int64 page_size_kb = sysconf(_SC_PAGE_SIZE) / 1024; // in case x86-64 is configured to use 2MB pages
+    resident_set = rss * page_size_kb;
+    return true;
+}
+ProcessMemoryUsage get_process_mem_usage()
+{
+    double resident_set;
+    Int64 cur_proc_num_threads = 1;
+    UInt64 cur_virt_size = 0;
+    process_mem_usage(resident_set, cur_proc_num_threads, cur_virt_size);
+    resident_set *= 1024; // unit: byte
+    return ProcessMemoryUsage{resident_set, cur_proc_num_threads, cur_virt_size};
+}
+
+} // namespace
+
+TEST_F(UniPageStorageTest, WriteManyNonExistedDeleted)
+try
+{
+    auto log = Logger::get("WriteManyNonExistedDeleted");
+    RegionID region_id = 42;
+    UInt64 beg_idx = 1;
+    // UInt64 end_idx = 1730000000 + 1;
+    UInt64 end_idx = 200'000'000 + 1;
+    size_t tot_writes = 0;
+    size_t tot_flush = 0;
+    UniversalWriteBatch wb;
+    for (UInt64 idx = beg_idx; idx < end_idx; ++idx)
+    {
+        wb.delPage(UniversalPageIdFormat::toRaftLogKey(region_id, idx));
+        tot_writes += 1;
+        if (wb.size() >= 2000000)
+        {
+            tot_flush += 1;
+            page_storage->write(std::move(wb));
+            wb.clear();
+            auto mu = get_process_mem_usage();
+            LOG_INFO(
+                log,
+                "page_storage->numPages={} "
+                "Memory: resident_set = {:.2f} MB, cur_virt_size = {:.2f} MB, tot_writes={} tot_flush={}",
+                page_storage->getFileUsageStatistics().num_pages,
+                mu.resident_set / 1024.0 / 1024,
+                mu.cur_virt_size / 1024.0 / 1024,
+                tot_writes,
+                tot_flush);
+        }
+    }
+    if (!wb.empty())
+    {
+        page_storage->write(std::move(wb));
+        wb.clear();
+        tot_flush += 1;
+    }
+    auto mu = get_process_mem_usage();
+    LOG_INFO(
+        log,
+        "page_storage->numPages={} "
+        "Memory: resident_set = {:.2f} MB, cur_virt_size = {:.2f} MB, tot_writes={} tot_flush={}",
+        page_storage->getFileUsageStatistics().num_pages,
+        mu.resident_set / 1024.0 / 1024,
+        mu.cur_virt_size / 1024.0 / 1024,
+        tot_writes,
+        tot_flush);
 }
 CATCH
 
