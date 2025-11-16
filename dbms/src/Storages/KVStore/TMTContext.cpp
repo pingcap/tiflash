@@ -306,10 +306,21 @@ void TMTContext::shutdown()
     if (background_service)
     {
         background_service->shutdown();
-        background_service = nullptr;
+        // background_service = nullptr;
         LOG_INFO(Logger::get(), "BackgroundService shutdown complete");
     }
-    LOG_INFO(Logger::get(), "TMTContext shut down complete");
+    LOG_INFO(Logger::get(), "TMTContext shutdown complete");
+}
+
+void TMTContext::shutdownStorageGc()
+{
+    LOG_INFO(Logger::get(), "TMTContext shutting down storage gc");
+    if (background_service)
+    {
+        background_service->shutdownStorageGc();
+        background_service = nullptr;
+    }
+    LOG_INFO(Logger::get(), "TMTContext shutdown storage gc complete");
 }
 
 KVStorePtr & TMTContext::getKVStore()
