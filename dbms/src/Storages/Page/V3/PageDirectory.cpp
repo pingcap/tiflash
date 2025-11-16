@@ -2212,6 +2212,7 @@ template <typename Trait>
 typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(const InMemGCOption & options)
     NO_THREAD_SAFETY_ANALYSIS
 {
+    Stopwatch watch;
     const auto snap_stat = gcInMemSnapshots();
 
     SYNC_FOR("after_PageDirectory::doGC_getLowestSeq");
@@ -2324,15 +2325,19 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
         }
     }
 
-    auto log_level = snap_stat.num_stale > 0 ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;
+    auto elapsed_s = watch.elapsedSeconds();
+    auto log_level = (snap_stat.num_stale > 0 || elapsed_s > 2.0) //
+        ? Poco::Message::PRIO_INFORMATION
+        : Poco::Message::PRIO_DEBUG;
     LOG_IMPL(
         log,
         log_level,
-        "After MVCC gc in memory, general_lowest_seq={} delta_tree_only_seq={}. "
+        "After MVCC gc in memory, elapsed={:.3f}s general_lowest_seq={} delta_tree_only_seq={}. "
         "clean invalid_snapshot_nums={} invalid_page_nums={} invalid_raft_pages_nums={} "
         "total_deref_counter={} all_del_entries={}. "
         "Still exist, snapshot_nums={} page_nums={}. "
         "Longest alive snapshot: {{alive_time={:.3f} seq={} type={} tracing_id={}}} stale_snapshot_nums={}",
+        elapsed_s,
         snap_stat.general_seq,
         snap_stat.delta_tree_only_seq,
         snap_stat.num_invalid,
