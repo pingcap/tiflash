@@ -77,6 +77,7 @@ UniversalPageStorageServicePtr UniversalPageStorageService::create(
             /*interval_ms*/ interval_s * 1000);
     }
 
+    auto bg_gc_check_interval = context.getSettingsRef().dt_bg_gc_check_interval;
     auto & bkg_pool = context.getBackgroundPool();
     service->gc_handle = bkg_pool.addTask(
         [srv_weak = std::weak_ptr<UniversalPageStorageService>(service)] {
@@ -86,7 +87,7 @@ UniversalPageStorageServicePtr UniversalPageStorageService::create(
             return service->gc();
         },
         false,
-        /*interval_ms*/ 60 * 1000);
+        /*interval_ms*/ bg_gc_check_interval * 1000);
     return service;
 }
 
