@@ -1062,8 +1062,9 @@ try
         if (storage_config.s3_config.isS3Enabled())
         {
             S3::ClientFactory::instance().shutdown();
+            LOG_INFO(log, "S3 Client Factory shutdown done.");
         }
-        LOG_DEBUG(log, "Shutted down storages.");
+        LOG_INFO(log, "Shutted down storages.");
     });
 
     proxy_machine.restoreKVStore(global_context->getTMTContext(), global_context->getPathPool());
