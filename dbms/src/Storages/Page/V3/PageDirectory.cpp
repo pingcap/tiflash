@@ -1711,6 +1711,16 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
         for (const auto & r : edit.getRecords())
         {
             // Protected in write_lock
+            if (r.type == EditRecordType::DEL)
+            {
+                auto iter = mvcc_table_directory.find(r.page_id);
+                if (iter == mvcc_table_directory.end())
+                {
+                    // Deleting a non-existing page
+                    GET_METRIC(tiflash_storage_page_apply_edit_type, type_del_not_exist).Increment();
+                    continue;
+                }
+            }
             auto [iter, created] = mvcc_table_directory.insert(std::make_pair(r.page_id, nullptr));
             if (created)
             {
@@ -1742,15 +1752,9 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
                 }
                 case EditRecordType::DEL:
                 {
-                    if (created)
-                    {
-                        // Deleting a non-existing page
-                        GET_METRIC(tiflash_storage_page_apply_edit_type, type_del_not_exist).Increment();
-                    }
-                    else
-                    {
-                        GET_METRIC(tiflash_storage_page_apply_edit_type, type_del).Increment();
-                    }
+                    assert(created == false);
+                    GET_METRIC(tiflash_storage_page_apply_edit_type, type_del).Increment();
+                    // append a "delete" to the version list
                     version_list->createDelete(r.version);
                     break;
                 }
