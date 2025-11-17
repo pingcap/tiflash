@@ -328,6 +328,14 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_read_blob, {"type", "read_blob"}),                                                                                     \
       F(type_scan, {"type", "scan"}),                                                                                               \
       F(type_snapshot, {"type", "snapshot"}))                                                                                       \
+    M(tiflash_storage_page_apply_edit_type,                                                                                         \
+      "Total number of PageDirectory applied edit",                                                                                 \
+      Counter,                                                                                                                      \
+      F(type_put, {"type", "put"}),                                                                                                 \
+      F(type_put_external, {"type", "put_external"}),                                                                               \
+      F(type_del, {"type", "del"}),                                                                                                 \
+      F(type_del_not_exist, {"type", "del_not_exist"}),                                                                             \
+      F(type_ref, {"type", "ref"}))                                                                                                 \
     M(tiflash_storage_page_write_batch_size,                                                                                        \
       "The size of each write batch in bytes",                                                                                      \
       Histogram,                                                                                                                    \

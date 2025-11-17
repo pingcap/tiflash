@@ -1711,6 +1711,16 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
         for (const auto & r : edit.getRecords())
         {
             // Protected in write_lock
+            if (r.type == EditRecordType::DEL)
+            {
+                auto iter = mvcc_table_directory.find(r.page_id);
+                if (iter == mvcc_table_directory.end())
+                {
+                    // Deleting a non-existing page
+                    GET_METRIC(tiflash_storage_page_apply_edit_type, type_del_not_exist).Increment();
+                    continue;
+                }
+            }
             auto [iter, created] = mvcc_table_directory.insert(std::make_pair(r.page_id, nullptr));
             if (created)
             {
@@ -1724,6 +1734,7 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
                 {
                 case EditRecordType::PUT_EXTERNAL:
                 {
+                    GET_METRIC(tiflash_storage_page_apply_edit_type, type_put_external).Increment();
                     auto holder = version_list->createNewExternal(r.version, r.entry);
                     if (holder)
                     {
@@ -1734,14 +1745,25 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
                     break;
                 }
                 case EditRecordType::PUT:
+                {
+                    GET_METRIC(tiflash_storage_page_apply_edit_type, type_put).Increment();
                     version_list->createNewEntry(r.version, r.entry);
                     break;
+                }
                 case EditRecordType::DEL:
+                {
+                    assert(created == false);
+                    GET_METRIC(tiflash_storage_page_apply_edit_type, type_del).Increment();
+                    // append a "delete" to the version list
                     version_list->createDelete(r.version);
                     break;
+                }
                 case EditRecordType::REF:
+                {
+                    GET_METRIC(tiflash_storage_page_apply_edit_type, type_ref).Increment();
                     applyRefEditRecord(mvcc_table_directory, version_list, r, r.version);
                     break;
+                }
                 case EditRecordType::UPSERT:
                 case EditRecordType::VAR_DELETE:
                 case EditRecordType::VAR_ENTRY:
@@ -2190,6 +2212,7 @@ template <typename Trait>
 typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(const InMemGCOption & options)
     NO_THREAD_SAFETY_ANALYSIS
 {
+    Stopwatch watch;
     const auto snap_stat = gcInMemSnapshots();
 
     SYNC_FOR("after_PageDirectory::doGC_getLowestSeq");
@@ -2302,15 +2325,19 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
         }
     }
 
-    auto log_level = snap_stat.num_stale > 0 ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;
+    auto elapsed_s = watch.elapsedSeconds();
+    auto log_level = (snap_stat.num_stale > 0 || elapsed_s > 2.0) //
+        ? Poco::Message::PRIO_INFORMATION
+        : Poco::Message::PRIO_DEBUG;
     LOG_IMPL(
         log,
         log_level,
-        "After MVCC gc in memory, general_lowest_seq={} delta_tree_only_seq={}. "
+        "After MVCC gc in memory, elapsed={:.3f}s general_lowest_seq={} delta_tree_only_seq={}. "
         "clean invalid_snapshot_nums={} invalid_page_nums={} invalid_raft_pages_nums={} "
         "total_deref_counter={} all_del_entries={}. "
         "Still exist, snapshot_nums={} page_nums={}. "
         "Longest alive snapshot: {{alive_time={:.3f} seq={} type={} tracing_id={}}} stale_snapshot_nums={}",
+        elapsed_s,
         snap_stat.general_seq,
         snap_stat.delta_tree_only_seq,
         snap_stat.num_invalid,

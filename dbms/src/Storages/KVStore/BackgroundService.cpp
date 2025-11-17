@@ -84,12 +84,6 @@ void BackgroundService::shutdown() noexcept
         single_thread_task_handle = nullptr;
     }
 
-    if (storage_gc_handle)
-    {
-        background_pool.removeTask(storage_gc_handle);
-        storage_gc_handle = nullptr;
-    }
-
     if (eager_raft_log_gc_handle)
     {
         background_pool.removeTask(eager_raft_log_gc_handle);
@@ -97,9 +91,20 @@ void BackgroundService::shutdown() noexcept
     }
 }
 
+void BackgroundService::shutdownStorageGc() noexcept
+{
+    // This rely on DeltaMergeStore::onSyncGc, which will be exit after IStorage::shutdown is called.
+    if (storage_gc_handle)
+    {
+        background_pool.removeTask(storage_gc_handle);
+        storage_gc_handle = nullptr;
+    }
+}
+
 BackgroundService::~BackgroundService()
 {
     shutdown();
+    shutdownStorageGc();
 }
 
 } // namespace DB

@@ -182,6 +182,24 @@ DeltaMergeStore::BackgroundTask DeltaMergeStore::MergeDeltaTaskPool::nextTask(bo
     return task;
 }
 
+std::pair<size_t, size_t> DeltaMergeStore::MergeDeltaTaskPool::clearTasks()
+{
+    size_t num_light_stopped = 0;
+    size_t num_heavy_stopped = 0;
+    std::scoped_lock lock(mutex);
+    while (!light_tasks.empty())
+    {
+        num_light_stopped++;
+        light_tasks.pop();
+    }
+    while (!heavy_tasks.empty())
+    {
+        num_heavy_stopped++;
+        heavy_tasks.pop();
+    }
+    return {num_light_stopped, num_heavy_stopped};
+}
+
 // ================================================
 //   DeltaMergeStore
 // ================================================
@@ -508,6 +526,8 @@ void DeltaMergeStore::shutdown()
     RUNTIME_CHECK(indexer_scheulder != nullptr);
     indexer_scheulder->dropTasks(keyspace_id, physical_table_id);
 
+    auto [clear_light, clear_heavy] = background_tasks.clearTasks();
+
     // Must shutdown storage path pool to make sure the DMFile remove callbacks
     // won't remove dmfiles unexpectly.
     path_pool->shutdown();
@@ -518,7 +538,7 @@ void DeltaMergeStore::shutdown()
     blockable_background_pool.removeTask(blockable_background_pool_handle);
     background_task_handle = nullptr;
     blockable_background_pool_handle = nullptr;
-    LOG_TRACE(log, "Shutdown DeltaMerge end");
+    LOG_TRACE(log, "Shutdown DeltaMerge end, clear_light_tasks={} clear_heavy_tasks={}", clear_light, clear_heavy);
 }
 
 DMContextPtr DeltaMergeStore::newDMContext(

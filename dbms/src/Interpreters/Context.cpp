@@ -329,6 +329,15 @@ struct ContextShared
             std::lock_guard lock(mutex);
             databases.clear();
         }
+
+        // This is a temporary with minimal code changes to fix the issue that
+        // removing `BackgroundService::storage_gc_handle` may be blocked for a long time
+        // because IStorage::shutdown (and IDatabase::shutdown) is not called yet.
+        // So we move the call of `BackgroundService::shutdownStorageGc` here.
+        if (tmt_context)
+        {
+            tmt_context->shutdownStorageGc();
+        }
     }
 
 private:
