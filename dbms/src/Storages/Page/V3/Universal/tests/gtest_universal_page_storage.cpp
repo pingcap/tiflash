@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/MemoryAllocTrace.h>
 #include <Storages/Page/V3/Universal/RaftDataReader.h>
+#include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
 #include <TestUtils/MockDiskDelegator.h>
@@ -114,6 +116,63 @@ try
     }
     DB::Page page2 = page_storage->read(UniversalPageIdFormat::toFullPageId(prefix, 500), nullptr, {}, false);
     ASSERT_TRUE(!page2.isValid());
+}
+CATCH
+
+TEST_F(UniPageStorageTest, WriteManyNonExistedDeleted)
+try
+{
+    auto log = Logger::get("WriteManyNonExistedDeleted");
+    RegionID region_id = 42;
+    UInt64 beg_idx = 1;
+    // UInt64 end_idx = 200'000'000 + 1;
+    UInt64 end_idx = 2'000'000 + 1;
+    size_t tot_writes = 0;
+    size_t tot_flush = 0;
+    UniversalWriteBatch wb;
+    for (UInt64 idx = beg_idx; idx < end_idx; ++idx)
+    {
+        wb.delPage(UniversalPageIdFormat::toRaftLogKey(region_id, idx));
+        tot_writes += 1;
+        if (wb.size() >= 2'000'000)
+        {
+            tot_flush += 1;
+            page_storage->write(std::move(wb));
+            wb.clear();
+            auto usage = page_storage->getFileUsageStatistics();
+            auto mu = get_process_mem_usage();
+            LOG_INFO(
+                log,
+                "page_storage->numPages={} "
+                "Memory: resident_set = {:.2f} MB, cur_virt_size = {:.2f} MB, tot_writes={} tot_flush={}",
+                usage.num_pages,
+                mu.resident_bytes / 1024.0 / 1024,
+                mu.cur_virt_bytes / 1024.0 / 1024,
+                tot_writes,
+                tot_flush);
+            // should not create any page id in the PageDirectory
+            ASSERT_EQ(usage.num_pages, 0);
+        }
+    }
+    if (!wb.empty())
+    {
+        page_storage->write(std::move(wb));
+        wb.clear();
+        tot_flush += 1;
+    }
+    auto usage = page_storage->getFileUsageStatistics();
+    auto mu = get_process_mem_usage();
+    LOG_INFO(
+        log,
+        "page_storage->numPages={} "
+        "Memory: resident_set = {:.2f} MB, cur_virt_size = {:.2f} MB, tot_writes={} tot_flush={}",
+        usage.num_pages,
+        mu.resident_bytes / 1024.0 / 1024,
+        mu.cur_virt_bytes / 1024.0 / 1024,
+        tot_writes,
+        tot_flush);
+    // should not create any page id in the PageDirectory
+    ASSERT_EQ(usage.num_pages, 0);
 }
 CATCH
 

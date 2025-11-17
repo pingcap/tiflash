@@ -492,7 +492,7 @@ typename BlobStore<Trait>::PageEntriesEdit BlobStore<Trait>::write(
         return edit;
     }
 
-    GET_METRIC(tiflash_storage_page_write_batch_size).Observe(all_page_data_size);
+    GET_METRIC(tiflash_storage_page_write_batch_size, type_v3).Observe(all_page_data_size);
 
     // If the WriteBatch is too big, we will split the Writes in the WriteBatch to different `BlobFile`.
     // This can avoid allocating a big buffer for writing data and can smooth memory usage.

@@ -191,6 +191,9 @@ public:
             const LoggerPtr & log_);
 
         BackgroundTask nextTask(bool is_heavy, const LoggerPtr & log_);
+
+        // num of stopped light_tasks and heavy_tasks
+        std::pair<size_t, size_t> clearTasks();
     };
 
 private:

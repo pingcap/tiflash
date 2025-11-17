@@ -274,6 +274,7 @@ void TMTContext::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * pr
 
 void TMTContext::shutdown()
 {
+    LOG_INFO(Logger::get(), "TMTContext shutting down");
     if (mpp_task_manager)
     {
         // notify end to the thread "MPPTask-Moniter"
@@ -286,24 +287,40 @@ void TMTContext::shutdown()
         // let client retry
         s3gc_owner->cancel();
         s3gc_owner = nullptr;
+        LOG_INFO(Logger::get(), "S3GCOwnerManager shutdown complete");
     }
 
     if (s3gc_manager)
     {
         s3gc_manager->shutdown();
         s3gc_manager = nullptr;
+        LOG_INFO(Logger::get(), "S3GCManager shutdown complete");
     }
 
     if (s3lock_client)
     {
         s3lock_client = nullptr;
+        LOG_INFO(Logger::get(), "S3LockClient shutdown complete");
     }
 
     if (background_service)
     {
         background_service->shutdown();
+        // background_service = nullptr;
+        LOG_INFO(Logger::get(), "BackgroundService shutdown complete");
+    }
+    LOG_INFO(Logger::get(), "TMTContext shutdown complete");
+}
+
+void TMTContext::shutdownStorageGc()
+{
+    LOG_INFO(Logger::get(), "TMTContext shutting down storage gc");
+    if (background_service)
+    {
+        background_service->shutdownStorageGc();
         background_service = nullptr;
     }
+    LOG_INFO(Logger::get(), "TMTContext shutdown storage gc complete");
 }
 
 KVStorePtr & TMTContext::getKVStore()
