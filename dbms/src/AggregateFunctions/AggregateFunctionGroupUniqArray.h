@@ -152,6 +152,7 @@ public:
 
     void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, Arena * arena) const override
     {
+        LOG_INFO(Logger::get(), "Deserialize groupUniqArray with PLACE {}", static_cast<void *>(place));
         auto & set = this->data(place).value;
         size_t size;
         readVarUInt(size, buf);
