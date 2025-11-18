@@ -21,6 +21,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Common/escapeForFileName.h>
 #include <IO/BaseFile/PosixRandomAccessFile.h>
+#include <IO/BaseFile/RateLimiter.h>
 #include <IO/IOThreadPools.h>
 #include <Interpreters/Settings.h>
 #include <Server/StorageConfigParser.h>
@@ -30,6 +31,7 @@
 #include <Storages/S3/FileCachePerf.h>
 #include <Storages/S3/S3Common.h>
 #include <aws/s3/model/GetObjectRequest.h>
+#include <common/logger_useful.h>
 
 #include <atomic>
 #include <chrono>
@@ -37,8 +39,6 @@
 #include <filesystem>
 #include <magic_enum.hpp>
 #include <queue>
-
-#include "common/logger_useful.h"
 
 namespace ProfileEvents
 {
@@ -112,13 +112,15 @@ FileSegment::Status FileSegment::waitForNotEmpty()
 FileCache::FileCache(
     PathCapacityMetricsPtr capacity_metrics_,
     const StorageRemoteCacheConfig & config_,
-    UInt16 logical_cores_)
+    UInt16 logical_cores_,
+    IORateLimiter & rate_limiter_)
     : capacity_metrics(capacity_metrics_)
     , cache_dir(config_.getDTFileCacheDir())
     , cache_capacity(config_.getDTFileCapacity())
     , cache_level(config_.dtfile_level)
     , cache_used(0)
     , logical_cores(logical_cores_)
+    , rate_limiter(rate_limiter_)
     , log(Logger::get("FileCache"))
 {
     CurrentMetrics::set(CurrentMetrics::DTFileCacheCapacity, cache_capacity);
@@ -275,6 +277,8 @@ FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname, const std::op
     auto file_seg
         = std::make_shared<FileSegment>(toLocalFilename(s3_key), FileSegment::Status::Empty, estimated_size, file_type);
     table.set(s3_key, file_seg);
+    // FIXME: release the lock then submit bg download task
+
     bgDownload(s3_key, file_seg);
 
     return nullptr;
@@ -577,7 +581,7 @@ UInt64 FileCache::forceEvict(UInt64 size_to_evict)
     size_t total_released_size = 0;
 
     constexpr auto all_file_types = magic_enum::enum_values<FileType>();
-    std::vector<std::list<String>::iterator> each_type_lru_iters; // Stores the iterator of next candicate to add
+    std::vector<std::list<String>::iterator> each_type_lru_iters; // Stores the iterator of next candidate to add
     each_type_lru_iters.reserve(all_file_types.size());
     for (const auto file_type : all_file_types)
     {
@@ -751,7 +755,7 @@ bool FileCache::finalizeReservedSize(FileType reserve_for, UInt64 reserved_size,
     return true;
 }
 
-void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg)
+void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg, const WriteLimiterPtr & write_limiter)
 {
     Stopwatch sw;
     auto client = S3::ClientFactory::instance().sharedTiFlashClient();
@@ -783,6 +787,8 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg)
         RUNTIME_CHECK_MSG(ostr.is_open(), "Open {} failed: {}", temp_fname, strerror(errno));
         if (content_length > 0)
         {
+            if (write_limiter)
+                write_limiter->request(content_length);
             GET_METRIC(tiflash_storage_remote_cache_bytes, type_dtfile_download_bytes).Increment(content_length);
             ostr << result.GetBody().rdbuf();
             // If content_length == 0, ostr.good() is false. Does not know the reason.
@@ -814,12 +820,12 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg)
         sw.elapsedMilliseconds());
 }
 
-void FileCache::download(const String & s3_key, FileSegmentPtr & file_seg)
+void FileCache::download(const String & s3_key, FileSegmentPtr & file_seg, const WriteLimiterPtr & write_limiter)
 {
     try
     {
         GET_METRIC(tiflash_storage_remote_cache, type_dtfile_download).Increment();
-        downloadImpl(s3_key, file_seg);
+        downloadImpl(s3_key, file_seg, write_limiter);
     }
     catch (...)
     {
@@ -854,8 +860,11 @@ void FileCache::bgDownload(const String & s3_key, FileSegmentPtr & file_seg)
         "downloading count {} => s3_key {} start",
         bg_downloading_count.load(std::memory_order_relaxed),
         s3_key);
+    auto write_limiter = rate_limiter.getBgWriteLimiter();
     S3FileCachePool::get().scheduleOrThrowOnError(
-        [this, s3_key = s3_key, file_seg = file_seg]() mutable { download(s3_key, file_seg); });
+        [this, s3_key = s3_key, file_seg = file_seg, limiter = std::move(write_limiter)]() mutable {
+            download(s3_key, file_seg, limiter);
+        });
 }
 
 void FileCache::fgDownload(const String & s3_key, FileSegmentPtr & file_seg)
@@ -866,7 +875,8 @@ void FileCache::fgDownload(const String & s3_key, FileSegmentPtr & file_seg)
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::file_cache_fg_download_fail);
         GET_METRIC(tiflash_storage_remote_cache, type_dtfile_download).Increment();
-        downloadImpl(s3_key, file_seg);
+        // not limit write speed for foreground download now
+        downloadImpl(s3_key, file_seg, nullptr);
     }
     catch (...)
     {
