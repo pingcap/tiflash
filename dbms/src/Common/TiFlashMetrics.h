@@ -845,6 +845,8 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       Counter,                                                                                                                      \
       F(type_dtfile_hit, {"type", "dtfile_hit"}),                                                                                   \
       F(type_dtfile_miss, {"type", "dtfile_miss"}),                                                                                 \
+      F(type_dtfile_not_cache_type, {"type", "dtfile_not_cache_type"}),                                                             \
+      F(type_dtfile_too_many_download, {"type", "dtfile_too_many_download"}),                                                       \
       F(type_dtfile_evict, {"type", "dtfile_evict"}),                                                                               \
       F(type_dtfile_full, {"type", "dtfile_full"}),                                                                                 \
       F(type_dtfile_download, {"type", "dtfile_download"}),                                                                         \
