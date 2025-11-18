@@ -213,6 +213,8 @@ public:
     ~IORateLimiter();
 
     WriteLimiterPtr getWriteLimiter();
+    WriteLimiterPtr getBgWriteLimiter();
+
     ReadLimiterPtr getReadLimiter();
     void init(Poco::Util::AbstractConfiguration & config_);
     void updateConfig(Poco::Util::AbstractConfiguration & config_);

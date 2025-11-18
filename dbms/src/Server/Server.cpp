@@ -691,7 +691,11 @@ try
     if (const auto & config = storage_config.remote_cache_config; config.isCacheEnabled() && is_disagg_compute_mode)
     {
         config.initCacheDir();
-        FileCache::initialize(global_context->getPathCapacity(), config, server_info.cpu_info.logical_cores);
+        FileCache::initialize(
+            global_context->getPathCapacity(),
+            config,
+            server_info.cpu_info.logical_cores,
+            global_context->getIORateLimiter());
     }
 
     /// Determining PageStorage run mode based on current files on disk and storage config.
