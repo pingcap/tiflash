@@ -21,6 +21,8 @@ s3-secret-key = "minioadmin"
 s3-bucket = "tiflash-test"
 s3-region = "local"
 
-[ia]
-mem-cap = "5GB"   # or "10%"
-disk-cap = "20GB" # or "20%"
+[schema-manager]
+dir = "/data/schemas"
+enabled = true
+keyspace-refresh-interval = "10s"
+schema-refresh-threshold = 1
