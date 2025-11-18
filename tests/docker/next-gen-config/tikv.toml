@@ -18,7 +18,7 @@ reserve-space = "0"
 # Enable keyspace and ttl for next-gen
 api-version = 2
 enable-ttl = true
-low_space_threshold = 0
+low-space-threshold = 0
 
 [raftstore]
 capacity = "100GB"
