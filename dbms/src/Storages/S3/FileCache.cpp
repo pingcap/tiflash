@@ -38,6 +38,8 @@
 #include <magic_enum.hpp>
 #include <queue>
 
+#include "common/logger_useful.h"
+
 namespace ProfileEvents
 {
 extern const Event S3GetObject;
@@ -107,12 +109,16 @@ FileSegment::Status FileSegment::waitForNotEmpty()
     return status;
 }
 
-FileCache::FileCache(PathCapacityMetricsPtr capacity_metrics_, const StorageRemoteCacheConfig & config_)
+FileCache::FileCache(
+    PathCapacityMetricsPtr capacity_metrics_,
+    const StorageRemoteCacheConfig & config_,
+    UInt16 logical_cores_)
     : capacity_metrics(capacity_metrics_)
     , cache_dir(config_.getDTFileCacheDir())
     , cache_capacity(config_.getDTFileCapacity())
     , cache_level(config_.dtfile_level)
     , cache_used(0)
+    , logical_cores(logical_cores_)
     , log(Logger::get("FileCache"))
 {
     CurrentMetrics::set(CurrentMetrics::DTFileCacheCapacity, cache_capacity);
@@ -235,10 +241,16 @@ FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname, const std::op
     }
 
     GET_METRIC(tiflash_storage_remote_cache, type_dtfile_miss).Increment();
-    if (!canCache(file_type))
+    switch (canCache(file_type))
     {
-        // Don't cache this file type or too many downloading task.
+    case ShouldCacheRes::RejectTypeNotMatch:
+        GET_METRIC(tiflash_storage_remote_cache, type_dtfile_not_cache_type).Increment();
         return nullptr;
+    case ShouldCacheRes::RejectTooManyDownloading:
+        GET_METRIC(tiflash_storage_remote_cache, type_dtfile_too_many_download).Increment();
+        return nullptr;
+    case ShouldCacheRes::Cache:
+        break;
     }
 
     // File not exists, try to download and cache it in background.
@@ -248,7 +260,7 @@ FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname, const std::op
     auto estimated_size = filesize ? *filesize : getEstimatedSizeOfFileType(file_type);
     if (!reserveSpaceImpl(file_type, estimated_size, EvictMode::TryEvict))
     {
-        // Space not enough.
+        // Space still not enough after eviction.
         GET_METRIC(tiflash_storage_remote_cache, type_dtfile_full).Increment();
         LOG_DEBUG(
             log,
@@ -637,11 +649,18 @@ void FileCache::releaseSpace(UInt64 size)
     releaseSpaceImpl(size);
 }
 
-bool FileCache::canCache(FileType file_type) const
+FileCache::ShouldCacheRes FileCache::canCache(FileType file_type) const
 {
-    return file_type != FileType::Unknow && static_cast<UInt64>(file_type) <= cache_level
-        && bg_downloading_count.load(std::memory_order_relaxed)
-        < S3FileCachePool::get().getMaxThreads() * max_downloading_count_scale.load(std::memory_order_relaxed);
+    auto max_bg_download_queue_size = S3FileCachePool::get().getQueueSize();
+    if (file_type == FileType::Unknow || static_cast<UInt64>(file_type) > cache_level)
+    {
+        return ShouldCacheRes::RejectTypeNotMatch;
+    }
+    else if (bg_downloading_count.load(std::memory_order_relaxed) > max_bg_download_queue_size)
+    {
+        return ShouldCacheRes::RejectTooManyDownloading;
+    }
+    return ShouldCacheRes::Cache;
 }
 
 FileType FileCache::getFileTypeOfColData(const std::filesystem::path & p)
@@ -980,7 +999,7 @@ void FileCache::restoreDMFile(const std::filesystem::directory_entry & dmfile_en
             auto file_type = getFileType(fname);
             auto & table = tables[static_cast<UInt64>(file_type)];
             auto size = file_entry.file_size();
-            if (canCache(file_type) && cache_capacity - cache_used >= size)
+            if (canCache(file_type) == FileCache::ShouldCacheRes::Cache && cache_capacity - cache_used >= size)
             {
                 table.set(
                     toS3Key(fname),
@@ -1012,15 +1031,51 @@ std::vector<FileSegmentPtr> FileCache::getAll()
 
 void FileCache::updateConfig(const Settings & settings)
 {
-    double max_downloading_scale = settings.dt_filecache_max_downloading_count_scale;
-    if (std::fabs(max_downloading_scale - max_downloading_count_scale.load(std::memory_order_relaxed)) > 0.001)
+    bool has_changed = false;
+    size_t new_download_concurrency = 0;
+    size_t new_max_queue_size = 0;
+
+    double new_download_scale = settings.dt_filecache_download_scale;
+    auto old_download_scale = download_count_scale.load(std::memory_order_relaxed);
+    if (std::fabs(new_download_scale - old_download_scale) > 0.001)
+    {
+        download_count_scale.store(new_download_scale, std::memory_order_relaxed);
+        new_download_concurrency = logical_cores * new_download_scale;
+        has_changed = true;
+    }
+    else
+    {
+        new_download_concurrency = logical_cores * old_download_scale;
+    }
+
+    double new_max_downloading_scale = settings.dt_filecache_max_downloading_count_scale;
+    auto old_max_download_scale = max_downloading_count_scale.load(std::memory_order_relaxed);
+    if (std::fabs(new_max_downloading_scale - old_max_download_scale) > 0.001)
+    {
+        max_downloading_count_scale.store(new_max_downloading_scale, std::memory_order_relaxed);
+        new_max_queue_size = logical_cores * new_max_downloading_scale;
+        has_changed = true;
+    }
+    else
+    {
+        new_max_queue_size = logical_cores * old_max_download_scale;
+    }
+
+    if (has_changed)
     {
         LOG_INFO(
             log,
-            "max_downloading_count_scale {} => {}",
-            max_downloading_count_scale.load(std::memory_order_relaxed),
-            max_downloading_scale);
-        max_downloading_count_scale.store(max_downloading_scale, std::memory_order_relaxed);
+            "Update S3FileCachePool config: "
+            "logical_cores={} "
+            "download_scale={} download_concurrency={} "
+            "max_downloading_scale={} download_queue_size={}",
+            logical_cores,
+            new_download_scale,
+            new_download_concurrency,
+            new_max_downloading_scale,
+            new_max_queue_size);
+        S3FileCachePool::get().setQueueSize(new_max_queue_size);
+        S3FileCachePool::get().setMaxThreads(new_download_concurrency);
     }
 
     UInt64 cache_min_age = settings.dt_filecache_min_age_seconds;
@@ -1028,7 +1083,7 @@ void FileCache::updateConfig(const Settings & settings)
     {
         LOG_INFO(
             log,
-            "cache_min_age_seconds {} => {}",
+            "Update S3FileCachePool config: cache_min_age_seconds {} => {}",
             cache_min_age_seconds.load(std::memory_order_relaxed),
             cache_min_age);
         cache_min_age_seconds.store(cache_min_age, std::memory_order_relaxed);

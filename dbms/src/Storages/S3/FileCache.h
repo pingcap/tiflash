@@ -219,9 +219,9 @@ private:
 class FileCache
 {
 public:
-    static void initialize(PathCapacityMetricsPtr capacity_metrics_, const StorageRemoteCacheConfig & config_)
+    static void initialize(PathCapacityMetricsPtr capacity_metrics_, const StorageRemoteCacheConfig & config_, UInt16 logical_cores)
     {
-        global_file_cache_instance = std::make_unique<FileCache>(capacity_metrics_, config_);
+        global_file_cache_instance = std::make_unique<FileCache>(capacity_metrics_, config_, logical_cores);
         global_file_cache_initialized.store(true, std::memory_order_release);
     }
 
@@ -238,7 +238,7 @@ public:
         global_file_cache_instance = nullptr;
     }
 
-    FileCache(PathCapacityMetricsPtr capacity_metrics_, const StorageRemoteCacheConfig & config_);
+    FileCache(PathCapacityMetricsPtr capacity_metrics_, const StorageRemoteCacheConfig & config_, UInt16 logical_cores_);
 
     RandomAccessFilePtr getRandomAccessFile(
         const S3::S3FilenameView & s3_fname,
@@ -335,7 +335,13 @@ public:
     static UInt64 getEstimatedSizeOfFileType(FileSegment::FileType file_type);
     static FileSegment::FileType getFileType(const String & fname);
     static FileSegment::FileType getFileTypeOfColData(const std::filesystem::path & p);
-    bool canCache(FileSegment::FileType file_type) const;
+
+    enum class ShouldCacheRes {
+        Cache,
+        RejectTypeNotMatch,
+        RejectTooManyDownloading,
+    };
+    ShouldCacheRes canCache(FileSegment::FileType file_type) const;
 
     enum class EvictMode
     {
@@ -365,7 +371,9 @@ public:
     UInt64 cache_capacity;
     UInt64 cache_level;
     UInt64 cache_used;
+    const UInt16 logical_cores;
     std::atomic<UInt64> cache_min_age_seconds = 1800;
+    std::atomic<double> download_count_scale = 2.0;
     std::atomic<double> max_downloading_count_scale = 1.0;
     std::array<LRUFileTable, magic_enum::enum_count<FileSegment::FileType>()> tables;
 
