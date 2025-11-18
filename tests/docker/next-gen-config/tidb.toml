@@ -19,6 +19,8 @@ disaggregated-tiflash = true
 # Now tests are ran on the SYSTEM keyspace tidb.
 keyspace-name = "SYSTEM"
 
+tikv-worker-url = "0.0.0.0:19000"
+
 enable-telemetry = false
 temp-dir = "/data/tmp"
 [performance]
