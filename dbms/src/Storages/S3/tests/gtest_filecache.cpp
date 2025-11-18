@@ -15,6 +15,7 @@
 #include <Common/Logger.h>
 #include <Common/Stopwatch.h>
 #include <Debug/TiFlashTestEnv.h>
+#include <IO/BaseFile/RateLimiter.h>
 #include <IO/IOThreadPools.h>
 #include <Interpreters/Context.h>
 #include <Server/StorageConfigParser.h>
@@ -246,9 +247,12 @@ try
     calculateCacheCapacity(cache_config, total_size);
     LOG_DEBUG(log, "total_size={} dt_cache_capacity={}", total_size, cache_config.getDTFileCapacity());
 
+    UInt16 vcores = 1;
+    IORateLimiter rate_limiter;
+
     {
         LOG_DEBUG(log, "Cache all data");
-        FileCache file_cache(capacity_metrics, cache_config);
+        FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
         for (const auto & obj : objects)
         {
             auto s3_fname = ::DB::S3::S3FilenameView::fromKey(obj.key);
@@ -272,7 +276,7 @@ try
 
     {
         LOG_DEBUG(log, "Cache restore");
-        FileCache file_cache(capacity_metrics, cache_config);
+        FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
         ASSERT_EQ(file_cache.cache_used, file_cache.cache_capacity);
         for (const auto & obj : objects)
         {
@@ -289,7 +293,7 @@ try
     ASSERT_EQ(meta_objects.size(), 2 * 2 * 2);
     {
         LOG_DEBUG(log, "Evict success");
-        FileCache file_cache(capacity_metrics, cache_config);
+        FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
         ASSERT_LE(file_cache.cache_used, file_cache.cache_capacity);
         for (const auto & obj : meta_objects)
         {
@@ -311,7 +315,7 @@ try
     ASSERT_EQ(meta_objects2.size(), 2 * 2 * 2);
     {
         LOG_DEBUG(log, "Evict failed");
-        FileCache file_cache(capacity_metrics, cache_config);
+        FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
         ASSERT_LE(file_cache.cache_used, file_cache.cache_capacity);
         UInt64 free_size = file_cache.cache_capacity - file_cache.cache_used;
         auto file_seg = file_cache.getAll(); // Prevent file_segment from evicted.
@@ -347,7 +351,11 @@ TEST_F(FileCacheTest, FileSystem)
 {
     auto cache_dir = fmt::format("{}/filesystem", tmp_dir);
     StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = cache_level};
-    FileCache file_cache(capacity_metrics, cache_config);
+
+    UInt16 vcores = 1;
+    IORateLimiter rate_limiter;
+
+    FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
     DMFileOID dmfile_oid = {.store_id = 1, .table_id = 2, .file_id = 3};
 
     // s1/data/t_2/dmf_3
@@ -448,33 +456,38 @@ try
     auto unknow_fname1 = fmt::format("{}/123456.lock", s3_fname);
     ASSERT_EQ(FileCache::getFileType(unknow_fname1), FileType::Unknow);
 
+    UInt16 vcores = 1;
+    IORateLimiter rate_limiter;
     for (UInt64 level = 0; level <= magic_enum::enum_count<FileType>(); ++level)
     {
         auto cache_dir = fmt::format("{}/filetype{}", tmp_dir, level);
         StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = level};
-        FileCache file_cache(capacity_metrics, cache_config);
-        ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
-        ASSERT_EQ(file_cache.canCache(FileType::Meta), level >= 1);
-        ASSERT_EQ(file_cache.canCache(FileType::VectorIndex), level >= 2);
-        ASSERT_EQ(file_cache.canCache(FileType::FullTextIndex), level >= 3);
-        ASSERT_EQ(file_cache.canCache(FileType::InvertedIndex), level >= 4);
-        ASSERT_EQ(file_cache.canCache(FileType::Merged), level >= 5);
-        ASSERT_EQ(file_cache.canCache(FileType::Index), level >= 6);
-        ASSERT_EQ(file_cache.canCache(FileType::Mark), level >= 7);
-        ASSERT_EQ(file_cache.canCache(FileType::NullMap), level >= 8);
-        ASSERT_EQ(file_cache.canCache(FileType::DeleteMarkColData), level >= 9);
-        ASSERT_EQ(file_cache.canCache(FileType::VersionColData), level >= 10);
-        ASSERT_EQ(file_cache.canCache(FileType::HandleColData), level >= 11);
-        ASSERT_EQ(file_cache.canCache(FileType::ColData), level >= 12);
+        FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
+        auto can_cache = FileCache::ShouldCacheRes::Cache;
+        ASSERT_EQ(file_cache.canCache(FileType::Unknow), can_cache);
+        ASSERT_EQ(file_cache.canCache(FileType::Meta) == can_cache, level >= 1);
+        ASSERT_EQ(file_cache.canCache(FileType::VectorIndex) == can_cache, level >= 2);
+        ASSERT_EQ(file_cache.canCache(FileType::FullTextIndex) == can_cache, level >= 3);
+        ASSERT_EQ(file_cache.canCache(FileType::InvertedIndex) == can_cache, level >= 4);
+        ASSERT_EQ(file_cache.canCache(FileType::Merged) == can_cache, level >= 5);
+        ASSERT_EQ(file_cache.canCache(FileType::Index) == can_cache, level >= 6);
+        ASSERT_EQ(file_cache.canCache(FileType::Mark) == can_cache, level >= 7);
+        ASSERT_EQ(file_cache.canCache(FileType::NullMap) == can_cache, level >= 8);
+        ASSERT_EQ(file_cache.canCache(FileType::DeleteMarkColData) == can_cache, level >= 9);
+        ASSERT_EQ(file_cache.canCache(FileType::VersionColData) == can_cache, level >= 10);
+        ASSERT_EQ(file_cache.canCache(FileType::HandleColData) == can_cache, level >= 11);
+        ASSERT_EQ(file_cache.canCache(FileType::ColData) == can_cache, level >= 12);
     }
 }
 CATCH
 
 TEST_F(FileCacheTest, Space)
 {
+    UInt16 vcores = 1;
+    IORateLimiter rate_limiter;
     auto cache_dir = fmt::format("{}/space", tmp_dir);
     StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = cache_level};
-    FileCache file_cache(capacity_metrics, cache_config);
+    FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
     auto dt_cache_capacity = cache_config.getDTFileCapacity();
     ASSERT_TRUE(file_cache.reserveSpace(FileType::Meta, dt_cache_capacity - 1024, FileCache::EvictMode::NoEvict));
     ASSERT_TRUE(file_cache.reserveSpace(FileType::Meta, 512, FileCache::EvictMode::NoEvict));
@@ -579,7 +592,10 @@ try
     StorageRemoteCacheConfig cache_config{.dir = cache_dir, .dtfile_level = 100};
     calculateCacheCapacity(cache_config, total_size);
     LOG_DEBUG(log, "total_size={} dt_cache_capacity={}", total_size, cache_config.getDTFileCapacity());
-    FileCache file_cache(capacity_metrics, cache_config);
+
+    UInt16 vcores = 1;
+    IORateLimiter rate_limiter;
+    FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
 
     // Cache empty files
     DMFileOID empty_file_oid{.store_id = 111, .table_id = 2222, .file_id = 33333};
@@ -662,7 +678,10 @@ try
     StorageRemoteCacheConfig cache_config{.dir = cache_dir, .dtfile_level = 100};
     calculateCacheCapacity(cache_config, total_size);
     LOG_DEBUG(log, "total_size={} dt_cache_capacity={}", total_size, cache_config.getDTFileCapacity());
-    FileCache file_cache(capacity_metrics, cache_config);
+
+    UInt16 vcores = 1;
+    IORateLimiter rate_limiter;
+    FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
 
     // Make cache full
     for (const auto & obj : objects)
@@ -682,7 +701,7 @@ try
     ASSERT_FALSE(std::filesystem::exists(cache_config.getDTFileCacheDir()));
     ASSERT_EQ(file_cache.cache_used, file_cache.cache_capacity);
 
-    // Remove droped-files
+    // Remove dropped-files
     Settings settings;
     settings.set("dt_filecache_max_downloading_count_scale", "0.0"); // Disable download file from S3
     file_cache.updateConfig(settings);
@@ -749,7 +768,10 @@ try
         .delta_rate = 0,
         .reserved_rate = 0,
     };
-    FileCache file_cache(capacity_metrics, cache_config);
+
+    UInt16 vcores = 1;
+    IORateLimiter rate_limiter;
+    FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
 
     ASSERT_EQ(file_cache.getAll().size(), 0);
 
