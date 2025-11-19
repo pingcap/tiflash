@@ -83,6 +83,7 @@ void RNLocalPageCache::write(
     }
 
     UniversalWriteBatch cache_wb;
+    cache_wb.disableFSync(); // RNLocalPageCache doesn't need fsync. Disable it to reduce IOPS requirements.
     cache_wb.putPage(key, 0, read_buffer, size, field_sizes);
     GET_METRIC(tiflash_storage_remote_cache, type_page_download).Increment();
     GET_METRIC(tiflash_storage_remote_cache_bytes, type_page_download_bytes).Increment(size);
@@ -113,6 +114,7 @@ void RNLocalPageCache::write(UniversalWriteBatch && wb)
                 itr->second.size);
         }
     }
+    wb.disableFSync(); // RNLocalPageCache doesn't need fsync. Disable it to reduce IOPS requirements.
     GET_METRIC(tiflash_storage_remote_cache, type_page_download).Increment(wb.getWrites().size());
     GET_METRIC(tiflash_storage_remote_cache_bytes, type_page_download_bytes).Increment(wb.getTotalDataSize());
     storage->write(std::move(wb));
