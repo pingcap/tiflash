@@ -14,6 +14,7 @@
 
 #include <Common/Logger.h>
 #include <Common/Stopwatch.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Debug/TiFlashTestEnv.h>
 #include <IO/BaseFile/RateLimiter.h>
 #include <IO/IOThreadPools.h>
@@ -35,6 +36,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <random>
 #include <thread>
 
@@ -247,7 +249,7 @@ try
     calculateCacheCapacity(cache_config, total_size);
     LOG_DEBUG(log, "total_size={} dt_cache_capacity={}", total_size, cache_config.getDTFileCapacity());
 
-    UInt16 vcores = 1;
+    UInt16 vcores = 4;
     IORateLimiter rate_limiter;
 
     {
@@ -414,6 +416,8 @@ TEST_F(FileCacheTest, FileSystem)
     ASSERT_FALSE(std::filesystem::exists(store_data)) << store_data.generic_string();
     ASSERT_FALSE(std::filesystem::exists(store)) << store.generic_string();
     ASSERT_TRUE(std::filesystem::exists(cache_root)) << cache_root.generic_string();
+
+    waitForBgDownload(file_cache);
 }
 
 TEST_F(FileCacheTest, FileType)
@@ -464,7 +468,7 @@ try
         StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = level};
         FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
         auto can_cache = FileCache::ShouldCacheRes::Cache;
-        ASSERT_EQ(file_cache.canCache(FileType::Unknow), can_cache);
+        ASSERT_EQ(file_cache.canCache(FileType::Unknow), FileCache::ShouldCacheRes::RejectTypeNotMatch);
         ASSERT_EQ(file_cache.canCache(FileType::Meta) == can_cache, level >= 1);
         ASSERT_EQ(file_cache.canCache(FileType::VectorIndex) == can_cache, level >= 2);
         ASSERT_EQ(file_cache.canCache(FileType::FullTextIndex) == can_cache, level >= 3);
@@ -477,6 +481,7 @@ try
         ASSERT_EQ(file_cache.canCache(FileType::VersionColData) == can_cache, level >= 10);
         ASSERT_EQ(file_cache.canCache(FileType::HandleColData) == can_cache, level >= 11);
         ASSERT_EQ(file_cache.canCache(FileType::ColData) == can_cache, level >= 12);
+        waitForBgDownload(file_cache);
     }
 }
 CATCH
@@ -501,6 +506,8 @@ TEST_F(FileCacheTest, Space)
     file_cache.releaseSpace(dt_cache_capacity);
     ASSERT_TRUE(file_cache.reserveSpace(FileType::Meta, dt_cache_capacity, FileCache::EvictMode::NoEvict));
     ASSERT_FALSE(file_cache.reserveSpace(FileType::Meta, 1, FileCache::EvictMode::NoEvict));
+
+    waitForBgDownload(file_cache);
 }
 
 TEST_F(FileCacheTest, LRUFileTable)
@@ -703,7 +710,7 @@ try
 
     // Remove dropped-files
     Settings settings;
-    settings.set("dt_filecache_max_downloading_count_scale", "0.0"); // Disable download file from S3
+    settings.dt_filecache_max_downloading_count_scale = 0.0; // Disable download file from S3
     file_cache.updateConfig(settings);
     ASSERT_DOUBLE_EQ(file_cache.max_downloading_count_scale, 0.0);
     UInt64 released_size = 0;
@@ -722,12 +729,26 @@ try
             ASSERT_EQ(e.code(), ErrorCodes::FILE_DOESNT_EXIST);
         }
         released_size += file_seg->getSize();
-        ASSERT_EQ(file_cache.cache_used + released_size, file_cache.cache_capacity);
+        LOG_INFO(
+            log,
+            "cache_used={} released_size={} cache_capacity={} obj_size={} file_seg_size={}",
+            file_cache.cache_used,
+            released_size,
+            file_cache.cache_capacity,
+            obj.size,
+            file_seg->getSize());
+        ASSERT_EQ(file_cache.cache_used + released_size, file_cache.cache_capacity) << fmt::format(
+            "cache_used={} released_size={} cache_capacity={}",
+            file_cache.cache_used,
+            released_size,
+            file_cache.cache_capacity);
 
         ASSERT_EQ(file_cache.get(s3_fname), nullptr); // Has been removed.
     }
     ASSERT_EQ(file_cache.cache_used, 0);
     ASSERT_EQ(released_size, file_cache.cache_capacity);
+
+    waitForBgDownload(file_cache);
 }
 CATCH
 
@@ -861,8 +882,128 @@ try
         }
         ASSERT_EQ(file_cache.getAll().size(), 0);
     }
+
+    waitForBgDownload(file_cache);
 }
 CATCH
 
+TEST_F(FileCacheTest, UpdateConfig)
+{
+    auto cache_dir = fmt::format("{}/update_config", tmp_dir);
+    StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = cache_level};
+
+    UInt16 vcores = 4;
+    IORateLimiter rate_limiter;
+
+    FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
+    // default values
+    ASSERT_DOUBLE_EQ(file_cache.download_count_scale, 2.0);
+    ASSERT_DOUBLE_EQ(file_cache.max_downloading_count_scale, 10.0);
+
+    Settings settings;
+    settings.dt_filecache_download_scale = 1.5;
+    settings.dt_filecache_max_downloading_count_scale = 5.0;
+    // updated
+    file_cache.updateConfig(settings);
+    ASSERT_DOUBLE_EQ(file_cache.download_count_scale, 1.5);
+    ASSERT_DOUBLE_EQ(file_cache.max_downloading_count_scale, 5.0);
+    ASSERT_EQ(S3FileCachePool::get().getMaxThreads(), vcores * 1.5);
+    ASSERT_EQ(S3FileCachePool::get().getQueueSize(), vcores * 5.0);
+
+    // not updated
+    file_cache.updateConfig(settings);
+    ASSERT_DOUBLE_EQ(file_cache.download_count_scale, 1.5);
+    ASSERT_DOUBLE_EQ(file_cache.max_downloading_count_scale, 5.0);
+    ASSERT_EQ(S3FileCachePool::get().getMaxThreads(), vcores * 1.5);
+    ASSERT_EQ(S3FileCachePool::get().getQueueSize(), vcores * 5.0);
+
+    // only one config updated
+    settings.dt_filecache_download_scale = 4.0;
+    file_cache.updateConfig(settings);
+    ASSERT_DOUBLE_EQ(file_cache.download_count_scale, 4.0);
+    ASSERT_DOUBLE_EQ(file_cache.max_downloading_count_scale, 5.0);
+    ASSERT_EQ(S3FileCachePool::get().getMaxThreads(), vcores * 4.0);
+    ASSERT_EQ(S3FileCachePool::get().getQueueSize(), vcores * 5.0);
+
+    // invalid dt_filecache_download_scale, should remain the old one
+    settings.dt_filecache_download_scale = -1.0;
+    file_cache.updateConfig(settings);
+    ASSERT_DOUBLE_EQ(file_cache.download_count_scale, 4.0);
+    ASSERT_DOUBLE_EQ(file_cache.max_downloading_count_scale, 5.0);
+    ASSERT_EQ(S3FileCachePool::get().getMaxThreads(), vcores * 4.0);
+    ASSERT_EQ(S3FileCachePool::get().getQueueSize(), vcores * 5.0);
+
+    // invalid dt_filecache_max_downloading_count_scale, should remain the old one
+    settings.dt_filecache_download_scale = 4.0;
+    settings.dt_filecache_max_downloading_count_scale = -1.0;
+    file_cache.updateConfig(settings);
+    ASSERT_DOUBLE_EQ(file_cache.download_count_scale, 4.0);
+    ASSERT_DOUBLE_EQ(file_cache.max_downloading_count_scale, 5.0);
+    ASSERT_EQ(S3FileCachePool::get().getMaxThreads(), vcores * 4.0);
+    ASSERT_EQ(S3FileCachePool::get().getQueueSize(), vcores * 5.0);
+
+    // small dt_filecache_download_scale, should remain at least 1 thread
+    settings.dt_filecache_download_scale = 0.1;
+    settings.dt_filecache_max_downloading_count_scale = 5.0;
+    file_cache.updateConfig(settings);
+    ASSERT_DOUBLE_EQ(file_cache.download_count_scale, 0.1);
+    ASSERT_DOUBLE_EQ(file_cache.max_downloading_count_scale, 5.0);
+    ASSERT_EQ(S3FileCachePool::get().getMaxThreads(), 1);
+    ASSERT_EQ(S3FileCachePool::get().getQueueSize(), vcores * 5.0);
+
+    // small dt_filecache_max_downloading_count_scale, the queue size should be at least vcores * concurrency
+    settings.dt_filecache_download_scale = 2.0;
+    settings.dt_filecache_max_downloading_count_scale = 0.1;
+    file_cache.updateConfig(settings);
+    ASSERT_DOUBLE_EQ(file_cache.download_count_scale, 2.0);
+    ASSERT_DOUBLE_EQ(file_cache.max_downloading_count_scale, 0.1);
+    ASSERT_EQ(S3FileCachePool::get().getMaxThreads(), vcores * 2.0);
+    ASSERT_EQ(S3FileCachePool::get().getQueueSize(), vcores * 2.0);
+}
+
+TEST_F(FileCacheTest, GetBeingBlock)
+{
+    auto cache_dir = fmt::format("{}/update_config", tmp_dir);
+    StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = 100};
+
+    UInt16 vcores = 1;
+    IORateLimiter rate_limiter;
+
+    FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
+    Settings settings;
+    settings.dt_filecache_download_scale = 1.0;
+    settings.dt_filecache_max_downloading_count_scale = 1.0;
+    file_cache.updateConfig(settings);
+
+    auto objects = genObjects(/*store_count*/ 1, /*table_count*/ 1, /*file_count*/ 1, basenames);
+
+    auto sp_reserve_size = SyncPointCtl::enableInScope("before_FileCache::downloadImpl_reserve_size");
+    auto th_submit_bg_download = std::async([&]() {
+        auto est_size = objects[0].size - 2; // less than actual size, it will call `finalizeReservedSize`
+        auto s3_fname = S3FilenameView::fromKey(objects[0].key);
+        // This will submit a bg download job and the bg download job will be suspend before finalizeReservedSize.
+        auto seg_ptr = file_cache.get(s3_fname, est_size);
+        LOG_INFO(log, "Submit bg download job thread finished");
+        ASSERT_EQ(seg_ptr, nullptr); // bg download, should return nullptr
+    });
+    sp_reserve_size.waitAndPause();
+
+    auto th_get_and_bg_download = std::async([&]() {
+        auto s3_fname = S3FilenameView::fromKey(objects[1].key);
+        // This will block wait because the thread pool queue size is 1 and is busy by the above download job.
+        auto seg_ptr = file_cache.get(s3_fname, 1024);
+        LOG_INFO(log, "Submit second bg download job thread finished");
+        ASSERT_EQ(seg_ptr, nullptr); // bg download, should return nullptr
+    });
+
+    th_submit_bg_download.get();
+    // continue the background download created by th_submit_bg_download
+    sp_reserve_size.next();
+    // continue the job created by th_get_and_bg_download, it should finish quickly
+    th_get_and_bg_download.get();
+    sp_reserve_size.disable();
+
+    waitForBgDownload(file_cache);
+}
 
 } // namespace DB::tests::S3

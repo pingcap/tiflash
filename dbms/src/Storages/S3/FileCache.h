@@ -387,11 +387,12 @@ public:
     IORateLimiter & rate_limiter;
     std::atomic<UInt64> cache_min_age_seconds = 1800;
     std::atomic<double> download_count_scale = 2.0;
-    std::atomic<double> max_downloading_count_scale = 1.0;
+    std::atomic<double> max_downloading_count_scale = 10.0;
+    // the on-going background download count
+    std::atomic<UInt64> bg_downloading_count = 0;
     std::array<LRUFileTable, magic_enum::enum_count<FileSegment::FileType>()> tables;
 
     // Currently, these variables are just use for testing.
-    std::atomic<UInt64> bg_downloading_count = 0;
     std::atomic<UInt64> bg_download_succ_count = 0;
     std::atomic<UInt64> bg_download_fail_count = 0;
 

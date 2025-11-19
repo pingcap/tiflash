@@ -224,60 +224,63 @@ FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname, const std::op
     auto file_type = getFileType(s3_key);
     auto & table = tables[static_cast<UInt64>(file_type)];
 
-    std::lock_guard lock(mtx);
-
-    auto f = table.get(s3_key);
-    if (f != nullptr)
+    FileSegmentPtr file_seg;
     {
-        f->setLastAccessTime(std::chrono::system_clock::now());
-        if (f->isReadyToRead())
+        std::lock_guard lock(mtx);
+        if (auto f = table.get(s3_key); f != nullptr)
         {
-            GET_METRIC(tiflash_storage_remote_cache, type_dtfile_hit).Increment();
-            return f;
+            f->setLastAccessTime(std::chrono::system_clock::now());
+            if (f->isReadyToRead())
+            {
+                GET_METRIC(tiflash_storage_remote_cache, type_dtfile_hit).Increment();
+                return f;
+            }
+            else
+            {
+                GET_METRIC(tiflash_storage_remote_cache, type_dtfile_miss).Increment();
+                return nullptr;
+            }
         }
-        else
+
+        GET_METRIC(tiflash_storage_remote_cache, type_dtfile_miss).Increment();
+        switch (canCache(file_type))
         {
-            GET_METRIC(tiflash_storage_remote_cache, type_dtfile_miss).Increment();
+        case ShouldCacheRes::RejectTypeNotMatch:
+            GET_METRIC(tiflash_storage_remote_cache, type_dtfile_not_cache_type).Increment();
+            return nullptr;
+        case ShouldCacheRes::RejectTooManyDownloading:
+            GET_METRIC(tiflash_storage_remote_cache, type_dtfile_too_many_download).Increment();
+            return nullptr;
+        case ShouldCacheRes::Cache:
+            break;
+        }
+
+        // File not exists, try to download and cache it in background.
+
+        // We don't know the exact size of a object/file, but we need reserve space to save the object/file.
+        // A certain amount of space is reserved for each file type.
+        auto estimated_size = filesize ? *filesize : getEstimatedSizeOfFileType(file_type);
+        if (!reserveSpaceImpl(file_type, estimated_size, EvictMode::TryEvict))
+        {
+            // Space still not enough after eviction.
+            GET_METRIC(tiflash_storage_remote_cache, type_dtfile_full).Increment();
+            LOG_DEBUG(
+                log,
+                "s3_key={} space not enough(capacity={} used={} estimated_size={}), skip cache",
+                s3_key,
+                cache_capacity,
+                cache_used,
+                estimated_size);
             return nullptr;
         }
-    }
 
-    GET_METRIC(tiflash_storage_remote_cache, type_dtfile_miss).Increment();
-    switch (canCache(file_type))
-    {
-    case ShouldCacheRes::RejectTypeNotMatch:
-        GET_METRIC(tiflash_storage_remote_cache, type_dtfile_not_cache_type).Increment();
-        return nullptr;
-    case ShouldCacheRes::RejectTooManyDownloading:
-        GET_METRIC(tiflash_storage_remote_cache, type_dtfile_too_many_download).Increment();
-        return nullptr;
-    case ShouldCacheRes::Cache:
-        break;
-    }
-
-    // File not exists, try to download and cache it in background.
-
-    // We don't know the exact size of a object/file, but we need reserve space to save the object/file.
-    // A certain amount of space is reserved for each file type.
-    auto estimated_size = filesize ? *filesize : getEstimatedSizeOfFileType(file_type);
-    if (!reserveSpaceImpl(file_type, estimated_size, EvictMode::TryEvict))
-    {
-        // Space still not enough after eviction.
-        GET_METRIC(tiflash_storage_remote_cache, type_dtfile_full).Increment();
-        LOG_DEBUG(
-            log,
-            "s3_key={} space not enough(capacity={} used={} estimated_size={}), skip cache",
-            s3_key,
-            cache_capacity,
-            cache_used,
-            estimated_size);
-        return nullptr;
-    }
-
-    auto file_seg
-        = std::make_shared<FileSegment>(toLocalFilename(s3_key), FileSegment::Status::Empty, estimated_size, file_type);
-    table.set(s3_key, file_seg);
-    // FIXME: release the lock then submit bg download task
+        file_seg = std::make_shared<FileSegment>(
+            toLocalFilename(s3_key),
+            FileSegment::Status::Empty,
+            estimated_size,
+            file_type);
+        table.set(s3_key, file_seg);
+    } // Release the lock before submiting bg download task. Because bgDownload may be blocked when the queue is full.
 
     bgDownload(s3_key, file_seg);
 
@@ -655,12 +658,12 @@ void FileCache::releaseSpace(UInt64 size)
 
 FileCache::ShouldCacheRes FileCache::canCache(FileType file_type) const
 {
-    auto max_bg_download_queue_size = S3FileCachePool::get().getQueueSize();
     if (file_type == FileType::Unknow || static_cast<UInt64>(file_type) > cache_level)
     {
         return ShouldCacheRes::RejectTypeNotMatch;
     }
-    else if (bg_downloading_count.load(std::memory_order_relaxed) > max_bg_download_queue_size)
+    auto max_bg_download_queue_size = logical_cores * max_downloading_count_scale.load(std::memory_order_relaxed);
+    if (bg_downloading_count.load(std::memory_order_relaxed) >= max_bg_download_queue_size)
     {
         return ShouldCacheRes::RejectTooManyDownloading;
     }
@@ -772,6 +775,7 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg, c
     RUNTIME_CHECK(content_length >= 0, s3_key, content_length);
     ProfileEvents::increment(ProfileEvents::S3ReadBytes, content_length);
     GET_METRIC(tiflash_storage_s3_request_seconds, type_get_object).Observe(sw.elapsedSeconds());
+    SYNC_FOR("before_FileCache::downloadImpl_reserve_size");
     if (!finalizeReservedSize(file_seg->getFileType(), file_seg->getSize(), content_length))
     {
         LOG_DEBUG(log, "s3_key={} finalizeReservedSize {}=>{} failed.", s3_key, file_seg->getSize(), content_length);
@@ -1042,34 +1046,57 @@ std::vector<FileSegmentPtr> FileCache::getAll()
 void FileCache::updateConfig(const Settings & settings)
 {
     bool has_changed = false;
-    size_t new_download_concurrency = 0;
-    size_t new_max_queue_size = 0;
 
     double new_download_scale = settings.dt_filecache_download_scale;
     auto old_download_scale = download_count_scale.load(std::memory_order_relaxed);
+    size_t new_concurrency = logical_cores * old_download_scale;
     if (std::fabs(new_download_scale - old_download_scale) > 0.001)
     {
-        download_count_scale.store(new_download_scale, std::memory_order_relaxed);
-        new_download_concurrency = logical_cores * new_download_scale;
-        has_changed = true;
+        if (likely(new_download_scale > 0.0))
+        {
+            download_count_scale.store(new_download_scale, std::memory_order_relaxed);
+            new_concurrency = logical_cores * new_download_scale;
+            has_changed = true;
+        }
+        else
+        {
+            LOG_WARNING(
+                log,
+                "dt_filecache_download_scale is set to non-positive value, ignore it, value={}",
+                new_download_scale);
+        }
     }
-    else
-    {
-        new_download_concurrency = logical_cores * old_download_scale;
-    }
+    new_concurrency = std::max(new_concurrency, 1); // at least 1
 
-    double new_max_downloading_scale = settings.dt_filecache_max_downloading_count_scale;
-    auto old_max_download_scale = max_downloading_count_scale.load(std::memory_order_relaxed);
-    if (std::fabs(new_max_downloading_scale - old_max_download_scale) > 0.001)
+    double new_queue_scale = settings.dt_filecache_max_downloading_count_scale;
+    auto old_queue_scale = max_downloading_count_scale.load(std::memory_order_relaxed);
+    size_t new_queue_size = logical_cores * old_queue_scale;
+    if (std::fabs(new_queue_scale - old_queue_scale) > 0.001)
     {
-        max_downloading_count_scale.store(new_max_downloading_scale, std::memory_order_relaxed);
-        new_max_queue_size = logical_cores * new_max_downloading_scale;
-        has_changed = true;
+        if (likely(new_queue_scale > 0.0))
+        {
+            max_downloading_count_scale.store(new_queue_scale, std::memory_order_relaxed);
+            new_queue_size = logical_cores * new_queue_scale;
+            has_changed = true;
+        }
+        else if (std::fabs(new_queue_scale) < 0.0001)
+        {
+            max_downloading_count_scale.store(0.0, std::memory_order_relaxed);
+            has_changed = true;
+            LOG_WARNING(
+                log,
+                "dt_filecache_max_downloading_count_scale is set to zero, disable download file from S3, value={}",
+                new_queue_scale);
+        }
+        else
+        {
+            LOG_WARNING(
+                log,
+                "dt_filecache_max_downloading_count_scale is set to non-positive value, ignore it, value={}",
+                new_queue_scale);
+        }
     }
-    else
-    {
-        new_max_queue_size = logical_cores * old_max_download_scale;
-    }
+    new_queue_size = std::max(new_queue_size, new_concurrency); // at least the same as concurrency
 
     if (has_changed)
     {
@@ -1077,15 +1104,17 @@ void FileCache::updateConfig(const Settings & settings)
             log,
             "Update S3FileCachePool config: "
             "logical_cores={} "
-            "download_scale={} download_concurrency={} "
-            "max_downloading_scale={} download_queue_size={}",
+            "old_download_scale={} download_scale={} download_concurrency={} "
+            "old_queue_scale={} queue_scale={} queue_size={}",
             logical_cores,
-            new_download_scale,
-            new_download_concurrency,
-            new_max_downloading_scale,
-            new_max_queue_size);
-        S3FileCachePool::get().setQueueSize(new_max_queue_size);
-        S3FileCachePool::get().setMaxThreads(new_download_concurrency);
+            old_download_scale,
+            download_count_scale.load(std::memory_order_relaxed),
+            new_concurrency,
+            old_queue_scale,
+            max_downloading_count_scale.load(std::memory_order_relaxed),
+            new_queue_size);
+        S3FileCachePool::get().setQueueSize(new_queue_size);
+        S3FileCachePool::get().setMaxThreads(new_concurrency);
     }
 
     UInt64 cache_min_age = settings.dt_filecache_min_age_seconds;
