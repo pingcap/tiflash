@@ -1047,7 +1047,7 @@ void FileCache::updateConfig(const Settings & settings)
 {
     bool has_changed = false;
 
-    double new_download_scale = settings.dt_filecache_download_scale;
+    double new_download_scale = settings.dt_filecache_downloading_count_scale;
     auto old_download_scale = download_count_scale.load(std::memory_order_relaxed);
     size_t new_concurrency = logical_cores * old_download_scale;
     if (std::fabs(new_download_scale - old_download_scale) > 0.001)
@@ -1062,7 +1062,7 @@ void FileCache::updateConfig(const Settings & settings)
         {
             LOG_WARNING(
                 log,
-                "dt_filecache_download_scale is set to non-positive value, ignore it, value={}",
+                "dt_filecache_downloading_count_scale is set to non-positive value, ignore it, value={}",
                 new_download_scale);
         }
     }

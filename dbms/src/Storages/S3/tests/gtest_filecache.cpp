@@ -901,7 +901,7 @@ TEST_F(FileCacheTest, UpdateConfig)
     ASSERT_DOUBLE_EQ(file_cache.max_downloading_count_scale, 10.0);
 
     Settings settings;
-    settings.dt_filecache_download_scale = 1.5;
+    settings.dt_filecache_downloading_count_scale = 1.5;
     settings.dt_filecache_max_downloading_count_scale = 5.0;
     // updated
     file_cache.updateConfig(settings);
@@ -918,15 +918,15 @@ TEST_F(FileCacheTest, UpdateConfig)
     ASSERT_EQ(S3FileCachePool::get().getQueueSize(), vcores * 5.0);
 
     // only one config updated
-    settings.dt_filecache_download_scale = 4.0;
+    settings.dt_filecache_downloading_count_scale = 4.0;
     file_cache.updateConfig(settings);
     ASSERT_DOUBLE_EQ(file_cache.download_count_scale, 4.0);
     ASSERT_DOUBLE_EQ(file_cache.max_downloading_count_scale, 5.0);
     ASSERT_EQ(S3FileCachePool::get().getMaxThreads(), vcores * 4.0);
     ASSERT_EQ(S3FileCachePool::get().getQueueSize(), vcores * 5.0);
 
-    // invalid dt_filecache_download_scale, should remain the old one
-    settings.dt_filecache_download_scale = -1.0;
+    // invalid dt_filecache_downloading_count_scale, should remain the old one
+    settings.dt_filecache_downloading_count_scaleunt_scale = -1.0;
     file_cache.updateConfig(settings);
     ASSERT_DOUBLE_EQ(file_cache.download_count_scale, 4.0);
     ASSERT_DOUBLE_EQ(file_cache.max_downloading_count_scale, 5.0);
@@ -934,7 +934,7 @@ TEST_F(FileCacheTest, UpdateConfig)
     ASSERT_EQ(S3FileCachePool::get().getQueueSize(), vcores * 5.0);
 
     // invalid dt_filecache_max_downloading_count_scale, should remain the old one
-    settings.dt_filecache_download_scale = 4.0;
+    settings.dt_filecache_downloading_count_scaleunt_scale = 4.0;
     settings.dt_filecache_max_downloading_count_scale = -1.0;
     file_cache.updateConfig(settings);
     ASSERT_DOUBLE_EQ(file_cache.download_count_scale, 4.0);
@@ -942,8 +942,8 @@ TEST_F(FileCacheTest, UpdateConfig)
     ASSERT_EQ(S3FileCachePool::get().getMaxThreads(), vcores * 4.0);
     ASSERT_EQ(S3FileCachePool::get().getQueueSize(), vcores * 5.0);
 
-    // small dt_filecache_download_scale, should remain at least 1 thread
-    settings.dt_filecache_download_scale = 0.1;
+    // small dt_filecache_downloading_count_scaleunt_scale, should remain at least 1 thread
+    settings.dt_filecache_downloading_count_scaleunt_scale = 0.1;
     settings.dt_filecache_max_downloading_count_scale = 5.0;
     file_cache.updateConfig(settings);
     ASSERT_DOUBLE_EQ(file_cache.download_count_scale, 0.1);
@@ -952,7 +952,7 @@ TEST_F(FileCacheTest, UpdateConfig)
     ASSERT_EQ(S3FileCachePool::get().getQueueSize(), vcores * 5.0);
 
     // small dt_filecache_max_downloading_count_scale, the queue size should be at least vcores * concurrency
-    settings.dt_filecache_download_scale = 2.0;
+    settings.dt_filecache_downloading_count_scale = 2.0;
     settings.dt_filecache_max_downloading_count_scale = 0.1;
     file_cache.updateConfig(settings);
     ASSERT_DOUBLE_EQ(file_cache.download_count_scale, 2.0);
@@ -971,7 +971,7 @@ TEST_F(FileCacheTest, GetBeingBlock)
 
     FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
     Settings settings;
-    settings.dt_filecache_download_scale = 1.0;
+    settings.dt_filecache_downloading_count_scale = 1.0;
     settings.dt_filecache_max_downloading_count_scale = 1.0;
     file_cache.updateConfig(settings);
 

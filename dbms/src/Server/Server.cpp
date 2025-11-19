@@ -328,7 +328,7 @@ void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
     }
     if (S3FileCachePool::instance)
     {
-        auto concurrency = logical_cores * settings.dt_filecache_download_scale;
+        auto concurrency = logical_cores * settings.dt_filecache_downloading_count_scale;
         auto queue_size = logical_cores * settings.dt_filecache_max_downloading_count_scale;
         S3FileCachePool::instance->setMaxThreads(concurrency);
         S3FileCachePool::instance->setMaxFreeThreads(concurrency / 2);
