@@ -231,6 +231,10 @@ public:
     // 2. When do some tests which just involves read/write logic;
     void disableRemoteLock() { remote_lock_disabled = true; }
 
+    // RNLocalPageCache disable fsync to improve performance
+    void disableFSync() { fsync = false; }
+    bool needFSync() const { return fsync; }
+
     size_t getTotalDataSize() const { return total_data_size; }
 
     static const UniversalPageId & getFullPageId(const UniversalPageId & id) { return id; }
@@ -295,6 +299,7 @@ public:
         , total_data_size(rhs.total_data_size)
         , has_writes_from_remote(rhs.has_writes_from_remote)
         , remote_lock_disabled(rhs.remote_lock_disabled)
+        , fsync(rhs.fsync)
     {
         PS::PageStorageMemorySummary::universal_write_count.fetch_sub(writes.size());
         writes = std::move(rhs.writes);
@@ -307,6 +312,7 @@ public:
         std::swap(total_data_size, o.total_data_size);
         std::swap(has_writes_from_remote, o.has_writes_from_remote);
         std::swap(remote_lock_disabled, o.remote_lock_disabled);
+        std::swap(fsync, o.fsync);
     }
 
 private:
@@ -318,5 +324,6 @@ private:
     size_t total_data_size = 0;
     bool has_writes_from_remote = false;
     bool remote_lock_disabled = false;
+    bool fsync = true;
 };
 } // namespace DB
