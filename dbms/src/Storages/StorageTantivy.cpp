@@ -27,6 +27,7 @@
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Operators/ExpressionTransformOp.h>
 #include <Operators/TantivyReaderSourceOp.h>
 #include <Storages/IStorage.h>
 #include <Storages/RegionQueryInfo.h>
@@ -84,6 +85,29 @@ void StorageTantivy::read(
         context.getSettingsRef().read_tso,
         tici_scan.getMatchExpr(),
         tici_scan.isCount()));
+
+
+    DAGExpressionAnalyzer analyzer{group_builder.getCurrentHeader(), context};
+    ExpressionActionsChain chain;
+    std::vector<UInt8> may_need_add_cast_column;
+    for (const auto & col : tici_scan.getReturnColumns())
+    {
+        may_need_add_cast_column.push_back(true);
+    }
+    // execute timezone cast or duration cast if needed for local table scan
+    if (analyzer.appendExtraCastsAfterTiCI(chain, may_need_add_cast_column, tici_scan))
+    {
+        ExpressionActionsPtr extra_cast = chain.getLastActions();
+        assert(extra_cast);
+        chain.finalize();
+        chain.clear();
+        for (size_t i = 0; i < group_builder.concurrency(); ++i)
+        {
+            auto & builder = group_builder.getCurBuilder(i);
+            builder.appendTransformOp(
+                std::make_unique<ExpressionTransformOp>(exec_status, log->identifier(), extra_cast));
+        }
+    }
 }
 
 void StorageTantivy::splitRemoteReadAndLocalRead()

@@ -29,6 +29,8 @@
 #include <fmt/os.h>
 #include <tici-search-lib/src/lib.rs.h>
 
+#include <cstdint>
+
 namespace DB::TS
 {
 class TantivyInputStream : public IProfilingBlockInputStream
@@ -174,6 +176,14 @@ protected:
                 for (auto & doc : documents)
                 {
                     col->insert(Field(doc.fieldValues[idx].int_value));
+                }
+            }
+            if (removeNullable(name_and_type.type)->isDateOrDateTime())
+            {
+                for (auto & doc : documents)
+                {
+                    auto t = static_cast<UInt64>(doc.fieldValues[idx].int_value);
+                    col->insert(Field(t));
                 }
             }
         }
