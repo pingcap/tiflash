@@ -470,6 +470,12 @@ WriteLimiterPtr IORateLimiter::getWriteLimiter()
     return is_background_thread ? bg_write_limiter : fg_write_limiter;
 }
 
+WriteLimiterPtr IORateLimiter::getBgWriteLimiter()
+{
+    std::lock_guard lock(limiter_mtx);
+    return bg_write_limiter;
+}
+
 ReadLimiterPtr IORateLimiter::getReadLimiter()
 {
     std::lock_guard lock(limiter_mtx);
