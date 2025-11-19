@@ -108,7 +108,7 @@ private:
     std::tuple<DM::RSOperatorPtr, DM::ColumnRangePtr> buildRSOperatorAndColumnRange(
         const Context & db_context,
         const DM::ColumnDefinesPtr & columns_to_read);
-    std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> packSegmentReadTasks(
+    std::tuple<std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr>, DM::ColumnDefinesPtr> packSegmentReadTasks(
         const Context & db_context,
         DM::SegmentReadTasks && read_tasks,
         const DM::ColumnDefinesPtr & column_defines,
@@ -161,5 +161,7 @@ private:
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
     static constexpr auto ZONE_LABEL_KEY = "zone";
     std::optional<String> zone_label;
+    // For generated column, just need a placeholder, and TiDB will fill this column.
+    std::vector<std::tuple<UInt64, String, DataTypePtr>> generated_column_infos;
 };
 } // namespace DB

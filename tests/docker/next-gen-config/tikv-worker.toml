@@ -12,18 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Enable disagg tiflash for next-gen
-disaggregated-tiflash = true
+# object storage for next-gen
+[dfs]
+prefix = "tikv"
+s3-endpoint = "http://minio0:9000"
+s3-key-id = "minioadmin"
+s3-secret-key = "minioadmin"
+s3-bucket = "tiflash-test"
+s3-region = "local"
 
-# After https://github.com/pingcap/tidb/pull/61752, the next-gen cluster requires a SYSTEM keyspace tidb.
-# Now tests are ran on the SYSTEM keyspace tidb.
-keyspace-name = "SYSTEM"
-
-tikv-worker-url = "tikv-worker0:19000"
-
-enable-telemetry = false
-temp-dir = "/data/tmp"
-[performance]
-tcp-keep-alive = true
-[security]
-enable-sem = false
+[schema-manager]
+dir = "/data/schemas"
+enabled = true
+keyspace-refresh-interval = "10s"
+schema-refresh-threshold = 1
