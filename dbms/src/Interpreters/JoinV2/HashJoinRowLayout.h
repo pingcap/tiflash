@@ -207,12 +207,12 @@ public:
 
     Block * getNextFullBlock()
     {
-        if (scan_full_blocks_done.load(std::memory_order_relaxed))
+        if (scan_full_blocks_done.load(std::memory_order_acquire))
             return nullptr;
         std::unique_lock lock(mu);
         if (scan_full_blocks_index >= full_blocks.size())
         {
-            scan_full_blocks_done.store(true, std::memory_order_relaxed);
+            scan_full_blocks_done.store(true, std::memory_order_release);
             return nullptr;
         }
         return &full_blocks[scan_full_blocks_index++];
@@ -220,12 +220,12 @@ public:
 
     Block * getNextNonFullBlock()
     {
-        if (scan_non_full_blocks_done.load(std::memory_order_relaxed))
+        if (scan_non_full_blocks_done.load(std::memory_order_acquire))
             return nullptr;
         std::unique_lock lock(mu);
         if (scan_non_full_blocks_index >= non_full_blocks.size())
         {
-            scan_non_full_blocks_done.store(true, std::memory_order_relaxed);
+            scan_non_full_blocks_done.store(true, std::memory_order_release);
             return nullptr;
         }
         return &non_full_blocks[scan_non_full_blocks_index++];

@@ -17,6 +17,8 @@
 #include <Interpreters/NullableUtils.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 
+#include "Core/Block.h"
+
 namespace DB
 {
 
@@ -53,16 +55,17 @@ JoinBuildScannerAfterProbe::JoinBuildScannerAfterProbe(HashJoin * join)
             if (need_row_data)
                 break;
         }
-        for (auto [column_index, _] : join->row_layout.other_column_indexes)
+        for (size_t i = 0; i < join->row_layout.other_column_count_for_other_condition; ++i)
         {
+            size_t column_index = join->row_layout.other_column_indexes[i].first;
             auto output_index = join->output_column_indexes.at(left_columns + column_index);
             need_row_data |= output_index >= 0;
             if (need_row_data)
                 break;
         }
 
-        need_other_block_data = (kind == RightSemi || kind == RightAnti)
-            && join->row_layout.other_column_indexes.size() > join->row_layout.other_column_count_for_other_condition;
+        need_other_block_data
+            = join->row_layout.other_column_indexes.size() > join->row_layout.other_column_count_for_other_condition;
 
         // The output data should not be empty
         RUNTIME_CHECK(need_row_data || need_other_block_data);
@@ -136,18 +139,50 @@ Block JoinBuildScannerAfterProbe::scanImpl(JoinProbeWorkerData & wd)
 
     using KeyGetterType = typename KeyGetter::Type;
     using HashValueType = typename KeyGetter::HashValueType;
-    const auto & multi_row_containers = join->multi_row_containers;
-    const size_t max_block_size = join->settings.max_block_size;
-    const size_t left_columns = join->left_sample_block_pruned.columns();
+
     auto & non_joined_blocks = join->non_joined_blocks;
-
-    auto & key_getter = *static_cast<KeyGetterType *>(join_key_getter.get());
-    constexpr size_t key_offset
-        = sizeof(RowPtr) + (KeyGetterType::joinKeyCompareHashFirst() ? sizeof(HashValueType) : 0);
-
     Block * full_block = non_joined_blocks.getNextFullBlock();
     if (full_block != nullptr)
         return *full_block;
+
+    const size_t max_block_size = join->settings.max_block_size;
+    while (true)
+    {
+        Block * non_joined_non_full_block = non_joined_blocks.getNextNonFullBlock();
+        if (non_joined_non_full_block == nullptr)
+            break;
+        RUNTIME_CHECK(non_joined_non_full_block->columns() == join->output_block_after_finalize.columns());
+        size_t rows = non_joined_non_full_block->rows();
+        if (rows >= max_block_size / 2)
+            return *non_joined_non_full_block;
+
+        if (wd.non_joined_non_full_blocks_rows + rows > max_block_size)
+        {
+            Block res_block = vstackBlocks(std::move(wd.non_joined_non_full_blocks));
+            wd.non_joined_non_full_blocks.clear();
+            wd.non_joined_non_full_blocks.emplace_back();
+            wd.non_joined_non_full_blocks.back().swap(*non_joined_non_full_block);
+            wd.non_joined_non_full_blocks_rows = rows;
+            return res_block;
+        }
+
+        wd.non_joined_non_full_blocks.emplace_back();
+        wd.non_joined_non_full_blocks.back().swap(*non_joined_non_full_block);
+        wd.non_joined_non_full_blocks_rows += rows;
+    }
+    if (wd.non_joined_non_full_blocks_rows > 0)
+    {
+        Block res_block = vstackBlocks(std::move(wd.non_joined_non_full_blocks));
+        wd.non_joined_non_full_blocks.clear();
+        wd.non_joined_non_full_blocks_rows = 0;
+        return res_block;
+    }
+
+    const auto & multi_row_containers = join->multi_row_containers;
+    const size_t left_columns = join->left_sample_block_pruned.columns();
+    auto & key_getter = *static_cast<KeyGetterType *>(join_key_getter.get());
+    constexpr size_t key_offset
+        = sizeof(RowPtr) + (KeyGetterType::joinKeyCompareHashFirst() ? sizeof(HashValueType) : 0);
 
     size_t scan_size = 0;
     RowContainer * container = wd.current_container;
@@ -157,48 +192,10 @@ Block JoinBuildScannerAfterProbe::scanImpl(JoinProbeWorkerData & wd)
     constexpr size_t insert_batch_max_size = 256;
     wd.insert_batch.clear();
     wd.insert_batch.reserve(insert_batch_max_size);
+
     join->initOutputBlock(wd.scan_result_block);
-
-    Block * non_joined_non_full_block = nullptr;
     size_t output_columns = wd.scan_result_block.columns();
-    while (true)
-    {
-        non_joined_non_full_block = non_joined_blocks.getNextNonFullBlock();
-        if (non_joined_non_full_block == nullptr)
-            break;
-        RUNTIME_CHECK(non_joined_non_full_block->columns() == output_columns);
-        size_t rows = non_joined_non_full_block->rows();
-        if (rows >= max_block_size / 2)
-            return *non_joined_non_full_block;
-
-        if (wd.scan_result_block.rows() + rows > max_block_size)
-        {
-            Block res_block;
-            res_block.swap(wd.scan_result_block);
-
-            join->initOutputBlock(wd.scan_result_block);
-            for (size_t i = 0; i < output_columns; ++i)
-            {
-                auto & src_column = non_joined_non_full_block->getByPosition(i);
-                auto & des_column = wd.scan_result_block.getByPosition(i);
-                des_column.column->assumeMutable()->insertRangeFrom(*src_column.column, 0, rows);
-            }
-            return res_block;
-        }
-
-        for (size_t i = 0; i < output_columns; ++i)
-        {
-            auto & src_column = non_joined_non_full_block->getByPosition(i);
-            auto & des_column = wd.scan_result_block.getByPosition(i);
-            des_column.column->assumeMutable()->insertRangeFrom(*src_column.column, 0, rows);
-        }
-    }
-
-    size_t scan_block_rows = wd.scan_result_block.rows();
-    if constexpr (need_row_data)
-        scan_block_rows += wd.insert_batch.size();
-    else
-        scan_block_rows += wd.selective_offsets.size();
+    size_t result_block_rows = wd.scan_result_block.rows();
 
     do
     {
@@ -251,8 +248,8 @@ Block JoinBuildScannerAfterProbe::scanImpl(JoinProbeWorkerData & wd)
                 {
                     wd.selective_offsets.push_back(index);
                 }
-                ++scan_block_rows;
-                if unlikely (scan_block_rows >= max_block_size)
+                ++result_block_rows;
+                if unlikely (result_block_rows >= max_block_size)
                 {
                     ++index;
                     break;
@@ -289,7 +286,7 @@ Block JoinBuildScannerAfterProbe::scanImpl(JoinProbeWorkerData & wd)
             index = 0;
         }
 
-        if unlikely (scan_block_rows >= max_block_size)
+        if unlikely (result_block_rows >= max_block_size)
             break;
     } while (scan_size < 2 * max_block_size);
 
@@ -305,7 +302,7 @@ Block JoinBuildScannerAfterProbe::scanImpl(JoinProbeWorkerData & wd)
         {
             auto des_mut_column = wd.scan_result_block.getByPosition(i).column->assumeMutable();
             size_t current_rows = des_mut_column->size();
-            if (current_rows < scan_block_rows)
+            if (current_rows < result_block_rows)
             {
                 // This column should be nullable and from the left side
                 RUNTIME_CHECK_MSG(
@@ -313,14 +310,14 @@ Block JoinBuildScannerAfterProbe::scanImpl(JoinProbeWorkerData & wd)
                     "Column with name {} is not nullable",
                     wd.scan_result_block.getByPosition(i).name);
                 auto & nullable_column = static_cast<ColumnNullable &>(*des_mut_column);
-                nullable_column.insertManyDefaults(scan_block_rows - current_rows);
+                nullable_column.insertManyDefaults(result_block_rows - current_rows);
             }
         }
     }
 
-    if unlikely (wd.is_scan_end || scan_block_rows >= max_block_size)
+    if unlikely (wd.is_scan_end || result_block_rows >= max_block_size)
     {
-        if (scan_block_rows == 0)
+        if (result_block_rows == 0)
             return {};
 
         Block res_block;

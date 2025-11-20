@@ -58,7 +58,8 @@ OperatorStatus HashJoinV2ProbeTransformOp::onOutput(Block & block)
             if unlikely (probe_context.isAllFinished())
             {
                 join_ptr->finishOneProbe(op_index);
-                status = join_ptr->needProbeScanBuildSide() ? ProbeStatus::WAIT_PROBE_FINISH : ProbeStatus::FINISHED;
+                status
+                    = join_ptr->needScanBuildSideAfterProbe() ? ProbeStatus::WAIT_PROBE_FINISH : ProbeStatus::FINISHED;
                 block = join_ptr->probeLastResultBlock(op_index);
                 if (block)
                     return OperatorStatus::HAS_OUTPUT;

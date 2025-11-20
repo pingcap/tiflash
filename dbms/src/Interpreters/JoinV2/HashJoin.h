@@ -66,7 +66,7 @@ public:
     Block probeBlock(JoinProbeContext & ctx, size_t stream_index);
     Block probeLastResultBlock(size_t stream_index);
 
-    bool needProbeScanBuildSide() const;
+    bool needScanBuildSideAfterProbe() const;
     Block scanBuildSideAfterProbe(size_t stream_index);
 
     void removeUselessColumn(Block & block) const;

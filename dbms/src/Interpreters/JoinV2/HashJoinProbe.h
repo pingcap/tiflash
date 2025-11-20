@@ -114,6 +114,9 @@ struct alignas(CPU_CACHE_LINE_SIZE) JoinProbeWorkerData
     size_t current_container_index = 0;
     /// Schema: HashJoin::output_block_after_finalize
     Block scan_result_block;
+    /// Accumulate non-joined non-full blocks and output them once they approach the max block size
+    Blocks non_joined_non_full_blocks;
+    size_t non_joined_non_full_blocks_rows = 0;
     bool is_scan_end = false;
 
     /// Metrics

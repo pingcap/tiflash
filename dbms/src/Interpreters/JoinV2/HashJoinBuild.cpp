@@ -59,8 +59,8 @@ void NO_INLINE JoinBuildHelper::insertBlockToRowContainersImpl(
         wd.right_semi_selector.reserve(rows);
         if constexpr (has_null_map)
         {
-            wd.right_semi_offsets.clear();
-            wd.right_semi_offsets.reserve(rows);
+            wd.right_semi_selective.clear();
+            wd.right_semi_selective.reserve(rows);
         }
     }
     else
@@ -116,7 +116,7 @@ void NO_INLINE JoinBuildHelper::insertBlockToRowContainersImpl(
                 continue;
             }
             if (is_right_semi_family)
-                wd.right_semi_offsets.push_back(i);
+                wd.right_semi_selective.push_back(i);
         }
 
         const auto & key = key_getter.getJoinKeyWithBuffer(i);
@@ -258,7 +258,7 @@ void NO_INLINE JoinBuildHelper::insertBlockToRowContainersImpl(
                 partition_row_container[j].other_column_block.insert(std::move(new_column_data));
             }
             if constexpr (has_null_map)
-                column_data.column->scatterTo(scatter_columns, wd.right_semi_selector, wd.right_semi_offsets);
+                column_data.column->scatterTo(scatter_columns, wd.right_semi_selector, wd.right_semi_selective);
             else
                 column_data.column->scatterTo(scatter_columns, wd.right_semi_selector);
         }

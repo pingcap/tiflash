@@ -51,7 +51,7 @@ struct alignas(CPU_CACHE_LINE_SIZE) JoinBuildWorkerData
     RowPtrs row_ptrs;
 
     IColumn::Selector right_semi_selector;
-    BlockSelective right_semi_offsets;
+    BlockSelective right_semi_selective;
     Block non_joined_block;
     IColumn::Offsets non_joined_offsets;
 

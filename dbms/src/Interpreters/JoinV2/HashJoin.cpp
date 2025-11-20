@@ -425,7 +425,7 @@ void HashJoin::initProbe(const Block & sample_block, size_t probe_concurrency_)
     active_probe_worker = probe_concurrency;
     probe_workers_data.resize(probe_concurrency);
 
-    if (needProbeScanBuildSide())
+    if (needScanBuildSideAfterProbe())
         join_build_scanner_after_probe = std::make_unique<JoinBuildScannerAfterProbe>(this);
 
     probe_initialized = true;
@@ -692,7 +692,7 @@ Block HashJoin::probeLastResultBlock(size_t stream_index)
     return {};
 }
 
-bool HashJoin::needProbeScanBuildSide() const
+bool HashJoin::needScanBuildSideAfterProbe() const
 {
     return isRightOuterJoin(kind) || isRightSemiFamily(kind);
 }
