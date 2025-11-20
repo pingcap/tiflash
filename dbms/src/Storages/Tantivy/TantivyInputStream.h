@@ -23,16 +23,29 @@
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/ShardInfo.h>
+#include <TiDB/Schema/TiDBTypes.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <fcntl.h>
 #include <fmt/os.h>
 #include <tici-search-lib/src/lib.rs.h>
 
-#include <cstdint>
-
 namespace DB::TS
 {
+
+// convert literal value from timezone specified in cop request to UTC in-place
+inline void convertFieldWithTimezone(Field & value, const TimezoneInfo & timezone_info)
+{
+    static const auto & time_zone_utc = DateLUT::instance("UTC");
+    UInt64 from_time = value.get<UInt64>();
+    UInt64 result_time = from_time;
+    if (timezone_info.is_name_based)
+        convertTimeZone(from_time, result_time, *timezone_info.timezone, time_zone_utc);
+    else if (timezone_info.timezone_offset != 0)
+        convertTimeZoneByOffset(from_time, result_time, false, timezone_info.timezone_offset);
+    value = Field(result_time);
+}
+
 class TantivyInputStream : public IProfilingBlockInputStream
 {
     static constexpr auto NAME = "TantivyInputStream";
@@ -47,7 +60,8 @@ public:
         UInt64 limit_,
         UInt64 read_ts_,
         google::protobuf::RepeatedPtrField<tipb::Expr> match_expr_,
-        bool is_count)
+        bool is_count,
+        const TimezoneInfo & timezone_info_)
         : log(log_)
         , table_id(table_id_)
         , index_id(index_id_)
@@ -56,6 +70,7 @@ public:
         , limit(limit_)
         , read_ts(read_ts_)
         , is_count(is_count)
+        , timezone_info(timezone_info_)
     {
         FmtBuffer buf;
         buf.joinStr(
@@ -202,6 +217,7 @@ private:
     UInt64 read_ts;
     ::Expr match_expr;
     bool is_count;
+    const TimezoneInfo & timezone_info;
 
     size_t processed_shard = 0;
 
@@ -254,6 +270,7 @@ private:
         return {ret, cids};
     }
 
+
     std::tuple<::Expr, std::vector<ColumnID>> tipbToTiCIExpr(const tipb::Expr & expr)
     {
         ::Expr ret;
@@ -295,12 +312,6 @@ private:
             case tipb::ScalarFuncSig::LEReal:
             case tipb::ScalarFuncSig::GTReal:
             case tipb::ScalarFuncSig::GEReal:
-            case tipb::ScalarFuncSig::EQTime:
-            case tipb::ScalarFuncSig::NETime:
-            case tipb::ScalarFuncSig::LTTime:
-            case tipb::ScalarFuncSig::LETime:
-            case tipb::ScalarFuncSig::GTTime:
-            case tipb::ScalarFuncSig::GETime:
             case tipb::ScalarFuncSig::EQDecimal:
             case tipb::ScalarFuncSig::NEDecimal:
             case tipb::ScalarFuncSig::LTDecimal:
@@ -309,6 +320,46 @@ private:
             case tipb::ScalarFuncSig::GEDecimal:
                 ret.sig = expr.sig();
                 break;
+            case tipb::ScalarFuncSig::EQTime:
+            case tipb::ScalarFuncSig::NETime:
+            case tipb::ScalarFuncSig::LTTime:
+            case tipb::ScalarFuncSig::LETime:
+            case tipb::ScalarFuncSig::GTTime:
+            case tipb::ScalarFuncSig::GETime:
+            {
+                ret.sig = expr.sig();
+                bool is_timestamp_column = false;
+                for (const auto & child : expr.children())
+                {
+                    if (isColumnExpr(child))
+                    {
+                        is_timestamp_column = (child.field_type().tp() == TiDB::TypeTimestamp);
+                        break;
+                    }
+                }
+                if (is_timestamp_column)
+                {
+                    for (int child_idx = 0; child_idx < expr.children_size(); ++child_idx)
+                    {
+                        const auto & child_expr = expr.children(child_idx);
+                        if (isLiteralExpr(child_expr))
+                        {
+                            Field value = decodeLiteral(child_expr);
+                            auto literal_type = child_expr.field_type().tp();
+                            if (literal_type != TiDB::TypeDatetime)
+                                continue;
+                            convertFieldWithTimezone(value, timezone_info);
+                            WriteBufferFromOwnString ss;
+                            UInt64 val = value.safeGet<UInt64>();
+                            encodeDAGUInt64(MyDateTime(val).toPackedUInt(), ss);
+                            ret.children[child_idx].val.clear();
+                            auto str = ss.releaseStr();
+                            std::copy(str.begin(), str.end(), std::back_inserter(ret.children[child_idx].val));
+                        }
+                    }
+                }
+                break;
+            }
             default:
                 throw std::runtime_error("Unsupported expression sig");
             }
@@ -357,5 +408,6 @@ private:
         }
     }
 };
+
 
 } // namespace DB::TS

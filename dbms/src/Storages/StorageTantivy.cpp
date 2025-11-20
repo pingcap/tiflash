@@ -84,7 +84,8 @@ void StorageTantivy::read(
         tici_scan.getLimit(),
         context.getSettingsRef().read_tso,
         tici_scan.getMatchExpr(),
-        tici_scan.isCount()));
+        tici_scan.isCount(),
+        context.getTimezoneInfo()));
 
 
     DAGExpressionAnalyzer analyzer{group_builder.getCurrentHeader(), context};
