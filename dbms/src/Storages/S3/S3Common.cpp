@@ -482,9 +482,9 @@ ClientFactory::create(const StorageS3Config & storage_config, const LoggerPtr & 
     if (storage_config.access_key_id.empty() && storage_config.secret_access_key.empty())
     {
         // authentication by the S3CredentialsProviderChain
-        LOG_INFO(log, "Create S3Client with S3CredentialsProviderChain");
+        LOG_INFO(log, "Create S3Client with S3CredentialsProviderChain, vendor={}", magic_enum::enum_name(vendor));
         // Some cred provider rely on the client_config
-        cred_provider = std::make_shared<S3CredentialsProviderChain>(client_config);
+        cred_provider = std::make_shared<S3CredentialsProviderChain>(client_config, vendor);
     }
     else
     {
