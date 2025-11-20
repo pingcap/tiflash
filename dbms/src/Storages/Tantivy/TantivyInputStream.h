@@ -327,30 +327,21 @@ private:
             case tipb::ScalarFuncSig::GETime:
             {
                 ret.sig = expr.sig();
-                bool is_timestamp_column = false;
-                for (const auto & child : expr.children())
+                size_t col_idx = 0, val_idx = 1;
+                if (isColumnExpr(expr.children(1)))
+                    std::swap(col_idx, val_idx);
+                if (expr.children(col_idx).field_type().tp() == TiDB::TypeTimestamp)
                 {
-                    if (isColumnExpr(child))
+                    const auto & child_expr = expr.children(val_idx);
+                    if (isLiteralExpr(child_expr))
                     {
-                        is_timestamp_column = (child.field_type().tp() == TiDB::TypeTimestamp);
-                        break;
-                    }
-                }
-                if (is_timestamp_column)
-                {
-                    for (int child_idx = 0; child_idx < expr.children_size(); ++child_idx)
-                    {
-                        const auto & child_expr = expr.children(child_idx);
-                        if (isLiteralExpr(child_expr))
-                        {
-                            UInt64 val = decodeDAGUInt64(child_expr.val());
-                            val = convertPackedU64WithTimezone(val, timezone_info);
-                            WriteBufferFromOwnString ss;
-                            encodeDAGUInt64(val, ss);
-                            ret.children[child_idx].val.clear();
-                            auto str = ss.releaseStr();
-                            std::copy(str.begin(), str.end(), std::back_inserter(ret.children[child_idx].val));
-                        }
+                        UInt64 val = decodeDAGUInt64(child_expr.val());
+                        val = convertPackedU64WithTimezone(val, timezone_info);
+                        WriteBufferFromOwnString ss;
+                        encodeDAGUInt64(val, ss);
+                        ret.children[val_idx].val.clear();
+                        auto str = ss.releaseStr();
+                        std::copy(str.begin(), str.end(), std::back_inserter(ret.children[val_idx].val));
                     }
                 }
                 break;
