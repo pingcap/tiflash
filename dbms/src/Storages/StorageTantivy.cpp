@@ -87,15 +87,19 @@ void StorageTantivy::read(
         tici_scan.isCount(),
         context.getTimezoneInfo()));
 
+    executeCastAfterTiCIScan(exec_status, group_builder);
+}
 
+void StorageTantivy::executeCastAfterTiCIScan(
+    PipelineExecutorContext & exec_status,
+    PipelineExecGroupBuilder & group_builder)
+{
+    // execute timezone cast or duration cast if needed for local tici scan
     DAGExpressionAnalyzer analyzer{group_builder.getCurrentHeader(), context};
     ExpressionActionsChain chain;
     std::vector<UInt8> may_need_add_cast_column;
     for (const auto & col : tici_scan.getReturnColumns())
-    {
         may_need_add_cast_column.push_back(true);
-    }
-    // execute timezone cast or duration cast if needed for local table scan
     if (analyzer.appendExtraCastsAfterTiCI(chain, may_need_add_cast_column, tici_scan))
     {
         ExpressionActionsPtr extra_cast = chain.getLastActions();
