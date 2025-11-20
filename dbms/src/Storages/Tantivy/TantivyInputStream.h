@@ -34,16 +34,15 @@ namespace DB::TS
 {
 
 // convert literal value from timezone specified in cop request to UTC in-place
-inline void convertFieldWithTimezone(Field & value, const TimezoneInfo & timezone_info)
+inline UInt64 convertPackedU64WithTimezone(UInt64 from_time, const TimezoneInfo & timezone_info)
 {
     static const auto & time_zone_utc = DateLUT::instance("UTC");
-    UInt64 from_time = value.get<UInt64>();
     UInt64 result_time = from_time;
     if (timezone_info.is_name_based)
         convertTimeZone(from_time, result_time, *timezone_info.timezone, time_zone_utc);
     else if (timezone_info.timezone_offset != 0)
         convertTimeZoneByOffset(from_time, result_time, false, timezone_info.timezone_offset);
-    value = Field(result_time);
+    return result_time;
 }
 
 class TantivyInputStream : public IProfilingBlockInputStream
@@ -344,14 +343,10 @@ private:
                         const auto & child_expr = expr.children(child_idx);
                         if (isLiteralExpr(child_expr))
                         {
-                            Field value = decodeLiteral(child_expr);
-                            auto literal_type = child_expr.field_type().tp();
-                            if (literal_type != TiDB::TypeDatetime)
-                                continue;
-                            convertFieldWithTimezone(value, timezone_info);
+                            UInt64 val = decodeDAGUInt64(child_expr.val());
+                            val = convertPackedU64WithTimezone(val, timezone_info);
                             WriteBufferFromOwnString ss;
-                            UInt64 val = value.safeGet<UInt64>();
-                            encodeDAGUInt64(MyDateTime(val).toPackedUInt(), ss);
+                            encodeDAGUInt64(val, ss);
                             ret.children[child_idx].val.clear();
                             auto str = ss.releaseStr();
                             std::copy(str.begin(), str.end(), std::back_inserter(ret.children[child_idx].val));
