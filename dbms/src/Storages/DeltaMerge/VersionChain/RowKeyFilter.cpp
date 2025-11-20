@@ -73,6 +73,7 @@ UInt32 buildRowKeyFilterBlock(
         "ColumnFile<{}> returns {} rows. Read all rows in one block is required!",
         cf.toString(),
         block.rows());
+    addUserReadBytes(dm_context, block.bytes());
 
     const auto handles = ColumnView<HandleType>(*(block.begin()->column));
     return buildRowKeyFilterVector<HandleType>(handles, delete_ranges, read_ranges, start_row_id, filter);
@@ -125,6 +126,7 @@ UInt32 buildRowKeyFilterDMFile(
     for (auto pack_id : *need_read_packs)
     {
         auto block = stream->read();
+        addUserReadBytes(dm_context, block.bytes());
         RUNTIME_CHECK(block.rows() == pack_stats[pack_id].rows, block.rows(), pack_stats[pack_id].rows);
         const auto handles = ColumnView<HandleType>(*(block.begin()->column));
         const auto itr = start_row_id_of_need_read_packs.find(pack_id);

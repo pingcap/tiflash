@@ -155,13 +155,13 @@ private:
     void consumeCPUResource(double ru, uint64_t cpu_time_in_ns_)
     {
         consumeResource(ru, cpu_time_in_ns_);
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_compute_ru_consumption, name_with_keyspace_id)
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group_counter, type_compute_ru_consumption, name_with_keyspace_id)
             .Increment(ru);
     }
     void consumeBytesResource(double ru, uint64_t cpu_time_in_ns_)
     {
         consumeResource(ru, cpu_time_in_ns_);
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_storage_ru_consumption, name_with_keyspace_id)
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group_counter, type_storage_ru_consumption, name_with_keyspace_id)
             .Increment(ru);
     }
 
@@ -614,9 +614,10 @@ private:
         std::string & err_msg);
     void updateMaxRUPerSecAfterDeleteWithoutLock(uint64_t deleted_user_ru_per_sec);
 
-    void clearCPUTimeWithoutLock(const SteadyClock::time_point & now)
+    void clearCPUTime(const SteadyClock::time_point & now)
     {
         static_assert(CLEAR_CPU_TIME_DURATION > ResourceGroup::COMPUTE_RU_CONSUMPTION_SPEED_INTERVAL);
+        std::lock_guard lock(mu);
         if (now - last_clear_cpu_time >= CLEAR_CPU_TIME_DURATION)
         {
             for (auto & ele : keyspace_resource_groups)

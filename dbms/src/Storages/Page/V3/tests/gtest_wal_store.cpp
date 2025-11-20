@@ -937,7 +937,7 @@ TEST_P(WALStoreTest, GetFileSnapshot)
                     .isValid());
 
     rollToNewLogWriter(wal);
-    // num of files exceed 3, return
+    // num of files exceed 3, return a valid files snapshot
     {
         ASSERT_EQ(getNumLogFiles(), 4);
         auto files = wal->tryGetFilesSnapshot(
@@ -952,18 +952,29 @@ TEST_P(WALStoreTest, GetFileSnapshot)
         ASSERT_EQ(getNumLogFiles(), 4);
     }
 
+    UInt64 max_seq = 2000;
+    auto apply_to_wal = [&max_seq, &wal](PageEntriesEdit && edit) {
+        for (auto & r : edit.getMutRecords())
+        {
+            ++max_seq;
+            r.version = PageVersion(max_seq);
+        }
+        wal->apply(u128::Serializer::serializeTo(edit));
+    };
     {
-        // write new edit, new log file generated
+        // write new edit, new log file generated, log_num=5
         PageEntriesEdit edit;
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 100));
-        wal->apply(u128::Serializer::serializeTo(edit));
+        apply_to_wal(std::move(edit));
     }
 
     {
+        // Collect the file_snap by snapsht_seq = max_seq, should contain all 5 log files
         ASSERT_EQ(getNumLogFiles(), 5);
+        UInt64 snapshot_seq = max_seq;
         auto files = wal->tryGetFilesSnapshot(
             3,
-            std::numeric_limits<UInt64>::max(),
+            snapshot_seq,
             details::getMaxSequenceForRecord<u128::PageDirectoryTrait>,
             false);
         ASSERT_TRUE(files.isValid());
@@ -971,11 +982,64 @@ TEST_P(WALStoreTest, GetFileSnapshot)
         ASSERT_EQ(files.persisted_log_files.begin()->log_num, 1);
         ASSERT_EQ(files.persisted_log_files.rbegin()->log_num, 5);
         ASSERT_EQ(getNumLogFiles(), 5);
+    }
 
-        // empty
+    {
+        // write new edit, new log file generated, log_num=6
+        PageEntriesEdit edit;
+        edit.del(buildV3Id(TEST_NAMESPACE_ID, 101));
+        apply_to_wal(std::move(edit));
+        // write an empty edit
+        PageEntriesEdit empty_edit;
+        apply_to_wal(std::move(empty_edit));
+    }
+
+    {
+        ASSERT_EQ(getNumLogFiles(), 6);
+        // There are 6 log files, but the last edit is empty, so should only compact the first 5 log files
+        // for safety.
+        UInt64 snapshot_seq = max_seq;
+        auto files = wal->tryGetFilesSnapshot(
+            3,
+            snapshot_seq,
+            details::getMaxSequenceForRecord<u128::PageDirectoryTrait>,
+            false);
+        ASSERT_TRUE(files.isValid());
+        ASSERT_EQ(files.persisted_log_files.size(), 5);
+        ASSERT_EQ(files.persisted_log_files.begin()->log_num, 1);
+        ASSERT_EQ(files.persisted_log_files.rbegin()->log_num, 5);
+        ASSERT_EQ(getNumLogFiles(), 6);
+    }
+
+    {
+        // write new edit, new log file generated, log_num=7
+        PageEntriesEdit edit;
+        edit.del(buildV3Id(TEST_NAMESPACE_ID, 101));
+        apply_to_wal(std::move(edit));
+    }
+
+    {
+        ASSERT_EQ(getNumLogFiles(), 7);
+        // We found the log file with log_num=7 and its max_seq >= snapshot_seq. Even log_num=6
+        // last_edit is an empty edit so we can't know its max_seq. But we keep an assumption that
+        // the log file with larger log_num must contain larger max_seq, so all 7 log files are
+        // ready for the compaction.
+        UInt64 snapshot_seq = max_seq;
+        auto files = wal->tryGetFilesSnapshot(
+            3,
+            snapshot_seq,
+            details::getMaxSequenceForRecord<u128::PageDirectoryTrait>,
+            false);
+        ASSERT_TRUE(files.isValid());
+        ASSERT_EQ(files.persisted_log_files.size(), 7);
+        ASSERT_EQ(files.persisted_log_files.begin()->log_num, 1);
+        ASSERT_EQ(files.persisted_log_files.rbegin()->log_num, 7);
+        ASSERT_EQ(getNumLogFiles(), 7);
+
+        // Mock that dump the in-mem snapshot to disk and compact the logs
         PageEntriesEdit snap_edit;
         files.num_records = snap_edit.size();
-        bool done = wal->saveSnapshot(std::move(files), u128::Serializer::serializeTo(snap_edit), /*snap_sequence*/ 0);
+        bool done = wal->saveSnapshot(std::move(files), u128::Serializer::serializeTo(snap_edit), snapshot_seq);
         ASSERT_TRUE(done);
         ASSERT_EQ(getNumLogFiles(), 1);
     }

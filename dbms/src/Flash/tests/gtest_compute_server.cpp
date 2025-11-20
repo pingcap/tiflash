@@ -1329,8 +1329,14 @@ try
         "random_pipeline_model_cancel_failpoint-0.8",
         "random_pipeline_model_execute_prefix_failpoint-1.0",
         "random_pipeline_model_execute_suffix_failpoint-1.0"};
+    auto log = Logger::get();
     for (const auto & failpoint : failpoints)
     {
+        // Cancel test will make MockTableScanBlockInputStream output infinite blocks,
+        // but suffix failpoint will have to be triggered when table scan finish.
+        // So for suffix related failpoint, make it non cancel test.
+        const bool is_cancel_test = !failpoint.contains("suffix");
+        LOG_DEBUG(log, "running failpoint: {}, is_cancel_test: {}", failpoint, is_cancel_test);
         auto config_str = fmt::format("[flash]\nrandom_fail_points = \"{}\"", failpoint);
         initRandomFailPoint(config_str);
         auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
@@ -1349,7 +1355,8 @@ try
                     .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
                     .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
                     .project({col("max(l_table.s)"), col("l_table.s")}),
-                properties);
+                properties,
+                is_cancel_test);
         }
         catch (...)
         {

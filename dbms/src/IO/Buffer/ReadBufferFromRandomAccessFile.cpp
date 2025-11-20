@@ -51,18 +51,15 @@ ReadBufferFromRandomAccessFile::ReadBufferFromRandomAccessFile(
 bool ReadBufferFromRandomAccessFile::nextImpl()
 {
     size_t bytes_read = 0;
-    while (!bytes_read)
+    while (bytes_read == 0)
     {
         ProfileEvents::increment(ProfileEvents::ReadBufferFromFileDescriptorRead);
 
-        ssize_t res = 0;
-        {
-            res = file->read(internal_buffer.begin(), internal_buffer.size());
-        }
-        if (!res)
+        ssize_t res = file->read(internal_buffer.begin(), internal_buffer.size());
+        if (res == 0)
             break;
 
-        if (-1 == res && errno != EINTR)
+        if (res < 0 && errno != EINTR)
         {
             ProfileEvents::increment(ProfileEvents::ReadBufferFromFileDescriptorReadFailed);
             throwFromErrno("Cannot read from file " + getFileName(), ErrorCodes::CANNOT_READ_FROM_FILE_DESCRIPTOR);

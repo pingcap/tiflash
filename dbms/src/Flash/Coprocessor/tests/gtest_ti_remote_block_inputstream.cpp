@@ -345,6 +345,7 @@ public:
         auto dag_writer = std::make_shared<BroadcastOrPassThroughWriter<MockWriterPtr>>(
             writer,
             batch_send_min_limit,
+            1024 * 1024 * 16,
             *dag_context_ptr,
             MPPDataPacketVersion::MPPDataPacketV1,
             tipb::CompressionMode::FAST,
@@ -374,6 +375,7 @@ public:
             writer,
             0,
             batch_send_min_limit,
+            1024 * 1024 * 16,
             *dag_context_ptr);
 
         // 2. encode all blocks

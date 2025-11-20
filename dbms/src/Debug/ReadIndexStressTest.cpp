@@ -39,6 +39,7 @@ static const std::map<std::string, ReadIndexStressTest::TestType> TestName2Type
 
 ReadIndexStressTest::ReadIndexStressTest(const TMTContext & tmt_)
     : tmt(tmt_)
+    , logger(Logger::get("ReadIndexStressTest"))
 {
     MockStressTestCfg::enable = true;
     LOG_WARNING(logger, "enable MockStressTest");

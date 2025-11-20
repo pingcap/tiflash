@@ -14,6 +14,9 @@
 
 #pragma once
 
+#include <cstddef>
+#include <mutex>
+#include <unordered_map>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #ifdef __clang__
@@ -23,6 +26,7 @@
 #pragma GCC diagnostic pop
 
 #include <Common/ConcurrentBoundedQueue.h>
+#include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Core/QueryOperatorSpillContexts.h>
 #include <Core/TaskOperatorSpillContexts.h>
@@ -55,6 +59,7 @@ class CoprocessorReader;
 using CoprocessorReaderPtr = std::shared_ptr<CoprocessorReader>;
 
 class AutoSpillTrigger;
+class CTE;
 
 struct JoinProfileInfo
 {
@@ -359,6 +364,70 @@ public:
 
     MPPReceiverSetPtr getMPPReceiverSet() const { return mpp_receiver_set; }
 
+    String getQueryIDAndCTEIDForSink()
+    {
+        std::lock_guard<std::mutex> lock(this->cte_mu);
+        return this->query_id_and_cte_id_for_sink;
+    }
+
+    String getQueryIDAndCTEIDForSource(size_t cte_id)
+    {
+        std::lock_guard<std::mutex> lock(this->cte_mu);
+        return this->query_id_and_cte_id_for_sources[cte_id];
+    }
+
+    void setQueryIDAndCTEIDForSink(const String & query_id_and_cte_id)
+    {
+        std::lock_guard<std::mutex> lock(this->cte_mu);
+
+        // MPP Task has only one CTESink, it's impossible to set query_id_and_cte_id_for_sink twice
+        RUNTIME_CHECK(this->query_id_and_cte_id_for_sink.empty(), this->query_id_and_cte_id_for_sink);
+        this->query_id_and_cte_id_for_sink = query_id_and_cte_id;
+    }
+
+    void addQueryIDAndCTEIDForSource(size_t cte_id, const String & query_id_and_cte_id)
+    {
+        std::lock_guard<std::mutex> lock(this->cte_mu);
+        auto iter = this->query_id_and_cte_id_for_sources.find(cte_id);
+        if (iter != this->query_id_and_cte_id_for_sources.end())
+        {
+            RUNTIME_CHECK_MSG(iter->second == query_id_and_cte_id, "{} vs {}", iter->second, query_id_and_cte_id);
+            return;
+        }
+        this->query_id_and_cte_id_for_sources.insert(std::make_pair(cte_id, query_id_and_cte_id));
+    }
+
+    std::shared_ptr<CTE> getCTESink()
+    {
+        std::lock_guard<std::mutex> lock(this->cte_mu);
+        return this->sink_cte;
+    }
+
+    std::unordered_map<size_t, std::shared_ptr<CTE>> getCTESource()
+    {
+        std::lock_guard<std::mutex> lock(this->cte_mu);
+        return this->source_ctes;
+    }
+
+    void setCTESink(std::shared_ptr<CTE> & cte)
+    {
+        std::lock_guard<std::mutex> lock(this->cte_mu);
+        RUNTIME_CHECK(!this->sink_cte);
+        this->sink_cte = cte;
+    }
+
+    void addCTESource(size_t cte_id, std::shared_ptr<CTE> & cte)
+    {
+        std::lock_guard<std::mutex> lock(this->cte_mu);
+        auto iter = this->source_ctes.find(cte_id);
+        if (iter != this->source_ctes.end())
+        {
+            RUNTIME_CHECK(iter->second.get() == cte.get());
+            return;
+        }
+        this->source_ctes.insert(std::make_pair(cte_id, cte));
+    }
+
 public:
     DAGRequest dag_request;
     /// Some existing code inherited from Clickhouse assume that each query must have a valid query string and query ast,
@@ -475,6 +544,13 @@ private:
     UInt64 connection_id;
     // It's the session alias between mysql client and tidb
     String connection_alias;
+
+    String query_id_and_cte_id_for_sink;
+    std::unordered_map<size_t, String> query_id_and_cte_id_for_sources;
+
+    std::mutex cte_mu;
+    std::shared_ptr<CTE> sink_cte;
+    std::unordered_map<size_t, std::shared_ptr<CTE>> source_ctes;
 };
 
 } // namespace DB

@@ -39,7 +39,7 @@ public:
 
     ~PosixWriteReadableFile() override;
 
-    ssize_t pwrite(char * buf, size_t size, off_t offset) const override;
+    [[nodiscard]] ssize_t pwrite(char * buf, size_t size, off_t offset) const override;
 
     int getFd() const override { return fd; }
 
@@ -49,7 +49,7 @@ public:
 
     int ftruncate(off_t length) override;
 
-    ssize_t pread(char * buf, size_t size, off_t offset) const override;
+    [[nodiscard]] ssize_t pread(char * buf, size_t size, off_t offset) const override;
 
     String getFileName() const override { return file_name; }
 

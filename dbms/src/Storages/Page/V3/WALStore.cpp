@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Common/RedactHelpers.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <IO/FileProvider/FileProvider.h>
 #include <Poco/File.h>
@@ -164,10 +165,11 @@ void WALStore::updateDiskUsage(const LogFilenameSet & log_filenames)
     }
 }
 
+// Try to get a snapshot of log files that can be compacted according to the `snap_sequence`.
 WALStore::FilesSnapshot WALStore::tryGetFilesSnapshot(
     size_t max_persisted_log_files,
     UInt64 snap_sequence,
-    std::function<UInt64(const String & record)> max_sequence_getter,
+    std::function<std::optional<UInt64>(const String & record)> && max_sequence_getter,
     bool force)
 {
     // First we simply check whether the number of files is enough for compaction
@@ -197,18 +199,34 @@ WALStore::FilesSnapshot WALStore::tryGetFilesSnapshot(
         log_file.reset();
     }
 
-    // traverse in reverse order,
-    // so that once the first log file whose max sequence is smaller or equal to snap_sequence is found,
+    // Collect the log files that all records' max sequence is smaller or equal to snap_sequence to
+    // `snap_log_files`.
+    // These log files can be compacted safely after we dump the in-memory snapshot to disk.
+    // Traverse `persisted_log_files` in reverse order (from largest log num to smallest) so that
+    // once the first log file whose max sequence is smaller or equal to snap_sequence is found,
     // we don't need to check the max sequence for the rest log files.
     bool found_log_file_smaller_than_snap_sequence = false;
     LogFilenameSet snap_log_files;
     for (auto iter = persisted_log_files.rbegin(); iter != persisted_log_files.rend(); ++iter) // NOLINT
     {
+        // Ignore the logfiles that maybe writing by other threads
         if (iter->log_num >= current_writing_log_num)
             continue;
-        if (!found_log_file_smaller_than_snap_sequence
-            && getLogFileMaxSequence(*iter, max_sequence_getter) > snap_sequence)
-            continue;
+        if (!found_log_file_smaller_than_snap_sequence)
+        {
+            const auto max_seq = getLogFileMaxSequence(*iter, max_sequence_getter);
+            LOG_DEBUG(logger, "tryGetFilesSnapshot, log_file={} max_sequence={}", iter->filename(iter->stage), max_seq);
+            // If we can not parse the max sequence from the last record, we conservatively skip
+            // this log file in this GC round. These remain log_files will be compacted in
+            // the following rounds once we found a log_file has larger log_num and its
+            // max_seq <= snap_sequence.
+            if (!max_seq.has_value())
+                continue;
+            // If the max_seq in the log file is larger than snap_sequence, there are could be some
+            // records in the log file that are not included in the snapshot.
+            if (max_seq.value() > snap_sequence)
+                continue;
+        }
 
         found_log_file_smaller_than_snap_sequence = true;
         snap_log_files.emplace(*iter);
@@ -219,7 +237,7 @@ WALStore::FilesSnapshot WALStore::tryGetFilesSnapshot(
 }
 
 // In order to make `restore` in a reasonable time, we need to compact
-// log files.
+// log files. The files in `files_snap` should be compacted.
 bool WALStore::saveSnapshot(
     FilesSnapshot && files_snap,
     String && serialized_snap,
@@ -229,7 +247,7 @@ bool WALStore::saveSnapshot(
     if (files_snap.persisted_log_files.empty())
         return false;
 
-    LOG_INFO(logger, "Saving directory snapshot [num_records={}]", files_snap.num_records);
+    LOG_INFO(logger, "Saving directory snapshot, num_records={}", files_snap.num_records);
 
     // Use {largest_log_num, 1} to save the `edit`
     const auto log_num = files_snap.persisted_log_files.rbegin()->log_num;
@@ -261,14 +279,14 @@ bool WALStore::saveSnapshot(
 
     auto get_logging_str = [&]() {
         FmtBuffer fmt_buf;
-        fmt_buf.append("Dumped directory snapshot to log file done. files_snapshot=");
+        fmt_buf.append("Dumped directory snapshot to log file done. files_snapshot=[");
         fmt_buf.joinStr(
             files_snap.persisted_log_files.begin(),
             files_snap.persisted_log_files.end(),
             [](const auto & arg, FmtBuffer & fb) { fb.append(arg.filename(arg.stage)); },
             ", ");
         fmt_buf.fmtAppend(
-            " dump_cost={} num_records={} file={} size={}",
+            "] dump_cost={} num_records={} file={} size={}",
             files_snap.dump_elapsed_ms,
             files_snap.num_records,
             normal_fullname,
@@ -296,26 +314,49 @@ void WALStore::removeLogFiles(const LogFilenameSet & log_filenames)
     }
 }
 
-UInt64 WALStore::getLogFileMaxSequence(
+// Get the max sequence in the log file.
+// If the log file is empty, return 0
+// If can not parse the max sequence from the last record, return nullopt.
+std::optional<UInt64> WALStore::getLogFileMaxSequence(
     const LogFilename & log_filename,
-    std::function<UInt64(const String & record)> max_sequence_getter)
+    std::function<std::optional<UInt64>(const String & record)> max_sequence_getter)
 {
     std::unique_lock<std::mutex> lock(log_file_max_sequences_cache_mutex);
     auto iter = log_file_max_sequences_cache.find(log_filename);
     if (iter != log_file_max_sequences_cache.end())
         return iter->second;
 
-    auto last_record = WALStoreReader::getLastRecordInLogFile(
+    auto [num_records, last_record] = WALStoreReader::getLastRecordInLogFile(
         log_filename,
         provider,
         config.getRecoverMode(),
         /*read_limiter*/ nullptr,
         logger);
-    if (last_record.empty())
-        return 0; // empty log file
+    if (num_records == 0)
+        return 0; // empty log file is always safe to be compacted
 
-    UInt64 max_sequence = max_sequence_getter(last_record);
-    log_file_max_sequences_cache.emplace(log_filename, max_sequence);
-    return max_sequence;
+    if (last_record.empty())
+    {
+        LOG_WARNING(
+            logger,
+            "Failed to read non-empty last record from log file, log_file={}",
+            log_filename.filename(log_filename.stage));
+        return std::nullopt;
+    }
+
+    std::optional<UInt64> max_sequence_opt = max_sequence_getter(last_record);
+    if (!max_sequence_opt.has_value())
+    {
+        LOG_WARNING(
+            logger,
+            "Failed to parse max_sequence from log file, log_file={} last_record={}",
+            log_filename.filename(log_filename.stage),
+            Redact::keyToHexString(last_record.data(), last_record.size()));
+        return std::nullopt;
+    }
+
+    // cache the result
+    log_file_max_sequences_cache.emplace(log_filename, max_sequence_opt.value());
+    return max_sequence_opt.value();
 }
 } // namespace DB::PS::V3

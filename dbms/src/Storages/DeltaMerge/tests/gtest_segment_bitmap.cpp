@@ -234,6 +234,57 @@ void SegmentBitmapFilterTest::checkBitmap(const CheckBitmapOptions & opt)
 
 INSTANTIATE_TEST_CASE_P(MVCC, SegmentBitmapFilterTest, /* is_common_handle */ ::testing::Bool());
 
+UInt64 SegmentBitmapFilterTest::estimatedBytesOfInternalColumns(UInt64 start_ts, Int64 enable_version_chain)
+{
+    auto & ctx = db_context->getGlobalContext();
+    auto & settings = ctx.getSettingsRef();
+    Int64 original_enable_version_chain = settings.enable_version_chain;
+    settings.set("enable_version_chain", std::to_string(enable_version_chain));
+    SCOPE_EXIT({ settings.set("enable_version_chain", std::to_string(original_enable_version_chain)); });
+    auto dm_ctx = DMContext::create(
+        ctx,
+        dm_context->path_pool,
+        dm_context->storage_pool,
+        dm_context->min_version,
+        dm_context->keyspace_id,
+        dm_context->physical_table_id,
+        dm_context->pk_col_id,
+        dm_context->is_common_handle,
+        dm_context->rowkey_column_size,
+        ctx.getSettingsRef(),
+        dm_context->scan_context,
+        dm_context->tracing_id);
+    auto [seg, snap] = getSegmentForRead(SEG_ID);
+    auto pack_filter_results = loadPackFilterResults(snap, {});
+
+    if (!dm_ctx->isVersionChainEnabled())
+    {
+        const auto & dmfiles = snap->stable->getDMFiles();
+        if (snap->delta->getRows() == 0)
+        {
+            auto [_ignore, new_pack_filter_results]
+                = DMFilePackFilter::getSkippedRangeAndFilter(*dm_ctx, dmfiles, pack_filter_results, start_ts);
+            pack_filter_results = std::move(new_pack_filter_results);
+        }
+        else
+        {
+            ColumnDefines columns_to_read{
+                getExtraHandleColumnDefine(is_common_handle),
+            };
+            auto read_info = seg->getReadInfo(*dm_context, columns_to_read, snap, {}, ReadTag::MVCC, start_ts);
+            auto [_ignore, new_pack_filter_results] = DMFilePackFilter::getSkippedRangeAndFilterWithMultiVersion(
+                *dm_ctx,
+                dmfiles,
+                pack_filter_results,
+                start_ts,
+                read_info.index_begin,
+                read_info.index_end);
+            pack_filter_results = std::move(new_pack_filter_results);
+        }
+    }
+    return Segment::estimatedBytesOfInternalColumns(*dm_ctx, snap, pack_filter_results, start_ts);
+}
+
 TEST_P(SegmentBitmapFilterTest, InMemory1)
 try
 {
@@ -244,6 +295,16 @@ try
             .expected_row_id = "[0, 1000)",
             .expected_handle = "[0, 1000)"},
         __LINE__);
+
+    // Delta only
+    auto bytes = estimatedBytesOfInternalColumns(std::numeric_limits<UInt64>::max(), 1);
+    ASSERT_EQ(bytes, 17 * 1000);
+    bytes = estimatedBytesOfInternalColumns(std::numeric_limits<UInt64>::max(), 0);
+    ASSERT_EQ(bytes, 17 * 1000);
+    bytes = estimatedBytesOfInternalColumns(0, 1);
+    ASSERT_EQ(bytes, 17 * 1000);
+    bytes = estimatedBytesOfInternalColumns(0, 0);
+    ASSERT_EQ(bytes, 17 * 1000);
 }
 CATCH
 
@@ -387,6 +448,16 @@ try
             .expected_row_id = "[0, 1024)",
             .expected_handle = "[0, 1024)"},
         __LINE__);
+
+    // Stable only
+    auto bytes = estimatedBytesOfInternalColumns(std::numeric_limits<UInt64>::max(), 0);
+    ASSERT_EQ(bytes, 0);
+    bytes = estimatedBytesOfInternalColumns(std::numeric_limits<UInt64>::max(), 1);
+    ASSERT_EQ(bytes, 0);
+    bytes = estimatedBytesOfInternalColumns(0, 0);
+    ASSERT_GE(bytes, 17 * 1024);
+    bytes = estimatedBytesOfInternalColumns(0, 1);
+    ASSERT_GE(bytes, 17 * 1024);
 }
 CATCH
 
@@ -427,6 +498,18 @@ try
             .expected_row_id = "[0, 128)|[1034, 1089)|[256, 298)|[1089, 1096)|[310, 1024)",
             .expected_handle = "[0, 128)|[200, 255)|[256, 305)|[310, 1024)"},
         __LINE__);
+
+    // Delta + Stable
+    auto bytes = estimatedBytesOfInternalColumns(std::numeric_limits<UInt64>::max(), 0);
+    ASSERT_GE(bytes, 17 * (1024 + 10 + 55 + 7));
+    bytes = estimatedBytesOfInternalColumns(std::numeric_limits<UInt64>::max(), 1);
+    ASSERT_GE(bytes, 17 * (10 + 55 + 7));
+    ASSERT_LT(bytes, 17 * (1024 + 10 + 55 + 7));
+
+    bytes = estimatedBytesOfInternalColumns(0, 0);
+    ASSERT_GE(bytes, 17 * (1024 + 10 + 55 + 7));
+    bytes = estimatedBytesOfInternalColumns(0, 1);
+    ASSERT_GE(bytes, 17 * (1024 + 10 + 55 + 7));
 }
 CATCH
 

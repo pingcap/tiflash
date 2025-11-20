@@ -90,11 +90,6 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
     t->fetchPages();
     recordRemoteConnectionInfoIfNecessary(t);
 
-    if (likely(read_mode == ReadMode::Bitmap && !res_group_name.empty()))
-    {
-        auto bytes = t->read_snapshot->estimatedBytesOfInternalColumns();
-        LocalAdmissionController::global_instance->consumeBytesResource(keyspace_id, res_group_name, bytesToRU(bytes));
-    }
     t->initInputStream(
         columns_to_read,
         start_ts,
@@ -127,6 +122,7 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     const String & tracing_id,
     bool enable_read_thread_,
     Int64 num_streams_,
+    Int64 active_segment_limit_,
     const KeyspaceID & keyspace_id_,
     const String & res_group_name_)
     : pool_id(nextPoolId())
@@ -140,6 +136,7 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     , total_read_tasks(tasks_.size())
     , tasks_wrapper(enable_read_thread_, std::move(tasks_))
     , after_segment_read(after_segment_read_)
+    , peak_active_segments(0)
     , log(Logger::get(tracing_id))
     , unordered_input_stream_ref_count(0)
     , exception_happened(false)
@@ -150,7 +147,7 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     , block_slot_limit(std::ceil(num_streams_ * 1.5))
     // Limiting the minimum number of reading segments to 2 is to avoid, as much as possible,
     // situations where the computation may be faster and the storage layer may not be able to keep up.
-    , active_segment_limit(std::max(num_streams_, 2))
+    , active_segment_limit(std::max(active_segment_limit_, 2))
     , keyspace_id(keyspace_id_)
     , res_group_name(res_group_name_)
 {
@@ -158,6 +155,38 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     {
         q.finish();
     }
+}
+
+SegmentReadTaskPool::~SegmentReadTaskPool()
+{
+    auto [pop_times, pop_empty_times, peak_blocks_in_queue] = q.getStat();
+    auto pop_empty_ratio = pop_times > 0 ? pop_empty_times * 1.0 / pop_times : 0.0;
+    auto total_count = blk_stat.totalCount();
+    auto total_bytes = blk_stat.totalBytes();
+    auto blk_avg_bytes = total_count > 0 ? total_bytes / total_count : 0;
+    auto approx_max_pending_block_bytes = blk_avg_bytes * peak_blocks_in_queue;
+    auto total_rows = blk_stat.totalRows();
+    LOG_INFO(
+        log,
+        "Done. pool_id={} pop={} pop_empty={} pop_empty_ratio={:.3f} "
+        "active_segment_limit={} peak_active_segments={} "
+        "block_slot_limit={} peak_blocks_in_queue={} blk_avg_bytes={} approx_max_pending_block_bytes={:.2f}MB "
+        "total_count={} total_bytes={:.2f}MB total_rows={} avg_block_rows={} avg_rows_bytes={}B",
+        pool_id,
+        pop_times,
+        pop_empty_times,
+        pop_empty_ratio,
+        active_segment_limit,
+        peak_active_segments,
+        block_slot_limit,
+        peak_blocks_in_queue,
+        blk_avg_bytes,
+        approx_max_pending_block_bytes / 1024.0 / 1024.0,
+        total_count,
+        total_bytes / 1024.0 / 1024.0,
+        total_rows,
+        total_count > 0 ? total_rows / total_count : 0,
+        total_rows > 0 ? total_bytes / total_rows : 0);
 }
 
 void SegmentReadTaskPool::finishSegment(const SegmentReadTaskPtr & seg)
@@ -189,6 +218,7 @@ SegmentReadTaskPtr SegmentReadTaskPool::getTask(const GlobalSegmentID & seg_id)
     auto t = tasks_wrapper.getTask(seg_id);
     RUNTIME_CHECK(t != nullptr, pool_id, seg_id);
     active_segment_ids.insert(seg_id);
+    peak_active_segments = std::max(peak_active_segments, active_segment_ids.size());
     return t;
 }
 
@@ -400,7 +430,7 @@ bool SegmentReadTaskPool::isRUExhaustedImpl()
     }
 
     // To reduce lock contention in resource control,
-    // check if RU is exhuasted every `bytes_of_one_hundred_ru` or every `100ms`.
+    // check if RU is exhausted every `bytes_of_one_hundred_ru` or every `100ms`.
 
     // Fast path.
     Int64 ms = currentMS();

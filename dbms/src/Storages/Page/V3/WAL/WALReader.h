@@ -75,7 +75,7 @@ public:
         const ReadLimiterPtr & read_limiter,
         LoggerPtr logger);
 
-    static String getLastRecordInLogFile(
+    static std::tuple<size_t, String> getLastRecordInLogFile(
         const LogFilename & filename,
         FileProviderPtr & provider,
         WALRecoveryMode recovery_mode,

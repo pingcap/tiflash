@@ -94,7 +94,7 @@ public:
     FilesSnapshot tryGetFilesSnapshot(
         size_t max_persisted_log_files,
         UInt64 snap_sequence,
-        std::function<UInt64(const String & record)> max_sequence_getter,
+        std::function<std::optional<UInt64>(const String & record)> && max_sequence_getter,
         bool force);
 
     bool saveSnapshot(
@@ -126,9 +126,9 @@ private:
 
     void removeLogFiles(const LogFilenameSet & log_filenames);
 
-    UInt64 getLogFileMaxSequence(
+    std::optional<UInt64> getLogFileMaxSequence(
         const LogFilename & log_filename,
-        std::function<UInt64(const String & record)> max_sequence_getter);
+        std::function<std::optional<UInt64>(const String & record)> max_sequence_getter);
 
 private:
     const String storage_name;

@@ -102,17 +102,26 @@ void initDisaggTaskMeta(
 
 BlockInputStreams StorageDisaggregated::readThroughS3(const Context & db_context, unsigned num_streams)
 {
+    auto * dag_context = context.getDAGContext();
+    auto scan_context
+        = std::make_shared<DM::ScanContext>(dag_context->getKeyspaceID(), dag_context->getResourceGroupName());
+    dag_context->scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
+
     // Build InputStream according to the remote segment read tasks
     DAGPipeline pipeline;
-    buildRemoteSegmentInputStreams(db_context, buildReadTaskWithBackoff(db_context), num_streams, pipeline);
+    buildRemoteSegmentInputStreams(
+        db_context,
+        buildReadTaskWithBackoff(db_context, scan_context),
+        num_streams,
+        pipeline,
+        scan_context);
 
     NamesAndTypes source_columns;
     source_columns.reserve(table_scan.getColumnSize());
     const auto & remote_segment_stream_header = pipeline.firstStream()->getHeader();
     for (const auto & col : remote_segment_stream_header)
-    {
         source_columns.emplace_back(col.name, col.type);
-    }
+    scan_context->num_columns = source_columns.size();
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
     // Handle duration type column
@@ -128,18 +137,25 @@ void StorageDisaggregated::readThroughS3(
     const Context & db_context,
     unsigned num_streams)
 {
+    auto * dag_context = context.getDAGContext();
+    auto scan_context
+        = std::make_shared<DM::ScanContext>(dag_context->getKeyspaceID(), dag_context->getResourceGroupName());
+    dag_context->scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
+
     buildRemoteSegmentSourceOps(
         exec_context,
         group_builder,
         db_context,
-        buildReadTaskWithBackoff(db_context),
-        num_streams);
+        buildReadTaskWithBackoff(db_context, scan_context),
+        num_streams,
+        scan_context);
 
     NamesAndTypes source_columns;
     auto header = group_builder.getCurrentHeader();
     source_columns.reserve(header.columns());
     for (const auto & col : header)
         source_columns.emplace_back(col.name, col.type);
+    scan_context->num_columns = source_columns.size();
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
     // Handle duration type column
@@ -148,14 +164,18 @@ void StorageDisaggregated::readThroughS3(
     filterConditions(exec_context, group_builder, *analyzer);
 }
 
-DM::SegmentReadTasks StorageDisaggregated::buildReadTaskWithBackoff(const Context & db_context)
+DM::SegmentReadTasks StorageDisaggregated::buildReadTaskWithBackoff(
+    const Context & db_context,
+    const DM::ScanContextPtr & scan_context)
 {
     using namespace pingcap;
 
-    auto * dag_context = context.getDAGContext();
-    auto scan_context
-        = std::make_shared<DM::ScanContext>(dag_context->getKeyspaceID(), dag_context->getResourceGroupName());
-    dag_context->scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
+    Stopwatch build_read_task_watch;
+    SCOPE_EXIT({
+        auto elapsed_seconds = build_read_task_watch.elapsedSeconds();
+        scan_context->disagg_build_read_tasks_ms += elapsed_seconds * 1000;
+        GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_build_read_tasks).Observe(elapsed_seconds);
+    });
 
     DM::SegmentReadTasks read_task;
 
@@ -182,6 +202,7 @@ DM::SegmentReadTasks StorageDisaggregated::buildReadTaskWithBackoff(const Contex
             if (e.code() != ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR)
                 throw;
 
+            scan_context->disagg_build_read_tasks_backoff_num += 1;
             Stopwatch w_backoff;
             SCOPE_EXIT({ total_backoff_seconds += w_backoff.elapsedSeconds(); });
 
@@ -190,6 +211,11 @@ DM::SegmentReadTasks StorageDisaggregated::buildReadTaskWithBackoff(const Contex
         }
     }
 
+    LOG_INFO(
+        log,
+        "build read task done, num_read_tasks={} elapsed_s={:.3f}",
+        read_task.size(),
+        build_read_task_watch.elapsedSeconds());
     return read_task;
 }
 
@@ -202,8 +228,17 @@ DM::SegmentReadTasks StorageDisaggregated::buildReadTask(
     // First split the read task for different write nodes.
     // For each write node, a BatchCopTask is built.
     {
+        Stopwatch sw;
+        SCOPE_EXIT({
+            auto elapsed_seconds = sw.elapsedSeconds();
+            scan_context->disagg_build_batch_cop_tasks_ms += elapsed_seconds * 1000;
+            GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_build_batch_cop_tasks)
+                .Observe(elapsed_seconds);
+        });
         auto [remote_table_ranges, region_num] = buildRemoteTableRanges();
         scan_context->setRegionNumOfCurrentInstance(region_num);
+        scan_context->total_remote_region_num = scan_context->total_local_region_num.load();
+        scan_context->total_local_region_num = 0;
         // only send to tiflash node with label [{"engine":"tiflash"}, {"engine-role":"write"}]
         const auto label_filter = pingcap::kv::labelFilterOnlyTiFlashWriteNode;
         batch_cop_tasks = buildBatchCopTasks(remote_table_ranges, label_filter);
@@ -223,6 +258,11 @@ DM::SegmentReadTasks StorageDisaggregated::buildReadTask(
         futures.add(std::move(f));
     }
     futures.getAllResults();
+    LOG_INFO(
+        log,
+        "build read tasks for all write nodes done, num_write_nodes={} total_seg_tasks={}",
+        batch_cop_tasks.size(),
+        output_seg_tasks.size());
 
     // Do some integrity checks for the build seg tasks. For example, we should not
     // ever read from the same store+table+segment multiple times.
@@ -253,8 +293,9 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
     if (status.error_code() == grpc::StatusCode::DEADLINE_EXCEEDED)
         throw Exception(
             ErrorCodes::TIMEOUT_EXCEEDED,
-            "EstablishDisaggregated execution was interrupted, maximum execution time exceeded, wn_address={} {}",
+            "EstablishDisaggTask timeout exceeded, wn_address={}, timeout={}s, {}",
             req->address(),
+            getBuildTaskRPCTimeout(),
             log->identifier());
     else if (!status.ok())
         throw Exception(
@@ -265,16 +306,18 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
             log->identifier());
 
     const DM::DisaggTaskId snapshot_id(resp.snapshot_id());
-    LOG_DEBUG(
+    LOG_INFO(
         log,
-        "Received EstablishDisaggregated response, error={} store={} snap_id={} addr={} resp.num_tables={}",
+        "Received EstablishDisaggTask response, error={} store={} snap_id={} addr={} resp.num_tables={}",
         resp.has_error(),
         resp.store_id(),
         snapshot_id,
         batch_cop_task.store_addr,
         resp.tables_size());
 
-    GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_rpc_establish).Observe(watch.elapsedSeconds());
+    auto elapsed_seconds = watch.elapsedSeconds();
+    scan_context->disagg_establish_disagg_task_ms += elapsed_seconds * 1000;
+    GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_rpc_establish).Observe(elapsed_seconds);
     watch.restart();
 
     if (resp.has_error())
@@ -292,7 +335,7 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
 
             LOG_INFO(
                 log,
-                "Received EstablishDisaggregated response with retryable error: {}, addr={} retry_regions={}",
+                "Received EstablishDisaggTask response with retryable error: {}, addr={} retry_regions={}",
                 error.msg(),
                 batch_cop_task.store_addr,
                 retry_regions);
@@ -309,7 +352,7 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
 
             LOG_INFO(
                 log,
-                "Received EstablishDisaggregated response with retryable error: {}, addr={}",
+                "Received EstablishDisaggTask response with retryable error: {}, addr={}",
                 error.msg(),
                 batch_cop_task.store_addr);
 
@@ -328,16 +371,17 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
                 pushed);
 
             // TODO: Use `pushed` to bypass large txn.
+            elapsed_seconds = w_resolve_lock.elapsedSeconds();
+            scan_context->disagg_resolve_lock_ms += elapsed_seconds * 1000;
             LOG_DEBUG(
                 log,
                 "Finished resolve locks, elapsed={}s n_locks={} pushed.size={} before_expired={}",
-                w_resolve_lock.elapsedSeconds(),
+                elapsed_seconds,
                 locks.size(),
                 pushed.size(),
                 before_expired);
 
-            GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_resolve_lock)
-                .Observe(w_resolve_lock.elapsedSeconds());
+            GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_resolve_lock).Observe(elapsed_seconds);
 
             throw Exception(error.msg(), ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR);
         }
@@ -347,14 +391,14 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
 
             LOG_WARNING(
                 log,
-                "Received EstablishDisaggregated response with error, addr={} err={}",
+                "Received EstablishDisaggTask response with error, addr={} err={}",
                 batch_cop_task.store_addr,
                 error.msg());
 
             // Meet other errors... May be not retryable?
             throw Exception(
                 error.code(),
-                "EstablishDisaggregatedTask failed: {}, addr={}",
+                "EstablishDisaggTask failed: {}, addr={}",
                 error.msg(),
                 batch_cop_task.store_addr);
         }
@@ -363,9 +407,22 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
     const bool is_same_zone = isSameZone(batch_cop_task);
     const size_t resp_size = resp.ByteSizeLong();
 
+    watch.restart();
+    SCOPE_EXIT({
+        elapsed_seconds = watch.elapsedSeconds();
+        scan_context->disagg_parse_read_task_ms += elapsed_seconds * 1000;
+        GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_parse_read_tasks).Observe(elapsed_seconds);
+        LOG_INFO(
+            log,
+            "build read task for write node done, wn_addr={} num_tables={} elapsed_s={:.3f}",
+            req->address(),
+            resp.tables_size(),
+            elapsed_seconds);
+    });
     // Now we have successfully established disaggregated read for this write node.
     // Let's parse the result and generate actual segment read tasks.
     // There may be multiple tables, so we concurrently build tasks for these tables.
+    // Note: Building a SegmentReadTask may need to read meta of DMFile from S3.
     IOPoolHelper::FutureContainer futures(log, resp.tables().size());
     for (auto i = 0; i < resp.tables().size(); ++i)
     {
@@ -423,6 +480,13 @@ void StorageDisaggregated::buildReadTaskForWriteNodeTable(
     auto table_tracing_logger = log->getChild(
         fmt::format("store_id={} keyspace={} table_id={}", store_id, table.keyspace_id(), table.table_id()));
 
+    LOG_INFO(
+        table_tracing_logger,
+        "build read tasks for write node table begin, num_segments={}",
+        store_id,
+        table.keyspace_id(),
+        table.table_id(),
+        table.segments().size());
     IOPoolHelper::FutureContainer futures(log, table.segments().size());
     for (auto i = 0; i < table.segments().size(); ++i)
     {
@@ -449,6 +513,13 @@ void StorageDisaggregated::buildReadTaskForWriteNodeTable(
         futures.add(std::move(f));
     }
     futures.getAllResults();
+    LOG_INFO(
+        table_tracing_logger,
+        "build read tasks for write node table done, num_segments={}",
+        store_id,
+        table.keyspace_id(),
+        table.table_id(),
+        table.segments().size());
 }
 
 /**
@@ -477,7 +548,7 @@ std::shared_ptr<disaggregated::EstablishDisaggTaskRequest> StorageDisaggregated:
     }
 
     // how long the task is valid on the write node
-    establish_req->set_timeout_s(DEFAULT_DISAGG_TASK_TIMEOUT_SEC);
+    establish_req->set_timeout_s(settings.disagg_task_snapshot_timeout);
     establish_req->set_address(batch_cop_task.store_addr);
     establish_req->set_schema_ver(settings.schema_version);
 
@@ -542,6 +613,7 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
     const Context & db_context,
     DM::SegmentReadTasks && read_tasks,
     const DM::ColumnDefinesPtr & column_defines,
+    const DM::ScanContextPtr & scan_context,
     size_t num_streams,
     int extra_table_id_index)
 {
@@ -576,8 +648,10 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
         table_scan.isFastScan(),
         table_scan.keepOrder(),
         push_down_executor);
+    scan_context->read_mode = read_mode;
     const UInt64 start_ts = sender_target_mpp_task_id.gather_id.query_id.start_ts;
     const auto enable_read_thread = db_context.getSettingsRef().dt_enable_read_thread;
+    RUNTIME_CHECK(num_streams > 0, num_streams);
     LOG_INFO(
         log,
         "packSegmentReadTasks: enable_read_thread={} read_mode={} is_fast_scan={} keep_order={} task_count={} "
@@ -592,6 +666,9 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
 
     if (enable_read_thread)
     {
+        // Under disagg arch, now we use blocking IO to read data from cloud storage. So it require more active
+        // segments to fully utilize the read threads.
+        const size_t read_thread_num_active_seg = 10 * num_streams;
         return std::make_shared<DM::SegmentReadTaskPool>(
             extra_table_id_index,
             *column_defines,
@@ -601,9 +678,10 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
             read_mode,
             std::move(read_tasks),
             /*after_segment_read*/ [](const DM::DMContextPtr &, const DM::SegmentPtr &) {},
-            executor_id,
+            log->identifier(),
             /*enable_read_thread*/ true,
             num_streams,
+            read_thread_num_active_seg,
             context.getDAGContext()->getKeyspaceID(),
             context.getDAGContext()->getResourceGroupName());
     }
@@ -657,13 +735,18 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
     const Context & db_context,
     DM::SegmentReadTasks && read_tasks,
     size_t num_streams,
-    DAGPipeline & pipeline)
+    DAGPipeline & pipeline,
+    const DM::ScanContextPtr & scan_context)
 {
     // Build the input streams to read blocks from remote segments
     auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
-    auto packed_read_tasks
-        = packSegmentReadTasks(db_context, std::move(read_tasks), column_defines, num_streams, extra_table_id_index);
-    RUNTIME_CHECK(num_streams > 0, num_streams);
+    auto packed_read_tasks = packSegmentReadTasks(
+        db_context,
+        std::move(read_tasks),
+        column_defines,
+        scan_context,
+        num_streams,
+        extra_table_id_index);
     pipeline.streams.reserve(num_streams);
 
     InputStreamBuilder builder{
@@ -686,7 +769,7 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
     });
 }
 
-struct SrouceOpBuilder
+struct SourceOpBuilder
 {
     const String & tracing_id;
     const DM::ColumnDefinesPtr & column_defines;
@@ -723,15 +806,20 @@ void StorageDisaggregated::buildRemoteSegmentSourceOps(
     PipelineExecGroupBuilder & group_builder,
     const Context & db_context,
     DM::SegmentReadTasks && read_tasks,
-    size_t num_streams)
+    size_t num_streams,
+    const DM::ScanContextPtr & scan_context)
 {
     // Build the input streams to read blocks from remote segments
     auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
-    auto packed_read_tasks
-        = packSegmentReadTasks(db_context, std::move(read_tasks), column_defines, num_streams, extra_table_id_index);
+    auto packed_read_tasks = packSegmentReadTasks(
+        db_context,
+        std::move(read_tasks),
+        column_defines,
+        scan_context,
+        num_streams,
+        extra_table_id_index);
 
-    RUNTIME_CHECK(num_streams > 0, num_streams);
-    SrouceOpBuilder builder{
+    SourceOpBuilder builder{
         .tracing_id = log->identifier(),
         .column_defines = column_defines,
         .extra_table_id_index = extra_table_id_index,

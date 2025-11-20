@@ -36,6 +36,7 @@
 #include <Storages/AlterCommands.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/TiKVHelpers/PDTiKVClient.h>
 #include <Storages/MutableSupport.h>
 #include <TiDB/Decode/TypeMapping.h>
 #include <TiDB/Schema/SchemaBuilder.h>
@@ -370,7 +371,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         {
             // >= SchemaActionType::MaxRecognizedType
             // log down the Int8 value directly
-            LOG_ERROR(log, "Unsupported change type: {}, diff_version={}", fmt::underlying(diff.type), diff.version);
+            LOG_WARNING(log, "Unsupported change type: {}, diff_version={}", fmt::underlying(diff.type), diff.version);
         }
 
         break;
@@ -394,7 +395,7 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
         auto storage = tmt_context.getStorages().get(keyspace_id, table_info->id);
         if (unlikely(storage == nullptr))
         {
-            LOG_ERROR(
+            LOG_WARNING(
                 log,
                 "Storage instance is not exist in TiFlash, applySetTiFlashReplica is ignored, table_id={}",
                 table_id);
@@ -523,12 +524,12 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(DatabaseID database_i
     auto table_info = getter.getTableInfo(database_id, table_id);
     if (unlikely(table_info == nullptr))
     {
-        LOG_ERROR(log, "table is not exist in TiKV, applyPartitionDiff is ignored, table_id={}", table_id);
+        LOG_WARNING(log, "table is not exist in TiKV, applyPartitionDiff is ignored, table_id={}", table_id);
         return;
     }
     if (!table_info->isLogicalPartitionTable())
     {
-        LOG_ERROR(
+        LOG_WARNING(
             log,
             "new table in TiKV is not a partition table {}, database_id={} table_id={}",
             name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id),
@@ -541,7 +542,7 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(DatabaseID database_i
     auto storage = tmt_context.getStorages().get(keyspace_id, table_info->id);
     if (storage == nullptr)
     {
-        LOG_ERROR(
+        LOG_WARNING(
             log,
             "logical_table storage instance is not exist in TiFlash, applyPartitionDiff is ignored, table_id={}",
             table_id);
@@ -664,7 +665,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRenameTable(DatabaseID database_id,
     auto new_table_info = getter.getTableInfo(database_id, table_id);
     if (unlikely(new_table_info == nullptr))
     {
-        LOG_ERROR(log, "table is not exist in TiKV, applyRenameTable is ignored, table_id={}", table_id);
+        LOG_WARNING(log, "table is not exist in TiKV, applyRenameTable is ignored, table_id={}", table_id);
         return;
     }
 
@@ -970,7 +971,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRecoverDatabase(DatabaseID database
     auto db = context.tryGetDatabase(db_name);
     if (unlikely(!db))
     {
-        LOG_ERROR(
+        LOG_WARNING(
             log,
             "Recover database is ignored because instance is not exists, may have been physically dropped, "
             "database_id={}",
@@ -1138,7 +1139,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateStorageInstance(
     // Else the storage instance does not exist, create it.
 
     // We need to create a Storage instance to handle its raft log and snapshot when it
-    // is "dropped" but not physically removed in TiDB. To handle it porperly, we get a
+    // is "dropped" but not physically removed in TiDB. To handle it properly, we get a
     // tso from PD to create the table. The tso must be newer than what "DROP TABLE" DDL
     // is executed. So when the gc-safepoint is larger than tombstone_ts, the table can
     // be safe to physically drop on TiFlash.
@@ -1434,7 +1435,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
     }
     sync_all_schema_wait_group->wait();
 
-    // `applyRenameLogicalTable` is not atmoic when renaming a partitioned table
+    // `applyRenameLogicalTable` is not atomic when renaming a partitioned table
     // to new database. There could be a chance that the logical table .sql have
     // been moved to the new database while some partitions' sql are not moved.
     // Try to detect such situation and fix it.
@@ -1526,7 +1527,7 @@ void SchemaBuilder<Getter, NameMapper>::tryFixPartitionsBelongingDatabase()
             auto it = part_to_db_id.find(*opt_tbl_id);
             if (it == part_to_db_id.end())
             {
-                // this is not a physical_table_id of a partition, ignore sliently
+                // this is not a physical_table_id of a partition, ignore silently
                 continue;
             }
             // Get the `new_database_id` from `table_id_map`
@@ -1769,8 +1770,8 @@ String SchemaBuilder<Getter, NameMapper>::tryGetDatabaseDisplayNameFromLocal(Dat
 {
     // This method is called in the `applyDiff` loop. The `applyDiff` loop should apply the all the DDL operations before
     // the database get dropped, so the database info should be cached in `databases`.
-    // But for corner cases that the database is dropped on some unkonwn cases, we just return a display database name
-    // according to the keyspace_id and database_id because display name ususally is not critical.
+    // But for corner cases that the database is dropped on some unknown cases, we just return a display database name
+    // according to the keyspace_id and database_id because display name usually is not critical.
     if (auto new_db_info = databases.getDBInfo(database_id); likely(new_db_info != nullptr))
     {
         return name_mapper.displayDatabaseName(*new_db_info);

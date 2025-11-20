@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Interpreters/Context.cpp
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -76,6 +78,7 @@
 #include <fmt/core.h>
 
 #include <boost/functional/hash/hash.hpp>
+#include <memory>
 #include <pcg_random.hpp>
 #include <unordered_map>
 
@@ -326,6 +329,15 @@ struct ContextShared
             std::lock_guard lock(mutex);
             databases.clear();
         }
+
+        // This is a temporary with minimal code changes to fix the issue that
+        // removing `BackgroundService::storage_gc_handle` may be blocked for a long time
+        // because IStorage::shutdown (and IDatabase::shutdown) is not called yet.
+        // So we move the call of `BackgroundService::shutdownStorageGc` here.
+        if (tmt_context)
+        {
+            tmt_context->shutdownStorageGc();
+        }
     }
 
 private:
@@ -568,6 +580,12 @@ PathPool & Context::getPathPool() const
 {
     auto lock = getLock();
     return shared->path_pool;
+}
+
+CTEManager * Context::getCTEManager() const
+{
+    auto lock = getLock();
+    return this->shared->tmt_context->getCTEManager();
 }
 
 void Context::setPath(const String & path)

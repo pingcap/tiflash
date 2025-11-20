@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Interpreters/AsynchronousMetrics.cpp
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -282,7 +284,8 @@ void AsynchronousMetrics::update()
         {
             if (auto uni_ps = context.tryGetWriteNodePageStorage(); uni_ps != nullptr)
             {
-                // Only set delta snapshot lifetime when UniPS is enabled
+                // Only set delta snapshot lifetime when UniPS is enabled.
+                // It returns the longest living snapshot stat include "General" and "DeltaTreeOnly".
                 const auto snap_stat = uni_ps->getSnapshotsStat();
                 set("MaxDTDeltaOldestSnapshotLifetime", snap_stat.longest_living_seconds);
             }

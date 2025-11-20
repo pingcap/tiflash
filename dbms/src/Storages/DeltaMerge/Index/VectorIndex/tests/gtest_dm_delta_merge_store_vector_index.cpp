@@ -25,6 +25,7 @@
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/Types.h>
 #include <TestUtils/InputStreamTestUtils.h>
+#include <gtest/gtest.h>
 
 namespace DB::FailPoints
 {
@@ -118,12 +119,12 @@ public:
             col_defs,
             {range},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             filter,
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /*keep_order=*/false)[0];
+            DMReadOptions{})[0];
         Strings cols_name;
         for (const auto & cd : col_defs)
         {
@@ -924,6 +925,7 @@ try
 {
     store = reload();
 
+    // pause after delta vector index built but not update to the delta->persisted_set.
     auto sp_delta_index_built
         = SyncPointCtl::enableInScope("DeltaMergeStore::segmentEnsureDeltaLocalIndex_after_build");
     // write [0, 2) to store
@@ -940,32 +942,128 @@ try
 
     // compact delta [0, 2) + [2, 4) -> [0, 4)
     triggerCompactDelta();
+    LOG_INFO(Logger::get(), "Delta compact finished, now persisted file set has changed.");
 
     // Now persisted file set has changed.
-    // Resume
+    // Resume, the delta index is not applied to the persisted set.
     sp_delta_index_built.next();
+    LOG_INFO(Logger::get(), "Resume sp_delta_index_built, delta index is not applied to the persisted set.");
 
-    const auto range = RowKeyRange::newAll(store->is_common_handle, store->rowkey_column_size);
-
-    // read from store
     {
-        readVec(range, EMPTY_FILTER, colVecFloat32("[0, 4)", vec_column_name, vec_column_id));
+        SCOPED_TRACE("After delta-compact");
+        const auto range = RowKeyRange::newAll(store->is_common_handle, store->rowkey_column_size);
+        // read from store
+        {
+            readVec(range, EMPTY_FILTER, colVecFloat32("[0, 4)", vec_column_name, vec_column_id));
+        }
+        // read with ANN query
+        {
+            const auto ann_query_info = annQueryInfoTopK({.vec = {1.0}, .top_k = 1});
+            auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
+            // [0, 4) without vector index return all.
+            readVec(range, filter, createVecFloat32Column<Array>({{0.0}, {1.0}, {2.0}, {3.0}}));
+        }
+        // read with ANN query
+        {
+            const auto ann_query_info = annQueryInfoTopK({.vec = {1.1}, .top_k = 1});
+            auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
+            // [0, 4) without vector index return all.
+            readVec(range, filter, createVecFloat32Column<Array>({{0.0}, {1.0}, {2.0}, {3.0}}));
+        }
     }
 
-    // read with ANN query
+    // trigger FlushCache for all segments
+    LOG_INFO(Logger::get(), "Triggering FlushCache and ensure delta local index after delta-compact.");
+    sp_delta_index_built.disable();
+    triggerFlushCacheAndEnsureDeltaLocalIndex();
+    waitDeltaIndexReady();
+
     {
-        const auto ann_query_info = annQueryInfoTopK({.vec = {1.0}, .top_k = 1});
-        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
-        // [0, 4) without vector index return all.
-        readVec(range, filter, createVecFloat32Column<Array>({{0.0}, {1.0}, {2.0}, {3.0}}));
+        SCOPED_TRACE("After local index built on delta");
+        const auto range = RowKeyRange::newAll(store->is_common_handle, store->rowkey_column_size);
+        // read from store
+        {
+            readVec(range, EMPTY_FILTER, colVecFloat32("[0, 4)", vec_column_name, vec_column_id));
+        }
+        // read with ANN query
+        {
+            const auto ann_query_info = annQueryInfoTopK({.vec = {-127.0}, .top_k = 1});
+            auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
+            // with vector index built on delta, top 1 return 1.0
+            readVec(range, filter, createVecFloat32Column<Array>({{0.0}}));
+        }
+    }
+}
+CATCH
+
+TEST_F(DeltaMergeStoreVectorTest, TestBuildDeltaIndexBetweenCompactDelta)
+try
+{
+    store = reload();
+
+    // write [0, 2), [2, 4), [4, 10) to store
+    write(0, 2);
+    triggerFlushCache();
+    write(2, 4);
+    triggerFlushCache();
+    write(4, 10);
+    triggerFlushCache();
+
+    // start a task to build delta compaction task
+    auto sp_delta_compact_task_build
+        = SyncPointCtl::enableInScope("DeltaValueSpace::compact_after_compaction_task_build");
+    auto th_delta_compact = std::async([&]() {
+        // compact delta [0, 2) + [2, 4) -> [0, 4)
+        triggerCompactDelta();
+    });
+    sp_delta_compact_task_build.waitAndPause();
+
+    // trigger FlushCache and build delta local index for all segments
+    triggerFlushCacheAndEnsureDeltaLocalIndex();
+    waitDeltaIndexReady();
+
+    // Now persisted file set has been updated with delta local index.
+    // Resume, the delta-compact should compact all three ColumnFile into one ColumnFile.
+    sp_delta_compact_task_build.next();
+    th_delta_compact.get();
+    sp_delta_compact_task_build.disable();
+
+    {
+        const auto range = RowKeyRange::newAll(store->is_common_handle, store->rowkey_column_size);
+        // read from store
+        {
+            readVec(range, EMPTY_FILTER, colVecFloat32("[0, 10)", vec_column_name, vec_column_id));
+        }
+        // read with ANN query
+        {
+            const auto ann_query_info = annQueryInfoTopK({.vec = {1.0}, .top_k = 1});
+            auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
+            // [0, 10) without vector index return all.
+            readVec(
+                range,
+                filter,
+                createVecFloat32Column<Array>({{0.0}, {1.0}, {2.0}, {3.0}, {4.0}, {5.0}, {6.0}, {7.0}, {8.0}, {9.0}}));
+        }
     }
 
-    // read with ANN query
+    // trigger FlushCache and build delta local index for all segments
+    LOG_INFO(Logger::get(), "Triggering FlushCache and ensure delta local index after delta-compact.");
+    triggerFlushCacheAndEnsureDeltaLocalIndex();
+    waitDeltaIndexReady();
+
     {
-        const auto ann_query_info = annQueryInfoTopK({.vec = {1.1}, .top_k = 1});
-        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
-        // [0, 4) without vector index return all.
-        readVec(range, filter, createVecFloat32Column<Array>({{0.0}, {1.0}, {2.0}, {3.0}}));
+        const auto range = RowKeyRange::newAll(store->is_common_handle, store->rowkey_column_size);
+        // read from store
+        {
+            readVec(range, EMPTY_FILTER, colVecFloat32("[0, 10)", vec_column_name, vec_column_id));
+        }
+        // read with ANN query
+        {
+            const auto ann_query_info = annQueryInfoTopK({.vec = {1.0}, .top_k = 1});
+            auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
+            // with vector index built on delta, top 1 return 1.0
+            readVec(range, filter, createVecFloat32Column<Array>({{1.0}}));
+        }
     }
 }
 CATCH
@@ -1363,7 +1461,7 @@ try
     triggerFlushCache();
 
     {
-        // Add vecotr index
+        // Add vector index
         TiDB::TableInfo new_table_info_with_vector_index;
         TiDB::ColumnInfo column_info;
         column_info.name = VectorIndexTestUtils::vec_column_name;
@@ -1381,7 +1479,7 @@ try
             .distance_metric = tipb::VectorDistanceMetric::L2,
         });
         new_table_info_with_vector_index.index_infos.emplace_back(index);
-        // apply local index change, shuold
+        // apply local index change, should
         // - create the local index
         // - generate the background tasks for building index on stable
         store->applyLocalIndexChange(new_table_info_with_vector_index);
@@ -1423,7 +1521,7 @@ try
         column_info.name = VectorIndexTestUtils::vec_column_name;
         column_info.id = VectorIndexTestUtils::vec_column_id;
         new_table_info_with_vector_index.columns.emplace_back(column_info);
-        // apply local index change, shuold drop the local index
+        // apply local index change, should drop the local index
         store->applyLocalIndexChange(new_table_info_with_vector_index);
         ASSERT_EQ(store->local_index_infos->size(), 0);
     }
@@ -1537,7 +1635,7 @@ try
         column_info.name = VectorIndexTestUtils::vec_column_name;
         column_info.id = VectorIndexTestUtils::vec_column_id;
         new_table_info_with_vector_index.columns.emplace_back(column_info);
-        // apply local index change, shuold drop the local index
+        // apply local index change, should drop the local index
         store->applyLocalIndexChange(new_table_info_with_vector_index);
         ASSERT_EQ(store->local_index_infos->size(), 0);
     }
@@ -1561,7 +1659,7 @@ try
     triggerMergeDelta();
 
     IndexID index_id = 2;
-    // Add vecotr index
+    // Add vector index
     TiDB::TableInfo new_table_info_with_vector_index;
     TiDB::ColumnInfo column_info;
     column_info.name = VectorIndexTestUtils::vec_column_name;
@@ -1614,7 +1712,7 @@ try
     triggerMergeDelta();
 
     IndexID index_id = 2;
-    // Add vecotr index
+    // Add vector index
     TiDB::TableInfo new_table_info_with_vector_index;
     TiDB::ColumnInfo column_info;
     column_info.name = VectorIndexTestUtils::vec_column_name;

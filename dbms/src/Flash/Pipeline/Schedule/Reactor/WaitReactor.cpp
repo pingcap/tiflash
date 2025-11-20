@@ -40,6 +40,7 @@ WaitReactor::WaitReactor(TaskScheduler & scheduler_)
     GET_METRIC(tiflash_pipeline_wait_on_notify_tasks, type_wait_on_join_probe).Set(0);
     GET_METRIC(tiflash_pipeline_wait_on_notify_tasks, type_wait_on_result_queue_write).Set(0);
     GET_METRIC(tiflash_pipeline_wait_on_notify_tasks, type_wait_on_shared_queue_write).Set(0);
+    GET_METRIC(tiflash_pipeline_wait_on_notify_tasks, type_type_wait_on_cte_read).Set(0);
     thread = std::thread(&WaitReactor::loop, this);
 }
 

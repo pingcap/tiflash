@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Interpreters/Context.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -35,7 +37,6 @@
 #include <memory>
 #include <mutex>
 #include <thread>
-
 
 namespace pingcap
 {
@@ -103,6 +104,7 @@ using TiFlashSecurityConfigPtr = std::shared_ptr<TiFlashSecurityConfig>;
 class MockStorage;
 class JointThreadInfoJeallocMap;
 using JointThreadInfoJeallocMapPtr = std::shared_ptr<JointThreadInfoJeallocMap>;
+class CTEManager;
 
 enum class PageStorageRunMode : UInt8;
 namespace DM
@@ -212,6 +214,8 @@ public:
     String getFlagsPath() const;
     String getUserFilesPath() const;
     PathPool & getPathPool() const;
+
+    CTEManager * getCTEManager() const;
 
     void setPath(const String & path);
     void setTemporaryPath(const String & path);

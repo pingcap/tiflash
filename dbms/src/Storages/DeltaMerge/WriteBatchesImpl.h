@@ -25,9 +25,11 @@ namespace DM
 {
 struct WriteBatches : private boost::noncopyable
 {
-    KeyspaceID keyspace_id;
     NamespaceID ns_id;
+    KeyspaceID keyspace_id;
     PageStorageRunMode run_mode;
+    bool should_roll_back = false;
+
     WriteBatchWrapper log;
     WriteBatchWrapper data;
     WriteBatchWrapper meta;
@@ -40,13 +42,12 @@ struct WriteBatches : private boost::noncopyable
     WriteBatchWrapper removed_meta;
 
     StoragePool & storage_pool;
-    bool should_roll_back = false;
 
     WriteLimiterPtr write_limiter;
 
     explicit WriteBatches(StoragePool & storage_pool_, const WriteLimiterPtr & write_limiter_ = nullptr)
-        : keyspace_id(storage_pool_.getKeyspaceID())
-        , ns_id(storage_pool_.getTableID())
+        : ns_id(storage_pool_.getTableID())
+        , keyspace_id(storage_pool_.getKeyspaceID())
         , run_mode(storage_pool_.getPageStorageRunMode())
         , log(run_mode, keyspace_id, StorageType::Log, ns_id)
         , data(run_mode, keyspace_id, StorageType::Data, ns_id)
@@ -60,32 +61,46 @@ struct WriteBatches : private boost::noncopyable
 
     ~WriteBatches()
     {
+        if (should_roll_back)
+        {
+            rollbackWrittenLogAndData();
+        }
+
+        checkEmpty();
+    }
+
+    // When the WriteBatches is being disposed, we should ensure that all the writes are
+    // in a deterministic state. Either the WriteBatches are committed by
+    // `writeLogAndData`->`writeMeta`->`writeRemoves`
+    // or rolled back by `rollbackWrittenLogAndData`
+    // After those operations, the WriteBatches should be empty.
+    ALWAYS_INLINE bool checkEmpty() const noexcept
+    {
+        bool ok = true;
         if constexpr (DM_RUN_CHECK)
         {
-            auto check_empty = [&](const WriteBatchWrapper & wb, const String & name) {
+            auto check_empty = [&](const WriteBatchWrapper & wb, const std::string_view & name) {
                 if (!wb.empty())
                 {
                     StackTrace trace;
-                    LOG_ERROR(
+                    LOG_WARNING(
                         Logger::get(),
                         "!!!=========================Modifications in {} haven't persisted=========================!!! "
                         "Stack trace: {}",
                         name,
                         trace.toString());
+                    return false;
                 }
+                return true;
             };
-            check_empty(log, "log");
-            check_empty(data, "data");
-            check_empty(meta, "meta");
-            check_empty(removed_log, "removed_log");
-            check_empty(removed_data, "removed_data");
-            check_empty(removed_meta, "removed_meta");
+            ok &= check_empty(log, "log");
+            ok &= check_empty(data, "data");
+            ok &= check_empty(meta, "meta");
+            ok &= check_empty(removed_log, "removed_log");
+            ok &= check_empty(removed_data, "removed_data");
+            ok &= check_empty(removed_meta, "removed_meta");
         }
-
-        if (should_roll_back)
-        {
-            rollbackWrittenLogAndData();
-        }
+        return ok;
     }
 
     void setRollback() { should_roll_back = true; }
@@ -198,6 +213,15 @@ struct WriteBatches : private boost::noncopyable
 
         written_log.clear();
         written_data.clear();
+
+        // If there are any buffered writes in `log` or `data`, we should not commit them.
+        // Clear them to avoid confusion.
+        log.clear();
+        data.clear();
+        // The removed write batches should never be committed after a rollback.
+        // Clear them to avoid confusion.
+        removed_log.clear();
+        removed_data.clear();
     }
 
     void writeMeta()

@@ -36,6 +36,7 @@ struct LogFile
 };
 using LogFiles = std::vector<LogFile>;
 
+// Returns all the log files in all the paths managed by `delegator` in <log_num, level_num> increasing order
 LogFilenameSet WALStoreReader::listAllFiles(const PSDiskDelegatorPtr & delegator, LoggerPtr logger)
 {
     // [<parent_path_0, [file0, file1, ...]>, <parent_path_1, [...]>, ...]
@@ -188,7 +189,8 @@ LogReaderPtr WALStoreReader::createLogReader(
         recovery_mode);
 }
 
-String WALStoreReader::getLastRecordInLogFile(
+// Returns <num_records, last_record> in the log file `filename`
+std::tuple<size_t, String> WALStoreReader::getLastRecordInLogFile(
     const LogFilename & filename,
     FileProviderPtr & provider,
     WALRecoveryMode recovery_mode,
@@ -197,6 +199,7 @@ String WALStoreReader::getLastRecordInLogFile(
 {
     ReportCollector reporter;
     auto log_reader = createLogReader(filename, provider, &reporter, recovery_mode, read_limiter, logger);
+    size_t num_records = 0;
     String last_record;
     while (true)
     {
@@ -204,9 +207,10 @@ String WALStoreReader::getLastRecordInLogFile(
         if (!ok)
             break;
 
+        num_records++;
         last_record = std::move(record);
     }
-    return last_record;
+    return {num_records, std::move(last_record)};
 }
 
 WALStoreReader::WALStoreReader(

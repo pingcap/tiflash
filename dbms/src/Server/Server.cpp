@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Server/Server.cpp
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -241,7 +243,7 @@ void printGRPCLog(gpr_log_func_args * args)
 // Later we will adjust it by `adjustThreadPoolSize`
 void initThreadPool(DisaggregatedMode disaggregated_mode)
 {
-    size_t default_num_threads = std::max(4UL, 2 * std::thread::hardware_concurrency());
+    size_t default_num_threads = std::max(4UL, 6 * std::thread::hardware_concurrency());
 
     // Note: Global Thread Pool must be larger than sub thread pools.
     GlobalThreadPool::initialize(
@@ -328,9 +330,11 @@ void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
     }
     if (S3FileCachePool::instance)
     {
-        S3FileCachePool::instance->setMaxThreads(max_io_thread_count);
-        S3FileCachePool::instance->setMaxFreeThreads(max_io_thread_count / 2);
-        S3FileCachePool::instance->setQueueSize(max_io_thread_count * 2);
+        auto concurrency = logical_cores * settings.dt_filecache_downloading_count_scale;
+        auto queue_size = logical_cores * settings.dt_filecache_max_downloading_count_scale;
+        S3FileCachePool::instance->setMaxThreads(concurrency);
+        S3FileCachePool::instance->setMaxFreeThreads(concurrency / 2);
+        S3FileCachePool::instance->setQueueSize(queue_size);
     }
     if (RNWritePageCachePool::instance)
     {
@@ -379,7 +383,7 @@ void syncSchemaWithTiDB(
             }
             catch (DB::Exception & e)
             {
-                LOG_ERROR(
+                LOG_WARNING(
                     log,
                     "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
                     " seconds and try again.",
@@ -389,7 +393,7 @@ void syncSchemaWithTiDB(
             }
             catch (Poco::Exception & e)
             {
-                LOG_ERROR(
+                LOG_WARNING(
                     log,
                     "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
                     " seconds and try again.",
@@ -570,8 +574,8 @@ try
         }
     }
 
-    // Set whether to use safe point v2.
-    PDClientHelper::enable_safepoint_v2 = config().getBool("enable_safe_point_v2", false);
+    // Safe point v2 is deprecated and replaced by keyspace-based safe point.
+    // config().getBool("enable_safe_point_v2", false);
 
     /** Context contains all that query execution is dependent:
       *  settings, available functions, data types, aggregate functions, databases...
@@ -691,7 +695,11 @@ try
     if (const auto & config = storage_config.remote_cache_config; config.isCacheEnabled() && is_disagg_compute_mode)
     {
         config.initCacheDir();
-        FileCache::initialize(global_context->getPathCapacity(), config);
+        FileCache::initialize(
+            global_context->getPathCapacity(),
+            config,
+            server_info.cpu_info.logical_cores,
+            global_context->getIORateLimiter());
     }
 
     /// Determining PageStorage run mode based on current files on disk and storage config.
@@ -1007,13 +1015,19 @@ try
     LOG_INFO(log, "Init S3 GC Manager");
     global_context->getTMTContext().initS3GCManager(proxy_machine.getProxyHelper());
     // Initialize the thread pool of storage before the storage engine is initialized.
-    LOG_INFO(log, "dt_enable_read_thread {}", global_context->getSettingsRef().dt_enable_read_thread);
-    // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
-    DM::DMFileReaderPool::instance();
-    DM::SegmentReaderPoolManager::instance().init(
-        server_info.cpu_info.logical_cores,
-        settings.dt_read_thread_count_scale);
-    DM::SegmentReadTaskScheduler::instance().updateConfig(global_context->getSettingsRef());
+    {
+        LOG_INFO(log, "dt_enable_read_thread {}", global_context->getSettingsRef().dt_enable_read_thread);
+        // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
+        DM::DMFileReaderPool::instance();
+        double read_thread_final_scale = settings.dt_read_thread_count_scale;
+        if (is_disagg_compute_mode)
+        {
+            // disagg compute node needs more read threads to handle blocking IO from S3.
+            read_thread_final_scale *= 10;
+        }
+        DM::SegmentReaderPoolManager::instance().init(server_info.cpu_info.logical_cores, read_thread_final_scale);
+        DM::SegmentReadTaskScheduler::instance().updateConfig(global_context->getSettingsRef());
+    }
 
     auto schema_cache_size = config().getInt("schema_cache_size", 10000);
     global_context->initializeSharedBlockSchemas(schema_cache_size);
@@ -1054,8 +1068,9 @@ try
         if (storage_config.s3_config.isS3Enabled())
         {
             S3::ClientFactory::instance().shutdown();
+            LOG_INFO(log, "S3 Client Factory shutdown done.");
         }
-        LOG_DEBUG(log, "Shutted down storages.");
+        LOG_INFO(log, "Shutted down storages.");
     });
 
     proxy_machine.restoreKVStore(global_context->getTMTContext(), global_context->getPathPool());
@@ -1138,6 +1153,7 @@ try
         SessionCleaner session_cleaner(*global_context);
         auto & tmt_context = global_context->getTMTContext();
 
+        // Start the proxy service, including the grpc service for raft and http status service
         proxy_machine.startProxyService(tmt_context, store_ident);
         if (proxy_machine.isProxyRunnable())
         {
@@ -1162,6 +1178,8 @@ try
                     syncSchemaWithTiDB(storage_config, bg_init_stores, terminate_signals_counter, global_context, log);
                     bg_init_stores.waitUntilFinish();
                 }
+
+                // Start read index workers and wait region apply index catch up with TiKV before serving requests.
                 proxy_machine.waitProxyServiceReady(tmt_context, terminate_signals_counter);
             }
         }
@@ -1224,13 +1242,13 @@ try
             GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
         }
 
-        /// startup grpc server to serve raft and/or flash services.
+        /// startup flash service for handling coprocessor and MPP requests.
         FlashGrpcServerHolder flash_grpc_server_holder(this->context(), this->config(), raft_config, log);
 
         SCOPE_EXIT({
             // Stop LAC for AutoScaler managed CN before FlashGrpcServerHolder is destructed.
             // Because AutoScaler it will kill tiflash process when port of flash_server_addr is down.
-            // And we want to make sure LAC is cleanedup.
+            // And we want to make sure LAC is cleaned up.
             // The effects are there will be no resource control during [lac.safeStop(), FlashGrpcServer destruct done],
             // but it's basically ok, that duration is small(normally 100-200ms).
             if (is_disagg_compute_mode && disagg_opt.use_autoscaler && LocalAdmissionController::global_instance)

@@ -75,7 +75,8 @@ namespace DB
     M(exception_build_local_index_for_file)                       \
     M(force_not_support_local_index)                              \
     M(sync_schema_request_failure)                                \
-    M(force_set_lifecycle_resp)
+    M(force_set_lifecycle_resp)                                   \
+    M(force_return_store_status)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(skip_check_segment_update)                             \
@@ -130,7 +131,9 @@ namespace DB
     M(force_semi_join_time_exceed)                           \
     M(force_set_proxy_state_machine_cpu_cores)               \
     M(force_join_v2_probe_enable_lm)                         \
-    M(force_join_v2_probe_disable_lm)
+    M(force_join_v2_probe_disable_lm)                        \
+    M(force_s3_random_access_file_init_fail)                 \
+    M(force_s3_random_access_file_read_fail)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M)    \
     M(pause_with_alter_locks_acquired)            \

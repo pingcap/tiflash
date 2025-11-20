@@ -16,6 +16,7 @@
 #include <DataStreams/ExchangeSenderBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/ExchangeSenderInterpreterHelper.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Mpp/newMPPExchangeWriter.h>
@@ -77,6 +78,8 @@ void PhysicalExchangeSender::buildBlockInputStreamImpl(DAGPipeline & pipeline, C
             context.getSettingsRef().max_buffered_bytes_in_executor,
             log);
     }
+
+    auto concurrency = pipeline.streams.size();
     pipeline.transform([&](auto & stream) {
         // construct writer
         std::unique_ptr<DAGResponseWriter> response_writer = newMPPExchangeWriter(
@@ -85,6 +88,7 @@ void PhysicalExchangeSender::buildBlockInputStreamImpl(DAGPipeline & pipeline, C
             exchange_type,
             context.getSettingsRef().dag_records_per_chunk,
             context.getSettingsRef().batch_send_min_limit,
+            getMaxBufferedBytesInResponseWriter(context.getSettingsRef().max_buffered_bytes_in_executor, concurrency),
             dag_context,
             fine_grained_shuffle.enabled(),
             fine_grained_shuffle.stream_count,
@@ -112,6 +116,7 @@ void PhysicalExchangeSender::buildPipelineExecGroupImpl(
             fine_grained_shuffle.stream_count);
     }
 
+    auto concurrency = group_builder.concurrency();
     group_builder.transform([&](auto & builder) {
         // construct writer
         std::unique_ptr<DAGResponseWriter> response_writer = newMPPExchangeWriter(
@@ -120,6 +125,7 @@ void PhysicalExchangeSender::buildPipelineExecGroupImpl(
             exchange_type,
             context.getSettingsRef().dag_records_per_chunk,
             context.getSettingsRef().batch_send_min_limit,
+            getMaxBufferedBytesInResponseWriter(context.getSettingsRef().max_buffered_bytes_in_executor, concurrency),
             *context.getDAGContext(),
             fine_grained_shuffle.enabled(),
             fine_grained_shuffle.stream_count,

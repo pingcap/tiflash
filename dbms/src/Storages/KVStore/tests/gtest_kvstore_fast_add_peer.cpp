@@ -234,7 +234,7 @@ template <typename F, typename FP>
 void eventuallyPredicateEx(F f, FP fp)
 {
     using namespace std::chrono_literals;
-    for (int i = 0; i < 10; i++)
+    for (int i = 0; i < 20; i++)
     {
         if (f())
             return;
@@ -352,8 +352,7 @@ void verifyRows(Context & ctx, DM::DeltaMergeStorePtr store, const DM::RowKeyRan
         std::vector<RuntimeFilterPtr>{},
         0,
         "KVStoreFastAddPeer",
-        /* keep_order= */ false,
-        /* is_fast_scan= */ false,
+        DM::DMReadOptions{},
         /* expected_block_size= */ 1024)[0];
     ASSERT_INPUTSTREAM_NROWS(in, rows);
 }

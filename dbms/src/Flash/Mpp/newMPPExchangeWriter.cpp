@@ -32,6 +32,7 @@ std::unique_ptr<DAGResponseWriter> buildMPPExchangeWriter(
     const tipb::ExchangeType & exchange_type,
     Int64 records_per_chunk,
     Int64 batch_send_min_limit,
+    UInt64 max_buffered_bytes,
     DAGContext & dag_context,
     bool enable_fine_grained_shuffle,
     UInt64 fine_grained_shuffle_stream_count,
@@ -50,6 +51,7 @@ std::unique_ptr<DAGResponseWriter> buildMPPExchangeWriter(
             writer,
             records_per_chunk,
             batch_send_min_limit,
+            max_buffered_bytes,
             dag_context);
     }
     else
@@ -68,6 +70,7 @@ std::unique_ptr<DAGResponseWriter> buildMPPExchangeWriter(
                     partition_col_ids,
                     partition_col_collators,
                     dag_context,
+                    max_buffered_bytes,
                     fine_grained_shuffle_stream_count,
                     fine_grained_shuffle_batch_size,
                     data_codec_version,
@@ -80,6 +83,7 @@ std::unique_ptr<DAGResponseWriter> buildMPPExchangeWriter(
                     partition_col_ids,
                     partition_col_collators,
                     chosen_batch_send_min_limit,
+                    max_buffered_bytes,
                     dag_context,
                     data_codec_version,
                     compression_mode);
@@ -91,6 +95,7 @@ std::unique_ptr<DAGResponseWriter> buildMPPExchangeWriter(
             return std::make_unique<BroadcastOrPassThroughWriter<ExchangeWriterPtr>>(
                 writer,
                 chosen_batch_send_min_limit,
+                max_buffered_bytes,
                 dag_context,
                 data_codec_version,
                 compression_mode,
@@ -106,6 +111,7 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
     const tipb::ExchangeType & exchange_type,
     Int64 records_per_chunk,
     Int64 batch_send_min_limit,
+    UInt64 max_buffered_bytes,
     DAGContext & dag_context,
     bool enable_fine_grained_shuffle,
     UInt64 fine_grained_shuffle_stream_count,
@@ -127,6 +133,7 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
             exchange_type,
             records_per_chunk,
             batch_send_min_limit,
+            max_buffered_bytes,
             dag_context,
             enable_fine_grained_shuffle,
             fine_grained_shuffle_stream_count,
@@ -145,6 +152,7 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
             exchange_type,
             records_per_chunk,
             batch_send_min_limit,
+            max_buffered_bytes,
             dag_context,
             enable_fine_grained_shuffle,
             fine_grained_shuffle_stream_count,

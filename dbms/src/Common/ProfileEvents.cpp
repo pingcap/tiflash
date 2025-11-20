@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Common/ProfileEvents.cpp
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -35,8 +37,6 @@
     M(ContextLock)                             \
     M(CreatedHTTPConnections)                  \
     M(DNSError)                                \
-    M(S3ReadMicroseconds)                      \
-    M(S3WriteMicroseconds)                     \
     M(S3ReadRequestsCount)                     \
     M(S3WriteRequestsCount)                    \
     M(S3ReadRequestsErrors)                    \
@@ -138,6 +138,7 @@
     M(S3PutObjectRetry)                        \
     M(S3IORead)                                \
     M(S3IOSeek)                                \
+    M(S3IOSeekBackward)                        \
     M(FileCacheHit)                            \
     M(FileCacheMiss)                           \
     M(FileCacheEvict)                          \
