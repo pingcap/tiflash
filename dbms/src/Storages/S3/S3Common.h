@@ -59,8 +59,6 @@ Exception fromS3Error(const Aws::S3::S3Error & e, const std::string & fmt, Args 
     return DB::Exception(ErrorCodes::S3_ERROR, fmt + S3ErrorMessage(e), args...);
 }
 
-bool updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const LoggerPtr & log);
-
 class TiFlashS3Client : public Aws::S3::S3Client
 {
 public:
@@ -106,6 +104,15 @@ enum class S3GCMethod
     ScanThenDelete,
 };
 
+enum class CloudVendor
+{
+    Unknown = 0,
+    AWS,
+    AlibabaCloud,
+};
+
+CloudVendor updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const LoggerPtr & log);
+
 class ClientFactory
 {
 public:
@@ -138,15 +145,19 @@ public:
 
     S3GCMethod gc_method = S3GCMethod::Lifecycle;
 
+    CloudVendor cloud_vendor = CloudVendor::Unknown;
+
 private:
     ClientFactory() = default;
     DISALLOW_COPY_AND_MOVE(ClientFactory);
 
-    static std::pair<Aws::Client::ClientConfiguration, bool> initAwsClientConfig(
+    static std::pair<Aws::Client::ClientConfiguration, CloudVendor> initAwsClientConfig(
         const StorageS3Config & storage_config,
         const LoggerPtr & log);
 
-    static std::unique_ptr<Aws::S3::S3Client> create(const StorageS3Config & storage_config, const LoggerPtr & log);
+    static std::pair<std::unique_ptr<Aws::S3::S3Client>, CloudVendor> create(
+        const StorageS3Config & storage_config,
+        const LoggerPtr & log);
 
     std::shared_ptr<TiFlashS3Client> initClientFromWriteNode();
 
@@ -175,7 +186,6 @@ void uploadFile(
     const EncryptionPath & encryption_path,
     const FileProviderPtr & file_provider,
     int max_retry_times = 3);
-
 
 
 /**

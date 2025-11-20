@@ -277,7 +277,7 @@ disaggregated::GetDisaggConfigResponse getDisaggConfigFromDisaggWriteNodes(
 }
 
 // Returns <aws_client_config, use_virtual_addressing>
-std::pair<Aws::Client::ClientConfiguration, bool> ClientFactory::initAwsClientConfig(
+std::pair<Aws::Client::ClientConfiguration, CloudVendor> ClientFactory::initAwsClientConfig(
     const StorageS3Config & storage_config,
     const LoggerPtr & log)
 {
@@ -293,8 +293,8 @@ std::pair<Aws::Client::ClientConfiguration, bool> ClientFactory::initAwsClientCo
     {
         cfg.endpointOverride = storage_config.endpoint;
     }
-    bool use_virtual_addressing = updateRegionByEndpoint(cfg, log);
-    return {cfg, use_virtual_addressing};
+    auto vendor = updateRegionByEndpoint(cfg, log);
+    return {cfg, vendor};
 }
 
 void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
@@ -337,7 +337,9 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
 
     if (!mock_s3_)
     {
-        shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, config.root, create(config, log));
+        auto [s3_client, vendor] = create(config, log);
+        cloud_vendor = vendor;
+        shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, config.root, std::move(s3_client));
     }
     else
     {
@@ -373,7 +375,9 @@ std::shared_ptr<TiFlashS3Client> ClientFactory::initClientFromWriteNode()
     config.bucket = disagg_config.s3_config().bucket();
     LOG_INFO(log, "S3 config updated, {}", config.toString());
 
-    shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, config.root, create(config, log));
+    auto [s3_client, vendor] = create(config, log);
+    cloud_vendor = vendor;
+    shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, config.root, std::move(s3_client));
     client_is_inited = true; // init finish
     return shared_tiflash_client;
 }
@@ -405,11 +409,11 @@ std::shared_ptr<TiFlashS3Client> ClientFactory::sharedTiFlashClient()
     return initClientFromWriteNode();
 }
 
-bool updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const LoggerPtr & log)
+CloudVendor updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const LoggerPtr & log)
 {
     if (cfg.endpointOverride.empty())
     {
-        return true;
+        return CloudVendor::Unknown;
     }
 
     const Poco::URI uri(cfg.endpointOverride);
@@ -424,6 +428,7 @@ bool updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const Logger
     //   - Internal: oss-<region>-internal.aliyuncs.com
     //   - External: oss-<region>.aliyuncs.com
     // Reference: https://www.alibabacloud.com/help/en/oss/regions-and-endpoints
+    CloudVendor vendor = CloudVendor::Unknown;
     static const RE2 region_pattern(
         R"((?:^s3\.|^s3-fips\.|^oss-)(?:dualstack.)?([a-z0-9\-]+)\.(?:amazonaws|aliyuncs)\.)");
     if (re2::RE2::PartialMatch(uri.getHost(), region_pattern, &matched_region))
@@ -432,6 +437,14 @@ bool updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const Logger
         if (matched_region.ends_with("-internal"))
             matched_region = matched_region.substr(0, matched_region.size() - strlen("-internal"));
         cfg.region = matched_region;
+        if (uri.getHost().find("amazonaws") != String::npos)
+        {
+            vendor = CloudVendor::AWS;
+        }
+        else if (uri.getHost().find("aliyuncs") != String::npos)
+        {
+            vendor = CloudVendor::AlibabaCloud;
+        }
     }
     else
     {
@@ -450,33 +463,21 @@ bool updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const Logger
     }
     cfg.verifySSL = cfg.scheme == Aws::Http::Scheme::HTTPS;
 
-    bool use_virtual_address = true;
-    {
-        std::string_view view(cfg.endpointOverride);
-        if (auto pos = view.find("://"); pos != std::string_view::npos)
-        {
-            view.remove_prefix(pos + 3); // remove the "<Scheme>://" prefix
-        }
-        // For deployed with AWS S3 service (or other S3-like service), the address use default port and port is not included,
-        // the service need virtual addressing to do load balancing.
-        // For deployed with local minio, the address contains fix port, we should disable virtual addressing
-        use_virtual_address = (view.find(':') == std::string_view::npos);
-    }
-
     LOG_INFO(
         log,
-        "AwsClientConfig{{endpoint={} region={} scheme={} verifySSL={} useVirtualAddressing={}}}",
+        "AwsClientConfig{{endpoint={} region={} scheme={} verifySSL={} vendor={}}}",
         cfg.endpointOverride,
         cfg.region,
         magic_enum::enum_name(cfg.scheme),
         cfg.verifySSL,
-        use_virtual_address);
-    return use_virtual_address;
+        magic_enum::enum_name(vendor));
+    return vendor;
 }
 
-std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config & storage_config, const LoggerPtr & log)
+std::pair<std::unique_ptr<Aws::S3::S3Client>, CloudVendor> //
+ClientFactory::create(const StorageS3Config & storage_config, const LoggerPtr & log)
 {
-    auto [client_config, use_virtual_addressing] = initAwsClientConfig(storage_config, log);
+    auto [client_config, vendor] = initAwsClientConfig(storage_config, log);
     std::shared_ptr<Aws::Auth::AWSCredentialsProvider> cred_provider;
     if (storage_config.access_key_id.empty() && storage_config.secret_access_key.empty())
     {
@@ -496,13 +497,17 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
             storage_config.secret_access_key,
             storage_config.session_token);
     }
+    // For deployed with AWS S3 service (or other S3-like service), the address use default port and port is not included,
+    // the service need virtual addressing to do load balancing.
+    // For deployed with local minio, the address contains fix port, we should disable virtual addressing
+    bool use_virtual_addressing = vendor != CloudVendor::Unknown;
     auto cli = std::make_unique<Aws::S3::S3Client>(
         cred_provider,
         client_config,
         Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
         use_virtual_addressing);
     LOG_INFO(log, "Create S3Client end");
-    return cli;
+    return {std::move(cli), vendor};
 }
 
 
