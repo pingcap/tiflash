@@ -35,6 +35,8 @@
 
 namespace DB
 {
+class IORateLimiter;
+
 class FileSegment
 {
 public:
@@ -219,9 +221,14 @@ private:
 class FileCache
 {
 public:
-    static void initialize(PathCapacityMetricsPtr capacity_metrics_, const StorageRemoteCacheConfig & config_)
+    static void initialize(
+        PathCapacityMetricsPtr capacity_metrics_,
+        const StorageRemoteCacheConfig & config_,
+        UInt16 logical_cores,
+        IORateLimiter & rate_limiter)
     {
-        global_file_cache_instance = std::make_unique<FileCache>(capacity_metrics_, config_);
+        global_file_cache_instance
+            = std::make_unique<FileCache>(capacity_metrics_, config_, logical_cores, rate_limiter);
         global_file_cache_initialized.store(true, std::memory_order_release);
     }
 
@@ -238,7 +245,11 @@ public:
         global_file_cache_instance = nullptr;
     }
 
-    FileCache(PathCapacityMetricsPtr capacity_metrics_, const StorageRemoteCacheConfig & config_);
+    FileCache(
+        PathCapacityMetricsPtr capacity_metrics_,
+        const StorageRemoteCacheConfig & config_,
+        UInt16 logical_cores_,
+        IORateLimiter & rate_limiter_);
 
     RandomAccessFilePtr getRandomAccessFile(
         const S3::S3FilenameView & s3_fname,
@@ -284,8 +295,8 @@ public:
 
     void bgDownload(const String & s3_key, FileSegmentPtr & file_seg);
     void fgDownload(const String & s3_key, FileSegmentPtr & file_seg);
-    void download(const String & s3_key, FileSegmentPtr & file_seg);
-    void downloadImpl(const String & s3_key, FileSegmentPtr & file_seg);
+    void download(const String & s3_key, FileSegmentPtr & file_seg, const WriteLimiterPtr & write_limiter);
+    void downloadImpl(const String & s3_key, FileSegmentPtr & file_seg, const WriteLimiterPtr & write_limiter);
 
     static String toTemporaryFilename(const String & fname);
     static bool isTemporaryFilename(const String & fname);
@@ -335,7 +346,14 @@ public:
     static UInt64 getEstimatedSizeOfFileType(FileSegment::FileType file_type);
     static FileSegment::FileType getFileType(const String & fname);
     static FileSegment::FileType getFileTypeOfColData(const std::filesystem::path & p);
-    bool canCache(FileSegment::FileType file_type) const;
+
+    enum class ShouldCacheRes
+    {
+        Cache,
+        RejectTypeNotMatch,
+        RejectTooManyDownloading,
+    };
+    ShouldCacheRes canCache(FileSegment::FileType file_type) const;
 
     enum class EvictMode
     {
@@ -365,12 +383,16 @@ public:
     UInt64 cache_capacity;
     UInt64 cache_level;
     UInt64 cache_used;
+    const UInt16 logical_cores;
+    IORateLimiter & rate_limiter;
     std::atomic<UInt64> cache_min_age_seconds = 1800;
-    std::atomic<double> max_downloading_count_scale = 1.0;
+    std::atomic<double> download_count_scale = 2.0;
+    std::atomic<double> max_downloading_count_scale = 10.0;
+    // the on-going background download count
+    std::atomic<UInt64> bg_downloading_count = 0;
     std::array<LRUFileTable, magic_enum::enum_count<FileSegment::FileType>()> tables;
 
     // Currently, these variables are just use for testing.
-    std::atomic<UInt64> bg_downloading_count = 0;
     std::atomic<UInt64> bg_download_succ_count = 0;
     std::atomic<UInt64> bg_download_fail_count = 0;
 

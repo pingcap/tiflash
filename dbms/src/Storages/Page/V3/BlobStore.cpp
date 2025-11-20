@@ -291,7 +291,9 @@ typename BlobStore<Trait>::PageEntriesEdit BlobStore<Trait>::handleLargeWrite(
                         data_buf.begin(),
                         offset_in_file + buffer_begin_in_page,
                         data_buf.size(),
-                        write_limiter);
+                        write_limiter,
+                        /*background*/ false,
+                        wb.needFSync());
                     buffer_begin_in_page += data_buf.size();
 
                     fiu_do_on(FailPoints::exception_after_large_write_exceed, {
@@ -640,7 +642,13 @@ typename BlobStore<Trait>::PageEntriesEdit BlobStore<Trait>::write(
             GET_METRIC(tiflash_storage_page_write_duration_seconds, type_blob_write).Observe(watch.elapsedSeconds());
         });
         auto blob_file = getBlobFile(blob_id);
-        blob_file->write(buffer, offset_in_file, all_page_data_size, write_limiter);
+        blob_file->write( //
+            buffer,
+            offset_in_file,
+            all_page_data_size,
+            write_limiter,
+            /*background*/ false,
+            wb.needFSync());
     }
     catch (DB::Exception & e)
     {
@@ -1371,7 +1379,7 @@ void BlobStore<Trait>::gc(
                 file_offset,
                 data_size,
                 total_page_size);
-            blob_file->write(data_begin, file_offset, data_size, write_limiter, /*background*/ true);
+            blob_file->write(data_begin, file_offset, data_size, write_limiter, /*background*/ true, /*fsync*/ true);
         }
         catch (DB::Exception & e)
         {

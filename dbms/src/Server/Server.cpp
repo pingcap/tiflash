@@ -328,9 +328,11 @@ void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
     }
     if (S3FileCachePool::instance)
     {
-        S3FileCachePool::instance->setMaxThreads(max_io_thread_count);
-        S3FileCachePool::instance->setMaxFreeThreads(max_io_thread_count / 2);
-        S3FileCachePool::instance->setQueueSize(max_io_thread_count * 2);
+        auto concurrency = logical_cores * settings.dt_filecache_downloading_count_scale;
+        auto queue_size = logical_cores * settings.dt_filecache_max_downloading_count_scale;
+        S3FileCachePool::instance->setMaxThreads(concurrency);
+        S3FileCachePool::instance->setMaxFreeThreads(concurrency / 2);
+        S3FileCachePool::instance->setQueueSize(queue_size);
     }
     if (RNWritePageCachePool::instance)
     {
@@ -691,7 +693,11 @@ try
     if (const auto & config = storage_config.remote_cache_config; config.isCacheEnabled() && is_disagg_compute_mode)
     {
         config.initCacheDir();
-        FileCache::initialize(global_context->getPathCapacity(), config);
+        FileCache::initialize(
+            global_context->getPathCapacity(),
+            config,
+            server_info.cpu_info.logical_cores,
+            global_context->getIORateLimiter());
     }
 
     /// Determining PageStorage run mode based on current files on disk and storage config.
