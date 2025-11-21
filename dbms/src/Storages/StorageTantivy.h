@@ -68,6 +68,8 @@ public:
         [[maybe_unused]] const Context & context,
         [[maybe_unused]] size_t max_block_size,
         [[maybe_unused]] unsigned num_streams) override;
+
+    void executeCastAfterTiCIScan(PipelineExecutorContext & exec_status, PipelineExecGroupBuilder & group_builder);
     // Members will be transferred to DAGQueryBlockInterpreter after execute
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 

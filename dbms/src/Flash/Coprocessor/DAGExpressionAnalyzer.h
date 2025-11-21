@@ -22,6 +22,7 @@
 #include <Flash/Coprocessor/DAGSet.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/RuntimeFilterMgr.h>
+#include <Flash/Coprocessor/TiCIScan.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ExpressionActions.h>
@@ -113,6 +114,11 @@ public:
         ExpressionActionsChain & chain,
         const std::vector<UInt8> & may_need_add_cast_column,
         const TiDBTableScan & table_scan);
+
+    bool appendExtraCastsAfterTiCI(
+        ExpressionActionsChain & chain,
+        const std::vector<UInt8> & may_need_add_cast_column,
+        const TiCIScan & tici_scan);
 
     /// return true if some actions is needed
     bool appendJoinKeyAndJoinFilters(
