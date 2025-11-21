@@ -33,6 +33,8 @@ public:
 
     void shutdown() noexcept;
 
+    void shutdownStorageGc() noexcept;
+
     ~BackgroundService();
 
 private:

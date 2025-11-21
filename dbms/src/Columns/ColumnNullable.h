@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Columns/ColumnNullable.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -79,6 +81,8 @@ public:
         const TiDB::TiDBCollatorPtr &,
         String &) const override;
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
+
+    size_t serializeByteSize() const override;
 
     void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override;
     void countSerializeByteSizeForCmp(

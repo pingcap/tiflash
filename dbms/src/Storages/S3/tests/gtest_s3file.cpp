@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <IO/BaseFile/PosixWritableFile.h>
+#include <IO/Buffer/ReadBufferFromRandomAccessFile.h>
 #include <IO/Encryption/MockKeyManager.h>
 #include <Interpreters/Context.h>
 #include <Poco/DigestStream.h>
@@ -48,6 +49,7 @@
 #include <chrono>
 #include <ext/scope_guard.h>
 #include <fstream>
+#include <memory>
 
 
 using namespace std::chrono_literals;
@@ -58,6 +60,8 @@ using namespace DB::S3;
 namespace DB::FailPoints
 {
 extern const char force_set_mocked_s3_object_mtime[];
+extern const char force_s3_random_access_file_init_fail[];
+extern const char force_s3_random_access_file_read_fail[];
 } // namespace DB::FailPoints
 
 namespace DB::tests
@@ -133,7 +137,7 @@ protected:
 
     void verifyFile(const String & key, size_t size)
     {
-        S3RandomAccessFile file(s3_client, key);
+        S3RandomAccessFile file(s3_client, key, nullptr);
         std::vector<char> tmp_buf;
         size_t read_size = 0;
         while (read_size < size)
@@ -248,7 +252,7 @@ try
     WriteSettings write_setting;
     const String key = "/a/b/c/seek";
     writeFile(key, size, write_setting);
-    S3RandomAccessFile file(s3_client, key);
+    S3RandomAccessFile file(s3_client, key, nullptr);
     {
         std::vector<char> tmp_buf(256);
         auto n = file.read(tmp_buf.data(), tmp_buf.size());
@@ -266,6 +270,82 @@ try
         std::iota(expected.begin(), expected.end(), 1);
         ASSERT_EQ(tmp_buf, expected);
     }
+}
+CATCH
+
+TEST_P(S3FileTest, ReadAfterDel1)
+try
+{
+    const String key = "/a/b/c/file";
+    const size_t size = 5 * 1024;
+    writeFile(key, size, WriteSettings{});
+    verifyFile(key, size);
+
+    // delete the file
+    DB::S3::deleteObject(*s3_client, key);
+
+    // try open the deleted file, should throw exception
+    ASSERT_ANY_THROW(S3RandomAccessFile file2(s3_client, key, nullptr););
+}
+CATCH
+
+TEST_P(S3FileTest, InitFileThenFailure)
+try
+{
+    const String key = "/a/b/c/file";
+    const size_t size = 5 * 1024;
+    writeFile(key, size, WriteSettings{});
+    verifyFile(key, size);
+
+    // First init the file, this should success
+    S3RandomAccessFile file(s3_client, key, nullptr);
+
+    // Mock s3 failure, for example, network error or file already deleted
+    FailPointHelper::enableFailPoint(FailPoints::force_s3_random_access_file_read_fail);
+    FailPointHelper::enableFailPoint(FailPoints::force_s3_random_access_file_init_fail);
+    SCOPE_EXIT({
+        FailPointHelper::disableFailPoint(FailPoints::force_s3_random_access_file_read_fail);
+        FailPointHelper::disableFailPoint(FailPoints::force_s3_random_access_file_init_fail);
+    });
+
+    // try read from the file, should throw exception
+    ASSERT_THROW(
+        {
+            std::vector<char> buff(size, 0x00);
+            auto nread = file.read(buff.data(), buff.size());
+            ASSERT_LT(nread, 0);
+        },
+        DB::Exception);
+}
+CATCH
+
+TEST_P(S3FileTest, InitBufferThenFailure)
+try
+{
+    const String key = "/a/b/c/file";
+    const size_t size = 5 * 1024;
+    writeFile(key, size, WriteSettings{});
+    verifyFile(key, size);
+
+    // First init the buffer, this should success
+    auto buf_reader = ReadBufferFromRandomAccessFile(std::make_shared<S3RandomAccessFile>(s3_client, key, nullptr));
+
+    // Mock s3 failure, for example, network error or file already deleted
+    FailPointHelper::enableFailPoint(FailPoints::force_s3_random_access_file_read_fail);
+    FailPointHelper::enableFailPoint(FailPoints::force_s3_random_access_file_init_fail);
+    SCOPE_EXIT({
+        FailPointHelper::disableFailPoint(FailPoints::force_s3_random_access_file_read_fail);
+        FailPointHelper::disableFailPoint(FailPoints::force_s3_random_access_file_init_fail);
+    });
+
+    // try read from the buffer
+    ASSERT_THROW(
+        {
+            std::vector<char> buff(size, 0x00);
+            auto nread = buf_reader.read(buff.data(), buff.size());
+            ASSERT_LT(nread, 0);
+        },
+        DB::Exception);
 }
 CATCH
 
@@ -432,13 +512,15 @@ try
     block_propertys.push_back(block_property2);
     auto parent_path = TiFlashStorageTestBasic::getTemporaryPath();
     DMFilePtr dmfile;
-    DMFileOID oid;
-    oid.store_id = 1;
-    oid.table_id = 1;
-    oid.file_id = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now())
-                      .time_since_epoch()
-                      .count();
-    oid.keyspace_id = keyspace_id;
+    DMFileOID oid{
+        .store_id = 1,
+        .keyspace_id = keyspace_id,
+        .table_id = 1,
+        .file_id
+        = static_cast<UInt64>(std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now())
+                                  .time_since_epoch()
+                                  .count()),
+    };
 
     {
         // Prepare for write
@@ -471,6 +553,7 @@ try
     {
         auto local_files = dmfile->listFilesForUpload();
         data_store->putDMFile(dmfile, oid, /*remove_local*/ true);
+        // check the uploaded files size
         auto remote_files_with_size = listFiles(oid);
         ASSERT_EQ(local_files.size(), remote_files_with_size.size());
         for (const auto & fname : local_files)
@@ -479,12 +562,13 @@ try
             ASSERT_NE(itr, remote_files_with_size.end());
             uploaded_files.push_back(fname);
         }
-        LOG_TRACE(log, "remote_files_with_size => {}", remote_files_with_size);
+        LOG_INFO(log, "remote_files_with_size => {}", remote_files_with_size);
     }
     ASSERT_FALSE(std::filesystem::exists(local_dir));
     ASSERT_EQ(dmfile->path(), S3::S3Filename::fromDMFileOID(oid).toFullKeyWithPrefix());
     read_dmfile(dmfile);
 
+    // read dmfile stored on S3 indicated by `oid`
     auto dmfile_from_s3 = restoreDMFile(oid);
     ASSERT_NE(dmfile_from_s3, nullptr);
     read_dmfile(dmfile_from_s3);

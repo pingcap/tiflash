@@ -44,7 +44,7 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
     auto log = DB::Logger::get("CheckpointIngestInfo");
     auto uni_ps = tmt.getContext().getWriteNodePageStorage();
     RUNTIME_CHECK(uni_ps != nullptr);
-    auto snapshot = uni_ps->getSnapshot(fmt::format("read_fap_i_{}", region_id));
+    auto snapshot = uni_ps->getGeneralSnapshot(fmt::format("read_fap_i_{}", region_id));
     RUNTIME_CHECK(snapshot != nullptr);
     auto page_id = UniversalPageIdFormat::toFAPIngestInfoPageID(region_id);
     Page page = uni_ps->read(page_id, nullptr, snapshot, /*throw_on_not_exist*/ false);
@@ -249,6 +249,36 @@ bool CheckpointIngestInfo::cleanOnSuccess(TMTContext & tmt, UInt64 region_id)
     auto log = DB::Logger::get();
     LOG_INFO(log, "Erase CheckpointIngestInfo from disk on success, region_id={}", region_id);
     removeFromLocal(tmt, region_id);
+    {
+        auto keyspace_id = region->getKeyspaceID();
+        auto table_id = region->getMappedTableID();
+        if (auto storage = tmt.getStorages().get(keyspace_id, table_id);
+            storage && storage->engineType() == TiDB::StorageEngine::DT)
+        {
+            auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+            if (dm_storage)
+            {
+                dm_storage->removeSegmentsFromCheckpointInfo(*this, tmt.getContext().getSettingsRef());
+            }
+            else
+            {
+                LOG_DEBUG(
+                    log,
+                    "Can't cast when delete checkpoint ingest info, region_id={}, peer_id={}",
+                    region_id,
+                    peer_id);
+            }
+        }
+        else
+        {
+            LOG_INFO(
+                log,
+                "Can't get table when delete checkpoint ingest info, table_id={} keyspace={} region_id={}",
+                keyspace_id,
+                table_id,
+                region_id);
+        }
+    }
     return true;
 }
 
@@ -259,6 +289,8 @@ bool CheckpointIngestInfo::forciblyClean(
     bool in_memory,
     CleanReason reason)
 {
+    // - If called by `ClearFapSnapshot`, then it would already be cleaned in `blockedCancelRunningTask`.
+    // - If called by `cleanTask`, it will also clean the memory structure.
     auto log = DB::Logger::get();
     // For most cases, ingest infos are deleted in `removeFromLocal`.
     auto checkpoint_ptr = CheckpointIngestInfo::restore(tmt, proxy_helper, region_id, 0);
@@ -274,6 +306,13 @@ bool CheckpointIngestInfo::forciblyClean(
         // First delete the page, it may cause dangling data.
         // However, never point to incomplete data then.
         removeFromLocal(tmt, region_id);
+        LOG_INFO(
+            log,
+            "Finish erase CheckpointIngestInfo from disk by force, region_id={} exist={} in_memory={} reason={}",
+            region_id,
+            checkpoint_ptr != nullptr,
+            in_memory,
+            magic_enum::enum_name(reason));
         CheckpointIngestInfo::deleteWrittenData(
             tmt,
             checkpoint_ptr->getRegion(),

@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/IO/ReadBufferFromFileBase.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,7 +36,7 @@ public:
     ReadBufferFromFileBase(size_t buf_size, char * existing_memory, size_t alignment);
     ReadBufferFromFileBase(ReadBufferFromFileBase &&) = default;
     ~ReadBufferFromFileBase() override;
-    off_t seek(off_t off, int whence = SEEK_SET);
+    [[nodiscard]] off_t seek(off_t off, int whence = SEEK_SET);
     virtual off_t getPositionInFile() = 0;
     virtual std::string getFileName() const = 0;
     virtual int getFD() const = 0;

@@ -51,7 +51,19 @@ public:
         PageIdU64s read_page_ids_,
         const Settings & settings_);
 
-    void syncWrite();
+    struct WriteSummary
+    {
+        bool fetch_memtableset = true;
+        UInt64 mem_cf_count = 0;
+        UInt64 mem_cf_size = 0;
+        UInt64 mem_packet_count = 0;
+        double mem_send_ms = 0;
+        UInt64 page_count = 0;
+        UInt64 page_size = 0;
+        UInt64 page_packet_count = 0;
+        double page_send_ms = 0;
+    };
+    WriteSummary syncWrite();
 
 private:
     [[nodiscard]] std::tuple<DM::RemotePb::RemotePage, size_t> getPersistedRemotePage(UInt64 page_id);
@@ -68,3 +80,30 @@ private:
 };
 
 } // namespace DB
+
+
+template <>
+struct fmt::formatter<DB::WNFetchPagesStreamWriter::WriteSummary>
+{
+    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
+
+    template <typename FormatContext>
+    auto format(const DB::WNFetchPagesStreamWriter::WriteSummary & s, FormatContext & ctx) const
+    {
+        return fmt::format_to(
+            ctx.out(),
+            "{{"
+            "fetch_memtableset={} mem_cf_count={} mem_cf_size={} mem_packet_count={} mem_send_ms={:.3f}ms "
+            "page_count={} page_size={} page_packet_count={} page_send_ms={:.3f}ms"
+            "}}",
+            s.fetch_memtableset,
+            s.mem_cf_count,
+            s.mem_cf_size,
+            s.mem_packet_count,
+            s.mem_send_ms,
+            s.page_count,
+            s.page_size,
+            s.page_packet_count,
+            s.page_send_ms);
+    }
+};

@@ -66,7 +66,8 @@ const typename CollatorCases::CompareCase CollatorCases::cmp_cases[] = {
 #define PREVENT_TRUNC(s) \
     {                    \
         s, sizeof(s) - 1 \
-    } // Prevent truncation by middle '\0' when constructing std::string using string literal, call std::string(const char *, size_t) instead.
+    }                    \
+    // Prevent truncation by middle '\0' when constructing std::string using string literal, call std::string(const char *, size_t) instead.
 const typename CollatorCases::SortKeyCase CollatorCases::sk_cases[] = {
     {"a",
      {PREVENT_TRUNC("\x61"),
@@ -139,18 +140,68 @@ const typename CollatorCases::PatternCase CollatorCases::pattern_cases[] = {
     {"A",
      {{"a", {false, false, true, false, true, true, false}},
       {"A", {true, true, true, true, true, true, true}},
+      {"AA", {false, false, false, false, false, false, false}},
       {"À", {false, false, true, false, true, true, false}},
       {"", {false, false, false, false, false, false, false}}}},
     {"_A",
      {{"aA", {true, true, true, true, true, true, true}},
-      {"ÀA", {false, false, true, true, true, true, false}},
+      {"A", {false, false, false, false, false, false, false}},
+      {"ÀA", {false, false, true, true, true, true, true}},
       {"ÀÀ", {false, false, true, false, true, true, false}},
       {"", {false, false, false, false, false, false, false}}}},
     {"%A",
      {{"a", {false, false, true, false, true, true, false}},
+      {"aaa", {false, false, true, false, true, true, false}},
+      {"XXa", {false, false, true, false, true, true, false}},
+      {"aXX", {false, false, false, false, false, false, false}},
       {"ÀA", {true, true, true, true, true, true, true}},
       {"À", {false, false, true, false, true, true, false}},
+      {"XX中À", {false, false, true, false, true, true, false}},
+      {"中国À", {false, false, true, false, true, true, false}},
       {"", {false, false, false, false, false, false, false}}}},
+    {"%中",
+     {{"中", {true, true, true, true, true, true, true}},
+      {"中国", {false, false, false, false, false, false, false}},
+      {"中国中", {true, true, true, true, true, true, true}},
+      {"", {false, false, false, false, false, false, false}}}},
+    {"A%",
+     {{"a", {false, false, true, false, true, true, false}},
+      {"aaa", {false, false, true, false, true, true, false}},
+      {"XXa", {false, false, false, false, false, false, false}},
+      {"aXX", {false, false, true, false, true, true, false}},
+      {"ÀA", {false, false, true, false, true, true, false}},
+      {"À", {false, false, true, false, true, true, false}},
+      {"À中国", {false, false, true, false, true, true, false}},
+      {"", {false, false, false, false, false, false, false}}}},
+    {"%A%",
+     {{"a", {false, false, true, false, true, true, false}},
+      {"aaa", {false, false, true, false, true, true, false}},
+      {"XXa", {false, false, true, false, true, true, false}},
+      {"aXX", {false, false, true, false, true, true, false}},
+      {"ÀA", {true, true, true, true, true, true, true}},
+      {"À", {false, false, true, false, true, true, false}},
+      {"中国À中国", {false, false, true, false, true, true, false}},
+      {"", {false, false, false, false, false, false, false}}}},
+    {"%AAAA",
+     {{"a", {false, false, false, false, false, false, false}},
+      {"aaaa", {false, false, true, false, true, true, false}},
+      {"aaaaa", {false, false, true, false, true, true, false}},
+      {"", {false, false, false, false, false, false, false}}}},
+    {"AAAA%",
+     {{"a", {false, false, false, false, false, false, false}},
+      {"aaaa", {false, false, true, false, true, true, false}},
+      {"aaaaa", {false, false, true, false, true, true, false}},
+      {"", {false, false, false, false, false, false, false}}}},
+    {"%AAAA%",
+     {{"a", {false, false, false, false, false, false, false}},
+      {"aaaa", {false, false, true, false, true, true, false}},
+      {"aaaaa", {false, false, true, false, true, true, false}},
+      {"", {false, false, false, false, false, false, false}}}},
+    {"%abcd%", {{"abcabcd", {true, true, true, true, true, true, true}}}},
+    {"%abc%abcd%",
+     {{"abcd", {false, false, false, false, false, false, false}},
+      {"abcabcd", {true, true, true, true, true, true, true}},
+      {"abcXXabcd", {true, true, true, true, true, true, true}}}},
     {"À",
      {{"a", {false, false, true, false, true, true, false}},
       {"A", {false, false, true, false, true, true, false}},
@@ -159,7 +210,7 @@ const typename CollatorCases::PatternCase CollatorCases::pattern_cases[] = {
     {"_À",
      {{" À", {true, true, true, true, true, true, true}},
       {"ÀA", {false, false, true, false, true, true, false}},
-      {"ÀÀ", {false, false, true, true, true, true, false}},
+      {"ÀÀ", {false, false, true, true, true, true, true}},
       {"", {false, false, false, false, false, false, false}}}},
     {"%À",
      {{"À", {true, true, true, true, true, true, true}},
@@ -197,8 +248,8 @@ const typename CollatorCases::PatternCase CollatorCases::pattern_cases[] = {
       {"ÀÀÀa", {true, true, true, true, true, true, true}},
       {"aÀÀÀ", {false, false, true, false, true, true, false}}}},
     {"___a",
-     {{"中a", {true, true, false, false, false, false, true}},
-      {"中文字a", {false, false, true, true, true, true, false}}}},
+     {{"中a", {true, true, false, false, false, false, false}},
+      {"中文字a", {false, false, true, true, true, true, true}}}},
     {"𐐭", {{"𐐨", {false, false, true, false, false, false, false}}}},
     {
         "%pending%deposits%",
@@ -228,12 +279,12 @@ const typename CollatorCases::PatternCase CollatorCases::pattern_cases[] = {
         "%__", // test match from end
         {
             {"1", {false, false, false, false, false, false, false}}, // 1 bytes
-            {"À", {true, true, false, false, false, false, true}}, // 2 bytes
+            {"À", {true, true, false, false, false, false, false}}, // 2 bytes
             {"12", {true, true, true, true, true, true, true}}, // 2 bytes
-            {"中", {true, true, false, false, false, false, true}}, // 3 bytes
+            {"中", {true, true, false, false, false, false, false}}, // 3 bytes
             {"À1", {true, true, true, true, true, true, true}}, // 3 bytes
             {"ÀÀ", {true, true, true, true, true, true, true}}, // 4 bytes
-            {"𒀈", {true, true, false, false, false, false, true}}, // 4 bytes 1 char
+            {"𒀈", {true, true, false, false, false, false, false}}, // 4 bytes 1 char
             {"À中", {true, true, true, true, true, true, true}}, // 5 bytes
             {"中中", {true, true, true, true, true, true, true}}, // 6 bytes
         },
@@ -242,26 +293,26 @@ const typename CollatorCases::PatternCase CollatorCases::pattern_cases[] = {
         "%__%", // test
         {
             {"1", {false, false, false, false, false, false, false}}, // 1 bytes
-            {"À", {true, true, false, false, false, false, true}}, // 2 bytes
+            {"À", {true, true, false, false, false, false, false}}, // 2 bytes
             {"12", {true, true, true, true, true, true, true}}, // 2 bytes
-            {"中", {true, true, false, false, false, false, true}}, // 3 bytes
+            {"中", {true, true, false, false, false, false, false}}, // 3 bytes
             {"À1", {true, true, true, true, true, true, true}}, // 3 bytes
             {"ÀÀ", {true, true, true, true, true, true, true}}, // 4 bytes
-            {"𒀈", {true, true, false, false, false, false, true}}, // 4 bytes 1 char
+            {"𒀈", {true, true, false, false, false, false, false}}, // 4 bytes 1 char
         },
     },
     {
         "%一_二", // test match from end
         {
             {"xx一a二", {true, true, true, true, true, true, true}},
-            {"xx一À二", {false, false, true, true, true, true, false}},
+            {"xx一À二", {false, false, true, true, true, true, true}},
         },
     },
     {
         "%一_三%四五六%七",
         {
             {"一二三四五七", {false, false, false, false, false, false, false}},
-            {"0一二三四五六.七", {false, false, true, true, true, true, false}},
+            {"0一二三四五六.七", {false, false, true, true, true, true, true}},
             {"一二四五六七", {false, false, false, false, false, false, false}},
             {"一2三.四五六...七", {true, true, true, true, true, true, true}},
         },
@@ -310,47 +361,54 @@ void testCollator()
     }
     {
         auto pattern = collator->pattern();
-        for (const auto & c : CollatorCases::pattern_cases)
+        for (auto is_try_ascii_ci : {false, true})
         {
-            const std::string & p = c.first;
-            const auto & inner_cases = c.second;
-
-            ColumnString::Chars_t strs;
-            ColumnString::Offsets offsets;
-            PaddedPODArray<UInt8> res;
-            { // init data
-                ColumnString::Offset current_new_offset = 0;
-                for (const auto & inner_c : inner_cases)
-                {
-                    const auto s = inner_c.first + char(0);
-                    {
-                        current_new_offset += s.size();
-                        offsets.push_back(current_new_offset);
-                    }
-                    {
-                        strs.resize(strs.size() + s.size());
-                        std::memcpy(&strs[strs.size() - s.size()], s.data(), s.size());
-                    }
-                    res.emplace_back(0);
-                }
-            }
-            if (!StringPatternMatch<false>(strs, offsets, p, ESCAPE, collator, res))
+            for (const auto & c : CollatorCases::pattern_cases)
             {
-                pattern->compile(p, ESCAPE);
+                const std::string & p = c.first;
+                const auto & inner_cases = c.second;
+
+                ColumnString::Chars_t strs;
+                ColumnString::Offsets offsets;
+                PaddedPODArray<UInt8> res;
+                { // init data
+                    ColumnString::Offset current_new_offset = 0;
+                    for (const auto & inner_c : inner_cases)
+                    {
+                        const auto s = inner_c.first + static_cast<char>(0);
+                        {
+                            current_new_offset += s.size();
+                            offsets.push_back(current_new_offset);
+                        }
+                        {
+                            strs.resize(strs.size() + s.size());
+                            std::memcpy(&strs[strs.size() - s.size()], s.data(), s.size());
+                        }
+                        res.emplace_back(0);
+                    }
+                }
+                if (!StringPatternMatch<false>(strs, offsets, p, ESCAPE, collator, res))
+                {
+                    pattern->compile(p, ESCAPE);
+                    if (is_try_ascii_ci && collator->isCI())
+                    {
+                        pattern->tryCompileAsciiCi(p, ESCAPE);
+                    }
+                    for (size_t idx = 0; idx < std::size(inner_cases); ++idx)
+                    {
+                        const auto & inner_c = inner_cases[idx];
+                        const std::string & s = inner_c.first;
+                        res[idx] = pattern->match(s.data(), s.length());
+                    }
+                }
+
                 for (size_t idx = 0; idx < std::size(inner_cases); ++idx)
                 {
                     const auto & inner_c = inner_cases[idx];
-                    const std::string & s = inner_c.first;
-                    res[idx] = pattern->match(s.data(), s.length());
+                    bool ans = std::get<Collator::collation_case>(inner_c.second);
+                    std::cout << "Pattern case (" << p << ", " << inner_c.first << ", " << ans << ")" << std::endl;
+                    ASSERT_EQ(res[idx], ans);
                 }
-            }
-
-            for (size_t idx = 0; idx < std::size(inner_cases); ++idx)
-            {
-                const auto & inner_c = inner_cases[idx];
-                bool ans = std::get<Collator::collation_case>(inner_c.second);
-                std::cout << "Pattern case (" << p << ", " << inner_c.first << ", " << ans << ")" << std::endl;
-                ASSERT_EQ(res[idx], ans);
             }
         }
     }
@@ -430,7 +488,7 @@ TEST(CollatorSuite, Utf8Mb40900AICICollator)
 
 TEST(CollatorSuite, Utf8Mb40900BinCollator)
 {
-    testCollator<Utf8Mb40900AICICollator>();
+    testCollator<Utf8Mb40900BinCollator>();
 }
 
 } // namespace DB::tests

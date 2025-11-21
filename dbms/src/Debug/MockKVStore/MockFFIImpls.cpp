@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Debug/MockKVStore/MockFFIImpls.h>
 #include <Debug/MockKVStore/MockRaftStoreProxy.h>
 
@@ -53,17 +54,15 @@ KVGetStatus MockFFIImpls::fn_get_region_local_state(
         *error_msg = RawCppString::New("RaftStoreProxyPtr is none");
         return KVGetStatus::Error;
     }
-    auto & x = as_ref(ptr);
-    auto region = x.getRegion(region_id);
-    if (region)
-    {
-        auto state = region->getState();
-        auto buff = state.SerializePartialAsString();
-        SetPBMsByBytes(MsgPBType::RegionLocalState, data, BaseBuffView{buff.data(), buff.size()});
-        return KVGetStatus::Ok;
-    }
-    else
+    auto & mock_raftstore = as_ref(ptr);
+    // get region without lock on mock_raftstore to avoid issue#10169
+    auto region = mock_raftstore.doGetRegion(region_id);
+    if (!region)
         return KVGetStatus::NotFound;
+    auto state = region->getState();
+    auto buff = state.SerializePartialAsString();
+    SetPBMsByBytes(MsgPBType::RegionLocalState, data, BaseBuffView{buff.data(), buff.size()});
+    return KVGetStatus::Ok;
 }
 
 void MockFFIImpls::fn_notify_compact_log(
@@ -75,9 +74,9 @@ void MockFFIImpls::fn_notify_compact_log(
 {
     UNUSED(applied_index);
     // Update flushed applied_index and truncated state.
-    auto & x = as_ref(ptr);
-    auto region = x.getRegion(region_id);
-    ASSERT(region);
+    auto & mock_raftstore = as_ref(ptr);
+    auto region = mock_raftstore.getRegion(region_id);
+    assert(region != nullptr);
     // `applied_index` in proxy's disk can still be less than the `applied_index` here when fg flush.
     if (region && region->getApply().truncated_state().index() < compact_index)
     {
@@ -99,7 +98,8 @@ RustStrWithView MockFFIImpls::fn_get_config_json(RaftStoreProxyPtr ptr, ConfigJs
     GCMonitor::instance().add(RawObjType::MockString, 1);
     return RustStrWithView{
         .buff = cppStringAsBuff(*s),
-        .inner = RawRustPtr{.ptr = s, .type = static_cast<RawRustPtrType>(RawObjType::MockString)}};
+        .inner = RawRustPtr{.ptr = s, .type = static_cast<RawRustPtrType>(RawObjType::MockString)},
+    };
 }
 
 } // namespace DB

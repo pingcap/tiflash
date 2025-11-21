@@ -18,6 +18,7 @@
 #include <Poco/JSON/Object.h>
 #pragma GCC diagnostic pop
 #include <Poco/UUIDGenerator.h>
+#include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
 #include <magic_enum.hpp>
@@ -117,12 +118,31 @@ String ScanContext::toJson() const
     json->set("num_local_region", total_local_region_num.load());
     json->set("num_stale_read", num_stale_read.load());
 
-    json->set("read_bytes", user_read_bytes.load());
+    json->set("query_read_bytes", query_read_bytes.load());
+    json->set("mvcc_read_bytes", mvcc_read_bytes.load());
 
-    if (disagg_read_cache_hit_size.load() > 0 && disagg_read_cache_miss_size.load() > 0)
+    if (disagg_read_cache_hit_size.load() > 0 || disagg_read_cache_miss_size.load() > 0)
     {
         json->set("disagg_cache_hit_size", disagg_read_cache_hit_size.load());
         json->set("disagg_cache_miss_size", disagg_read_cache_miss_size.load());
+        json->set("disagg_build_read_tasks_ms", disagg_build_read_tasks_ms.load());
+        json->set("disagg_build_read_tasks_backoff_num", disagg_build_read_tasks_backoff_num.load());
+        json->set("disagg_establish_disagg_task_ms", disagg_establish_disagg_task_ms.load());
+        json->set("disagg_resolve_lock_ms", disagg_resolve_lock_ms.load());
+        json->set("disagg_parse_read_task_ms", disagg_parse_read_task_ms.load());
+        json->set("disagg_build_batch_cop_tasks_ms", disagg_build_batch_cop_tasks_ms.load());
+        json->set("disagg_page_hit_count", disagg_page_hit_count.load());
+        json->set("disagg_page_miss_count", disagg_page_miss_count.load());
+        json->set("disagg_s3file_hit_count", disagg_s3file_hit_count.load());
+        json->set("disagg_s3file_miss_count", disagg_s3file_miss_count.load());
+        json->set("disagg_s3file_get_object_ms", disagg_s3file_get_object_ms.load());
+        json->set("disagg_s3file_get_object_count", disagg_s3file_get_object_count.load());
+        json->set("disagg_s3file_read_time_ms", disagg_s3file_read_time_ms.load());
+        json->set("disagg_s3file_read_count", disagg_s3file_read_count.load());
+        json->set("disagg_s3file_read_bytes", disagg_s3file_read_bytes.load());
+        json->set("disagg_s3file_seek_count", disagg_s3file_seek_count.load());
+        json->set("disagg_s3file_seek_time_ms", disagg_s3file_seek_time_ms.load());
+        json->set("disagg_s3file_seek_bytes", disagg_s3file_seek_bytes.load());
     }
 
     json->set("num_segments", num_segments.load());
@@ -180,6 +200,11 @@ String ScanContext::toJson() const
         vec_idx->set("read_vec", vector_idx_read_vec_time_ms.load());
         vec_idx->set("read_others", vector_idx_read_others_time_ms.load());
         json->set("vector_idx", vec_idx);
+    }
+
+    if (pushdown_executor)
+    {
+        json->set("pushdown", pushdown_executor->toJSONObject());
     }
 
     std::stringstream buf;
@@ -261,4 +286,37 @@ void ScanContext::initCurrentInstanceId(Poco::Util::AbstractConfiguration & conf
     current_instance_id = getCurrentInstanceId(flash_server_addr, log);
     LOG_INFO(log, "flash_server_addr={}, current_instance_id={}", flash_server_addr, current_instance_id);
 }
+
+std::optional<LACBytesCollector> ScanContext::newLACBytesCollector(ReadTag read_tag)
+{
+    if (resource_group_name.empty())
+        return std::nullopt;
+    if (read_tag != ReadTag::Query && read_tag != ReadTag::LMFilter)
+        return std::nullopt;
+    return LACBytesCollector(keyspace_id, resource_group_name);
+}
+
+void ScanContext::addUserReadBytes(
+    size_t bytes,
+    ReadTag read_tag,
+    std::optional<LACBytesCollector> & lac_bytes_collector)
+{
+    if (read_tag != ReadTag::Query && read_tag != ReadTag::LMFilter && read_tag != ReadTag::MVCC)
+        return;
+    if (read_tag == ReadTag::MVCC)
+    {
+        mvcc_read_bytes += bytes;
+        if (mvcc_read_bytes_counter)
+            mvcc_read_bytes_counter->Increment(bytes);
+    }
+    else
+    {
+        query_read_bytes += bytes;
+        if (query_read_bytes_counter)
+            query_read_bytes_counter->Increment(bytes);
+        if (lac_bytes_collector)
+            lac_bytes_collector->collect(bytes);
+    }
+}
+
 } // namespace DB::DM

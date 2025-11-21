@@ -51,6 +51,10 @@ Children getChildren(const tipb::Executor & executor)
         return Children{&executor.exchange_sender().child()};
     case tipb::ExecType::TypeExchangeReceiver:
         return {};
+    case tipb::ExecType::TypeCTESink:
+        return Children{&executor.cte_sink().child()};
+    case tipb::ExecType::TypeCTESource:
+        return {};
     case tipb::ExecType::TypeKill:
         throw TiFlashException("Kill executor is not supported", Errors::Coprocessor::Unimplemented);
     default:

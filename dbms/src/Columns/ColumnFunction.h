@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Columns/ColumnFunction.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -118,6 +120,11 @@ public:
     const char * deserializeAndInsertFromArena(const char *, const TiDB::TiDBCollatorPtr &) override
     {
         throw Exception("Cannot deserialize to " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    size_t serializeByteSize() const override
+    {
+        throw Exception("Method serializeByteSize is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
     void countSerializeByteSize(PaddedPODArray<size_t> & /* byte_size */) const override

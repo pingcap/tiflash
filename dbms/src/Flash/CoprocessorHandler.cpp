@@ -15,6 +15,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/RequestUtils.h>
@@ -130,7 +131,7 @@ grpc::Status CoprocessorHandler<is_stream>::execute()
             TablesRegionsInfo tables_regions_info(true);
             auto & table_regions_info = tables_regions_info.getSingleTableRegions();
 
-#if SERVERLESS_PROXY != 0
+#if ENABLE_NEXT_GEN
             if (cop_context.db_context.isKeyspaceInBlocklist(cop_request->context().keyspace_id())
                 || cop_context.db_context.isRegionInBlocklist(cop_context.kv_context.region_id()))
             {
@@ -249,31 +250,8 @@ grpc::Status CoprocessorHandler<is_stream>::execute()
             response = cop_response;
         }
 
-        errorpb::Error * region_err;
-        switch (e.status)
-        {
-        case RegionException::RegionReadStatus::OTHER:
-        case RegionException::RegionReadStatus::BUCKET_EPOCH_NOT_MATCH:
-        case RegionException::RegionReadStatus::FLASHBACK:
-        case RegionException::RegionReadStatus::KEY_NOT_IN_REGION:
-        case RegionException::RegionReadStatus::TIKV_SERVER_ISSUE:
-        case RegionException::RegionReadStatus::READ_INDEX_TIMEOUT:
-        case RegionException::RegionReadStatus::NOT_LEADER:
-        case RegionException::RegionReadStatus::NOT_FOUND_TIKV:
-        case RegionException::RegionReadStatus::NOT_FOUND:
-            GET_METRIC(tiflash_coprocessor_request_error, reason_region_not_found).Increment();
-            region_err = response->mutable_region_error();
-            region_err->mutable_region_not_found()->set_region_id(cop_request->context().region_id());
-            break;
-        case RegionException::RegionReadStatus::EPOCH_NOT_MATCH:
-            GET_METRIC(tiflash_coprocessor_request_error, reason_epoch_not_match).Increment();
-            region_err = response->mutable_region_error();
-            region_err->mutable_epoch_not_match();
-            break;
-        default:
-            // should not happen
-            break;
-        }
+        setResponseByRegionException(response, e, cop_request->context().region_id());
+
         if constexpr (is_stream)
         {
             cop_writer->Write(stream_response);

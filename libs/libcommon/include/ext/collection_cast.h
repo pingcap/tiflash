@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/libs/libcommon/include/ext/collection_cast.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,7 +28,7 @@ auto collection_cast(const Collection & collection)
     using value_type = typename Collection::value_type;
 
     return ResultCollection<value_type>(std::begin(collection), std::end(collection));
-};
+}
 
 /** \brief Returns collection of specified type.
      *    Performs implicit conversion of between source and result value_type, if available and required. */

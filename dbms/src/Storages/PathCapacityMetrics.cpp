@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/CurrentMetrics.h>
+#include <Common/DiskSize.h>
 #include <Common/Exception.h>
 #include <Common/formatReadable.h>
 #include <Core/Types.h>
@@ -148,10 +149,10 @@ void PathCapacityMetrics::freeRemoteUsedSize(KeyspaceID keyspace_id, size_t used
 
 std::unordered_map<KeyspaceID, UInt64> PathCapacityMetrics::getKeyspaceUsedSizes()
 {
-    size_t local_toal_size = 0;
+    size_t local_total_size = 0;
     for (auto & path_info : path_infos)
     {
-        local_toal_size += path_info.used_bytes;
+        local_total_size += path_info.used_bytes;
     }
 
     std::unordered_map<KeyspaceID, UInt64> keyspace_id_to_total_size;
@@ -169,7 +170,7 @@ std::unordered_map<KeyspaceID, UInt64> PathCapacityMetrics::getKeyspaceUsedSizes
         // cannot get accurate local used size for each keyspace, so we use a simple way to estimate it.
         keyspace_id_to_total_size.emplace(
             keyspace_id,
-            size + static_cast<size_t>(size * 1.0 / remote_total_size * local_toal_size));
+            size + static_cast<size_t>(size * 1.0 / remote_total_size * local_total_size));
     }
     return keyspace_id_to_total_size;
 }
@@ -199,7 +200,7 @@ std::map<FSID, DiskCapacity> PathCapacityMetrics::getDiskStats()
     return disk_stats_map;
 }
 
-FsStats PathCapacityMetrics::getFsStats(bool finalize_capacity)
+FsStats PathCapacityMetrics::getFsStats(DisaggregatedMode disagg_mode, bool finalize_capacity)
 {
     // Now we assume the size of `path_infos` will not change, don't acquire heavy lock on `path_infos`.
     FsStats total_stat{};
@@ -248,13 +249,29 @@ FsStats PathCapacityMetrics::getFsStats(bool finalize_capacity)
     const double avail_rate = 1.0 * total_stat.avail_size / total_stat.capacity_size;
     // Default threshold "schedule.low-space-ratio" in PD is 0.8, log warning message if avail ratio is low.
     if (avail_rate <= 0.2)
-        LOG_WARNING(
+    {
+        Poco::Message::Priority priority = Poco::Message::PRIO_WARNING;
+        switch (disagg_mode)
+        {
+        case DisaggregatedMode::None:
+        case DisaggregatedMode::Storage:
+            priority = Poco::Message::PRIO_WARNING;
+            break;
+        // Only debug level under disagg compute mode because it is the common case
+        // that compute node is filled with local cache data.
+        case DisaggregatedMode::Compute:
+            priority = Poco::Message::PRIO_DEBUG;
+            break;
+        }
+        LOG_IMPL(
             log,
+            priority,
             "Available space is only {:.2f}% of capacity size. Avail size: {}, used size: {}, capacity size: {}",
             avail_rate * 100.0,
             formatReadableSizeWithBinarySuffix(total_stat.avail_size),
             formatReadableSizeWithBinarySuffix(total_stat.used_size),
             formatReadableSizeWithBinarySuffix(total_stat.capacity_size));
+    }
 
     // Just report local disk capacity and available size is enough
     CurrentMetrics::set(CurrentMetrics::StoreSizeCapacity, total_stat.capacity_size);
@@ -264,13 +281,11 @@ FsStats PathCapacityMetrics::getFsStats(bool finalize_capacity)
     size_t remote_used_size = 0;
     if (finalize_capacity && S3::ClientFactory::instance().isEnabled())
     {
+        std::unique_lock<std::mutex> lock(mutex);
+        for (const auto & [keyspace_id, used_bytes] : keyspace_id_to_used_bytes)
         {
-            std::unique_lock<std::mutex> lock(mutex);
-            for (const auto & [keyspace_id, used_bytes] : keyspace_id_to_used_bytes)
-            {
-                UNUSED(keyspace_id);
-                remote_used_size += used_bytes;
-            }
+            UNUSED(keyspace_id);
+            remote_used_size += used_bytes;
         }
     }
     CurrentMetrics::set(CurrentMetrics::StoreSizeUsedRemote, remote_used_size);
@@ -328,18 +343,11 @@ ssize_t PathCapacityMetrics::locatePath(std::string_view file_path) const
 std::tuple<FsStats, struct statvfs> PathCapacityMetrics::CapacityInfo::getStats(const LoggerPtr & log) const
 {
     FsStats res{};
-    /// Get capacity, used, available size for one path.
-    /// Similar to `handle_store_heartbeat` in TiKV release-4.0 branch
-    /// https://github.com/tikv/tikv/blob/f14e8288f3/components/raftstore/src/store/worker/pd.rs#L593
-    struct statvfs vfs
-    {
-    };
-    if (int code = statvfs(path.data(), &vfs); code != 0)
+    auto [vfs, err_msg] = DB::getFsStat(path);
+    if unlikely (!err_msg.empty())
     {
         if (log)
-        {
-            LOG_ERROR(log, "Could not calculate available disk space (statvfs) of path: {}, errno: {}", path, errno);
-        }
+            LOG_ERROR(log, "Could not calculate available disk space: {}", err_msg);
         return {};
     }
 

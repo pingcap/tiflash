@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Interpreters/InterpreterCreateQuery.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -64,7 +66,7 @@ private:
 
     ASTPtr query_ptr;
     Context & context;
-    std::string_view log_suffix;
+    std::string log_suffix;
 
     /// Using while loading database.
     ThreadPool * thread_pool = nullptr;

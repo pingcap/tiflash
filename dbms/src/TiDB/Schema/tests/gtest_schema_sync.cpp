@@ -851,10 +851,11 @@ try
                     dmsv.vec_column_id));
         }
 
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_index_id(idx_id);
-        ann_query_info->set_deprecated_column_id(dmsv.vec_column_id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+        auto ann_query_info = DM::tests::DeltaMergeStoreVectorBase::annQueryInfoTopK({
+            .top_k = 1,
+            .column_id = dmsv.vec_column_id,
+            .index_id = idx_id,
+        });
 
         // read with ANN query
         {

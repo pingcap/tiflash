@@ -40,7 +40,7 @@ protected:
         auto [seg, snap] = getSegmentForRead(opts.seg_id);
         auto actual_base_versions = std::visit(
             [&](auto & version_chain) { return version_chain.replaySnapshot(*dm_context, *snap); },
-            seg->version_chain);
+            *(seg->version_chain));
         ASSERT_EQ(opts.expected_base_versions, *actual_base_versions) << "caller_line=" << opts.caller_line;
     }
 
@@ -54,7 +54,7 @@ protected:
                     version_chain.dmfile_or_delete_range_list.size(),
                 };
             },
-            seg->version_chain);
+            *(seg->version_chain));
         ASSERT_EQ(actutal_new_handle_count, expected_new_handle_count);
         ASSERT_EQ(actual_dmfile_or_delete_range_count, expected_dmfile_or_delete_range_count);
     }
@@ -297,9 +297,6 @@ try
         excepted_base_versions.begin() + 10 + 55,
         NotExistRowID); // d_tiny:[200, 255)
     std::iota(excepted_base_versions.begin() + 10 + 55, excepted_base_versions.end(), 298); // d_mem:[298, 305)
-    read_ranges.emplace_back(buildRowKeyRange(222, 244, is_common_handle));
-    read_ranges.emplace_back(buildRowKeyRange(300, 303, is_common_handle));
-    read_ranges.emplace_back(buildRowKeyRange(555, 666, is_common_handle));
     runVersionChainTest(TestOptions{
         .seg_data = "s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)",
         .expected_base_versions = excepted_base_versions,

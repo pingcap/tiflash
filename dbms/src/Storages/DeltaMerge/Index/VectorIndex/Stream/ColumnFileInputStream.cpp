@@ -19,6 +19,7 @@
 #include <Storages/DeltaMerge/Index/VectorIndex/Reader.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Stream/ColumnFileInputStream.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Stream/Ctx.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Stream/DistanceProjectionInputStream.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Stream/ReaderFromColumnFileTiny.h>
 
 namespace DB::DM
@@ -31,14 +32,26 @@ SkippableBlockInputStreamPtr ColumnFileProvideVectorIndexInputStream::createOrFa
     RUNTIME_CHECK(ctx->data_provider != nullptr);
     RUNTIME_CHECK(ctx->dm_context != nullptr);
 
-    auto fallback = [&] {
+    auto fallback = [&]() -> SkippableBlockInputStreamPtr {
         ctx->perf->n_from_cf_noindex += 1;
-        return ColumnFileInputStream::create(
+        if (!ctx->ann_query_info->enable_distance_proj())
+        {
+            return ColumnFileInputStream::create(
+                *ctx->dm_context,
+                column_file,
+                ctx->data_provider,
+                ctx->col_defs,
+                ctx->read_tag);
+        }
+
+        auto stream = ColumnFileInputStream::create(
             *ctx->dm_context,
             column_file,
             ctx->data_provider,
-            ctx->col_defs,
+            ctx->dis_ctx->col_defs_no_index,
             ctx->read_tag);
+
+        return DistanceProjectionInputStream::create(stream, ctx);
     };
 
     const auto tiny_file = std::dynamic_pointer_cast<ColumnFileTiny>(column_file);
@@ -52,7 +65,7 @@ SkippableBlockInputStreamPtr ColumnFileProvideVectorIndexInputStream::createOrFa
     return std::make_shared<ColumnFileProvideVectorIndexInputStream>(ctx, tiny_file);
 }
 
-inline VectorIndexReaderPtr ColumnFileProvideVectorIndexInputStream::getVectorIndexReader()
+VectorIndexReaderPtr ColumnFileProvideVectorIndexInputStream::getVectorIndexReader()
 {
     if (vec_index != nullptr)
         return vec_index;
@@ -73,15 +86,62 @@ Block ColumnFileProvideVectorIndexInputStream::read()
 
     Stopwatch w(CLOCK_MONOTONIC_COARSE);
 
-    // read vector column from index
-    auto vec_column = ctx->vec_cd.type->createColumn();
-    vec_column->reserve(sorted_results.view.size());
-    for (const auto & row : sorted_results.view)
+    // read vector or distance column from index
+    MutableColumnPtr vec_column = nullptr;
+    if (ctx->vec_cd.has_value())
     {
-        vec_index->get(row.rowid, ctx->vector_value);
-        vec_column->insertData(
-            reinterpret_cast<const char *>(ctx->vector_value.data()),
-            ctx->vector_value.size() * sizeof(Float32));
+        vec_column = ctx->vec_cd->type->createColumn();
+        vec_column->reserve(sorted_results.view.size());
+    }
+
+    MutableColumnPtr dis_column = nullptr;
+    if (ctx->dis_ctx.has_value())
+    {
+        RUNTIME_CHECK(ctx->ann_query_info->enable_distance_proj());
+        dis_column = ctx->dis_ctx->dis_cd.type->createColumn();
+        dis_column->reserve(sorted_results.view.size());
+    }
+
+    // The index stores non-squared L2 distances. To ensure consistent behavior between indexed and non-indexed queries,
+    // we square the distances from the index when using L2 metric when distance-proj is enable.
+    if (ctx->ann_query_info->enable_distance_proj())
+    {
+        RUNTIME_CHECK(dis_column->isColumnNullable());
+
+        auto * dis_nullable = typeid_cast<ColumnNullable *>(dis_column.get());
+        RUNTIME_CHECK(dis_nullable != nullptr);
+
+        auto * dis_float32 = typeid_cast<ColumnFloat32 *>(&dis_nullable->getNestedColumn());
+        RUNTIME_CHECK(dis_float32 != nullptr);
+
+        auto & null_data = dis_nullable->getNullMapData();
+
+        if (ctx->ann_query_info->distance_metric() == tipb::VectorDistanceMetric::L2)
+        {
+            for (const auto & row : sorted_results.view)
+            {
+                dis_float32->insert(std::sqrt(row.distance));
+            }
+        }
+        else
+        {
+            for (const auto & row : sorted_results.view)
+            {
+                dis_float32->insert(row.distance);
+            }
+        }
+        null_data.resize_fill(sorted_results.view.size(), 0);
+    }
+    else
+    {
+        RUNTIME_CHECK(vec_column != nullptr);
+        for (const auto & row : sorted_results.view)
+        {
+            vec_index->get(row.rowid, ctx->vector_value);
+            vec_column->insertData(
+                reinterpret_cast<const char *>(ctx->vector_value.data()),
+                ctx->vector_value.size() * sizeof(Float32));
+        }
     }
 
     ctx->perf->n_cf_reads += 1;
@@ -107,8 +167,28 @@ Block ColumnFileProvideVectorIndexInputStream::read()
 
     ctx->perf->total_cf_read_others_ms += w.elapsedMillisecondsFromLastTime();
 
-    auto index = ctx->header.getPositionByName(ctx->vec_cd.name);
-    block.insert(index, ColumnWithTypeAndName(std::move(vec_column), ctx->vec_cd.type, ctx->vec_cd.name));
+    if (vec_column != nullptr)
+    {
+        RUNTIME_CHECK(ctx->vec_col_idx.has_value());
+        block.insert(
+            ctx->vec_col_idx.value(),
+            ColumnWithTypeAndName{
+                std::move(vec_column),
+                ctx->vec_cd->type,
+                ctx->vec_cd->name,
+                ctx->vec_cd->id,
+            });
+    }
+    if (dis_column != nullptr)
+    {
+        // Note that distance column is ensured to be the last column in schema (and we have checked that in Ctx)
+        block.insert(ColumnWithTypeAndName{
+            std::move(dis_column),
+            ctx->dis_ctx->dis_cd.type,
+            ctx->dis_ctx->dis_cd.name,
+            ctx->dis_ctx->dis_cd.id,
+        });
+    }
 
     // After a successful read, clear out the ordered_return_rows so that
     // the next read will just return an empty block.
@@ -117,7 +197,7 @@ Block ColumnFileProvideVectorIndexInputStream::read()
     return block;
 }
 
-inline Block ColumnFileProvideVectorIndexInputStream::getHeader() const
+Block ColumnFileProvideVectorIndexInputStream::getHeader() const
 {
     return ctx->header;
 }

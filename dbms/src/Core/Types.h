@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Core/Types.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -225,7 +227,7 @@ struct TypeId<Float64>
     static constexpr const TypeIndex value = TypeIndex::Float64;
 };
 
-/// Avoid to use `std::vector<bool`
+/// Avoid to use `std::vector<bool>`
 using BoolVec = std::vector<UInt8>;
 
 } // namespace DB

@@ -164,7 +164,7 @@ bool checkMatch(
         std::vector<RuntimeFilterPtr>{},
         0,
         name,
-        false);
+        DMReadOptions{});
     auto rows = getInputStreamNRows(streams[0]);
     store->drop();
 
@@ -2246,10 +2246,12 @@ try
     b.id = 2;
     TiDB::ColumnInfos column_infos = {a, b};
     const auto ann_query_info = tipb::ANNQueryInfo{};
+    const auto fts_query_info = tipb::FTSQueryInfo{};
     static const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> empty_used_indexes{};
     auto dag_query = std::make_unique<DAGQueryInfo>(
         filters,
         ann_query_info,
+        fts_query_info,
         pushed_down_filters, // Not care now
         empty_used_indexes,
         column_infos,

@@ -42,7 +42,9 @@ struct PlanType
         JoinBuild = 17,
         JoinProbe = 18,
         GetResult = 19,
-        TiCiScan = 20,
+        CTESource = 20,
+        CTESink = 21,
+        TiCiScan = 22,
     };
     PlanTypeEnum enum_value;
 

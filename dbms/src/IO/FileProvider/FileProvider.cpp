@@ -60,7 +60,8 @@ WritableFilePtr FileProvider::newWritableFile(
     bool create_new_encryption_info_,
     const WriteLimiterPtr & write_limiter_,
     int flags,
-    mode_t mode) const
+    mode_t mode,
+    const SpillLimiterPtr & spill_limiter_) const
 {
     // S3 file always does not encrypt.
     if (auto view = S3::S3FilenameView::fromKeyWithPrefix(file_path_); view.isValid())
@@ -68,8 +69,13 @@ WritableFilePtr FileProvider::newWritableFile(
 
     // Unrecognized xx:// protocol.
     RUNTIME_CHECK_MSG(file_path_.find("://") == std::string::npos, "Unsupported protocol in path {}", file_path_);
-    WritableFilePtr file
-        = std::make_shared<PosixWritableFile>(file_path_, truncate_if_exists_, flags, mode, write_limiter_);
+    WritableFilePtr file = std::make_shared<PosixWritableFile>(
+        file_path_,
+        truncate_if_exists_,
+        flags,
+        mode,
+        write_limiter_,
+        spill_limiter_);
     if (encryption_enabled && create_new_encryption_info_)
     {
         auto encryption_info = key_manager->newInfo(encryption_path_);

@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Functions/FunctionsRound.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -199,77 +201,6 @@ enum class RoundingMode
 #endif
 };
 
-/** Rounding functions for decimal values
- */
-
-template <typename T, RoundingMode rounding_mode, ScaleMode scale_mode, typename OutputType>
-struct DecimalRoundingComputation
-{
-    static_assert(IsDecimal<T>);
-    static const size_t data_count = 1;
-    static size_t prepare(size_t scale) { return scale; }
-    // compute need decimal_scale to interpret decimals
-    static inline void compute(
-        const T * __restrict in,
-        size_t scale,
-        OutputType * __restrict out,
-        ScaleType decimal_scale)
-    {
-        static_assert(std::is_same_v<T, OutputType> || std::is_same_v<OutputType, Int64>);
-        Float64 val = in->template toFloat<Float64>(decimal_scale);
-
-        if constexpr (scale_mode == ScaleMode::Positive)
-        {
-            val = val * scale;
-        }
-        else if constexpr (scale_mode == ScaleMode::Negative)
-        {
-            val = val / scale;
-        }
-
-        if constexpr (rounding_mode == RoundingMode::Round)
-        {
-            val = round(val);
-        }
-        else if constexpr (rounding_mode == RoundingMode::Floor)
-        {
-            val = floor(val);
-        }
-        else if constexpr (rounding_mode == RoundingMode::Ceil)
-        {
-            val = ceil(val);
-        }
-        else if constexpr (rounding_mode == RoundingMode::Trunc)
-        {
-            val = trunc(val);
-        }
-
-
-        if constexpr (scale_mode == ScaleMode::Positive)
-        {
-            val = val / scale;
-        }
-        else if constexpr (scale_mode == ScaleMode::Negative)
-        {
-            val = val * scale;
-        }
-
-        if constexpr (std::is_same_v<T, OutputType>)
-        {
-            *out = ToDecimal<Float64, T>(val, decimal_scale);
-        }
-        else if constexpr (std::is_same_v<OutputType, Int64>)
-        {
-            *out = static_cast<Int64>(val);
-        }
-        else
-        {
-            ; // never arrived here
-        }
-    }
-};
-
-
 /** Rounding functions for integer values.
   */
 template <typename T, RoundingMode rounding_mode, ScaleMode scale_mode>
@@ -327,12 +258,74 @@ struct IntegerRoundingComputation
         }
     }
 
-    static ALWAYS_INLINE void compute(const T * __restrict in, size_t scale, T * __restrict out)
+    static ALWAYS_INLINE void compute(const T * __restrict in, T scale, T * __restrict out)
     {
         *out = compute(*in, scale);
     }
 };
 
+/** Rounding functions for decimal values
+ */
+
+template <typename T, RoundingMode rounding_mode, ScaleMode scale_mode, typename OutputType>
+struct DecimalRoundingComputation
+{
+    static_assert(IsDecimal<T>);
+    using NativeType = typename T::NativeType;
+    static const size_t data_count = 1;
+    static size_t prepare(size_t scale) { return scale; }
+    // compute need decimal_scale to interpret decimals
+    static inline void compute(
+        const T * __restrict in,
+        size_t scale,
+        OutputType * __restrict out,
+        NativeType decimal_scale)
+    {
+        static_assert(std::is_same_v<T, OutputType> || std::is_same_v<OutputType, Int64>);
+        // Currently, we only use DecimalRoundingComputation for floor/ceil.
+        // As for round/truncate, we always use tidbRoundWithFrac/tidbTruncateWithFrac.
+        // So, we only handle ScaleMode::Zero here.
+        if constexpr (scale_mode == ScaleMode::Zero)
+        {
+            try
+            {
+                if constexpr (rounding_mode == RoundingMode::Floor)
+                {
+                    auto x = in->value;
+                    if (x < 0)
+                        x -= decimal_scale - 1;
+                    *out = static_cast<OutputType>(x / decimal_scale);
+                }
+                else if constexpr (rounding_mode == RoundingMode::Ceil)
+                {
+                    auto x = in->value;
+                    if (x >= 0)
+                        x += decimal_scale - 1;
+                    *out = static_cast<OutputType>(x / decimal_scale);
+                }
+                else
+                {
+                    throw Exception(
+                        "Logical error: unexpected 'rounding_mode' of DecimalRoundingComputation",
+                        ErrorCodes::LOGICAL_ERROR);
+                }
+            }
+            catch (const std::overflow_error & e)
+            {
+                throw Exception(
+                    "Logical error: unexpected overflow in DecimalRoundingComputation",
+                    ErrorCodes::LOGICAL_ERROR);
+            }
+        }
+        else
+        {
+            throw Exception(
+                "Logical error: unexpected 'scale_mode' of DecimalRoundingComputation and unexpected scale: "
+                    + toString(scale),
+                ErrorCodes::LOGICAL_ERROR);
+        }
+    }
+};
 
 #if __SSE4_1__
 
@@ -540,7 +533,7 @@ public:
 
         while (p_in < end_in)
         {
-            Op::compute(p_in, scale, p_out);
+            Op::compute(p_in, static_cast<T>(scale), p_out);
             ++p_in;
             ++p_out;
         }
@@ -606,6 +599,9 @@ struct DecimalRoundingImpl;
 template <typename T, RoundingMode rounding_mode, ScaleMode scale_mode>
 struct DecimalRoundingImpl<T, rounding_mode, scale_mode, Int64>
 {
+    static_assert(IsDecimal<T>);
+    using NativeType = typename T::NativeType;
+
 private:
     using Op = DecimalRoundingComputation<T, rounding_mode, scale_mode, Int64>;
     using Data = T;
@@ -616,7 +612,8 @@ public:
         size_t scale,
         typename ColumnVector<Int64>::Container & out)
     {
-        ScaleType decimal_scale = in.getScale();
+        ScaleType in_scale = in.getScale();
+        auto decimal_scale = intExp10OfSize<NativeType>(in_scale);
         const T * end_in = in.data() + in.size();
 
         const T * __restrict p_in = in.data();
@@ -634,6 +631,9 @@ public:
 template <typename T, RoundingMode rounding_mode, ScaleMode scale_mode>
 struct DecimalRoundingImpl<T, rounding_mode, scale_mode, T>
 {
+    static_assert(IsDecimal<T>);
+    using NativeType = typename T::NativeType;
+
 private:
     using Op = DecimalRoundingComputation<T, rounding_mode, scale_mode, T>;
     using Data = T;
@@ -644,7 +644,8 @@ public:
         size_t scale,
         typename ColumnDecimal<T>::Container & out)
     {
-        ScaleType decimal_scale = in.getScale();
+        ScaleType in_scale = in.getScale();
+        auto decimal_scale = intExp10OfSize<NativeType>(in_scale);
         const T * end_in = in.data() + in.size();
 
         const T * __restrict p_in = in.data();
@@ -698,7 +699,12 @@ struct Dispatcher
 
         if constexpr (IsDecimal<OutputType>)
         {
-            auto col_res = ColumnDecimal<OutputType>::create(col->getData().size(), col->getData().getScale());
+            UInt32 res_scale = 0;
+            if constexpr (rounding_mode == RoundingMode::Round || rounding_mode == RoundingMode::Trunc)
+            {
+                res_scale = col->getData().getScale();
+            }
+            auto col_res = ColumnDecimal<OutputType>::create(col->getData().size(), res_scale);
             typename ColumnDecimal<OutputType>::Container & vec_res = col_res->getData();
             applyInternal(col, vec_res, col_res, block, scale_arg, result);
         }
@@ -813,6 +819,20 @@ public:
                     fmt::format("Illegal type {} of argument of function {}", arguments[0]->getName(), getName()),
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
+        if constexpr (rounding_mode == RoundingMode::Ceil || rounding_mode == RoundingMode::Floor)
+        {
+            if (arguments[0]->isDecimal())
+            {
+                if (const auto * decimal_type32 = checkAndGetDataType<DataTypeDecimal32>(arguments[0].get()))
+                    return std::make_shared<DataTypeDecimal32>(decimal_type32->getPrec(), 0);
+                else if (const auto * decimal_type64 = checkAndGetDataType<DataTypeDecimal64>(arguments[0].get()))
+                    return std::make_shared<DataTypeDecimal64>(decimal_type64->getPrec(), 0);
+                else if (const auto * decimal_type128 = checkAndGetDataType<DataTypeDecimal128>(arguments[0].get()))
+                    return std::make_shared<DataTypeDecimal128>(decimal_type128->getPrec(), 0);
+                else if (const auto * decimal_type256 = checkAndGetDataType<DataTypeDecimal256>(arguments[0].get()))
+                    return std::make_shared<DataTypeDecimal256>(decimal_type256->getPrec(), 0);
+            }
+        }
         return arguments[0];
     }
 

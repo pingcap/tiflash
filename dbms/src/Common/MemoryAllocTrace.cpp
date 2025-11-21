@@ -68,14 +68,18 @@ bool process_mem_usage(double & resident_set, Int64 & cur_proc_num_threads, UInt
     return true;
 }
 
-std::tuple<UInt64, Int64, UInt64> process_mem_usage()
+ProcessMemoryUsage get_process_mem_usage()
 {
     double resident_set;
     Int64 cur_proc_num_threads = 1;
     UInt64 cur_virt_size = 0;
     process_mem_usage(resident_set, cur_proc_num_threads, cur_virt_size);
-    resident_set *= 1024; // unit: byte
-    return std::make_tuple(resident_set, cur_proc_num_threads, cur_virt_size);
+    resident_set *= 1024; // transfrom from KB to bytes
+    return ProcessMemoryUsage{
+        static_cast<size_t>(resident_set),
+        cur_virt_size,
+        cur_proc_num_threads,
+    };
 }
 
 } // namespace DB

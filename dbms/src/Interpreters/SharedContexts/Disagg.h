@@ -19,8 +19,8 @@
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/SharedContexts/Disagg_fwd.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore_fwd.h>
-#include <Storages/DeltaMerge/Remote/RNDeltaIndexCache_fwd.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache_fwd.h>
+#include <Storages/DeltaMerge/Remote/RNMVCCIndexCache_fwd.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager_fwd.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService_fwd.h>
 #include <Storages/PathPool_fwd.h>
@@ -66,8 +66,8 @@ struct SharedContextDisagg : private boost::noncopyable
     DB::DM::Remote::RNLocalPageCachePtr rn_page_cache;
 
     /// Only for read node.
-    /// It is a cache for the delta index, stores in the memory.
-    DB::DM::Remote::RNDeltaIndexCachePtr rn_delta_index_cache;
+    /// It is a cache for the mvcc index, stores in the memory.
+    DB::DM::Remote::RNMVCCIndexCachePtr rn_mvcc_index_cache;
 
     static SharedContextDisaggPtr create(Context & global_context_)
     {
@@ -85,7 +85,7 @@ struct SharedContextDisagg : private boost::noncopyable
 
     /// Note that the unit of max_size is quantity, not byte size. It controls how
     /// **many** of delta index will be maintained.
-    void initReadNodeDeltaIndexCache(size_t max_size);
+    void initReadNodeMVCCIndexCache(size_t max_size);
 
     void initWriteNodeSnapManager();
 

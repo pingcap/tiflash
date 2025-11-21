@@ -170,15 +170,15 @@ void IOPriorityQueue::submit(std::vector<TaskPtr> & tasks)
     }
 }
 
-void IOPriorityQueue::cancel(const String & query_id, const String &)
+void IOPriorityQueue::cancel(const TaskCancelInfo & cancel_info)
 {
-    if unlikely (query_id.empty())
+    if unlikely (cancel_info.query_id.empty())
         return;
 
     std::lock_guard lock(mu);
-    if (cancel_query_id_cache.add(query_id))
+    if (cancel_query_id_cache.add(cancel_info.query_id))
     {
-        collectCancelledTasks(cancel_task_queue, query_id);
+        collectCancelledTasks(cancel_task_queue, cancel_info.query_id);
         cv.notify_all();
     }
 }

@@ -24,6 +24,7 @@
 
 #include <chrono>
 #include <condition_variable>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <unordered_map>
@@ -42,7 +43,7 @@ struct MPPGatherTaskSet
     State state = Normal;
     String error_message;
     /// <sender_task_id, <receiver_task_id, alarm>>
-    std::unordered_map<Int64, std::unordered_map<Int64, grpc::Alarm>> alarms;
+    std::unordered_map<Int64, std::unordered_map<Int64, std::reference_wrapper<grpc::Alarm>>> alarms;
     /// only used in scheduler
     std::queue<MPPTaskId> waiting_tasks;
     bool isInNormalState() const { return state == Normal; }
@@ -193,6 +194,8 @@ public:
         return monitored_tasks.find(task_unique_id) != monitored_tasks.end();
     }
 
+    void waitAllMPPTasksFinish(const std::unique_ptr<Context> & context);
+
     std::mutex mu;
     std::condition_variable cv;
     bool is_shutdown = false;
@@ -219,6 +222,8 @@ class MPPTaskManager : private boost::noncopyable
     std::condition_variable cv;
 
     std::shared_ptr<MPPTaskMonitor> monitor;
+
+    std::atomic<bool> is_available{true};
 
 public:
     explicit MPPTaskManager(MPPTaskSchedulerPtr scheduler);
@@ -271,6 +276,9 @@ public:
     MPPQueryId getCurrentMinTSOQueryId(const String & resource_group_name);
 
     bool isTaskExists(const MPPTaskId & id);
+
+    void setUnavailable() { is_available = false; }
+    bool isAvailable() { return is_available; }
 
 private:
     MPPQueryPtr addMPPQuery(

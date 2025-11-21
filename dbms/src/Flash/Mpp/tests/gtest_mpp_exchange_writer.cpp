@@ -43,8 +43,10 @@
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.cpp>
 #include <Flash/Mpp/FineGrainedShuffleWriter.cpp>
 #include <Flash/Mpp/HashPartitionWriter.cpp>
+#include <cstddef>
 #include <cstdlib>
 #include <ctime>
+#include <vector>
 
 namespace DB
 {
@@ -414,6 +416,7 @@ try
         part_col_ids,
         part_col_collators,
         *dag_context_ptr,
+        1024 * 1024 * 16,
         fine_grained_shuffle_stream_count,
         fine_grained_shuffle_batch_size,
         DB::MPPDataPacketV0,
@@ -479,6 +482,7 @@ try
             part_col_ids,
             part_col_collators,
             *dag_context_ptr,
+            1024 * 1024 * 16,
             fine_grained_shuffle_stream_count,
             fine_grained_shuffle_batch_size,
             DB::MPPDataPacketV1,
@@ -566,6 +570,7 @@ try
         part_col_ids,
         part_col_collators,
         *dag_context_ptr,
+        1024 * 1024 * 16,
         fine_grained_shuffle_stream_count,
         fine_grained_shuffle_batch_size,
         DB::MPPDataPacketV0,
@@ -600,6 +605,61 @@ try
 }
 CATCH
 
+TEST_F(TestMPPExchangeWriter, testFineGrainedShuffleWriterWithMaxBufferedBytes)
+try
+{
+    const size_t block_rows = 64;
+    const size_t block_num = 64;
+    const uint16_t part_num = 4;
+    const uint32_t fine_grained_shuffle_stream_count = 8;
+    const Int64 fine_grained_shuffle_batch_size = 108;
+    const std::vector<UInt64> max_buffered_bytes_vec = {1, 1024 * 1024 * 1024};
+    const std::vector<size_t> expected_response_num = {block_num, 8};
+
+    for (size_t i = 0; i < max_buffered_bytes_vec.size(); i++)
+    {
+        // 1. Build Block.
+        std::vector<Block> blocks;
+        for (size_t i = 0; i < block_num; ++i)
+        {
+            blocks.emplace_back(prepareUniformBlock(block_rows));
+            blocks.emplace_back(prepareUniformBlock(0));
+        }
+        Block header = blocks.back();
+
+        // 2. Build MockExchangeWriter.
+        std::unordered_map<uint16_t, TrackedMppDataPacketPtrs> write_report;
+        auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
+            write_report[part_id].emplace_back(packet);
+        };
+        auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num, *dag_context_ptr);
+
+        // 3. Start to write.
+        auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockExchangeWriter>>>(
+            mock_writer,
+            part_col_ids,
+            part_col_collators,
+            *dag_context_ptr,
+            max_buffered_bytes_vec[i],
+            fine_grained_shuffle_stream_count,
+            fine_grained_shuffle_batch_size,
+            DB::MPPDataPacketV0,
+            tipb::CompressionMode::NONE);
+        dag_writer->prepare(blocks[0].cloneEmpty());
+        for (const auto & block : blocks)
+            dag_writer->write(block);
+        dag_writer->flush();
+
+        // 4. Start to check write_report.
+        ASSERT_EQ(write_report.size(), part_num);
+        for (const auto & ele : write_report)
+        {
+            ASSERT_EQ(ele.second.size(), expected_response_num[i]);
+        }
+    }
+}
+CATCH
+
 TEST_F(TestMPPExchangeWriter, testHashPartitionWriter)
 try
 {
@@ -630,6 +690,7 @@ try
         part_col_ids,
         part_col_collators,
         batch_send_min_limit,
+        1024 * 1024 * 16,
         *dag_context_ptr,
         DB::MPPDataPacketV0,
         tipb::CompressionMode::NONE);
@@ -652,6 +713,58 @@ try
             }
         }
         ASSERT_EQ(decoded_block_rows, per_part_rows);
+    }
+}
+CATCH
+
+TEST_F(TestMPPExchangeWriter, testHashPartitionWriterWithMaxBufferedBytes)
+try
+{
+    const size_t block_rows = 64;
+    const size_t block_num = 64;
+    const size_t batch_send_min_limit = block_rows * block_num / 2;
+    const uint16_t part_num = 4;
+    const std::vector<UInt64> max_buffered_bytes_vec = {1, 1024 * 1024 * 1024};
+    const std::vector<size_t> expected_response_num = {block_num, 2};
+
+    for (size_t i = 0; i < max_buffered_bytes_vec.size(); i++)
+    {
+        // 1. Build Blocks.
+        std::vector<Block> blocks;
+        for (size_t i = 0; i < block_num; ++i)
+        {
+            blocks.emplace_back(prepareUniformBlock(block_rows));
+            blocks.emplace_back(prepareUniformBlock(0));
+        }
+        Block header = blocks.back();
+
+        // 2. Build MockExchangeWriter.
+        std::unordered_map<uint16_t, TrackedMppDataPacketPtrs> write_report;
+        auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
+            write_report[part_id].emplace_back(packet);
+        };
+        auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num, *dag_context_ptr);
+
+        // 3. Start to write.
+        auto dag_writer = std::make_shared<HashPartitionWriter<std::shared_ptr<MockExchangeWriter>>>(
+            mock_writer,
+            part_col_ids,
+            part_col_collators,
+            batch_send_min_limit,
+            max_buffered_bytes_vec[i],
+            *dag_context_ptr,
+            DB::MPPDataPacketV0,
+            tipb::CompressionMode::NONE);
+        for (const auto & block : blocks)
+            dag_writer->write(block);
+        dag_writer->flush();
+
+        // 4. Start to check write_report.
+        ASSERT_EQ(write_report.size(), part_num);
+        for (const auto & ele : write_report)
+        {
+            ASSERT_EQ(ele.second.size(), expected_response_num[i]);
+        }
     }
 }
 CATCH
@@ -684,6 +797,7 @@ try
     auto dag_writer = std::make_shared<BroadcastOrPassThroughWriter<std::shared_ptr<MockExchangeWriter>>>(
         mock_writer,
         batch_send_min_limit,
+        1024 * 1024 * 16,
         *dag_context_ptr,
         MPPDataPacketVersion::MPPDataPacketV0,
         tipb::CompressionMode::NONE,
@@ -705,6 +819,53 @@ try
         }
     }
     ASSERT_EQ(decoded_block_rows, expect_rows);
+}
+CATCH
+
+TEST_F(TestMPPExchangeWriter, testBroadcastOrPassThroughWriterWithMaxBufferedBytes)
+try
+{
+    const size_t block_rows = 64;
+    const size_t block_num = 64;
+    const size_t batch_send_min_limit = block_rows * block_num / 2;
+    const std::vector<UInt64> max_buffered_bytes_vec = {1, 1024 * 1024 * 1024};
+    const std::vector<size_t> expected_response_num = {block_num, 2};
+
+    for (size_t i = 0; i < max_buffered_bytes_vec.size(); i++)
+    {
+        // 1. Build Blocks.
+        std::vector<Block> blocks;
+        for (size_t i = 0; i < block_num; ++i)
+        {
+            blocks.emplace_back(prepareRandomBlock(block_rows));
+            blocks.emplace_back(prepareRandomBlock(0));
+        }
+        Block header = blocks.back();
+
+        // 2. Build MockExchangeWriter.
+        TrackedMppDataPacketPtrs write_report;
+        auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
+            ASSERT_EQ(part_id, 0);
+            write_report.emplace_back(packet);
+        };
+        auto mock_writer = std::make_shared<MockExchangeWriter>(checker, 1, *dag_context_ptr);
+
+        // 3. Start to write.
+        auto dag_writer = std::make_shared<BroadcastOrPassThroughWriter<std::shared_ptr<MockExchangeWriter>>>(
+            mock_writer,
+            batch_send_min_limit,
+            max_buffered_bytes_vec[i],
+            *dag_context_ptr,
+            MPPDataPacketVersion::MPPDataPacketV0,
+            tipb::CompressionMode::NONE,
+            tipb::ExchangeType::Broadcast);
+
+        for (const auto & block : blocks)
+            dag_writer->write(block);
+        dag_writer->flush();
+
+        ASSERT_EQ(write_report.size(), expected_response_num[i]);
+    }
 }
 CATCH
 
@@ -738,6 +899,7 @@ try
         auto dag_writer = std::make_shared<BroadcastOrPassThroughWriter<std::shared_ptr<MockExchangeWriter>>>(
             mock_writer,
             batch_send_min_limit,
+            1024 * 1024 * 16,
             *dag_context_ptr,
             MPPDataPacketVersion::MPPDataPacketV1,
             mode,
@@ -812,6 +974,7 @@ try
             part_col_ids,
             part_col_collators,
             batch_send_min_limit,
+            1024 * 1024 * 16,
             *dag_context_ptr,
             DB::MPPDataPacketV1,
             mode);
@@ -897,6 +1060,7 @@ try
             part_col_ids,
             part_col_collators,
             *dag_context_ptr,
+            1024 * 1024 * 16,
             fine_grained_shuffle_stream_count,
             fine_grained_shuffle_batch_size,
             mpp_version,
@@ -956,6 +1120,7 @@ try
             part_col_ids,
             part_col_collators,
             /*batch_send_min_limit*/ 1024,
+            1024 * 1024 * 16,
             *dag_context_ptr,
             mpp_version,
             mode);

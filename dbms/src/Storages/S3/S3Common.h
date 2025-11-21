@@ -59,13 +59,13 @@ Exception fromS3Error(const Aws::S3::S3Error & e, const std::string & fmt, Args 
     return DB::Exception(ErrorCodes::S3_ERROR, fmt + S3ErrorMessage(e), args...);
 }
 
+bool updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const LoggerPtr & log);
+
 class TiFlashS3Client : public Aws::S3::S3Client
 {
 public:
     // Usually one tiflash instance only need access one bucket.
     // Store the bucket name to simplify some param passing.
-
-    TiFlashS3Client(const String & bucket_name_, const String & root_);
 
     TiFlashS3Client(
         const String & bucket_name_,
@@ -141,9 +141,12 @@ public:
 private:
     ClientFactory() = default;
     DISALLOW_COPY_AND_MOVE(ClientFactory);
-    std::unique_ptr<Aws::S3::S3Client> create() const;
 
-    static std::unique_ptr<Aws::S3::S3Client> create(const StorageS3Config & config_, const LoggerPtr & log);
+    static std::pair<Aws::Client::ClientConfiguration, bool> initAwsClientConfig(
+        const StorageS3Config & storage_config,
+        const LoggerPtr & log);
+
+    static std::unique_ptr<Aws::S3::S3Client> create(const StorageS3Config & storage_config, const LoggerPtr & log);
 
     std::shared_ptr<TiFlashS3Client> initClientFromWriteNode();
 

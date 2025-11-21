@@ -28,7 +28,8 @@ WriteBufferFromWritableFilePtr WriteBufferFromWritableFileBuilder::buildPtr(
     int flags,
     mode_t mode,
     char * existing_memory,
-    size_t alignment)
+    size_t alignment,
+    const SpillLimiterPtr & spill_limiter_)
 {
     auto writeable_file = file_provider->newWritableFile(
         file_name_,
@@ -37,7 +38,8 @@ WriteBufferFromWritableFilePtr WriteBufferFromWritableFileBuilder::buildPtr(
         create_new_encryption_info_,
         write_limiter_,
         flags,
-        mode);
+        mode,
+        spill_limiter_);
     return std::make_unique<WriteBufferFromWritableFile>(writeable_file, buf_size, existing_memory, alignment);
 }
 
@@ -51,7 +53,8 @@ WriteBufferFromWritableFile WriteBufferFromWritableFileBuilder::build(
     int flags,
     mode_t mode,
     char * existing_memory,
-    size_t alignment)
+    size_t alignment,
+    const SpillLimiterPtr & spill_limiter_)
 {
     auto writeable_file = file_provider->newWritableFile(
         file_name_,
@@ -60,7 +63,8 @@ WriteBufferFromWritableFile WriteBufferFromWritableFileBuilder::build(
         create_new_encryption_info_,
         write_limiter_,
         flags,
-        mode);
+        mode,
+        spill_limiter_);
     return WriteBufferFromWritableFile(writeable_file, buf_size, existing_memory, alignment);
 }
 

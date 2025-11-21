@@ -70,9 +70,9 @@ void MPPTaskStatistics::initializeExecutorDAG(DAGContext * dag_context_)
     assert(dag_context_->isMPPTask());
     dag_context = dag_context_;
     const auto & root_executor = dag_context->dag_request.rootExecutor();
-    if unlikely (!root_executor.has_exchange_sender())
+    if unlikely (!root_executor.has_exchange_sender() && !root_executor.has_cte_sink())
         throw TiFlashException(
-            "The root executor isn't ExchangeSender in MPP, which is unexpected.",
+            "The root executor isn't ExchangeSender or CTESink in MPP, which is unexpected.",
             Errors::Coprocessor::BadRequest);
 
     is_root = dag_context->isRootMPPTask();

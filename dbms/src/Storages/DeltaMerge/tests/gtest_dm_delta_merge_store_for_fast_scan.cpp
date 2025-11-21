@@ -85,8 +85,9 @@ TEST_P(DeltaMergeStoreRWTest, TestFastScanWithOnlyInsertWithoutRangeFilter)
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ true,
+            DMReadOptions{
+                .is_fast_scan = true,
+            },
             /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -171,8 +172,9 @@ TEST_P(DeltaMergeStoreRWTest, TestFastScanWithOnlyInsertWithRangeFilter)
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ true,
+            DMReadOptions{
+                .is_fast_scan = true,
+            },
             /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -251,8 +253,9 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ true,
+            DMReadOptions{
+                .is_fast_scan = true,
+            },
             /* expected_block_size= */ 1024)[0];
         switch (mode)
         {
@@ -385,8 +388,9 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ true,
+            DMReadOptions{
+                .is_fast_scan = true,
+            },
             /* expected_block_size= */ 1024)[0];
         switch (mode)
         {
@@ -498,8 +502,9 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ true,
+            DMReadOptions{
+                .is_fast_scan = true,
+            },
             /* expected_block_size= */ 1024)[0];
         switch (mode)
         {
@@ -614,8 +619,9 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ true,
+            DMReadOptions{
+                .is_fast_scan = true,
+            },
             /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -698,8 +704,9 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ true,
+            DMReadOptions{
+                .is_fast_scan = true,
+            },
             /* expected_block_size= */ 1024)[0];
 
         switch (mode)
@@ -723,7 +730,7 @@ try
                 return res;
             }();
             ASSERT_EQ(pk_coldata.size(), 3 * num_write_rows);
-            ASSERT_INPUTSTREAM_COLS_UR(
+            ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
                 in,
                 Strings({DMTestEnv::pk_name}),
                 createColumns({createColumn<Int64>(pk_coldata)}));
@@ -869,8 +876,9 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ true,
+            DMReadOptions{
+                .is_fast_scan = true,
+            },
             /* expected_block_size= */ 1024)[0];
         // filter del mark = 1， thus just read the insert data before delete
         ASSERT_INPUTSTREAM_COLS_UR(
@@ -898,8 +906,9 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ true,
+            DMReadOptions{
+                .is_fast_scan = true,
+            },
             /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -946,8 +955,9 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ true,
+            DMReadOptions{
+                .is_fast_scan = true,
+            },
             /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -974,8 +984,9 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order = */ false,
-            /* is_fast_scan= */ true,
+            DMReadOptions{
+                .is_fast_scan = true,
+            },
             /* expected_block_size= */ 1024)[0];
         // filter del mark = 1， thus just read the insert data before delete
         ASSERT_INPUTSTREAM_COLS_UR(
@@ -1036,8 +1047,9 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ true,
+            DMReadOptions{
+                .is_fast_scan = true,
+            },
             /* expected_block_size= */ 1024)[0];
         auto pk_coldata = createNumbers<Int64>(num_deleted_rows, num_rows_write);
         ASSERT_EQ(pk_coldata.size(), num_rows_write - num_deleted_rows);
@@ -1123,8 +1135,9 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ true,
+            DMReadOptions{
+                .is_fast_scan = true,
+            },
             /* expected_block_size= */ 1024)[0];
 
         switch (mode)
@@ -1148,7 +1161,7 @@ try
                 return res;
             }();
             ASSERT_EQ(pk_coldata.size(), 3 * num_write_rows);
-            ASSERT_INPUTSTREAM_COLS_UR(
+            ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
                 in,
                 Strings({DMTestEnv::pk_name}),
                 createColumns({createColumn<Int64>(pk_coldata)}));
@@ -1217,8 +1230,10 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{
+                // normal case
+                .is_fast_scan = false,
+            },
             /* expected_block_size= */ 1024)[0];
         // Data is not guaranteed to be returned in order.
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
@@ -1273,8 +1288,9 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ true,
+            DMReadOptions{
+                .is_fast_scan = true,
+            },
             /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -1320,8 +1336,9 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ true,
+            DMReadOptions{
+                .is_fast_scan = true,
+            },
             /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_NROWS(in, num_rows_write - num_deleted_rows);
     }
@@ -1401,8 +1418,9 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ true,
+            DMReadOptions{
+                .is_fast_scan = true,
+            },
             /* expected_block_size= */ 1024)[0];
         size_t rows = 0;
         in->readPrefix();
