@@ -123,7 +123,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(tiflash_proxy_process_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=\"tiflash\"}[1m])",
+              "expr": "rate(tiflash_proxy_process_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=~\".*tiflash\"}[1m])",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{instance}}",

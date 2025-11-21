@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Interpreters/Settings.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -182,6 +184,9 @@ struct Settings
     M(SettingUInt64, dt_merged_file_max_size, 16 * 1024 * 1024, "Small files are merged into one or more files not larger than dt_merged_file_max_size")                                                                                \
     M(SettingDouble, dt_page_gc_threshold, 0.5, "Max valid rate of deciding to do a GC in PageStorage")                                                                                                                                 \
     M(SettingDouble, dt_page_gc_threshold_raft_data, 0.05, "Max valid rate of deciding to do a GC for BlobFile storing PageData in PageStorage")                                                                                        \
+    M(SettingInt64, enable_version_chain, 0, "Enable version chain or not: 0 - disable, 1 - enabled. "                                                                                                                                  \
+                                             "More details are in the comments of `enum class VersionChainMode`."                                                                                                                       \
+                                             "Modifying this configuration requires a restart to reset the in-memory state.")                                                                                                           \
     /* DeltaTree engine testing settings */\
     M(SettingUInt64, dt_insert_max_rows, 0, "[testing] Max rows of insert blocks when write into DeltaTree Engine. By default 0 means no limit.")                                                                                       \
     M(SettingBool, dt_raw_filter_range, true, "[unused] Do range filter or not when read data in raw mode in DeltaTree Engine.")                                                                                                        \
@@ -241,7 +246,8 @@ struct Settings
     M(SettingInt64, remote_gc_small_size, 128 * 1024, "The files with total size less than this threshold will be compacted")                                                                                                           \
     /* Disagg arch reading settings */ \
     M(SettingUInt64, dt_write_page_cache_limit_size, 2 * 1024 * 1024, "Limit size per write batch when compute node writing to PageStorage cache")                                                                                      \
-    M(SettingDouble, dt_filecache_max_downloading_count_scale, 1.0, "Max downloading task count of FileCache = io thread count * dt_filecache_max_downloading_count_scale.")                                                            \
+    M(SettingDouble, dt_filecache_downloading_count_scale, 2.0, "Max concurrency of download task count of FileCache = number of logical cpu cores * dt_filecache_downloading_count_scale.")                                                              \
+    M(SettingDouble, dt_filecache_max_downloading_count_scale, 10.0, "Max queue size of download task count of FileCache = number of logical cpu cores * dt_filecache_max_downloading_count_scale.")                                    \
     M(SettingUInt64, dt_filecache_min_age_seconds, 1800, "Files of the same priority can only be evicted from files that were not accessed within `dt_filecache_min_age_seconds` seconds.")                                             \
     M(SettingBool, dt_enable_fetch_memtableset, true, "Whether fetching delta cache in FetchDisaggPages")                                                                                                                               \
     M(SettingUInt64, dt_fetch_pages_packet_limit_size, 512 * 1024, "Response packet bytes limit of FetchDisaggPages, 0 means one page per packet")                                                                                      \
@@ -252,6 +258,7 @@ struct Settings
     M(SettingUInt64, disagg_build_task_timeout, DEFAULT_DISAGG_TASK_BUILD_TIMEOUT_SEC, "disagg task establish timeout, unit is second.")                                                                                                \
     M(SettingUInt64, disagg_task_snapshot_timeout, DEFAULT_DISAGG_TASK_TIMEOUT_SEC, "disagg task snapshot max endurable time, unit is second.")                                                                                         \
     M(SettingUInt64, disagg_fetch_pages_timeout, DEFAULT_DISAGG_FETCH_PAGES_TIMEOUT_SEC, "fetch disagg pages timeout for one segment, unit is second.")                                                                                 \
+    M(SettingString, disagg_blocklist_wn_store_id, "", "comma separated unsigned integers representing `store_id`s of stores that are blocklisted.")                                                                                    \
     /* Disagg arch FastAddPeer settings */ \
     M(SettingInt64, fap_wait_checkpoint_timeout_seconds, 80, "The max time wait for a usable checkpoint for FAP")                                                                                                                       \
     M(SettingUInt64, fap_task_timeout_seconds, 120, "The max time FAP can take before fallback")                                                                                                                                        \

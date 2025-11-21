@@ -65,13 +65,16 @@ void VectorIndexInputStream::initSearchResults()
 
     // 2. Keep the top k minimum distances rows.
     // [0, top_k) will be the top k minimum distances rows. (However it is not sorted)
-    const auto top_k = std::min(search_results->size(), ctx->ann_query_info->top_k());
-    std::nth_element( //
-        search_results->begin(),
-        search_results->begin() + top_k,
-        search_results->end(),
-        [](const auto & lhs, const auto & rhs) { return lhs.distance < rhs.distance; });
-    search_results->resize(top_k);
+    const auto top_k = ctx->ann_query_info->top_k();
+    if (top_k < search_results->size())
+    {
+        std::nth_element( //
+            search_results->begin(),
+            search_results->begin() + top_k,
+            search_results->end(),
+            [](const auto & lhs, const auto & rhs) { return lhs.distance < rhs.distance; });
+        search_results->resize(top_k);
+    }
 
     // 3. Sort by rowid for the first K rows.
     std::sort( //

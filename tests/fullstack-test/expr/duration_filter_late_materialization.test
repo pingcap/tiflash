@@ -30,18 +30,26 @@ mysql> insert into test.t select * from test.t;
 mysql> insert into test.t select * from test.t;
 mysql> insert into test.t select * from test.t;
 mysql> insert into test.t select * from test.t;
+mysql> insert into test.t values ('08:20:00.00', 4), ('11:11:35.00', 5);
 
 mysql> alter table test.t set tiflash replica 1;
 
 func> wait_table test t
 
-mysql> select * from test.t where a = '500:11:11.123500';
 # success, but the result is empty
-mysql> select hour(a), i from test.t where a = '500:11:11.123500';
-mysql> select minute(a), i from test.t where a = '500:11:11.123500';
-mysql> select second(a), i from test.t where a = '500:11:11.123500';
-mysql> select a, i from test.t where hour(a) = 500;
-mysql> select a, i from test.t where minute(a) = 13;
-mysql> select a, i from test.t where second(a) = 14;
+mysql> set @@tidb_isolation_read_engines='tiflash'; select * from test.t where a = '500:11:11.123500';
+mysql> set @@tidb_isolation_read_engines='tiflash'; select hour(a), i from test.t where a = '500:11:11.123500';
+mysql> set @@tidb_isolation_read_engines='tiflash'; select minute(a), i from test.t where a = '500:11:11.123500';
+mysql> set @@tidb_isolation_read_engines='tiflash'; select second(a), i from test.t where a = '500:11:11.123500';
+mysql> set @@tidb_isolation_read_engines='tiflash'; select a, i from test.t where hour(a) = 500;
+mysql> set @@tidb_isolation_read_engines='tiflash'; select a, i from test.t where minute(a) = 13;
+mysql> set @@tidb_isolation_read_engines='tiflash'; select a, i from test.t where second(a) = 14;
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select bit_and(a) from test.t where i > 0 and a between '08:20:09.00' and '11:11:36.00' group by i;
++------------+
+| bit_and(a) |
++------------+
+|     111135 |
++------------+
 
 mysql> drop table test.t;

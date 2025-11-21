@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# next-gen does not support cop/batch_cop, skip this test
+#SKIP_FOR_NEXT_GEN
+
 mysql> drop table if exists test.t
 mysql> create table test.t(a char(10), b int, c tinyint unsigned)
 mysql> insert into test.t values('', -3, 2), ('abc', -3, 2)

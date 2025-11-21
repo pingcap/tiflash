@@ -26,6 +26,16 @@ extern const int LOGICAL_ERROR;
 
 namespace TiDB
 {
+
+const std::array<char, 128> weight_ascii_ci
+    = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12,
+       0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F, 0x20, 0x21, 0x22, 0x23, 0x24, 0x25,
+       0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B, 0x2C, 0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38,
+       0x39, 0x3A, 0x3B, 0x3C, 0x3D, 0x3E, 0x3F, 0x40, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6A, 0x6B,
+       0x6C, 0x6D, 0x6E, 0x6F, 0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x5B, 0x5C, 0x5D, 0x5E,
+       0x5F, 0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F, 0x70, 0x71,
+       0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x7B, 0x7C, 0x7D, 0x7E, 0x7F};
+
 TiDBCollators dummy_collators;
 std::vector<std::string> dummy_sort_key_contaners;
 std::string dummy_sort_key_contaner;
@@ -72,12 +82,13 @@ inline Rune decodeUtf8Char(const char * s, size_t & offset)
 template <typename Collator>
 void Pattern<Collator>::compile(const std::string & pattern, char escape)
 {
-    chars.clear();
+    pattern_weights.clear();
     match_types.clear();
 
-    chars.reserve(pattern.length() * sizeof(typename Collator::CharType));
+    pattern_weights.reserve(pattern.length() * sizeof(typename Collator::CharType));
     match_types.reserve(pattern.length() * sizeof(typename Pattern::MatchType));
 
+    auto last_tp = MatchType::Match;
     size_t offset = 0;
     while (offset < pattern.length())
     {
@@ -102,61 +113,264 @@ void Pattern<Collator>::compile(const std::string & pattern, char escape)
         }
         else if (c == '%')
         {
+            // Only keep one '%' for continuous '%'s
+            if (last_tp == MatchType::Any)
+            {
+                continue;
+            }
             tp = MatchType::Any;
         }
         else
         {
             tp = MatchType::Match;
         }
-        chars.push_back(c);
+        pattern_weights.push_back(c);
         match_types.push_back(tp);
+        last_tp = tp;
     }
+}
+
+template <typename Collator>
+void Pattern<Collator>::tryCompileAsciiCi(const std::string & pattern, char escape)
+{
+    is_ascii_ci_pattern = false;
+    // Can't handle non-ASCII escape
+    if (escape < 0)
+    {
+        return;
+    }
+    ascii_ci_pattern.clear();
+    ascii_ci_pattern.reserve(pattern.length());
+
+    for (size_t i = 0; i < pattern.length(); i++)
+    {
+        auto c = pattern[i];
+        // Can't handle non-ASCII character
+        if (c < 0)
+        {
+            return;
+        }
+
+        if (c == escape)
+        {
+            if (i < pattern.length() - 1)
+            {
+                // use next char to match
+                c = pattern[++i];
+            }
+            else
+            {
+                // use `escape` to match
+            }
+        }
+        else if (c == '%')
+        {
+            if (i > 0 && pattern[i - 1] == '%')
+            {
+                continue;
+            }
+        }
+
+        ascii_ci_pattern.push_back(weight_ascii_ci[c]);
+    }
+    is_ascii_ci_pattern = true;
 }
 
 template <typename Collator>
 bool Pattern<Collator>::match(const char * s, size_t length) const
 {
-    size_t s_offset = 0, next_s_offset = 0, tmp_s_offset = 0;
-    size_t p_idx = 0, next_p_idx = 0;
-    while (p_idx < chars.size() || s_offset < length)
+    if (is_ascii_ci_pattern)
     {
-        if (p_idx < chars.size())
+        if (auto ret = tryMatchAsciiCi(s, length); ret >= 0)
         {
-            switch (match_types[p_idx])
+            return ret;
+        }
+        // if ret == -1, means the string contains non-ASCII characters, continue to check
+    }
+
+    size_t s_offset = 0, backtrack_s_offset = 0;
+    size_t p_idx = 0, p_idx_after_any = 0;
+    while (true)
+    {
+        if (p_idx < pattern_weights.size())
+        {
+            if (s_offset >= length)
             {
-            case Match:
-                if (s_offset < length
-                    && Collator::regexEq(Collator::decodeChar(s, tmp_s_offset = s_offset), chars[p_idx]))
+                // If the last character is '%', it means the pattern is like 'a%',
+                // we can match the rest of the string with '%'.
+                return static_cast<bool>(match_types[p_idx] == Any && p_idx == pattern_weights.size() - 1);
+            }
+            else
+            {
+                if (match_types[p_idx] == Match)
                 {
-                    p_idx++;
-                    s_offset = tmp_s_offset;
-                    continue;
+                    if (Collator::regexEq(Collator::decodeChar(s, s_offset), pattern_weights[p_idx]))
+                    {
+                        p_idx++;
+                        // To compare the next
+                        continue;
+                    }
                 }
-                break;
-            case One:
-                if (s_offset < length)
+                else if (match_types[p_idx] == One)
                 {
                     p_idx++;
                     Collator::decodeChar(s, s_offset);
                     continue;
                 }
-                break;
-            case Any:
-                next_p_idx = p_idx;
-                Collator::decodeChar(s, next_s_offset = s_offset);
-                p_idx++;
-                continue;
+                else if (match_types[p_idx] == Any)
+                {
+                    // Last '%' can match all left characters
+                    if (p_idx == pattern_weights.size() - 1)
+                    {
+                        return true;
+                    }
+                    p_idx_after_any = ++p_idx;
+                    backtrack_s_offset = s_offset;
+                    continue;
+                }
             }
         }
-        if (0 < next_s_offset && next_s_offset <= length)
+        else
         {
-            p_idx = next_p_idx;
-            s_offset = next_s_offset;
+            // All characters in the pattern have been matched,
+            // we need to check if the rest of the string is empty.
+            if (s_offset >= length)
+            {
+                return true;
+            }
+            // Else there are still characters in the string to match,
+            // we need to backtrack below if there is '%' before.
+        }
+
+        // Backtrack
+        if (p_idx_after_any > 0)
+        {
+            Collator::decodeChar(s, s_offset = backtrack_s_offset);
+            // Fast forward to the first match position
+            if (match_types[p_idx_after_any] == Match)
+            {
+                while (true)
+                {
+                    backtrack_s_offset = s_offset;
+                    if (Collator::regexEq(Collator::decodeChar(s, s_offset), pattern_weights[p_idx_after_any]))
+                    {
+                        break;
+                    }
+                    if (s_offset >= length)
+                    {
+                        return false;
+                    }
+                }
+
+                p_idx = p_idx_after_any + 1;
+                continue;
+            }
+            p_idx = p_idx_after_any;
+            backtrack_s_offset = s_offset;
             continue;
         }
         return false;
     }
     return true;
+}
+
+// Similar logical like match, but don't need to decodeChar
+template <typename Collator>
+int Pattern<Collator>::tryMatchAsciiCi(const char * s, size_t length) const
+{
+    size_t p_idx = 0;
+    size_t p_idx_after_any = 0;
+    size_t str_idx = 0;
+    size_t backtrack_idx = 0;
+
+    while (true)
+    {
+        if (p_idx < ascii_ci_pattern.size())
+        {
+            if (str_idx >= length)
+            {
+                if (match_types[p_idx] == Any && p_idx == ascii_ci_pattern.size() - 1)
+                {
+                    return 1;
+                }
+                else
+                {
+                    return 0;
+                }
+            }
+            else
+            {
+                // Can't handle non-ASCII escape
+                if (s[str_idx] < 0)
+                {
+                    return -1;
+                }
+                if ((match_types[p_idx] == Match && weight_ascii_ci[s[str_idx]] == ascii_ci_pattern[p_idx])
+                    || match_types[p_idx] == One)
+                {
+                    p_idx++;
+                    str_idx++;
+                    continue;
+                }
+                else if (match_types[p_idx] == Any)
+                {
+                    if (p_idx == ascii_ci_pattern.size() - 1)
+                    {
+                        return 1;
+                    }
+                    p_idx_after_any = ++p_idx;
+                    backtrack_idx = str_idx;
+                    continue;
+                }
+            }
+        }
+        else
+        {
+            if (str_idx >= length)
+            {
+                return 1;
+            }
+        }
+
+        // Backtrack
+        if (p_idx_after_any > 0)
+        {
+            str_idx = ++backtrack_idx;
+            if (match_types[p_idx_after_any] == Match)
+            { // Fast forward to the first match position
+                while (str_idx < length)
+                {
+                    // Can't handle non-ASCII escape
+                    if (s[str_idx] < 0)
+                    {
+                        return -1;
+                    }
+
+                    if (weight_ascii_ci[s[str_idx]] != ascii_ci_pattern[p_idx_after_any])
+                    {
+                        str_idx = ++backtrack_idx;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+
+                if (str_idx >= length)
+                {
+                    return 0;
+                }
+                str_idx++;
+                p_idx = p_idx_after_any + 1;
+                continue;
+            }
+
+            p_idx = p_idx_after_any;
+            continue;
+        }
+        return 0;
+    }
+    return 1;
 }
 
 template <typename T, bool padding>

@@ -16,14 +16,45 @@
 #include <Common/ThreadManager.h>
 #include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Executor/ResultQueue.h>
+#include <TestUtils/ExecutorTestUtils.h>
+#include <TestUtils/FailPointUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
 namespace DB::tests
 {
-class PipelineExecutorContextTestRunner : public ::testing::Test
+class PipelineExecutorContextTestRunner : public ExecutorTest
 {
+public:
+    ~PipelineExecutorContextTestRunner() override = default;
 };
+
+TEST_F(PipelineExecutorContextTestRunner, suffixExceptionTest)
+try
+{
+    context.addMockTable(
+        "simple_test",
+        "t1",
+        {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}},
+        {toNullableVec<String>("a", {"1"}), toNullableVec<String>("b", {"3"})});
+
+    auto req = context.scan("simple_test", "t1").aggregation({Count(col("a"))}, {col("a")}).build(context);
+
+    const auto failpoints = std::vector{
+        "random_pipeline_model_execute_suffix_failpoint-1",
+        "random_pipeline_model_execute_prefix_failpoint-1"};
+
+    for (const auto & fp : failpoints)
+    {
+        auto config_str = fmt::format("[flash]\nrandom_fail_points = \"{}\"", fp);
+        initRandomFailPoint(config_str);
+        enablePipeline(true);
+        // Expect this case throw failpoint instead of stuck.
+        ASSERT_THROW(executeStreams(req, 1), Exception);
+        disableRandomFailPoint(config_str);
+    }
+}
+CATCH
 
 TEST_F(PipelineExecutorContextTestRunner, waitTimeout)
 try

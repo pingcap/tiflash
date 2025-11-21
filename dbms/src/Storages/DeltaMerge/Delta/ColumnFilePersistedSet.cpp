@@ -75,7 +75,7 @@ void ColumnFilePersistedSet::checkColumnFiles(const ColumnFilePersisteds & new_c
 
     RUNTIME_CHECK_MSG(
         new_rows == rows && new_deletes == deletes,
-        "Rows and deletes check failed. Actual: rows[{}], deletes[{}]. Expected: rows[{}], deletes[{}]. Current column "
+        "Rows and deletes check failed. Actual: rows={} deletes={} Expected: rows={} deletes={}. Current column "
         "files: {}, new column files: {}.", //
         new_rows,
         new_deletes,
@@ -316,6 +316,7 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
     minor_compaction_version += 1;
     LOG_DEBUG(log, "{}, before commit compaction, persisted column files: {}", info(), detailInfo());
     ColumnFilePersisteds new_persisted_files;
+    // Generate the new persisted files by the compaction results.
     for (const auto & task : compaction->getTasks())
     {
         if (task.is_trivial_move)
@@ -333,11 +334,28 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
                     || (file->getId() != (*old_persisted_files_iter)->getId())
                     || (file->getRows() != (*old_persisted_files_iter)->getRows())))
             {
-                throw Exception("Compaction algorithm broken", ErrorCodes::LOGICAL_ERROR);
+                // The ColumnFile in `to_compact` is not in the latest persisted files, skip
+                // the minor compaction.
+                LOG_WARNING(
+                    log,
+                    "Minor Compaction is skipped, "
+                    "compaction={{{}}} persisted_files={} task={} "
+                    "old_persisted_files_iter.is_end={} "
+                    "file->getId={} old_persist_files->getId={} file->getRows={} old_persist_files->getRows={}",
+                    compaction->info(),
+                    detailInfo(),
+                    task.toString(),
+                    old_persisted_files_iter == persisted_files.end(),
+                    file->getId(),
+                    old_persisted_files_iter == persisted_files.end() ? -1 : (*old_persisted_files_iter)->getId(),
+                    file->getRows(),
+                    old_persisted_files_iter == persisted_files.end() ? -1 : (*old_persisted_files_iter)->getRows());
+                return false;
             }
             old_persisted_files_iter++;
         }
     }
+    // The new persisted_files contains the files that appended during the minor compaction.
     while (old_persisted_files_iter != persisted_files.end())
     {
         new_persisted_files.emplace_back(*old_persisted_files_iter);
@@ -375,7 +393,7 @@ ColumnFileSetSnapshotPtr ColumnFilePersistedSet::createSnapshot(const IColumnFil
     {
         LOG_ERROR(
             log,
-            "Rows and deletes check failed. Actual: rows[{}], deletes[{}]. Expected: rows[{}], deletes[{}].",
+            "Rows and deletes check failed. Actual: rows={} deletes={}. Expected: rows={} deletes={}",
             total_rows,
             total_deletes,
             rows.load(),

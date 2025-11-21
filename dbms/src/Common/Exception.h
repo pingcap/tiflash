@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Common/Exception.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -121,9 +123,10 @@ void tryLogCurrentException(const char * log_name, const std::string & start_of_
 void tryLogCurrentException(const LoggerPtr & logger, const std::string & start_of_message = "");
 void tryLogCurrentException(Poco::Logger * logger, const std::string & start_of_message = "");
 
+// log current exception as FATAL level
 void tryLogCurrentFatalException(const char * log_name, const std::string & start_of_message = "");
-void tryLogCurrentFatalException(const LoggerPtr & logger, const std::string & start_of_message = "");
-void tryLogCurrentFatalException(Poco::Logger * logger, const std::string & start_of_message = "");
+// log current exception as WARNING level
+void tryLogCurrentWarningException(const LoggerPtr & logger, const std::string & start_of_message = "");
 
 /** Prints current exception in canonical format.
  * with_stacktrace - prints stack trace for DB::Exception.

@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wsign-compare"
-#include <gtest/gtest.h>
-#pragma GCC diagnostic pop
+#include <Common/Logger.h>
 #include <IO/BaseFile/PosixRandomAccessFile.h>
 #include <IO/BaseFile/PosixWritableFile.h>
 #include <IO/BaseFile/RateLimiter.h>
@@ -28,14 +25,15 @@
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/Page/PageUtil.h>
+#include <TestUtils/TiFlashTestBasic.h>
 #include <fmt/format.h>
 
+#include <ext/scope_guard.h>
 #include <random>
 
-namespace DB
+namespace DB::tests
 {
-namespace tests
-{
+
 namespace
 {
 std::random_device dev; // NOLINT(cert-err58-cpp)
@@ -164,7 +162,8 @@ void runSeekingTest()
             {
                 auto [offset, whence, length, next] = randomOperation(size, current);
                 current = next;
-                buffer.seek(offset, whence);
+                auto ret = buffer.seek(offset, whence);
+                ASSERT_GE(ret, 0);
                 ASSERT_EQ(current, buffer.getPositionInFile());
                 std::vector<char> data_slice(length);
                 std::vector<char> file_slice(length);
@@ -221,7 +220,8 @@ void runReadBigTest()
     {
         auto file = provider->newRandomAccessFile(filename, {"/tmp/test.enc", "test.enc"}, limiter->getReadLimiter());
         auto buffer = FramedChecksumReadBuffer<D>(file);
-        buffer.seek(static_cast<ssize_t>(i));
+        auto ret = buffer.seek(static_cast<ssize_t>(i));
+        ASSERT_GE(ret, 0);
         buffer.readBig(compare.data(), i);
         ASSERT_EQ(std::memcmp(compare.data(), data.data() + i, i), 0) << "seed: " << seed;
     }
@@ -372,5 +372,129 @@ TEST_STACKED_SEEKING(CRC32)
 TEST_STACKED_SEEKING(CRC64)
 TEST_STACKED_SEEKING(City128)
 TEST_STACKED_SEEKING(XXH3)
-} // namespace tests
-} // namespace DB
+
+template <ChecksumAlgo D>
+void runCompressedSeekableReaderBufferTest()
+try
+{
+    auto log = Logger::get();
+    // Create a temporary file for testing
+    const std::string temp_file_path = "/tmp/tiflash_compressed_seek_test.dat";
+    SCOPE_EXIT({
+        Poco::File file(temp_file_path);
+        if (file.exists())
+            file.remove();
+    });
+    // Test data - create multiple blocks with different patterns
+    std::vector<std::string> test_blocks;
+
+    test_blocks = {
+        std::string(1500, 'A') + "BLOCK0_END",
+        std::string(800, 'B') + "BLOCK1_END",
+        "", // Block 2 is empty
+        "", // Block 3 is empty
+    };
+
+    std::vector<size_t> block_compressed_offsets;
+    std::vector<size_t> block_decompressed_sizes;
+
+    auto [limiter, provider] = prepareIO();
+    auto config = DM::DMChecksumConfig{{}, TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE, D};
+
+    // Write compressed data to file
+    {
+        auto plain_file = ChecksumWriteBufferBuilder::build(
+            true,
+            provider,
+            temp_file_path,
+            EncryptionPath(temp_file_path, temp_file_path),
+            false,
+            limiter->getWriteLimiter(),
+            config.getChecksumAlgorithm(),
+            config.getChecksumFrameLength(),
+            /*flags*/
+            -1,
+            /*mode*/ 0666,
+            1048576);
+        auto compressed_buf
+            = CompressedWriteBuffer<>::build(*plain_file, CompressionSettings(CompressionMethod::LZ4), false);
+
+        for (const auto & block_data : test_blocks)
+        {
+            // Record the compressed file offset before writing this block
+            block_compressed_offsets.push_back(plain_file->count());
+            block_decompressed_sizes.push_back(block_data.size());
+
+            // Write the block data
+            compressed_buf->write(block_data.data(), block_data.size());
+            compressed_buf->next(); // Force compression of this block
+        }
+    }
+
+    LOG_INFO(log, "Created compressed file with {} blocks", test_blocks.size());
+    for (size_t i = 0; i < block_compressed_offsets.size(); ++i)
+    {
+        LOG_INFO(
+            log,
+            "Block {}: compressed_offset={}, decompressed_size={}",
+            i,
+            block_compressed_offsets[i],
+            block_decompressed_sizes[i]);
+    }
+
+
+    auto compressed_in = CompressedReadBufferFromFileBuilder::build(
+        provider,
+        temp_file_path,
+        EncryptionPath(temp_file_path, temp_file_path),
+        config.getChecksumFrameLength(),
+        limiter->getReadLimiter(),
+        config.getChecksumAlgorithm(),
+        config.getChecksumFrameLength());
+
+    // 1. Check seek + read
+    for (size_t i = 0; i < test_blocks.size(); ++i)
+    {
+        // Seek to the start of each block
+        LOG_INFO(log, "Seeking to block {} at offset {}", i, block_compressed_offsets[i]);
+        compressed_in->seek(block_compressed_offsets[i], 0);
+
+        // Read the data
+        std::string read_data;
+        read_data.resize(block_decompressed_sizes[i]);
+        compressed_in->readBig(read_data.data(), block_decompressed_sizes[i]);
+
+        // Verify the data matches
+        ASSERT_EQ(read_data, test_blocks[i]) << "Block " << i << " data mismatch";
+    }
+
+    // Seek in inverse order to test seek again
+    for (size_t i = 0; i < test_blocks.size(); ++i)
+    {
+        assert(i + 1 <= test_blocks.size());
+        const size_t target_block = test_blocks.size() - i - 1;
+        compressed_in->seek(block_compressed_offsets[target_block], 0);
+        std::string read_data;
+        read_data.resize(block_decompressed_sizes[target_block]);
+        size_t num_read = compressed_in->readBig(read_data.data(), test_blocks[target_block].size());
+        ASSERT_EQ(num_read, test_blocks[target_block].size());
+        read_data.resize(num_read);
+        ASSERT_EQ(read_data, test_blocks[target_block])
+            << "Block " << target_block << " data mismatch after seek again";
+    }
+}
+CATCH
+
+#define TEST_COMPRESSEDSEEKABLE(ALGO)                                \
+    TEST(DMChecksumBuffer##ALGO, CompressedSeekable)                 \
+    {                                                                \
+        runCompressedSeekableReaderBufferTest<ChecksumAlgo::ALGO>(); \
+    } // NOLINT(cert-err58-cpp)
+
+TEST_COMPRESSEDSEEKABLE(None)
+TEST_COMPRESSEDSEEKABLE(CRC32)
+TEST_COMPRESSEDSEEKABLE(CRC64)
+TEST_COMPRESSEDSEEKABLE(City128)
+TEST_COMPRESSEDSEEKABLE(XXH3)
+
+} // namespace DB::tests

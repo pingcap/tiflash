@@ -21,8 +21,6 @@
 #include <common/logger_useful.h>
 #include <kvproto/kvrpcpb.pb.h>
 
-#include <algorithm>
-#include <condition_variable>
 #include <memory>
 #include <thread>
 
@@ -32,6 +30,7 @@ namespace tests
 {
 class ReadIndexTest;
 } // namespace tests
+class KVStore;
 
 struct AsyncWaker
 {
@@ -95,9 +94,7 @@ public:
     void runOneRound(SteadyClock::duration min_dur, size_t id);
     void stop();
     ~ReadIndexWorkerManager();
-    BatchReadIndexRes batchReadIndex(
-        const std::vector<kvrpcpb::ReadIndexRequest> & reqs,
-        uint64_t timeout_ms = 10 * 1000);
+    BatchReadIndexRes batchReadIndex(const std::vector<kvrpcpb::ReadIndexRequest> & reqs, uint64_t timeout_ms);
 
     static std::unique_ptr<ReadIndexWorkerManager> newReadIndexWorkerManager(
         const TiFlashRaftProxyHelper & proxy_helper,

@@ -299,7 +299,7 @@ inline DeltaIndexPtr buildDeltaIndex(
         snapshot->delta,
         pk_ver_col_defs,
         segment.getRowKeyRange(),
-        ReadTag::MVCC);
+        ReadTag::Internal);
 
     auto [delta_index, fully_indexed] = segment.ensurePlace(
         dm_context,

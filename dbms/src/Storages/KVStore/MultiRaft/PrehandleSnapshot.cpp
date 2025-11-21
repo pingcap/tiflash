@@ -15,6 +15,7 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Common/setThreadName.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
@@ -29,6 +30,7 @@
 #include <Storages/KVStore/MultiRaft/PreHandlingTrace.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/TiKVHelpers/PDTiKVClient.h>
 #include <Storages/KVStore/Types.h>
 #include <Storages/KVStore/Utils/AsyncTasks.h>
 #include <Storages/StorageDeltaMerge.h>
@@ -306,7 +308,7 @@ PrehandleResult KVStore::preHandleSnapshotToFiles(
 
 size_t KVStore::getMaxParallelPrehandleSize() const
 {
-#if SERVERLESS_PROXY == 0
+#if ENABLE_NEXT_GEN == 0
     return getMaxPrehandleSubtaskSize();
 #else
     auto max_subtask_size = getMaxPrehandleSubtaskSize();
@@ -350,7 +352,7 @@ static inline std::pair<std::vector<std::string>, size_t> getSplitKey(
 
     // Don't change the order of following checks, `getApproxBytes` involves some overhead,
     // although it is optimized to bring about the minimum overhead.
-#if SERVERLESS_PROXY == 0
+#if ENABLE_NEXT_GEN == 0
     if (new_region->getClusterRaftstoreVer() != RaftstoreVer::V2)
         return std::make_pair(std::vector<std::string>{}, 0);
 #endif

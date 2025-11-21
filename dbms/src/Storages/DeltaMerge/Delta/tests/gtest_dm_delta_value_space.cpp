@@ -460,7 +460,7 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
     auto persisted_file_set = delta->getPersistedFileSet();
     MinorCompactionPtr compaction_task;
     {
-        PageReaderPtr reader = dmContext().storage_pool->newLogReader(dmContext().getReadLimiter(), true, "");
+        PageReaderPtr reader = dmContext().storage_pool->newLogReader(dmContext().getReadLimiter(), "");
         compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext().delta_small_column_file_rows);
         // There should be three compaction sub_tasks.
         // The first task try to compact the first three column files to a larger one.
@@ -501,7 +501,7 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
         compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext().delta_small_column_file_rows);
         EXPECT_EQ(compaction_task->getFirsCompactIndex(), 2);
         // generate and commit
-        PageReaderPtr reader = dmContext().storage_pool->newLogReader(dmContext().getReadLimiter(), true, "");
+        PageReaderPtr reader = dmContext().storage_pool->newLogReader(dmContext().getReadLimiter(), "");
         compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext().delta_small_column_file_rows);
         EXPECT_EQ(compaction_task->getFirsCompactIndex(), 2);
         compaction_task->prepare(dmContext(), wbs, *reader);
@@ -525,7 +525,7 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
             delta->flush(dmContext());
             while (true)
             {
-                PageReaderPtr reader = dmContext().storage_pool->newLogReader(dmContext().getReadLimiter(), true, "");
+                PageReaderPtr reader = dmContext().storage_pool->newLogReader(dmContext().getReadLimiter(), "");
                 auto minor_compaction_task
                     = persisted_file_set->pickUpMinorCompaction(dmContext().delta_small_column_file_rows);
                 if (!minor_compaction_task)
@@ -593,7 +593,7 @@ TEST_F(DeltaValueSpaceTest, MinorCompactionWithLocalIndexes)
     auto persisted_file_set = delta->getPersistedFileSet();
     MinorCompactionPtr compaction_task;
     {
-        PageReaderPtr reader = dmContext().storage_pool->newLogReader(dmContext().getReadLimiter(), true, "");
+        PageReaderPtr reader = dmContext().storage_pool->newLogReader(dmContext().getReadLimiter(), "");
         compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext().delta_small_column_file_rows);
         // There should be three compaction sub_tasks.
         // The first task try to compact the first three column files to a larger one.

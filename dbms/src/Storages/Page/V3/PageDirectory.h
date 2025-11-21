@@ -49,9 +49,10 @@ class PageDirectorySnapshot : public DB::PageStorageSnapshot
 public:
     using TimePoint = std::chrono::time_point<std::chrono::steady_clock>;
 
-    explicit PageDirectorySnapshot(UInt64 seq, const String & tracing_id_)
+    explicit PageDirectorySnapshot(UInt64 seq, SnapshotType tp, const String & tracing_id_)
         : sequence(seq)
         , create_thread(Poco::ThreadNumber::get())
+        , type(tp)
         , tracing_id(tracing_id_)
         , create_time(std::chrono::steady_clock::now())
     {
@@ -69,7 +70,8 @@ public:
 
 public:
     const UInt64 sequence;
-    const unsigned create_thread;
+    const UInt32 create_thread;
+    const SnapshotType type;
     const String tracing_id;
 
 private:
@@ -127,9 +129,9 @@ public:
     {
         if (snap_seq == 0)
         {
-            // When `snap_seq` is 0, it means the deref operation is caused by rewritting a ref page to a normal page.
-            // Actually we can collapse versioned_ref_counts here too because there should be no other gc happend concurrently.
-            // But collpase it when `snap_seq` is not zero should be enough. So we just do an append here.
+            // When `snap_seq` is 0, it means the deref operation is caused by rewriting a ref page to a normal page.
+            // Actually we can collapse versioned_ref_counts here too because there should be no other gc happened concurrently.
+            // But collapse it when `snap_seq` is not zero should be enough. So we just do an append here.
             versioned_ref_counts->emplace_back(PageVersion(0, 0), -deref_count_delta);
         }
         else
@@ -309,7 +311,7 @@ public:
     // Commit the upsert entry after full gc.
     // Return a PageId, if the page id is valid, it means it rewrite a RefPage into
     // a normal Page. Caller must call `derefAndClean` to decrease the ref-count of
-    // the returing page id.
+    // the returning page id.
     [[nodiscard]] PageId createUpsertEntry(const PageVersion & ver, const PageEntryV3 & entry, bool strict_check);
 
     bool createNewRef(const PageVersion & ver, const PageId & ori_page_id);
@@ -426,6 +428,27 @@ private:
     std::shared_ptr<PageId> external_holder;
 };
 
+struct SnapshotGCStatistics
+{
+    UInt64 seq = 0;
+    UInt64 delta_tree_only_seq = 0;
+    std::optional<UInt64> general_seq = 0;
+    UInt64 lowest_seq_of_all = 0;
+
+    UInt64 num_invalid = 0;
+    UInt64 num_valid = 0;
+
+    // "stale" means the snapshot last longer than expected
+    UInt64 num_stale = 0;
+
+    // The longest living snapshot info
+    double longest_alive_time = 0;
+    UInt64 longest_alive_seq = 0;
+    SnapshotType longest_alive_type = SnapshotType::General;
+    UInt32 longest_alive_from_thread_id = 0;
+    String longest_alive_from_tracing_id;
+};
+
 // `PageDirectory` store VersionedPageEntries for all pages.
 // User can acquire a snapshot from it and get a consist result by the snapshot.
 // All its functions are consider concurrent safe.
@@ -454,7 +477,8 @@ public:
         WALStorePtr && wal,
         UInt64 max_persisted_log_files_ = MAX_PERSISTED_LOG_FILES);
 
-    PageDirectorySnapshotPtr createSnapshot(const String & tracing_id = "") const;
+    PageDirectorySnapshotPtr createSnapshot(SnapshotType tp = SnapshotType::General, const String & tracing_id = "")
+        const;
 
     SnapshotsStatistics getSnapshotsStat() const;
 
@@ -580,6 +604,9 @@ private:
         const PageDirectorySnapshotPtr & snap,
         bool throw_on_not_exist) const;
 
+    // Perform a GC for in-memory snapshots
+    SnapshotGCStatistics gcInMemSnapshots() const;
+
 private:
     // Only `std::map` is allow for `MVCCMap`. Cause `std::map::insert` ensure that
     // "No iterators or references are invalidated"
@@ -654,12 +681,15 @@ private:
 
 namespace details
 {
+// Get the max sequence number from a serialized edit record.
+// If the record is empty, return std::nullopt.
 template <typename Trait>
-UInt64 getMaxSequenceForRecord(const String & record)
+std::optional<UInt64> getMaxSequenceForRecord(const String & record)
 {
     auto edit = Trait::Serializer::deserializeFrom(record, nullptr);
     const auto & records = edit.getRecords();
-    RUNTIME_CHECK(!records.empty(), record.size());
+    if (records.empty())
+        return std::nullopt;
     return records.back().version.sequence;
 }
 } // namespace details

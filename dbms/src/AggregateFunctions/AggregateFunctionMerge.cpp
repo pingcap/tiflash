@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/AggregateFunctions/AggregateFunctionMerge.cpp
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,7 +30,7 @@ extern const int BAD_ARGUMENTS;
 class AggregateFunctionCombinatorMerge final : public IAggregateFunctionCombinator
 {
 public:
-    String getName() const override { return "Merge"; };
+    String getName() const override { return "Merge"; }
 
     DataTypes transformArguments(const DataTypes & arguments) const override
     {

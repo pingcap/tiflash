@@ -62,6 +62,7 @@ namespace DM::tests
 static const google::protobuf::RepeatedPtrField<tipb::Expr> empty_pushed_down_filters{};
 static const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> empty_used_indexes{};
 static const auto empty_ann_query_info = tipb::ANNQueryInfo{};
+static const auto empty_fts_query_info = tipb::FTSQueryInfo{};
 
 TEST(StorageDeltaMergeTest, ReadWriteCase1)
 try
@@ -136,6 +137,7 @@ try
     query_info.dag_query = std::make_unique<DAGQueryInfo>(
         filters,
         empty_ann_query_info,
+        empty_fts_query_info,
         empty_pushed_down_filters, // Not care now
         empty_used_indexes, // Not care now
         source_columns, // Not care now
@@ -693,6 +695,7 @@ try
     query_info.dag_query = std::make_unique<DAGQueryInfo>(
         filters,
         empty_ann_query_info,
+        empty_fts_query_info,
         empty_pushed_down_filters, // Not care now
         empty_used_indexes, // Not care now
         source_columns, // Not care now
@@ -812,6 +815,7 @@ try
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             filters,
             empty_ann_query_info,
+            empty_fts_query_info,
             empty_pushed_down_filters, // Not care now
             empty_used_indexes, // Not care now
             source_columns, // Not care now

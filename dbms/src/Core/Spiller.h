@@ -113,7 +113,7 @@ public:
         bool append_dummy_read_stream = false);
     UInt64 spilledRows(UInt64 partition_id);
     void finishSpill();
-    bool hasSpilledData() const { return has_spilled_data; };
+    bool hasSpilledData() const { return has_spilled_data; }
     /// only for test now
     bool releaseSpilledFileOnRestore() const { return release_spilled_file_on_restore; }
     void removeConstantColumns(Block & block) const;

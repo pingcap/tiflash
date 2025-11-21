@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Columns/IColumn.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -253,6 +255,10 @@ public:
     virtual const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr & collator) = 0;
     const char * deserializeAndInsertFromArena(const char * pos) { return deserializeAndInsertFromArena(pos, nullptr); }
 
+    /// Size of serialized column data in memory (may be approximate).
+    /// The main difference between `serializeByteSize` and `byteSize` is that `serializeByteSize` uses UInt32
+    /// instead of size_t to represent the length of each element.
+    virtual size_t serializeByteSize() const = 0;
     /// Count the serialize byte size and added to the byte_size.
     /// The byte_size.size() must be equal to the column size.
     virtual void countSerializeByteSize(PaddedPODArray<size_t> & /* byte_size */) const = 0;

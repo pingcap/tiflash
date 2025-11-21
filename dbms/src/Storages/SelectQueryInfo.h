@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Storages/SelectQueryInfo.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -53,11 +55,13 @@ struct SelectQueryInfo
     std::string req_id;
     bool keep_order = true;
     bool is_fast_scan = false;
+    bool has_multiple_partitions = false;
 
     SelectQueryInfo();
     ~SelectQueryInfo();
 
-    // support copying and moving
+    // Support copying and moving
+    // Note: should update the following functions when adding new members
     SelectQueryInfo(const SelectQueryInfo & rhs);
     SelectQueryInfo(SelectQueryInfo && rhs) noexcept;
 

@@ -350,7 +350,7 @@ try
     }
 
     // generate snapshot for reading
-    auto snap0 = page_storage->getSnapshot("read");
+    auto snap0 = page_storage->getGeneralSnapshot("read");
 
     // Delete the page before reading from snapshot
     {
@@ -544,14 +544,14 @@ try
     // read with snapshot
     FAIL_POINT_PAUSE(FailPoints::pause_before_page_dir_update_local_cache);
     auto th_read0 = std::async([&]() {
-        auto snap0 = page_storage->getSnapshot("read0");
+        auto snap0 = page_storage->getGeneralSnapshot("read0");
         auto page = page_storage->read(test_page_id, nullptr, snap0);
         ASSERT_TRUE(page.isValid());
         ASSERT_EQ("nahida opened her eyes", String(page.data.begin(), page.data.size()));
         LOG_DEBUG(log, "th_read0 finished");
     });
     auto th_read1 = std::async([&]() {
-        auto snap1 = page_storage->getSnapshot("read1");
+        auto snap1 = page_storage->getGeneralSnapshot("read1");
         auto page = page_storage->read(test_page_id, nullptr, snap1);
         ASSERT_TRUE(page.isValid());
         ASSERT_EQ("nahida opened her eyes", String(page.data.begin(), page.data.size()));
@@ -907,7 +907,8 @@ try
         PosixWritableFile wf(full_path, true, -1, 0600, nullptr);
         for (const auto & d : filename_with_data.data)
         {
-            wf.write(const_cast<char *>(d.data()), d.size());
+            auto n_write = wf.write(const_cast<char *>(d.data()), d.size());
+            ASSERT_EQ(n_write, d.size());
         }
         wf.fsync();
         wf.close();

@@ -22,7 +22,10 @@
 
 namespace DB
 {
-/// TableIDMap use to store the mapping between table_id -> database_id and partition_id -> logical_table_id
+/* TableIDMap is a thread-safe struct use to store the mapping of
+ * - table_id -> database_id
+ * - partition_id -> logical_table_id
+ */
 struct TableIDMap
 {
     explicit TableIDMap(const LoggerPtr & log_)

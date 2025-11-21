@@ -39,7 +39,8 @@ public:
         size_t row_count_hint,
         size_t hash_value_bytes,
         size_t probe_prefetch_threshold,
-        bool enable_tagged_pointer_);
+        bool enable_tagged_pointer_,
+        bool is_unit_test);
 
     template <typename HashValueType>
     bool build(
@@ -47,7 +48,7 @@ public:
         std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
         size_t max_build_size);
 
-    size_t getBucketNum(size_t hash) const
+    size_t getBucketNum(UInt64 hash) const
     {
         return (hash & pointer_table_size_mask) >> (hash_value_bits - pointer_table_size_degree);
     }
@@ -57,7 +58,7 @@ public:
     bool enableProbePrefetch() const { return enable_probe_prefetch; }
     bool enableTaggedPointer() const { return enable_tagged_pointer; }
 
-    RowPtr getHeadPointer(size_t hash) const
+    RowPtr getHeadPointer(UInt64 hash) const
     {
         return reinterpret_cast<RowPtr>(pointer_table[getBucketNum(hash)].load(std::memory_order_relaxed));
     }
@@ -71,7 +72,11 @@ private:
         std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
         size_t max_build_size);
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
+#endif
     size_t hash_value_bits = 0;
     size_t pointer_table_size = 0;
     size_t pointer_table_size_degree = 0;

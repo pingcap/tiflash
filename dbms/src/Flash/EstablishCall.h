@@ -19,6 +19,7 @@
 #include <Common/Stopwatch.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/MPPTaskId.h>
+#include <grpcpp/alarm.h>
 #include <kvproto/tikvpb.grpc.pb.h>
 #include <prometheus/gauge.h>
 
@@ -95,6 +96,8 @@ public:
     grpc::ServerContext * getGrpcContext() { return &ctx; }
 
     String getResourceGroupName() const { return resource_group_name; }
+    grpc::Alarm & getAlarm();
+
 
 private:
     /// WARNING: Since a event from one grpc completion queue may be handled by different
@@ -142,5 +145,6 @@ private:
     String resource_group_name;
     String connection_id;
     double waiting_task_time_ms = 0;
+    grpc::Alarm alarm{};
 };
 } // namespace DB

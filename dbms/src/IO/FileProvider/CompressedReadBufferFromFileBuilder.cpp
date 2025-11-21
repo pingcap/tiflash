@@ -40,16 +40,11 @@ std::unique_ptr<LegacyCompressedReadBufferFromFile> CompressedReadBufferFromFile
 std::unique_ptr<CompressedReadBufferFromFile> CompressedReadBufferFromFileBuilder::build(
     String && data,
     const String & file_name,
-    size_t estimated_size,
     ChecksumAlgo checksum_algorithm,
     size_t checksum_frame_size)
 {
-    auto file_in = ChecksumReadBufferBuilder::build(
-        std::move(data),
-        file_name,
-        estimated_size,
-        checksum_algorithm,
-        checksum_frame_size);
+    auto file_in
+        = ChecksumReadBufferBuilder::build(std::move(data), file_name, checksum_algorithm, checksum_frame_size);
     return std::make_unique<CompressedReadBufferFromFileImpl<false>>(std::move(file_in));
 }
 

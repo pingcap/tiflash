@@ -2,6 +2,8 @@ header:
   license:
     spdx-id: Apache-2.0
     copyright-owner: PingCAP, Inc.
+  # Allow the "Modified from" declaration at the top of the file
+  license-location-threshold: 1024
   paths-ignore:
     - '.gitignore'
     - '.gitattributes'
@@ -15,6 +17,9 @@ header:
     - 'NOTICE'
     - 'tiflash-architecture.png'
     - 'contrib/'
+    - 'libs/libclara-prebuilt/'
+    - 'libs/libclara/target/'
+    - 'build/'
     - '.github/'
     - 'docs/'
     - 'tests/testsdata/'
@@ -33,8 +38,6 @@ header:
     - '**/README'
     - '**/COPYRIGHT'
     - '**/NOTICE'
-    - 'dbms/src/IO/tests/limit_read_buffer.reference'
-    - 'dbms/src/IO/tests/DevicePixelRatio'
     - 'dbms/src/Flash/tests/gtest_*.out'
     - 'Cargo.lock'
     - 'Cargo.toml'

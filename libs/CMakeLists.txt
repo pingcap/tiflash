@@ -1,3 +1,5 @@
+# Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/libs/CMakeLists.txt
+#
 # Copyright 2023 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -31,3 +33,7 @@ endif ()
 
 add_subdirectory (libsymbolization)
 add_subdirectory (libprocess_metrics)
+
+if (ENABLE_CLARA AND USE_INTERNAL_LIBCLARA)
+    add_subdirectory (libclara-cmake)
+endif ()

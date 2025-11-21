@@ -33,7 +33,7 @@ enum class NASemiJoinStep : UInt8
     /// with at least one null join key.
     /// The join keys of this left row must not have null.
     NOT_NULL_KEY_CHECK_NULL_ROWS,
-    /// Like `CHECK_NULL_ROWS_NOT_NULL` except the join keys of this left row must have null.
+    /// Like `NOT_NULL_KEY_CHECK_NULL_ROWS` except the join keys of this left row must have null.
     NULL_KEY_CHECK_NULL_ROWS,
     /// Check join key equal condition and other conditions(if any) for all right rows in blocks.
     /// The join keys of this left row must have null.

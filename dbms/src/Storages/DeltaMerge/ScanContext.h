@@ -15,11 +15,16 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Common/TiFlashMetrics.h>
+#include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
+#include <Storages/KVStore/Types.h>
 #include <common/types.h>
 #include <fmt/format.h>
+#include <pingcap/pd/Types.h>
+#include <prometheus/counter.h>
 #include <sys/types.h>
 #include <tipb/executor.pb.h>
 
@@ -28,6 +33,8 @@
 
 namespace DB::DM
 {
+class PushDownExecutor;
+using PushDownExecutorPtr = std::shared_ptr<PushDownExecutor>;
 /// ScanContext is used to record statistical information in table scan for current query.
 /// For each table scan(one executor id), there is only one ScanContext.
 /// ScanContext helps to collect the statistical information of the table scan to show in `EXPLAIN ANALYZE`.
@@ -53,10 +60,26 @@ public:
     std::atomic<uint64_t> total_local_region_num{0};
     std::atomic<uint64_t> num_stale_read{0};
 
-    // the read bytes from delta layer and stable layer (in-mem, decompressed)
-    std::atomic<uint64_t> user_read_bytes{0};
     std::atomic<uint64_t> disagg_read_cache_hit_size{0};
     std::atomic<uint64_t> disagg_read_cache_miss_size{0};
+    std::atomic<uint64_t> disagg_build_read_tasks_ms{0};
+    std::atomic<uint64_t> disagg_build_read_tasks_backoff_num{0};
+    std::atomic<uint64_t> disagg_establish_disagg_task_ms{0};
+    std::atomic<uint64_t> disagg_resolve_lock_ms{0};
+    std::atomic<uint64_t> disagg_parse_read_task_ms{0};
+    std::atomic<uint64_t> disagg_build_batch_cop_tasks_ms{0};
+    std::atomic<uint64_t> disagg_page_hit_count{0};
+    std::atomic<uint64_t> disagg_page_miss_count{0};
+    std::atomic<uint64_t> disagg_s3file_hit_count{0};
+    std::atomic<uint64_t> disagg_s3file_miss_count{0};
+    std::atomic<uint64_t> disagg_s3file_get_object_count{0};
+    std::atomic<uint64_t> disagg_s3file_get_object_ms{0};
+    std::atomic<uint64_t> disagg_s3file_read_count{0};
+    std::atomic<uint64_t> disagg_s3file_read_time_ms{0};
+    std::atomic<uint64_t> disagg_s3file_read_bytes{0};
+    std::atomic<uint64_t> disagg_s3file_seek_count{0};
+    std::atomic<uint64_t> disagg_s3file_seek_time_ms{0};
+    std::atomic<uint64_t> disagg_s3file_seek_bytes{0};
 
     // num segments, num tasks
     std::atomic<uint64_t> num_segments{0};
@@ -67,7 +90,6 @@ public:
     std::atomic<uint64_t> delta_rows{0};
     std::atomic<uint64_t> delta_bytes{0};
 
-    ReadMode read_mode = ReadMode::Normal;
 
     // - read_mode == Normal, apply mvcc to all read blocks
     // - read_mode == Bitmap, it will apply mvcc to get the bitmap
@@ -106,11 +128,53 @@ public:
     std::atomic<uint64_t> inverted_idx_indexed_rows{0};
     std::atomic<uint64_t> inverted_idx_search_selected_rows{0};
 
-    const String resource_group_name;
+    std::atomic<uint32_t> fts_n_from_inmemory_noindex{0};
+    std::atomic<uint32_t> fts_n_from_tiny_index{0};
+    std::atomic<uint32_t> fts_n_from_tiny_noindex{0};
+    std::atomic<uint32_t> fts_n_from_dmf_index{0};
+    std::atomic<uint32_t> fts_n_from_dmf_noindex{0};
+    std::atomic<uint64_t> fts_rows_from_inmemory_noindex{0};
+    std::atomic<uint64_t> fts_rows_from_tiny_index{0};
+    std::atomic<uint64_t> fts_rows_from_tiny_noindex{0};
+    std::atomic<uint64_t> fts_rows_from_dmf_index{0};
+    std::atomic<uint64_t> fts_rows_from_dmf_noindex{0};
+    std::atomic<uint64_t> fts_idx_load_total_ms{0};
+    std::atomic<uint32_t> fts_idx_load_from_cache{0};
+    std::atomic<uint32_t> fts_idx_load_from_column_file{0};
+    std::atomic<uint32_t> fts_idx_load_from_stable_s3{0};
+    std::atomic<uint32_t> fts_idx_load_from_stable_disk{0};
+    std::atomic<uint32_t> fts_idx_search_n{0};
+    std::atomic<uint64_t> fts_idx_search_total_ms{0};
+    std::atomic<uint64_t> fts_idx_dm_search_rows{0};
+    std::atomic<uint64_t> fts_idx_dm_total_read_fts_ms{0};
+    std::atomic<uint64_t> fts_idx_dm_total_read_others_ms{0};
+    std::atomic<uint64_t> fts_idx_tiny_search_rows{0};
+    std::atomic<uint64_t> fts_idx_tiny_total_read_fts_ms{0};
+    std::atomic<uint64_t> fts_idx_tiny_total_read_others_ms{0};
+    std::atomic<uint64_t> fts_brute_total_read_ms{0};
+    std::atomic<uint64_t> fts_brute_total_search_ms{0};
 
-    explicit ScanContext(const String & name = "")
-        : resource_group_name(name)
-    {}
+    const KeyspaceID keyspace_id;
+    ReadMode read_mode = ReadMode::Normal; // note: share struct padding with keyspace_id
+    const String resource_group_name;
+    PushDownExecutorPtr pushdown_executor;
+
+    explicit ScanContext(const KeyspaceID & keyspace_id_ = NullspaceID, const String & name = "")
+        : keyspace_id(keyspace_id_)
+        , resource_group_name(name)
+    {
+        if (!resource_group_name.empty())
+        {
+            mvcc_read_bytes_counter = &TiFlashMetrics::instance().getStorageRUReadBytesCounter(
+                keyspace_id,
+                resource_group_name,
+                ReadRUType::MVCC_READ);
+            query_read_bytes_counter = &TiFlashMetrics::instance().getStorageRUReadBytesCounter(
+                keyspace_id,
+                resource_group_name,
+                ReadRUType::QUERY_READ);
+        }
+    }
 
     void deserialize(const tipb::TiFlashScanContext & tiflash_scan_context_pb)
     {
@@ -127,7 +191,9 @@ public:
         create_snapshot_time_ns = tiflash_scan_context_pb.total_build_snapshot_ms() * 1000000;
         total_remote_region_num = tiflash_scan_context_pb.remote_regions();
         total_local_region_num = tiflash_scan_context_pb.local_regions();
-        user_read_bytes = tiflash_scan_context_pb.user_read_bytes();
+        // TODO: rename user_read_bytes to query_read_bytes in tipb.
+        query_read_bytes = tiflash_scan_context_pb.user_read_bytes();
+        // TODO: add mvcc_read_bytes in tipb.
         learner_read_ns = tiflash_scan_context_pb.total_learner_read_ms() * 1000000;
         disagg_read_cache_hit_size = tiflash_scan_context_pb.disagg_read_cache_hit_bytes();
         disagg_read_cache_miss_size = tiflash_scan_context_pb.disagg_read_cache_miss_bytes();
@@ -171,6 +237,32 @@ public:
         inverted_idx_search_skipped_packs = tiflash_scan_context_pb.inverted_idx_search_skipped_packs();
         inverted_idx_indexed_rows = tiflash_scan_context_pb.inverted_idx_indexed_rows();
         inverted_idx_search_selected_rows = tiflash_scan_context_pb.inverted_idx_search_selected_rows();
+
+        fts_n_from_inmemory_noindex = tiflash_scan_context_pb.fts_n_from_inmemory_noindex();
+        fts_n_from_tiny_index = tiflash_scan_context_pb.fts_n_from_tiny_index();
+        fts_n_from_tiny_noindex = tiflash_scan_context_pb.fts_n_from_tiny_noindex();
+        fts_n_from_dmf_index = tiflash_scan_context_pb.fts_n_from_dmf_index();
+        fts_n_from_dmf_noindex = tiflash_scan_context_pb.fts_n_from_dmf_noindex();
+        fts_rows_from_inmemory_noindex = tiflash_scan_context_pb.fts_rows_from_inmemory_noindex();
+        fts_rows_from_tiny_index = tiflash_scan_context_pb.fts_rows_from_tiny_index();
+        fts_rows_from_tiny_noindex = tiflash_scan_context_pb.fts_rows_from_tiny_noindex();
+        fts_rows_from_dmf_index = tiflash_scan_context_pb.fts_rows_from_dmf_index();
+        fts_rows_from_dmf_noindex = tiflash_scan_context_pb.fts_rows_from_dmf_noindex();
+        fts_idx_load_total_ms = tiflash_scan_context_pb.fts_idx_load_total_ms();
+        fts_idx_load_from_cache = tiflash_scan_context_pb.fts_idx_load_from_cache();
+        fts_idx_load_from_column_file = tiflash_scan_context_pb.fts_idx_load_from_column_file();
+        fts_idx_load_from_stable_s3 = tiflash_scan_context_pb.fts_idx_load_from_stable_s3();
+        fts_idx_load_from_stable_disk = tiflash_scan_context_pb.fts_idx_load_from_stable_disk();
+        fts_idx_search_n = tiflash_scan_context_pb.fts_idx_search_n();
+        fts_idx_search_total_ms = tiflash_scan_context_pb.fts_idx_search_total_ms();
+        fts_idx_dm_search_rows = tiflash_scan_context_pb.fts_idx_dm_search_rows();
+        fts_idx_dm_total_read_fts_ms = tiflash_scan_context_pb.fts_idx_dm_total_read_fts_ms();
+        fts_idx_dm_total_read_others_ms = tiflash_scan_context_pb.fts_idx_dm_total_read_others_ms();
+        fts_idx_tiny_search_rows = tiflash_scan_context_pb.fts_idx_tiny_search_rows();
+        fts_idx_tiny_total_read_fts_ms = tiflash_scan_context_pb.fts_idx_tiny_total_read_fts_ms();
+        fts_idx_tiny_total_read_others_ms = tiflash_scan_context_pb.fts_idx_tiny_total_read_others_ms();
+        fts_brute_total_read_ms = tiflash_scan_context_pb.fts_brute_total_read_ms();
+        fts_brute_total_search_ms = tiflash_scan_context_pb.fts_brute_total_search_ms();
     }
 
     tipb::TiFlashScanContext serialize()
@@ -188,7 +280,9 @@ public:
         tiflash_scan_context_pb.set_total_build_snapshot_ms(create_snapshot_time_ns / 1000000);
         tiflash_scan_context_pb.set_remote_regions(total_remote_region_num);
         tiflash_scan_context_pb.set_local_regions(total_local_region_num);
-        tiflash_scan_context_pb.set_user_read_bytes(user_read_bytes);
+        // TODO: rename user_read_bytes to query_read_bytes in tipb.
+        tiflash_scan_context_pb.set_user_read_bytes(userReadBytes());
+        // TODO: add mvcc_read_bytes in tipb.
         tiflash_scan_context_pb.set_total_learner_read_ms(learner_read_ns / 1000000);
         tiflash_scan_context_pb.set_disagg_read_cache_hit_bytes(disagg_read_cache_hit_size);
         tiflash_scan_context_pb.set_disagg_read_cache_miss_bytes(disagg_read_cache_miss_size);
@@ -232,6 +326,32 @@ public:
         tiflash_scan_context_pb.set_inverted_idx_indexed_rows(inverted_idx_indexed_rows);
         tiflash_scan_context_pb.set_inverted_idx_search_selected_rows(inverted_idx_search_selected_rows);
 
+        tiflash_scan_context_pb.set_fts_n_from_inmemory_noindex(fts_n_from_inmemory_noindex);
+        tiflash_scan_context_pb.set_fts_n_from_tiny_index(fts_n_from_tiny_index);
+        tiflash_scan_context_pb.set_fts_n_from_tiny_noindex(fts_n_from_tiny_noindex);
+        tiflash_scan_context_pb.set_fts_n_from_dmf_index(fts_n_from_dmf_index);
+        tiflash_scan_context_pb.set_fts_n_from_dmf_noindex(fts_n_from_dmf_noindex);
+        tiflash_scan_context_pb.set_fts_rows_from_inmemory_noindex(fts_rows_from_inmemory_noindex);
+        tiflash_scan_context_pb.set_fts_rows_from_tiny_index(fts_rows_from_tiny_index);
+        tiflash_scan_context_pb.set_fts_rows_from_tiny_noindex(fts_rows_from_tiny_noindex);
+        tiflash_scan_context_pb.set_fts_rows_from_dmf_index(fts_rows_from_dmf_index);
+        tiflash_scan_context_pb.set_fts_rows_from_dmf_noindex(fts_rows_from_dmf_noindex);
+        tiflash_scan_context_pb.set_fts_idx_load_total_ms(fts_idx_load_total_ms);
+        tiflash_scan_context_pb.set_fts_idx_load_from_cache(fts_idx_load_from_cache);
+        tiflash_scan_context_pb.set_fts_idx_load_from_column_file(fts_idx_load_from_column_file);
+        tiflash_scan_context_pb.set_fts_idx_load_from_stable_s3(fts_idx_load_from_stable_s3);
+        tiflash_scan_context_pb.set_fts_idx_load_from_stable_disk(fts_idx_load_from_stable_disk);
+        tiflash_scan_context_pb.set_fts_idx_search_n(fts_idx_search_n);
+        tiflash_scan_context_pb.set_fts_idx_search_total_ms(fts_idx_search_total_ms);
+        tiflash_scan_context_pb.set_fts_idx_dm_search_rows(fts_idx_dm_search_rows);
+        tiflash_scan_context_pb.set_fts_idx_dm_total_read_fts_ms(fts_idx_dm_total_read_fts_ms);
+        tiflash_scan_context_pb.set_fts_idx_dm_total_read_others_ms(fts_idx_dm_total_read_others_ms);
+        tiflash_scan_context_pb.set_fts_idx_tiny_search_rows(fts_idx_tiny_search_rows);
+        tiflash_scan_context_pb.set_fts_idx_tiny_total_read_fts_ms(fts_idx_tiny_total_read_fts_ms);
+        tiflash_scan_context_pb.set_fts_idx_tiny_total_read_others_ms(fts_idx_tiny_total_read_others_ms);
+        tiflash_scan_context_pb.set_fts_brute_total_read_ms(fts_brute_total_read_ms);
+        tiflash_scan_context_pb.set_fts_brute_total_search_ms(fts_brute_total_search_ms);
+
         return tiflash_scan_context_pb;
     }
 
@@ -253,7 +373,8 @@ public:
 
         total_local_region_num += other.total_local_region_num;
         total_remote_region_num += other.total_remote_region_num;
-        user_read_bytes += other.user_read_bytes;
+        query_read_bytes += other.query_read_bytes;
+        mvcc_read_bytes += other.mvcc_read_bytes;
         disagg_read_cache_hit_size += other.disagg_read_cache_hit_size;
         disagg_read_cache_miss_size += other.disagg_read_cache_miss_size;
 
@@ -301,6 +422,32 @@ public:
         inverted_idx_search_skipped_packs += other.inverted_idx_search_skipped_packs;
         inverted_idx_indexed_rows += other.inverted_idx_indexed_rows;
         inverted_idx_search_selected_rows += other.inverted_idx_search_selected_rows;
+
+        fts_n_from_inmemory_noindex += other.fts_n_from_inmemory_noindex;
+        fts_n_from_tiny_index += other.fts_n_from_tiny_index;
+        fts_n_from_tiny_noindex += other.fts_n_from_tiny_noindex;
+        fts_n_from_dmf_index += other.fts_n_from_dmf_index;
+        fts_n_from_dmf_noindex += other.fts_n_from_dmf_noindex;
+        fts_rows_from_inmemory_noindex += other.fts_rows_from_inmemory_noindex;
+        fts_rows_from_tiny_index += other.fts_rows_from_tiny_index;
+        fts_rows_from_tiny_noindex += other.fts_rows_from_tiny_noindex;
+        fts_rows_from_dmf_index += other.fts_rows_from_dmf_index;
+        fts_rows_from_dmf_noindex += other.fts_rows_from_dmf_noindex;
+        fts_idx_load_total_ms += other.fts_idx_load_total_ms;
+        fts_idx_load_from_cache += other.fts_idx_load_from_cache;
+        fts_idx_load_from_column_file += other.fts_idx_load_from_column_file;
+        fts_idx_load_from_stable_s3 += other.fts_idx_load_from_stable_s3;
+        fts_idx_load_from_stable_disk += other.fts_idx_load_from_stable_disk;
+        fts_idx_search_n += other.fts_idx_search_n;
+        fts_idx_search_total_ms += other.fts_idx_search_total_ms;
+        fts_idx_dm_search_rows += other.fts_idx_dm_search_rows;
+        fts_idx_dm_total_read_fts_ms += other.fts_idx_dm_total_read_fts_ms;
+        fts_idx_dm_total_read_others_ms += other.fts_idx_dm_total_read_others_ms;
+        fts_idx_tiny_search_rows += other.fts_idx_tiny_search_rows;
+        fts_idx_tiny_total_read_fts_ms += other.fts_idx_tiny_total_read_fts_ms;
+        fts_idx_tiny_total_read_others_ms += other.fts_idx_tiny_total_read_others_ms;
+        fts_brute_total_read_ms += other.fts_brute_total_read_ms;
+        fts_brute_total_search_ms += other.fts_brute_total_search_ms;
     }
 
     void merge(const tipb::TiFlashScanContext & other)
@@ -318,7 +465,9 @@ public:
         create_snapshot_time_ns += other.total_build_snapshot_ms() * 1000000;
         total_local_region_num += other.local_regions();
         total_remote_region_num += other.remote_regions();
-        user_read_bytes += other.user_read_bytes();
+        // TODO: rename user_read_bytes to query_read_bytes in tipb.
+        query_read_bytes += other.user_read_bytes();
+        // TODO: add mvcc_read_bytes in tipb.
         learner_read_ns += other.total_learner_read_ms() * 1000000;
         disagg_read_cache_hit_size += other.disagg_read_cache_hit_bytes();
         disagg_read_cache_miss_size += other.disagg_read_cache_miss_bytes();
@@ -362,6 +511,32 @@ public:
         inverted_idx_search_skipped_packs += other.inverted_idx_search_skipped_packs();
         inverted_idx_indexed_rows += other.inverted_idx_indexed_rows();
         inverted_idx_search_selected_rows += other.inverted_idx_search_selected_rows();
+
+        fts_n_from_inmemory_noindex += other.fts_n_from_inmemory_noindex();
+        fts_n_from_tiny_index += other.fts_n_from_tiny_index();
+        fts_n_from_tiny_noindex += other.fts_n_from_tiny_noindex();
+        fts_n_from_dmf_index += other.fts_n_from_dmf_index();
+        fts_n_from_dmf_noindex += other.fts_n_from_dmf_noindex();
+        fts_rows_from_inmemory_noindex += other.fts_rows_from_inmemory_noindex();
+        fts_rows_from_tiny_index += other.fts_rows_from_tiny_index();
+        fts_rows_from_tiny_noindex += other.fts_rows_from_tiny_noindex();
+        fts_rows_from_dmf_index += other.fts_rows_from_dmf_index();
+        fts_rows_from_dmf_noindex += other.fts_rows_from_dmf_noindex();
+        fts_idx_load_total_ms += other.fts_idx_load_total_ms();
+        fts_idx_load_from_cache += other.fts_idx_load_from_cache();
+        fts_idx_load_from_column_file += other.fts_idx_load_from_column_file();
+        fts_idx_load_from_stable_s3 += other.fts_idx_load_from_stable_s3();
+        fts_idx_load_from_stable_disk += other.fts_idx_load_from_stable_disk();
+        fts_idx_search_n += other.fts_idx_search_n();
+        fts_idx_search_total_ms += other.fts_idx_search_total_ms();
+        fts_idx_dm_search_rows += other.fts_idx_dm_search_rows();
+        fts_idx_dm_total_read_fts_ms += other.fts_idx_dm_total_read_fts_ms();
+        fts_idx_dm_total_read_others_ms += other.fts_idx_dm_total_read_others_ms();
+        fts_idx_tiny_search_rows += other.fts_idx_tiny_search_rows();
+        fts_idx_tiny_total_read_fts_ms += other.fts_idx_tiny_total_read_fts_ms();
+        fts_idx_tiny_total_read_others_ms += other.fts_idx_tiny_total_read_others_ms();
+        fts_brute_total_read_ms += other.fts_brute_total_read_ms();
+        fts_brute_total_search_ms += other.fts_brute_total_search_ms();
     }
 
     String toJson() const;
@@ -370,6 +545,11 @@ public:
     void setStreamCost(uint64_t local_min_ns, uint64_t local_max_ns, uint64_t remote_min_ns, uint64_t remote_max_ns);
 
     static void initCurrentInstanceId(Poco::Util::AbstractConfiguration & config, const LoggerPtr & log);
+
+    // LACBytesCollector is not thread-safe, to avoid locking, we create a new one for each stream.
+    std::optional<LACBytesCollector> newLACBytesCollector(ReadTag read_tag);
+    void addUserReadBytes(size_t bytes, ReadTag read_tag, std::optional<LACBytesCollector> & lac_bytes_collector);
+    uint64_t userReadBytes() const { return query_read_bytes + mvcc_read_bytes; }
 
 private:
     void serializeRegionNumOfInstance(tipb::TiFlashScanContext & proto) const;
@@ -392,6 +572,12 @@ private:
     // `current_instance_id` is a identification of this store.
     // It only used to identify which store generated the ScanContext object.
     inline static String current_instance_id;
+
+    // the read bytes from delta layer and stable layer (in-mem, decompressed)
+    std::atomic<uint64_t> query_read_bytes{0};
+    std::atomic<uint64_t> mvcc_read_bytes{0};
+    prometheus::Counter * mvcc_read_bytes_counter = nullptr;
+    prometheus::Counter * query_read_bytes_counter = nullptr;
 };
 
 } // namespace DB::DM

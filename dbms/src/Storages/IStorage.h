@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Storages/IStorage.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -63,6 +65,10 @@ class IStorage
     , public ITableDeclaration
 {
 public:
+    IStorage();
+
+    explicit IStorage(ColumnsDescription columns_);
+
     /// The main name of the table type (for example, StorageDeltaMerge).
     virtual std::string getName() const = 0;
 
@@ -329,6 +335,8 @@ private:
     /// DROP-like queries take this lock for write (lockExclusively), to be sure
     /// that all table threads finished.
     mutable RWLockPtr drop_lock = RWLock::create();
+
+    CurrentMetrics::Increment holder_counter;
 };
 
 /// table name -> table

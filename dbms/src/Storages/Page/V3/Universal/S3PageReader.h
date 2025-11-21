@@ -21,6 +21,9 @@
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
 #include <aws/s3/model/GetObjectResult.h>
 
+#include <magic_enum.hpp>
+
+
 namespace Aws::S3
 {
 class S3Client;
@@ -44,13 +47,48 @@ using UniversalPageIdAndEntries = std::vector<UniversalPageIdAndEntry>;
 class S3PageReader : private Allocator<false>
 {
 public:
+    enum class ReuseStat
+    {
+        Reused = 0,
+        BuffIsNull,
+        ReadBack,
+        NewFile,
+        NegFilePos,
+        End,
+    };
+
+    struct ReuseStatAgg
+    {
+        static_assert(magic_enum::enum_underlying(ReuseStat::End) == 5);
+        size_t reasons[5] = {0, 0, 0, 0, 0};
+
+        void observe(const ReuseStat & reason)
+        {
+            if (magic_enum::enum_underlying(reason) < magic_enum::enum_underlying(ReuseStat::End))
+            {
+                reasons[magic_enum::enum_underlying(reason)] += 1;
+            }
+        }
+
+        String toString()
+        {
+            return fmt::format(
+                "(reused={} buff_is_null={} read_back={} new_file={} neg_file_pos={})",
+                reasons[0],
+                reasons[1],
+                reasons[2],
+                reasons[3],
+                reasons[4]);
+        }
+    };
+
     S3PageReader() = default;
 
     Page read(const UniversalPageIdAndEntry & page_id_and_entry);
     // Give an S3RandomAccessFile, try read from current cursor of this file if possible,
     // otherwise create a new one and seek from the beginning.
     // Returns the S3RandomAccessFile we eventually read from, for later use.
-    std::tuple<Page, ReadBufferFromRandomAccessFilePtr> readFromS3File(
+    std::tuple<Page, ReadBufferFromRandomAccessFilePtr, ReuseStat> readFromS3File(
         const UniversalPageIdAndEntry & page_id_and_entry,
         ReadBufferFromRandomAccessFilePtr file_buf,
         size_t prefetch_size);

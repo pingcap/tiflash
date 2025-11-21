@@ -73,8 +73,6 @@ public:
 
     virtual PageEntry getPageEntry(PageIdU64 page_id) const = 0;
 
-    virtual PageStorage::SnapshotPtr getSnapshot(const String & tracing_id) const = 0;
-
     // Get some statistics of all living snapshots and the oldest living snapshot.
     virtual SnapshotsStatistics getSnapshotsStat() const = 0;
 
@@ -125,11 +123,6 @@ public:
     }
 
     PageEntry getPageEntry(PageIdU64 page_id) const override { return storage->getEntry(ns_id, page_id, snap); }
-
-    PageStorage::SnapshotPtr getSnapshot(const String & tracing_id) const override
-    {
-        return storage->getSnapshot(tracing_id);
-    }
 
     // Get some statistics of all living snapshots and the oldest living snapshot.
     SnapshotsStatistics getSnapshotsStat() const override { return storage->getSnapshotsStat(); }
@@ -271,13 +264,6 @@ public:
             return page_entry;
         }
         return storage_v2->getEntry(ns_id, page_id, toConcreteV2Snapshot());
-    }
-
-    PageStorage::SnapshotPtr getSnapshot(const String & tracing_id) const override
-    {
-        return std::make_shared<PageStorageSnapshotMixed>(
-            storage_v2->getSnapshot(fmt::format("{}-v2", tracing_id)),
-            storage_v3->getSnapshot(fmt::format("{}-v3", tracing_id)));
     }
 
     // Get some statistics of all living snapshots and the oldest living snapshot.
@@ -428,17 +414,12 @@ public:
         return storage->getEntry(UniversalPageIdFormat::toFullPageId(prefix, page_id), snap);
     }
 
-    PageStorageSnapshotPtr getSnapshot(const String & tracing_id) const override
-    {
-        return storage->getSnapshot(tracing_id);
-    }
-
     // Get some statistics of all living snapshots and the oldest living snapshot.
     SnapshotsStatistics getSnapshotsStat() const override { return storage->getSnapshotsStat(); }
 
     void traverse(const TraversePageCallback & acceptor, bool /*only_v2*/, bool /*only_v3*/) const override
     {
-        auto snapshot = storage->getSnapshot(fmt::format("scan_{}", prefix));
+        auto snapshot = storage->getDeltaTreeOnlySnapshot(fmt::format("scan_{}", prefix));
         const auto page_ids = storage->page_directory->getAllPageIdsWithPrefix(prefix, snapshot);
         const auto num_pages = page_ids.size();
         for (const auto & page_id : page_ids)
@@ -566,11 +547,6 @@ PageIdU64 PageReader::getNormalPageId(PageIdU64 page_id) const
 PageEntry PageReader::getPageEntry(PageIdU64 page_id) const
 {
     return impl->getPageEntry(page_id);
-}
-
-PageStorage::SnapshotPtr PageReader::getSnapshot(const String & tracing_id) const
-{
-    return impl->getSnapshot(tracing_id);
 }
 
 // Get some statistics of all living snapshots and the oldest living snapshot.

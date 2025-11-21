@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Functions/IFunction.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider_fwd.h>
 #include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
@@ -30,11 +31,42 @@ namespace DB::DM
 /// Its expected lifetime >= VectorIndexInputStream.
 struct VectorIndexStreamCtx
 {
+    struct DistanceProjectionCtx
+    {
+        // This field will be fill when enable_distance_proj is true and vector index not build up. when enable_distance_proj is true, col_defs have no vector column, so
+        // retrieve back the vector column to the last position for reading vector column without vector index.
+        const ColumnDefinesPtr col_defs_no_index;
+        // This field is the extra distance column in the TableScan's schema.
+        // Although distance column schema is fixed from TiDB side, when different tiflash nodes pass the read column information, distance col define may be set to other names,
+        // so the column information still needs to be saved here.
+        const ColumnDefine dis_cd;
+
+        // A column contains 1 row, which is the ref_vector in the AnnQueryInfo. This is used for calculating the distance when index is not built.
+        // This field is not assigned by default, and only constructed when it is being used.
+        ColumnPtr ref_vec_col; // nullable
+        // This field is not assigned by default, and only constructed when it is being used.
+        FunctionPtr distance_fn; // nullable
+
+        // Indicate if this ctx has been filled. The value in DistanceProjectionCtx is the same for each process.
+        bool is_prepared = false;
+    };
+
+    // constants for vector search to fill the distane column.
+    static const ColumnDefine VIRTUAL_DISTANCE_CD;
     const LocalIndexCachePtr index_cache_light; // nullable
     const LocalIndexCachePtr index_cache_heavy; // nullable
     const ANNQueryInfoPtr ann_query_info;
     const ColumnDefinesPtr col_defs;
-    const ColumnDefine vec_cd;
+    // Note that when enable_distance_proj, vec column will not exist in the TableScan's schema and this field will be nullopt.
+    const std::optional<size_t> vec_col_idx;
+
+    // Note that when enable_distance_proj, vec column will not exist in the TableScan's schema and this field will be nullopt.
+    const std::optional<ColumnDefine> vec_cd;
+
+    // will be set if enable_distance_proj is true.
+    std::optional<DistanceProjectionCtx> dis_ctx;
+
+    const ColumnID vec_col_id;
     const ColumnDefinesPtr rest_col_defs;
     const Block header;
 
@@ -77,6 +109,8 @@ struct VectorIndexStreamCtx
         const ANNQueryInfoPtr & ann_query_info_,
         const ColumnDefinesPtr & col_defs_,
         const LocalIndexCachePtr & index_cache_light_ = nullptr);
+
+    void prepareForDistanceProjStream();
 };
 
 } // namespace DB::DM

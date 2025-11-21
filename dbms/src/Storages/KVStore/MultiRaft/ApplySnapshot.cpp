@@ -102,7 +102,7 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
 
     {
         const auto & new_range = new_region->getRange();
-        auto task_lock = genTaskLock();
+        auto task_lock = genTaskLock(); // m1
         auto region_map = getRegionsByRangeOverlap(new_range->comparableKeys());
         for (const auto & overlapped_region : region_map)
         {
@@ -230,14 +230,16 @@ void KVStore::onSnapshot(
                     new_region_wrap->getRange(),
                     table_id,
                     storage->isCommonHandle(),
-                    storage->getRowKeyColumnSize());
+                    storage->getRowKeyColumnSize(),
+                    fmt::format("new_region_id={} KVStore::onSnapshot", region_id));
                 if (old_region)
                 {
                     auto old_key_range = DM::RowKeyRange::fromRegionRange(
                         old_region->getRange(),
                         table_id,
                         storage->isCommonHandle(),
-                        storage->getRowKeyColumnSize());
+                        storage->getRowKeyColumnSize(),
+                        fmt::format("old_region_id={} KVStore::onSnapshot", region_id));
                     if (old_key_range != new_key_range)
                     {
                         LOG_INFO(

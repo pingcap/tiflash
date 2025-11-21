@@ -38,6 +38,8 @@ mysql> alter table test.t set tiflash replica 1;
 func> wait_table test t
 mysql> analyze table test.t;
 
+# the failpoint is not effective under next-gen test
+#SKIP_FOR_NEXT_GEN
 => DBGInvoke __enable_fail_point(force_remote_read_for_batch_cop)
 => DBGInvoke __enable_fail_point(cop_send_failure)
 

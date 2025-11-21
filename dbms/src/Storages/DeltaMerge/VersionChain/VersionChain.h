@@ -19,6 +19,7 @@
 #include <Storages/DeltaMerge/VersionChain/Common.h>
 #include <Storages/DeltaMerge/VersionChain/DMFileHandleIndex.h>
 #include <Storages/DeltaMerge/VersionChain/NewHandleIndex.h>
+#include <Storages/DeltaMerge/VersionChain/VersionChain_fwd.h>
 
 namespace DB::DM
 {
@@ -69,6 +70,8 @@ public:
     [[nodiscard]] std::shared_ptr<const std::vector<RowID>> replaySnapshot(
         const DMContext & dm_context,
         const SegmentSnapshot & snapshot);
+
+    size_t getBytes() const;
 
 #ifdef DBMS_PUBLIC_GTEST
     [[nodiscard]] auto getReplayedRows() const { return base_versions->size(); }
@@ -139,7 +142,7 @@ private:
     friend class tests::NewHandleIndexTest;
     friend class tests::VersionChainTest;
 
-    std::mutex mtx;
+    mutable std::mutex mtx;
     UInt32 replayed_rows_and_deletes = 0; // delta.getRows() + delta.getDeletes()
     // After replaySnapshot, base_versions->size() == delta.getRows().
     // The records in delta correspond one-to-one with base_versions.
@@ -154,14 +157,25 @@ private:
     std::vector<DMFileOrDeleteRange> dmfile_or_delete_range_list;
 };
 
-using GenericVersionChain = std::variant<VersionChain<Int64>, VersionChain<String>>;
-
-inline GenericVersionChain createVersionChain(bool is_common_handle)
+inline GenericVersionChainPtr createVersionChain(bool is_common_handle)
 {
     if (is_common_handle)
-        return GenericVersionChain{std::in_place_type<VersionChain<String>>};
+        return std::make_shared<GenericVersionChain>(std::in_place_type<VersionChain<String>>);
     else
-        return GenericVersionChain{std::in_place_type<VersionChain<Int64>>};
+        return std::make_shared<GenericVersionChain>(std::in_place_type<VersionChain<Int64>>);
 }
+
+inline size_t getVersionChainBytes(const GenericVersionChain & version_chain)
+{
+    return std::visit([](auto && v) { return v.getBytes(); }, version_chain);
+}
+
+enum class VersionChainMode : Int64
+{
+    // Generating MVCC bitmap by using delta index.
+    Disabled = 0,
+    // Generating MVCC bitmap by using version chain.
+    Enabled = 1,
+};
 
 } // namespace DB::DM

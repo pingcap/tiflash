@@ -81,8 +81,9 @@ std::shared_ptr<ResourceGroup> createResourceGroupOfDynamicTokenBucket(
     TokenBucket::TokenBucketConfig config(
         user_ru_per_sec,
         user_ru_per_sec,
+        static_cast<double>(std::numeric_limits<uint64_t>::max()),
         static_cast<double>(std::numeric_limits<uint64_t>::max()));
-    resource_group->bucket->reConfig(config);
+    resource_group->bucket->reConfig(config, std::chrono::steady_clock::now());
     return resource_group;
 }
 
@@ -109,27 +110,34 @@ void setupNopLAC()
 {
     LocalAdmissionController::global_instance.reset();
     LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
-    LocalAdmissionController::global_instance->consume_resource_func = nopConsumeResource;
-    LocalAdmissionController::global_instance->get_priority_func = nopGetPriority;
+    {
+        std::lock_guard lock(LocalAdmissionController::global_instance->mu);
+        LocalAdmissionController::global_instance->consume_resource_func = nopConsumeResource;
+        LocalAdmissionController::global_instance->get_priority_func = nopGetPriority;
+    }
 }
 
 void setupMockLAC(const std::vector<ResourceGroupPtr> & resource_groups)
 {
     LocalAdmissionController::global_instance.reset();
     LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
-    LocalAdmissionController::global_instance->consume_resource_func = dynamicConsumeResource;
-    LocalAdmissionController::global_instance->get_priority_func = dynamicGetPriority;
 
     uint64_t max_ru_per_sec = 0;
-    for (const auto & resource_group : resource_groups)
     {
-        auto cur_ru_per_sec = resource_group->user_ru_per_sec;
-        if (max_ru_per_sec < cur_ru_per_sec)
-            max_ru_per_sec = cur_ru_per_sec;
+        std::lock_guard lock(LocalAdmissionController::global_instance->mu);
+        LocalAdmissionController::global_instance->consume_resource_func = dynamicConsumeResource;
+        LocalAdmissionController::global_instance->get_priority_func = dynamicGetPriority;
 
-        LocalAdmissionController::global_instance->resource_groups.insert({resource_group->name, resource_group});
+        for (const auto & resource_group : resource_groups)
+        {
+            auto cur_ru_per_sec = resource_group->user_ru_per_sec;
+            if (max_ru_per_sec < cur_ru_per_sec)
+                max_ru_per_sec = cur_ru_per_sec;
+
+            LocalAdmissionController::global_instance->resource_groups.insert({resource_group->name, resource_group});
+        }
+        LocalAdmissionController::global_instance->max_ru_per_sec = max_ru_per_sec;
     }
-    LocalAdmissionController::global_instance->max_ru_per_sec = max_ru_per_sec;
 }
 
 std::vector<TaskPtr> setupTasks(
@@ -177,6 +185,7 @@ public:
                 nullptr,
                 nullptr,
                 nullptr,
+                NullspaceID,
                 resource_group_name);
         }
         return all_contexts;
@@ -191,25 +200,21 @@ public:
             resource_groups = std::vector<ResourceGroupPtr>{
                 createResourceGroupOfStaticTokenBucket(
                     "rg1",
-                    ResourceGroup::MediumPriorityValue,
+                    ResourceGroup::UserMediumPriority,
                     rg1_ru_per_sec,
                     rg1_burstable),
-                createResourceGroupOfStaticTokenBucket(
-                    "rg2",
-                    ResourceGroup::MediumPriorityValue,
-                    rg2_ru_per_sec,
-                    false),
+                createResourceGroupOfStaticTokenBucket("rg2", ResourceGroup::UserMediumPriority, rg2_ru_per_sec, false),
             };
         else
             resource_groups = std::vector<ResourceGroupPtr>{
                 createResourceGroupOfDynamicTokenBucket(
                     "rg1",
-                    ResourceGroup::MediumPriorityValue,
+                    ResourceGroup::UserMediumPriority,
                     rg1_ru_per_sec,
                     rg1_burstable),
                 createResourceGroupOfDynamicTokenBucket(
                     "rg2",
-                    ResourceGroup::MediumPriorityValue,
+                    ResourceGroup::UserMediumPriority,
                     rg2_ru_per_sec,
                     false),
             };
@@ -248,15 +253,15 @@ public:
         std::vector<ResourceGroupPtr> resource_groups;
         if (static_token_bucket)
             resource_groups = std::vector<ResourceGroupPtr>{
-                createResourceGroupOfStaticTokenBucket("rg-ru20", ResourceGroup::MediumPriorityValue, 20, false),
-                createResourceGroupOfStaticTokenBucket("rg-ru100", ResourceGroup::MediumPriorityValue, 100, false),
-                createResourceGroupOfStaticTokenBucket("rg-ru200", ResourceGroup::MediumPriorityValue, 200, false),
+                createResourceGroupOfStaticTokenBucket("rg-ru20", ResourceGroup::UserMediumPriority, 20, false),
+                createResourceGroupOfStaticTokenBucket("rg-ru100", ResourceGroup::UserMediumPriority, 100, false),
+                createResourceGroupOfStaticTokenBucket("rg-ru200", ResourceGroup::UserMediumPriority, 200, false),
             };
         else
             resource_groups = std::vector<ResourceGroupPtr>{
-                createResourceGroupOfDynamicTokenBucket("rg-ru20", ResourceGroup::MediumPriorityValue, 20, false),
-                createResourceGroupOfDynamicTokenBucket("rg-ru100", ResourceGroup::MediumPriorityValue, 100, false),
-                createResourceGroupOfDynamicTokenBucket("rg-ru200", ResourceGroup::MediumPriorityValue, 200, false),
+                createResourceGroupOfDynamicTokenBucket("rg-ru20", ResourceGroup::UserMediumPriority, 20, false),
+                createResourceGroupOfDynamicTokenBucket("rg-ru100", ResourceGroup::UserMediumPriority, 100, false),
+                createResourceGroupOfDynamicTokenBucket("rg-ru200", ResourceGroup::UserMediumPriority, 200, false),
             };
 
         setupMockLAC(resource_groups);
@@ -305,15 +310,15 @@ public:
         // RU proportion is 1:5:10.
         if (static_token_bucket)
             resource_groups = std::vector<ResourceGroupPtr>{
-                createResourceGroupOfStaticTokenBucket("rg-ru20K", ResourceGroup::MediumPriorityValue, 20000, false),
-                createResourceGroupOfStaticTokenBucket("rg-ru100K", ResourceGroup::MediumPriorityValue, 100000, false),
-                createResourceGroupOfStaticTokenBucket("rg-ru200K", ResourceGroup::MediumPriorityValue, 200000, false),
+                createResourceGroupOfStaticTokenBucket("rg-ru20K", ResourceGroup::UserMediumPriority, 20000, false),
+                createResourceGroupOfStaticTokenBucket("rg-ru100K", ResourceGroup::UserMediumPriority, 100000, false),
+                createResourceGroupOfStaticTokenBucket("rg-ru200K", ResourceGroup::UserMediumPriority, 200000, false),
             };
         else
             resource_groups = std::vector<ResourceGroupPtr>{
-                createResourceGroupOfDynamicTokenBucket("rg-ru20K", ResourceGroup::MediumPriorityValue, 20000, false),
-                createResourceGroupOfDynamicTokenBucket("rg-ru100K", ResourceGroup::MediumPriorityValue, 100000, false),
-                createResourceGroupOfDynamicTokenBucket("rg-ru200K", ResourceGroup::MediumPriorityValue, 200000, false),
+                createResourceGroupOfDynamicTokenBucket("rg-ru20K", ResourceGroup::UserMediumPriority, 20000, false),
+                createResourceGroupOfDynamicTokenBucket("rg-ru100K", ResourceGroup::UserMediumPriority, 100000, false),
+                createResourceGroupOfDynamicTokenBucket("rg-ru200K", ResourceGroup::UserMediumPriority, 200000, false),
             };
 
         setupMockLAC(resource_groups);
@@ -380,6 +385,7 @@ TEST_F(TestResourceControlQueue, BasicTest)
             nullptr,
             nullptr,
             nullptr,
+            NullspaceID,
             group_name);
 
         for (int j = 0; j < task_num_per_resource_group; ++j)
@@ -416,6 +422,7 @@ TEST_F(TestResourceControlQueue, BasicTimeoutTest)
         nullptr,
         nullptr,
         nullptr,
+        NullspaceID,
         group_name);
 
     auto task = std::make_unique<SimpleTask>(*exec_context);
@@ -436,7 +443,7 @@ TEST_F(TestResourceControlQueue, RunOutOfRU)
     // 1. When RU is exhausted, expect that task cannot be executed.
     const uint64_t ru_per_sec = 1;
     auto resource_group
-        = createResourceGroupOfDynamicTokenBucket(rg_name, ResourceGroup::MediumPriorityValue, ru_per_sec, false);
+        = createResourceGroupOfDynamicTokenBucket(rg_name, ResourceGroup::UserMediumPriority, ru_per_sec, false);
     setupMockLAC({resource_group});
 
     const int thread_num = 10;
@@ -445,7 +452,7 @@ TEST_F(TestResourceControlQueue, RunOutOfRU)
     TaskScheduler task_scheduler(config);
 
     PipelineExecutorContext
-        exec_context("mock-query-id", "mock-req-id", mem_tracker, nullptr, nullptr, nullptr, rg_name);
+        exec_context("mock-query-id", "mock-req-id", mem_tracker, nullptr, nullptr, nullptr, NullspaceID, rg_name);
 
     auto task = std::make_unique<SimpleTask>(exec_context);
     // This task should use 5*100ms cpu_time.
@@ -463,13 +470,16 @@ TEST_F(TestResourceControlQueue, RunOutOfRU)
         const uint64_t new_ru_per_sec = 1000000;
         resource_group = createResourceGroupOfDynamicTokenBucket(
             rg_name,
-            ResourceGroup::MediumPriorityValue,
+            ResourceGroup::UserMediumPriority,
             new_ru_per_sec,
             false);
         LocalAdmissionController::global_instance->resource_groups.insert({rg_name, resource_group});
         LocalAdmissionController::global_instance->max_ru_per_sec = new_ru_per_sec;
     }
-    LocalAdmissionController::global_instance->refill_token_callback();
+    {
+        std::lock_guard lock(LocalAdmissionController::global_instance->call_back_mutex);
+        LocalAdmissionController::global_instance->refill_token_callback();
+    }
     ASSERT_NO_THROW(exec_context.waitFor(std::chrono::seconds(10)));
 }
 
@@ -557,7 +567,7 @@ TEST_F(TestResourceControlQueue, ResourceControlPriorityQueueTest)
     ResourceControlQueue<CPUMultiLevelFeedbackQueue> test_queue;
     for (size_t i = 0; i < priority_vals.size(); ++i)
     {
-        test_queue.resource_group_infos.push({"rg-" + std::to_string(i), priority_vals[i], nullptr});
+        test_queue.resource_group_infos.push({NullspaceID, "rg-" + std::to_string(i), priority_vals[i], nullptr});
     }
 
     std::sort(priority_vals.begin(), priority_vals.end());
@@ -575,9 +585,9 @@ TEST_F(TestResourceControlQueue, cancel)
 {
     const auto rg_names = std::vector<String>{"rg-ru20K", "rg-ru100K", "rg-ru200K"};
     auto resource_groups = std::vector<ResourceGroupPtr>{
-        createResourceGroupOfDynamicTokenBucket(rg_names[0], ResourceGroup::MediumPriorityValue, 20000, false),
-        createResourceGroupOfDynamicTokenBucket(rg_names[1], ResourceGroup::MediumPriorityValue, 100000, false),
-        createResourceGroupOfDynamicTokenBucket(rg_names[2], ResourceGroup::MediumPriorityValue, 200000, false),
+        createResourceGroupOfDynamicTokenBucket(rg_names[0], ResourceGroup::UserMediumPriority, 20000, false),
+        createResourceGroupOfDynamicTokenBucket(rg_names[1], ResourceGroup::UserMediumPriority, 100000, false),
+        createResourceGroupOfDynamicTokenBucket(rg_names[2], ResourceGroup::UserMediumPriority, 200000, false),
     };
     const String query_id_prefix = "mock_query_id";
     const String req_id_prefix = "mock_req_id";
@@ -609,7 +619,7 @@ TEST_F(TestResourceControlQueue, cancel)
         queue.submit(tasks);
         for (size_t i = 0; i < resource_groups.size(); ++i)
         {
-            queue.cancel(query_id_prefix + rg_names[i], rg_names[i]);
+            queue.cancel(TaskCancelInfo{.query_id = query_id_prefix + rg_names[i], .resource_group_name = rg_names[i]});
             for (size_t j = 0; j < tasks_per_resource_group; ++j)
             {
                 TaskPtr task;
@@ -629,7 +639,7 @@ TEST_F(TestResourceControlQueue, cancel)
         ResourceControlQueue<CPUMultiLevelFeedbackQueue> queue;
         for (size_t i = 0; i < resource_groups.size(); ++i)
         {
-            queue.cancel(query_id_prefix + rg_names[i], rg_names[i]);
+            queue.cancel(TaskCancelInfo{.query_id = query_id_prefix + rg_names[i], .resource_group_name = rg_names[i]});
             if (i == 0)
                 queue.submit(tasks);
 
@@ -667,6 +677,74 @@ TEST_F(TestResourceControlQueue, tokenBucket)
         }
         ASSERT_GT(bucket.peek(), init_tokens);
         ASSERT_GE(bucket.peek(), init_tokens + fill_rate * 1000 * std::chrono::microseconds(5).count() / 1000000);
+    }
+}
+
+TEST_F(TestResourceControlQueue, parseEtcdKey)
+{
+    {
+        KeyspaceID id = NullspaceID;
+        std::string name;
+        std::string err_msg;
+
+        const std::string k1 = "resource_group/keyspace/settings/1234/rg1";
+        LocalAdmissionController::parseKeyspaceEtcdKey(
+            LocalAdmissionController::GAC_KEYSPACE_RESOURCE_GROUP_ETCD_PATH,
+            k1,
+            id,
+            name,
+            err_msg);
+        ASSERT_EQ(id, 1234);
+        ASSERT_EQ(name, "rg1");
+        ASSERT_TRUE(err_msg.empty());
+    }
+    {
+        KeyspaceID id = NullspaceID;
+        std::string name;
+        std::string err_msg;
+
+        const std::string k1 = "resource_group/keyspace/settings//123";
+        LocalAdmissionController::parseKeyspaceEtcdKey(
+            LocalAdmissionController::GAC_KEYSPACE_RESOURCE_GROUP_ETCD_PATH,
+            k1,
+            id,
+            name,
+            err_msg);
+        ASSERT_EQ(id, NullspaceID);
+        ASSERT_EQ(name, "123");
+        ASSERT_TRUE(err_msg.contains("parse keyspace fail"));
+    }
+    {
+        KeyspaceID id = NullspaceID;
+        std::string name;
+        std::string err_msg;
+
+        const std::string k1 = "resource_group/keyspace/settings//";
+        LocalAdmissionController::parseKeyspaceEtcdKey(
+            LocalAdmissionController::GAC_KEYSPACE_RESOURCE_GROUP_ETCD_PATH,
+            k1,
+            id,
+            name,
+            err_msg);
+        ASSERT_EQ(id, NullspaceID);
+        ASSERT_EQ(name, "");
+        ASSERT_TRUE(err_msg.contains("parse keyspace fail"));
+    }
+    {
+        KeyspaceID id = NullspaceID;
+        std::string name;
+        std::string err_msg;
+
+        const std::string k1 = "resource_group/keyspace/settings/rg1";
+        LocalAdmissionController::parseKeyspaceEtcdKey(
+            LocalAdmissionController::GAC_KEYSPACE_RESOURCE_GROUP_ETCD_PATH,
+            k1,
+            id,
+            name,
+            err_msg);
+        ASSERT_EQ(id, NullspaceID);
+        ASSERT_EQ(name, "");
+        ASSERT_TRUE(err_msg.contains("parse keyspace fail"));
     }
 }
 

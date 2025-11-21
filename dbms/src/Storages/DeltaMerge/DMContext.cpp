@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/ScanContext.h>
+#include <Storages/DeltaMerge/VersionChain/VersionChain.h>
 
 namespace DB::DM
 {
@@ -70,4 +72,8 @@ DMContext::DMContext(
     , scan_context(scan_context_ ? scan_context_ : std::make_shared<ScanContext>())
 {}
 
+bool DMContext::isVersionChainEnabled() const
+{
+    return global_context.getSettingsRef().enable_version_chain != static_cast<Int64>(VersionChainMode::Disabled);
+}
 } // namespace DB::DM

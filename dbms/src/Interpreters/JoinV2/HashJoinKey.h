@@ -642,7 +642,7 @@ struct HashJoinKeyGetterForType<HashJoinKeyMethod::KeysFixedOther>
     using Type = HashJoinKeysFixedOther;
     using Hash = StringRefHash;
     using HashValueType = std::invoke_result_t<Hash, Type::KeyType>;
-    static_assert(std::is_same_v<HashValueType, size_t>);
+    static_assert(std::is_same_v<HashValueType, UInt64>);
 };
 
 template <>
@@ -651,7 +651,7 @@ struct HashJoinKeyGetterForType<HashJoinKeyMethod::OneKeyStringBin>
     using Type = HashJoinKeyStringBin<false>;
     using Hash = StringRefHash;
     using HashValueType = std::invoke_result_t<Hash, Type::KeyType>;
-    static_assert(std::is_same_v<HashValueType, size_t>);
+    static_assert(std::is_same_v<HashValueType, UInt64>);
 };
 
 template <>
@@ -660,7 +660,7 @@ struct HashJoinKeyGetterForType<HashJoinKeyMethod::OneKeyStringBinPadding>
     using Type = HashJoinKeyStringBin<true>;
     using Hash = StringRefHash;
     using HashValueType = std::invoke_result_t<Hash, Type::KeyType>;
-    static_assert(std::is_same_v<HashValueType, size_t>);
+    static_assert(std::is_same_v<HashValueType, UInt64>);
 };
 
 template <>
@@ -669,7 +669,7 @@ struct HashJoinKeyGetterForType<HashJoinKeyMethod::OneKeyString>
     using Type = HashJoinKeyString;
     using Hash = StringRefHash;
     using HashValueType = std::invoke_result_t<Hash, Type::KeyType>;
-    static_assert(std::is_same_v<HashValueType, size_t>);
+    static_assert(std::is_same_v<HashValueType, UInt64>);
 };
 
 template <>
@@ -678,7 +678,7 @@ struct HashJoinKeyGetterForType<HashJoinKeyMethod::KeySerialized>
     using Type = HashJoinKeySerialized;
     using Hash = StringRefHash;
     using HashValueType = std::invoke_result_t<Hash, Type::KeyType>;
-    static_assert(std::is_same_v<HashValueType, size_t>);
+    static_assert(std::is_same_v<HashValueType, UInt64>);
 };
 
 size_t getHashValueByteSize(HashJoinKeyMethod method);

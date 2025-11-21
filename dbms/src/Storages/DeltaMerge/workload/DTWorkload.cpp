@@ -200,8 +200,10 @@ void DTWorkload::read(const ColumnDefines & columns, int stream_count, T func)
         std::vector<RuntimeFilterPtr>(),
         0,
         "DTWorkload",
-        false,
-        opts->is_fast_scan,
+        DMReadOptions{
+            .keep_order = false,
+            .is_fast_scan = opts->is_fast_scan,
+        },
         excepted_block_size);
     std::vector<std::thread> threads;
     threads.reserve(streams.size());

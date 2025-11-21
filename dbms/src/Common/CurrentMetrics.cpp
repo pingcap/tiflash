@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Common/CurrentMetrics.cpp
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -62,8 +64,16 @@
     M(DT_SnapshotOfDeltaMerge)                  \
     M(DT_SnapshotOfDeltaCompact)                \
     M(DT_SnapshotOfPlaceIndex)                  \
+    M(DT_SnapshotOfReplayVersionChain)          \
     M(DT_SnapshotOfBitmapFilter)                \
     M(DT_SnapshotOfDisaggReadNodeRead)          \
+    M(NumKeyspace)                              \
+    M(NumIStorage)                              \
+    M(DT_NumStorageDeltaMerge)                  \
+    M(DT_NumSegment)                            \
+    M(DT_NumMemTable)                           \
+    M(DT_BytesMemTable)                         \
+    M(DT_BytesMemTableAllocated)                \
     M(IOLimiterPendingBgWriteReq)               \
     M(IOLimiterPendingFgWriteReq)               \
     M(IOLimiterPendingBgReadReq)                \

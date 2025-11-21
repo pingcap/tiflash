@@ -43,7 +43,7 @@ void SimplePKTestBasic::reload()
 {
     TiFlashStorageTestBasic::SetUp();
 
-    version = 0;
+    version.store(0);
 
     auto cols = DMTestEnv::getDefaultColumns(
         is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
@@ -129,7 +129,7 @@ std::vector<Int64> SimplePKTestBasic::getSegmentBreakpoints() const
 RowKeyValue SimplePKTestBasic::buildRowKey(Int64 pk) const
 {
     if (!is_common_handle)
-        return RowKeyValue::fromHandle(pk);
+        return RowKeyValue::fromIntHandle(pk);
 
     WriteBufferFromOwnString ss;
     ::DB::EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
@@ -185,12 +185,12 @@ Block SimplePKTestBasic::fillBlock(const FillBlockOptions & options)
     RUNTIME_CHECK(start_key <= end_key);
     if (end_key == start_key)
         return Block{};
-    version++;
+    auto tso = version.fetch_add(1) + 1;
     return DMTestEnv::prepareSimpleWriteBlock(
         start_key, //
         end_key,
         false,
-        version,
+        tso,
         DMTestEnv::pk_name,
         MutSup::extra_handle_id,
         is_common_handle ? MutSup::getExtraHandleColumnStringType() : MutSup::getExtraHandleColumnIntType(),
@@ -318,9 +318,12 @@ void SimplePKTestBasic::ingestFiles(const IngestFilesOptions & options)
 
     auto range = buildRowRange(options.range.first, options.range.second);
 
+    auto lock = options.mtx ? std::unique_lock{*options.mtx} : std::unique_lock<std::mutex>{};
+    const auto & blocks = options.mtx ? Blocks{1, fillBlock({.range = options.range})} : options.blocks;
+
     std::vector<DM::ExternalDTFileInfo> external_files;
-    external_files.reserve(options.blocks.size());
-    for (const auto & block : options.blocks)
+    external_files.reserve(blocks.size());
+    for (const auto & block : blocks)
     {
         auto f = genDMFile(store, *dm_context, block);
         external_files.emplace_back(std::move(f));
@@ -342,8 +345,7 @@ size_t SimplePKTestBasic::getRowsN() const
         std::vector<RuntimeFilterPtr>{},
         0,
         "",
-        /* keep_order= */ false,
-        /* is_fast_scan= */ false,
+        DMReadOptions{},
         /* expected_block_size= */ 1024)[0];
     return getInputStreamNRows(in);
 }
@@ -361,8 +363,7 @@ size_t SimplePKTestBasic::getRowsN(Int64 start_key, Int64 end_key) const
         std::vector<RuntimeFilterPtr>{},
         0,
         "",
-        /* keep_order= */ false,
-        /* is_fast_scan= */ false,
+        DMReadOptions{},
         /* expected_block_size= */ 1024)[0];
     return getInputStreamNRows(in);
 }

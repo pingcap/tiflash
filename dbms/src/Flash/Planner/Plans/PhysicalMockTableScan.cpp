@@ -238,7 +238,7 @@ void PhysicalMockTableScan::buildRuntimeFilterInLocalStream(Context & context)
     }
 }
 
-RuntimeFilteList PhysicalMockTableScan::getRuntimeFilterList(Context & context)
+RuntimeFilterList PhysicalMockTableScan::getRuntimeFilterList(Context & context)
 {
     auto mock_column_infos = context.mockStorage()->getTableSchemaForDeltaMerge(table_id);
     auto column_infos = mockColumnInfosToTiDBColumnInfos(mock_column_infos);

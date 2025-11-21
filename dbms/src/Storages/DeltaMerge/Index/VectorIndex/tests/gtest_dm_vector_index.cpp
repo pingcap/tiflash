@@ -75,8 +75,7 @@ try
     };
 
     // VectorIndexInputStream does not need this information, but ctx needs at least a correct vec column.
-    auto ann = std::make_shared<tipb::ANNQueryInfo>();
-    ann->set_deprecated_column_id(1);
+    auto ann = DeltaMergeStoreVectorBase::annQueryInfoTopK({.vec = {}, .top_k = 1, .column_id = 1});
     auto ctx = VectorIndexStreamCtx::createForStableOnlyTests(
         ann,
         std::make_shared<ColumnDefines>(
@@ -137,12 +136,12 @@ try
         return ConcatSkippableBlockInputStream<false>::create(
             {NopSkippableBlockInputStream::wrap(block1), NopSkippableBlockInputStream::wrap(block2)},
             {7, 4},
-            nullptr);
+            nullptr,
+            ReadTag::Query);
     };
 
     // VectorIndexInputStream does not need this information, but ctx needs at least a correct vec column.
-    auto ann = std::make_shared<tipb::ANNQueryInfo>();
-    ann->set_deprecated_column_id(1);
+    auto ann = DeltaMergeStoreVectorBase::annQueryInfoTopK({.vec = {}, .top_k = 1, .column_id = 1});
     auto ctx = VectorIndexStreamCtx::createForStableOnlyTests(
         ann,
         std::make_shared<ColumnDefines>(
@@ -1927,7 +1926,13 @@ public:
             .dir = fmt::format("{}/fs_cache", getTemporaryPath()),
             .capacity = 1 * 1000 * 1000 * 1000,
         };
-        FileCache::initialize(global_context.getPathCapacity(), file_cache_config);
+
+        UInt16 vcores = 8;
+        FileCache::initialize(
+            global_context.getPathCapacity(),
+            file_cache_config,
+            vcores,
+            global_context.getIORateLimiter());
 
         auto cols = DMTestEnv::getDefaultColumns();
         cols->emplace_back(cdVec());
@@ -1989,12 +1994,7 @@ public:
             nullptr);
 
         auto read_dm_context = dmContext(read_scan_context);
-        auto cn_segment_snap = Remote::Serializer::deserializeSegment(
-            *read_dm_context,
-            /* store_id */ 100,
-            /* keyspace_id */ 0,
-            /* table_id */ 100,
-            snap_proto);
+        auto cn_segment_snap = Remote::Serializer::deserializeSegment(*read_dm_context, snap_proto);
 
         auto stream = cn_segment->getInputStream(
             ReadMode::Bitmap,
@@ -2143,7 +2143,7 @@ protected:
     ColumnDefinesPtr table_columns;
     DM::DeltaMergeStore::Settings settings;
 
-    NamespaceID ns_id = 100;
+    TableID ns_id = 100;
 
     // the segment we are going to test
     SegmentPtr wn_segment;

@@ -21,7 +21,9 @@
 #include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/StorageEngineType.h>
 #include <Storages/KVStore/TMTStorages.h>
-#include <Storages/KVStore/TiKVHelpers/PDTiKVClient.h>
+#include <pingcap/kv/Cluster.h>
+
+#include <memory>
 
 namespace DB
 {
@@ -44,6 +46,9 @@ using GCManagerPtr = std::shared_ptr<GCManager>;
 struct TiFlashRaftConfig;
 
 struct TiFlashRaftProxyHelper;
+
+class CTEManager;
+using CTEManagerPtr = std::unique_ptr<CTEManager>;
 
 // We define a shared ptr here, because TMTContext / SchemaSyncer / IndexReader all need to
 // `share` the resource of cluster.
@@ -119,8 +124,11 @@ public:
     S3::S3LockClientPtr getS3LockClient() const { return s3lock_client; }
 
     MPPTaskManagerPtr getMPPTaskManager();
+    CTEManager * getCTEManager();
 
     void shutdown();
+
+    void shutdownStorageGc();
 
     void restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper = nullptr);
 
@@ -162,6 +170,7 @@ private:
     const std::unordered_set<std::string> ignore_databases;
     std::shared_ptr<TiDBSchemaSyncerManager> schema_sync_manager;
     MPPTaskManagerPtr mpp_task_manager;
+    CTEManagerPtr cte_manager;
 
     TiFlashRaftConfig raftproxy_config;
 };

@@ -408,7 +408,7 @@ inline bool addDefaultValueToColumnIfPossible(
         if (!force_decode)
             return false;
         // Else non-clustered index, and not pk_is_handle, it could be a row encoded by older schema,
-        // we need to fill the column wich has primary key flag with default value.
+        // we need to fill the column which has primary key flag with default value.
         // fallthrough to fill default value when force_decode
     }
 

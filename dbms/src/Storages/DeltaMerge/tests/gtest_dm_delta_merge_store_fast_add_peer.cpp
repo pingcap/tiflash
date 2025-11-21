@@ -265,8 +265,7 @@ protected:
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_NROWS(in, rows);
     }

@@ -49,6 +49,20 @@ tipb::ANNQueryInfo extractAnnQuery(const tipb::Executor * table_scan)
     return used_columnar_indexes[0].ann_query_info();
 }
 
+tipb::FTSQueryInfo extractFtsQuery(const tipb::Executor * table_scan)
+{
+    bool is_partition_table_scan = table_scan->tp() == tipb::TypePartitionTableScan;
+    const auto & used_columnar_indexes = is_partition_table_scan
+        ? table_scan->partition_table_scan().used_columnar_indexes()
+        : table_scan->tbl_scan().used_columnar_indexes();
+    if (used_columnar_indexes.size() != 1)
+        return {};
+    if (used_columnar_indexes[0].index_type() != tipb::ColumnarIndexType::TypeFulltext)
+        return {};
+    RUNTIME_CHECK(used_columnar_indexes[0].has_fts_query_info());
+    return used_columnar_indexes[0].fts_query_info();
+}
+
 void copyUsedColumnarIndexesFromPartitionTableScan(
     const tipb::PartitionTableScan & partition_table_scan,
     tipb::TableScan * tipb_table_scan)
@@ -88,6 +102,7 @@ TiDBTableScan::TiDBTableScan(
           is_partition_table_scan ? table_scan->partition_table_scan().used_columnar_indexes()
                                   : table_scan->tbl_scan().used_columnar_indexes())
     , ann_query_info(extractAnnQuery(table_scan))
+    , fts_query_info(extractFtsQuery(table_scan))
     // Only No-partition table need keep order when tablescan executor required keep order.
     // If keep_order is not set, keep order for safety.
     , keep_order(

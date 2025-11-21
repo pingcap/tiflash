@@ -13,12 +13,14 @@
 // limitations under the License.
 
 #include <Common/MemoryTracker.h>
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Debug/MockKVStore/MockSSTGenerator.h>
 #include <Debug/MockTiDB.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
 #include <Storages/KVStore/Read/LearnerRead.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TiKVHelpers/DecodedLockCFValue.h>
+#include <Storages/KVStore/TiKVHelpers/PDTiKVClient.h>
 #include <Storages/KVStore/Utils/AsyncTasks.h>
 #include <Storages/KVStore/tests/region_kvstore_test.h>
 #include <Storages/Page/V3/PageDefines.h>
@@ -32,6 +34,7 @@
 #include <common/config_common.h> // Included for `USE_JEMALLOC`
 
 #include <limits>
+#include <thread>
 
 
 namespace DB::tests
@@ -455,6 +458,8 @@ try
                 validateSSTGeneration(kvs, proxy_instance, region_id, default_cf, ColumnFamilyType::Default, 5, 7);
             }
 
+#if ENABLE_NEXT_GEN == 0
+            // MultiSSTReader::approxSize is not supported under next-gen so far
             {
                 // Test of ingesting multiple files with MultiSSTReader.
                 MockSSTReader::getMockSSTData().clear();
@@ -489,6 +494,7 @@ try
                     EXPECT_THROW(proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index), Exception);
                 }
             }
+#endif
             {
                 // Test of ingesting single file with MultiSSTReader.
                 MockSSTReader::getMockSSTData().clear();
@@ -939,10 +945,10 @@ CATCH
 TEST(ProxyMode, Normal)
 try
 {
-#if SERVERLESS_PROXY == 0
-    ASSERT_EQ(SERVERLESS_PROXY, 0);
+#if ENABLE_NEXT_GEN == 0
+    ASSERT_EQ(ENABLE_NEXT_GEN, 0);
 #else
-    ASSERT_EQ(SERVERLESS_PROXY, 1);
+    ASSERT_EQ(ENABLE_NEXT_GEN, 1);
 #endif
 }
 CATCH
@@ -970,11 +976,10 @@ try
     auto & ctx = TiFlashTestEnv::getGlobalContext();
     ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
     UInt64 region_id = 1;
-    TableID table_id;
 
     initStorages();
     KVStore & kvs = getKVS();
-    table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
+    TableID table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
     LOG_INFO(&Poco::Logger::get("Test"), "generated table_id {}", table_id);
     proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), region_id, std::nullopt);
     auto kvr1 = kvs.getRegion(region_id);
@@ -984,16 +989,6 @@ try
         MockSSTReader::getMockSSTData().clear();
         MockSSTGenerator default_cf{902, 800, ColumnFamilyType::Default};
         default_cf.insert(1, "v1");
-        default_cf.finish_file();
-        default_cf.insert(2, "v2");
-        default_cf.finish_file();
-        default_cf.insert(3, "v3");
-        default_cf.insert(4, "v4");
-        default_cf.finish_file();
-        default_cf.insert(5, "v5");
-        default_cf.insert(6, "v6");
-        default_cf.finish_file();
-        default_cf.insert(7, "v7");
         default_cf.finish_file();
         default_cf.freeze();
         kvs.mutProxyHelperUnsafe()->sst_reader_interfaces = make_mock_sst_reader_interface();
@@ -1067,5 +1062,31 @@ try
     }
 }
 CATCH
+
+TEST(KeyspacesGCInfoTest, Basic)
+{
+    KeyspacesGCInfo info;
+    ASSERT_EQ(info.getGCSafepoint(1), std::nullopt);
+    info.updateGCSafepoint(1, 10086);
+    // get hit cache
+    auto gc_info = info.getGCSafepoint(1);
+    ASSERT_TRUE(gc_info.has_value());
+    ASSERT_EQ(gc_info->gc_safepoint, 10086);
+    // get hit cache second time
+    gc_info = info.getGCSafepoint(1);
+    ASSERT_TRUE(gc_info.has_value());
+    ASSERT_EQ(gc_info->gc_safepoint, 10086);
+    // get with valid seconds, not expired
+    gc_info = info.getGCSafepointIfValid(1, 10);
+    ASSERT_TRUE(gc_info.has_value());
+    ASSERT_EQ(gc_info->gc_safepoint, 10086);
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    // get with valid seconds, expired
+    gc_info = info.getGCSafepointIfValid(1, 1);
+    ASSERT_EQ(gc_info, std::nullopt);
+    // remove keyspace
+    info.removeGCSafepoint(1);
+    ASSERT_EQ(info.getGCSafepoint(1), std::nullopt);
+}
 
 } // namespace DB::tests

@@ -14,28 +14,85 @@
 
 #pragma once
 
+#include <Common/PODArray.h>
 #include <Storages/KVStore/Utils.h>
+#include <common/unaligned.h>
 
 #include <vector>
 
 namespace DB
 {
 
-constexpr size_t ROW_ALIGN = 4;
+/// Row Layout
+/// 1. if required hash value comparison:
+///    <Next Pointer> <Hash Value> <Other Join Keys> <Raw Required Join Keys> <Other Required Columns>
+/// 2. if not required hash value comparison:
+///    <Next Pointer> <Other Join Keys> <Raw Required Join Keys> <Other Required Columns>
+struct HashJoinRowLayout
+{
+    /// The raw join key column are the same as the original data.
+    /// raw_key_column_index in HashJoin::right_sample_block_pruned + is_nullable.
+    std::vector<std::pair<size_t, bool>> raw_key_column_indexes;
+    /// other_column_index in HashJoin::right_sample_block_pruned + is_fixed_size
+    std::vector<std::pair<size_t, bool>> other_column_indexes;
+    /// Number of columns at the beginning of `output_other_column_indexes`
+    /// that are used for evaluating the join other conditions.
+    size_t other_column_count_for_other_condition = 0;
+
+    size_t key_column_fixed_size = 0;
+    size_t other_column_fixed_size = 0;
+};
 
 using RowPtr = char *;
 using RowPtrs = PaddedPODArray<RowPtr>;
+
+constexpr size_t ROW_ALIGN = 4;
+
+constexpr size_t ROW_PTR_TAG_BITS = 16;
+constexpr size_t ROW_PTR_TAG_MASK = (1 << ROW_PTR_TAG_BITS) - 1;
+constexpr size_t ROW_PTR_TAG_SHIFT = 8 * sizeof(RowPtr) - ROW_PTR_TAG_BITS;
+static_assert(sizeof(RowPtr) == sizeof(uintptr_t));
+static_assert(sizeof(RowPtr) == 8);
+
+inline RowPtr getNextRowPtr(RowPtr ptr)
+{
+    return unalignedLoad<RowPtr>(ptr);
+}
+
+inline UInt16 getRowPtrTag(RowPtr ptr)
+{
+    auto address = reinterpret_cast<uintptr_t>(ptr);
+    return address >> ROW_PTR_TAG_SHIFT;
+}
+
+inline bool isRowPtrTagZero(RowPtr ptr)
+{
+    return getRowPtrTag(ptr) == 0;
+}
+
+inline RowPtr removeRowPtrTag(RowPtr ptr)
+{
+    auto address = reinterpret_cast<uintptr_t>(ptr);
+    address &= (1ULL << ROW_PTR_TAG_SHIFT) - 1;
+    return reinterpret_cast<RowPtr>(address);
+}
+
+inline bool containOtherTag(RowPtr ptr, UInt16 other_tag)
+{
+    UInt16 tag = getRowPtrTag(ptr);
+    return (tag | other_tag) == tag;
+}
 
 struct RowContainer
 {
     PaddedPODArray<char> data;
     PaddedPODArray<size_t> offsets;
-    PaddedPODArray<size_t> hashes;
+    PaddedPODArray<UInt64> hashes;
 
     size_t size() const { return offsets.size(); }
 
     RowPtr getRowPtr(ssize_t row) { return &data[offsets[row - 1]]; }
-    size_t getHash(ssize_t row) { return hashes[row]; }
+    UInt64 getHash(ssize_t row) { return hashes[row]; }
 };
 
 struct alignas(CPU_CACHE_LINE_SIZE) MultipleRowContainer
@@ -70,60 +127,5 @@ struct alignas(CPU_CACHE_LINE_SIZE) MultipleRowContainer
         return &column_rows[scan_table_index++];
     }
 };
-
-/// Row Layout
-/// 1. Not-null join key row if required hash value comparison:
-///    <Next Pointer> <Hash Value> <Other Join Keys> <Raw Required Join Keys> <Other Required Columns>
-/// 2. Not-null join key row if not required hash value comparison:
-///    <Next Pointer> <Other Join Keys> <Raw Required Join Keys> <Other Required Columns>
-/// 3. Null join key row(For right anti/outer join): <All Required Columns>
-struct HashJoinRowLayout
-{
-    /// The raw join key are the same as the original data.
-    /// raw_required_key_column_index + is_nullable
-    std::vector<std::pair<size_t, bool>> raw_required_key_column_indexes;
-    /// other_required_column_index + is_fixed_size
-    std::vector<std::pair<size_t, bool>> other_required_column_indexes;
-    size_t key_column_fixed_size = 0;
-    size_t other_column_fixed_size = 0;
-
-    static RowPtr getNextRowPtr(const RowPtr ptr) { return unalignedLoad<RowPtr>(ptr); }
-};
-
-constexpr size_t ROW_PTR_TAG_BITS = 16;
-constexpr size_t ROW_PTR_TAG_MASK = (1 << ROW_PTR_TAG_BITS) - 1;
-
-inline UInt16 getRowPtrTag(RowPtr ptr)
-{
-    static_assert(sizeof(RowPtr) == 8);
-    auto address = reinterpret_cast<uintptr_t>(ptr);
-    return address >> (64 - ROW_PTR_TAG_BITS);
-}
-
-inline bool isRowPtrTagZero(RowPtr ptr)
-{
-    return getRowPtrTag(ptr) == 0;
-}
-
-inline RowPtr removeRowPtrTag(RowPtr ptr)
-{
-    auto address = reinterpret_cast<uintptr_t>(ptr);
-    address &= (1ULL << (64 - ROW_PTR_TAG_BITS)) - 1;
-    return reinterpret_cast<RowPtr>(address);
-}
-
-inline RowPtr addRowPtrTag(RowPtr ptr, UInt16 tag)
-{
-    static_assert(sizeof(uintptr_t) == 8);
-    auto address = reinterpret_cast<uintptr_t>(ptr);
-    address |= static_cast<uintptr_t>(tag) << (64 - ROW_PTR_TAG_BITS);
-    return reinterpret_cast<RowPtr>(address);
-}
-
-inline bool containOtherTag(RowPtr ptr, UInt16 other_tag)
-{
-    UInt16 tag = getRowPtrTag(ptr);
-    return (tag | other_tag) == tag;
-}
 
 } // namespace DB

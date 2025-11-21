@@ -35,6 +35,7 @@ public:
         StreamWriterPtr writer_,
         Int64 records_per_chunk_,
         Int64 batch_send_min_limit_,
+        UInt64 max_buffered_bytes_,
         DAGContext & dag_context_);
     WaitResult waitForWritable() const override;
 
@@ -45,10 +46,8 @@ private:
     void encodeThenWriteBlocks();
 
 private:
-    Int64 batch_send_min_limit;
     StreamWriterPtr writer;
     std::vector<Block> blocks;
-    size_t rows_in_blocks;
     std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
 };
 

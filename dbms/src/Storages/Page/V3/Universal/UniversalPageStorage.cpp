@@ -26,6 +26,7 @@
 #include <Storages/Page/V3/CheckpointFile/CheckpointFiles.h>
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/Universal/S3LockLocalManager.h>
+#include <Storages/Page/V3/Universal/S3PageReader.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
 #include <Storages/Page/V3/WAL/WALConfig.h>
@@ -132,12 +133,14 @@ Page UniversalPageStorage::read(
     const UniversalPageId & page_id,
     const ReadLimiterPtr & read_limiter,
     SnapshotPtr snapshot,
-    bool throw_on_not_exist) const
+    bool throw_on_not_exist,
+    ReadBufferFromRandomAccessFilePtr & reusable_buf,
+    PS::V3::S3PageReader::ReuseStat & unused_reason) const
 {
     GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
     if (!snapshot)
     {
-        snapshot = this->getSnapshot("");
+        snapshot = this->getGeneralSnapshot("");
     }
 
     auto page_entry = throw_on_not_exist ? page_directory->getByID(page_id, snapshot)
@@ -145,7 +148,10 @@ Page UniversalPageStorage::read(
     auto & checkpoint_info = page_entry.second.checkpoint_info;
     if (checkpoint_info.has_value() && checkpoint_info.is_local_data_reclaimed)
     {
-        auto page = remote_reader->read(page_entry);
+        auto [page, s3_file_buf, unused_rea]
+            = remote_reader->readFromS3File(page_entry, reusable_buf, DBMS_DEFAULT_BUFFER_SIZE);
+        unused_reason = unused_rea;
+        reusable_buf = s3_file_buf;
         UniversalWriteBatch wb;
         auto buf = std::make_shared<ReadBufferFromMemory>(page.data.begin(), page.data.size());
         {
@@ -172,6 +178,17 @@ Page UniversalPageStorage::read(
     }
 }
 
+Page UniversalPageStorage::read(
+    const UniversalPageId & page_id,
+    const ReadLimiterPtr & read_limiter,
+    SnapshotPtr snapshot,
+    bool throw_on_not_exist) const
+{
+    ReadBufferFromRandomAccessFilePtr reusable_buf;
+    PS::V3::S3PageReader::ReuseStat reused = PS::V3::S3PageReader::ReuseStat::Reused;
+    return read(page_id, read_limiter, snapshot, throw_on_not_exist, reusable_buf, reused);
+}
+
 UniversalPageMap UniversalPageStorage::read(
     const UniversalPageIds & page_ids,
     const ReadLimiterPtr & read_limiter,
@@ -181,7 +198,7 @@ UniversalPageMap UniversalPageStorage::read(
     GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
     if (!snapshot)
     {
-        snapshot = this->getSnapshot("");
+        snapshot = this->getGeneralSnapshot("");
     }
 
     auto do_read = [&](const UniversalPageIdAndEntries & page_entries) {
@@ -238,7 +255,7 @@ UniversalPageMap UniversalPageStorage::read(
     GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
     if (!snapshot)
     {
-        snapshot = this->getSnapshot("");
+        snapshot = this->getGeneralSnapshot("");
     }
 
     // get the entries from directory, keep track
@@ -304,7 +321,7 @@ void UniversalPageStorage::traverse(
 {
     if (!snapshot)
     {
-        snapshot = this->getSnapshot("");
+        snapshot = this->getGeneralSnapshot("");
     }
 
     // TODO: This could hold the read lock of `page_directory` for a long time
@@ -336,7 +353,7 @@ void UniversalPageStorage::traverseEntries(
 {
     if (!snapshot)
     {
-        snapshot = this->getSnapshot("");
+        snapshot = this->getGeneralSnapshot("");
     }
 
     // TODO: This could hold the read lock of `page_directory` for a long time
@@ -354,7 +371,7 @@ UniversalPageId UniversalPageStorage::getNormalPageId(
 {
     if (!snapshot)
     {
-        snapshot = this->getSnapshot("");
+        snapshot = this->getGeneralSnapshot("");
     }
 
     return page_directory->getNormalPageId(page_id, snapshot, throw_on_not_exist);
@@ -364,7 +381,7 @@ DB::PageEntry UniversalPageStorage::getEntry(const UniversalPageId & page_id, Sn
 {
     if (!snapshot)
     {
-        snapshot = this->getSnapshot("");
+        snapshot = this->getGeneralSnapshot("");
     }
 
     try
@@ -394,7 +411,7 @@ std::optional<DB::PS::V3::CheckpointLocation> UniversalPageStorage::getCheckpoin
 {
     if (!snapshot)
     {
-        snapshot = this->getSnapshot("");
+        snapshot = this->getGeneralSnapshot("");
     }
 
     try
@@ -495,7 +512,7 @@ PS::V3::S3LockLocalManager::ExtraLockInfo UniversalPageStorage::allocateNewUploa
 bool UniversalPageStorage::canSkipCheckpoint() const
 {
     std::scoped_lock lock(checkpoint_mu);
-    auto snap = page_directory->createSnapshot(/*tracing_id*/ "canSkipCheckpoint");
+    auto snap = page_directory->createSnapshot(SnapshotType::General, /*tracing_id*/ "canSkipCheckpoint");
     return snap->sequence == last_checkpoint_sequence;
 }
 
@@ -505,7 +522,9 @@ std::optional<PS::V3::CPDataDumpStats> UniversalPageStorage::dumpIncrementalChec
     std::scoped_lock lock(checkpoint_mu);
     Stopwatch sw;
     // Let's keep this snapshot until all finished, so that blob data will not be GCed.
-    auto snap = page_directory->createSnapshot(/*tracing_id*/ "dumpIncrementalCheckpoint");
+    auto snap = page_directory->createSnapshot(
+        SnapshotType::General,
+        /*tracing_id*/ "dumpIncrementalCheckpoint");
 
     if (snap->sequence == last_checkpoint_sequence && !options.full_compact)
         return PS::V3::CPDataDumpStats{.has_new_data = false};
@@ -517,7 +536,7 @@ std::optional<PS::V3::CPDataDumpStats> UniversalPageStorage::dumpIncrementalChec
         sequence = options.override_sequence.value();
 
     auto edit_from_mem = page_directory->dumpSnapshotToEdit(snap);
-    // The output of `PageDirectory::dumpSnapshotToEdit` may contain page ids which are logically deleted but have not been gced yet.
+    // The output of `PageDirectory::dumpSnapshotToEdit` may contain page ids which are logically deleted but have not been GCed yet.
     // These page ids may be GC-ed when dumping snapshot, so we cannot read data of these page ids.
     // So we create a clean temp page_directory here and use it to dump edits with all visible page ids for `snap`.
     // But if we just upload manifest without reading page data, we can skip this step.

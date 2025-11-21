@@ -24,15 +24,15 @@ simsimd_capability_t simd_capabilities()
 {
     static simsimd_capability_t static_capabilities = simsimd_cap_any_k;
     if (static_capabilities == simsimd_cap_any_k)
-        static_capabilities = simsimd_capabilities_implementation();
+        static_capabilities = _simsimd_capabilities_implementation();
     return static_capabilities;
 }
 
 simsimd_capability_t actual_capability(simsimd_datatype_t data_type, simsimd_metric_kind_t kind)
 {
-    simsimd_metric_punned_t metric = nullptr;
+    simsimd_kernel_punned_t metric = nullptr;
     simsimd_capability_t used_capability;
-    simsimd_find_metric_punned(
+    simsimd_find_kernel_punned(
         kind,
         data_type,
         simsimd_details::simd_capabilities(),

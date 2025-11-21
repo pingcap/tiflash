@@ -27,7 +27,9 @@ Page CPWriteDataSourceBlobStore::read(const BlobStore<universal::BlobStoreTrait>
         // Read from S3. Try read from current cursor of the previous read buffer if possible,
         // otherwise create a new one and seek from the beginning.
         // Returns the read buffer we eventually read from, for later re-use.
-        auto [page, s3_file_buf] = remote_reader->readFromS3File(page_id_and_entry, current_s3file_buf, prefetch_size);
+        auto [page, s3_file_buf, reused]
+            = remote_reader->readFromS3File(page_id_and_entry, current_s3file_buf, prefetch_size);
+        UNUSED(reused);
         current_s3file_buf = s3_file_buf;
         return page;
     }

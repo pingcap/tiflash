@@ -170,7 +170,7 @@ private:
             dm_context.tracing_id,
             /*max_sharing_column_bytes_for_all*/ false,
             dm_context.scan_context,
-            ReadTag::MVCC);
+            ReadTag::Internal);
 
         const auto & pack_stats = dmfile->getPackStats();
         clipped_handle_packs.resize(clipped_pack_range.count);

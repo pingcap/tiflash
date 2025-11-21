@@ -14,6 +14,7 @@
 
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileInMemory.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/DMContext.h>
@@ -44,10 +45,17 @@ DeltaIndex::Updates ColumnFileFlushTask::prepare(WriteBatches & wbs)
         if (!task.block_data)
             continue;
 
-        IColumn::Permutation perm;
-        task.sorted = sortBlockByPk(getExtraHandleColumnDefine(context.is_common_handle), task.block_data, perm);
-        if (task.sorted)
-            delta_index_updates.emplace_back(task.deletes_offset, task.rows_offset, perm);
+        // Data sorting alters the sequence of data, requiring updates to the VersionChain,
+        // like `cloneWithUpdates` of DeltaIndex, yet it provides no benefit for VersionChain's data scanning.
+        // Meanwhile, the DeltaIndex inherently supports unordered delta data, such as unflushed or compacted data.
+        // Therefore, only perform data sorting when the VersionChain is disabled.
+        if (!context.isVersionChainEnabled())
+        {
+            IColumn::Permutation perm;
+            task.sorted = sortBlockByPk(getExtraHandleColumnDefine(context.is_common_handle), task.block_data, perm);
+            if (task.sorted)
+                delta_index_updates.emplace_back(task.deletes_offset, task.rows_offset, perm);
+        }
 
         task.data_page = ColumnFileTiny::writeColumnFileData(context, task.block_data, 0, task.block_data.rows(), wbs);
     }

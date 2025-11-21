@@ -45,12 +45,15 @@ class S3RandomAccessFile final : public RandomAccessFile
 public:
     static RandomAccessFilePtr create(const String & remote_fname);
 
-    S3RandomAccessFile(std::shared_ptr<TiFlashS3Client> client_ptr_, const String & remote_fname_);
+    S3RandomAccessFile(
+        std::shared_ptr<TiFlashS3Client> client_ptr_,
+        const String & remote_fname_,
+        const DM::ScanContextPtr & scan_context_);
 
     // Can only seek forward.
-    off_t seek(off_t offset, int whence) override;
+    [[nodiscard]] off_t seek(off_t offset, int whence) override;
 
-    ssize_t read(char * buf, size_t size) override;
+    [[nodiscard]] ssize_t read(char * buf, size_t size) override;
 
     // Note that this will return "{S3Client.bucket_name}/{remote_fname}"
     std::string getFileName() const override;
@@ -58,7 +61,7 @@ public:
     // Return "remote_fname"
     std::string getInitialFileName() const override;
 
-    ssize_t pread(char * /*buf*/, size_t /*size*/, off_t /*offset*/) const override
+    [[nodiscard]] ssize_t pread(char * /*buf*/, size_t /*size*/, off_t /*offset*/) const override
     {
         throw Exception("S3RandomAccessFile not support pread", ErrorCodes::NOT_IMPLEMENTED);
     }
@@ -84,7 +87,7 @@ public:
     String summary() const;
 
 private:
-    bool initialize();
+    void initialize(std::string_view action);
     off_t seekImpl(off_t offset, int whence);
     ssize_t readImpl(char * buf, size_t size);
     String readRangeOfObject();
@@ -106,6 +109,7 @@ private:
 
     Int32 cur_retry = 0;
     static constexpr Int32 max_retry = 3;
+    DM::ScanContextPtr scan_context;
 };
 
 using S3RandomAccessFilePtr = std::shared_ptr<S3RandomAccessFile>;

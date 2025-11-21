@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Columns/ColumnVector.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -320,6 +322,8 @@ public:
         data.push_back(*reinterpret_cast<const T *>(pos));
         return pos + sizeof(T);
     }
+
+    size_t serializeByteSize() const override { return data.size() * sizeof(T); }
 
     void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override;
     void countSerializeByteSizeForCmp(

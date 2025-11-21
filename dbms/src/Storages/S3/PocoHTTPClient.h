@@ -26,7 +26,6 @@
 #include <aws/core/http/standard/StandardHttpResponse.h>
 
 #include <string>
-#include <vector>
 
 namespace Aws::Http::Standard
 {
@@ -141,21 +140,16 @@ private:
 
     enum class S3MetricType
     {
-        Microseconds,
         Count,
         Errors,
         Throttling,
         Redirects,
-
-        EnumSize,
     };
 
     enum class S3MetricKind
     {
         Read,
         Write,
-
-        EnumSize,
     };
 
     static S3MetricKind getMetricKind(const Aws::Http::HttpRequest & request);

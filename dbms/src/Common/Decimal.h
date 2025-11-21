@@ -19,6 +19,7 @@
 #include <Core/Types.h>
 
 #include <ext/singleton.h>
+#include <type_traits>
 
 namespace DB
 {
@@ -163,11 +164,26 @@ struct SumDecimalInferer
 
 struct AvgDecimalInferer
 {
-    static std::tuple<PrecType, ScaleType> infer(PrecType left_prec, ScaleType left_scale, ScaleType div_precincrement)
+    static constexpr PrecType decimal_longlong_digits = 22;
+
+    static std::tuple<PrecType, ScaleType> inferResultType(
+        PrecType left_prec,
+        ScaleType left_scale,
+        ScaleType div_precincrement)
     {
         return {
             std::min(left_prec + div_precincrement, decimal_max_prec),
             std::min(left_scale + div_precincrement, decimal_max_scale)};
+    }
+
+    static std::tuple<PrecType, ScaleType> inferCalculate(
+        PrecType left_prec,
+        ScaleType left_scale,
+        ScaleType div_precincrement)
+    {
+        return {
+            std::min(left_prec + div_precincrement + decimal_longlong_digits, decimal_max_prec),
+            std::min(left_scale, decimal_max_scale)};
     }
 };
 

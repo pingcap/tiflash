@@ -73,6 +73,8 @@ PhysicalPlanNodePtr PhysicalExpand2::build(
     auto final_project_aliases = analyzer.genNonRootFinalProjectAliases("");
     header_actions->add(ExpressionAction::project(final_project_aliases));
 
+    analyzer.reset(header_actions->getSampleBlock().getNamesAndTypes());
+
     // pre-detect the nullability change action in the first projection level and generate the pre-actions.
     // for rollup, it's level projections may show like below:
     // Says child schema is: [unrelated grouping cols projection..., col1, col2, col3]
@@ -115,10 +117,8 @@ PhysicalPlanNodePtr PhysicalExpand2::build(
             }
         }
     }
-    NamesAndTypes new_source_cols;
-    for (const auto & origin_col : header_actions->getSampleBlock().getNamesAndTypesList())
-        new_source_cols.emplace_back(origin_col.name, origin_col.type);
-    analyzer.reset(new_source_cols);
+
+    analyzer.reset(header_actions->getSampleBlock().getNamesAndTypes());
 
     for (auto i = 0; i < expand.proj_exprs().size(); i++)
     {

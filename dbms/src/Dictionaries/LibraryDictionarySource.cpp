@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Dictionaries/LibraryDictionarySource.cpp
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -256,9 +258,10 @@ BlockInputStreamPtr LibraryDictionarySource::loadKeys(
     void * data_ptr = nullptr;
 
     /// Get function pointer before dataNew call because library->get may throw.
-    auto func_load_keys = library->get<
-        void * (*)(decltype(data_ptr), decltype(&settings->strings), decltype(&columns_pass), decltype(&requested_rows_c))>(
-        "ClickHouseDictionary_v2_loadKeys");
+    auto func_load_keys = library->get<void * (*)(decltype(data_ptr),
+                                                  decltype(&settings->strings),
+                                                  decltype(&columns_pass),
+                                                  decltype(&requested_rows_c))>("ClickHouseDictionary_v2_loadKeys");
     data_ptr = library->get<decltype(data_ptr) (*)(decltype(lib_data))>("ClickHouseDictionary_v2_dataNew")(lib_data);
     auto * data = func_load_keys(data_ptr, &settings->strings, &columns_pass, &requested_rows_c);
     auto block = dataToBlock(description.sample_block, data);

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Debug/MockKVStore/MockRaftStoreProxy.h>
 #include <Debug/TiFlashTestEnv.h>
 #include <Interpreters/SharedContexts/Disagg.h>
@@ -229,17 +230,23 @@ void eventuallyThrow(F f)
     ASSERT_TRUE(thrown);
 }
 
-template <typename F>
-void eventuallyPredicate(F f)
+template <typename F, typename FP>
+void eventuallyPredicateEx(F f, FP fp)
 {
     using namespace std::chrono_literals;
-    for (int i = 0; i < 5; i++)
+    for (int i = 0; i < 20; i++)
     {
         if (f())
             return;
         std::this_thread::sleep_for(500ms);
     }
-    ASSERT_TRUE(false);
+    fp();
+}
+
+template <typename F>
+void eventuallyPredicate(F f)
+{
+    eventuallyPredicateEx(f, []() { throw Exception("not meet"); });
 }
 
 void assertNoSegment(
@@ -345,8 +352,7 @@ void verifyRows(Context & ctx, DM::DeltaMergeStorePtr store, const DM::RowKeyRan
         std::vector<RuntimeFilterPtr>{},
         0,
         "KVStoreFastAddPeer",
-        /* keep_order= */ false,
-        /* is_fast_scan= */ false,
+        DM::DMReadOptions{},
         /* expected_block_size= */ 1024)[0];
     ASSERT_INPUTSTREAM_NROWS(in, rows);
 }
@@ -356,10 +362,10 @@ std::vector<CheckpointRegionInfoAndData> RegionKVStoreTestFAP::prepareForRestart
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     KVStore & kvs = getKVS();
     global_context.getTMTContext().debugSetKVStore(kvstore);
+    auto fap_context = global_context.getSharedContextDisagg()->fap_context;
     auto page_storage = global_context.getWriteNodePageStorage();
 
     table_id = proxy_instance->bootstrapTable(global_context, kvs, global_context.getTMTContext());
-    auto fap_context = global_context.getSharedContextDisagg()->fap_context;
 
     auto store_id = kvs.getStore().store_id.load();
 
@@ -539,11 +545,68 @@ try
             DM::RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()),
             1);
     }
+    // CheckpointIngestInfo is not removed.
+    eventuallyPredicate([&]() {
+        return CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
+    });
+    ASSERT_TRUE(fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
+
+    const auto checkpoint_info = fap_context->tryGetCheckpointIngestInfo(region_id).value();
+    const auto checkpoint_info_meta = checkpoint_info->serializeMeta();
+
+    EngineStoreServerWrap w{
+        .tmt = &global_context.getTMTContext(),
+        .proxy_helper = proxy_helper.get(),
+    };
+
+    // Re-ingest, will success.
+    ApplyFapSnapshotImpl(
+        global_context.getTMTContext(),
+        proxy_helper.get(),
+        region_id,
+        2333,
+        true,
+        region_to_ingest->appliedIndex(),
+        region_to_ingest->appliedIndexTerm());
+    {
+        auto keyspace_id = kv_region->getKeyspaceID();
+        auto table_id = kv_region->getMappedTableID();
+        auto storage = global_context.getTMTContext().getStorages().get(keyspace_id, table_id);
+        ASSERT_TRUE(storage && storage->engineType() == TiDB::StorageEngine::DT);
+        auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+        auto store = dm_storage->getStore();
+        ASSERT_EQ(store->getRowKeyColumnSize(), 1);
+        verifyRows(
+            global_context,
+            store,
+            DM::RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()),
+            1);
+    }
+
+    ClearFapSnapshot(&w, region_id, 1);
+
+    // Do it again. no throw.
+    ClearFapSnapshot(&w, region_id, 1);
+
+    // Re-ingest, throw.
+    EXPECT_THROW(
+        ApplyFapSnapshotImpl(
+            global_context.getTMTContext(),
+            proxy_helper.get(),
+            region_id,
+            2333,
+            true,
+            region_to_ingest->appliedIndex(),
+            region_to_ingest->appliedIndexTerm()),
+        DB::Exception);
+
     // CheckpointIngestInfo is removed.
     eventuallyPredicate([&]() {
         return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
     });
     ASSERT_FALSE(fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
+
+    assertNoSegment(global_context.getTMTContext(), kv_region, checkpoint_info_meta);
 }
 CATCH
 
@@ -840,9 +903,32 @@ try
     sp.disable();
     t.join();
 
+    auto prev_fap_task_timeout_seconds = server.tmt->getContext().getSettingsRef().fap_task_timeout_seconds;
+    SCOPE_EXIT({ server.tmt->getContext().getSettingsRef().fap_task_timeout_seconds = prev_fap_task_timeout_seconds; });
     server.tmt->getContext().getSettingsRef().fap_task_timeout_seconds = 0;
     // Use another call to cancel
     FastAddPeer(&server, region_id, 2333);
+    eventuallyPredicate([&]() {
+        auto ptr = fap_context->getOrRestoreCheckpointIngestInfo(
+            global_context.getTMTContext(),
+            proxy_helper.get(),
+            region_id,
+            2333);
+        return ptr == nullptr
+            && !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
+    });
+
+    {
+        CheckpointIngestInfo::forciblyClean(
+            global_context.getTMTContext(),
+            proxy_helper.get(),
+            region_id,
+            false,
+            CheckpointIngestInfo::CleanReason::ProxyFallback);
+    }
+    eventuallyPredicate([&]() {
+        return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
+    });
     LOG_INFO(log, "Try another snapshot");
     proxy_instance->snapshot(
         kvs,
@@ -918,15 +1004,10 @@ try
     t2.join();
     exe_lock.unlock();
     exe_lock2.unlock();
-    // ["FAP is canceled when building segments, built=0"]
-    ASSERT_EQ(result.get().status, FastAddPeerStatus::Canceled);
-    // region 2 shared the same checkpoint with region 1, however, after region 1 failed with cancel,
-    // region 2 will rebuild the segment id cache.
-    // ["Build cache for with 1 segments"] [source="region_id=1002 keyspace=4294967295 table_id=31"]
+    ASSERT_EQ(result.get().status, FastAddPeerStatus::Ok);
     ASSERT_EQ(result2.get().status, FastAddPeerStatus::Ok);
 }
 CATCH
-
 
 TEST_F(RegionKVStoreTestFAP, EmptySegment)
 try
@@ -1017,6 +1098,7 @@ try
     auto mock_data = prepareForRestart(FAPTestOpt{})[0];
     KVStore & kvs = getKVS();
     RegionPtr kv_region = std::get<1>(mock_data);
+    auto apply_state = std::get<2>(mock_data);
 
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
@@ -1027,6 +1109,15 @@ try
         .proxy_helper = proxy_helper.get(),
     };
 
+    auto st = QueryFapSnapshotState(
+        &server,
+        region_id,
+        2333,
+        kv_region->getMeta().appliedIndex(),
+        kv_region->getMeta().appliedIndexTerm());
+    ASSERT_EQ(st, FapSnapshotState::NotFound);
+    ASSERT_EQ(fap_context->tasks_trace->queryState(region_id), FAPAsyncTasks::TaskState::NotScheduled);
+
     kvstore->getStore().store_id.store(1, std::memory_order_release);
     kvstore->debugMutStoreMeta().set_id(1);
     ASSERT_EQ(1, kvstore->getStoreID());
@@ -1035,8 +1126,12 @@ try
     FailPointHelper::enableFailPoint(FailPoints::force_set_fap_candidate_store_id);
     // The FAP will fail because it doesn't contain the new peer in region meta.
     FastAddPeer(&server, region_id, 2333);
-    eventuallyPredicate(
-        [&]() { return fap_context->tasks_trace->queryState(region_id) == FAPAsyncTasks::TaskState::Finished; });
+    eventuallyPredicateEx(
+        [&]() { return fap_context->tasks_trace->queryState(region_id) == FAPAsyncTasks::TaskState::Finished; },
+        [&]() {
+            LOG_ERROR(log, "Final state is {}", magic_enum::enum_name(fap_context->tasks_trace->queryState(region_id)));
+            throw Exception("not meet");
+        });
     eventuallyPredicate([&]() {
         return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
     });

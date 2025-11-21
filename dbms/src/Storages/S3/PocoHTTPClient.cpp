@@ -38,20 +38,18 @@
 
 #include <algorithm>
 #include <functional>
-#include <utility>
+#include <magic_enum.hpp>
 
 static const int SUCCESS_RESPONSE_MIN = 200;
 static const int SUCCESS_RESPONSE_MAX = 299;
 
 namespace ProfileEvents
 {
-extern const Event S3ReadMicroseconds;
 extern const Event S3ReadRequestsCount;
 extern const Event S3ReadRequestsErrors;
 extern const Event S3ReadRequestsThrottling;
 extern const Event S3ReadRequestsRedirects;
 
-extern const Event S3WriteMicroseconds;
 extern const Event S3WriteRequestsCount;
 extern const Event S3WriteRequestsErrors;
 extern const Event S3WriteRequestsThrottling;
@@ -159,6 +157,10 @@ bool checkRequestCanReturn2xxAndErrorInBody(Aws::Http::HttpRequest & request)
 
 PocoHTTPClient::S3MetricKind PocoHTTPClient::getMetricKind(const Aws::Http::HttpRequest & request)
 {
+    // According to https://repost.aws/knowledge-center/http-5xx-errors-s3
+    // For each partitioned Amazon S3 prefix
+    // PUT/COPY/POST/DELETE belongs to Read and QPS is 3,500
+    // GET/HEAD requests belongs to Write and QPS is 5,500
     switch (request.GetMethod())
     {
     case Aws::Http::HttpMethod::HTTP_GET:
@@ -175,10 +177,9 @@ PocoHTTPClient::S3MetricKind PocoHTTPClient::getMetricKind(const Aws::Http::Http
 
 void PocoHTTPClient::addMetric(const Aws::Http::HttpRequest & request, S3MetricType type, ProfileEvents::Count amount)
 {
-    const ProfileEvents::Event events_map[static_cast<size_t>(S3MetricType::EnumSize)]
-                                         [static_cast<size_t>(S3MetricKind::EnumSize)]
+    const ProfileEvents::Event events_map[magic_enum::enum_count<S3MetricType>()]
+                                         [magic_enum::enum_count<S3MetricKind>()]
         = {
-            {ProfileEvents::S3ReadMicroseconds, ProfileEvents::S3WriteMicroseconds},
             {ProfileEvents::S3ReadRequestsCount, ProfileEvents::S3WriteRequestsCount},
             {ProfileEvents::S3ReadRequestsErrors, ProfileEvents::S3WriteRequestsErrors},
             {ProfileEvents::S3ReadRequestsThrottling, ProfileEvents::S3WriteRequestsThrottling},
@@ -260,7 +261,7 @@ void PocoHTTPClient::makeRequestInternal(
     }
     catch (...)
     {
-        tryLogCurrentException(tracing_logger, fmt::format("Failed to make request to: {}", uri));
+        tryLogCurrentWarningException(tracing_logger, fmt::format("Failed to make request to: {}", uri));
         response->SetClientErrorType(Aws::Client::CoreErrors::NETWORK_CONNECTION);
         response->SetClientErrorMessage(getCurrentExceptionMessage(false));
 
@@ -457,7 +458,10 @@ std::optional<String> PocoHTTPClient::makeRequestOnce(
     else
     {
         if (status_code == 429 || status_code == 503)
-        { // API throttling
+        {
+            // API throttling from the server side
+            // 429 Too Many Requests
+            // 503 Service Unavailable
             addMetric(request, S3MetricType::Throttling);
         }
         else if (status_code >= 300)

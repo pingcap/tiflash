@@ -43,17 +43,17 @@ Float64 VectorFloat32Ref::l2SquaredDistance(VectorFloat32Ref b) const
 {
     checkDims(b);
 
-    static simsimd_metric_punned_t metric = nullptr;
+    static simsimd_metric_dense_punned_t metric = nullptr;
     static std::once_flag init_flag;
 
     std::call_once(init_flag, []() {
         simsimd_capability_t used_capability;
-        simsimd_find_metric_punned(
+        simsimd_find_kernel_punned(
             simsimd_metric_l2sq_k,
             simsimd_datatype_f32_k,
             simsimd_details::simd_capabilities(),
             simsimd_cap_any_k,
-            &metric,
+            reinterpret_cast<simsimd_kernel_punned_t *>(&metric),
             &used_capability);
     });
 
@@ -70,17 +70,17 @@ Float64 VectorFloat32Ref::innerProduct(VectorFloat32Ref b) const
 {
     checkDims(b);
 
-    static simsimd_metric_punned_t metric = nullptr;
+    static simsimd_metric_dense_punned_t metric = nullptr;
     static std::once_flag init_flag;
 
     std::call_once(init_flag, []() {
         simsimd_capability_t used_capability;
-        simsimd_find_metric_punned(
+        simsimd_find_kernel_punned(
             simsimd_metric_dot_k,
             simsimd_datatype_f32_k,
             simsimd_details::simd_capabilities(),
             simsimd_cap_any_k,
-            &metric,
+            reinterpret_cast<simsimd_kernel_punned_t *>(&metric),
             &used_capability);
     });
 
@@ -97,17 +97,17 @@ Float64 VectorFloat32Ref::cosineDistance(VectorFloat32Ref b) const
 {
     checkDims(b);
 
-    static simsimd_metric_punned_t metric = nullptr;
+    static simsimd_metric_dense_punned_t metric = nullptr;
     static std::once_flag init_flag;
 
     std::call_once(init_flag, []() {
         simsimd_capability_t used_capability;
-        simsimd_find_metric_punned(
+        simsimd_find_kernel_punned(
             simsimd_metric_cos_k,
             simsimd_datatype_f32_k,
             simsimd_details::simd_capabilities(),
             simsimd_cap_any_k,
-            &metric,
+            reinterpret_cast<simsimd_kernel_punned_t *>(&metric),
             &used_capability);
     });
 

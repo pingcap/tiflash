@@ -26,6 +26,14 @@ else
   ENABLE_TESTS=OFF
 fi
 
+if [[ -n "$ENABLE_NEXT_GEN" && "$ENABLE_NEXT_GEN" != "false" && "$ENABLE_NEXT_GEN" != "0" ]]; then
+  CMAKE_ENABLE_NEXT_GEN="ON"
+  echo "Building TiFlash with next-gen features enabled"
+else
+  CMAKE_ENABLE_NEXT_GEN="OFF"
+  echo "Building TiFlash"
+fi
+
 DEFAULT_CMAKE_PREFIX_PATH="/usr/local/"
 DEFINE_CMAKE_PREFIX_PATH="-DCMAKE_PREFIX_PATH=${DEFAULT_CMAKE_PREFIX_PATH}"
 
@@ -73,6 +81,7 @@ cmake -S "${SRCPATH}" \
   -DENABLE_TESTING=OFF \
   -DENABLE_TESTS=${ENABLE_TESTS} \
   -DENABLE_FAILPOINTS=${ENABLE_FAILPOINTS} \
+  -DENABLE_NEXT_GEN=${CMAKE_ENABLE_NEXT_GEN} \
   -DJEMALLOC_NARENAS=${JEMALLOC_NARENAS} \
   -Wno-dev \
   -DUSE_CCACHE=OFF \

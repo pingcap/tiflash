@@ -18,6 +18,7 @@
 #include <Storages/DeltaMerge/Index/VectorIndex/CommonUtil.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Perf.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Reader.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Stream/Ctx.h>
 #include <TiDB/Schema/VectorIndex.h>
 
 namespace DB::ErrorCodes
@@ -116,7 +117,7 @@ VectorIndexReader::SearchResults VectorIndexReader::search(
             query_vec_size,
             file_props.dimensions(),
             query_info->index_id(),
-            query_info->deprecated_column_id());
+            getVectorColumnID(query_info));
 
     RUNTIME_CHECK(query_info->ref_vec_f32().size() == sizeof(UInt32) + query_vec_size * sizeof(Float32));
 
@@ -127,7 +128,7 @@ VectorIndexReader::SearchResults VectorIndexReader::search(
             tipb::VectorDistanceMetric_Name(query_info->distance_metric()),
             file_props.distance_metric(),
             query_info->index_id(),
-            query_info->deprecated_column_id());
+            getVectorColumnID(query_info));
 
     std::atomic<size_t> visited_nodes = 0;
     std::atomic<size_t> discarded_nodes = 0;

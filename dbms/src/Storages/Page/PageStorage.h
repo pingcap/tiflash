@@ -30,7 +30,6 @@
 #include <common/logger_useful.h>
 #include <fmt/format.h>
 
-#include <functional>
 #include <memory>
 #include <set>
 
@@ -310,8 +309,6 @@ public:
     PageIdU64 getNormalPageId(PageIdU64 page_id) const;
 
     PageEntry getPageEntry(PageIdU64 page_id) const;
-
-    PageStorage::SnapshotPtr getSnapshot(const String & tracing_id) const;
 
     // Get some statistics of all living snapshots and the oldest living snapshot.
     SnapshotsStatistics getSnapshotsStat() const;

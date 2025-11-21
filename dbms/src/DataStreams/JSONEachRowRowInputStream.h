@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/DataStreams/JSONEachRowRowInputStream.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -35,7 +37,7 @@ public:
     JSONEachRowRowInputStream(ReadBuffer & istr_, const Block & header_, bool skip_unknown_);
 
     bool read(MutableColumns & columns) override;
-    bool allowSyncAfterError() const override { return true; };
+    bool allowSyncAfterError() const override { return true; }
     void syncAfterError() override;
 
 private:

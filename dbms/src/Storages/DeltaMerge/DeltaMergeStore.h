@@ -27,6 +27,7 @@
 #include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
+#include <Storages/DeltaMerge/DeltaMergeStore_Statistics.h>
 #include <Storages/DeltaMerge/File/DMFile_fwd.h>
 #include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
 #include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
@@ -76,104 +77,6 @@ namespace tests
 class DeltaMergeStoreTest;
 }
 
-struct SegmentStats
-{
-    UInt64 segment_id = 0;
-    RowKeyRange range;
-    UInt64 epoch = 0;
-    UInt64 rows = 0;
-    UInt64 size = 0;
-
-    Float64 delta_rate = 0;
-    UInt64 delta_memtable_rows = 0;
-    UInt64 delta_memtable_size = 0;
-    UInt64 delta_memtable_column_files = 0;
-    UInt64 delta_memtable_delete_ranges = 0;
-    UInt64 delta_persisted_page_id = 0;
-    UInt64 delta_persisted_rows = 0;
-    UInt64 delta_persisted_size = 0;
-    UInt64 delta_persisted_column_files = 0;
-    UInt64 delta_persisted_delete_ranges = 0;
-    UInt64 delta_cache_size = 0;
-    UInt64 delta_index_size = 0;
-
-    UInt64 stable_page_id = 0;
-    UInt64 stable_rows = 0;
-    UInt64 stable_size = 0;
-    UInt64 stable_dmfiles = 0;
-    UInt64 stable_dmfiles_id_0 = 0;
-    UInt64 stable_dmfiles_rows = 0;
-    UInt64 stable_dmfiles_size = 0;
-    UInt64 stable_dmfiles_size_on_disk = 0;
-    UInt64 stable_dmfiles_packs = 0;
-};
-using SegmentsStats = std::vector<SegmentStats>;
-
-struct StoreStats
-{
-    UInt64 segment_count = 0;
-
-    UInt64 total_rows = 0;
-    UInt64 total_size = 0;
-    UInt64 total_delete_ranges = 0;
-
-    Float64 delta_rate_rows = 0;
-    Float64 delta_rate_segments = 0;
-
-    Float64 delta_placed_rate = 0;
-    UInt64 delta_cache_size = 0;
-    Float64 delta_cache_rate = 0;
-    Float64 delta_cache_wasted_rate = 0;
-
-    UInt64 delta_index_size = 0;
-
-    Float64 avg_segment_rows = 0;
-    Float64 avg_segment_size = 0;
-
-    UInt64 delta_count = 0;
-    UInt64 total_delta_rows = 0;
-    UInt64 total_delta_size = 0;
-    Float64 avg_delta_rows = 0;
-    Float64 avg_delta_size = 0;
-    Float64 avg_delta_delete_ranges = 0;
-
-    UInt64 stable_count = 0;
-    UInt64 total_stable_rows = 0;
-    UInt64 total_stable_size = 0;
-    UInt64 total_stable_size_on_disk = 0;
-    Float64 avg_stable_rows = 0;
-    Float64 avg_stable_size = 0;
-
-    // statistics about column file in delta
-    UInt64 total_pack_count_in_delta = 0;
-    UInt64 max_pack_count_in_delta = 0;
-    Float64 avg_pack_count_in_delta = 0;
-    Float64 avg_pack_rows_in_delta = 0;
-    Float64 avg_pack_size_in_delta = 0;
-
-    UInt64 total_pack_count_in_stable = 0;
-    Float64 avg_pack_count_in_stable = 0;
-    Float64 avg_pack_rows_in_stable = 0;
-    Float64 avg_pack_size_in_stable = 0;
-
-    UInt64 storage_stable_num_snapshots = 0;
-    Float64 storage_stable_oldest_snapshot_lifetime = 0.0;
-    UInt64 storage_stable_oldest_snapshot_thread_id = 0;
-    String storage_stable_oldest_snapshot_tracing_id;
-
-    UInt64 storage_delta_num_snapshots = 0;
-    Float64 storage_delta_oldest_snapshot_lifetime = 0.0;
-    UInt64 storage_delta_oldest_snapshot_thread_id = 0;
-    String storage_delta_oldest_snapshot_tracing_id;
-
-    UInt64 storage_meta_num_snapshots = 0;
-    Float64 storage_meta_oldest_snapshot_lifetime = 0.0;
-    UInt64 storage_meta_oldest_snapshot_thread_id = 0;
-    String storage_meta_oldest_snapshot_tracing_id;
-
-    UInt64 background_tasks_length = 0;
-};
-
 struct LocalIndexStats
 {
     UInt64 column_id{};
@@ -194,6 +97,13 @@ using LocalIndexesStats = std::vector<LocalIndexStats>;
 class DeltaMergeStore;
 using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
 
+// TODO: merge more parameters to ReadOptions
+struct DMReadOptions
+{
+    bool keep_order = false;
+    bool is_fast_scan = false;
+    bool has_multiple_partitions = false;
+};
 class DeltaMergeStore
     : private boost::noncopyable
     , public std::enable_shared_from_this<DeltaMergeStore>
@@ -281,6 +191,9 @@ public:
             const LoggerPtr & log_);
 
         BackgroundTask nextTask(bool is_heavy, const LoggerPtr & log_);
+
+        // num of stopped light_tasks and heavy_tasks
+        std::pair<size_t, size_t> clearTasks();
     };
 
 private:
@@ -372,7 +285,7 @@ public:
 
     /// You must ensure external files are ordered and do not overlap. Otherwise exceptions will be thrown.
     /// You must ensure all of the external files are contained by the range. Otherwise exceptions will be thrown.
-    /// Return the 'ingtested bytes'.
+    /// Return the 'ingested bytes'.
     UInt64 ingestFiles(
         const Context & db_context, //
         const DB::Settings & db_settings,
@@ -427,6 +340,19 @@ public:
         return ingestSegmentsFromCheckpointInfo(dm_context, range, checkpoint_info);
     }
 
+    UInt64 removeSegmentsFromCheckpointInfo(
+        const DMContextPtr & dm_context,
+        const CheckpointIngestInfo & checkpoint_info);
+
+    UInt64 removeSegmentsFromCheckpointInfo(
+        const Context & db_context,
+        const DB::Settings & db_settings,
+        const CheckpointIngestInfo & checkpoint_info)
+    {
+        auto dm_context = newDMContext(db_context, db_settings);
+        return removeSegmentsFromCheckpointInfo(dm_context, checkpoint_info);
+    }
+
     /// Read all rows without MVCC filtering
     BlockInputStreams readRaw(
         const Context & db_context,
@@ -461,11 +387,10 @@ public:
         size_t num_streams,
         UInt64 start_ts,
         const PushDownExecutorPtr & executor,
-        const RuntimeFilteList & runtime_filter_list,
+        const RuntimeFilterList & runtime_filter_list,
         int rf_max_wait_time_ms,
         const String & tracing_id,
-        bool keep_order,
-        bool is_fast_scan = false,
+        const DMReadOptions & read_opts = {},
         size_t expected_block_size = DEFAULT_BLOCK_SIZE,
         const SegmentIdSet & read_segments = {},
         size_t extra_table_id_index = MutSup::invalid_col_id,
@@ -486,11 +411,10 @@ public:
         size_t num_streams,
         UInt64 start_ts,
         const PushDownExecutorPtr & executor,
-        const RuntimeFilteList & runtime_filter_list,
+        const RuntimeFilterList & runtime_filter_list,
         int rf_max_wait_time_ms,
         const String & tracing_id,
-        bool keep_order,
-        bool is_fast_scan = false,
+        const DMReadOptions & read_opts = {},
         size_t expected_block_size = DEFAULT_BLOCK_SIZE,
         const SegmentIdSet & read_segments = {},
         size_t extra_table_id_index = MutSup::invalid_col_id,
@@ -629,7 +553,7 @@ private:
     void waitForDeleteRange(const DMContextPtr & context, const SegmentPtr & segment);
 
     /// Should be called after every write into DeltaMergeStore.
-    /// If the delta cache reaches the foreground flush limit, it will also trigger a KVStore flush of releated regions,
+    /// If the delta cache reaches the foreground flush limit, it will also trigger a KVStore flush of related regions,
     /// by returning a non-empty DM::WriteResult.
     // Deferencing `Iter` can get a pointer to a Segment.
     template <typename Iter>
@@ -844,18 +768,18 @@ private:
 private:
     /**
       * Remove the segment from the store's memory structure.
-      * Not protected by lock, should accquire lock before calling this function.
+      * Not protected by lock, should acquire lock before calling this function.
       */
     void removeSegment(std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment);
     /**
       * Add the segment to the store's memory structure.
-      * Not protected by lock, should accquire lock before calling this function.
+      * Not protected by lock, should acquire lock before calling this function.
       */
     void addSegment(std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment);
     /**
       * Replace the old segment with the new segment in the store's memory structure.
       * New segment should have the same segment id as the old segment.
-      * Not protected by lock, should accquire lock before calling this function.
+      * Not protected by lock, should acquire lock before calling this function.
       */
     void replaceSegment(
         std::unique_lock<std::shared_mutex> &,

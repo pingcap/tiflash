@@ -1746,41 +1746,41 @@ TEST_F(RegionKVStoreOldTest, RegionRange)
 
 TEST_F(RegionKVStoreOldTest, RegionRange2)
 {
-    auto mustOverlap = [](std::string s1, std::string e1, std::string s2, std::string e2) {
+    auto must_overlap = [](std::string s1, std::string e1, std::string s2, std::string e2) {
         auto r1 = RegionRangeKeys::makeComparableKeys(TiKVKey::copyFrom(s1), TiKVKey::copyFrom(e1));
         auto r2 = RegionRangeKeys::makeComparableKeys(TiKVKey::copyFrom(s2), TiKVKey::copyFrom(e2));
         ASSERT_TRUE(RegionRangeKeys::isRangeOverlapped(r1, r2));
         ASSERT_TRUE(RegionRangeKeys::isRangeOverlapped(r2, r1));
     };
-    auto mustNotOverlap = [](std::string s1, std::string e1, std::string s2, std::string e2) {
+    auto must_not_overlap = [](std::string s1, std::string e1, std::string s2, std::string e2) {
         auto r1 = RegionRangeKeys::makeComparableKeys(TiKVKey::copyFrom(s1), TiKVKey::copyFrom(e1));
         auto r2 = RegionRangeKeys::makeComparableKeys(TiKVKey::copyFrom(s2), TiKVKey::copyFrom(e2));
         ASSERT_FALSE(RegionRangeKeys::isRangeOverlapped(r1, r2));
         ASSERT_FALSE(RegionRangeKeys::isRangeOverlapped(r2, r1));
     };
-    mustOverlap("", "a", "", "b");
-    mustOverlap("a", "", "b", "");
-    mustOverlap("", "", "b", "");
-    mustOverlap("", "", "", "a");
-    mustOverlap("", "", "a", "b");
-    mustOverlap("", "", "", "");
+    must_overlap("", "a", "", "b");
+    must_overlap("a", "", "b", "");
+    must_overlap("", "", "b", "");
+    must_overlap("", "", "", "a");
+    must_overlap("", "", "a", "b");
+    must_overlap("", "", "", "");
 
-    mustOverlap("a", "e", "", "f");
-    mustOverlap("a", "e", "", "");
-    mustOverlap("b", "e", "a", "");
+    must_overlap("a", "e", "", "f");
+    must_overlap("a", "e", "", "");
+    must_overlap("b", "e", "a", "");
 
-    mustOverlap("a", "e", "a", "e");
-    mustOverlap("a", "f", "c", "d");
-    mustOverlap("a", "f", "c", "f");
+    must_overlap("a", "e", "a", "e");
+    must_overlap("a", "f", "c", "d");
+    must_overlap("a", "f", "c", "f");
 
-    mustNotOverlap("a", "e", "e", "f");
-    mustNotOverlap("a", "e", "f", "g");
-    mustNotOverlap("", "e", "e", "f");
-    mustNotOverlap("a", "e", "e", "");
-    mustNotOverlap("", "e", "f", "g");
-    mustNotOverlap("a", "e", "f", "");
-    mustNotOverlap("", "e", "f", "");
-    mustNotOverlap("", "e", "e", "");
+    must_not_overlap("a", "e", "e", "f");
+    must_not_overlap("a", "e", "f", "g");
+    must_not_overlap("", "e", "e", "f");
+    must_not_overlap("a", "e", "e", "");
+    must_not_overlap("", "e", "f", "g");
+    must_not_overlap("a", "e", "f", "");
+    must_not_overlap("", "e", "f", "");
+    must_not_overlap("", "e", "e", "");
 }
 
 } // namespace DB::tests
