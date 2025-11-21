@@ -159,15 +159,11 @@ elseif(APPLE)
     install (RUNTIME_DEPENDENCY_SET tiflash-release-dependency
             COMPONENT tiflash-release
             DESTINATION "."
-<<<<<<< HEAD
-            PRE_INCLUDE_REGEXES ".*proxy.*")
+            PRE_INCLUDE_REGEXES ".*proxy.*|.*clara.*")
 
     install (TARGETS tici_search_lib
             COMPONENT tiflash-release
             DESTINATION ".")
-=======
-            PRE_INCLUDE_REGEXES ".*proxy.*|.*clara.*")
->>>>>>> upstream/master
 endif ()
 
 include(CMakePrintHelpers)
