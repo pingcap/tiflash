@@ -138,4 +138,16 @@ struct CTESourceImpl
     static bool isSourceExecutor() { return true; }
 };
 using CTESourceStatistics = ExecutorStatistics<CTESourceImpl>;
+
+struct TiCIStatisticsImpl
+{
+    static constexpr bool has_extra_info = false;
+
+    static constexpr auto type = "IndexRangeScan";
+
+    static bool isMatch(const tipb::Executor * executor) { return executor->has_idx_scan(); }
+
+    static bool isSourceExecutor() { return true; }
+};
+using TiCIStatistics = ExecutorStatistics<TiCIStatisticsImpl>;
 } // namespace DB

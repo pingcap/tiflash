@@ -97,7 +97,8 @@ void ExecutorStatisticsCollector::initialize(DAGContext * dag_context_)
                 WindowStatistics,
                 ExpandStatistics,
                 CTESinkStatistics,
-                CTESourceStatistics>(&executor))
+                CTESourceStatistics,
+                TiCIStatistics>(&executor))
         {
             throw TiFlashException(
                 fmt::format("Unknown executor type, executor_id: {}", executor.executor_id()),
@@ -120,7 +121,7 @@ void ExecutorStatisticsCollector::fillChildren()
                 assert(child.has_executor_id());
                 children.push_back(child.executor_id());
             });
-            //profiles[executor.executor_id()]->setChildren(children);
+            profiles[executor.executor_id()]->setChildren(children);
             return true;
         });
     }
