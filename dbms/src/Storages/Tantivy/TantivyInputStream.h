@@ -301,6 +301,11 @@ private:
             case tipb::ScalarFuncSig::LEDecimal:
             case tipb::ScalarFuncSig::GTDecimal:
             case tipb::ScalarFuncSig::GEDecimal:
+            case tipb::ScalarFuncSig::InInt:
+            case tipb::ScalarFuncSig::InString:
+            case tipb::ScalarFuncSig::InReal:
+            case tipb::ScalarFuncSig::InDecimal:
+            case tipb::ScalarFuncSig::InTime:
                 ret.sig = expr.sig();
                 break;
             default:
