@@ -77,6 +77,7 @@ void StorageTantivy::read(
     group_builder.addConcurrency(std::make_unique<TantivyReaderSourceOp>(
         exec_status,
         log->identifier(),
+        tici_scan.getKeyspaceID(),
         tici_scan.getTableId(),
         tici_scan.getIndexId(),
         local_read,
