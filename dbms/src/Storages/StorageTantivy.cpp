@@ -99,7 +99,7 @@ void StorageTantivy::executeCastAfterTiCIScan(
     DAGExpressionAnalyzer analyzer{group_builder.getCurrentHeader(), context};
     ExpressionActionsChain chain;
     std::vector<UInt8> may_need_add_cast_column;
-    for (const auto & col : tici_scan.getReturnColumns())
+    for (size_t i = 0; i < tici_scan.getReturnColumns().size(); ++i)
         may_need_add_cast_column.push_back(true);
     if (analyzer.appendExtraCastsAfterTiCI(chain, may_need_add_cast_column, tici_scan))
     {
