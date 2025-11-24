@@ -31,6 +31,7 @@ public:
     TantivyReaderSourceOp(
         PipelineExecutorContext & exec_context_,
         const String & req_id,
+        const UInt32 & keyspace_id,
         const Int64 & table_id,
         const Int64 & index_id,
         const ShardInfoList & query_shard_infos,

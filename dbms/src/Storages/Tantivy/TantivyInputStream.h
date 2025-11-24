@@ -38,6 +38,7 @@ class TantivyInputStream : public IProfilingBlockInputStream
 public:
     TantivyInputStream(
         LoggerPtr log_,
+        UInt32 keyspace_id_,
         Int64 table_id_,
         Int64 index_id_,
         ShardInfoList query_shard_infos_,
@@ -47,6 +48,7 @@ public:
         google::protobuf::RepeatedPtrField<tipb::Expr> match_expr_,
         bool is_count)
         : log(log_)
+        , keyspace_id(keyspace_id_)
         , table_id(table_id_)
         , index_id(index_id_)
         , query_shard_infos(query_shard_infos_)
@@ -103,6 +105,7 @@ protected:
 
         SearchResult search_result = search(
             {
+                .keyspace_id = keyspace_id,
                 .table_id = table_id,
                 .index_id = index_id,
                 .shard_id = shard_info.shard_id,
@@ -184,6 +187,7 @@ private:
     Block header;
     bool done = false;
     LoggerPtr log;
+    UInt32 keyspace_id;
     Int64 table_id;
     Int64 index_id;
     ShardInfoList query_shard_infos;
