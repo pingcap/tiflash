@@ -25,6 +25,7 @@ namespace DB
 TantivyReaderSourceOp::TantivyReaderSourceOp(
     PipelineExecutorContext & exec_context_,
     const String & req_id,
+    const UInt32 & keyspace_id,
     const Int64 & table_id,
     const Int64 & index_id,
     const ShardInfoList & query_shard_infos,
@@ -39,6 +40,7 @@ TantivyReaderSourceOp::TantivyReaderSourceOp(
 
     input = std::make_shared<TS::TantivyInputStream>(
         log,
+        keyspace_id,
         table_id,
         index_id,
         query_shard_infos,

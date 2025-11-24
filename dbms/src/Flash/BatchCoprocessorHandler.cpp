@@ -53,8 +53,9 @@ grpc::Status BatchCoprocessorHandler::execute()
 
     try
     {
+        bool is_tici = cop_request->table_shard_infos_size() != 0;
         RUNTIME_CHECK_MSG(
-            !cop_context.db_context.getSharedContextDisagg()->isDisaggregatedComputeMode(),
+            !cop_context.db_context.getSharedContextDisagg()->isDisaggregatedComputeMode() || is_tici,
             "cannot run cop or batchCop request on tiflash_compute node");
 
         switch (cop_request->tp())
