@@ -24,6 +24,7 @@ namespace DB
 TiCIScan::TiCIScan(const tipb::Executor * tici_scan_, const String & executor_id_, const DAGContext & dag_context)
     : tici_scan(tici_scan_)
     , executor_id(executor_id_)
+    , keyspace_id(dag_context.getKeyspaceID())
     , table_id(tici_scan->idx_scan().table_id())
     , index_id(tici_scan->idx_scan().index_id())
     , return_columns(TiDB::toTiDBColumnInfos(tici_scan->idx_scan().columns()))

@@ -29,6 +29,7 @@ public:
 
     const TiDB::ColumnInfos & getReturnColumns() const { return return_columns; }
     const TableShardInfos & getShardInfos() const { return shard_infos; }
+    const uint & getKeyspaceID() const { return keyspace_id; }
     const int & getTableId() const { return table_id; }
     const int & getIndexId() const { return index_id; }
     const int & getLimit() const { return limit; }
@@ -48,6 +49,7 @@ public:
 private:
     const tipb::Executor * tici_scan;
     [[maybe_unused]] String executor_id;
+    const uint keyspace_id;
     const int table_id;
     const int index_id;
     TiDB::ColumnInfos return_columns;
