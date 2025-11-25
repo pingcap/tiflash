@@ -1294,6 +1294,32 @@ bool DAGExpressionAnalyzer::appendExtraCastsAfterTS(
     return true;
 }
 
+bool DAGExpressionAnalyzer::appendExtraCastsAfterTiCI(
+    ExpressionActionsChain & chain,
+    const std::vector<UInt8> & may_need_add_cast_column,
+    const TiCIScan & tici_scan)
+{
+    auto & step = initAndGetLastStep(chain);
+    auto & actions = step.actions;
+
+    auto [has_cast, casted_columns]
+        = buildExtraCastsAfterTS(actions, may_need_add_cast_column, tici_scan.getReturnColumns());
+
+    if (!has_cast)
+        return false;
+
+    // Add a projection to replace the original columns with the casted columns.
+    NamesWithAliases project_cols;
+    for (size_t i = 0; i < may_need_add_cast_column.size(); ++i)
+        project_cols.emplace_back(casted_columns[i], source_columns[i].name);
+    actions->add(ExpressionAction::project(project_cols));
+
+    for (auto & col : source_columns)
+        step.required_output.push_back(col.name);
+
+    return true;
+}
+
 String DAGExpressionAnalyzer::appendDurationCast(
     const String & fsp_expr,
     const String & dur_expr,
