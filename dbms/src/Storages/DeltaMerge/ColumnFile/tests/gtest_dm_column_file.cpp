@@ -239,7 +239,7 @@ try
         cf = ColumnFileTiny::writeColumnFile(dmContext(), block, 0, num_rows_write, wbs);
         wbs.writeAll();
     }
-    auto storage_snap = std::make_shared<StorageSnapshot>(*dmContext().storage_pool, nullptr, "", true);
+    auto storage_snap = std::make_shared<StorageSnapshot>(*dmContext().storage_pool, nullptr, "");
     auto data_from_storage_snap = ColumnFileDataProviderLocalStoragePool::create(storage_snap);
 
     {

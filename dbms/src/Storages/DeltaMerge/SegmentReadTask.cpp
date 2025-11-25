@@ -26,6 +26,7 @@
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
+#include <common/logger_useful.h>
 
 using namespace std::chrono_literals;
 using namespace DB::DM::Remote;
@@ -39,6 +40,7 @@ namespace DB::ErrorCodes
 {
 extern const int DT_DELTA_INDEX_ERROR;
 extern const int FETCH_PAGES_ERROR;
+extern const int TIMEOUT_EXCEEDED;
 } // namespace DB::ErrorCodes
 
 namespace DB::DM
@@ -67,7 +69,9 @@ SegmentReadTask::SegmentReadTask(
     const String & store_address,
     KeyspaceID keyspace_id,
     TableID physical_table_id,
-    ColumnID pk_col_id)
+    ColumnID pk_col_id,
+    bool is_same_zone,
+    size_t establish_disagg_task_resp_size)
     : store_id(store_id_)
 {
     CurrentMetrics::add(CurrentMetrics::DT_SegmentReadTasks);
@@ -104,7 +108,7 @@ SegmentReadTask::SegmentReadTask(
         nullptr,
         nullptr);
 
-    read_snapshot = Serializer::deserializeSegment(*dm_context, store_id, keyspace_id, physical_table_id, proto);
+    read_snapshot = Serializer::deserializeSegment(*dm_context, proto);
 
     ranges.reserve(proto.read_key_ranges_size());
     for (const auto & read_key_range : proto.read_key_ranges())
@@ -157,7 +161,10 @@ SegmentReadTask::SegmentReadTask(
         .snapshot_id = snapshot_id,
         .remote_page_ids = std::move(remote_page_ids),
         .remote_page_sizes = std::move(remote_page_sizes),
+        .connection_profile_info
+        = ConnectionProfileInfo(ConnectionProfileInfo::inferConnectionType(/*is_local=*/false, is_same_zone)),
     });
+    extra_remote_info->connection_profile_info.bytes += establish_disagg_task_resp_size;
 
     LOG_DEBUG(
         read_snapshot->log,
@@ -264,6 +271,10 @@ void SegmentReadTask::initInputStream(
     size_t expected_block_size,
     bool enable_delta_index_error_fallback)
 {
+    // Under disagg mode, `prepareMVCCIndex` will try to get delta index or version chain from cache.
+    auto initial_index_bytes = prepareMVCCIndex(read_mode);
+    SCOPE_EXIT({ updateMVCCIndexSize(read_mode, initial_index_bytes); });
+
     if (likely(doInitInputStreamWithErrorFallback(
             columns_to_read,
             start_ts,
@@ -278,10 +289,6 @@ void SegmentReadTask::initInputStream(
     // Exception DT_DELTA_INDEX_ERROR raised. Reset delta index and try again.
     DeltaIndex empty_delta_index;
     read_snapshot->delta->getSharedDeltaIndex()->swap(empty_delta_index);
-    if (auto cache = dm_context->global_context.getSharedContextDisagg()->rn_delta_index_cache; cache)
-    {
-        cache->setDeltaIndex(read_snapshot->delta->getSharedDeltaIndex());
-    }
     doInitInputStream(columns_to_read, start_ts, push_down_executor, read_mode, expected_block_size);
 }
 
@@ -464,7 +471,7 @@ disaggregated::FetchDisaggPagesRequest SegmentReadTask::buildFetchPagesRequest(
     return req;
 }
 
-// In order to make network and disk run parallelly,
+// In order to make network and disk run in parallel,
 // `doFetchPages` will receive data pages from WN,
 // package these data pages into several `WritePageTask` objects
 // and send them to `RNWritePageCachePool` to write into local page cache.
@@ -581,10 +588,12 @@ void SegmentReadTask::doFetchPages(const disaggregated::FetchDisaggPagesRequest 
         }
     });
 
-    // All delta data is cached.
     if (request.page_ids_size() == 0 && !needFetchMemTableSet())
     {
-        finishPagesPacketStream(stream_resp);
+        // All delta data is cached in the compute node, just send a request to notify WN
+        // to release the snapshot of current segment. The Compute node can safely ignore
+        // the error message in response under this case.
+        finishPagesPacketStream(stream_resp, /*ignore_err*/ true);
         return;
     }
 
@@ -596,7 +605,7 @@ void SegmentReadTask::doFetchPages(const disaggregated::FetchDisaggPagesRequest 
             }
             else
             {
-                finishPagesPacketStream(stream_resp);
+                finishPagesPacketStream(stream_resp, /*ignore_err*/ false);
                 return false;
             }
         },
@@ -612,7 +621,6 @@ void SegmentReadTask::doFetchPagesImpl(
     UInt64 wait_write_page_ns = 0;
 
     Stopwatch sw_total;
-    UInt64 packet_count = 0;
     UInt64 write_page_task_count = 0;
     const UInt64 page_count = remaining_pages_to_fetch.size();
 
@@ -643,7 +651,8 @@ void SegmentReadTask::doFetchPagesImpl(
             throw Exception(ErrorCodes::FETCH_PAGES_ERROR, "{} (from {})", packet.error().msg(), *this);
 
         read_page_ns = sw_read_packet.elapsed();
-        packet_count += 1;
+        extra_remote_info->connection_profile_info.bytes += packet.ByteSizeLong();
+        extra_remote_info->connection_profile_info.packets += 1;
         MemTrackerWrapper packet_mem_tracker_wrapper(packet.SpaceUsedLong(), fetch_pages_mem_tracker.get());
 
         // Handle `chunks`.
@@ -743,7 +752,7 @@ void SegmentReadTask::doFetchPagesImpl(
         "total_ms={}, read_stream_ms={}, deserialize_page_ms={}, schedule_write_page_ms={}",
         *this,
         page_count,
-        packet_count,
+        extra_remote_info->connection_profile_info.packets,
         write_page_task_count,
         sw_total.elapsed() / 1000000,
         read_page_ns / 1000000,
@@ -787,20 +796,58 @@ GlobalSegmentID SegmentReadTask::getGlobalSegmentID() const
 }
 
 void SegmentReadTask::finishPagesPacketStream(
-    std::unique_ptr<grpc::ClientReader<disaggregated::PagesPacket>> & stream_resp)
+    std::unique_ptr<grpc::ClientReader<disaggregated::PagesPacket>> & stream_resp,
+    bool ignore_err)
 {
-    if unlikely (stream_resp == nullptr)
+    if (unlikely(stream_resp == nullptr))
         return;
 
     auto status = stream_resp->Finish();
     stream_resp.reset(); // Reset to avoid calling `Finish()` repeatedly.
-    RUNTIME_CHECK_MSG(
-        status.ok(),
-        "Failed to fetch all pages for {}, status={}, message={}, wn_address={}",
-        *this,
-        static_cast<int>(status.error_code()),
-        status.error_message(),
-        extra_remote_info->store_address);
+    if (ignore_err)
+    {
+        if (!status.ok())
+        {
+            LOG_WARNING(
+                read_snapshot->log,
+                "Ignore error when finishing pages packet stream for {}, wn_address={} status={} message={}",
+                *this,
+                extra_remote_info->store_address,
+                static_cast<int>(status.error_code()),
+                status.error_message());
+        }
+    }
+    else
+    {
+        switch (status.error_code())
+        {
+        case grpc::StatusCode::OK:
+            break;
+        case grpc::StatusCode::DEADLINE_EXCEEDED:
+        {
+            LOG_WARNING(
+                read_snapshot->log,
+                "Fetch pages timeout for {}, wn_address={} message={}",
+                *this,
+                extra_remote_info->store_address,
+                status.error_message());
+            // throw exception without wn address to avoid returning internal info to user
+            throw Exception(
+                ErrorCodes::TIMEOUT_EXCEEDED,
+                "Fetch pages timeout for {}, message={}",
+                *this,
+                status.error_message());
+        }
+        default:
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Failed to fetch all pages for {}, wn_address={} status={} message={}",
+                *this,
+                extra_remote_info->store_address,
+                static_cast<int>(status.error_code()),
+                status.error_message());
+        }
+    }
 }
 
 bool SegmentReadTask::hasColumnFileToFetch() const
@@ -814,5 +861,78 @@ bool SegmentReadTask::hasColumnFileToFetch() const
     const auto & persisted_cfs = read_snapshot->delta->getPersistedFileSetSnapshot()->getColumnFiles();
     return std::any_of(mem_cfs.cbegin(), mem_cfs.cend(), need_to_fetch)
         || std::any_of(persisted_cfs.cbegin(), persisted_cfs.cend(), need_to_fetch);
+}
+
+std::optional<Remote::RNMVCCIndexCache::CacheKey> SegmentReadTask::getRNMVCCIndexCacheKey(ReadMode read_mode) const
+{
+    if (!dm_context->global_context.getSharedContextDisagg()->isDisaggregatedComputeMode())
+        return std::nullopt;
+
+    auto & cache = dm_context->global_context.getSharedContextDisagg()->rn_mvcc_index_cache;
+    if (!cache)
+        return std::nullopt;
+
+    return Remote::RNMVCCIndexCache::CacheKey{
+        .store_id = store_id,
+        .table_id = dm_context->physical_table_id,
+        .segment_id = segment->segmentId(),
+        .segment_epoch = segment->segmentEpoch(),
+        .delta_index_epoch = read_snapshot->delta->getDeltaIndexEpoch(),
+        .keyspace_id = dm_context->keyspace_id,
+        .is_version_chain = read_mode == ReadMode::Bitmap && dm_context->isVersionChainEnabled(),
+    };
+}
+
+size_t SegmentReadTask::prepareMVCCIndex(ReadMode read_mode)
+{
+    const auto cache_key = getRNMVCCIndexCacheKey(read_mode);
+    if (!cache_key)
+        return 0;
+
+    auto & cache = dm_context->global_context.getSharedContextDisagg()->rn_mvcc_index_cache;
+    assert(cache != nullptr);
+    if (cache_key->is_version_chain)
+    {
+        auto version_chain = cache->getVersionChain(*cache_key, dm_context->is_common_handle);
+        segment->setVersionChain(version_chain);
+        return getVersionChainBytes(*version_chain);
+    }
+    else
+    {
+        auto delta_index = cache->getDeltaIndex(*cache_key);
+        read_snapshot->delta->setSharedDeltaIndex(delta_index);
+        return delta_index->getBytes();
+    }
+}
+
+void SegmentReadTask::updateMVCCIndexSize(ReadMode read_mode, size_t initial_index_bytes)
+{
+    const auto cache_key = getRNMVCCIndexCacheKey(read_mode);
+    if (!cache_key)
+        return;
+
+    auto & cache = dm_context->global_context.getSharedContextDisagg()->rn_mvcc_index_cache;
+    assert(cache != nullptr);
+    static constexpr size_t LOGGING_INDEX_BYTES_THRESHOLD = 1024 * 1024;
+    if (cache_key->is_version_chain)
+    {
+        auto current_index_bytes = getVersionChainBytes(*(segment->getVersionChain()));
+        if (current_index_bytes >= LOGGING_INDEX_BYTES_THRESHOLD)
+        {
+            LOG_INFO(
+                read_snapshot->log,
+                "Version chain index size is {}, cache key is {}, initial_index_bytes is {}",
+                current_index_bytes,
+                cache_key->toString(),
+                initial_index_bytes);
+        }
+        if (current_index_bytes != initial_index_bytes)
+        {
+            cache->setVersionChain(*cache_key, segment->getVersionChain());
+        }
+    }
+    else if (
+        !cache_key->is_version_chain && read_snapshot->delta->getSharedDeltaIndex()->getBytes() != initial_index_bytes)
+        cache->setDeltaIndex(*cache_key, read_snapshot->delta->getSharedDeltaIndex());
 }
 } // namespace DB::DM

@@ -24,8 +24,8 @@ namespace DB
 class RuntimeFilter;
 
 using RuntimeFilterPtr = std::shared_ptr<RuntimeFilter>;
-using RuntimeFilteList = std::vector<RuntimeFilterPtr>;
-extern RuntimeFilteList dummy_runtime_filter_list;
+using RuntimeFilterList = std::vector<RuntimeFilterPtr>;
+extern RuntimeFilterList dummy_runtime_filter_list;
 
 class RuntimeFilterMgr
 {
@@ -34,7 +34,7 @@ public:
 
     ~RuntimeFilterMgr() = default;
 
-    RuntimeFilteList getLocalRuntimeFilterByIds(const std::vector<int> & ids);
+    RuntimeFilterList getLocalRuntimeFilterByIds(const std::vector<int> & ids);
 
     void registerRuntimeFilterList(std::vector<RuntimeFilterPtr> & rfList);
 

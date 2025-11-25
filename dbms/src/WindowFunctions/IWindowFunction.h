@@ -67,6 +67,9 @@ struct WindowFunctionWorkspace
 
     ColumnNumbers arguments;
 
+    // Avoid the release of column pointer
+    Columns materialized_columns;
+
     UInt64 idx;
 };
 } // namespace DB

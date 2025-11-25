@@ -30,6 +30,7 @@ struct DAGQueryInfo
     DAGQueryInfo(
         const google::protobuf::RepeatedPtrField<tipb::Expr> & filters_,
         const tipb::ANNQueryInfo & ann_query_info_,
+        const tipb::FTSQueryInfo & fts_query_info_,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters_,
         const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> & used_indexes_,
         const TiDB::ColumnInfos & source_columns_,
@@ -39,6 +40,7 @@ struct DAGQueryInfo
         : source_columns(source_columns_)
         , filters(filters_)
         , ann_query_info(ann_query_info_)
+        , fts_query_info(fts_query_info_)
         , pushed_down_filters(pushed_down_filters_)
         , used_indexes(used_indexes_)
         , runtime_filter_ids(runtime_filter_ids_)
@@ -51,6 +53,7 @@ struct DAGQueryInfo
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters;
     // filters for approximate nearest neighbor (ann) vector search
     const tipb::ANNQueryInfo & ann_query_info;
+    const tipb::FTSQueryInfo & fts_query_info;
     // filters have been push down to storage engine in dag request
     const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters;
     // used indexes in dag request

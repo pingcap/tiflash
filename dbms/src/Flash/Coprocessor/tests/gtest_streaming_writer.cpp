@@ -24,6 +24,7 @@
 #include <gtest/gtest.h>
 
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.cpp>
+#include <cstddef>
 
 namespace DB
 {
@@ -113,6 +114,7 @@ try
         const size_t block_rows = 64;
         const size_t block_num = 64;
         const size_t batch_send_min_limit = 108;
+        const size_t max_buffered_bytes = 1024 * 1024 * 16;
 
         // 1. Build Blocks.
         std::vector<Block> blocks;
@@ -135,6 +137,7 @@ try
             mock_writer,
             batch_send_min_limit,
             batch_send_min_limit,
+            max_buffered_bytes,
             *dag_context_ptr);
         for (const auto & block : blocks)
             dag_writer->write(block);
@@ -165,6 +168,58 @@ try
             }
         }
         ASSERT_EQ(decoded_block_rows, expect_rows);
+    }
+}
+CATCH
+
+TEST_F(TestStreamingWriter, testMaxBufferedBytes)
+try
+{
+    std::vector<tipb::EncodeType> encode_types{
+        tipb::EncodeType::TypeDefault,
+        tipb::EncodeType::TypeChunk,
+        tipb::EncodeType::TypeCHBlock};
+    for (const auto & encode_type : encode_types)
+    {
+        dag_context_ptr->encode_type = encode_type;
+
+        const size_t block_rows = 64;
+        const size_t block_num = 64;
+        const size_t batch_send_min_limit = block_rows * block_num / 2;
+        const std::vector<UInt64> max_buffered_bytes_vec{1, 1024 * 1024 * 1024};
+        const std::vector<UInt64> expected_response_num{block_num, 2};
+
+        for (size_t i = 0; i < max_buffered_bytes_vec.size(); ++i)
+        {
+            // 1. Build Blocks.
+            std::vector<Block> blocks;
+            for (size_t i = 0; i < block_num; ++i)
+            {
+                blocks.emplace_back(prepareBlock(block_rows));
+                blocks.emplace_back(prepareBlock(0));
+            }
+            Block header = blocks.back();
+
+            // 2. Build MockStreamWriter.
+            std::vector<tipb::SelectResponse> write_report;
+            auto checker = [&write_report](tipb::SelectResponse & response) {
+                write_report.emplace_back(std::move(response));
+            };
+            auto mock_writer = std::make_shared<MockStreamWriter>(checker);
+
+            // 3. Write blocks
+            auto dag_writer = std::make_shared<StreamingDAGResponseWriter<std::shared_ptr<MockStreamWriter>>>(
+                mock_writer,
+                batch_send_min_limit,
+                batch_send_min_limit,
+                max_buffered_bytes_vec[i],
+                *dag_context_ptr);
+            for (const auto & block : blocks)
+                dag_writer->write(block);
+            dag_writer->flush();
+
+            ASSERT_EQ(write_report.size(), expected_response_num[i]);
+        }
     }
 }
 CATCH

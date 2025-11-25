@@ -45,11 +45,11 @@ public:
 
     ~PosixRandomAccessFile() override;
 
-    off_t seek(off_t offset, int whence) override;
+    [[nodiscard]] off_t seek(off_t offset, int whence) override;
 
-    ssize_t read(char * buf, size_t size) override;
+    [[nodiscard]] ssize_t read(char * buf, size_t size) override;
 
-    ssize_t pread(char * buf, size_t size, off_t offset) const override;
+    [[nodiscard]] ssize_t pread(char * buf, size_t size, off_t offset) const override;
 
     std::string getFileName() const override { return file_name; }
     std::string getInitialFileName() const override { return file_name; }

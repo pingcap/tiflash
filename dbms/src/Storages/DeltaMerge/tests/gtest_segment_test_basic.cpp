@@ -212,7 +212,7 @@ std::optional<PageIdU64> SegmentTestBasic::splitSegmentAt(
     }
     else
     {
-        split_at_key = RowKeyValue::fromHandle(split_at);
+        split_at_key = RowKeyValue::fromIntHandle(split_at);
     }
 
     RUNTIME_CHECK(segments.find(segment_id) != segments.end());
@@ -972,7 +972,7 @@ bool SegmentTestBasic::ensureSegmentDeltaLocalIndex(PageIdU64 segment_id, const 
     {
         return false;
     }
-    auto storage_snap = std::make_shared<StorageSnapshot>(*storage_pool, nullptr, "", true);
+    auto storage_snap = std::make_shared<StorageSnapshot>(*storage_pool, nullptr, "");
     auto data_from_storage_snap = ColumnFileDataProviderLocalStoragePool::create(storage_snap);
     auto persisted_files_snap = delta->getPersistedFileSet()->createSnapshot(data_from_storage_snap);
     WriteBatches wbs(*storage_pool, nullptr);
@@ -1028,12 +1028,12 @@ PageIdU64 SegmentTestBasic::getRandomSegmentId() // Complexity is O(n)
     return segment_id;
 }
 
-size_t SegmentTestBasic::getPageNumAfterGC(StorageType type, NamespaceID ns_id) const
+size_t SegmentTestBasic::getPageNumAfterGC(StorageType type, TableID tbl_id) const
 {
     if (storage_pool->uni_ps)
     {
         storage_pool->uni_ps->gc(/* not_skip */ true);
-        return storage_pool->uni_ps->getNumberOfPages(UniversalPageIdFormat::toFullPrefix(NullspaceID, type, ns_id));
+        return storage_pool->uni_ps->getNumberOfPages(UniversalPageIdFormat::toFullPrefix(NullspaceID, type, tbl_id));
     }
     else
     {
@@ -1070,34 +1070,34 @@ size_t SegmentTestBasic::getPageNumAfterGC(StorageType type, NamespaceID ns_id) 
     }
 }
 
-std::set<PageIdU64> SegmentTestBasic::getAliveExternalPageIdsWithoutGC(NamespaceID ns_id) const
+std::set<PageIdU64> SegmentTestBasic::getAliveExternalPageIdsWithoutGC(TableID tbl_id) const
 {
     if (storage_pool->uni_ps)
     {
         return *(storage_pool->uni_ps->page_directory->getAliveExternalIds(
-            UniversalPageIdFormat::toFullPrefix(NullspaceID, StorageType::Data, ns_id)));
+            UniversalPageIdFormat::toFullPrefix(NullspaceID, StorageType::Data, tbl_id)));
     }
     else
     {
         assert(storage_pool->data_storage_v3 != nullptr || storage_pool->data_storage_v2 != nullptr);
         if (storage_pool->data_storage_v3)
         {
-            return storage_pool->data_storage_v3->getAliveExternalPageIds(ns_id);
+            return storage_pool->data_storage_v3->getAliveExternalPageIds(tbl_id);
         }
         else
         {
-            return storage_pool->data_storage_v2->getAliveExternalPageIds(ns_id);
+            return storage_pool->data_storage_v2->getAliveExternalPageIds(tbl_id);
         }
     }
 }
 
-std::set<PageIdU64> SegmentTestBasic::getAliveExternalPageIdsAfterGC(NamespaceID ns_id) const
+std::set<PageIdU64> SegmentTestBasic::getAliveExternalPageIdsAfterGC(TableID tbl_id) const
 {
     if (storage_pool->uni_ps)
     {
         storage_pool->uni_ps->gc(/* not_skip */ true);
         return *(storage_pool->uni_ps->page_directory->getAliveExternalIds(
-            UniversalPageIdFormat::toFullPrefix(NullspaceID, StorageType::Data, ns_id)));
+            UniversalPageIdFormat::toFullPrefix(NullspaceID, StorageType::Data, tbl_id)));
     }
     else
     {
@@ -1105,12 +1105,12 @@ std::set<PageIdU64> SegmentTestBasic::getAliveExternalPageIdsAfterGC(NamespaceID
         if (storage_pool->data_storage_v3)
         {
             storage_pool->data_storage_v3->gc(/* not_skip */ true);
-            return storage_pool->data_storage_v3->getAliveExternalPageIds(ns_id);
+            return storage_pool->data_storage_v3->getAliveExternalPageIds(tbl_id);
         }
         else
         {
             storage_pool->data_storage_v2->gc(/* not_skip */ true);
-            return storage_pool->data_storage_v2->getAliveExternalPageIds(ns_id);
+            return storage_pool->data_storage_v2->getAliveExternalPageIds(tbl_id);
         }
     }
 }
@@ -1213,14 +1213,14 @@ RowKeyRange SegmentTestBasic::buildRowKeyRange(
             DB::EncodeInt64(v, ss);
             return std::make_shared<String>(ss.releaseStr());
         };
-        auto left = RowKeyValue{is_common_handle, create_rowkey_value(begin)};
+        auto left = RowKeyValue::fromHandle(is_common_handle, create_rowkey_value(begin));
         auto right = including_right_boundary ? RowKeyValue::COMMON_HANDLE_MAX_KEY
-                                              : RowKeyValue{is_common_handle, create_rowkey_value(end)};
+                                              : RowKeyValue::fromHandle(is_common_handle, create_rowkey_value(end));
         return RowKeyRange{left, right, is_common_handle, 1};
     }
 
-    auto left = RowKeyValue::fromHandle(begin);
-    auto right = including_right_boundary ? RowKeyValue::INT_HANDLE_MAX_KEY : RowKeyValue::fromHandle(end);
+    auto left = RowKeyValue::fromIntHandle(begin);
+    auto right = including_right_boundary ? RowKeyValue::INT_HANDLE_MAX_KEY : RowKeyValue::fromIntHandle(end);
     return RowKeyRange{left, right, is_common_handle, 1};
 }
 

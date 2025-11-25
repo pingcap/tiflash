@@ -18,6 +18,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/config.h> // For ENABLE_CLARA
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/GeneratedColumnPlaceholderBlockInputStream.h>
@@ -41,6 +42,7 @@
 #include <Operators/NullSourceOp.h>
 #include <Operators/UnorderedSourceOp.h>
 #include <Parsers/makeDummyQuery.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Stream/Ctx.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
 #include <Storages/DeltaMerge/ScanContext.h>
@@ -59,6 +61,10 @@
 #include <common/logger_useful.h>
 #include <kvproto/coprocessor.pb.h>
 #include <tipb/select.pb.h>
+
+#if ENABLE_CLARA
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/Ctx.h>
+#endif
 
 namespace DB
 {
@@ -369,9 +375,9 @@ void DAGStorageInterpreter::executeImpl(
     auto remote_requests = buildRemoteRequests(dag_context.scan_context_map[table_scan.getTableScanExecutorID()]);
     if (dag_context.is_disaggregated_task && !remote_requests.empty())
     {
-        // This means RN is sending requests with stale region info, we simply reject the request
-        // and ask RN to send requests again with correct region info. When RN updates region info,
-        // RN may be sending requests to other WN.
+        // This means compute node is sending requests with stale region info, we simply reject the request
+        // and ask compute node to send requests again with correct region info. When compute node updates region info,
+        // compute node may be sending requests to other WN.
 
         RegionException::UnavailableRegions region_ids;
         for (const auto & info : context.getDAGContext()->retry_regions)
@@ -481,9 +487,9 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     auto remote_requests = buildRemoteRequests(dag_context.scan_context_map[table_scan.getTableScanExecutorID()]);
     if (dag_context.is_disaggregated_task && !remote_requests.empty())
     {
-        // This means RN is sending requests with stale region info, we simply reject the request
-        // and ask RN to send requests again with correct region info. When RN updates region info,
-        // RN may be sending requests to other WN.
+        // This means compute node is sending requests with stale region info, we simply reject the request
+        // and ask compute node to send requests again with correct region info. When compute node updates region info,
+        // compute node may be sending requests to other write node.
 
         RegionException::UnavailableRegions region_ids;
         for (const auto & info : context.getDAGContext()->retry_regions)
@@ -540,7 +546,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 
 // here we assume that, if the columns' id and data type in query is the same as the columns in TiDB,
 // we think we can directly do read, and don't need sync schema.
-// compare the columns in table_scan with the columns in storages, to check if the current schema is satisified this query.
+// compare the columns in table_scan with the columns in storages, to check if the current schema is satisfied this query.
 // column.name are always empty from table_scan, and column name is not necessary in read process, so we don't need compare the name here.
 std::tuple<bool, String> compareColumns(
     ColumnID logical_table_id,
@@ -610,7 +616,8 @@ void DAGStorageInterpreter::prepare()
 
     // Do learner read
     DAGContext & dag_context = *context.getDAGContext();
-    auto scan_context = std::make_shared<DM::ScanContext>(dag_context.getResourceGroupName());
+    auto scan_context
+        = std::make_shared<DM::ScanContext>(dag_context.getKeyspaceID(), dag_context.getResourceGroupName());
     dag_context.scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
     mvcc_query_info->scan_context = scan_context;
 
@@ -760,7 +767,8 @@ CoprocessorReaderPtr DAGStorageInterpreter::buildCoprocessorReader(const std::ve
         cop_timeout,
         tiflash_label_filter,
         log->identifier(),
-        store_zone_label);
+        store_zone_label,
+        kv_store->getStoreID());
     context.getDAGContext()->addCoprocessorReader(coprocessor_reader);
 
     return coprocessor_reader;
@@ -871,7 +879,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
         }
         catch (const LockException & e)
         {
-            // When this is a disaggregated read task on WN issued by RN, we need RN
+            // When this is a disaggregated read task on write node issued by compute node, we need compute node
             // to take care of retrying.
             if (context.getDAGContext()->is_disaggregated_task)
                 throw;
@@ -883,7 +891,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
         }
         catch (const RegionException & e)
         {
-            // When this is a disaggregated read task on WN issued by RN, we need RN
+            // When this is a disaggregated read task on write node issued by compute node, we need compute node
             // to take care of retrying.
             if (context.getDAGContext()->is_disaggregated_task)
                 throw;
@@ -916,6 +924,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             filter_conditions.conditions,
             table_scan.getANNQueryInfo(),
+            table_scan.getFTSQueryInfo(),
             table_scan.getPushedDownFilters(),
             table_scan.getUsedIndexes(),
             table_scan.getColumns(),
@@ -930,6 +939,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
     RUNTIME_CHECK_MSG(mvcc_query_info->scan_context != nullptr, "Unexpected null scan_context");
     if (table_scan.isPartitionTableScan())
     {
+        bool has_multiple_partitions = table_scan.getPhysicalTableIDs().size() > 1;
         for (const auto physical_table_id : table_scan.getPhysicalTableIDs())
         {
             SelectQueryInfo query_info = create_query_info(physical_table_id);
@@ -937,6 +947,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
                 mvcc_query_info->resolve_locks,
                 mvcc_query_info->start_ts,
                 mvcc_query_info->scan_context);
+            query_info.has_multiple_partitions = has_multiple_partitions;
             ret.emplace(physical_table_id, std::move(query_info));
         }
         // Dispatch the regions_query_info to different physical table's query_info
@@ -959,15 +970,12 @@ bool DAGStorageInterpreter::checkRetriableForBatchCopOrMPP(
     const TableID & table_id,
     const SelectQueryInfo & query_info,
     const RegionException & e,
-    int num_allow_retry)
+    const Int32 num_allow_retry)
 {
     const DAGContext & dag_context = *context.getDAGContext();
     assert((dag_context.isBatchCop() || dag_context.isMPPTask()));
     const auto & dag_regions = dag_context.getTableRegionsInfoByTableID(table_id).local_regions;
     FmtBuffer buffer;
-    // Normally there is only few regions need to retry when super batch is enabled. Retry to read
-    // from local first. However, too many retry in different places may make the whole process
-    // time out of control. We limit the number of retries to 1 now.
     if (likely(num_allow_retry > 0))
     {
         auto & regions_query_info = query_info.mvcc_query_info->regions_query_info;
@@ -981,6 +989,7 @@ bool DAGStorageInterpreter::checkRetriableForBatchCopOrMPP(
                     region_retry_from_local_region.emplace_back(region_iter->second);
                     buffer.fmtAppend("{},", region_iter->first);
                 }
+                // remove the unavailable region for next local read attempt
                 iter = regions_query_info.erase(iter);
             }
             else
@@ -988,9 +997,14 @@ bool DAGStorageInterpreter::checkRetriableForBatchCopOrMPP(
                 ++iter;
             }
         }
+        // `tot_num_remote_region` is the total number of regions that we will retry from other tiflash nodes among all retries
+        // `current_retry_regions` is the number of regions that we will retry from other tiflash nodes in this retry
         LOG_WARNING(
             log,
-            "RegionException after read from storage, regions [{}], message: {}{}",
+            "RegionException after read from storage, tot_num_remote_region={} cur_retry_regions={}"
+            " regions [{}], message: {}{}",
+            region_retry_from_local_region.size(),
+            e.unavailable_region.size(),
             buffer.toString(),
             e.message(),
             (regions_query_info.empty() ? "" : ", retry to read from local"));
@@ -1010,14 +1024,43 @@ bool DAGStorageInterpreter::checkRetriableForBatchCopOrMPP(
                 buffer.fmtAppend("{},", iter->first);
             }
         }
+        // `tot_num_remote_region` is the total number of regions that we will retry from other tiflash nodes among all retries
+        // `current_retry_regions` is the number of regions that we will retry from other tiflash nodes in this retry
         LOG_WARNING(
             log,
-            "RegionException after read from storage, regions [{}], message: {}",
+            "RegionException after read from storage, tot_num_remote_region={} cur_retry_regions={}"
+            " regions [{}], message: {}",
+            region_retry_from_local_region.size(),
+            e.unavailable_region.size(),
             buffer.toString(),
             e.message());
         return false; // break retry loop
     }
 }
+
+namespace
+{
+Int32 getMaxAllowRetryForLocalRead(const SelectQueryInfo & query_info)
+{
+    size_t region_num = query_info.mvcc_query_info->regions_query_info.size();
+    if (region_num > 1000)
+    {
+        // 1000 regions is about 93GB for 96MB region size / 250GB for 256MB region size.
+        return 10;
+    }
+    else if (region_num > 500)
+    {
+        // 500 regions is about 46.5GB for 96MB region size / 125GB for 256MB region size.
+        return 8;
+    }
+    else if (region_num > 100)
+    {
+        // 100 regions is about 9.3GB for 96MB region size / 25GB for 256MB region size.
+        return 5;
+    }
+    return 1;
+}
+} // namespace
 
 DM::Remote::DisaggPhysicalTableReadSnapshotPtr DAGStorageInterpreter::buildLocalStreamsForPhysicalTable(
     const TableID & table_id,
@@ -1035,7 +1078,14 @@ DM::Remote::DisaggPhysicalTableReadSnapshotPtr DAGStorageInterpreter::buildLocal
 
     const DAGContext & dag_context = *context.getDAGContext();
     const auto keyspace_id = dag_context.getKeyspaceID();
-    for (int num_allow_retry = 1; num_allow_retry >= 0; --num_allow_retry)
+    // Normally there is only few regions need to retry when super batch is enabled. Retry to read
+    // from local first.
+    // When the table is large and too hot for writing, the number of regions may be large
+    // and region split is frequent. In this case, we allow more retries for building
+    // inputstream from local in order to avoid large number of RemoteRead requests.
+    // However, too many retry may make the whole execution time out of control.
+    Int32 num_allow_retry = getMaxAllowRetryForLocalRead(query_info);
+    for (; num_allow_retry >= 0; --num_allow_retry)
     {
         try
         {
@@ -1077,7 +1127,7 @@ DM::Remote::DisaggPhysicalTableReadSnapshotPtr DAGStorageInterpreter::buildLocal
                 // clean all streams from local because we are not sure the correctness of those streams
                 pipeline.streams.clear();
                 if (likely(checkRetriableForBatchCopOrMPP(table_id, query_info, e, num_allow_retry)))
-                    continue;
+                    continue; // next retry to read from local storage
                 else
                     break;
             }
@@ -1227,9 +1277,10 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
         // register the snapshot to manager
         auto snaps = context.getSharedContextDisagg()->wn_snapshot_manager;
         const auto & snap_id = *dag_context.getDisaggTaskId();
-        auto timeout_s = context.getSettingsRef().disagg_task_snapshot_timeout;
-        bool register_snapshot_ok
-            = snaps->registerSnapshot(snap_id, disaggregated_snap, std::chrono::seconds(timeout_s));
+        bool register_snapshot_ok = snaps->registerSnapshot(
+            snap_id,
+            disaggregated_snap,
+            std::chrono::seconds(context.getSettingsRef().disagg_task_snapshot_timeout));
         RUNTIME_CHECK_MSG(register_snapshot_ok, "Disaggregated task has been registered, snap_id={}", snap_id);
     }
 
@@ -1284,9 +1335,10 @@ void DAGStorageInterpreter::buildLocalExec(
         // register the snapshot to manager
         auto snaps = context.getSharedContextDisagg()->wn_snapshot_manager;
         const auto & snap_id = *dag_context.getDisaggTaskId();
-        auto timeout_s = context.getSettingsRef().disagg_task_snapshot_timeout;
-        bool register_snapshot_ok
-            = snaps->registerSnapshot(snap_id, disaggregated_snap, std::chrono::seconds(timeout_s));
+        bool register_snapshot_ok = snaps->registerSnapshot(
+            snap_id,
+            disaggregated_snap,
+            std::chrono::seconds(context.getSettingsRef().disagg_task_snapshot_timeout));
         RUNTIME_CHECK_MSG(register_snapshot_ok, "Disaggregated task has been registered, snap_id={}", snap_id);
     }
 
@@ -1565,6 +1617,12 @@ std::pair<Names, std::vector<UInt8>> DAGStorageInterpreter::getColumnsForTableSc
             name = handle_column_name;
         else if (cid == MutSup::extra_table_id_col_id)
             name = MutSup::extra_table_id_column_name;
+        else if (cid == DM::VectorIndexStreamCtx::VIRTUAL_DISTANCE_CD.id)
+            name = DM::VectorIndexStreamCtx::VIRTUAL_DISTANCE_CD.name;
+#if ENABLE_CLARA
+        else if (cid == DM::FullTextIndexStreamCtx::VIRTUAL_SCORE_CD.id)
+            name = DM::FullTextIndexStreamCtx::VIRTUAL_SCORE_CD.name;
+#endif
         else
             name = storage_for_logical_table->getTableInfo().getColumnName(cid);
         required_columns_tmp.emplace_back(std::move(name));

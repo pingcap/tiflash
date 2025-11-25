@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Interpreters/loadMetadata.cpp
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,6 +15,7 @@
 // limitations under the License.
 
 #include <Common/Stopwatch.h>
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Common/escapeForFileName.h>
 #include <Databases/DatabaseOrdinary.h>
 #include <Databases/DatabaseTiFlash.h>
@@ -121,7 +124,7 @@ void loadMetadata(Context & context)
         if (db_name == SYSTEM_DATABASE)
             continue;
 
-#if SERVERLESS_PROXY == 1
+#if ENABLE_NEXT_GEN
         // Ignore database owned by keyspace in blocklist
         auto keyspace_id = SchemaNameMapper::getMappedNameKeyspaceID(db_name);
         if (context.isKeyspaceInBlocklist(keyspace_id))

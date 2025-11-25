@@ -55,12 +55,11 @@ std::unique_ptr<ReadBufferFromFileBase> ChecksumReadBufferBuilder::build(
 std::unique_ptr<ReadBufferFromFileBase> ChecksumReadBufferBuilder::build(
     String && data,
     const String & file_name,
-    size_t estimated_size,
     ChecksumAlgo checksum_algorithm,
     size_t checksum_frame_size)
 {
+    auto allocation_size = std::min(data.size(), checksum_frame_size);
     auto file = std::make_shared<MemoryRandomAccessFile>(file_name, std::forward<String>(data));
-    auto allocation_size = std::min(estimated_size, checksum_frame_size);
     switch (checksum_algorithm)
     {
     case ChecksumAlgo::None:

@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Core/Block.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -99,6 +101,7 @@ public:
     size_t getPositionByName(const std::string & name) const;
 
     const ColumnsWithTypeAndName & getColumnsWithTypeAndName() const;
+    NamesAndTypes getNamesAndTypes() const;
     NamesAndTypesList getNamesAndTypesList() const;
     Names getNames() const;
 
@@ -152,7 +155,12 @@ public:
     Block sortColumns() const;
 
     void clear();
+    // The following functions will swap two block.
+    // `swap` will swap all data in blocks.
+    // And `swapCloumnData` will only swap column data,
+    // `start_offset` and `rs_result` will keep unchanged.
     void swap(Block & other) noexcept;
+    void swapCloumnData(Block & other) noexcept;
 
     /** Updates SipHash of the Block, using update method of columns.
       * Returns hash for block, that could be used to differentiate blocks

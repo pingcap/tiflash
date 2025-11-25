@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Dictionaries/TrieDictionary.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -47,7 +49,7 @@ public:
 
     ~TrieDictionary();
 
-    std::string getKeyDescription() const { return key_description; };
+    std::string getKeyDescription() const { return key_description; }
 
     std::exception_ptr getCreationException() const override { return creation_exception; }
 

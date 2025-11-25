@@ -33,7 +33,7 @@ public:
 
     ~MemoryRandomAccessFile() override = default;
 
-    off_t seek(off_t offset, int whence) override
+    [[nodiscard]] off_t seek(off_t offset, int whence) override
     {
         RUNTIME_CHECK(whence == SEEK_SET, whence);
         RUNTIME_CHECK(offset >= 0 && offset <= static_cast<off_t>(s.size()), offset, s.size());
@@ -41,7 +41,7 @@ public:
         return current_offset;
     }
 
-    ssize_t read(char * buf, size_t size) override
+    [[nodiscard]] ssize_t read(char * buf, size_t size) override
     {
         auto n = std::min(s.size() - current_offset, size);
         memcpy(buf, s.data() + current_offset, n);
@@ -49,7 +49,7 @@ public:
         return n;
     }
 
-    ssize_t pread(char * buf, size_t size, off_t offset) const override
+    [[nodiscard]] ssize_t pread(char * buf, size_t size, off_t offset) const override
     {
         RUNTIME_CHECK(offset >= 0 && offset <= static_cast<off_t>(s.size()), offset, s.size());
         auto n = std::min(s.size() - offset, size);

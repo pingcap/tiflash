@@ -26,11 +26,13 @@
 #pragma GCC diagnostic pop
 #endif
 
+#include <Common/DiskSize.h>
 #include <Common/Exception.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/formatReadable.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <Poco/File.h>
 #include <Poco/Path.h>
 #include <Poco/String.h>
 #include <Poco/StringTokenizer.h>
@@ -444,7 +446,128 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(
         storage_config.remote_cache_config.parse(config.getString("storage.remote.cache"), log);
     }
 
+    if (config.has("storage.temp"))
+    {
+        // Need to make sure storage.main/latest is parsed before storage.temp.
+        storage_config.parseTempConfig(config.getString("storage"));
+    }
+    else if (config.has("tmp_path"))
+    {
+        storage_config.temp_path = getNormalizedPath(config.getString("tmp_path"));
+        // If storage.temp doesn't exist, temp_capacity will be zero.
+        storage_config.temp_capacity = 0;
+    }
+    else
+    {
+        storage_config.temp_path = getNormalizedPath(storage_config.latest_data_paths[0] + "tmp/");
+        storage_config.temp_capacity = 0;
+    }
+    LOG_INFO(
+        log,
+        "storage.temp config parse done: temp_path: {}, temp_capacity: {}",
+        storage_config.temp_path,
+        storage_config.temp_capacity);
+
     return std::make_tuple(global_capacity_quota, storage_config);
+}
+
+void TiFlashStorageConfig::parseTempConfig(const String & content)
+{
+    std::istringstream ss(content);
+    cpptoml::parser p(ss);
+    auto table = p.parse();
+
+    const auto temp_path_opt = table->get_qualified_as<String>("temp.dir");
+    if (!temp_path_opt || temp_path_opt->empty())
+        temp_path = latest_data_paths[0] + "tmp/";
+    else
+        temp_path = *temp_path_opt;
+    temp_path = getNormalizedPath(temp_path);
+
+    temp_capacity = 0;
+    const auto temp_capacity_opt = table->get_qualified_as<UInt64>("temp.capacity");
+    if (temp_capacity_opt)
+        temp_capacity = *temp_capacity_opt;
+}
+
+// Separate this function from TiFlashStorageConfig::parseTempConfig() because need to create temp_path first.
+void TiFlashStorageConfig::checkTempCapacity(UInt64 global_capacity_quota, const LoggerPtr & log) const
+{
+    // global_capacity_quota and storage.main/latest.capacity cannot take effects at the same time.
+    RUNTIME_CHECK(!(!main_capacity_quota.empty() && global_capacity_quota > 0));
+
+    // Check if storage.temp.capacity is valid or not when it's greater than zero(0 means no limit).
+    if (temp_capacity <= 0)
+        return;
+
+    // Check storage.temp.capacity < disk capacity.
+    auto [path_capacity, err_msg] = DB::getFsCapacity(temp_path);
+    if unlikely (!err_msg.empty())
+    {
+        LOG_ERROR(log, "get temp_path capacity failed: {}, skip check storage.temp.capacity", err_msg);
+    }
+    else
+    {
+        if (temp_capacity > path_capacity)
+        {
+            throw Exception(
+                ErrorCodes::INVALID_CONFIG_PARAMETER,
+                "storage.temp.capacity({}) exceeds disk capacity({}) of temp path({})",
+                temp_capacity,
+                path_capacity,
+                temp_path);
+        }
+    }
+
+    // Check if temp_path is subdir of latest.dir or main.dir, then use its quota to check if temp.capacity is valid.
+    UInt64 parent_storage_quota = 0;
+    String parent_storage_path{};
+    auto get_quota = [&](const Strings & path_vec, const std::vector<size_t> & quota_vec) -> std::pair<ssize_t, bool> {
+        for (size_t i = 0; i < path_vec.size(); ++i)
+        {
+            if (temp_path.contains(path_vec[i]))
+            {
+                parent_storage_path = path_vec[i];
+                if (i < quota_vec.size())
+                    return {quota_vec[i], true};
+                else
+                    return {0, true};
+            }
+        }
+        return {0, false};
+    };
+
+    if (global_capacity_quota > 0)
+    {
+        if (auto [global_path_quota, ok]
+            = get_quota(main_data_paths, std::vector<size_t>(main_data_paths.size(), global_capacity_quota));
+            ok)
+            parent_storage_quota = global_capacity_quota;
+    }
+    else
+    {
+        if (auto [main_path_quota, ok] = get_quota(main_data_paths, main_capacity_quota); ok)
+        {
+            parent_storage_quota = main_path_quota;
+        }
+        else
+        {
+            if (auto [latest_path_quota, ok] = get_quota(latest_data_paths, latest_capacity_quota); ok)
+                parent_storage_quota = latest_path_quota;
+        }
+    }
+
+
+    // If temp_path is subdir of main.dir or latest.dir, temp_capacity should respect main.capacity or latest.capacity.
+    if (parent_storage_quota > 0 && temp_capacity > parent_storage_quota)
+    {
+        throw Exception(
+            ErrorCodes::INVALID_CONFIG_PARAMETER,
+            "storage.temp.capacity({}) exceeds parent storage quota({}), "
+            "you should check path_capacity, storage.main.capacity or storage.latest.capacity",
+            temp_capacity,
+            parent_storage_quota);
+    }
 }
 
 void StorageS3Config::parse(const String & content)

@@ -14,6 +14,7 @@
 
 #include <Common/FailPoint.h>
 #include <Common/Stopwatch.h>
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/MPPHandler.h>
 #include <Flash/Mpp/MPPTask.h>
@@ -80,7 +81,7 @@ grpc::Status MPPHandler::execute(const ContextPtr & context, mpp::DispatchTaskRe
         task = MPPTask::newTask(task_request.meta(), context);
         task->prepare(task_request);
 
-#if SERVERLESS_PROXY != 0
+#if ENABLE_NEXT_GEN
         if (context->isKeyspaceInBlocklist(task_request.meta().keyspace_id())
             || context->isRegionsContainsInBlocklist(context->getDAGContext()->tables_regions_info.getAllRegionID()))
         {
@@ -109,14 +110,14 @@ grpc::Status MPPHandler::execute(const ContextPtr & context, mpp::DispatchTaskRe
     }
     catch (Exception & e)
     {
-        LOG_ERROR(log, "dispatch task meet error : {}", e.displayText());
+        LOG_WARNING(log, "dispatch task meet error : {}", e.displayText());
         auto * err = response->mutable_error();
         err->set_msg(e.displayText());
         handleError(task, e.displayText());
     }
     catch (std::exception & e)
     {
-        LOG_ERROR(log, "dispatch task meet error : {}", e.what());
+        LOG_WARNING(log, "dispatch task meet error : {}", e.what());
         auto * err = response->mutable_error();
         err->set_msg(e.what());
         handleError(task, e.what());

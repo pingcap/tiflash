@@ -130,7 +130,7 @@ void VectorIndexWriterInternal::saveFileProps(dtpb::IndexFilePropsV2 * pb_idx) c
     pb_vec_idx->set_distance_metric(tipb::VectorDistanceMetric_Name(definition->distance_metric));
 }
 
-void VectorIndexWriterOnDisk::saveToFile() const
+void VectorIndexWriterOnDisk::saveToFile()
 {
     Stopwatch w(CLOCK_MONOTONIC_COARSE);
     SCOPE_EXIT({ writer.total_duration += w.elapsedSeconds(); });

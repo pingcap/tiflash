@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Parsers/ASTSetQuery.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -37,7 +39,7 @@ public:
     Changes changes;
 
     /** Get the text that identifies this element. */
-    String getID() const override { return "Set"; };
+    String getID() const override { return "Set"; }
 
     ASTPtr clone() const override { return std::make_shared<ASTSetQuery>(*this); }
 

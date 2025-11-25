@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Common/TiFlashBuildInfo.h>
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Common/setThreadName.h>
 #include <Core/TiFlashDisaggregatedMode.h>
 #include <Interpreters/Settings.h>
@@ -113,7 +114,7 @@ struct TiFlashProxyConfig
 private:
     TiFlashProxyConfig()
     {
-        // For test, bootstrap no proxy.
+        // For test, bootstrap without proxy.
     }
     // TiFlash Proxy will set the default value of "flash.proxy.addr", so we don't need to set here.
     void addExtraArgs(const std::string & k, const std::string & v) { val_map["--" + k] = v; }
@@ -160,7 +161,6 @@ private:
             else
                 args_map["advertise-engine-addr"] = args_map["engine-addr"];
             args_map["engine-label"] = getProxyLabelByDisaggregatedMode(disaggregated_mode);
-#if SERVERLESS_PROXY == 0
             String extra_label;
             if (disaggregated_mode == DisaggregatedMode::Storage)
             {
@@ -183,14 +183,8 @@ private:
             {
                 args_map["labels"] = extra_label;
             }
-#else
-            // Serverless proxy has not adapted with these changes yet.
-            // For tiflash write node, it should report a extra label with "key" == "engine-role-label"
-            if (disaggregated_mode == DisaggregatedMode::Storage)
-                args_map["engine-role-label"] = DISAGGREGATED_MODE_WRITE_ENGINE_ROLE;
-#endif
 
-#if SERVERLESS_PROXY == 1
+#if ENABLE_NEXT_GEN
             if (config.has("blacklist_file"))
                 args_map["blacklist-file"] = config.getString("blacklist_file");
 #endif
@@ -337,6 +331,10 @@ struct ProxyStateMachine
         tiflash_instance_wrap.tmt = &tmt_context;
         LOG_INFO(log, "Let tiflash proxy start all services");
         // Set tiflash instance status to running, then wait for proxy enter running status
+        // It means that in tiflash-proxy
+        // * rpc server for handling raft command is started
+        // * http status server is started
+        // https://github.com/pingcap/tidb-engine-ext/blob/74d6916e0aee34783cf3835b6fb93d40f32bb889/proxy_components/proxy_server/src/run.rs#L241-L265
         tiflash_instance_wrap.status = EngineStoreServerStatus::Running;
         while (tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Idle)
             std::this_thread::sleep_for(std::chrono::milliseconds(200));

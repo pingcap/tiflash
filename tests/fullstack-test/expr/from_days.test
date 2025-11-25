@@ -19,7 +19,7 @@ mysql> insert into test.t values (3652424),(3652425),(3652499),(3652500),(365250
 mysql> alter table test.t set tiflash replica 1;
 func> wait_table test t
 
-# we are compaitable with mysql
+# we are compatible with mysql
 mysql> set tidb_enforce_mpp=1; select a, from_days(a), to_days(from_days(a)) from test.t;
 +---------+--------------+-----------------------+
 | a       | from_days(a) | to_days(from_days(a)) |

@@ -867,7 +867,7 @@ void StoragePool::drop()
     }
 }
 
-PageIdU64 StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who) const
+PageIdU64 StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, [[maybe_unused]] const char * who) const
 {
     // In case that there is a DTFile created on disk but TiFlash crashes without persisting the ID.
     // After TiFlash process restored, the ID will be inserted into the stable delegator, but we may
@@ -893,7 +893,7 @@ PageIdU64 StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, c
         // else there is a DTFile with that id, continue to acquire a new ID.
         LOG_WARNING(
             logger,
-            "The DTFile is already exists, continute to acquire another ID. call={} path={} file_id={}",
+            "The DTFile is already exists, continue to acquire another ID. call={} path={} file_id={}",
             who,
             existed_path,
             dtfile_id);
@@ -916,12 +916,11 @@ inline static PageReaderPtr newReader(
     const PageStorageRunMode run_mode,
     KeyspaceID keyspace_id,
     StorageType tag,
-    const NamespaceID table_id,
+    const TableID table_id,
     T & storage_v2,
     T & storage_v3,
     UniversalPageStoragePtr uni_ps,
     ReadLimiterPtr read_limiter,
-    bool snapshot_read,
     const String & tracing_id)
 {
     switch (run_mode)
@@ -935,7 +934,7 @@ inline static PageReaderPtr newReader(
             storage_v2,
             nullptr,
             /*uni_ps*/ nullptr,
-            snapshot_read ? storage_v2->getSnapshot(tracing_id) : nullptr,
+            storage_v2->getSnapshot(tracing_id),
             read_limiter);
     case PageStorageRunMode::ONLY_V3:
         return std::make_shared<PageReader>(
@@ -946,7 +945,7 @@ inline static PageReaderPtr newReader(
             nullptr,
             storage_v3,
             /*uni_ps*/ nullptr,
-            snapshot_read ? storage_v3->getSnapshot(tracing_id) : nullptr,
+            storage_v3->getSnapshot(tracing_id),
             read_limiter);
     case PageStorageRunMode::MIX_MODE:
         return std::make_shared<PageReader>(
@@ -957,10 +956,9 @@ inline static PageReaderPtr newReader(
             storage_v2,
             storage_v3,
             /*uni_ps*/ nullptr,
-            snapshot_read ? std::make_shared<PageStorageSnapshotMixed>(
+            std::make_shared<PageStorageSnapshotMixed>(
                 storage_v2->getSnapshot(fmt::format("{}-v2", tracing_id)),
-                storage_v3->getSnapshot(fmt::format("{}-v3", tracing_id)))
-                          : nullptr,
+                storage_v3->getSnapshot(fmt::format("{}-v3", tracing_id))),
             read_limiter);
     case PageStorageRunMode::UNI_PS:
         return std::make_shared<PageReader>(
@@ -971,14 +969,15 @@ inline static PageReaderPtr newReader(
             nullptr,
             nullptr,
             uni_ps,
-            snapshot_read ? uni_ps->getSnapshot(tracing_id) : nullptr,
+            // Under uni_ps, only protect the data belong to DeltaTree engine
+            uni_ps->getDeltaTreeOnlySnapshot(tracing_id),
             read_limiter);
     default:
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode));
     }
 }
 
-PageReaderPtr StoragePool::newLogReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id)
+PageReaderPtr StoragePool::newLogReader(ReadLimiterPtr read_limiter, const String & tracing_id)
 {
     return newReader(
         run_mode,
@@ -989,25 +988,10 @@ PageReaderPtr StoragePool::newLogReader(ReadLimiterPtr read_limiter, bool snapsh
         log_storage_v3,
         uni_ps,
         read_limiter,
-        snapshot_read,
         tracing_id);
 }
 
-PageReaderPtr StoragePool::newLogReader(ReadLimiterPtr read_limiter, PageStorage::SnapshotPtr & snapshot)
-{
-    return std::make_shared<PageReader>(
-        run_mode,
-        keyspace_id,
-        StorageType::Log,
-        table_id,
-        log_storage_v2,
-        log_storage_v3,
-        uni_ps,
-        snapshot,
-        read_limiter);
-}
-
-PageReaderPtr StoragePool::newDataReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id)
+PageReaderPtr StoragePool::newDataReader(ReadLimiterPtr read_limiter, const String & tracing_id)
 {
     return newReader(
         run_mode,
@@ -1018,11 +1002,10 @@ PageReaderPtr StoragePool::newDataReader(ReadLimiterPtr read_limiter, bool snaps
         data_storage_v3,
         uni_ps,
         read_limiter,
-        snapshot_read,
         tracing_id);
 }
 
-PageReaderPtr StoragePool::newMetaReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id)
+PageReaderPtr StoragePool::newMetaReader(ReadLimiterPtr read_limiter, const String & tracing_id)
 {
     return newReader(
         run_mode,
@@ -1033,7 +1016,6 @@ PageReaderPtr StoragePool::newMetaReader(ReadLimiterPtr read_limiter, bool snaps
         meta_storage_v3,
         uni_ps,
         read_limiter,
-        snapshot_read,
         tracing_id);
 }
 

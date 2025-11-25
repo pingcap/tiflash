@@ -17,13 +17,16 @@
 #include <Columns/ColumnVector.h>
 #include <Columns/IColumn.h>
 #include <DataTypes/IDataType.h>
-#include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/DeltaMerge/Index/LocalIndexWriter_fwd.h>
 #include <Storages/DeltaMerge/dtpb/index_file.pb.h>
 
 
 namespace DB::DM
 {
+
+struct LocalIndexInfo;
+
+using IndexID = Int64;
 
 class LocalIndexWriter
 {
@@ -80,7 +83,7 @@ public:
     dtpb::IndexFilePropsV2 finalize();
 
 protected:
-    virtual void saveToFile() const = 0;
+    virtual void saveToFile() = 0;
 
 protected:
     String index_file;

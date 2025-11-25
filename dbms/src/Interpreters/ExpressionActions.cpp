@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Interpreters/ExpressionActions.cpp
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -299,7 +301,7 @@ void ExpressionAction::prepare(Block & sample_block)
             new_block.insert(std::move(column));
         }
 
-        sample_block.swap(new_block);
+        sample_block.swapCloumnData(new_block);
         break;
     }
 
@@ -402,8 +404,7 @@ void ExpressionAction::execute(Block & block) const
                 column.name = alias;
             new_block.insert(std::move(column));
         }
-        new_block.setRSResult(block.getRSResult());
-        block.swap(new_block);
+        block.swapCloumnData(new_block);
 
         break;
     }

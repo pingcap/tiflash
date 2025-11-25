@@ -489,7 +489,8 @@ ConcatSkippableBlockInputStreamPtr<need_row_id> StableValueSpace::Snapshot::getI
     return ConcatSkippableBlockInputStream<need_row_id>::create(
         std::move(streams),
         std::move(rows),
-        dm_context.scan_context);
+        dm_context.scan_context,
+        read_tag);
 }
 
 template ConcatSkippableBlockInputStreamPtr<false> StableValueSpace::Snapshot::getInputStream(
@@ -597,6 +598,52 @@ StableValueSpace::Snapshot::getAtLeastRowsAndBytes(const DMContext & dm_context,
     }
 
     return ret;
+}
+
+// Estimating the number of rows that need to be read to build the MVCC bitmap.
+// If a delta index is used, the relevant data must be read and merged with the delta.
+// For stable-only or version chain, no merging with the delta is required,
+// so reading occurs only when filtering of the pack is necessary.
+UInt64 StableValueSpace::Snapshot::estimatedReadRows(
+    const DMContext & dm_context,
+    const DMFilePackFilterResults & pack_filter_results,
+    UInt64 start_ts,
+    bool use_version_chain) const
+{
+    const auto & dmfiles = getDMFiles();
+    auto file_provider = dm_context.global_context.getFileProvider();
+    UInt64 rows = 0;
+    for (size_t i = 0; i < dmfiles.size(); ++i)
+    {
+        const auto & dmfile = dmfiles[i];
+        const auto & pack_filter = pack_filter_results[i];
+        const auto & pack_res = pack_filter->getPackRes();
+        const auto & handle_res = pack_filter->getHandleRes();
+        const auto & pack_stats = dmfile->getPackStats();
+        for (size_t pack_id = 0; pack_id < pack_stats.size(); ++pack_id)
+        {
+            const auto & pack_stat = pack_stats[pack_id];
+            if (!pack_res[pack_id].isUse())
+                continue;
+
+            // If VersionChain is not used, prior to this, pack_filter_results would have already been ​processed and filtered​
+            // by either DMFilePackFilter::getSkippedRangeAndFilter or DMFilePackFilter::getSkippedRangeAndFilterWithMultiVersion.
+            if (!use_version_chain)
+            {
+                rows += pack_stat.rows;
+            }
+            else if (
+                handle_res[pack_id] == RSResult::Some || pack_stat.not_clean > 0
+                || pack_filter->getMaxVersion(dmfile, pack_id, file_provider, dm_context.scan_context) > start_ts)
+            {
+                // `not_clean > 0` means there are more than one version for some rowkeys in this pack
+                // `pack.max_version > start_ts` means some rows will be filtered by MVCC reading
+                // We need to read this pack to do RowKey or MVCC filter.
+                rows += pack_stat.rows;
+            }
+        }
+    }
+    return rows;
 }
 
 static size_t defaultValueBytes(const Field & f)

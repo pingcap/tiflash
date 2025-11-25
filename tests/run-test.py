@@ -30,6 +30,7 @@ CMD_PREFIX_TIDB = 'mysql> '
 CMD_PREFIX_TIDB_BINALY_AS_HEX = 'mysql_bin_as_hex> '
 CMD_PREFIX_FUNC = 'func> '
 RETURN_PREFIX = '#RETURN'
+SKIP_NEXT_GEN_PREFIX = '#SKIP_FOR_NEXT_GEN'
 SLEEP_PREFIX = 'SLEEP '
 TODO_PREFIX = '#TODO'
 COMMENT_PREFIX = '#'
@@ -41,7 +42,7 @@ REGEXP_MATCH = '{#REGEXP}'
 CURL_TIDB_STATUS_PREFIX = 'curl_tidb> '
 NO_UNESCAPE_SUFFIX = ' #NO_UNESCAPE'
 
-# Some third-party module might output messge directly to stderr/stdin, use this list to ignore such outputs
+# Some third-party module might output message directly to stderr/stdin, use this list to ignore such outputs
 IGNORED_CLIENT_OUTPUTS = ['<jemalloc>: Number of CPUs detected is not deterministic. Per-CPU arena disabled.']
 verbose = False
 
@@ -341,6 +342,10 @@ def parse_exe_match(path, executor, executor_tidb, executor_func, executor_curl_
             line_number += 1
             line = origin.strip()
             if line.startswith(RETURN_PREFIX):
+                break
+            # Some tests are designed to be skipped in next-gen TiFlash.
+            if line.startswith(SKIP_NEXT_GEN_PREFIX) and os.getenv('ENABLE_NEXT_GEN', 'false') != 'false':
+                print(f'Skipping test for next-gen from line {line_number}.')
                 break
             if line.startswith(TODO_PREFIX):
                 todos.append(line[len(TODO_PREFIX):].strip())

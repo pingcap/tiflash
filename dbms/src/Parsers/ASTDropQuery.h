@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Parsers/ASTDropQuery.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -35,7 +37,7 @@ public:
     std::chrono::milliseconds lock_timeout{std::chrono::milliseconds(0)};
 
     /** Get the text that identifies this element. */
-    String getID() const override { return (detach ? "DetachQuery_" : "DropQuery_") + database + "_" + table; };
+    String getID() const override { return (detach ? "DetachQuery_" : "DropQuery_") + database + "_" + table; }
 
     ASTPtr clone() const override
     {

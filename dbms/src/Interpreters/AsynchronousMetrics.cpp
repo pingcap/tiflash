@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Interpreters/AsynchronousMetrics.cpp
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -207,10 +209,10 @@ void AsynchronousMetrics::update()
     }
 
     {
-        if (auto rn_delta_index_cache = context.getSharedContextDisagg()->rn_delta_index_cache)
+        if (auto rn_mvcc_index_cache = context.getSharedContextDisagg()->rn_mvcc_index_cache)
         {
-            set("RNDeltaIndexCacheBytes", rn_delta_index_cache->getCacheWeight());
-            set("RNDeltaIndexFiles", rn_delta_index_cache->getCacheCount());
+            set("RNMVCCIndexCacheBytes", rn_mvcc_index_cache->getCacheWeight());
+            set("RNMVCCIndexFiles", rn_mvcc_index_cache->getCacheCount());
         }
     }
 
@@ -282,7 +284,8 @@ void AsynchronousMetrics::update()
         {
             if (auto uni_ps = context.tryGetWriteNodePageStorage(); uni_ps != nullptr)
             {
-                // Only set delta snapshot lifetime when UniPS is enabled
+                // Only set delta snapshot lifetime when UniPS is enabled.
+                // It returns the longest living snapshot stat include "General" and "DeltaTreeOnly".
                 const auto snap_stat = uni_ps->getSnapshotsStat();
                 set("MaxDTDeltaOldestSnapshotLifetime", snap_stat.longest_living_seconds);
             }
@@ -311,6 +314,11 @@ void AsynchronousMetrics::update()
         if (auto s3_gc_owner = tmt.getS3GCOwnerManager(); s3_gc_owner->isOwner())
         {
             GET_METRIC(tiflash_storage_s3_gc_status, type_owner).Set(1.0);
+        }
+        else
+        {
+            // If the current node is not the owner, we reset the metric to 0
+            GET_METRIC(tiflash_storage_s3_gc_status, type_owner).Set(0.0);
         }
     }
 

@@ -63,7 +63,7 @@ TiFlashRaftProxyHelper MockRaftStoreProxy::setRaftStoreProxyFFIHelper(RaftStoreP
 
 MockProxyRegionPtr MockRaftStoreProxy::getRegion(uint64_t id) NO_THREAD_SAFETY_ANALYSIS
 {
-    auto _ = genLockGuard();
+    auto _ = genLockGuard(); // m0
     return doGetRegion(id);
 }
 
@@ -144,14 +144,14 @@ void MockRaftStoreProxy::bootstrapWithRegion(
     std::optional<std::pair<std::string, std::string>> maybe_range) NO_THREAD_SAFETY_ANALYSIS
 {
     {
-        auto _ = genLockGuard();
+        auto _ = genLockGuard(); // m0
         RUNTIME_CHECK_MSG(regions.empty(), "Mock Proxy regions are not cleared");
-        auto task_lock = kvs.genTaskLock();
+        auto task_lock = kvs.genTaskLock(); // m1
         auto lock = kvs.genRegionMgrWriteLock(task_lock);
         RUNTIME_CHECK_MSG(lock.regions.empty(), "KVStore regions are not cleared");
     }
-    auto start = RecordKVFormat::genKey(table_id, 0);
-    auto end = RecordKVFormat::genKey(table_id + 1, 0);
+    auto start = RecordKVFormat::genTableRecordStartKey(table_id);
+    auto end = RecordKVFormat::genTableRecordEndKey(table_id);
     debugAddRegions(kvs, tmt, {region_id}, {maybe_range.value_or(std::make_pair(start.toString(), end.toString()))});
 }
 

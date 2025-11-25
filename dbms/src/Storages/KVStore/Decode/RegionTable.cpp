@@ -193,6 +193,7 @@ namespace
 /// Note that this function will try to acquire lock by `IStorage->lockForShare`
 void removeObsoleteDataInStorage(
     Context * const context,
+    RegionID region_id,
     const KeyspaceTableID ks_table_id,
     const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & handle_range)
 {
@@ -217,7 +218,8 @@ void removeObsoleteDataInStorage(
             ks_table_id.second,
             ks_table_id.second,
             storage->isCommonHandle(),
-            storage->getRowKeyColumnSize());
+            storage->getRowKeyColumnSize(),
+            fmt::format("region_id={} removeObsoleteDataInStorage", region_id));
         dm_storage->deleteRange(rowkey_range, context->getSettingsRef());
         dm_storage->flushCache(*context, rowkey_range, /*try_until_succeed*/ true); // flush to disk
     }
@@ -270,7 +272,7 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
         // But caller(KVStore) should ensure that no new data write into this handle_range
         // before `removeObsoleteDataInStorage` is done. (by param `RegionTaskLock`)
         // And this is expected not to block for long time.
-        removeObsoleteDataInStorage(context, ks_table_id, handle_range);
+        removeObsoleteDataInStorage(context, region_id, ks_table_id, handle_range);
         LOG_INFO(log, "remove region in storage done, region_id={}", region_id);
     }
 }

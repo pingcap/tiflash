@@ -21,6 +21,7 @@
 #include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/Operators.h>
 #include <Interpreters/Context_fwd.h>
+#include <Interpreters/Settings.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Range.h>
@@ -29,6 +30,7 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Schema/TiDB.h>
 
+#include <ext/scope_guard.h>
 #include <vector>
 
 namespace DB::DM::tests
@@ -536,8 +538,9 @@ public:
     static RowKeyRange getRowKeyRangeForClusteredIndex(Int64 start, Int64 end, size_t rowkey_column_size)
     {
         RowKeyValue start_key
-            = RowKeyValue(true, std::make_shared<String>(genMockCommonHandle(start, rowkey_column_size)));
-        RowKeyValue end_key = RowKeyValue(true, std::make_shared<String>(genMockCommonHandle(end, rowkey_column_size)));
+            = RowKeyValue::fromHandle(true, std::make_shared<String>(genMockCommonHandle(start, rowkey_column_size)));
+        RowKeyValue end_key
+            = RowKeyValue::fromHandle(true, std::make_shared<String>(genMockCommonHandle(end, rowkey_column_size)));
         return RowKeyRange(start_key, end_key, true, rowkey_column_size);
     }
 
@@ -568,4 +571,24 @@ public:
         return num++;
     }
 };
+
+// For some tests that designed for delta index, use this function to disable version chain temporarily.
+[[nodiscard]] inline auto disableVersionChainTemporary(Settings & settings)
+{
+    const Int64 initial_config = settings.enable_version_chain;
+    settings.set("enable_version_chain", "0");
+    return ext::make_scope_guard(
+        [initial_config, &settings]() { settings.set("enable_version_chain", std::to_string(initial_config)); });
+}
+
+// For some tests that designed for version chain, use this function to enable version chain temporarily.
+[[nodiscard]] inline auto enableVersionChainTemporary(Settings & settings)
+{
+    const Int64 initial_config = settings.enable_version_chain;
+    settings.set("enable_version_chain", "1");
+    return ext::make_scope_guard(
+        [initial_config, &settings]() { settings.set("enable_version_chain", std::to_string(initial_config)); });
+}
+
+
 } // namespace DB::DM::tests

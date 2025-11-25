@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Storages/IStorage.cpp
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,6 +16,10 @@
 
 #include <Storages/IStorage.h>
 
+namespace CurrentMetrics
+{
+extern const Metric NumIStorage;
+} // namespace CurrentMetrics
 
 namespace DB
 {
@@ -24,6 +30,14 @@ extern const int DEADLOCK_AVOIDED;
 extern const int TABLE_IS_DROPPED;
 } // namespace ErrorCodes
 
+IStorage::IStorage()
+    : holder_counter(CurrentMetrics::NumIStorage, 1)
+{}
+
+IStorage::IStorage(ColumnsDescription columns_)
+    : ITableDeclaration(std::move(columns_))
+    , holder_counter(CurrentMetrics::NumIStorage, 1)
+{}
 
 RWLock::LockHolder IStorage::tryLockTimed(
     const RWLockPtr & rwlock,
