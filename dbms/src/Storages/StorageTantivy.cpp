@@ -45,8 +45,7 @@ namespace DB
 {
 
 StorageTantivy::StorageTantivy(Context & context_, const TiCIScan & tici_scan_)
-    : IStorage()
-    , tici_scan(tici_scan_)
+    : tici_scan(tici_scan_)
     , context(context_)
     , log(Logger::get(context_.getDAGContext()->log ? context_.getDAGContext()->log->identifier() : ""))
 {}
