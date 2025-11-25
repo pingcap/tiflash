@@ -1309,10 +1309,6 @@ bool DAGExpressionAnalyzer::appendExtraCastsAfterTiCI(
         return false;
 
     // Add a projection to replace the original columns with the casted columns.
-    // For example:
-    // we have a block with columns (a int64, b float, c int64)
-    // after the cast, the block will be (a int64, b float, c int64, casted_c MyDuration)
-    // After this projection, the block will be (a int64, b float, c MyDuration)
     NamesWithAliases project_cols;
     for (size_t i = 0; i < may_need_add_cast_column.size(); ++i)
         project_cols.emplace_back(casted_columns[i], source_columns[i].name);
