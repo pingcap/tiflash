@@ -663,7 +663,7 @@ std::tuple<std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr>, D
     LOG_INFO(
         log,
         "packSegmentReadTasks: enable_read_thread={} read_mode={} is_fast_scan={} keep_order={} task_count={} "
-        "num_streams={} column_defines={}, final_columns_defines={}",
+        "num_streams={} column_defines={} final_columns_defines={}",
         enable_read_thread,
         magic_enum::enum_name(read_mode),
         table_scan.isFastScan(),

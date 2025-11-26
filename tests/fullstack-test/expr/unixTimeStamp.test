@@ -12,10 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# next-gen does not support unix_timestamp for now.
-# will enable after fixing this issue.
-#SKIP_FOR_NEXT_GEN
-
 mysql> drop table if exists test.t
 mysql> create table test.t(a date, b datetime, c timestamp(3), d timestamp(6));
 mysql> alter table test.t set tiflash replica 1;
