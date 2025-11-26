@@ -33,7 +33,8 @@ TantivyReaderSourceOp::TantivyReaderSourceOp(
     const UInt64 & limit,
     const UInt64 & read_ts,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & expr,
-    bool is_count)
+    bool is_count,
+    const TimezoneInfo & timezone_info)
     : SourceOp(exec_context_, req_id)
 {
     setHeader(Block(return_columns));
@@ -48,7 +49,8 @@ TantivyReaderSourceOp::TantivyReaderSourceOp(
         limit,
         read_ts,
         expr,
-        is_count);
+        is_count,
+        timezone_info);
 }
 
 String TantivyReaderSourceOp::getName() const
