@@ -325,7 +325,6 @@ private:
             case tipb::ScalarFuncSig::InString:
             case tipb::ScalarFuncSig::InReal:
             case tipb::ScalarFuncSig::InDecimal:
-            case tipb::ScalarFuncSig::InTime:
                 ret.sig = expr.sig();
                 break;
             case tipb::ScalarFuncSig::EQTime:
@@ -355,6 +354,35 @@ private:
                 }
                 break;
             }
+            case tipb::ScalarFuncSig::InTime:
+            {
+                ret.sig = expr.sig();
+                if (expr.children(0).field_type().tp() == TiDB::TypeTimestamp)
+                {
+                    for (int val_idx = 1; val_idx < expr.children_size(); ++val_idx)
+                    {
+                        const auto & child_expr = expr.children(val_idx);
+                        if (isLiteralExpr(child_expr))
+                        {
+                            UInt64 val = decodeDAGUInt64(child_expr.val());
+                            val = convertPackedU64WithTimezone(val, timezone_info);
+                            WriteBufferFromOwnString ss;
+                            encodeDAGUInt64(val, ss);
+                            ret.children[val_idx].val.clear();
+                            auto str = ss.releaseStr();
+                            std::copy(str.begin(), str.end(), std::back_inserter(ret.children[val_idx].val));
+                        }
+                        else
+                        {
+                            throw TiFlashException(
+                                "InTime only support literal values",
+                                Errors::Coprocessor::BadRequest);
+                        }
+                    }
+                }
+                break;
+            }
+
             default:
                 throw std::runtime_error("Unsupported expression sig");
             }
