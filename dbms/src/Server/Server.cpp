@@ -1033,12 +1033,14 @@ try
     auto schema_cache_size = config().getInt("schema_cache_size", 10000);
     global_context->initializeSharedBlockSchemas(schema_cache_size);
 
-    if (auto addr = config().getString("tici.reader_node.addr", ""); !addr.empty())
+    auto tici_reader_addr = config().getString("tici.reader_node.addr", "");
+    auto tici_reader_port = config().getInt("tici.reader_node.port", 0);
+    if (!tici_reader_addr.empty() || tici_reader_port > 0)
     {
         auto service_addr = config().getString("flash.service_addr");
         auto pd_addr = config().getString("raft.pd_addr");
-        start_reader_server(config_path, addr, service_addr, pd_addr);
-        LOG_INFO(log, "tici is enabled, reader_node addr: {}", addr);
+        start_reader_server(config_path, tici_reader_addr, service_addr, pd_addr);
+        LOG_INFO(log, "tici is enabled, reader_node addr: {}, port: {}", tici_reader_addr, tici_reader_port);
     }
 
     // Load remaining databases
