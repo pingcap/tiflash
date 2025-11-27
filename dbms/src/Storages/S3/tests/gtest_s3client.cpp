@@ -15,6 +15,7 @@
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Debug/TiFlashTestEnv.h>
+#include <Storages/S3/Lifecycle.h>
 #include <Storages/S3/S3Common.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <aws/core/AmazonWebServiceRequest.h>
