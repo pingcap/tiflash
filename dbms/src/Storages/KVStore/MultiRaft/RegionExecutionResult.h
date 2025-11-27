@@ -14,11 +14,7 @@
 
 #pragma once
 
-<<<<<<< HEAD
 #include <Storages/KVStore/Read/RegionException.h>
-=======
-#include <Storages/KVStore/Region_fwd.h>
->>>>>>> e84ee46fa8 (Raft: Fix coprocessor ignore new added RegionReadStatus thus cause inconsistent result (#10543))
 #include <Storages/KVStore/Types.h>
 
 #include <boost/noncopyable.hpp>

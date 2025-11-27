@@ -179,8 +179,6 @@ try
 }
 CATCH
 
-<<<<<<< HEAD
-=======
 TEST_F(LearnerReadTest, UnavailableRegionsToString)
 try
 {
@@ -296,5 +294,4 @@ TEST_F(LearnerReadTest, SetRespByRegionException)
     LOG_INFO(Logger::get(), "SetRespByRegionException test passed with {} enum values.", num_enum_values);
 }
 
->>>>>>> e84ee46fa8 (Raft: Fix coprocessor ignore new added RegionReadStatus thus cause inconsistent result (#10543))
 } // namespace DB::tests
