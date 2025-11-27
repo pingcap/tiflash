@@ -44,6 +44,9 @@ public:
         KEY_NOT_IN_REGION,
         TIKV_SERVER_ISSUE,
         READ_INDEX_TIMEOUT,
+        STALE_COMMAND,
+        STORE_NOT_MATCH,
+        MEET_LOCK, // meet LockInfoPtr when reading
         OTHER,
     };
 
