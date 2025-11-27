@@ -125,8 +125,10 @@
           "steppedLine": false,
           "targets": [
             {
+              "exemplar": true,
               "expr": "sum(tiflash_system_current_metric_StoreSizeUsed{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\", type=~\"\"}) by (instance)",
               "format": "time_series",
+              "interval": "",
               "intervalFactor": 2,
               "legendFormat": "{{instance}}-local",
               "refId": "A",
@@ -570,7 +572,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(tiflash_proxy_tikv_raftstore_region_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"region\"}) by (instance)",
+              "expr": "sum(tiflash_proxy_tikv_raftstore_region_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"region\", instance=~\"$proxy_instance\"}) by (instance)",
               "format": "time_series",
               "interval": "",
               "intervalFactor": 2,
@@ -685,9 +687,11 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(tiflash_proxy_process_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=~\".*tiflash\"}[1m])",
+              "exemplar": true,
+              "expr": "rate(tiflash_proxy_process_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=~\".*tiflash\", instance=~\"$proxy_instance\"}[1m])",
               "format": "time_series",
               "hide": false,
+              "interval": "",
               "intervalFactor": 2,
               "legendFormat": "{{instance}}",
               "refId": "A",
@@ -806,8 +810,10 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "tiflash_proxy_process_resident_memory_bytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=~\".*tiflash\"}",
+              "exemplar": true,
+              "expr": "tiflash_proxy_process_resident_memory_bytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=~\".*tiflash\", instance=~\"$proxy_instance\"}",
               "format": "time_series",
+              "interval": "",
               "intervalFactor": 1,
               "legendFormat": "{{instance}}",
               "refId": "K"
@@ -998,7 +1004,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum by (instance) (irate(tiflash_proxy_threads_io_bytes_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=~\".*tiflash\"}[1m]))",
+              "expr": "sum by (instance) (irate(tiflash_proxy_threads_io_bytes_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=~\".*tiflash\", instance=~\"$proxy_instance\"}[1m]))",
               "format": "time_series",
               "hide": false,
               "interval": "",
@@ -3210,7 +3216,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(tiflash_proxy_threads_state{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\"}) by (instance, state)",
+              "expr": "sum(tiflash_proxy_threads_state{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\"}) by (instance, state)",
               "format": "time_series",
               "interval": "",
               "intervalFactor": 1,
@@ -3220,7 +3226,7 @@
             },
             {
               "exemplar": true,
-              "expr": "sum(tiflash_proxy_threads_state{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\"}) by (instance)",
+              "expr": "sum(tiflash_proxy_threads_state{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\"}) by (instance)",
               "format": "time_series",
               "interval": "",
               "intervalFactor": 2,
@@ -3323,12 +3329,12 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_proxy_threads_io_bytes_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\"}[30s])) by (name, io) > 1024",
+              "expr": "sum(rate(tiflash_proxy_threads_io_bytes_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\"}[30s])) by (name, io, $additional_groupby) > 1024",
               "format": "time_series",
               "hide": false,
               "interval": "",
               "intervalFactor": 1,
-              "legendFormat": "{{name}}-{{io}}",
+              "legendFormat": "{{name}}-{{io}} {{$additional_groupby}}",
               "refId": "A",
               "step": 4
             }
@@ -3428,7 +3434,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_proxy_thread_voluntary_context_switches{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\"}[30s])) by (instance, name) > 200",
+              "expr": "sum(rate(tiflash_proxy_thread_voluntary_context_switches{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\"}[30s])) by (instance, name) > 200",
               "format": "time_series",
               "hide": false,
               "interval": "",
@@ -3533,7 +3539,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_proxy_thread_nonvoluntary_context_switches{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\"}[30s])) by (instance, name) > 50",
+              "expr": "sum(rate(tiflash_proxy_thread_nonvoluntary_context_switches{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\"}[30s])) by (instance, name) > 50",
               "format": "time_series",
               "hide": false,
               "interval": "",
@@ -3615,7 +3621,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 12
+            "y": 4
           },
           "hiddenSeries": false,
           "id": 9,
@@ -3713,7 +3719,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 12
+            "y": 4
           },
           "hiddenSeries": false,
           "id": 2,
@@ -3810,7 +3816,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 19
+            "y": 11
           },
           "hiddenSeries": false,
           "id": 11,
@@ -3933,7 +3939,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 19
+            "y": 11
           },
           "hiddenSeries": false,
           "id": 12,
@@ -4030,7 +4036,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 26
+            "y": 18
           },
           "hiddenSeries": false,
           "id": 13,
@@ -4148,7 +4154,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 26
+            "y": 18
           },
           "hiddenSeries": false,
           "id": 14,
@@ -4247,7 +4253,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 33
+            "y": 25
           },
           "hiddenSeries": false,
           "id": 63,
@@ -4363,7 +4369,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 33
+            "y": 25
           },
           "hiddenSeries": false,
           "id": 165,
@@ -4462,7 +4468,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 40
+            "y": 32
           },
           "hiddenSeries": false,
           "id": 100,
@@ -4561,7 +4567,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 40
+            "y": 32
           },
           "hiddenSeries": false,
           "id": 77,
@@ -4659,7 +4665,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 47
+            "y": 39
           },
           "hiddenSeries": false,
           "id": 102,
@@ -4758,7 +4764,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 47
+            "y": 39
           },
           "hiddenSeries": false,
           "id": 101,
@@ -4858,7 +4864,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 54
+            "y": 46
           },
           "hiddenSeries": false,
           "id": 157,
@@ -4957,7 +4963,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 54
+            "y": 46
           },
           "hiddenSeries": false,
           "id": 103,
@@ -5056,7 +5062,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 61
+            "y": 53
           },
           "hiddenSeries": false,
           "id": 199,
@@ -5155,7 +5161,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 61
+            "y": 53
           },
           "hiddenSeries": false,
           "id": 166,
@@ -5254,7 +5260,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 68
+            "y": 60
           },
           "hiddenSeries": false,
           "id": 297,
@@ -5354,7 +5360,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 68
+            "y": 60
           },
           "hiddenSeries": false,
           "id": 299,
@@ -14015,6 +14021,7 @@
             "alignAsTable": true,
             "avg": false,
             "current": true,
+            "hideZero": true,
             "max": true,
             "min": false,
             "rightSide": true,
@@ -14059,6 +14066,113 @@
           "timeRegions": [],
           "timeShift": null,
           "title": "PS Command OPS By Instance",
+          "tooltip": {
+            "shared": true,
+            "sort": 2,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": null,
+              "format": "ops",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "opm",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 0,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 9,
+            "w": 24,
+            "x": 0,
+            "y": 61
+          },
+          "hiddenSeries": false,
+          "id": 345,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "hideZero": true,
+            "max": true,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [
+            {
+              "yaxis": 2
+            }
+          ],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_storage_page_apply_edit_type{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (instance, type)",
+              "format": "time_series",
+              "hide": false,
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "{{type}}-{{instance}}",
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "PS Apply edits OPS By Instance",
           "tooltip": {
             "shared": true,
             "sort": 2,
@@ -22818,32 +22932,32 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "histogram_quantile(0.999, \n  sum(rate(\n  tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket\n  {k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\"}[1m]\n)) by (le, path))",
+              "expr": "histogram_quantile(0.999, \n  sum(rate(\n  tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket\n  {k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\"}[$__rate_interval]\n)) by (le, path, $additional_groupby))",
               "format": "time_series",
               "hide": true,
               "interval": "",
               "intervalFactor": 1,
-              "legendFormat": "999-{{path}}",
+              "legendFormat": "999-{{path}} {{$additional_groupby}}",
               "refId": "A"
             },
             {
               "exemplar": true,
-              "expr": "histogram_quantile(0.99, \n  sum(rate(\n  tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket\n  {k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\"}[1m]\n)) by (le, path))",
+              "expr": "histogram_quantile(0.99, \n  sum(rate(\n  tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket\n  {k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\"}[$__rate_interval]\n)) by (le, path, $additional_groupby))",
               "format": "time_series",
               "hide": false,
               "interval": "",
               "intervalFactor": 1,
-              "legendFormat": "99-{{path}}",
+              "legendFormat": "99-{{path}} {{$additional_groupby}}",
               "refId": "B"
             },
             {
               "exemplar": true,
-              "expr": "(sum(rate(\n    tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\"}\n    [$__rate_interval]\n)) by (path)  / sum(rate(\n    tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\"}\n    [$__rate_interval]\n)) by (path) )",
+              "expr": "(sum(rate(\n    tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\"}\n    [$__rate_interval]\n)) by (path, $additional_groupby)  / sum(rate(\n    tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\"}\n    [$__rate_interval]\n)) by (path, $additional_groupby) )",
               "format": "time_series",
               "hide": true,
               "interval": "",
               "intervalFactor": 1,
-              "legendFormat": "avg-{{path}}",
+              "legendFormat": "avg-{{path}} {{$additional_groupby}}",
               "refId": "C"
             }
           ],
@@ -22940,10 +23054,10 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(rate(\n    tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_count\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\"}\n    [$__rate_interval]\n)) by (path) ",
+              "expr": "sum(rate(\n    tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_count\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\"}\n    [$__rate_interval]\n)) by (path, $additional_groupby) ",
               "hide": false,
               "interval": "",
-              "legendFormat": "{{path}}",
+              "legendFormat": "{{path}} {{$additional_groupby}}",
               "refId": "A"
             }
           ],
@@ -23001,12 +23115,7 @@
     "list": [
       {
         "allValue": null,
-        "current": {
-          "isNone": true,
-          "selected": false,
-          "text": "None",
-          "value": ""
-        },
+        "current": {},
         "datasource": "${DS_TEST-CLUSTER}",
         "definition": "",
         "description": null,
@@ -23033,12 +23142,7 @@
       },
       {
         "allValue": null,
-        "current": {
-          "isNone": true,
-          "selected": false,
-          "text": "None",
-          "value": ""
-        },
+        "current": {},
         "datasource": "${DS_TEST-CLUSTER}",
         "definition": "",
         "description": null,
@@ -23065,11 +23169,7 @@
       },
       {
         "allValue": null,
-        "current": {
-          "selected": false,
-          "text": "All",
-          "value": "$__all"
-        },
+        "current": {},
         "datasource": "${DS_TEST-CLUSTER}",
         "definition": "label_values(tiflash_system_profile_event_Query{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\"}, instance)",
         "description": null,
@@ -23083,6 +23183,33 @@
         "query": {
           "query": "label_values(tiflash_system_profile_event_Query{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\"}, instance)",
           "refId": "j2-instance-Variable-Query"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "tagValuesQuery": "",
+        "tags": [],
+        "tagsQuery": "",
+        "type": "query",
+        "useTags": false
+      },
+      {
+        "allValue": null,
+        "current": {},
+        "datasource": "${DS_TEST-CLUSTER}",
+        "definition": "label_values(tiflash_proxy_tikv_engine_size_bytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\"}, instance)",
+        "description": null,
+        "error": null,
+        "hide": 0,
+        "includeAll": true,
+        "label": "Proxy Instance",
+        "multi": true,
+        "name": "proxy_instance",
+        "options": [],
+        "query": {
+          "query": "label_values(tiflash_proxy_tikv_engine_size_bytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\"}, instance)",
+          "refId": "StandardVariableQuery"
         },
         "refresh": 1,
         "regex": "",
