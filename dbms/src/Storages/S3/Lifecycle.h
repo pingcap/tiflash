@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Inc.
+// Copyright 2025 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,21 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
+#include <common/types.h>
 
-#include <Common/Logger.h>
-#include <Storages/S3/S3Common.h>
-#include <aws/core/auth/AWSCredentialsProviderChain.h>
+#include <string_view>
 
 namespace DB::S3
 {
-// Override AWS credentials provider chain
-class S3CredentialsProviderChain : public Aws::Auth::AWSCredentialsProviderChain
-{
-public:
-    explicit S3CredentialsProviderChain(const Aws::Client::ClientConfiguration & cfg, CloudVendor vendor);
+class TiFlashS3Client;
+constexpr std::string_view TaggingObjectIsDeleted = "tiflash_deleted=true";
 
-private:
-    LoggerPtr log;
-};
+bool ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days);
+
 } // namespace DB::S3
