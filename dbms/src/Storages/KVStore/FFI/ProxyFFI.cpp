@@ -51,8 +51,6 @@ const std::string ColumnFamilyName::Lock = "lock";
 const std::string ColumnFamilyName::Default = "default";
 const std::string ColumnFamilyName::Write = "write";
 
-extern const uint64_t DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS;
-
 ColumnFamilyType NameToCF(const std::string & cf)
 {
     if (cf.empty() || cf == ColumnFamilyName::Default)

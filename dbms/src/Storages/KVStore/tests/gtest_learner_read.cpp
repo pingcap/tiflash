@@ -15,6 +15,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/Read/LearnerReadWorker.h>
+#include <Storages/KVStore/Read/RegionException.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/Types.h>
 #include <Storages/KVStore/tests/region_helper.h>
@@ -23,6 +24,8 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <kvproto/kvrpcpb.pb.h>
+
+#include <magic_enum.hpp>
 
 namespace DB::tests
 {
@@ -175,5 +178,120 @@ try
     ASSERT_EQ(0, mvcc_query_info.getReadIndexRes(999)); // not exist region_id
 }
 CATCH
+
+TEST_F(LearnerReadTest, UnavailableRegionsToString)
+try
+{
+    // region
+    {
+        UnavailableRegions regions(/*for_batch_cop_=*/true, /*is_wn_disagg_read_=*/false);
+        regions.addStatus(1, RegionException::RegionReadStatus::NOT_FOUND, "mockA");
+        regions.addStatus(2, RegionException::RegionReadStatus::EPOCH_NOT_MATCH, "mockB");
+        regions.addStatus(3, RegionException::RegionReadStatus::NOT_LEADER, "mockC");
+        regions.addStatus(4, RegionException::RegionReadStatus::NOT_FOUND_TIKV, "mockD");
+        regions.addStatus(5, RegionException::RegionReadStatus::TIKV_SERVER_ISSUE, "mockE");
+        regions.addStatus(6, RegionException::RegionReadStatus::STALE_COMMAND, "mockF");
+        // show all
+        LOG_INFO(Logger::get(), "{}", regions.toDebugString(0));
+        // show first 5
+        LOG_INFO(Logger::get(), "{}", regions.toDebugString(5));
+    }
+    {
+        UnavailableRegions regions(/*for_batch_cop_=*/true, /*is_wn_disagg_read_=*/false);
+        regions.addStatus(1, RegionException::RegionReadStatus::NOT_FOUND, "mockA");
+        regions.addStatus(2, RegionException::RegionReadStatus::EPOCH_NOT_MATCH, "mockB");
+        regions.addStatus(3, RegionException::RegionReadStatus::NOT_LEADER, "mockC");
+        regions.addStatus(4, RegionException::RegionReadStatus::NOT_FOUND_TIKV, "mockD");
+        regions.addStatus(5, RegionException::RegionReadStatus::TIKV_SERVER_ISSUE, "mockE");
+        // show all
+        LOG_INFO(Logger::get(), "{}", regions.toDebugString(0));
+        // show first 5
+        LOG_INFO(Logger::get(), "{}", regions.toDebugString(5));
+    }
+    {
+        UnavailableRegions regions(/*for_batch_cop_=*/true, /*is_wn_disagg_read_=*/false);
+        regions.addStatus(1, RegionException::RegionReadStatus::NOT_FOUND, "mockA");
+        regions.addStatus(2, RegionException::RegionReadStatus::EPOCH_NOT_MATCH, "mockB");
+        regions.addStatus(3, RegionException::RegionReadStatus::NOT_LEADER, "mockC");
+        // show all
+        LOG_INFO(Logger::get(), "{}", regions.toDebugString(0));
+        // show first 3
+        LOG_INFO(Logger::get(), "{}", regions.toDebugString(5));
+    }
+    // lock
+    {
+        UnavailableRegions regions(/*for_batch_cop_=*/true, /*is_wn_disagg_read_=*/false);
+        auto gen_lock = []() {
+            auto lock = std::make_unique<kvrpcpb::LockInfo>();
+            lock->set_lock_ttl(100);
+            lock->set_lock_type(kvrpcpb::Op::Lock);
+            return lock;
+        };
+        regions.addRegionLock(1, gen_lock());
+        regions.addRegionLock(2, gen_lock());
+        regions.addRegionLock(3, gen_lock());
+        regions.addRegionLock(4, gen_lock());
+        regions.addRegionLock(5, gen_lock());
+        regions.addRegionLock(6, gen_lock());
+        // show all
+        LOG_INFO(Logger::get(), "{}", regions.toDebugString(0));
+        // show first 5
+        LOG_INFO(Logger::get(), "{}", regions.toDebugString(5));
+    }
+    {
+        UnavailableRegions regions(/*for_batch_cop_=*/true, /*is_wn_disagg_read_=*/false);
+        auto gen_lock = []() {
+            auto lock = std::make_unique<kvrpcpb::LockInfo>();
+            lock->set_lock_ttl(100);
+            lock->set_lock_type(kvrpcpb::Op::Lock);
+            return lock;
+        };
+        regions.addRegionLock(1, gen_lock());
+        regions.addRegionLock(2, gen_lock());
+        regions.addRegionLock(3, gen_lock());
+        regions.addRegionLock(4, gen_lock());
+        regions.addRegionLock(5, gen_lock());
+        // show all
+        LOG_INFO(Logger::get(), "{}", regions.toDebugString(0));
+        // show first 5
+        LOG_INFO(Logger::get(), "{}", regions.toDebugString(5));
+    }
+    {
+        UnavailableRegions regions(/*for_batch_cop_=*/true, /*is_wn_disagg_read_=*/false);
+        auto gen_lock = []() {
+            auto lock = std::make_unique<kvrpcpb::LockInfo>();
+            lock->set_lock_ttl(100);
+            lock->set_lock_type(kvrpcpb::Op::Lock);
+            return lock;
+        };
+        regions.addRegionLock(1, gen_lock());
+        regions.addRegionLock(2, gen_lock());
+        regions.addRegionLock(3, gen_lock());
+        // show all
+        LOG_INFO(Logger::get(), "{}", regions.toDebugString(0));
+        // show first 3
+        LOG_INFO(Logger::get(), "{}", regions.toDebugString(5));
+    }
+}
+CATCH
+
+TEST_F(LearnerReadTest, SetRespByRegionException)
+{
+    RegionID reg_id = 12345;
+    RegionException::UnavailableRegions regs{reg_id};
+
+    size_t num_enum_values = 0;
+    for (auto s : magic_enum::enum_values<RegionException::RegionReadStatus>())
+    {
+        auto tmp_regs = regs;
+        RegionException e(std::move(tmp_regs), s, "test");
+        coprocessor::Response response;
+        setResponseByRegionException(&response, e, reg_id);
+        // response must have region_error set
+        ASSERT_TRUE(response.has_region_error());
+        num_enum_values++;
+    }
+    LOG_INFO(Logger::get(), "SetRespByRegionException test passed with {} enum values.", num_enum_values);
+}
 
 } // namespace DB::tests
