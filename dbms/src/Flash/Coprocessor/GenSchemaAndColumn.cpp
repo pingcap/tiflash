@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataStreams/GeneratedColumnPlaceholderBlockInputStream.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/MutableSupport.h>
@@ -94,14 +95,23 @@ NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan, const StringRef
     return genNamesAndTypes(table_scan.getColumns(), column_prefix);
 }
 
-std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedRead(const TiDBTableScan & table_scan)
+std::tuple<DM::ColumnDefinesPtr, int, std::vector<std::tuple<UInt64, String, DataTypePtr>>> genColumnDefinesForDisaggregatedRead(
+    const TiDBTableScan & table_scan)
 {
     auto column_defines = std::make_shared<DM::ColumnDefines>();
     int extra_table_id_index = MutSup::invalid_col_id;
     column_defines->reserve(table_scan.getColumnSize());
+    std::vector<std::tuple<UInt64, String, DataTypePtr>> generated_column_infos;
     for (Int32 i = 0; i < table_scan.getColumnSize(); ++i)
     {
         const auto & column_info = table_scan.getColumns()[i];
+        if (column_info.hasGeneratedColumnFlag())
+        {
+            const auto & data_type = getDataTypeByColumnInfoForComputingLayer(column_info);
+            const auto & col_name = GeneratedColumnPlaceholderBlockInputStream::getColumnName(i);
+            generated_column_infos.push_back(std::make_tuple(i, col_name, data_type));
+            continue;
+        }
         // Now the upper level seems treat disagg read as an ExchangeReceiver output, so
         // use this as output column prefix.
         // Even if the id is pk_column or extra_table_id, we still output it as
@@ -117,10 +127,6 @@ std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedRead(const
             break;
         case MutSup::extra_table_id_col_id:
         {
-            column_defines->emplace_back(DM::ColumnDefine{
-                MutSup::extra_table_id_col_id,
-                output_name, // MutSup::extra_table_id_column_name
-                MutSup::getExtraTableIdColumnType()});
             extra_table_id_index = i;
             break;
         }
@@ -133,7 +139,7 @@ std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedRead(const
             break;
         }
     }
-    return {std::move(column_defines), extra_table_id_index};
+    return {std::move(column_defines), extra_table_id_index, std::move(generated_column_infos)};
 }
 
 ColumnsWithTypeAndName getColumnWithTypeAndName(const NamesAndTypes & names_and_types)
