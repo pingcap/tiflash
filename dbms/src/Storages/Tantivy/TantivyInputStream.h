@@ -30,7 +30,6 @@
 #include <fmt/os.h>
 #include <tici-search-lib/src/lib.rs.h>
 
-
 namespace DB::TS
 {
 
@@ -45,14 +44,6 @@ inline UInt64 convertPackedU64WithTimezone(UInt64 from_time, const TimezoneInfo 
         convertTimeZoneByOffset(from_time, result_time, false, timezone_info.timezone_offset);
     return result_time;
 }
-
-rust::Vec<rust::String> getFields(NamesAndTypes & columns);
-rust::Vec<::Range> getKeyRanges(ShardInfo::KeyRanges & key_ranges);
-std::tuple<::Expr, std::vector<ColumnID>> tipbToTiCIExpr(const tipb::Expr & expr, const TimezoneInfo & timezone_info);
-
-std::tuple<::Expr, std::vector<ColumnID>> tipbToTiCIExpr(
-    google::protobuf::RepeatedPtrField<tipb::Expr> exprs,
-    const TimezoneInfo & tz);
 
 class TantivyInputStream : public IProfilingBlockInputStream
 {
@@ -86,10 +77,116 @@ public:
 
     Block getHeader() const override { return header; }
 
-    Block readImpl() override;
+    Block readImpl() override
+    {
+        if (done)
+        {
+            return {};
+        }
+        Block ret = readFromS3(is_count);
+        done = true;
+        return ret;
+    }
 
 protected:
-    Block readFromS3(bool is_count);
+    Block readFromS3(bool is_count)
+    {
+        auto return_fields = getFields(return_columns);
+        auto shard_info = query_shard_info;
+        LOG_DEBUG(log, "shard info: {}", shard_info.toString());
+        auto key_ranges = getKeyRanges(shard_info.key_ranges);
+
+        auto search_param = SearchParam{static_cast<size_t>(limit)};
+        if (is_count)
+            return_fields = {};
+
+        SearchResult search_result = search(
+            {
+                .keyspace_id = keyspace_id,
+                .table_id = table_id,
+                .index_id = index_id,
+                .shard_id = shard_info.shard_id,
+                .shard_epoch = shard_info.shard_epoch,
+            },
+            key_ranges,
+            return_fields,
+            match_expr,
+            search_param,
+            read_ts);
+
+        Block res(return_columns);
+        if (is_count)
+        {
+            if (search_result.count == 0)
+            {
+                return res;
+            }
+            // Construct const columns with search_result.count items, only used by count(*)
+            for (auto & name_and_type : return_columns)
+            {
+                auto type_default_value = name_and_type.type->getDefault();
+                auto col = name_and_type.type->createColumnConst(
+                    static_cast<size_t>(search_result.count),
+                    type_default_value);
+                res.getByName(name_and_type.name).column = std::move(col);
+            }
+            return res;
+        }
+
+
+        auto documents = search_result.rows;
+        if (documents.empty())
+        {
+            return res;
+        }
+        for (auto & name_and_type : return_columns)
+        {
+            int idx = -1;
+            for (size_t j = 0; j < documents[0].fieldValues.size(); j++)
+            {
+                if (documents[0].fieldValues[j].field_name == name_and_type.name)
+                {
+                    idx = j;
+                    break;
+                }
+            }
+            if (idx == -1)
+            {
+                for (size_t j = 0; j < documents.size(); j++)
+                {
+                    // Insert default value for missing fields
+                    res.getByName(name_and_type.name).column->assumeMutable()->insertDefault();
+                }
+                continue;
+            }
+
+            auto col = res.getByName(name_and_type.name).column->assumeMutable();
+            if (removeNullable(name_and_type.type)->isStringOrFixedString())
+            {
+                for (auto & doc : documents)
+                {
+                    const auto & v = doc.fieldValues[idx].string_value;
+                    col->insert(Field(String(v.begin(), v.end())));
+                }
+            }
+            if (removeNullable(name_and_type.type)->isInteger())
+            {
+                for (auto & doc : documents)
+                {
+                    col->insert(Field(doc.fieldValues[idx].int_value));
+                }
+            }
+            if (removeNullable(name_and_type.type)->isDateOrDateTime())
+            {
+                for (auto & doc : documents)
+                {
+                    auto t = static_cast<UInt64>(doc.fieldValues[idx].int_value);
+                    col->insert(Field(t));
+                }
+            }
+        }
+        return res;
+    }
 
 private:
     Block header;
@@ -104,7 +201,34 @@ private:
     UInt64 read_ts;
     ::Expr match_expr;
     bool is_count;
+
+    static rust::Vec<rust::String> getFields(NamesAndTypes & columns)
+    {
+        rust::Vec<rust::String> fields;
+        for (auto & name_and_type : columns)
+        {
+            fields.push_back(name_and_type.name);
+        }
+        return fields;
+    }
+
+    static rust::Vec<::Range> getKeyRanges(ShardInfo::KeyRanges & key_ranges)
+    {
+        rust::Vec<::Range> res;
+        for (const auto & range : key_ranges)
+        {
+            rust::Slice<::std::uint8_t const> start(
+                reinterpret_cast<const unsigned char *>(range.start().c_str()),
+                range.start().size());
+            rust::Slice<::std::uint8_t const> end(
+                reinterpret_cast<const unsigned char *>(range.end().c_str()),
+                range.end().size());
+            res.push_back({
+                .start = std::move(start),
+                .end = std::move(end),
+            });
+        }
+        return res;
+    }
 };
-
-
 } // namespace DB::TS

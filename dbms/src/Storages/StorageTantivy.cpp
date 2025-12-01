@@ -80,7 +80,7 @@ void StorageTantivy::read(
         local_read,
         return_columns,
         tici_scan.getLimit(),
-        context.getSettingsRef().read_tso.get(),
+        context.getSettingsRef().read_tso,
         tici_scan.getMatchExpr(),
         tici_scan.isCount(),
         context.getTimezoneInfo());

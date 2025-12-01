@@ -241,7 +241,6 @@ target_link_libraries (dbms
     RemoteTaskProto
     PSCheckpointProto
     kvstore
-    tici_reader
 )
 
 if (ENABLE_CLARA)
