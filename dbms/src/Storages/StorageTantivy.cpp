@@ -68,24 +68,29 @@ void StorageTantivy::read(
     [[maybe_unused]] const SelectQueryInfo & info,
     const Context & context,
     [[maybe_unused]] size_t max_block_size,
-    [[maybe_unused]] unsigned num_streams)
+    unsigned num_streams)
 {
     auto return_columns = genNamesAndTypesForTiCI(tici_scan.getReturnColumns(), "column");
 
-    // local read
-    group_builder.addConcurrency(std::make_unique<TantivyReaderSourceOp>(
-        exec_status,
-        log->identifier(),
+    auto tici_task_pool = std::make_shared<TS::TiCIReadTaskPool>(
+        log,
         tici_scan.getKeyspaceID(),
         tici_scan.getTableId(),
         tici_scan.getIndexId(),
         local_read,
         return_columns,
         tici_scan.getLimit(),
-        context.getSettingsRef().read_tso,
+        context.getSettingsRef().read_tso.get(),
         tici_scan.getMatchExpr(),
         tici_scan.isCount(),
-        context.getTimezoneInfo()));
+        context.getTimezoneInfo());
+
+    // local read
+    for (size_t i = 0; i < num_streams; ++i)
+    {
+        group_builder.addConcurrency(
+            std::make_unique<TantivyReaderSourceOp>(exec_status, log->identifier(), tici_task_pool, return_columns));
+    }
 
     executeCastAfterTiCIScan(exec_status, group_builder);
 }

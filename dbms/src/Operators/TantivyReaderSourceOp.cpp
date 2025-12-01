@@ -25,32 +25,12 @@ namespace DB
 TantivyReaderSourceOp::TantivyReaderSourceOp(
     PipelineExecutorContext & exec_context_,
     const String & req_id,
-    const UInt32 & keyspace_id,
-    const Int64 & table_id,
-    const Int64 & index_id,
-    const ShardInfoList & query_shard_infos,
-    const NamesAndTypes & return_columns,
-    const UInt64 & limit,
-    const UInt64 & read_ts,
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & expr,
-    bool is_count,
-    const TimezoneInfo & timezone_info)
+    const TS::TiCIReadTaskPoolPtr task_pool_,
+    const NamesAndTypes & return_columns)
     : SourceOp(exec_context_, req_id)
+    , task_pool(task_pool_)
 {
     setHeader(Block(return_columns));
-
-    input = std::make_shared<TS::TantivyInputStream>(
-        log,
-        keyspace_id,
-        table_id,
-        index_id,
-        query_shard_infos,
-        return_columns,
-        limit,
-        read_ts,
-        expr,
-        is_count,
-        timezone_info);
 }
 
 String TantivyReaderSourceOp::getName() const
@@ -78,23 +58,35 @@ Block TantivyReaderSourceOp::popFromBlockQueue()
 
 OperatorStatus TantivyReaderSourceOp::readImpl(Block & block)
 {
-    if (!block_queue.empty())
+    if (unlikely(done))
     {
-        block = popFromBlockQueue();
         return OperatorStatus::HAS_OUTPUT;
     }
 
-    assert(block_queue.empty());
-    for (;;)
+    while (true)
     {
-        auto tmp = input->readImpl();
-        block_queue.push(tmp);
-        total_rows += tmp.rows();
-        if (!tmp)
-            break;
+        while (!cur_stream)
+        {
+            auto task = task_pool->getNextTask();
+            if (!task)
+            {
+                done = true;
+                return OperatorStatus::HAS_OUTPUT;
+            }
+            cur_stream = task_pool->buildInputStream(task);
+        }
+        Block res = cur_stream->read();
+        if (res)
+        {
+            total_rows += res.rows();
+            block.swap(res);
+        }
+        else
+        {
+            cur_stream = {};
+            continue;
+        }
     }
-    block = popFromBlockQueue();
-    return OperatorStatus::HAS_OUTPUT;
 }
 
 } // namespace DB

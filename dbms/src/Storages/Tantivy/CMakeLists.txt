@@ -1,6 +1,4 @@
-# Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Storages/CMakeLists.txt
-#
-# Copyright 2023 PingCAP, Inc.
+# Copyright 2025 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory (System)
-add_subdirectory (Page)
-add_subdirectory (DeltaMerge)
-add_subdirectory (KVStore)
-add_subdirectory (Tantivy)
+include(${TiFlash_SOURCE_DIR}/cmake/dbms_glob_sources.cmake)
+
+add_headers_and_sources(tici_reader .)
+
+add_library(tici_reader ${tici_reader_headers} ${tici_reader_sources})
+
+target_link_libraries(tici_reader PRIVATE dbms)
