@@ -51,6 +51,9 @@ public:
             match_expr_,
             is_count);
     }
+
+    bool isInitialized() const { return input_stream != nullptr; }
+
     BlockInputStreamPtr getInputStream() const
     {
         RUNTIME_CHECK(input_stream != nullptr);
@@ -119,17 +122,20 @@ public:
     BlockInputStreamPtr buildInputStream(TiCIReadTaskPtr & task)
     {
         RUNTIME_CHECK(task != nullptr);
-        task->initInputStream(
-            log,
-            keyspace_id,
-            table_id,
-            index_id,
-            task->getShardInfo(),
-            return_columns,
-            limit,
-            read_ts,
-            match_expr,
-            is_count);
+        if (!task->isInitialized())
+        {
+            task->initInputStream(
+                log,
+                keyspace_id,
+                table_id,
+                index_id,
+                task->getShardInfo(),
+                return_columns,
+                limit,
+                read_ts,
+                match_expr,
+                is_count);
+        }
         return task->getInputStream();
     }
 

@@ -85,6 +85,7 @@ void StorageTantivy::read(
         tici_scan.isCount(),
         context.getTimezoneInfo());
 
+    num_streams = std::min(num_streams, local_read.size());
     // local read
     for (size_t i = 0; i < num_streams; ++i)
     {
