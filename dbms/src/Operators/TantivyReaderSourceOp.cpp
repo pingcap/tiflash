@@ -80,6 +80,7 @@ OperatorStatus TantivyReaderSourceOp::readImpl(Block & block)
         {
             total_rows += res.rows();
             block.swap(res);
+            return OperatorStatus::HAS_OUTPUT;
         }
         else
         {
