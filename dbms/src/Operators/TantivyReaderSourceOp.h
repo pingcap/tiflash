@@ -15,10 +15,12 @@
 #pragma once
 
 #include <Core/NamesAndTypes.h>
+#include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Coprocessor/ShardInfo.h>
 #include <Operators/Operator.h>
 #include <Storages/Tantivy/TantivyInputStream.h>
+#include <Storages/Tantivy/TiCIReadTaskPool.h>
 #include <common/types.h>
 #include <pingcap/coprocessor/Client.h>
 
@@ -31,16 +33,8 @@ public:
     TantivyReaderSourceOp(
         PipelineExecutorContext & exec_context_,
         const String & req_id,
-        const UInt32 & keyspace_id,
-        const Int64 & table_id,
-        const Int64 & index_id,
-        const ShardInfoList & query_shard_infos,
-        const NamesAndTypes & return_columns,
-        const UInt64 & limit,
-        const UInt64 & read_ts,
-        const google::protobuf::RepeatedPtrField<tipb::Expr> & expr,
-        bool is_count,
-        const TimezoneInfo & timezone_info);
+        TS::TiCIReadTaskPoolPtr task_pool_,
+        const NamesAndTypes & return_columns);
 
     String getName() const override;
 
@@ -60,8 +54,10 @@ private:
 
     UInt64 total_rows{};
     IOProfileInfoPtr io_profile_info;
+    TS::TiCIReadTaskPoolPtr task_pool;
+    bool done = false;
 
-    std::shared_ptr<TS::TantivyInputStream> input;
+    BlockInputStreamPtr cur_stream;
     Stopwatch watcher;
 };
 
