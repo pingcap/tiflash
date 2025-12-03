@@ -85,7 +85,7 @@ void StorageTantivy::read(
         tici_scan.isCount(),
         context.getTimezoneInfo());
 
-    num_streams = std::min(num_streams, local_read.size());
+    num_streams = std::max(1, std::min(num_streams, local_read.size()));
     // local read
     for (size_t i = 0; i < num_streams; ++i)
     {
@@ -100,6 +100,8 @@ void StorageTantivy::executeCastAfterTiCIScan(
     PipelineExecutorContext & exec_status,
     PipelineExecGroupBuilder & group_builder)
 {
+    if (group_builder.concurrency() == 0)
+        return;
     // execute timezone cast or duration cast if needed for local tici scan
     DAGExpressionAnalyzer analyzer{group_builder.getCurrentHeader(), context};
     ExpressionActionsChain chain;
