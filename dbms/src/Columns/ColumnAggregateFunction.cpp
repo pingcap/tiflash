@@ -297,7 +297,7 @@ void ColumnAggregateFunction::insert(const Field & x)
 
     Arena & arena = createOrGetArena();
 
-    getData().push_back(arena.alloc(function->sizeOfData()));
+    getData().push_back(arena.alignedAlloc(function->sizeOfData(), function->alignOfData()));
     function->create(getData().back());
     ReadBufferFromString read_buffer(x.get<const String &>());
     function->deserialize(getData().back(), read_buffer, &arena);
@@ -309,7 +309,7 @@ void ColumnAggregateFunction::insertDefault()
 
     Arena & arena = createOrGetArena();
 
-    getData().push_back(arena.alloc(function->sizeOfData()));
+    getData().push_back(arena.alignedAlloc(function->sizeOfData(), function->alignOfData()));
     function->create(getData().back());
 }
 
@@ -337,7 +337,7 @@ const char * ColumnAggregateFunction::deserializeAndInsertFromArena(
       */
     Arena & dst_arena = createOrGetArena();
 
-    getData().push_back(dst_arena.alloc(function->sizeOfData()));
+    getData().push_back(dst_arena.alignedAlloc(function->sizeOfData(), function->alignOfData()));
     function->create(getData().back());
 
     /** We will read from src_arena.
