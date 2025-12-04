@@ -125,13 +125,37 @@ RemoteRequest RemoteRequest::build(
         tici_scan.constructTiCIScanForRemoteRead(mutable_tici_scan);
 
         const auto & return_columns = tici_scan.getReturnColumns();
-        auto names_and_types = genNamesAndTypesForTiCI(return_columns, "column");
-        for (size_t i = 0; i < return_columns.size(); ++i)
+        NamesAndTypes names_and_types;
+        if (tici_scan.isCount())
         {
-            const auto & col = return_columns[i];
-            schema.emplace_back(std::make_pair(names_and_types[i].name, col));
-            dag_req.add_output_offsets(i);
+            names_and_types = tici_scan.getNamesAndTypes();
+            TiDB::ColumnInfo ci;
+            // count query always returns a NOT NULL INT64 column
+            ci.tp = TiDB::TypeLongLong;
+            ci.setNotNullFlag();
+            schema.emplace_back(std::make_pair(names_and_types[0].name, std::move(ci)));
+            dag_req.add_output_offsets(0);
+            // set index_id to -1 to indicate that it is a count query
+            mutable_tici_scan->mutable_fts_query_info()->set_index_id(-1);
+            tipb::ColumnInfo * column = mutable_tici_scan->mutable_columns(0);
+            column->set_tp(TiDB::TypeLongLong);
+            column->set_columnlen(8);
+            column->set_decimal(0);
+            column->set_flag(TiDB::ColumnFlagNotNull);
+            column->set_collation(0);
+            column->set_column_id(-1);
         }
+        else
+        {
+            names_and_types = genNamesAndTypesForTiCI(return_columns, "column");
+            for (size_t i = 0; i < return_columns.size(); ++i)
+            {
+                const auto & col = return_columns[i];
+                schema.emplace_back(std::make_pair(names_and_types[i].name, col));
+                dag_req.add_output_offsets(i);
+            }
+        }
+
         dag_req.set_encode_type(tipb::EncodeType::TypeCHBlock);
         dag_req.set_force_encode_type(true);
     }

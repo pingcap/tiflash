@@ -48,6 +48,12 @@ public:
 
     void buildPipeline(PipelineBuilder & builder, Context & context, PipelineExecutorContext & exec_context) override;
 
+    void setSchema(const NamesAndTypes & new_schema)
+    {
+        PhysicalPlanNode::setSchema(new_schema);
+        tici_scan.setNamesAndTypes(new_schema);
+    }
+
 private:
     void buildPipelineExecGroupImpl(
         PipelineExecutorContext & /*exec_status*/,

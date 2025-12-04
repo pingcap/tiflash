@@ -70,7 +70,18 @@ void StorageTantivy::read(
     [[maybe_unused]] size_t max_block_size,
     unsigned num_streams)
 {
-    auto return_columns = genNamesAndTypesForTiCI(tici_scan.getReturnColumns(), "column");
+    NamesAndTypes return_columns;
+    if (tici_scan.isCount())
+    {
+        if (!tici_scan.getNamesAndTypes().empty()) // local read
+            return_columns = tici_scan.getNamesAndTypes();
+        else // at remote read target node
+            return_columns = {{"count", std::make_shared<DataTypeInt64>()}};
+    }
+    else
+    {
+        return_columns = genNamesAndTypesForTiCI(tici_scan.getReturnColumns(), "column");
+    }
 
     auto tici_task_pool = std::make_shared<TS::TiCIReadTaskPool>(
         log,

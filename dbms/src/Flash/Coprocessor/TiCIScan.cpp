@@ -31,6 +31,8 @@ TiCIScan::TiCIScan(const tipb::Executor * tici_scan_, const String & executor_id
     , query_type(tici_scan->idx_scan().fts_query_info().query_type())
     , shard_infos(dag_context.query_shard_infos.getTableShardInfosByExecutorID(tici_scan_->executor_id()))
     , limit(tici_scan->idx_scan().fts_query_info().top_k())
+    // the index_id will only be -1 during count at the remote read target node
+    , is_count_agg(tici_scan->idx_scan().fts_query_info().index_id() == -1)
 {}
 
 void TiCIScan::constructTiCIScanForRemoteRead(tipb::IndexScan * tipb_index_scan) const

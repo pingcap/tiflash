@@ -90,7 +90,12 @@ PhysicalPlanNodePtr PhysicalTiCIScan::build(
     const LoggerPtr & log,
     const TiCIScan & tici_scan)
 {
-    auto schema = genNamesAndTypes(tici_scan.getReturnColumns(), "tici_scan");
+    NamesAndTypes schema;
+    // This is only meaningful for remote read, because for local read, setSchema will be called to overwrite it to the aggregation schema.
+    if (tici_scan.isCount())
+        schema = {{"count", std::make_shared<DataTypeInt64>()}};
+    else
+        schema = genNamesAndTypes(tici_scan.getReturnColumns(), "tici_scan");
     auto physical_tici_scan
         = std::make_shared<PhysicalTiCIScan>(executor_id, schema, log->identifier(), tici_scan, Block(schema));
     return physical_tici_scan;
@@ -104,7 +109,8 @@ void PhysicalTiCIScan::buildPipeline(
     // For building PipelineExec in compile time.
     StorageTantivyIterpreter storage_interpreter(context, tici_scan, context.getMaxStreams());
     storage_interpreter.execute(exec_context, pipeline_exec_builder);
-    buildProjection(exec_context, pipeline_exec_builder);
+    if (!tici_scan.isCount())
+        buildProjection(exec_context, pipeline_exec_builder);
 
     PhysicalPlanNode::buildPipeline(builder, context, exec_context);
 }

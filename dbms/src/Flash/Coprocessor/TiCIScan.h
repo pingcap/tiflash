@@ -28,6 +28,8 @@ public:
     explicit TiCIScan(const tipb::Executor * tici_scan_);
 
     const TiDB::ColumnInfos & getReturnColumns() const { return return_columns; }
+    void setNamesAndTypes(const NamesAndTypes & new_names_and_types) { names_and_types = new_names_and_types; }
+    const NamesAndTypes getNamesAndTypes() const { return names_and_types; }
     const TableShardInfos & getShardInfos() const { return shard_infos; }
     const uint & getKeyspaceID() const { return keyspace_id; }
     const int & getTableId() const { return table_id; }
@@ -53,6 +55,7 @@ private:
     const int table_id;
     const int index_id;
     TiDB::ColumnInfos return_columns;
+    NamesAndTypes names_and_types;
     [[maybe_unused]] tipb::FTSQueryType query_type;
     const TableShardInfos shard_infos;
     const int limit;

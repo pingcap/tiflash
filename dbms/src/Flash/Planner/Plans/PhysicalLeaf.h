@@ -39,6 +39,8 @@ public:
         throw TiFlashException("the children size of PhysicalLeaf is zero", Errors::Planner::Internal);
     }
 
-    size_t childrenSize() const override { return 0; };
+    void setChild(size_t, PhysicalPlanNodePtr) override { throw Exception("Unsupport"); }
+
+    size_t childrenSize() const override { return 0; }
 };
 } // namespace DB
