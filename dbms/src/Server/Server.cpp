@@ -950,10 +950,12 @@ try
     /// Size of max memory usage of DeltaIndex, used by DeltaMerge engine.
     /// - In non-disaggregated mode, its default value is 0, means unlimited, and it
     ///   controls the number of total bytes keep in the memory.
-    /// - In disaggregated mode, its default value is memory_capacity_of_host * 0.02.
+    /// - In disaggregated compute node, its default value is memory_capacity_of_host * 0.02.
     ///   0 means cache is disabled.
     ///   We cannot support unlimited delta index cache in disaggregated mode for now,
     ///   because cache items will be never explicitly removed.
+    /// - In disaggregated write node, its default value is 1GiB. Because write node manage
+    ///   much more data than non-disaggregated mode, and the delta index cache is less useful.
     if (is_disagg_compute_mode)
     {
         constexpr auto delta_index_cache_ratio = 0.02;
@@ -966,6 +968,12 @@ try
         // In disaggregated compute node, we will not use DeltaIndexManager to cache the delta index.
         // Instead, we use RNMVCCIndexCache.
         global_context->getSharedContextDisagg()->initReadNodeMVCCIndexCache(n);
+    }
+    else if (is_disagg_storage_mode)
+    {
+        constexpr auto default_delta_index_cache_size = 1024 * 1024 * 1024; // 1GiB
+        size_t n = config().getUInt64("delta_index_cache_size", default_delta_index_cache_size);
+        global_context->setDeltaIndexManager(n);
     }
     else
     {

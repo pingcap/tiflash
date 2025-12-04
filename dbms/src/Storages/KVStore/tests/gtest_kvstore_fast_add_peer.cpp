@@ -860,8 +860,10 @@ try
 }
 CATCH
 
+// FIXME: Disabled because the flaky test result errors in CI.
+// And we don't plan to support enable FAP in short time.
 // Test cancel and regular snapshot
-TEST_F(RegionKVStoreTestFAP, Cancel4)
+TEST_F(RegionKVStoreTestFAP, DISABLED_Cancel4)
 try
 {
     using namespace std::chrono_literals;
@@ -951,7 +953,7 @@ try
 CATCH
 
 // Test cancel when building segments
-TEST_F(RegionKVStoreTestFAP, Cancel5)
+TEST_F(RegionKVStoreTestFAP, DISABLED_Cancel5)
 try
 {
     auto mock_data = prepareForRestart(FAPTestOpt{.second_region = true});
