@@ -88,11 +88,11 @@ bool HashJoinPointerTable::buildImpl(
     Stopwatch watch;
     size_t build_size = 0;
     bool is_end = false;
-    while (true)
+    do
     {
         RowContainer * container = nullptr;
-        if (wd.build_pointer_table_iter != -1)
-            container = multi_row_containers[wd.build_pointer_table_iter]->getNext();
+        if (wd.current_build_table_index != -1)
+            container = multi_row_containers[wd.current_build_table_index]->getNext();
         if (container == nullptr)
         {
             {
@@ -103,7 +103,7 @@ bool HashJoinPointerTable::buildImpl(
                     container = multi_row_containers[build_table_index]->getNext();
                     if (container != nullptr)
                     {
-                        wd.build_pointer_table_iter = build_table_index;
+                        wd.current_build_table_index = build_table_index;
                         build_table_index = (build_table_index + 1) % JOIN_BUILD_PARTITION_COUNT;
                         break;
                     }
@@ -116,9 +116,9 @@ bool HashJoinPointerTable::buildImpl(
                 break;
             }
         }
-        size_t size = container->size();
-        build_size += size;
-        for (size_t i = 0; i < size; ++i)
+        size_t rows = container->size();
+        build_size += rows;
+        for (size_t i = 0; i < rows; ++i)
         {
             RowPtr row_ptr = container->getRowPtr(i);
             assert((reinterpret_cast<uintptr_t>(row_ptr) & (ROW_ALIGN - 1)) == 0);
@@ -149,10 +149,7 @@ bool HashJoinPointerTable::buildImpl(
             if (old_head != nullptr)
                 unalignedStore<RowPtr>(row_ptr, old_head);
         }
-
-        if (build_size >= max_build_size)
-            break;
-    }
+    } while (build_size < max_build_size * 2);
     wd.build_pointer_table_size += build_size;
     wd.build_pointer_table_time += watch.elapsedMilliseconds();
     return is_end;
