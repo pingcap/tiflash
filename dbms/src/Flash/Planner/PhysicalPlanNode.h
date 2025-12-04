@@ -57,11 +57,15 @@ public:
 
     virtual PhysicalPlanNodePtr children(size_t /*i*/) const = 0;
 
+    virtual void setChild(size_t i, PhysicalPlanNodePtr new_child) = 0;
+
     const PlanType & tp() const { return type; }
 
     const String & execId() const { return executor_id; }
 
     const NamesAndTypes & getSchema() const { return schema; }
+
+    void setSchema(const NamesAndTypes & new_schema) { schema = new_schema; }
 
     virtual size_t childrenSize() const = 0;
 

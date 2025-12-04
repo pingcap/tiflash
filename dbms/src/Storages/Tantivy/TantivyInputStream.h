@@ -20,6 +20,7 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/ShardInfo.h>
@@ -117,22 +118,14 @@ protected:
         Block res(return_columns);
         if (is_count)
         {
-            if (search_result.count == 0)
-            {
-                return res;
-            }
-            // Construct const columns with search_result.count items, only used by count(*)
-            for (auto & name_and_type : return_columns)
-            {
-                auto type_default_value = name_and_type.type->getDefault();
-                auto col = name_and_type.type->createColumnConst(
-                    static_cast<size_t>(search_result.count),
-                    type_default_value);
-                res.getByName(name_and_type.name).column = std::move(col);
-            }
-            return res;
+            RUNTIME_ASSERT(return_columns.size() == 1, log, "count search should only return one column");
+            Block result_block;
+            auto data_type = std::make_shared<DataTypeInt64>();
+            auto column = data_type->createColumn();
+            column->insert(Int64(search_result.count));
+            result_block.insert({std::move(column), data_type, return_columns[0].name});
+            return result_block;
         }
-
 
         auto documents = search_result.rows;
         if (documents.empty())
