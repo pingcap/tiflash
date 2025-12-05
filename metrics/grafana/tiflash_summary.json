@@ -22984,7 +22984,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "histogram_quantile(0.999, \n  sum(rate(\n  tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket\n  {k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\"}[$__rate_interval]\n)) by (le, path, $additional_groupby))",
+              "expr": "histogram_quantile(0.999, \n  sum(rate(\n  tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket\n  {k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[$__rate_interval]\n)) by (le, path, $additional_groupby))",
               "format": "time_series",
               "hide": true,
               "interval": "",
@@ -22994,7 +22994,7 @@
             },
             {
               "exemplar": true,
-              "expr": "histogram_quantile(0.99, \n  sum(rate(\n  tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket\n  {k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\"}[$__rate_interval]\n)) by (le, path, $additional_groupby))",
+              "expr": "histogram_quantile(0.99, \n  sum(rate(\n  tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket\n  {k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[$__rate_interval]\n)) by (le, path, $additional_groupby))",
               "format": "time_series",
               "hide": false,
               "interval": "",
@@ -23004,7 +23004,7 @@
             },
             {
               "exemplar": true,
-              "expr": "(sum(rate(\n    tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\"}\n    [$__rate_interval]\n)) by (path, $additional_groupby)  / sum(rate(\n    tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\"}\n    [$__rate_interval]\n)) by (path, $additional_groupby) )",
+              "expr": "(sum(rate(\n    tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}\n    [$__rate_interval]\n)) by (path, $additional_groupby)  / sum(rate(\n    tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}\n    [$__rate_interval]\n)) by (path, $additional_groupby) )",
               "format": "time_series",
               "hide": true,
               "interval": "",
@@ -23106,7 +23106,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(rate(\n    tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_count\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\"}\n    [$__rate_interval]\n)) by (path, $additional_groupby) ",
+              "expr": "sum(rate(\n    tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_count\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}\n    [$__rate_interval]\n)) by (path, $additional_groupby) ",
               "hide": false,
               "interval": "",
               "legendFormat": "{{path}} {{$additional_groupby}}",
