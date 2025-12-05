@@ -90,7 +90,7 @@ void DataTypeAggregateFunction::deserializeBinary(IColumn & column, ReadBuffer &
 
     Arena & arena = column_concrete.createOrGetArena();
     size_t size_of_state = function->sizeOfData();
-    AggregateDataPtr place = arena.alloc(size_of_state);
+    AggregateDataPtr place = arena.alignedAlloc(size_of_state, function->alignOfData());
 
     function->create(place);
     try
@@ -144,8 +144,7 @@ void DataTypeAggregateFunction::deserializeBinaryBulk(
     {
         if (istr.eof())
             break;
-
-        AggregateDataPtr place = arena.alloc(size_of_state);
+        AggregateDataPtr place = arena.alignedAlloc(size_of_state, function->alignOfData());
 
         function->create(place);
 
@@ -176,7 +175,7 @@ static void deserializeFromString(const AggregateFunctionPtr & function, IColumn
 
     Arena & arena = column_concrete.createOrGetArena();
     size_t size_of_state = function->sizeOfData();
-    AggregateDataPtr place = arena.alloc(size_of_state);
+    AggregateDataPtr place = arena.alignedAlloc(size_of_state, function->alignOfData());
 
     function->create(place);
 
