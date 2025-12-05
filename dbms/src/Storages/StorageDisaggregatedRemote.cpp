@@ -103,7 +103,18 @@ BlockInputStreams StorageDisaggregated::readThroughS3(const Context & db_context
 {
     // Build InputStream according to the remote segment read tasks
     DAGPipeline pipeline;
+<<<<<<< HEAD
     buildRemoteSegmentInputStreams(db_context, buildReadTaskWithBackoff(db_context), num_streams, pipeline);
+=======
+    buildRemoteSegmentInputStreams(
+        db_context,
+        buildReadTaskWithBackoff(db_context, scan_context),
+        num_streams,
+        pipeline,
+        scan_context);
+    // handle generated column if necessary.
+    executeGeneratedColumnPlaceholder(generated_column_infos, log, pipeline);
+>>>>>>> a5e14033f8 (Fix three schema mismatch bugs under disaggregated arch  (#10530))
 
     NamesAndTypes source_columns;
     source_columns.reserve(table_scan.getColumnSize());
@@ -131,8 +142,16 @@ void StorageDisaggregated::readThroughS3(
         exec_context,
         group_builder,
         db_context,
+<<<<<<< HEAD
         buildReadTaskWithBackoff(db_context),
         num_streams);
+=======
+        buildReadTaskWithBackoff(db_context, scan_context),
+        num_streams,
+        scan_context);
+    // handle generated column if necessary.
+    executeGeneratedColumnPlaceholder(exec_context, group_builder, generated_column_infos, log);
+>>>>>>> a5e14033f8 (Fix three schema mismatch bugs under disaggregated arch  (#10530))
 
     NamesAndTypes source_columns;
     auto header = group_builder.getCurrentHeader();
@@ -496,12 +515,23 @@ DM::RSOperatorPtr StorageDisaggregated::buildRSOperator(
     return DM::RSOperator::build(dag_query, table_scan.getColumns(), *columns_to_read, enable_rs_filter, log);
 }
 
+<<<<<<< HEAD
 std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisaggregated::packSegmentReadTasks(
     const Context & db_context,
     DM::SegmentReadTasks && read_tasks,
     const DM::ColumnDefinesPtr & column_defines,
     size_t num_streams,
     int extra_table_id_index)
+=======
+std::tuple<std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr>, DM::ColumnDefinesPtr> StorageDisaggregated::
+    packSegmentReadTasks(
+        const Context & db_context,
+        DM::SegmentReadTasks && read_tasks,
+        const DM::ColumnDefinesPtr & column_defines,
+        const DM::ScanContextPtr & scan_context,
+        size_t num_streams,
+        int extra_table_id_index)
+>>>>>>> a5e14033f8 (Fix three schema mismatch bugs under disaggregated arch  (#10530))
 {
     const auto & executor_id = table_scan.getTableScanExecutorID();
 
@@ -520,20 +550,29 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
         push_down_filter);
     const UInt64 start_ts = sender_target_mpp_task_id.gather_id.query_id.start_ts;
     const auto enable_read_thread = db_context.getSettingsRef().dt_enable_read_thread;
+<<<<<<< HEAD
+=======
+    const auto & final_columns_defines = push_down_executor && push_down_executor->extra_cast
+        ? push_down_executor->columns_after_cast
+        : column_defines;
+    RUNTIME_CHECK(num_streams > 0, num_streams);
+>>>>>>> a5e14033f8 (Fix three schema mismatch bugs under disaggregated arch  (#10530))
     LOG_INFO(
         log,
         "packSegmentReadTasks: enable_read_thread={} read_mode={} is_fast_scan={} keep_order={} task_count={} "
-        "num_streams={} column_defines={}",
+        "num_streams={} column_defines={} final_columns_defines={}",
         enable_read_thread,
         magic_enum::enum_name(read_mode),
         table_scan.isFastScan(),
         table_scan.keepOrder(),
         read_tasks.size(),
         num_streams,
-        *column_defines);
+        *column_defines,
+        *final_columns_defines);
 
     if (enable_read_thread)
     {
+<<<<<<< HEAD
         return std::make_shared<DM::SegmentReadTaskPool>(
             extra_table_id_index,
             *column_defines,
@@ -561,6 +600,44 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
                 .read_mode = read_mode,
             },
             num_streams);
+=======
+        // Under disagg arch, now we use blocking IO to read data from cloud storage. So it require more active
+        // segments to fully utilize the read threads.
+        const size_t read_thread_num_active_seg = 10 * num_streams;
+        return {
+            std::make_shared<DM::SegmentReadTaskPool>(
+                extra_table_id_index,
+                *final_columns_defines,
+                push_down_executor,
+                start_ts,
+                db_context.getSettingsRef().max_block_size,
+                read_mode,
+                std::move(read_tasks),
+                /*after_segment_read*/ [](const DM::DMContextPtr &, const DM::SegmentPtr &) {},
+                log->identifier(),
+                /*enable_read_thread*/ true,
+                num_streams,
+                read_thread_num_active_seg,
+                context.getDAGContext()->getKeyspaceID(),
+                context.getDAGContext()->getResourceGroupName()),
+            final_columns_defines};
+    }
+    else
+    {
+        return {
+            DM::Remote::RNWorkers::create(
+                db_context,
+                std::move(read_tasks),
+                {
+                    .log = log->getChild(executor_id),
+                    .columns_to_read = final_columns_defines,
+                    .start_ts = start_ts,
+                    .push_down_executor = push_down_executor,
+                    .read_mode = read_mode,
+                },
+                num_streams),
+            final_columns_defines};
+>>>>>>> a5e14033f8 (Fix three schema mismatch bugs under disaggregated arch  (#10530))
     }
 }
 
@@ -598,15 +675,29 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
     DAGPipeline & pipeline)
 {
     // Build the input streams to read blocks from remote segments
+<<<<<<< HEAD
     auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
     auto packed_read_tasks
         = packSegmentReadTasks(db_context, std::move(read_tasks), column_defines, num_streams, extra_table_id_index);
     RUNTIME_CHECK(num_streams > 0, num_streams);
+=======
+    DM::ColumnDefinesPtr column_defines;
+    int extra_table_id_index;
+    std::tie(column_defines, extra_table_id_index, generated_column_infos)
+        = genColumnDefinesForDisaggregatedRead(table_scan);
+    auto [packed_read_tasks, final_column_defines] = packSegmentReadTasks(
+        db_context,
+        std::move(read_tasks),
+        column_defines,
+        scan_context,
+        num_streams,
+        extra_table_id_index);
+>>>>>>> a5e14033f8 (Fix three schema mismatch bugs under disaggregated arch  (#10530))
     pipeline.streams.reserve(num_streams);
 
     InputStreamBuilder builder{
         .tracing_id = log->identifier(),
-        .columns_to_read = column_defines,
+        .columns_to_read = final_column_defines,
         .extra_table_id_index = extra_table_id_index,
     };
     for (size_t stream_idx = 0; stream_idx < num_streams; ++stream_idx)
@@ -661,14 +752,28 @@ void StorageDisaggregated::buildRemoteSegmentSourceOps(
     size_t num_streams)
 {
     // Build the input streams to read blocks from remote segments
+<<<<<<< HEAD
     auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
     auto packed_read_tasks
         = packSegmentReadTasks(db_context, std::move(read_tasks), column_defines, num_streams, extra_table_id_index);
+=======
+    DM::ColumnDefinesPtr column_defines;
+    int extra_table_id_index;
+    std::tie(column_defines, extra_table_id_index, generated_column_infos)
+        = genColumnDefinesForDisaggregatedRead(table_scan);
+    auto [packed_read_tasks, final_column_defines] = packSegmentReadTasks(
+        db_context,
+        std::move(read_tasks),
+        column_defines,
+        scan_context,
+        num_streams,
+        extra_table_id_index);
+>>>>>>> a5e14033f8 (Fix three schema mismatch bugs under disaggregated arch  (#10530))
 
     RUNTIME_CHECK(num_streams > 0, num_streams);
     SrouceOpBuilder builder{
         .tracing_id = log->identifier(),
-        .column_defines = column_defines,
+        .column_defines = final_column_defines,
         .extra_table_id_index = extra_table_id_index,
         .exec_context = exec_context,
     };
