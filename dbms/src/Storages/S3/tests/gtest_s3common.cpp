@@ -96,6 +96,44 @@ TEST(S3CommonTest, updateRegionByEndpoint)
             Aws::Http::Scheme::HTTPS,
             CloudVendor::AlibabaCloud,
         },
+        // Kingsoft Cloud endpoint (internal)
+        TestCase{
+            "http://ks3-cn-beijing-internal.ksyuncs.com",
+            "cn-beijing",
+            Aws::Http::Scheme::HTTP,
+            CloudVendor::KingsoftCloud,
+        },
+        TestCase{
+            "http://ks3-sgp-internal.ksyuncs.com",
+            "sgp",
+            Aws::Http::Scheme::HTTP,
+            CloudVendor::KingsoftCloud,
+        },
+        TestCase{
+            "http://ks3-jr-beijing-internal.ksyuncs.com",
+            "jr-beijing",
+            Aws::Http::Scheme::HTTP,
+            CloudVendor::KingsoftCloud,
+        },
+        // Kingsoft Cloud endpoint (external)
+        TestCase{
+            "http://ks3-cn-beijing.ksyuncs.com",
+            "cn-beijing",
+            Aws::Http::Scheme::HTTP,
+            CloudVendor::KingsoftCloud,
+        },
+        TestCase{
+            "http://ks3-sgp.ksyuncs.com",
+            "sgp",
+            Aws::Http::Scheme::HTTP,
+            CloudVendor::KingsoftCloud,
+        },
+        TestCase{
+            "http://ks3-jr-shanghai.ksyuncs.com",
+            "jr-shanghai",
+            Aws::Http::Scheme::HTTP,
+            CloudVendor::KingsoftCloud,
+        },
         // non-AWS endpoint
         TestCase{
             "minio.mydomain.com",
@@ -104,10 +142,36 @@ TEST(S3CommonTest, updateRegionByEndpoint)
             CloudVendor::Unknown,
         },
         TestCase{
-            "10.0.0.1:9000",
+            "http://minio.mydomain.com",
             "us-west-2",
             Aws::Http::Scheme::HTTP,
             CloudVendor::Unknown,
+        },
+        TestCase{
+            "http://minio.mydomain.com:80",
+            "us-west-2",
+            Aws::Http::Scheme::HTTP,
+            CloudVendor::Unknown,
+        },
+        TestCase{
+            "https://minio.mydomain.com",
+            "us-west-2",
+            Aws::Http::Scheme::HTTPS,
+            CloudVendor::Unknown,
+        },
+        TestCase{
+            "https://minio.mydomain.com:443",
+            "us-west-2",
+            Aws::Http::Scheme::HTTPS,
+            CloudVendor::Unknown,
+        },
+        // non-AWS endpoint with non default http/https port,
+        // should be UnknownFixAddress vendor and not need virtual addressing
+        TestCase{
+            "10.0.0.1:9000",
+            "us-west-2",
+            Aws::Http::Scheme::HTTP,
+            CloudVendor::UnknownFixAddress,
         },
     };
 
