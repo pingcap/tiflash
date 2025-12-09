@@ -43,6 +43,8 @@
     M(S3WriteRequestsThrottling)               \
     M(S3ReadRequestsRedirects)                 \
     M(S3WriteRequestsRedirects)                \
+    M(S3ReadRequestsNotFound)                  \
+    M(S3WriteRequestsNotFound)                 \
                                                \
     M(RWLockAcquiredReadLocks)                 \
     M(RWLockAcquiredWriteLocks)                \
