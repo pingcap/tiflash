@@ -166,7 +166,7 @@ TEST(S3CommonTest, updateRegionByEndpoint)
             CloudVendor::Unknown,
         },
         // non-AWS endpoint with non default http/https port,
-        // should be Unknown vendor and not need virtual addressing
+        // should be UnknownFixAddress vendor and not need virtual addressing
         TestCase{
             "10.0.0.1:9000",
             "us-west-2",
