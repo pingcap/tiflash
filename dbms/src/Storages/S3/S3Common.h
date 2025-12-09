@@ -106,8 +106,10 @@ enum class S3GCMethod
 
 enum class CloudVendor
 {
-    Unknown = 0,
-    UnknownVirtualAddressing = 1,
+    // unknown vendor that do not need virtual addressing
+    UnknownFixAddress = 0,
+    // unknown vendor that need virtual addressing
+    Unknown,
     AWS,
     AlibabaCloud,
     KingsoftCloud,

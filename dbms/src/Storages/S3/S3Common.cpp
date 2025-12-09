@@ -432,7 +432,7 @@ CloudVendor updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const
     //   - Internal: ks3-<region>-internal.ksyuncs.com
     //   - External: ks3-<region>.ksyuncs.com
     // Reference: https://endocs.ksyun.com/documents/37088
-    CloudVendor vendor = CloudVendor::Unknown;
+    CloudVendor vendor = CloudVendor::UnknownFixAddress;
     static const RE2 region_pattern(
         R"((?:^s3\.|^s3-fips\.|^oss-|^ks3-)(?:dualstack.)?([a-z0-9\-]+)\.(?:amazonaws|aliyuncs|ksyuncs)\.)");
     if (re2::RE2::PartialMatch(uri.getHost(), region_pattern, &matched_region))
@@ -464,16 +464,16 @@ CloudVendor updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const
     if (uri.getScheme() == "https")
     {
         cfg.scheme = Aws::Http::Scheme::HTTPS;
-        if (vendor == CloudVendor::Unknown && uri.getPort() == 443)
+        if (vendor == CloudVendor::UnknownFixAddress && uri.getPort() == 443)
         {
             // For unknown vendor, we assume it's AWS-compatible service if using default HTTPS port
-            vendor = CloudVendor::UnknownVirtualAddressing;
+            vendor = CloudVendor::Unknown;
         }
     }
     else
     {
         cfg.scheme = Aws::Http::Scheme::HTTP;
-        if (vendor == CloudVendor::Unknown)
+        if (vendor == CloudVendor::UnknownFixAddress)
         {
             // If the vendor is unknown, check the endpoint format when
             // - using http and default port 80
@@ -481,7 +481,7 @@ CloudVendor updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const
             // we assume it's AWS-compatible service that need virtual addressing
             if ((uri.getScheme() == "http" && uri.getPort() == 80) || (uri.getScheme().empty() && uri.getPort() == 0))
             {
-                vendor = CloudVendor::UnknownVirtualAddressing;
+                vendor = CloudVendor::Unknown;
             }
         }
     }
@@ -524,7 +524,7 @@ ClientFactory::create(const StorageS3Config & storage_config, const LoggerPtr & 
     // For deployed with AWS S3 service (or other S3-like service), the address use default port and port is not included,
     // the service need virtual addressing to do load balancing.
     // For deployed with local minio, the address contains fix port, we should disable virtual addressing
-    bool use_virtual_addressing = vendor != CloudVendor::Unknown;
+    bool use_virtual_addressing = vendor != CloudVendor::UnknownFixAddress;
     auto cli = std::make_unique<Aws::S3::S3Client>(
         cred_provider,
         client_config,

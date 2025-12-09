@@ -139,31 +139,31 @@ TEST(S3CommonTest, updateRegionByEndpoint)
             "minio.mydomain.com",
             "us-west-2",
             Aws::Http::Scheme::HTTP,
-            CloudVendor::UnknownVirtualAddressing,
+            CloudVendor::Unknown,
         },
         TestCase{
             "http://minio.mydomain.com",
             "us-west-2",
             Aws::Http::Scheme::HTTP,
-            CloudVendor::UnknownVirtualAddressing,
+            CloudVendor::Unknown,
         },
         TestCase{
             "http://minio.mydomain.com:80",
             "us-west-2",
             Aws::Http::Scheme::HTTP,
-            CloudVendor::UnknownVirtualAddressing,
+            CloudVendor::Unknown,
         },
         TestCase{
             "https://minio.mydomain.com",
             "us-west-2",
             Aws::Http::Scheme::HTTPS,
-            CloudVendor::UnknownVirtualAddressing,
+            CloudVendor::Unknown,
         },
         TestCase{
             "https://minio.mydomain.com:443",
             "us-west-2",
             Aws::Http::Scheme::HTTPS,
-            CloudVendor::UnknownVirtualAddressing,
+            CloudVendor::Unknown,
         },
         // non-AWS endpoint with non default http/https port,
         // should be Unknown vendor and not need virtual addressing
@@ -171,7 +171,7 @@ TEST(S3CommonTest, updateRegionByEndpoint)
             "10.0.0.1:9000",
             "us-west-2",
             Aws::Http::Scheme::HTTP,
-            CloudVendor::Unknown,
+            CloudVendor::UnknownFixAddress,
         },
     };
 
