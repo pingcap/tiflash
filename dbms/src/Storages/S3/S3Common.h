@@ -107,8 +107,10 @@ enum class S3GCMethod
 enum class CloudVendor
 {
     Unknown = 0,
+    UnknownVirtualAddressing = 1,
     AWS,
     AlibabaCloud,
+    KingsoftCloud,
 };
 
 CloudVendor updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const LoggerPtr & log);

@@ -428,9 +428,13 @@ CloudVendor updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const
     //   - Internal: oss-<region>-internal.aliyuncs.com
     //   - External: oss-<region>.aliyuncs.com
     // Reference: https://www.alibabacloud.com/help/en/oss/regions-and-endpoints
+    // Kingsoft Cloud endpoint format:
+    //   - Internal: ks3-<region>-internal.ksyuncs.com
+    //   - External: ks3-<region>.ksyuncs.com
+    // Reference: https://endocs.ksyun.com/documents/37088
     CloudVendor vendor = CloudVendor::Unknown;
     static const RE2 region_pattern(
-        R"((?:^s3\.|^s3-fips\.|^oss-)(?:dualstack.)?([a-z0-9\-]+)\.(?:amazonaws|aliyuncs)\.)");
+        R"((?:^s3\.|^s3-fips\.|^oss-|^ks3-)(?:dualstack.)?([a-z0-9\-]+)\.(?:amazonaws|aliyuncs|ksyuncs)\.)");
     if (re2::RE2::PartialMatch(uri.getHost(), region_pattern, &matched_region))
     {
         boost::algorithm::to_lower(matched_region);
@@ -445,6 +449,10 @@ CloudVendor updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const
         {
             vendor = CloudVendor::AlibabaCloud;
         }
+        else if (uri.getHost().find("ksyuncs") != String::npos)
+        {
+            vendor = CloudVendor::KingsoftCloud;
+        }
     }
     else
     {
@@ -456,10 +464,26 @@ CloudVendor updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const
     if (uri.getScheme() == "https")
     {
         cfg.scheme = Aws::Http::Scheme::HTTPS;
+        if (vendor == CloudVendor::Unknown && uri.getPort() == 443)
+        {
+            // For unknown vendor, we assume it's AWS-compatible service if using default HTTPS port
+            vendor = CloudVendor::UnknownVirtualAddressing;
+        }
     }
     else
     {
         cfg.scheme = Aws::Http::Scheme::HTTP;
+        if (vendor == CloudVendor::Unknown)
+        {
+            // If the vendor is unknown, check the endpoint format when
+            // - using http and default port 80
+            // - without scheme and port 0 (means default port)
+            // we assume it's AWS-compatible service that need virtual addressing
+            if ((uri.getScheme() == "http" && uri.getPort() == 80) || (uri.getScheme().empty() && uri.getPort() == 0))
+            {
+                vendor = CloudVendor::UnknownVirtualAddressing;
+            }
+        }
     }
     cfg.verifySSL = cfg.scheme == Aws::Http::Scheme::HTTPS;
 
