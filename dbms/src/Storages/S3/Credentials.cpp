@@ -365,9 +365,9 @@ S3CredentialsProviderChain::S3CredentialsProviderChain(const Aws::Client::Client
         }
         break;
     }
-    case CloudVendor::UnknownVirtualAddressing:
-        [[fallthrough]];
     case CloudVendor::Unknown:
+        [[fallthrough]];
+    case CloudVendor::UnknownFixAddress:
     {
         AddProvider(std::make_shared<TiFlashEnvironmentCredentialsProvider>());
         // Add AWS environment variable credentials provider as a default fallback
