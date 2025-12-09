@@ -144,6 +144,7 @@ private:
         Errors,
         Throttling,
         Redirects,
+        ErrorNotFound,
     };
 
     enum class S3MetricKind
