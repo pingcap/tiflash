@@ -824,7 +824,10 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg, c
         sw.elapsedMilliseconds());
 }
 
-void FileCache::download(const String & s3_key, FileSegmentPtr & file_seg, const WriteLimiterPtr & write_limiter)
+void FileCache::bgDownloadExecutor(
+    const String & s3_key,
+    FileSegmentPtr & file_seg,
+    const WriteLimiterPtr & write_limiter)
 {
     try
     {
@@ -833,7 +836,8 @@ void FileCache::download(const String & s3_key, FileSegmentPtr & file_seg, const
     }
     catch (...)
     {
-        tryLogCurrentException(log, fmt::format("Download s3_key={} failed", s3_key));
+        // ignore the exception here, and log as warning.
+        tryLogCurrentWarningException(log, fmt::format("Download s3_key={} failed", s3_key));
     }
 
     if (!file_seg->isReadyToRead())
@@ -867,7 +871,7 @@ void FileCache::bgDownload(const String & s3_key, FileSegmentPtr & file_seg)
     auto write_limiter = rate_limiter.getBgWriteLimiter();
     S3FileCachePool::get().scheduleOrThrowOnError(
         [this, s3_key = s3_key, file_seg = file_seg, limiter = std::move(write_limiter)]() mutable {
-            download(s3_key, file_seg, limiter);
+            bgDownloadExecutor(s3_key, file_seg, limiter);
         });
 }
 
