@@ -894,7 +894,7 @@
               "refId": "G"
             },
             {
-              "expr": "sum(tiflash_system_asynchronous_metric_mimalloc_current_rss{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=~\".*tiflash\"})",
+              "expr": "sum(tiflash_system_asynchronous_metric_mimalloc_current_rss{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=~\".*tiflash\", instance=~\"$instance\", instance=~\"$tiflash_role\"})",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
@@ -902,7 +902,7 @@
               "refId": "H"
             },
             {
-              "expr": "sum(tiflash_system_asynchronous_metric_mimalloc_current_commit{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=~\".*tiflash\"})",
+              "expr": "sum(tiflash_system_asynchronous_metric_mimalloc_current_commit{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=~\".*tiflash\", instance=~\"$instance\", instance=~\"$tiflash_role\"})",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
@@ -910,7 +910,7 @@
               "refId": "I"
             },
             {
-              "expr": "sum(tiflash_system_asynchronous_metric_mmap_alive{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=~\".*tiflash\"})",
+              "expr": "sum(tiflash_system_asynchronous_metric_mmap_alive{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=~\".*tiflash\", instance=~\"$instance\", instance=~\"$tiflash_role\"})",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
@@ -9887,7 +9887,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "tiflash_proxy_process_open_fds{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=~\".*tiflash\"}",
+              "expr": "tiflash_proxy_process_open_fds{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=~\".*tiflash\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
@@ -16681,7 +16681,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_proxy_tikv_server_raft_append_rejects{}[1m])) by (instance)",
+              "expr": "sum(rate(tiflash_proxy_tikv_server_raft_append_rejects{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$tiflash_role\"}[1m])) by (instance)",
               "format": "time_series",
               "interval": "",
               "intervalFactor": 1,
@@ -21710,7 +21710,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"cpu_pool\"}[1m]))",
+              "expr": "sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"cpu_pool\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[1m]))",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -21722,7 +21722,7 @@
             },
             {
               "exemplar": true,
-              "expr": "count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"cpu_pool\"})",
+              "expr": "count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"cpu_pool\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"})",
               "hide": false,
               "interval": "",
               "intervalFactor": 2,
@@ -21840,7 +21840,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"io_pool\"}[1m]))",
+              "expr": "sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"io_pool\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[1m]))",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -21852,7 +21852,7 @@
             },
             {
               "exemplar": true,
-              "expr": "count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"io_pool\"})",
+              "expr": "count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"io_pool\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"})",
               "hide": false,
               "interval": "",
               "intervalFactor": 2,
@@ -21970,7 +21970,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"WaitReactor\"}[1m]))",
+              "expr": "sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"WaitReactor\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[1m]))",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -21982,7 +21982,7 @@
             },
             {
               "exemplar": true,
-              "expr": "count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"WaitReactor\"})",
+              "expr": "count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"WaitReactor\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"})",
               "hide": false,
               "interval": "",
               "intervalFactor": 2,
@@ -22384,7 +22384,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_storage_sync_replica_ru[1m])) by (keyspace_id)",
+              "expr": "sum(rate(tiflash_storage_sync_replica_ru{instance=~\"$tiflash_role\"}[1m])) by (keyspace_id, $additional_groupby)",
               "format": "time_series",
               "interval": "",
               "intervalFactor": 2,
@@ -22394,34 +22394,34 @@
             },
             {
               "exemplar": true,
-              "expr": "sum(increase(tiflash_storage_sync_replica_ru[24h])) by (keyspace_id)",
+              "expr": "sum(increase(tiflash_storage_sync_replica_ru{instance=~\"$tiflash_role\"}[24h])) by (keyspace_id, $additional_groupby)",
               "hide": false,
               "interval": "",
-              "legendFormat": "replica-sync-sum-24h-{{keyspace_id}}",
+              "legendFormat": "replica-sync-sum-24h-{{keyspace_id}} {{$additional_groupby}}",
               "refId": "B"
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_compute_request_unit[1m])) by (cluster_id)",
+              "expr": "sum(rate(tiflash_compute_request_unit{instance=~\"$tiflash_role\"}[1m])) by (cluster_id, $additional_groupby)",
               "hide": false,
               "interval": "",
-              "legendFormat": "query-rate-{{cluster_id}}",
+              "legendFormat": "query-rate-{{cluster_id}} {{$additional_groupby}}",
               "refId": "C"
             },
             {
               "exemplar": true,
-              "expr": "sum(increase(tiflash_compute_request_unit[24h])) by (cluster_id)",
+              "expr": "sum(increase(tiflash_compute_request_unit{instance=~\"$tiflash_role\"}[24h])) by (cluster_id, $additional_groupby)",
               "hide": false,
               "interval": "",
-              "legendFormat": "query-sum-24h-{{cluster_id}}",
+              "legendFormat": "query-sum-24h-{{cluster_id}} {{$additional_groupby}}",
               "refId": "D"
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_storage_ru_read_bytes[1m])) by (keyspace, resource_group, type) / (64 * 1024)",
+              "expr": "sum(rate(tiflash_storage_ru_read_bytes{instance=~\"$tiflash_role\"}[1m])) by (keyspace, resource_group, type, $additional_groupby) / (64 * 1024)",
               "hide": false,
               "interval": "",
-              "legendFormat": "storage-{{keyspace}}_{{resource_group}}_{{type}}",
+              "legendFormat": "storage-{{keyspace}}_{{resource_group}}_{{type}} {{$additional_groupby}}",
               "refId": "E"
             }
           ],
@@ -22787,7 +22787,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum by (type, instance) (\n    tiflash_vector_index_active_instances{\n        k8s_cluster=\"$k8s_cluster\", \n        tidb_cluster=\"$tidb_cluster\", \n        instance=~\"$instance\"\n    }\n)",
+              "expr": "sum by (type, instance) (\n    tiflash_vector_index_active_instances{\n        k8s_cluster=\"$k8s_cluster\", \n        tidb_cluster=\"$tidb_cluster\", \n        instance=~\"$instance\", instance=~\"$tiflash_role\"\n    }\n)",
               "format": "time_series",
               "hide": false,
               "interval": "",
@@ -22908,7 +22908,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "tiflash_vector_index_memory_usage{\n    k8s_cluster=\"$k8s_cluster\", \n    tidb_cluster=\"$tidb_cluster\", \n    instance=~\"$instance\"\n}",
+              "expr": "tiflash_vector_index_memory_usage{\n    k8s_cluster=\"$k8s_cluster\", \n    tidb_cluster=\"$tidb_cluster\", \n    instance=~\"$instance\", instance=~\"$tiflash_role\"\n}",
               "format": "time_series",
               "hide": false,
               "interval": "",
@@ -22918,7 +22918,7 @@
             },
             {
               "exemplar": true,
-              "expr": "tiflash_process_rss_by_type_bytes{\n    k8s_cluster=\"$k8s_cluster\", \n    tidb_cluster=\"$tidb_cluster\", \n    instance=~\"$instance\",\n    type=\"file\"\n}",
+              "expr": "tiflash_process_rss_by_type_bytes{\n    k8s_cluster=\"$k8s_cluster\", \n    tidb_cluster=\"$tidb_cluster\", \n    instance=~\"$instance\", instance=~\"$tiflash_role\",\n    type=\"file\"\n}",
               "hide": false,
               "interval": "",
               "legendFormat": "{{instance}}-RssFile",
@@ -23042,7 +23042,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "histogram_quantile(\n    0.999, \n    sum(rate(\n        tiflash_vector_index_duration_bucket{\n            k8s_cluster=\"$k8s_cluster\", \n            tidb_cluster=\"$tidb_cluster\", \n            instance=~\"$instance\",\n            type!=\"build\"\n        }\n        [$__rate_interval]\n    )) by (le, type)\n)",
+              "expr": "histogram_quantile(\n    0.999, \n    sum(rate(\n        tiflash_vector_index_duration_bucket{\n            k8s_cluster=\"$k8s_cluster\", \n            tidb_cluster=\"$tidb_cluster\", \n            instance=~\"$instance\", instance=~\"$tiflash_role\", \n            type!=\"build\"\n        }\n        [$__rate_interval]\n    )) by (le, type)\n)",
               "format": "time_series",
               "hide": false,
               "interval": "",
@@ -23164,7 +23164,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "histogram_quantile(\n    0.999, \n    sum(rate(\n        tiflash_vector_index_duration_bucket{\n            k8s_cluster=\"$k8s_cluster\", \n            tidb_cluster=\"$tidb_cluster\", \n            instance=~\"$instance\",\n            type=\"build\"\n        }\n        [$__rate_interval]\n    )) by (le, type)\n)",
+              "expr": "histogram_quantile(\n    0.999, \n    sum(rate(\n        tiflash_vector_index_duration_bucket{\n            k8s_cluster=\"$k8s_cluster\", \n            tidb_cluster=\"$tidb_cluster\", \n            instance=~\"$instance\", instance=~\"$tiflash_role\", \n            type=\"build\"\n        }\n        [$__rate_interval]\n    )) by (le, type)\n)",
               "format": "time_series",
               "hide": false,
               "interval": "",
