@@ -20830,6 +20830,22 @@
               "interval": "",
               "legendFormat": "write-redirects {{$additional_groupby}}",
               "refId": "R"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_system_profile_event_S3ReadRequestsNotFound{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "read-notfound {{$additional_groupby}}",
+              "refId": "A"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_system_profile_event_S3WriteRequestsNotFound{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "write-notfound {{$additional_groupby}}",
+              "refId": "B"
             }
           ],
           "thresholds": [],
