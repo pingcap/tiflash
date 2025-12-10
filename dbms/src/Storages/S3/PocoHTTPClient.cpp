@@ -469,14 +469,15 @@ std::optional<String> PocoHTTPClient::makeRequestOnce(
     }
     else
     {
-        if (status_code == 429 || status_code == 503)
+        if (status_code == Poco::Net::HTTPResponse::HTTP_TOO_MANY_REQUESTS
+            || status_code == Poco::Net::HTTPResponse::HTTP_SERVICE_UNAVAILABLE)
         {
             // API throttling from the server side
             // 429 Too Many Requests
             // 503 Service Unavailable
             addMetric(request, S3MetricType::Throttling);
         }
-        else if (status_code == 404)
+        else if (status_code == Poco::Net::HTTPResponse::HTTP_NOT_FOUND)
         {
             // Get/Head request to a non-existing object, returning 404 Not Found
             // is a valid response.
