@@ -110,7 +110,7 @@ void SchemaSyncService::addKeyspaceGCTasks()
                 }
                 catch (const Exception & e)
                 {
-                    LOG_ERROR(
+                    LOG_WARNING(
                         ks_log,
                         "{}, keyspace={} failed by {} \n stack : {}",
                         stage,
@@ -120,11 +120,11 @@ void SchemaSyncService::addKeyspaceGCTasks()
                 }
                 catch (const Poco::Exception & e)
                 {
-                    LOG_ERROR(ks_log, "{}, keyspace={} failed by {}", stage, keyspace, e.displayText());
+                    LOG_WARNING(ks_log, "{}, keyspace={} failed by {}", stage, keyspace, e.displayText());
                 }
                 catch (const std::exception & e)
                 {
-                    LOG_ERROR(ks_log, "{}, keyspace={} failed by {}", stage, keyspace, e.what());
+                    LOG_WARNING(ks_log, "{}, keyspace={} failed by {}", stage, keyspace, e.what());
                 }
                 return false;
             },
