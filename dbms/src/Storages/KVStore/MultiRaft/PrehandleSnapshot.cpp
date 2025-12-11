@@ -868,6 +868,11 @@ void KVStore::releasePreHandledSnapshot<RegionPtrWithSnapshotFiles>(
     auto keyspace_id = s.base->getKeyspaceID();
     auto table_id = s.base->getMappedTableID();
     auto storage = storages.get(keyspace_id, table_id);
+    if (storage == nullptr)
+    {
+        LOG_WARNING(log, "Storage is not found, region_id={} keyspace={} table_id={}", s.base->id(), keyspace_id, table_id);
+        return;
+    }
     if (storage->engineType() != TiDB::StorageEngine::DT)
     {
         return;
