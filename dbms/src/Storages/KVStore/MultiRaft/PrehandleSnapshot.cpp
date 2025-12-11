@@ -122,10 +122,11 @@ void PreHandlingTrace::waitForSubtaskResources(uint64_t region_id, size_t parall
         .Observe(watch.elapsedSeconds());
     LOG_INFO(
         log,
-        "Prehandle resource acquired after {:.3f} seconds, region_id={} parallel={}",
+        "Prehandle resource acquired after {:.3f} seconds, region_id={} parallel={} limit={}",
         watch.elapsedSeconds(),
         region_id,
-        parallel);
+        parallel,
+        parallel_subtask_limit);
     CurrentMetrics::sub(CurrentMetrics::RaftNumWaitedParallelPrehandlingTasks);
 }
 
