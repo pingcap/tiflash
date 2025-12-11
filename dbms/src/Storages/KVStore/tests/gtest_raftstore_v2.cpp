@@ -871,7 +871,8 @@ try
 {
     auto & ctx = TiFlashTestEnv::getGlobalContext();
     proxy_instance->cluster_ver = RaftstoreVer::V2;
-    proxy_instance->proxy_config_string = R"({"raftstore":{"snap-handle-pool-size":3},"server":{"engine-addr":"123"}})";
+    proxy_instance->proxy_config_string
+        = R"({"raftstore":{"snap-handle-pool-size":3, "apply-low-priority-pool-size":8},"server":{"engine-addr":"123"}})";
     KVStore & kvs = getKVS();
     kvs.fetchProxyConfig(proxy_helper.get());
     ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
@@ -912,7 +913,7 @@ try
         MockSSTReader::getMockSSTData().clear();
         DB::FailPointHelper::enablePauseFailPoint(DB::FailPoints::pause_before_prehandle_subtask, 100);
         std::vector<std::thread> ths;
-        auto runId = [&](size_t ths_id) {
+        auto run_id = [&](size_t ths_id) {
             auto [value_write, value_default] = proxy_instance->generateTiKVKeyValue(111, 999);
             MockSSTGenerator default_cf{region_ids[ths_id], table_id, ColumnFamilyType::Default};
             for (HandleID h = table_limits[ths_id]; h < table_limits[ths_id + 1]; h++)
@@ -942,13 +943,13 @@ try
                     std::nullopt);
             }
         };
-        ths.push_back(std::thread(runId, 0));
+        ths.push_back(std::thread(run_id, 0));
         std::this_thread::sleep_for(std::chrono::milliseconds(300));
 
         ASSERT_EQ(kvs.getOngoingPrehandleTaskCount(), 1);
         for (size_t ths_id = 1; ths_id < region_ids.size(); ths_id++)
         {
-            ths.push_back(std::thread(runId, ths_id));
+            ths.push_back(std::thread(run_id, ths_id));
         }
 
         auto loop = 0;

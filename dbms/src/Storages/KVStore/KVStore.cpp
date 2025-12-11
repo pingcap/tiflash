@@ -127,22 +127,28 @@ void KVStore::fetchProxyConfig(const TiFlashRaftProxyHelper * proxy_helper)
             Poco::JSON::Parser parser;
             auto obj = parser.parse(cpp_string);
             auto ptr = obj.extract<Poco::JSON::Object::Ptr>();
+
             auto raftstore = ptr->getObject("raftstore");
             proxy_config_summary.snap_handle_pool_size = raftstore->getValue<uint64_t>("snap-handle-pool-size");
+            proxy_config_summary.apply_low_priority_pool_size
+                = raftstore->getValue<uint64_t>("apply-low-priority-pool-size");
+
             auto server = ptr->getObject("server");
             proxy_config_summary.engine_addr = server->getValue<std::string>("engine-addr");
+
             LOG_INFO(
                 log,
-                "Parsed proxy config: snap_handle_pool_size={} engine_addr={}",
+                "Parsed proxy config: snap_handle_pool_size={} apply_low_priority_pool_size={} engine_addr={}",
                 proxy_config_summary.snap_handle_pool_size,
+                proxy_config_summary.apply_low_priority_pool_size,
                 proxy_config_summary.engine_addr);
             proxy_config_summary.valid = true;
         }
         catch (...)
         {
             proxy_config_summary.valid = false;
-            // we don't care
-            LOG_WARNING(log, "Can't parse config from proxy {}", cpp_string);
+            // ignore the error and log a error message
+            tryLogCurrentWarningException(log, fmt::format("Can't parse config from proxy {}", cpp_string));
         }
     }
 }
