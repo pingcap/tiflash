@@ -38,6 +38,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <magic_enum.hpp>
 #include <utility>
 
 static const int SUCCESS_RESPONSE_MIN = 200;
