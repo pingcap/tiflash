@@ -177,10 +177,9 @@ PocoHTTPClient::S3MetricKind PocoHTTPClient::getMetricKind(const Aws::Http::Http
 
 void PocoHTTPClient::addMetric(const Aws::Http::HttpRequest & request, S3MetricType type, ProfileEvents::Count amount)
 {
-    const ProfileEvents::Event events_map[static_cast<size_t>(S3MetricType::EnumSize)]
-                                         [static_cast<size_t>(S3MetricKind::EnumSize)]
+    const ProfileEvents::Event events_map[magic_enum::enum_count<S3MetricType>()]
+                                         [magic_enum::enum_count<S3MetricKind>()]
         = {
-            {ProfileEvents::S3ReadMicroseconds, ProfileEvents::S3WriteMicroseconds},
             {ProfileEvents::S3ReadRequestsCount, ProfileEvents::S3WriteRequestsCount},
             {ProfileEvents::S3ReadRequestsErrors, ProfileEvents::S3WriteRequestsErrors},
             {ProfileEvents::S3ReadRequestsThrottling, ProfileEvents::S3WriteRequestsThrottling},
@@ -468,17 +467,12 @@ std::optional<String> PocoHTTPClient::makeRequestOnce(
     }
     else
     {
-<<<<<<< HEAD
-        if (status_code == 429 || status_code == 503)
-        { // API throttling
-=======
         if (status_code == Poco::Net::HTTPResponse::HTTP_TOO_MANY_REQUESTS
             || status_code == Poco::Net::HTTPResponse::HTTP_SERVICE_UNAVAILABLE)
         {
             // API throttling from the server side
             // 429 Too Many Requests
             // 503 Service Unavailable
->>>>>>> cc3c80a2a5 (*: Downgrade some logging level (#10603))
             addMetric(request, S3MetricType::Throttling);
         }
         else if (status_code == Poco::Net::HTTPResponse::HTTP_NOT_FOUND)

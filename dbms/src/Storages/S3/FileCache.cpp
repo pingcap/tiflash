@@ -733,14 +733,7 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg)
         sw.elapsedMilliseconds());
 }
 
-<<<<<<< HEAD
-void FileCache::download(const String & s3_key, FileSegmentPtr & file_seg)
-=======
-void FileCache::bgDownloadExecutor(
-    const String & s3_key,
-    FileSegmentPtr & file_seg,
-    const WriteLimiterPtr & write_limiter)
->>>>>>> cc3c80a2a5 (*: Downgrade some logging level (#10603))
+void FileCache::bgDownloadExecutor(const String & s3_key, FileSegmentPtr & file_seg)
 {
     try
     {
@@ -782,13 +775,7 @@ void FileCache::bgDownload(const String & s3_key, FileSegmentPtr & file_seg)
         bg_downloading_count.load(std::memory_order_relaxed),
         s3_key);
     S3FileCachePool::get().scheduleOrThrowOnError(
-<<<<<<< HEAD
-        [this, s3_key = s3_key, file_seg = file_seg]() mutable { download(s3_key, file_seg); });
-=======
-        [this, s3_key = s3_key, file_seg = file_seg, limiter = std::move(write_limiter)]() mutable {
-            bgDownloadExecutor(s3_key, file_seg, limiter);
-        });
->>>>>>> cc3c80a2a5 (*: Downgrade some logging level (#10603))
+        [this, s3_key = s3_key, file_seg = file_seg]() mutable { bgDownloadExecutor(s3_key, file_seg); });
 }
 
 void FileCache::fgDownload(const String & s3_key, FileSegmentPtr & file_seg)

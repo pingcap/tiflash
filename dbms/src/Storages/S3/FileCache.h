@@ -265,13 +265,8 @@ public:
 
     void bgDownload(const String & s3_key, FileSegmentPtr & file_seg);
     void fgDownload(const String & s3_key, FileSegmentPtr & file_seg);
-<<<<<<< HEAD
-    void download(const String & s3_key, FileSegmentPtr & file_seg);
+    void bgDownloadExecutor(const String & s3_key, FileSegmentPtr & file_seg);
     void downloadImpl(const String & s3_key, FileSegmentPtr & file_seg);
-=======
-    void bgDownloadExecutor(const String & s3_key, FileSegmentPtr & file_seg, const WriteLimiterPtr & write_limiter);
-    void downloadImpl(const String & s3_key, FileSegmentPtr & file_seg, const WriteLimiterPtr & write_limiter);
->>>>>>> cc3c80a2a5 (*: Downgrade some logging level (#10603))
 
     static String toTemporaryFilename(const String & fname);
     static bool isTemporaryFilename(const String & fname);

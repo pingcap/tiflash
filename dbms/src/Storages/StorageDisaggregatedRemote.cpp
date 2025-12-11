@@ -288,14 +288,8 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
             for (const auto & region_id : error.region_ids())
                 retry_regions.insert(region_id);
 
-<<<<<<< HEAD
-            LOG_INFO(
-                log,
-                "Received EstablishDisaggregated response with retryable error: {}, addr={} retry_regions={}",
-=======
             String error_msg = fmt::format(
                 "Received EstablishDisaggTask response with retryable error: {}, addr={} retry_regions={}",
->>>>>>> cc3c80a2a5 (*: Downgrade some logging level (#10603))
                 error.msg(),
                 batch_cop_task.store_addr,
                 retry_regions);
@@ -311,14 +305,8 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
 
             const auto & error = resp.error().error_locked();
 
-<<<<<<< HEAD
-            LOG_INFO(
-                log,
-                "Received EstablishDisaggregated response with retryable error: {}, addr={}",
-=======
             String error_msg = fmt::format(
                 "Received EstablishDisaggTask response with retryable error: {}, addr={} lock_info_size={}",
->>>>>>> cc3c80a2a5 (*: Downgrade some logging level (#10603))
                 error.msg(),
                 batch_cop_task.store_addr,
                 error.locked().size());
