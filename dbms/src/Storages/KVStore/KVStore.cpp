@@ -147,8 +147,8 @@ void KVStore::fetchProxyConfig(const TiFlashRaftProxyHelper * proxy_helper)
         catch (...)
         {
             proxy_config_summary.valid = false;
-            // we don't care
-            LOG_WARNING(log, "Can't parse config from proxy {}", cpp_string);
+            // ignore the error and log a error message
+            tryLogCurrentWarningException(log, fmt::format("Can't parse config from proxy {}", cpp_string));
         }
     }
 }
