@@ -50,12 +50,14 @@ extern const Event S3ReadRequestsCount;
 extern const Event S3ReadRequestsErrors;
 extern const Event S3ReadRequestsThrottling;
 extern const Event S3ReadRequestsRedirects;
+extern const Event S3ReadRequestsNotFound;
 
 extern const Event S3WriteMicroseconds;
 extern const Event S3WriteRequestsCount;
 extern const Event S3WriteRequestsErrors;
 extern const Event S3WriteRequestsThrottling;
 extern const Event S3WriteRequestsRedirects;
+extern const Event S3WriteRequestsNotFound;
 
 extern const Event S3GetRequestThrottlerCount;
 extern const Event S3GetRequestThrottlerSleepMicroseconds;
@@ -183,6 +185,7 @@ void PocoHTTPClient::addMetric(const Aws::Http::HttpRequest & request, S3MetricT
             {ProfileEvents::S3ReadRequestsErrors, ProfileEvents::S3WriteRequestsErrors},
             {ProfileEvents::S3ReadRequestsThrottling, ProfileEvents::S3WriteRequestsThrottling},
             {ProfileEvents::S3ReadRequestsRedirects, ProfileEvents::S3WriteRequestsRedirects},
+            {ProfileEvents::S3ReadRequestsNotFound, ProfileEvents::S3WriteRequestsNotFound},
         };
 
     S3MetricKind kind = getMetricKind(request);
@@ -272,6 +275,7 @@ void PocoHTTPClient::makeRequestInternal(
     }
 }
 
+// Return redirect uri if redirect happens, otherwise return nullopt
 template <typename Session>
 std::optional<String> PocoHTTPClient::makeRequestOnce(
     const Poco::URI & target_uri,
@@ -342,8 +346,6 @@ std::optional<String> PocoHTTPClient::makeRequestOnce(
     for (const auto & [header_name, header_value] : extra_headers)
         poco_request.set(boost::algorithm::to_lower_copy(header_name), header_value);
 
-    Poco::Net::HTTPResponse poco_response;
-
     Stopwatch watch;
 
     Poco::Net::HTTPSendMetrics metrics;
@@ -372,13 +374,21 @@ std::optional<String> PocoHTTPClient::makeRequestOnce(
 
     if (enable_s3_requests_logging)
         LOG_DEBUG(tracing_logger, "Receiving response...");
+    Poco::Net::HTTPResponse poco_response;
     auto & response_body_stream = session->receiveResponse(poco_response);
     GET_METRIC(tiflash_storage_s3_http_request_seconds, type_response)
         .Observe(watch.elapsedMillisecondsFromLastTime() / 1000.0);
 
     int status_code = static_cast<int>(poco_response.getStatus());
-    if (status_code >= SUCCESS_RESPONSE_MIN && status_code <= SUCCESS_RESPONSE_MAX)
+    if (status_code >= SUCCESS_RESPONSE_MIN && status_code <= SUCCESS_RESPONSE_MAX) // 2xx
     {
+        if (enable_s3_requests_logging)
+            LOG_DEBUG(tracing_logger, "Response status: {}, {}", status_code, poco_response.getReason());
+    }
+    else if (status_code == Poco::Net::HTTPResponse::HTTP_NOT_FOUND) // 404
+    {
+        /// 404 Not Found is a valid response for some requests (e.g., GET/HEAD of non-existing object)
+        /// so we just log it at DEBUG level when `enable_s3_requests_logging` is on.
         if (enable_s3_requests_logging)
             LOG_DEBUG(tracing_logger, "Response status: {}, {}", status_code, poco_response.getReason());
     }
@@ -387,13 +397,15 @@ std::optional<String> PocoHTTPClient::makeRequestOnce(
         /// Error statuses are more important so we show them even if `enable_s3_requests_logging == false`.
         LOG_INFO(tracing_logger, "Response status: {}, {}", status_code, poco_response.getReason());
     }
+
+    // handle redirect status codes
     if (poco_response.getStatus() == Poco::Net::HTTPResponse::HTTP_TEMPORARY_REDIRECT
         || poco_response.getStatus() == Poco::Net::HTTPResponse::HTTP_FOUND)
     {
         auto location = poco_response.get("location");
         remote_host_filter->checkURL(Poco::URI(location));
         if (enable_s3_requests_logging)
-            LOG_DEBUG(tracing_logger, "Redirecting request to new location: {}", location);
+            LOG_INFO(tracing_logger, "Redirecting request to new location: {}", location);
 
         addMetric(request, S3MetricType::Redirects);
 
@@ -420,7 +432,7 @@ std::optional<String> PocoHTTPClient::makeRequestOnce(
             response->AddHeader(header_name, header_value);
     }
 
-    /// Request is successful but for some special requests we can have actual error message in body
+    /// Request is successful (2xx) but for some special requests we can have actual error message in body
     if (status_code >= SUCCESS_RESPONSE_MIN && status_code <= SUCCESS_RESPONSE_MAX
         && checkRequestCanReturn2xxAndErrorInBody(request))
     {
@@ -456,9 +468,24 @@ std::optional<String> PocoHTTPClient::makeRequestOnce(
     }
     else
     {
+<<<<<<< HEAD
         if (status_code == 429 || status_code == 503)
         { // API throttling
+=======
+        if (status_code == Poco::Net::HTTPResponse::HTTP_TOO_MANY_REQUESTS
+            || status_code == Poco::Net::HTTPResponse::HTTP_SERVICE_UNAVAILABLE)
+        {
+            // API throttling from the server side
+            // 429 Too Many Requests
+            // 503 Service Unavailable
+>>>>>>> cc3c80a2a5 (*: Downgrade some logging level (#10603))
             addMetric(request, S3MetricType::Throttling);
+        }
+        else if (status_code == Poco::Net::HTTPResponse::HTTP_NOT_FOUND)
+        {
+            // Get/Head request to a non-existing object, returning 404 Not Found
+            // is a valid response.
+            addMetric(request, S3MetricType::ErrorNotFound);
         }
         else if (status_code >= 300)
         {

@@ -491,7 +491,7 @@ void LocalAdmissionController::requestGACLoop()
         }
         catch (...)
         {
-            LOG_ERROR(
+            LOG_WARNING(
                 log,
                 "doRequestGAC got error: {}, retry {} sec later",
                 getCurrentExceptionMessage(false),

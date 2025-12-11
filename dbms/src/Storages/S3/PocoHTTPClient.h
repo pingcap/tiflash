@@ -146,8 +146,12 @@ private:
         Errors,
         Throttling,
         Redirects,
+<<<<<<< HEAD
 
         EnumSize,
+=======
+        ErrorNotFound,
+>>>>>>> cc3c80a2a5 (*: Downgrade some logging level (#10603))
     };
 
     enum class S3MetricKind
