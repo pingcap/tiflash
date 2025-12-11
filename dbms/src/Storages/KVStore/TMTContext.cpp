@@ -173,15 +173,13 @@ void TMTContext::initS3GCManager(const TiFlashRaftProxyHelper * proxy_helper)
     if (S3::ClientFactory::instance().isEnabled() && !context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
         kvstore->fetchProxyConfig(proxy_helper);
-        if (kvstore->getProxyConfigSummay().valid)
+        if (kvstore->getProxyConfigSummary().valid)
         {
-            LOG_INFO(
-                Logger::get(),
-                "Build s3gc manager from proxy's conf engine_addr={}",
-                kvstore->getProxyConfigSummay().engine_addr);
+            auto engine_addr = kvstore->getProxyConfigSummary().engine_addr;
+            LOG_INFO(Logger::get(), "Build s3gc manager from proxy's conf engine_addr={}", engine_addr);
             s3gc_owner = OwnerManager::createS3GCOwner(
                 context,
-                /*id*/ kvstore->getProxyConfigSummay().engine_addr,
+                /*id*/ engine_addr,
                 etcd_client);
         }
         else if (!raftproxy_config.pd_addrs.empty())
