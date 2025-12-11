@@ -306,32 +306,48 @@ PrehandleResult KVStore::preHandleSnapshotToFiles(
     return PrehandleResult{};
 }
 
-size_t KVStore::getMaxParallelPrehandleSize() const
+size_t KVStore::getMaxParallelPrehandleSize(DM::FileConvertJobType job_type) const
 {
 #if ENABLE_NEXT_GEN == 0
-    return getMaxPrehandleSubtaskSize();
+    return getMaxPrehandleSubtaskSize(job_type);
 #else
-    auto max_subtask_size = getMaxPrehandleSubtaskSize();
+    auto max_subtask_size = getMaxPrehandleSubtaskSize(job_type);
     // In serverless mode, IO takes more part in decoding stage, so we can increase parallel limit.
     // In real test, the prehandling speed decreases if we use higher concurrency.
     return std::min(4, max_subtask_size);
 #endif
 }
 
-size_t KVStore::getMaxPrehandleSubtaskSize() const
+size_t KVStore::getMaxPrehandleSubtaskSize(DM::FileConvertJobType job_type) const
 {
-    const auto & proxy_config = getProxyConfigSummay();
-    size_t total_concurrency = 0;
-    if (proxy_config.valid)
+    const auto & proxy_config = getProxyConfigSummary();
+    switch (job_type)
     {
-        total_concurrency = proxy_config.snap_handle_pool_size;
-    }
-    else
+    case DM::FileConvertJobType::ApplySnapshot:
     {
-        auto cpu_num = std::thread::hardware_concurrency();
-        total_concurrency = static_cast<size_t>(std::clamp(cpu_num * 0.7, 2.0, 16.0));
+        if (proxy_config.valid && proxy_config.snap_handle_pool_size > 0)
+        {
+            return proxy_config.snap_handle_pool_size;
+        }
+        else
+        {
+            auto cpu_num = std::thread::hardware_concurrency();
+            return static_cast<size_t>(std::clamp(cpu_num * 0.7, 2.0, 16.0));
+        }
     }
-    return total_concurrency;
+    case DM::FileConvertJobType::IngestSST:
+    {
+        if (proxy_config.valid && proxy_config.apply_low_priority_pool_size > 0)
+        {
+            return proxy_config.apply_low_priority_pool_size;
+        }
+        else
+        {
+            auto cpu_num = std::thread::hardware_concurrency();
+            return std::max(1, static_cast<size_t>(cpu_num));
+        }
+    }
+    }
 }
 
 // If size is 0, do not parallel prehandle for this snapshot, which is regular.
@@ -340,7 +356,8 @@ static inline std::pair<std::vector<std::string>, size_t> getSplitKey(
     LoggerPtr log,
     KVStore * kvstore,
     RegionPtr new_region,
-    std::shared_ptr<DM::SSTFilesToBlockInputStream> sst_stream)
+    std::shared_ptr<DM::SSTFilesToBlockInputStream> sst_stream,
+    DM::FileConvertJobType job_type)
 {
     // We don't use this is the single snapshot is small, due to overhead in decoding.
     constexpr size_t default_parallel_prehandle_threshold = 1 * 1024 * 1024 * 1024;
@@ -378,7 +395,7 @@ static inline std::pair<std::vector<std::string>, size_t> getSplitKey(
     // This is because in serverless, too much parallelism causes performance reduction.
     // So, if there is already enough parallelism that is used to prehandle,
     // it is not necessary to manually split a snapshot.
-    auto total_concurrency = kvstore->getMaxParallelPrehandleSize();
+    auto total_concurrency = kvstore->getMaxParallelPrehandleSize(job_type);
     if (total_concurrency + 1 > ongoing_count)
     {
         // Current thread takes 1 which is in `ongoing_count`.
@@ -407,7 +424,7 @@ static inline std::pair<std::vector<std::string>, size_t> getSplitKey(
     if (split_keys.size() + 1 < want_split_parts)
     {
         // If there are too few split keys, the `split_keys` itself may be not be uniformly distributed,
-        // it is even better that we still handle it sequantially.
+        // it is even better that we still handle it sequentially.
         split_keys.clear();
         LOG_INFO(
             log,
@@ -740,8 +757,11 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
             };
 
             // `split_keys` do not begin with 'z'.
-            auto [split_keys, approx_bytes] = getSplitKey(log, this, new_region, sst_stream);
-            prehandling_trace.waitForSubtaskResources(region_id, split_keys.size() + 1, getMaxPrehandleSubtaskSize());
+            auto [split_keys, approx_bytes] = getSplitKey(log, this, new_region, sst_stream, job_type);
+            prehandling_trace.waitForSubtaskResources(
+                region_id,
+                split_keys.size() + 1,
+                getMaxPrehandleSubtaskSize(job_type));
             ReadFromStreamResult result;
             if (split_keys.empty())
             {
