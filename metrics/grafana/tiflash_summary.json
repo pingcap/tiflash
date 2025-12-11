@@ -16880,7 +16880,7 @@
             "avg": false,
             "current": true,
             "hideEmpty": false,
-            "hideZero": false,
+            "hideZero": true,
             "max": true,
             "min": false,
             "rightSide": true,
@@ -16928,6 +16928,16 @@
               "intervalFactor": 1,
               "legendFormat": "ParallelTasks-{{instance}}",
               "refId": "C"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(tiflash_system_current_metric_RaftNumWaitedParallelPrehandlingTasks{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}) by (instance)",
+              "format": "time_series",
+              "hide": false,
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "Pending-ParallelTasks-{{instance}}",
+              "refId": "D"
             }
           ],
           "thresholds": [],
