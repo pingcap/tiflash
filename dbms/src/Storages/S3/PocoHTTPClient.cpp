@@ -45,14 +45,12 @@ static const int SUCCESS_RESPONSE_MAX = 299;
 
 namespace ProfileEvents
 {
-extern const Event S3ReadMicroseconds;
 extern const Event S3ReadRequestsCount;
 extern const Event S3ReadRequestsErrors;
 extern const Event S3ReadRequestsThrottling;
 extern const Event S3ReadRequestsRedirects;
 extern const Event S3ReadRequestsNotFound;
 
-extern const Event S3WriteMicroseconds;
 extern const Event S3WriteRequestsCount;
 extern const Event S3WriteRequestsErrors;
 extern const Event S3WriteRequestsThrottling;

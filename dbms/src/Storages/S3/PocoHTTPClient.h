@@ -26,7 +26,6 @@
 #include <aws/core/http/standard/StandardHttpResponse.h>
 
 #include <string>
-#include <vector>
 
 namespace Aws::Http::Standard
 {
@@ -152,8 +151,6 @@ private:
     {
         Read,
         Write,
-
-        EnumSize,
     };
 
     static S3MetricKind getMetricKind(const Aws::Http::HttpRequest & request);
