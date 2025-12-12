@@ -54,7 +54,9 @@ public:
                 if (child->tp() == PlanType::TiCiScan)
                 {
                     auto tici_scan = std::static_pointer_cast<PhysicalTiCIScan>(child);
-                    tici_scan->setIsCountAgg(true);
+                    tici_scan->setCountAgg(agg);
+                    // return tici_scan directly to replace agg
+                    return tici_scan;
                 }
             }
         }
@@ -62,7 +64,12 @@ public:
         {
             for (size_t i = 0; i < plan->childrenSize(); ++i)
             {
-                apply(context, plan->children(i), logger);
+                auto new_child = apply(context, plan->children(i), logger);
+                if (new_child != plan->children(i))
+                {
+                    // replace child with the PhysicalPlanNodePtr returned by apply
+                    plan->setChild(i, new_child);
+                }
             }
         }
 

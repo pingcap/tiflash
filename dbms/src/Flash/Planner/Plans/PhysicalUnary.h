@@ -46,7 +46,13 @@ public:
         return child;
     }
 
-    size_t childrenSize() const override { return 1; };
+    void setChild(size_t i, PhysicalPlanNodePtr new_child) override
+    {
+        RUNTIME_CHECK_MSG(i == 0, "child_index({}) shouldn't >= childrenSize({})", i, childrenSize());
+        child = std::move(new_child);
+    }
+
+    size_t childrenSize() const override { return 1; }
 
 protected:
     PhysicalPlanNodePtr child;
