@@ -17,6 +17,7 @@
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
 #include <Flash/Coprocessor/FilterConditions.h>
 #include <Flash/Coprocessor/TiCIScan.h>
+#include <Flash/Planner/Plans/PhysicalAggregation.h>
 #include <Flash/Planner/Plans/PhysicalLeaf.h>
 #include <tipb/executor.pb.h>
 
@@ -34,8 +35,6 @@ public:
         const TiCIScan & tici_scan_,
         const Block & sample_block_);
 
-    void setIsCountAgg(bool v) { tici_scan.setIsCountAgg(v); }
-
     void finalizeImpl(const Names & parent_require) override;
 
     const Block & getSampleBlock() const override;
@@ -47,6 +46,14 @@ public:
     const String & getFilterConditionsId() const;
 
     void buildPipeline(PipelineBuilder & builder, Context & context, PipelineExecutorContext & exec_context) override;
+
+    void setCountAgg(std::shared_ptr<PhysicalAggregation> agg)
+    {
+        tici_scan.setIsCountAgg(true);
+        schema = agg->getSchema();
+        tici_scan.setNamesAndTypes(agg->getSchema());
+        tici_scan.setCountAggExecutorId(agg->execId());
+    }
 
 private:
     void buildPipelineExecGroupImpl(
