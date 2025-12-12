@@ -274,7 +274,8 @@ struct MockRaftStoreProxy : MutexLockWrap
         , table_id(1)
         , cluster_ver(RaftstoreVer::V1)
     {
-        proxy_config_string = R"({"raftstore":{"snap-handle-pool-size":4},"server":{"engine-addr":"123"}})";
+        proxy_config_string
+            = R"({"raftstore":{"snap-handle-pool-size":4,"apply-low-priority-pool-size":8},"server":{"engine-addr":"123"}})";
     }
 
     LoggerPtr log;

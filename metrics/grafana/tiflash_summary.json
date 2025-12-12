@@ -16399,7 +16399,7 @@
             "avg": false,
             "current": true,
             "hideEmpty": false,
-            "hideZero": false,
+            "hideZero": true,
             "max": true,
             "min": false,
             "rightSide": true,
@@ -16447,6 +16447,14 @@
               "intervalFactor": 1,
               "legendFormat": "ParallelTasks-{{instance}}",
               "refId": "C"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(tiflash_system_current_metric_RaftNumWaitedParallelPrehandlingTasks{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "Pending-ParallelTasks-{{instance}}",
+              "refId": "D"
             }
           ],
           "thresholds": [],
@@ -20282,7 +20290,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 16
+            "y": 17
           },
           "hiddenSeries": false,
           "id": 178,
@@ -20400,7 +20408,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 16
+            "y": 17
           },
           "hiddenSeries": false,
           "id": 179,
@@ -20574,7 +20582,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 24
+            "y": 25
           },
           "hiddenSeries": false,
           "id": 182,
@@ -20692,7 +20700,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 24
+            "y": 25
           },
           "hiddenSeries": false,
           "id": 180,
@@ -20808,6 +20816,299 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "S3 HTTP OPS",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 0,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 33
+          },
+          "hiddenSeries": false,
+          "id": 343,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "max": true,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "sort": "max",
+            "sortDesc": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_system_profile_event_S3ReadRequestsCount{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "read-count",
+              "refId": "K"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_system_profile_event_S3WriteRequestsCount{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "write-count",
+              "refId": "L"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_system_profile_event_S3ReadRequestsErrors{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "read-error",
+              "refId": "M"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_system_profile_event_S3WriteRequestsErrors{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "write-error",
+              "refId": "N"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_system_profile_event_S3ReadRequestsThrottling{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "read-throttling",
+              "refId": "O"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_system_profile_event_S3WriteRequestsThrottling{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "write-throttling",
+              "refId": "P"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_system_profile_event_S3ReadRequestsRedirects{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "read-redirects",
+              "refId": "Q"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_system_profile_event_S3WriteRequestsRedirects{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "write-redirects",
+              "refId": "R"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_system_profile_event_S3ReadRequestsNotFound{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "read-notfound",
+              "refId": "A"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_system_profile_event_S3WriteRequestsNotFound{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "write-notfound",
+              "refId": "B"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "S3 HTTP OPS",
+          "tooltip": {
+            "shared": true,
+            "sort": 2,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": null,
+              "format": "ops",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "opm",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "S3 HTTP Request Duration",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 1,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 33
+          },
+          "hiddenSeries": false,
+          "id": 345,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "max": true,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "sort": "max",
+            "sortDesc": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_s3_http_request_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le, type) / 1000000000)",
+              "format": "time_series",
+              "hide": true,
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "{{type}}-max",
+              "refId": "A"
+            },
+            {
+              "exemplar": true,
+              "expr": "histogram_quantile(0.9999, sum(rate(tiflash_storage_s3_http_request_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "{{type}}-9999",
+              "refId": "C"
+            },
+            {
+              "exemplar": true,
+              "expr": "histogram_quantile(0.99, sum(rate(tiflash_storage_s3_http_request_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "{{type}}-99",
+              "refId": "B"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "S3 HTTP Request Duration",
+          "tooltip": {
+            "shared": true,
+            "sort": 2,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "format": "s",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
           "description": "Remote Cache Operations",
           "fieldConfig": {
             "defaults": {},
@@ -20819,7 +21120,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 32
+            "y": 41
           },
           "hiddenSeries": false,
           "id": 185,
@@ -20946,7 +21247,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 32
+            "y": 41
           },
           "hiddenSeries": false,
           "id": 186,
@@ -21048,7 +21349,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 40
+            "y": 49
           },
           "hiddenSeries": false,
           "id": 188,
