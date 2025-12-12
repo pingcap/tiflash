@@ -733,7 +733,7 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg)
         sw.elapsedMilliseconds());
 }
 
-void FileCache::download(const String & s3_key, FileSegmentPtr & file_seg)
+void FileCache::bgDownloadExecutor(const String & s3_key, FileSegmentPtr & file_seg)
 {
     try
     {
@@ -742,7 +742,8 @@ void FileCache::download(const String & s3_key, FileSegmentPtr & file_seg)
     }
     catch (...)
     {
-        tryLogCurrentException(log, fmt::format("Download s3_key={} failed", s3_key));
+        // ignore the exception here, and log as warning.
+        tryLogCurrentWarningException(log, fmt::format("Download s3_key={} failed", s3_key));
     }
 
     if (!file_seg->isReadyToRead())
@@ -774,7 +775,7 @@ void FileCache::bgDownload(const String & s3_key, FileSegmentPtr & file_seg)
         bg_downloading_count.load(std::memory_order_relaxed),
         s3_key);
     S3FileCachePool::get().scheduleOrThrowOnError(
-        [this, s3_key = s3_key, file_seg = file_seg]() mutable { download(s3_key, file_seg); });
+        [this, s3_key = s3_key, file_seg = file_seg]() mutable { bgDownloadExecutor(s3_key, file_seg); });
 }
 
 void FileCache::fgDownload(const String & s3_key, FileSegmentPtr & file_seg)

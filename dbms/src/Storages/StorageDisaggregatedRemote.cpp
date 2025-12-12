@@ -288,16 +288,16 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
             for (const auto & region_id : error.region_ids())
                 retry_regions.insert(region_id);
 
-            LOG_INFO(
-                log,
-                "Received EstablishDisaggregated response with retryable error: {}, addr={} retry_regions={}",
+            String error_msg = fmt::format(
+                "Received EstablishDisaggTask response with retryable error: {}, addr={} retry_regions={}",
                 error.msg(),
                 batch_cop_task.store_addr,
                 retry_regions);
+            LOG_INFO(log, error_msg);
 
             dropRegionCache(cluster->region_cache, req, std::move(retry_regions));
 
-            throw Exception(error.msg(), ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR);
+            throw Exception(error_msg, ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR);
         }
         else if (resp.error().has_error_locked())
         {
@@ -305,11 +305,12 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
 
             const auto & error = resp.error().error_locked();
 
-            LOG_INFO(
-                log,
-                "Received EstablishDisaggregated response with retryable error: {}, addr={}",
+            String error_msg = fmt::format(
+                "Received EstablishDisaggTask response with retryable error: {}, addr={} lock_info_size={}",
                 error.msg(),
-                batch_cop_task.store_addr);
+                batch_cop_task.store_addr,
+                error.locked().size());
+            LOG_INFO(log, error_msg);
 
             Stopwatch w_resolve_lock;
 
@@ -337,7 +338,7 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
             GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_resolve_lock)
                 .Observe(w_resolve_lock.elapsedSeconds());
 
-            throw Exception(error.msg(), ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR);
+            throw Exception(error_msg, ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR);
         }
         else
         {
