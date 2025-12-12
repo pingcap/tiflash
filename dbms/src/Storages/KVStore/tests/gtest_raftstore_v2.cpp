@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/KVStore/MultiRaft/ApplySnapshot.h>
+#include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/Read/LearnerRead.h>
 #include <Storages/KVStore/tests/region_kvstore_test.h>
 
