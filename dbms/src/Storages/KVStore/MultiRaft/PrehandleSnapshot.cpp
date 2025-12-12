@@ -37,6 +37,8 @@
 #include <Storages/StorageDeltaMergeHelpers.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
+#include <common/logger_useful.h>
+#include <fiu.h>
 
 #include <chrono>
 
@@ -56,6 +58,7 @@ extern const char force_set_parallel_prehandle_threshold[];
 extern const char force_raise_prehandle_exception[];
 extern const char pause_before_prehandle_snapshot[];
 extern const char pause_before_prehandle_subtask[];
+extern const char force_release_snap_meet_null_storage[];
 } // namespace FailPoints
 
 namespace ErrorCodes
@@ -885,10 +888,25 @@ void KVStore::releasePreHandledSnapshot<RegionPtrWithSnapshotFiles>(
     const RegionPtrWithSnapshotFiles & s,
     TMTContext & tmt)
 {
-    auto & storages = tmt.getStorages();
     auto keyspace_id = s.base->getKeyspaceID();
     auto table_id = s.base->getMappedTableID();
+    if (s.external_files.empty())
+    {
+        LOG_INFO(
+            log,
+            "Release prehandled snapshot is skipped, no external files, region_id={} keyspace={} table_id={}",
+            s.base->id(),
+            keyspace_id,
+            table_id);
+        return;
+    }
+
+    auto & storages = tmt.getStorages();
     auto storage = storages.get(keyspace_id, table_id);
+    fiu_do_on(FailPoints::force_release_snap_meet_null_storage, {
+        LOG_WARNING(log, "failpoint force_release_snap_meet_null_storage is enabled");
+        storage = nullptr;
+    });
     if (storage == nullptr)
     {
         LOG_WARNING(
