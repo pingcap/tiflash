@@ -128,7 +128,8 @@ namespace DB
     M(force_join_v2_probe_enable_lm)                         \
     M(force_join_v2_probe_disable_lm)                        \
     M(force_s3_random_access_file_init_fail)                 \
-    M(force_s3_random_access_file_read_fail)
+    M(force_s3_random_access_file_read_fail)                 \
+    M(force_release_snap_meet_null_storage)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M)    \
     M(pause_with_alter_locks_acquired)            \

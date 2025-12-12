@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/Read/LearnerRead.h>
 #include <Storages/KVStore/tests/region_kvstore_test.h>
 
@@ -22,6 +23,7 @@ namespace FailPoints
 extern const char force_raise_prehandle_exception[];
 extern const char pause_before_prehandle_subtask[];
 extern const char force_set_sst_to_dtfile_block_size[];
+extern const char force_release_snap_meet_null_storage[];
 } // namespace FailPoints
 
 namespace tests
@@ -524,6 +526,120 @@ try
             sp.disable();
             t.join();
         }
+    }
+}
+CATCH
+
+// Test when a region is cancel during releasing pre-handled snapshot.
+// And the pre-handled snapshot contains no external files.
+TEST_F(RegionKVStoreV2Test, KVStoreSingleSnapReleaseNoExternalFiles)
+try
+{
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
+    proxy_instance->cluster_ver = RaftstoreVer::V2;
+    ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
+    ASSERT_NE(proxy_helper->fn_get_config_json, nullptr);
+    FailPointHelper::enableFailPoint(FailPoints::force_release_snap_meet_null_storage, static_cast<size_t>(0));
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_release_snap_meet_null_storage); });
+    UInt64 region_id = 2;
+    initStorages();
+    KVStore & kvs = getKVS();
+    TableID table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
+    auto start = RecordKVFormat::genKey(table_id, 0);
+    auto end = RecordKVFormat::genKey(table_id, 40);
+    proxy_instance->bootstrapWithRegion( //
+        kvs,
+        ctx.getTMTContext(),
+        region_id,
+        std::make_pair(start.toString(), end.toString()));
+    auto r1 = proxy_instance->getRegion(region_id);
+
+    auto [value_write, value_default] = proxy_instance->generateTiKVKeyValue(111, 999);
+    auto kkk = RecordKVFormat::decodeWriteCfValue(TiKVValue::copyFrom(value_write));
+    {
+        // mock an empty region
+        MockSSTReader::getMockSSTData().clear();
+        MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
+        default_cf.finish_file(SSTFormatKind::KIND_TABLET);
+        default_cf.freeze();
+        MockSSTGenerator write_cf{region_id, table_id, ColumnFamilyType::Write};
+        write_cf.finish_file(SSTFormatKind::KIND_TABLET);
+        write_cf.freeze();
+        auto [prehandle_region, res] = proxy_instance->snapshot( //
+            kvs,
+            ctx.getTMTContext(),
+            region_id,
+            {default_cf, write_cf},
+            0,
+            0,
+            std::nullopt);
+        kvs.abortPreHandleSnapshot(region_id, ctx.getTMTContext());
+        RegionPtrWithSnapshotFiles region_with_snap(prehandle_region, {});
+        kvs.releasePreHandledSnapshot(region_with_snap, ctx.getTMTContext());
+    }
+}
+CATCH
+
+// Test when a region is cancel during releasing pre-handled snapshot.
+// And the pre-handled snapshot's storage is null.
+TEST_F(RegionKVStoreV2Test, KVStoreSingleSnapReleaseNullStorage)
+try
+{
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
+    proxy_instance->cluster_ver = RaftstoreVer::V2;
+    ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
+    ASSERT_NE(proxy_helper->fn_get_config_json, nullptr);
+    FailPointHelper::enableFailPoint(FailPoints::force_release_snap_meet_null_storage, static_cast<size_t>(0));
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_release_snap_meet_null_storage); });
+    UInt64 region_id = 2;
+    initStorages();
+    KVStore & kvs = getKVS();
+    TableID table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
+    auto start = RecordKVFormat::genKey(table_id, 0);
+    auto end = RecordKVFormat::genKey(table_id, 40);
+    HandleID sst_limit = 40;
+    proxy_instance->bootstrapWithRegion( //
+        kvs,
+        ctx.getTMTContext(),
+        region_id,
+        std::make_pair(start.toString(), end.toString()));
+    auto r1 = proxy_instance->getRegion(region_id);
+
+    auto [value_write, value_default] = proxy_instance->generateTiKVKeyValue(111, 999);
+    auto kkk = RecordKVFormat::decodeWriteCfValue(TiKVValue::copyFrom(value_write));
+    {
+        MockSSTReader::getMockSSTData().clear();
+        MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
+        for (HandleID h = 1; h < sst_limit; h++)
+        {
+            auto k = RecordKVFormat::genKey(table_id, h, 111);
+            default_cf.insert_raw(k, value_default);
+        }
+        default_cf.finish_file(SSTFormatKind::KIND_TABLET);
+        default_cf.freeze();
+        MockSSTGenerator write_cf{region_id, table_id, ColumnFamilyType::Write};
+        for (HandleID h = 1; h < sst_limit; h++)
+        {
+            auto k = RecordKVFormat::genKey(table_id, h, 111);
+            write_cf.insert_raw(k, value_write);
+        }
+        write_cf.finish_file(SSTFormatKind::KIND_TABLET);
+        write_cf.freeze();
+
+        auto [prehandle_region, res] = proxy_instance->snapshot( //
+            kvs,
+            ctx.getTMTContext(),
+            region_id,
+            {default_cf, write_cf},
+            0,
+            0,
+            std::nullopt,
+            [] {
+                // set the function so that will call releasePreHandledSnapshot
+                // and verify the null storage handling logic
+                return nullptr;
+            });
+        UNUSED(prehandle_region, res);
     }
 }
 CATCH
