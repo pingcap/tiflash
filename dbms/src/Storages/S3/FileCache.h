@@ -295,7 +295,7 @@ public:
 
     void bgDownload(const String & s3_key, FileSegmentPtr & file_seg);
     void fgDownload(const String & s3_key, FileSegmentPtr & file_seg);
-    void download(const String & s3_key, FileSegmentPtr & file_seg, const WriteLimiterPtr & write_limiter);
+    void bgDownloadExecutor(const String & s3_key, FileSegmentPtr & file_seg, const WriteLimiterPtr & write_limiter);
     void downloadImpl(const String & s3_key, FileSegmentPtr & file_seg, const WriteLimiterPtr & write_limiter);
 
     static String toTemporaryFilename(const String & fname);
