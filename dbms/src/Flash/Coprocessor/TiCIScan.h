@@ -27,7 +27,10 @@ public:
     TiCIScan(const tipb::Executor * tici_scan_, const String & executor_id_, const DAGContext & dag_context);
     explicit TiCIScan(const tipb::Executor * tici_scan_);
 
+    // Do not use getReturnColumns when is_count_agg is true
     const TiDB::ColumnInfos & getReturnColumns() const { return return_columns; }
+    void setNamesAndTypes(const NamesAndTypes & new_names_and_types) { names_and_types = new_names_and_types; }
+    const NamesAndTypes getNamesAndTypes() const { return names_and_types; }
     const TableShardInfos & getShardInfos() const { return shard_infos; }
     const uint & getKeyspaceID() const { return keyspace_id; }
     const int & getTableId() const { return table_id; }
@@ -46,6 +49,10 @@ public:
 
     void setIsCountAgg(bool v) { is_count_agg = v; }
 
+    void setCountAggExecutorId(const String & v) { count_agg_executor_id = v; }
+
+    const String & getCountAggExecutorId() const { return count_agg_executor_id; }
+
 private:
     const tipb::Executor * tici_scan;
     [[maybe_unused]] String executor_id;
@@ -53,9 +60,11 @@ private:
     const int table_id;
     const int index_id;
     TiDB::ColumnInfos return_columns;
+    NamesAndTypes names_and_types;
     [[maybe_unused]] tipb::FTSQueryType query_type;
     const TableShardInfos shard_infos;
     const int limit;
     bool is_count_agg = false;
+    String count_agg_executor_id;
 };
 } // namespace DB

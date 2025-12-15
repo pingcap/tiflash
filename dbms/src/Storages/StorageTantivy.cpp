@@ -70,7 +70,16 @@ void StorageTantivy::read(
     [[maybe_unused]] size_t max_block_size,
     unsigned num_streams)
 {
-    auto return_columns = genNamesAndTypesForTiCI(tici_scan.getReturnColumns(), "column");
+    NamesAndTypes return_columns;
+    if (tici_scan.isCount())
+    {
+        RUNTIME_CHECK_MSG(tici_scan.getNamesAndTypes().size() == 1, "count search should return one column");
+        return_columns = tici_scan.getNamesAndTypes();
+    }
+    else
+    {
+        return_columns = genNamesAndTypesForTiCI(tici_scan.getReturnColumns(), "column");
+    }
 
     auto tici_task_pool = std::make_shared<TS::TiCIReadTaskPool>(
         log,
@@ -92,8 +101,8 @@ void StorageTantivy::read(
         group_builder.addConcurrency(
             std::make_unique<TantivyReaderSourceOp>(exec_status, log->identifier(), tici_task_pool, return_columns));
     }
-
-    executeCastAfterTiCIScan(exec_status, group_builder);
+    if (!tici_scan.isCount())
+        executeCastAfterTiCIScan(exec_status, group_builder);
 }
 
 void StorageTantivy::executeCastAfterTiCIScan(

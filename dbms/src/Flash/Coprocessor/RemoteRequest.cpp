@@ -118,20 +118,48 @@ RemoteRequest RemoteRequest::build(
     DAGSchema schema;
     tipb::DAGRequest dag_req;
     {
-        tipb::Executor * ts_exec = dag_req.mutable_root_executor();
-        ts_exec->set_tp(tipb::ExecType::TypeIndexScan);
-        ts_exec->set_executor_id(tici_scan.getTiCIScan()->executor_id());
-        auto * mutable_tici_scan = ts_exec->mutable_idx_scan();
+        tipb::Executor * tici_scan_exec;
+        NamesAndTypes names_and_types;
+        if (tici_scan.isCount())
+        {
+            auto * root_exec = dag_req.mutable_root_executor();
+            root_exec->set_tp(tipb::ExecType::TypeAggregation);
+            root_exec->set_executor_id(tici_scan.getCountAggExecutorId());
+            auto * new_aggregation = root_exec->mutable_aggregation();
+            tipb::Expr * agg_func = new_aggregation->add_agg_func();
+            agg_func->set_tp(tipb::ExprType::Count);
+            auto * ft = agg_func->mutable_field_type();
+            // "count" always returns a NOT NULL INT64 column
+            ft->set_tp(TiDB::TypeLongLong);
+            ft->set_flag(TiDB::ColumnFlagNotNull);
+            tici_scan_exec = new_aggregation->mutable_child();
+
+            names_and_types = tici_scan.getNamesAndTypes();
+            TiDB::ColumnInfo ci;
+            // "count" always returns a NOT NULL INT64 column
+            ci.tp = TiDB::TypeLongLong;
+            ci.setNotNullFlag();
+            schema.emplace_back(std::make_pair(names_and_types[0].name, std::move(ci)));
+            dag_req.add_output_offsets(0);
+        }
+        else
+        {
+            const auto & return_columns = tici_scan.getReturnColumns();
+            tici_scan_exec = dag_req.mutable_root_executor();
+            names_and_types = genNamesAndTypesForTiCI(return_columns, "column");
+            for (size_t i = 0; i < return_columns.size(); ++i)
+            {
+                const auto & col = return_columns[i];
+                schema.emplace_back(std::make_pair(names_and_types[i].name, col));
+                dag_req.add_output_offsets(i);
+            }
+        }
+
+        tici_scan_exec->set_tp(tipb::ExecType::TypeIndexScan);
+        tici_scan_exec->set_executor_id(tici_scan.getTiCIScan()->executor_id());
+        auto * mutable_tici_scan = tici_scan_exec->mutable_idx_scan();
         tici_scan.constructTiCIScanForRemoteRead(mutable_tici_scan);
 
-        const auto & return_columns = tici_scan.getReturnColumns();
-        auto names_and_types = genNamesAndTypesForTiCI(return_columns, "column");
-        for (size_t i = 0; i < return_columns.size(); ++i)
-        {
-            const auto & col = return_columns[i];
-            schema.emplace_back(std::make_pair(names_and_types[i].name, col));
-            dag_req.add_output_offsets(i);
-        }
         dag_req.set_encode_type(tipb::EncodeType::TypeCHBlock);
         dag_req.set_force_encode_type(true);
     }

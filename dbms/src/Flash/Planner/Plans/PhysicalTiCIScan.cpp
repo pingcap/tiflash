@@ -104,7 +104,8 @@ void PhysicalTiCIScan::buildPipeline(
     // For building PipelineExec in compile time.
     StorageTantivyIterpreter storage_interpreter(context, tici_scan, context.getMaxStreams());
     storage_interpreter.execute(exec_context, pipeline_exec_builder);
-    buildProjection(exec_context, pipeline_exec_builder);
+    if (!tici_scan.isCount())
+        buildProjection(exec_context, pipeline_exec_builder);
 
     PhysicalPlanNode::buildPipeline(builder, context, exec_context);
 }
