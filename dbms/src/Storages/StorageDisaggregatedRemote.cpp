@@ -306,7 +306,7 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
             ErrorCodes::UNKNOWN_EXCEPTION,
             "EstablishDisaggTask failed, wn_address={}, errmsg={}, {}",
             req->address(),
-            rpc.errMsg(status),
+            rpc.errMsg(status, ""),
             log->identifier());
 
     const DM::DisaggTaskId snapshot_id(resp.snapshot_id());
