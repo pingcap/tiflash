@@ -67,7 +67,7 @@ struct StorageRemoteCacheConfig
     UInt64 capacity = 0;
     UInt64 dtfile_level = 100;
     double delta_rate = 0.1;
-    double reserved_rate = 0.1;
+    double reserved_rate = 0.15;
 
     bool isCacheEnabled() const;
     void initCacheDir() const;
