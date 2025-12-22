@@ -356,48 +356,55 @@ HttpRequestRes HandleHttpRequestRemoteGC(
     return buildOkResp(api_name, std::move(body));
 }
 
-RemoteCacheEvictRequest parseEvictRequest(const std::string_view path, const std::string_view api_name)
+RemoteCacheEvictRequest parseEvictRequest(
+    const std::string_view path,
+    const std::string_view api_name,
+    const std::string_view query)
 {
     RemoteCacheEvictRequest req{
         .evict_method = EvictMethod::ByFileType,
         .evict_type = FileSegment::FileType::Unknow,
-        .evict_size = 0,
+        .reserve_size = 0,
+        .force_evict = false,
         .err_msg = "",
     };
     // schema:
     // - /tiflash/remote/cache/evict/{file_type_int}
     // - /tiflash/remote/cache/evict/type/{file_type_int}
     // - /tiflash/remote/cache/evict/size/{size_in_bytes}
-    auto query = path.substr(api_name.size());
-    if (query.empty() || query[0] != '/')
+    auto trim_path = path.substr(api_name.size());
+    if (trim_path.empty() || trim_path[0] != '/')
     {
         req.err_msg = fmt::format("invalid remote cache evict request: {}", path);
         return req;
     }
-    query.remove_prefix(1); // remove leading '/'
+    trim_path.remove_prefix(1); // remove leading '/'
 
     try
     {
-        if (query.starts_with("size/"))
+        if (trim_path.starts_with("size/"))
         {
-            query.remove_prefix(5); // remove leading 'size/'
+            trim_path.remove_prefix(5); // remove leading 'size/'
             // reject negative size
-            if (query.empty() || query[0] == '-')
+            if (trim_path.empty() || trim_path[0] == '-')
             {
                 req.err_msg = fmt::format("invalid size in remote cache evict request: {}", path);
                 return req;
             }
-            req.evict_size = std::stoull(query.data());
+            req.reserve_size = std::stoull(trim_path.data());
             req.evict_method = EvictMethod::ByEvictSize;
+
+            if (!query.empty() && query.find("force") != std::string_view::npos)
+                req.force_evict = true;
             return req;
         }
         else
         {
-            if (query.starts_with("type/"))
+            if (trim_path.starts_with("type/"))
             {
-                query.remove_prefix(5); // remove leading 'type/'
+                trim_path.remove_prefix(5); // remove leading 'type/'
             }
-            auto itype = std::stoull(query.data());
+            auto itype = std::stoull(trim_path.data());
             std::optional<FileSegment::FileType> opt_evict_until_type
                 = magic_enum::enum_cast<FileSegment::FileType>(itype);
             if (!opt_evict_until_type.has_value())
@@ -422,7 +429,7 @@ HttpRequestRes HandleHttpRequestRemoteCacheEvict(
     EngineStoreServerWrap * server,
     std::string_view path,
     const std::string & api_name,
-    std::string_view,
+    std::string_view query,
     std::string_view)
 {
     auto & global_ctx = server->tmt->getContext();
@@ -434,8 +441,8 @@ HttpRequestRes HandleHttpRequestRemoteCacheEvict(
     }
 
     auto log = Logger::get("HandleHttpRequestRemoteCacheEvict");
-    LOG_INFO(log, "handling remote cache evict request, path={} api_name={}", path, api_name);
-    RemoteCacheEvictRequest req = parseEvictRequest(path, api_name);
+    LOG_INFO(log, "handling remote cache evict request, path={} api_name={} query={}", path, api_name, query);
+    RemoteCacheEvictRequest req = parseEvictRequest(path, api_name, query);
     if (!req.err_msg.empty())
     {
         auto body = fmt::format(R"json({{"message":"{}"}})json", req.err_msg);
@@ -455,19 +462,13 @@ HttpRequestRes HandleHttpRequestRemoteCacheEvict(
     case EvictMethod::ByFileType:
     {
         auto released_size = file_cache->evictByFileType(req.evict_type);
-        auto body = fmt::format(
-            R"json({{"req":"{}","released_size":"{}"}})json",
-            req,
-            released_size);
+        auto body = fmt::format(R"json({{"req":"{}","released_size":"{}"}})json", req, released_size);
         return buildOkResp(api_name, std::move(body));
     }
     case EvictMethod::ByEvictSize:
     {
-        size_t released_size = file_cache->evictBySize(req.evict_size, false);
-        auto body = fmt::format(
-            R"json({{"req":"{}","released_size":"{}"}})json",
-            req,
-            released_size);
+        size_t released_size = file_cache->evictBySize(req.reserve_size, req.force_evict);
+        auto body = fmt::format(R"json({{"req":"{}","released_size":"{}"}})json", req, released_size);
         return buildOkResp(api_name, std::move(body));
     }
     }

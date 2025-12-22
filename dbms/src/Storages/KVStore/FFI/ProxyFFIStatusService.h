@@ -27,11 +27,12 @@ struct RemoteCacheEvictRequest
 {
     EvictMethod evict_method;
     FileSegment::FileType evict_type;
-    size_t evict_size;
+    size_t reserve_size = 0;
+    bool force_evict = false;
     String err_msg;
 };
 
-RemoteCacheEvictRequest parseEvictRequest(std::string_view path, std::string_view api_name);
+RemoteCacheEvictRequest parseEvictRequest(std::string_view path, std::string_view api_name, std::string_view query);
 
 } // namespace DB
 
@@ -47,11 +48,21 @@ struct fmt::formatter<DB::RemoteCacheEvictRequest>
         {
             return fmt::format_to(ctx.out(), "{{err_msg={}}}", req.err_msg);
         }
-        return fmt::format_to(
-            ctx.out(),
-            "{{method={} evict_type={} evict_size={}}}",
-            magic_enum::enum_name(req.evict_method),
-            magic_enum::enum_name(req.evict_type),
-            req.evict_size);
+        switch (req.evict_method)
+        {
+        case DB::EvictMethod::ByFileType:
+            return fmt::format_to(
+                ctx.out(),
+                "{{method={} evict_type={}}}",
+                magic_enum::enum_name(req.evict_method),
+                magic_enum::enum_name(req.evict_type));
+        case DB::EvictMethod::ByEvictSize:
+            return fmt::format_to(
+                ctx.out(),
+                "{{method={} reserve_size={} force={}}}",
+                magic_enum::enum_name(req.evict_method),
+                req.reserve_size,
+                req.force_evict);
+        }
     }
 };

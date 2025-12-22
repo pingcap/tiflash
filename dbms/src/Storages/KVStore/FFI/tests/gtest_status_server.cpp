@@ -213,21 +213,21 @@ TEST_F(StatusServerTest, TestParseRemoteCacheEvictRequest)
     const std::string api_name = "/tiflash/remote/cache/evict";
     {
         std::string path = api_name + "/5";
-        RemoteCacheEvictRequest req = parseEvictRequest(path, api_name);
+        RemoteCacheEvictRequest req = parseEvictRequest(path, api_name, "");
         ASSERT_TRUE(req.err_msg.empty());
         ASSERT_EQ(req.evict_method, EvictMethod::ByFileType);
         ASSERT_EQ(req.evict_type, FileSegment::FileType::Merged);
     }
     {
         std::string path = api_name + "/type/5";
-        RemoteCacheEvictRequest req = parseEvictRequest(path, api_name);
+        RemoteCacheEvictRequest req = parseEvictRequest(path, api_name, "");
         ASSERT_TRUE(req.err_msg.empty());
         ASSERT_EQ(req.evict_method, EvictMethod::ByFileType);
         ASSERT_EQ(req.evict_type, FileSegment::FileType::Merged);
     }
     {
         std::string path = api_name + "/type/0";
-        RemoteCacheEvictRequest req = parseEvictRequest(path, api_name);
+        RemoteCacheEvictRequest req = parseEvictRequest(path, api_name, "");
         ASSERT_TRUE(req.err_msg.empty());
         ASSERT_EQ(req.evict_method, EvictMethod::ByFileType);
         ASSERT_EQ(req.evict_type, FileSegment::FileType::Unknow);
@@ -236,17 +236,36 @@ TEST_F(StatusServerTest, TestParseRemoteCacheEvictRequest)
     // test evict by size
     {
         std::string path = api_name + "/size/102400";
-        RemoteCacheEvictRequest req = parseEvictRequest(path, api_name);
+        RemoteCacheEvictRequest req = parseEvictRequest(path, api_name, "");
         ASSERT_TRUE(req.err_msg.empty());
         ASSERT_EQ(req.evict_method, EvictMethod::ByEvictSize);
         ASSERT_EQ(req.evict_size, 102400);
+        ASSERT_EQ(req.force_evict, false);
     }
     {
         std::string path = api_name + "/size/20480";
-        RemoteCacheEvictRequest req = parseEvictRequest(path, api_name);
+        RemoteCacheEvictRequest req = parseEvictRequest(path, api_name, "");
         ASSERT_TRUE(req.err_msg.empty());
         ASSERT_EQ(req.evict_method, EvictMethod::ByEvictSize);
         ASSERT_EQ(req.evict_size, 20480);
+        ASSERT_EQ(req.force_evict, false);
+    }
+    {
+        std::string path = api_name + "/size/20480";
+        // now we only check the existence of "force" in query string
+        RemoteCacheEvictRequest req = parseEvictRequest(path, api_name, "force");
+        ASSERT_TRUE(req.err_msg.empty());
+        ASSERT_EQ(req.evict_method, EvictMethod::ByEvictSize);
+        ASSERT_EQ(req.evict_size, 20480);
+        ASSERT_EQ(req.force_evict, true);
+    }
+    {
+        std::string path = api_name + "/size/20480";
+        RemoteCacheEvictRequest req = parseEvictRequest(path, api_name, "force=true");
+        ASSERT_TRUE(req.err_msg.empty());
+        ASSERT_EQ(req.evict_method, EvictMethod::ByEvictSize);
+        ASSERT_EQ(req.evict_size, 20480);
+        ASSERT_EQ(req.force_evict, true);
     }
 
     for (const auto & invalid_suffix : {
@@ -266,7 +285,7 @@ TEST_F(StatusServerTest, TestParseRemoteCacheEvictRequest)
          })
     {
         std::string path = api_name + invalid_suffix;
-        RemoteCacheEvictRequest req = parseEvictRequest(path, api_name);
+        RemoteCacheEvictRequest req = parseEvictRequest(path, api_name, "");
         LOG_INFO(Logger::get(), "path={} err_msg={}", path, req.err_msg);
         EXPECT_FALSE(req.err_msg.empty()) << fmt::format("path={} req={}", path, req);
     }
