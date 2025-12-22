@@ -472,6 +472,7 @@ HttpRequestRes HandleHttpRequestRemoteCacheEvict(
         return buildOkResp(api_name, std::move(body));
     }
     }
+    __builtin_unreachable();
 }
 
 // Acquiring the all the region ids created in this TiFlash node with given keyspace id.

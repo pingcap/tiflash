@@ -239,7 +239,7 @@ TEST_F(StatusServerTest, TestParseRemoteCacheEvictRequest)
         RemoteCacheEvictRequest req = parseEvictRequest(path, api_name, "");
         ASSERT_TRUE(req.err_msg.empty());
         ASSERT_EQ(req.evict_method, EvictMethod::ByEvictSize);
-        ASSERT_EQ(req.evict_size, 102400);
+        ASSERT_EQ(req.reserve_size, 102400);
         ASSERT_EQ(req.force_evict, false);
     }
     {
@@ -247,7 +247,7 @@ TEST_F(StatusServerTest, TestParseRemoteCacheEvictRequest)
         RemoteCacheEvictRequest req = parseEvictRequest(path, api_name, "");
         ASSERT_TRUE(req.err_msg.empty());
         ASSERT_EQ(req.evict_method, EvictMethod::ByEvictSize);
-        ASSERT_EQ(req.evict_size, 20480);
+        ASSERT_EQ(req.reserve_size, 20480);
         ASSERT_EQ(req.force_evict, false);
     }
     {
@@ -256,7 +256,7 @@ TEST_F(StatusServerTest, TestParseRemoteCacheEvictRequest)
         RemoteCacheEvictRequest req = parseEvictRequest(path, api_name, "force");
         ASSERT_TRUE(req.err_msg.empty());
         ASSERT_EQ(req.evict_method, EvictMethod::ByEvictSize);
-        ASSERT_EQ(req.evict_size, 20480);
+        ASSERT_EQ(req.reserve_size, 20480);
         ASSERT_EQ(req.force_evict, true);
     }
     {
@@ -264,7 +264,7 @@ TEST_F(StatusServerTest, TestParseRemoteCacheEvictRequest)
         RemoteCacheEvictRequest req = parseEvictRequest(path, api_name, "force=true");
         ASSERT_TRUE(req.err_msg.empty());
         ASSERT_EQ(req.evict_method, EvictMethod::ByEvictSize);
-        ASSERT_EQ(req.evict_size, 20480);
+        ASSERT_EQ(req.reserve_size, 20480);
         ASSERT_EQ(req.force_evict, true);
     }
 
