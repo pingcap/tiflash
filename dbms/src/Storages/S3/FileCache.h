@@ -272,12 +272,10 @@ public:
 
     void updateConfig(const Settings & settings);
 
-    // evict the cached files until no file of >= `file_type` is in cache.
+
     UInt64 evictByFileType(FileSegment::FileType file_type);
-    // evict the cached files until at least `size_to_reserve` bytes are freed.
-    // return the actual evicted size.
-    // When `force_evict` is true, it will evict files even if they are being used recently.
-    UInt64 evictBySize(UInt64 size_to_reserve, bool force_evict);
+
+    UInt64 evictBySize(UInt64 size_to_reserve, UInt64 min_age_seconds, bool force_evict);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -384,16 +382,19 @@ public:
     UInt64 evictBySizeImpl(
         FileSegment::FileType evict_for,
         UInt64 size_to_reserve,
+        UInt64 min_age_seconds,
         EvictMode mode,
         std::unique_lock<std::mutex> & guard);
     UInt64 tryEvictFile(
         FileSegment::FileType evict_for,
         UInt64 min_evict_size,
+        UInt64 min_age_seconds,
         EvictMode mode,
         std::unique_lock<std::mutex> & guard);
     UInt64 tryEvictFileFrom(
         FileSegment::FileType evict_for,
         UInt64 min_evict_size,
+        UInt64 min_age_seconds,
         FileSegment::FileType evict_from,
         std::unique_lock<std::mutex> & guard);
     UInt64 forceEvict(UInt64 size, std::unique_lock<std::mutex> & guard);

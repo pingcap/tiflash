@@ -208,6 +208,67 @@ try
 }
 CATCH
 
+TEST_F(StatusServerTest, TestParseHttpQueryMap)
+{
+    {
+        std::string_view query = "key1=val1&key2=val2&key3=val3";
+        auto query_map = parseHttpQueryMap(query);
+        ASSERT_EQ(query_map.size(), 3);
+        ASSERT_EQ(query_map["key1"], "val1");
+        ASSERT_EQ(query_map["key2"], "val2");
+        ASSERT_EQ(query_map["key3"], "val3");
+    }
+    {
+        std::string_view query = "key1=val1&key2=&key3=val3";
+        auto query_map = parseHttpQueryMap(query);
+        ASSERT_EQ(query_map.size(), 3);
+        ASSERT_EQ(query_map["key1"], "val1");
+        ASSERT_EQ(query_map["key2"], "");
+        ASSERT_EQ(query_map["key3"], "val3");
+    }
+    {
+        std::string_view query = "key1=val1&key2&key3=val3";
+        auto query_map = parseHttpQueryMap(query);
+        ASSERT_EQ(query_map.size(), 3);
+        ASSERT_EQ(query_map["key1"], "val1");
+        ASSERT_EQ(query_map["key2"], "");
+        ASSERT_EQ(query_map["key3"], "val3");
+    }
+    {
+        std::string_view query;
+        auto query_map = parseHttpQueryMap(query);
+        ASSERT_EQ(query_map.size(), 0);
+    }
+    {
+        std::string_view query = "&";
+        auto query_map = parseHttpQueryMap(query);
+        ASSERT_EQ(query_map.size(), 0);
+    }
+    {
+        std::string_view query = "key1=val1&&key3=val3";
+        auto query_map = parseHttpQueryMap(query);
+        ASSERT_EQ(query_map.size(), 2);
+        ASSERT_EQ(query_map["key1"], "val1");
+        ASSERT_EQ(query_map["key3"], "val3");
+    }
+    {
+        std::string_view query = "key1=val1&key2=val2&key3=val3&";
+        auto query_map = parseHttpQueryMap(query);
+        ASSERT_EQ(query_map.size(), 3);
+        ASSERT_EQ(query_map["key1"], "val1");
+        ASSERT_EQ(query_map["key2"], "val2");
+        ASSERT_EQ(query_map["key3"], "val3");
+    }
+    {
+        std::string_view query = "key1=val1&key2=val2&=val3";
+        auto query_map = parseHttpQueryMap(query);
+        ASSERT_EQ(query_map.size(), 3);
+        ASSERT_EQ(query_map["key1"], "val1");
+        ASSERT_EQ(query_map["key2"], "val2");
+        ASSERT_EQ(query_map[""], "val3");
+    }
+}
+
 TEST_F(StatusServerTest, TestParseRemoteCacheEvictRequest)
 {
     const std::string api_name = "/tiflash/remote/cache/evict";
@@ -240,6 +301,7 @@ TEST_F(StatusServerTest, TestParseRemoteCacheEvictRequest)
         ASSERT_TRUE(req.err_msg.empty());
         ASSERT_EQ(req.evict_method, EvictMethod::ByEvictSize);
         ASSERT_EQ(req.reserve_size, 102400);
+        ASSERT_EQ(req.min_age, 0);
         ASSERT_EQ(req.force_evict, false);
     }
     {
@@ -248,6 +310,7 @@ TEST_F(StatusServerTest, TestParseRemoteCacheEvictRequest)
         ASSERT_TRUE(req.err_msg.empty());
         ASSERT_EQ(req.evict_method, EvictMethod::ByEvictSize);
         ASSERT_EQ(req.reserve_size, 20480);
+        ASSERT_EQ(req.min_age, 0);
         ASSERT_EQ(req.force_evict, false);
     }
     {
@@ -257,6 +320,7 @@ TEST_F(StatusServerTest, TestParseRemoteCacheEvictRequest)
         ASSERT_TRUE(req.err_msg.empty());
         ASSERT_EQ(req.evict_method, EvictMethod::ByEvictSize);
         ASSERT_EQ(req.reserve_size, 20480);
+        ASSERT_EQ(req.min_age, 0);
         ASSERT_EQ(req.force_evict, true);
     }
     {
@@ -265,6 +329,34 @@ TEST_F(StatusServerTest, TestParseRemoteCacheEvictRequest)
         ASSERT_TRUE(req.err_msg.empty());
         ASSERT_EQ(req.evict_method, EvictMethod::ByEvictSize);
         ASSERT_EQ(req.reserve_size, 20480);
+        ASSERT_EQ(req.min_age, 0);
+        ASSERT_EQ(req.force_evict, true);
+    }
+    {
+        std::string path = api_name + "/size/20480";
+        RemoteCacheEvictRequest req = parseEvictRequest(path, api_name, "force=false");
+        ASSERT_TRUE(req.err_msg.empty());
+        ASSERT_EQ(req.evict_method, EvictMethod::ByEvictSize);
+        ASSERT_EQ(req.reserve_size, 20480);
+        ASSERT_EQ(req.min_age, 0);
+        ASSERT_EQ(req.force_evict, false);
+    }
+    {
+        std::string path = api_name + "/size/20480";
+        RemoteCacheEvictRequest req = parseEvictRequest(path, api_name, "age=123&force=true");
+        ASSERT_TRUE(req.err_msg.empty());
+        ASSERT_EQ(req.evict_method, EvictMethod::ByEvictSize);
+        ASSERT_EQ(req.reserve_size, 20480);
+        ASSERT_EQ(req.min_age, 123); // valid age param
+        ASSERT_EQ(req.force_evict, true);
+    }
+    {
+        std::string path = api_name + "/size/20480";
+        RemoteCacheEvictRequest req = parseEvictRequest(path, api_name, "age=abd&force=true");
+        ASSERT_TRUE(req.err_msg.empty());
+        ASSERT_EQ(req.evict_method, EvictMethod::ByEvictSize);
+        ASSERT_EQ(req.reserve_size, 20480);
+        ASSERT_EQ(req.min_age, 0); // invalid age param, min_age is 0
         ASSERT_EQ(req.force_evict, true);
     }
 

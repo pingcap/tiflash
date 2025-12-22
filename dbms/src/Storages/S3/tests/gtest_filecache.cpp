@@ -959,7 +959,7 @@ TEST_F(FileCacheTest, EvictBySize)
         FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
         // no need to evict
         auto dt_cache_capacity = cache_config.getDTFileCapacity();
-        ASSERT_EQ(file_cache.evictBySize(dt_cache_capacity - 1024, false), 0);
+        ASSERT_EQ(file_cache.evictBySize(dt_cache_capacity - 1024, 0, false), 0);
     }
 
     {
@@ -985,10 +985,10 @@ TEST_F(FileCacheTest, EvictBySize)
         }
         // evict should respect the priority and last_access_time
         LOG_INFO(Logger::get(), "Test evictBySize with evict");
-        ASSERT_EQ(file_cache.evictBySize(32, /*force_evict*/ false), 0);
+        ASSERT_EQ(file_cache.evictBySize(32, 0, /*force_evict*/ false), 0);
         // force evict should free at least 1080 bytes
         LOG_INFO(Logger::get(), "Test evictBySize with force evict");
-        ASSERT_GT(file_cache.evictBySize(1080, /*force_evict*/ true), 1080);
+        ASSERT_GT(file_cache.evictBySize(1080, 0, /*force_evict*/ true), 1080);
     }
 
     {
@@ -1018,10 +1018,10 @@ TEST_F(FileCacheTest, EvictBySize)
         }
         // evict should respect the priority and last_access_time
         LOG_INFO(Logger::get(), "Test evictBySize with cache_used over capacity");
-        ASSERT_EQ(file_cache.evictBySize(32, /*force_evict*/ false), 0);
+        ASSERT_EQ(file_cache.evictBySize(32, 0, /*force_evict*/ false), 0);
         // force evict should free at least 32 bytes
         LOG_INFO(Logger::get(), "Test evictBySize with cache_used over capacity and force evict");
-        ASSERT_GT(file_cache.evictBySize(32, /*force_evict*/ true), 32);
+        ASSERT_GT(file_cache.evictBySize(32, 0, /*force_evict*/ true), 32);
     }
 }
 

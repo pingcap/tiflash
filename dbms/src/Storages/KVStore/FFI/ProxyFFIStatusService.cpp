@@ -357,6 +357,49 @@ HttpRequestRes HandleHttpRequestRemoteGC(
     return buildOkResp(api_name, std::move(body));
 }
 
+// Parse Http query string_view into a map
+HttpQueryMap parseHttpQueryMap(std::string_view query)
+{
+    HttpQueryMap query_map;
+
+    if (query.empty())
+    {
+        return query_map;
+    }
+
+    size_t start = 0;
+    while (start < query.size())
+    {
+        // Find the next '&' to separate key-value pairs
+        size_t end = query.find('&', start);
+        if (end == std::string_view::npos)
+        {
+            end = query.size();
+        }
+
+        std::string_view pair = query.substr(start, end - start);
+        if (!pair.empty())
+        {
+            // Find '=' to separate key and value
+            size_t eq_pos = pair.find('=');
+            if (eq_pos != std::string_view::npos)
+            {
+                std::string_view key = pair.substr(0, eq_pos);
+                std::string_view value = pair.substr(eq_pos + 1);
+                query_map[key] = value;
+            }
+            else
+            {
+                // Handle case where there's a key without a value
+                query_map[pair] = std::string_view{};
+            }
+        }
+
+        start = end + 1;
+    }
+    return query_map;
+}
+
 RemoteCacheEvictRequest parseEvictRequest(
     const std::string_view path,
     const std::string_view api_name,
@@ -366,6 +409,7 @@ RemoteCacheEvictRequest parseEvictRequest(
         .evict_method = EvictMethod::ByFileType,
         .evict_type = FileSegment::FileType::Unknow,
         .reserve_size = 0,
+        .min_age = 0,
         .force_evict = false,
         .err_msg = "",
     };
@@ -401,8 +445,26 @@ RemoteCacheEvictRequest parseEvictRequest(
 
             req.evict_method = EvictMethod::ByEvictSize;
 
-            if (!query.empty() && query.find("force") != std::string_view::npos)
-                req.force_evict = true;
+            // parse query as map
+            auto query_map = parseHttpQueryMap(query);
+            // "age"
+            if (auto age_it = query_map.find("age"); age_it != query_map.end())
+            {
+                UInt64 min_age = 0;
+                if (auto res
+                    = std::from_chars(age_it->second.data(), age_it->second.data() + age_it->second.size(), min_age);
+                    res.ec == std::errc())
+                {
+                    req.min_age = min_age;
+                }
+                // else just keep min_age as default
+            }
+            // "force"
+            if (auto force_it = query_map.find("force"); force_it != query_map.end())
+            {
+                // any value other than "0" or "false" is considered as true
+                req.force_evict = !(force_it->second == "0" || force_it->second == "false");
+            }
             return req;
         }
         else
@@ -481,7 +543,7 @@ HttpRequestRes HandleHttpRequestRemoteCacheEvict(
     }
     case EvictMethod::ByEvictSize:
     {
-        size_t released_size = file_cache->evictBySize(req.reserve_size, req.force_evict);
+        size_t released_size = file_cache->evictBySize(req.reserve_size, req.min_age, req.force_evict);
         auto body = fmt::format(R"json({{"req":"{}","released_size":"{}"}})json", req, released_size);
         return buildOkResp(api_name, std::move(body));
     }
