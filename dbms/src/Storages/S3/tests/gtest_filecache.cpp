@@ -462,9 +462,9 @@ try
         IDataType::getFileNameForStream(std::to_string(MutSup::delmark_col_id), {}));
     ASSERT_EQ(FileCache::getFileType(delmark_fname), FileType::DeleteMarkColData);
     auto unknow_fname0 = fmt::format("{}/123456", s3_fname);
-    ASSERT_EQ(FileCache::getFileType(unknow_fname0), FileType::Unknow);
+    ASSERT_EQ(FileCache::getFileType(unknow_fname0), FileType::Unknown);
     auto unknow_fname1 = fmt::format("{}/123456.lock", s3_fname);
-    ASSERT_EQ(FileCache::getFileType(unknow_fname1), FileType::Unknow);
+    ASSERT_EQ(FileCache::getFileType(unknow_fname1), FileType::Unknown);
 
     UInt16 vcores = 1;
     IORateLimiter rate_limiter;
@@ -474,7 +474,7 @@ try
         StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = level};
         FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
         auto can_cache = FileCache::ShouldCacheRes::Cache;
-        ASSERT_EQ(file_cache.canCache(FileType::Unknow), FileCache::ShouldCacheRes::RejectTypeNotMatch);
+        ASSERT_EQ(file_cache.canCache(FileType::Unknown), FileCache::ShouldCacheRes::RejectTypeNotMatch);
         ASSERT_EQ(file_cache.canCache(FileType::Meta) == can_cache, level >= 1);
         ASSERT_EQ(file_cache.canCache(FileType::VectorIndex) == can_cache, level >= 2);
         ASSERT_EQ(file_cache.canCache(FileType::FullTextIndex) == can_cache, level >= 3);
@@ -989,6 +989,36 @@ TEST_F(FileCacheTest, EvictBySize)
         // force evict should free at least 1080 bytes
         LOG_INFO(Logger::get(), "Test evictBySize with force evict");
         ASSERT_GT(file_cache.evictBySize(1080, 0, /*force_evict*/ true), 1080);
+    }
+
+    {
+        FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
+        auto dt_cache_capacity = cache_config.getDTFileCapacity();
+        // hack to add some files
+        {
+            std::unique_lock lock(file_cache.mtx);
+            file_cache.tables[magic_enum::enum_integer(FileType::Index)].set(
+                "/key1",
+                std::make_shared<FileSegment>(
+                    "/key1",
+                    FileSegment::Status::Complete,
+                    dt_cache_capacity - 2048,
+                    FileType::Index));
+            file_cache.tables[magic_enum::enum_integer(FileType::Index)].set(
+                "/key2",
+                std::make_shared<FileSegment>("/key2", FileSegment::Status::Complete, 512, FileType::Index));
+            // hack a older last_access_time
+            auto seg = std::make_shared<FileSegment>("/key3", FileSegment::Status::Complete, 512, FileType::Index);
+            seg->setLastAccessTime(std::chrono::system_clock::now() - std::chrono::hours(24));
+            file_cache.tables[magic_enum::enum_integer(FileType::Index)].set("/key3", seg);
+            file_cache.cache_used = dt_cache_capacity - 2048 + 512 + 512;
+        }
+        // evict should respect the priority and last_access_time, evict the "/key3" with only 512 bytes
+        LOG_INFO(Logger::get(), "Test evictBySize with old file");
+        ASSERT_EQ(file_cache.evictBySize(2048, 3600, /*force_evict*/ false), 512);
+        // force evict should free at least 2048 bytes
+        LOG_INFO(Logger::get(), "Test evictBySize with old file and force evict");
+        ASSERT_GT(file_cache.evictBySize(2048, 3600, /*force_evict*/ true), 2048);
     }
 
     {

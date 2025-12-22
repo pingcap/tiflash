@@ -291,7 +291,7 @@ TEST_F(StatusServerTest, TestParseRemoteCacheEvictRequest)
         RemoteCacheEvictRequest req = parseEvictRequest(path, api_name, "");
         ASSERT_TRUE(req.err_msg.empty());
         ASSERT_EQ(req.evict_method, EvictMethod::ByFileType);
-        ASSERT_EQ(req.evict_type, FileSegment::FileType::Unknow);
+        ASSERT_EQ(req.evict_type, FileSegment::FileType::Unknown);
     }
 
     // test evict by size
