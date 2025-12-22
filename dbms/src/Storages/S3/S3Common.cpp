@@ -240,7 +240,10 @@ disaggregated::GetDisaggConfigResponse getDisaggConfigFromDisaggWriteNodes(
                 disaggregated::GetDisaggConfigResponse resp;
                 auto status = rpc.call(&client_context, req, &resp);
                 if (!status.ok())
-                    throw Exception(rpc.errMsg(status));
+                {
+                    std::string extra_msg = "addr: " + send_address;
+                    throw Exception(rpc.errMsg(status, extra_msg));
+                }
 
                 RUNTIME_CHECK(resp.has_s3_config(), resp.ShortDebugString());
 
