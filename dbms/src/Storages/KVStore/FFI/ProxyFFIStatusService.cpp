@@ -21,6 +21,7 @@
 #include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/FFI/ProxyFFICommon.h>
+#include <Storages/KVStore/FFI/ProxyFFIStatusService.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/S3/FileCache.h>
@@ -355,6 +356,45 @@ HttpRequestRes HandleHttpRequestRemoteGC(
     return buildOkResp(api_name, std::move(body));
 }
 
+RemoteCacheEvictRequest parseEvictRequest(const std::string_view path, const std::string_view api_name)
+{
+    RemoteCacheEvictRequest req{
+        .evict_method = EvictMethod::ByFileType,
+        .evict_until_type = FileSegment::FileType::Unknow,
+        .evict_size = 0,
+        .err_msg = "",
+    };
+    // schema: /tiflash/remote/cache/evict/{file_type_int}
+    auto query = path.substr(api_name.size());
+    if (query.empty() || query[0] != '/')
+    {
+        req.err_msg = fmt::format("invalid remote cache evict request: {}", path);
+        return req;
+    }
+
+    query.remove_prefix(1);
+    std::optional<FileSegment::FileType> opt_evict_until_type = std::nullopt;
+    try
+    {
+        auto itype = std::stoll(query.data());
+        opt_evict_until_type = magic_enum::enum_cast<FileSegment::FileType>(itype);
+    }
+    catch (...)
+    {
+        // ignore
+    }
+    if (!opt_evict_until_type.has_value())
+    {
+        req.err_msg = fmt::format("invalid file_type in remote cache evict request: {}", path);
+        return req;
+    }
+
+    // successfully parse the file type
+    req.evict_method = EvictMethod::ByFileType;
+    req.evict_until_type = opt_evict_until_type.value();
+    return req;
+}
+
 HttpRequestRes HandleHttpRequestRemoteCacheEvict(
     EngineStoreServerWrap * server,
     std::string_view path,
@@ -372,42 +412,42 @@ HttpRequestRes HandleHttpRequestRemoteCacheEvict(
 
     auto log = Logger::get("HandleHttpRequestRemoteCacheEvict");
     LOG_INFO(log, "handling remote cache evict request, path={} api_name={}", path, api_name);
-    FileSegment::FileType evict_until_type;
+    RemoteCacheEvictRequest req = parseEvictRequest(path, api_name);
+
+    if (!req.err_msg.empty())
     {
-        // schema: /tiflash/remote/cache/evict/{file_type_int}
-        auto query = path.substr(api_name.size());
-        if (query.empty() || query[0] != '/')
-        {
-            auto body = fmt::format(R"json({{"message":"invalid remote cache evict request: {}"}})json", path);
-            return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, std::move(body));
-        }
-        query.remove_prefix(1);
-        std::optional<FileSegment::FileType> opt_evict_until_type = std::nullopt;
-        try
-        {
-            auto itype = std::stoll(query.data());
-            opt_evict_until_type = magic_enum::enum_cast<FileSegment::FileType>(itype);
-        }
-        catch (...)
-        {
-            // ignore
-        }
-        if (!opt_evict_until_type.has_value())
-        {
-            auto body
-                = fmt::format(R"json({{"message":"invalid file_type in remote cache evict request: {}"}})json", path);
-            return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, std::move(body));
-        }
-        // successfully parse the file type
-        evict_until_type = opt_evict_until_type.value();
+        auto body = fmt::format(R"json({{"message":"{}"}})json", req.err_msg);
+        return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, std::move(body));
     }
 
-    auto released_size = DB::FileCache::instance()->evictUntil(evict_until_type);
-    auto body = fmt::format(
-        R"json({{"file_type":"{}","released_size":"{}"}})json",
-        magic_enum::enum_name(evict_until_type),
-        released_size);
-    return buildOkResp(api_name, std::move(body));
+    auto * file_cache = DB::FileCache::instance();
+    if (!file_cache)
+    {
+        auto body = fmt::format(R"json({{"message":"file cache is not enabled"}})json");
+        return buildRespWithCode(HttpRequestStatus::InternalError, api_name, std::move(body));
+    }
+
+    switch (req.evict_method)
+    {
+    case EvictMethod::ByFileType:
+    {
+        auto released_size = file_cache->evictByFileType(req.evict_until_type);
+        auto body = fmt::format(
+            R"json({{"file_type":"{}","released_size":"{}"}})json",
+            magic_enum::enum_name(req.evict_until_type),
+            released_size);
+        return buildOkResp(api_name, std::move(body));
+    }
+    case EvictMethod::ByEvictSize:
+    {
+        size_t released_size = 0;
+        auto body = fmt::format(
+            R"json({{"file_type":"{}","released_size":"{}"}})json",
+            magic_enum::enum_name(req.evict_until_type),
+            released_size);
+        return buildOkResp(api_name, std::move(body));
+    }
+    }
 }
 
 // Acquiring the all the region ids created in this TiFlash node with given keyspace id.

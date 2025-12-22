@@ -26,6 +26,7 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/FFI/ProxyFFICommon.h>
+#include <Storages/KVStore/FFI/ProxyFFIStatusService.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/TMTStorages.h>
 #include <Storages/KVStore/Types.h>
@@ -411,5 +412,25 @@ try
     dropDataBase("db_1");
 }
 CATCH
+
+TEST_F(StatusServerTest, TestParseRemoteCacheEvictRequest)
+{
+    const std::string api_name = "/tiflash/remote/cache/evict";
+    {
+        std::string path = api_name + "/5";
+        RemoteCacheEvictRequest req = parseEvictRequest(path, api_name);
+        ASSERT_TRUE(req.err_msg.empty());
+        ASSERT_EQ(req.evict_method, EvictMethod::ByFileType);
+        ASSERT_EQ(req.evict_until_type, FileSegment::FileType::Merged);
+    }
+
+    for (const auto & invalid_suffix: {"/invalid_type", "/1000", "/-1", ""})
+    {
+        std::string path = api_name + invalid_suffix;
+        RemoteCacheEvictRequest req = parseEvictRequest(path, api_name);
+        LOG_INFO(Logger::get(), "path={} err_msg={}", path, req.err_msg);
+        ASSERT_FALSE(req.err_msg.empty()) << path;
+    }
+}
 
 } // namespace DB::tests
