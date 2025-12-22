@@ -460,7 +460,7 @@ UInt64 FileCache::evictBySizeImpl(
         min_evict_size = cache_used - cache_capacity + size_to_reserve;
         LOG_WARNING(
             log,
-            "reserveSpaceImpl cache overused, capacity={} used={} reserve_size={} min_evict_size={} evict_mode={}",
+            "evictBySizeImpl cache overused, capacity={} used={} reserve_size={} min_evict_size={} evict_mode={}",
             cache_capacity,
             cache_used,
             size_to_reserve,
@@ -761,7 +761,7 @@ void FileCache::releaseSpace(UInt64 size)
 
 FileCache::ShouldCacheRes FileCache::canCache(FileType file_type) const
 {
-    if (file_type == FileType::Unknow || static_cast<UInt64>(file_type) > cache_level)
+    if (file_type == FileType::Unknown || static_cast<UInt64>(file_type) > cache_level)
     {
         return ShouldCacheRes::RejectTypeNotMatch;
     }
@@ -843,7 +843,7 @@ FileType FileCache::getFileType(const String & fname)
         return FileType::Meta;
     }
 
-    return FileType::Unknow;
+    return FileType::Unknown;
 }
 
 bool FileCache::finalizeReservedSize(FileType reserve_for, UInt64 reserved_size, UInt64 content_length)

@@ -50,7 +50,7 @@ public:
     // The smaller the enum value, the higher the cache priority.
     enum class FileType : UInt64
     {
-        Unknow = 0,
+        Unknown = 0,
         Meta,
         // Vector index is always stored as a separate file and requires to be read through `mmap`
         // which must be downloaded to the local disk.

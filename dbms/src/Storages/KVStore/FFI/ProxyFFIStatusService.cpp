@@ -407,7 +407,7 @@ RemoteCacheEvictRequest parseEvictRequest(
 {
     RemoteCacheEvictRequest req{
         .evict_method = EvictMethod::ByFileType,
-        .evict_type = FileSegment::FileType::Unknow,
+        .evict_type = FileSegment::FileType::Unknown,
         .reserve_size = 0,
         .min_age = 0,
         .force_evict = false,
