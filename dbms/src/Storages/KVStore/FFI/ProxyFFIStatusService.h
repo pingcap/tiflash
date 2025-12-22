@@ -26,7 +26,7 @@ enum class EvictMethod
 struct RemoteCacheEvictRequest
 {
     EvictMethod evict_method;
-    FileSegment::FileType evict_until_type;
+    FileSegment::FileType evict_type;
     size_t evict_size;
     String err_msg;
 };
@@ -34,3 +34,24 @@ struct RemoteCacheEvictRequest
 RemoteCacheEvictRequest parseEvictRequest(std::string_view path, std::string_view api_name);
 
 } // namespace DB
+
+template <>
+struct fmt::formatter<DB::RemoteCacheEvictRequest>
+{
+    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
+
+    template <typename FormatContext>
+    auto format(const DB::RemoteCacheEvictRequest & req, FormatContext & ctx) const
+    {
+        if (!req.err_msg.empty())
+        {
+            return fmt::format_to(ctx.out(), "{{err_msg={}}}", req.err_msg);
+        }
+        return fmt::format_to(
+            ctx.out(),
+            "{{method={} evict_type={} evict_size={}}}",
+            magic_enum::enum_name(req.evict_method),
+            magic_enum::enum_name(req.evict_type),
+            req.evict_size);
+    }
+};
