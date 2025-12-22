@@ -500,18 +500,72 @@ TEST_F(FileCacheTest, Space)
     StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = cache_level};
     FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
     auto dt_cache_capacity = cache_config.getDTFileCapacity();
+
+    // pre-reserve before download
     ASSERT_TRUE(file_cache.reserveSpace(FileType::Meta, dt_cache_capacity - 1024, FileCache::EvictMode::NoEvict));
     ASSERT_TRUE(file_cache.reserveSpace(FileType::Meta, 512, FileCache::EvictMode::NoEvict));
     ASSERT_TRUE(file_cache.reserveSpace(FileType::Meta, 256, FileCache::EvictMode::NoEvict));
     ASSERT_TRUE(file_cache.reserveSpace(FileType::Meta, 256, FileCache::EvictMode::NoEvict));
+    // No space left
     ASSERT_FALSE(file_cache.reserveSpace(FileType::Meta, 1, FileCache::EvictMode::NoEvict));
+    // Finalize with larger content_length than reserved_size
     ASSERT_FALSE(file_cache.finalizeReservedSize(FileType::Meta, /*reserved_size*/ 512, /*content_length*/ 513));
+    // Finalize with smaller content_length than reserved_size, should success and free space for (reserved_size - content_length)
     ASSERT_TRUE(file_cache.finalizeReservedSize(FileType::Meta, /*reserved_size*/ 512, /*content_length*/ 511));
+    // Now 1 byte space left
     ASSERT_TRUE(file_cache.reserveSpace(FileType::Meta, 1, FileCache::EvictMode::NoEvict));
+    // No space left
     ASSERT_FALSE(file_cache.reserveSpace(FileType::Meta, 1, FileCache::EvictMode::NoEvict));
+
+    // Release the whole capacity
     file_cache.releaseSpace(dt_cache_capacity);
+
+    // All space freed, reserve full capacity
     ASSERT_TRUE(file_cache.reserveSpace(FileType::Meta, dt_cache_capacity, FileCache::EvictMode::NoEvict));
+    // No space left
     ASSERT_FALSE(file_cache.reserveSpace(FileType::Meta, 1, FileCache::EvictMode::NoEvict));
+
+    waitForBgDownload(file_cache);
+}
+
+TEST_F(FileCacheTest, ReserveMeetOverUsed)
+{
+    UInt16 vcores = 1;
+    IORateLimiter rate_limiter;
+    auto cache_dir = fmt::format("{}/reserve_meet_over_used", tmp_dir);
+    StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = cache_level};
+    FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
+    auto dt_cache_capacity = cache_config.getDTFileCapacity();
+
+    // hack to set cache_used to over capacity
+    {
+        std::unique_lock lock(file_cache.mtx);
+        file_cache.tables[magic_enum::enum_integer(FileType::Index)].set(
+            "/key1",
+            std::make_shared<FileSegment>(
+                "/key1",
+                FileSegment::Status::Complete,
+                dt_cache_capacity - 1024,
+                FileType::Index));
+        file_cache.tables[magic_enum::enum_integer(FileType::Index)].set(
+            "/key2",
+            std::make_shared<FileSegment>("/key2", FileSegment::Status::Complete, 512, FileType::Index));
+        file_cache.tables[magic_enum::enum_integer(FileType::Index)].set(
+            "/key3",
+            std::make_shared<FileSegment>("/key3", FileSegment::Status::Complete, 512, FileType::Index));
+        // somehow 10 byte over used
+        file_cache.tables[magic_enum::enum_integer(FileType::Index)].set(
+            "/key4",
+            std::make_shared<FileSegment>("/key4", FileSegment::Status::Complete, 10, FileType::Index));
+        file_cache.cache_used = dt_cache_capacity + 10;
+    }
+
+    // reserve should fail when over used
+    ASSERT_FALSE(file_cache.reserveSpace(FileType::Index, 1, FileCache::EvictMode::NoEvict));
+    // try evict should fail because all files are recently used
+    ASSERT_FALSE(file_cache.reserveSpace(FileType::Index, 1, FileCache::EvictMode::TryEvict));
+    // force evict should success
+    ASSERT_TRUE(file_cache.reserveSpace(FileType::Index, 1, FileCache::EvictMode::ForceEvict));
 
     waitForBgDownload(file_cache);
 }
@@ -892,6 +946,84 @@ try
     waitForBgDownload(file_cache);
 }
 CATCH
+
+TEST_F(FileCacheTest, EvictBySize)
+{
+    UInt16 vcores = 1;
+    IORateLimiter rate_limiter;
+    auto cache_dir = fmt::format("{}/evict_by_size", tmp_dir);
+    StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = cache_level};
+
+    {
+        LOG_INFO(Logger::get(), "Test evictBySize no need to evict");
+        FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
+        // no need to evict
+        auto dt_cache_capacity = cache_config.getDTFileCapacity();
+        ASSERT_EQ(file_cache.evictBySize(dt_cache_capacity - 1024, false), 0);
+    }
+
+    {
+        FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
+        auto dt_cache_capacity = cache_config.getDTFileCapacity();
+        // hack to add some files
+        {
+            std::unique_lock lock(file_cache.mtx);
+            file_cache.tables[magic_enum::enum_integer(FileType::Index)].set(
+                "/key1",
+                std::make_shared<FileSegment>(
+                    "/key1",
+                    FileSegment::Status::Complete,
+                    dt_cache_capacity - 2048,
+                    FileType::Index));
+            file_cache.tables[magic_enum::enum_integer(FileType::Index)].set(
+                "/key2",
+                std::make_shared<FileSegment>("/key2", FileSegment::Status::Complete, 512, FileType::Index));
+            file_cache.tables[magic_enum::enum_integer(FileType::Index)].set(
+                "/key3",
+                std::make_shared<FileSegment>("/key3", FileSegment::Status::Complete, 512, FileType::Index));
+            file_cache.cache_used = dt_cache_capacity - 2048 + 512 + 512;
+        }
+        // evict should respect the priority and last_access_time
+        LOG_INFO(Logger::get(), "Test evictBySize with evict");
+        ASSERT_EQ(file_cache.evictBySize(32, /*force_evict*/ false), 0);
+        // force evict should free at least 1080 bytes
+        LOG_INFO(Logger::get(), "Test evictBySize with force evict");
+        ASSERT_GT(file_cache.evictBySize(1080, /*force_evict*/ true), 1080);
+    }
+
+    {
+        FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
+        auto dt_cache_capacity = cache_config.getDTFileCapacity();
+        // hack to set cache_used to over capacity
+        {
+            std::unique_lock lock(file_cache.mtx);
+            file_cache.tables[magic_enum::enum_integer(FileType::Index)].set(
+                "/key1",
+                std::make_shared<FileSegment>(
+                    "/key1",
+                    FileSegment::Status::Complete,
+                    dt_cache_capacity - 1024,
+                    FileType::Index));
+            file_cache.tables[magic_enum::enum_integer(FileType::Index)].set(
+                "/key2",
+                std::make_shared<FileSegment>("/key2", FileSegment::Status::Complete, 512, FileType::Index));
+            file_cache.tables[magic_enum::enum_integer(FileType::Index)].set(
+                "/key3",
+                std::make_shared<FileSegment>("/key3", FileSegment::Status::Complete, 512, FileType::Index));
+            // somehow 10 byte over used
+            file_cache.tables[magic_enum::enum_integer(FileType::Index)].set(
+                "/key4",
+                std::make_shared<FileSegment>("/key4", FileSegment::Status::Complete, 10, FileType::Index));
+            file_cache.cache_used = dt_cache_capacity + 10;
+        }
+        // evict should respect the priority and last_access_time
+        LOG_INFO(Logger::get(), "Test evictBySize with cache_used over capacity");
+        ASSERT_EQ(file_cache.evictBySize(32, /*force_evict*/ false), 0);
+        // force evict should free at least 32 bytes
+        LOG_INFO(Logger::get(), "Test evictBySize with cache_used over capacity and force evict");
+        ASSERT_GT(file_cache.evictBySize(32, /*force_evict*/ true), 32);
+    }
+}
 
 TEST_F(FileCacheTest, UpdateConfig)
 {

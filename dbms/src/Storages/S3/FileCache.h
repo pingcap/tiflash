@@ -383,7 +383,7 @@ public:
         bool evict_same_type_first);
     UInt64 evictBySizeImpl(
         FileSegment::FileType evict_for,
-        UInt64 min_evict_size,
+        UInt64 size_to_reserve,
         EvictMode mode,
         std::unique_lock<std::mutex> & guard);
     UInt64 tryEvictFile(
