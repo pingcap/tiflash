@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashMetrics.h>
@@ -551,6 +552,55 @@ HttpRequestRes HandleHttpRequestRemoteCacheEvict(
     __builtin_unreachable();
 }
 
+HttpRequestRes HandleHttpRequestRemoteCacheInfo(
+    EngineStoreServerWrap * server,
+    std::string_view /*path*/,
+    const std::string & api_name,
+    std::string_view,
+    std::string_view)
+{
+    auto & global_ctx = server->tmt->getContext();
+    if (auto err_resp
+        = allowDisaggAPI(global_ctx, api_name, DisaggregatedMode::Compute, "can not get remote cache info");
+        err_resp)
+    {
+        return err_resp.value();
+    }
+
+    auto * file_cache = DB::FileCache::instance();
+    if (!file_cache)
+    {
+        auto body = fmt::format(R"json({{"message":"file cache is not enabled"}})json");
+        return buildRespWithCode(HttpRequestStatus::InternalError, api_name, std::move(body));
+    }
+
+    auto log = Logger::get("HandleHttpRequestRemoteCacheInfo");
+    try
+    {
+        Poco::JSON::Array::Ptr list = new Poco::JSON::Array();
+        for (const auto & [file_type, histogram] : file_cache->getCacheSizeHistogram())
+        {
+            Poco::JSON::Object::Ptr type_info = new Poco::JSON::Object();
+            type_info->set("file_type", std::string(magic_enum::enum_name(file_type)));
+            type_info->set("file_type_int", static_cast<UInt64>(file_type));
+            type_info->set("histogram", histogram.toJson());
+            list->add(type_info);
+        }
+
+        std::stringstream ss;
+        list->stringify(ss);
+        auto json_str = ss.str();
+        LOG_INFO(log, "remote cache info: {}", json_str);
+        return buildOkResp(api_name, json_str);
+    }
+    catch (...)
+    {
+        tryLogCurrentWarningException(log, "failed to get remote cache info");
+        auto body = fmt::format(R"json({{"message":"failed to get remote cache info"}})json");
+        return buildRespWithCode(HttpRequestStatus::InternalError, api_name, std::move(body));
+    }
+}
+
 // Acquiring the all the region ids created in this TiFlash node with given keyspace id.
 HttpRequestRes HandleHttpRequestSyncRegion(
     EngineStoreServerWrap * server,
@@ -708,6 +758,7 @@ static const std::map<std::string, HANDLE_HTTP_URI_METHOD> AVAILABLE_HTTP_URI = 
     {"/tiflash/remote/gc", HandleHttpRequestRemoteGC},
     {"/tiflash/remote/upload", HandleHttpRequestRemoteReUpload},
     {"/tiflash/remote/cache/evict", HandleHttpRequestRemoteCacheEvict},
+    {"/tiflash/remote/cache/info", HandleHttpRequestRemoteCacheInfo},
 };
 
 uint8_t CheckHttpUriAvailable(BaseBuffView path_)
