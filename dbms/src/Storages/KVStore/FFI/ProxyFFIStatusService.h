@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#pragma once
+
 #include <Storages/S3/FileCache.h>
 
 namespace DB
@@ -64,5 +66,6 @@ struct fmt::formatter<DB::RemoteCacheEvictRequest>
                 req.reserve_size,
                 req.force_evict);
         }
+        __builtin_unreachable();
     }
 };

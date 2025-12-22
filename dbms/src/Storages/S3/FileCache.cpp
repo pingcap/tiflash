@@ -504,6 +504,7 @@ UInt64 FileCache::evictBySizeImpl(
         }
     }
     }
+    __builtin_unreachable();
 }
 
 // The basic evict logic:
@@ -1217,6 +1218,8 @@ void FileCache::updateConfig(const Settings & settings)
 
 UInt64 FileCache::evictByFileType(FileSegment::FileType file_type)
 {
+    // getEvictFileType is a static method that is not related to the current object state,
+    // so it is safe to call it before acquiring the lock.
     auto file_types = getEvictFileTypes(file_type, /*evict_same_type_first*/ false);
     std::lock_guard lock(mtx);
     UInt64 total_released_size = 0;
@@ -1259,7 +1262,7 @@ UInt64 FileCache::evictByFileType(FileSegment::FileType file_type)
 UInt64 FileCache::evictBySize(UInt64 size_to_reserve, bool force_evict)
 {
     std::unique_lock lock(mtx);
-    // short cut
+    // shortcut
     if (size_to_reserve <= cache_capacity - cache_used)
     {
         LOG_INFO(
