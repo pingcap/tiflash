@@ -444,17 +444,29 @@ bool FileCache::reserveSpaceImpl(
             min_evict_size,
             magic_enum::enum_name(mode));
         const UInt64 size_after_try_evict = tryEvictFile(reserve_for, min_evict_size, mode, guard);
-        if (mode == EvictMode::ForceEvict && size_after_try_evict > 0)
+        if (unlikely(size_after_try_evict > 0))
         {
-            // After tryEvictFile, the space is still not sufficient,
-            // so we do a force eviction.
-            auto evicted_size = forceEvict(size_after_try_evict, guard);
-            LOG_INFO(
-                log,
-                "forceEvict min_evict_size={} size_after_try_evict={} evicted_size={}",
-                min_evict_size,
-                size_after_try_evict,
-                evicted_size);
+            if (mode == EvictMode::ForceEvict)
+            {
+                // After tryEvictFile, the space is still not sufficient,
+                // so we do a force eviction.
+                auto evicted_size = forceEvict(size_after_try_evict, guard);
+                LOG_INFO(
+                    log,
+                    "forceEvict min_evict_size={} size_after_try_evict={} evicted_size={}",
+                    min_evict_size,
+                    size_after_try_evict,
+                    evicted_size);
+            }
+            else
+            {
+                LOG_INFO(
+                    log,
+                    "tryEvictFile failed to evict enough space, min_evict_size={} remaining_size={} evict_mode={}",
+                    min_evict_size,
+                    size_after_try_evict,
+                    magic_enum::enum_name(mode));
+            }
         }
         // try update `cache_used` after eviction
         return reserveSpaceImpl(reserve_for, size, EvictMode::NoEvict, guard);
