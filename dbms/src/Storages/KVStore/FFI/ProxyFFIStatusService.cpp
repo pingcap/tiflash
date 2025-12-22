@@ -33,6 +33,7 @@
 #include <fmt/core.h>
 
 #include <boost/algorithm/string.hpp>
+#include <charconv>
 #include <magic_enum.hpp>
 #include <string>
 
@@ -388,10 +389,16 @@ RemoteCacheEvictRequest parseEvictRequest(
             // reject negative size
             if (trim_path.empty() || trim_path[0] == '-')
             {
-                req.err_msg = fmt::format("invalid size in remote cache evict request: {}", path);
+                req.err_msg = fmt::format("invalid negative size in request: {}", path);
                 return req;
             }
-            req.reserve_size = std::stoull(trim_path.data());
+            if (auto res = std::from_chars(trim_path.data(), trim_path.data() + trim_path.size(), req.reserve_size);
+                res.ec != std::errc())
+            {
+                req.err_msg = fmt::format("invalid size in request: {}", path);
+                return req;
+            }
+
             req.evict_method = EvictMethod::ByEvictSize;
 
             if (!query.empty() && query.find("force") != std::string_view::npos)
@@ -404,12 +411,18 @@ RemoteCacheEvictRequest parseEvictRequest(
             {
                 trim_path.remove_prefix(5); // remove leading 'type/'
             }
-            auto itype = std::stoull(trim_path.data());
+            UInt32 itype = 0;
+            if (auto res = std::from_chars(trim_path.data(), trim_path.data() + trim_path.size(), itype);
+                res.ec != std::errc())
+            {
+                req.err_msg = fmt::format("invalid file type in request: {}", path);
+                return req;
+            }
             std::optional<FileSegment::FileType> opt_evict_until_type
                 = magic_enum::enum_cast<FileSegment::FileType>(itype);
             if (!opt_evict_until_type.has_value())
             {
-                req.err_msg = fmt::format("invalid file type in remote cache evict request: {}", path);
+                req.err_msg = fmt::format("invalid file type enum value in request: {}", path);
                 return req;
             }
             // successfully parse the file type
@@ -446,10 +459,11 @@ HttpRequestRes HandleHttpRequestRemoteCacheEvict(
     if (!req.err_msg.empty())
     {
         auto body = fmt::format(R"json({{"message":"{}"}})json", req.err_msg);
+        LOG_INFO(log, "invalid remote cache evict request, req={}", req);
         return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, std::move(body));
     }
-    LOG_INFO(log, "handling remote cache evict request, req={}", req);
 
+    LOG_INFO(log, "handling remote cache evict request, req={}", req);
     auto * file_cache = DB::FileCache::instance();
     if (!file_cache)
     {
