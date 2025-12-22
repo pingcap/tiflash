@@ -362,16 +362,19 @@ public:
         ForceEvict,
     };
 
-    bool reserveSpaceImpl(FileSegment::FileType reserve_for, UInt64 size, EvictMode evict);
+    bool reserveSpaceImpl(FileSegment::FileType reserve_for, UInt64 size, EvictMode mode);
     void releaseSpaceImpl(UInt64 size);
     void releaseSpace(UInt64 size);
-    bool reserveSpace(FileSegment::FileType reserve_for, UInt64 size, EvictMode evict);
+    bool reserveSpace(FileSegment::FileType reserve_for, UInt64 size, EvictMode mode);
     bool finalizeReservedSize(FileSegment::FileType reserve_for, UInt64 reserved_size, UInt64 content_length);
+
+    // == evict cached files ==
+
     static std::vector<FileSegment::FileType> getEvictFileTypes(
         FileSegment::FileType evict_for,
         bool evict_same_type_first);
-    void tryEvictFile(FileSegment::FileType evict_for, UInt64 size, EvictMode evict);
-    UInt64 tryEvictFrom(FileSegment::FileType evict_for, UInt64 size, FileSegment::FileType evict_from);
+    void tryEvictFile(FileSegment::FileType evict_for, UInt64 size, EvictMode mode);
+    UInt64 tryEvictFileFrom(FileSegment::FileType evict_for, UInt64 size, FileSegment::FileType evict_from);
     UInt64 forceEvict(UInt64 size);
 
     // This function is used for test.

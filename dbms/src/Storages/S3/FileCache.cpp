@@ -416,7 +416,7 @@ std::pair<Int64, std::list<String>::iterator> FileCache::removeImpl(
     return {release_size, table.remove(s3_key)};
 }
 
-bool FileCache::reserveSpaceImpl(FileType reserve_for, UInt64 size, EvictMode evict)
+bool FileCache::reserveSpaceImpl(FileType reserve_for, UInt64 size, EvictMode mode)
 {
     if (cache_used + size <= cache_capacity)
     {
@@ -424,7 +424,7 @@ bool FileCache::reserveSpaceImpl(FileType reserve_for, UInt64 size, EvictMode ev
         CurrentMetrics::set(CurrentMetrics::DTFileCacheUsed, cache_used);
         return true;
     }
-    if (evict == EvictMode::TryEvict || evict == EvictMode::ForceEvict)
+    if (mode == EvictMode::TryEvict || mode == EvictMode::ForceEvict)
     {
         UInt64 min_evict_size = size - (cache_capacity - cache_used);
         LOG_DEBUG(
@@ -432,8 +432,8 @@ bool FileCache::reserveSpaceImpl(FileType reserve_for, UInt64 size, EvictMode ev
             "tryEvictFile for {} min_evict_size={} evict_mode={}",
             magic_enum::enum_name(reserve_for),
             min_evict_size,
-            magic_enum::enum_name(evict));
-        tryEvictFile(reserve_for, min_evict_size, evict);
+            magic_enum::enum_name(mode));
+        tryEvictFile(reserve_for, min_evict_size, mode);
         return reserveSpaceImpl(reserve_for, size, EvictMode::NoEvict);
     }
     return false;
@@ -473,39 +473,34 @@ std::vector<FileType> FileCache::getEvictFileTypes(FileType evict_for, bool evic
             {
                 // Do not evict higher priority file type
                 break;
-                ;
             }
         }
         return evict_types;
     }
 }
 
-void FileCache::tryEvictFile(FileType evict_for, UInt64 size, EvictMode evict)
+void FileCache::tryEvictFile(FileType evict_for, UInt64 size, EvictMode mode)
 {
-    RUNTIME_CHECK(evict != EvictMode::NoEvict);
+    RUNTIME_CHECK(mode != EvictMode::NoEvict);
 
     auto file_types = getEvictFileTypes(evict_for, /*evict_same_type_first*/ true);
     for (auto evict_from : file_types)
     {
-        auto evicted_size = tryEvictFrom(evict_for, size, evict_from);
-        LOG_DEBUG(
-            log,
-            "tryEvictFrom {} required_size={} evicted_size={}",
-            magic_enum::enum_name(evict_from),
-            size,
-            evicted_size);
+        // try to evict from `evict_from` file type.
+        auto evicted_size = tryEvictFileFrom(evict_for, size, evict_from);
         if (size > evicted_size)
         {
             size -= evicted_size;
         }
         else
         {
+            // has enough space, break
             size = 0;
             break;
         }
     }
 
-    if (size > 0 && evict == EvictMode::ForceEvict)
+    if (size > 0 && mode == EvictMode::ForceEvict)
     {
         // After a series of tryEvict, the space is still not sufficient,
         // so we do a force eviction.
@@ -514,10 +509,11 @@ void FileCache::tryEvictFile(FileType evict_for, UInt64 size, EvictMode evict)
     }
 }
 
-UInt64 FileCache::tryEvictFrom(FileType evict_for, UInt64 size, FileType evict_from)
+UInt64 FileCache::tryEvictFileFrom(FileType evict_for, UInt64 size, FileType evict_from)
 {
     auto & table = tables[static_cast<UInt64>(evict_from)];
     UInt64 total_released_size = 0;
+    // max try evict times to prevent long time lock the FileCache
     constexpr UInt32 max_try_evict_count = 10;
     // File type that we evict for does not have higher priority,
     // so we need check last access time to prevent recently used files from evicting.
@@ -547,11 +543,19 @@ UInt64 FileCache::tryEvictFrom(FileType evict_for, UInt64 size, FileType evict_f
         {
             ++itr;
         }
+        // has released enough space or tried enough times, break
         if (total_released_size >= size || try_evict_count >= max_try_evict_count)
         {
             break;
         }
     }
+
+    LOG_DEBUG(
+        log,
+        "tryEvictFrom {} required_size={} evicted_size={}",
+        magic_enum::enum_name(evict_from),
+        size,
+        total_released_size);
     return total_released_size;
 }
 
@@ -638,10 +642,10 @@ UInt64 FileCache::forceEvict(UInt64 size_to_evict)
     return total_released_size;
 }
 
-bool FileCache::reserveSpace(FileType reserve_for, UInt64 size, EvictMode evict)
+bool FileCache::reserveSpace(FileType reserve_for, UInt64 size, EvictMode mode)
 {
     std::lock_guard lock(mtx);
-    return reserveSpaceImpl(reserve_for, size, evict);
+    return reserveSpaceImpl(reserve_for, size, mode);
 }
 
 void FileCache::releaseSpaceImpl(UInt64 size)
@@ -1135,8 +1139,8 @@ void FileCache::updateConfig(const Settings & settings)
 
 UInt64 FileCache::evictUntil(FileSegment::FileType file_type)
 {
-    std::lock_guard lock(mtx);
     auto file_types = getEvictFileTypes(file_type, /*evict_same_type_first*/ false);
+    std::lock_guard lock(mtx);
     UInt64 total_released_size = 0;
     for (auto evict_from : file_types)
     {
