@@ -226,7 +226,7 @@ FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname, const std::op
 
     FileSegmentPtr file_seg;
     {
-        std::lock_guard lock(mtx);
+        std::unique_lock lock(mtx);
         if (auto f = table.get(s3_key); f != nullptr)
         {
             f->setLastAccessTime(std::chrono::system_clock::now());
@@ -260,7 +260,7 @@ FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname, const std::op
         // We don't know the exact size of a object/file, but we need reserve space to save the object/file.
         // A certain amount of space is reserved for each file type.
         auto estimated_size = filesize ? *filesize : getEstimatedSizeOfFileType(file_type);
-        if (!reserveSpaceImpl(file_type, estimated_size, EvictMode::TryEvict))
+        if (!reserveSpaceImpl(file_type, estimated_size, EvictMode::TryEvict, lock))
         {
             // Space still not enough after eviction.
             GET_METRIC(tiflash_storage_remote_cache, type_dtfile_full).Increment();
@@ -313,7 +313,7 @@ FileSegmentPtr FileCache::getOrWait(const S3::S3FilenameView & s3_fname, const s
     GET_METRIC(tiflash_storage_remote_cache, type_dtfile_miss).Increment();
 
     auto estimated_size = filesize ? *filesize : getEstimatedSizeOfFileType(file_type);
-    if (!reserveSpaceImpl(file_type, estimated_size, EvictMode::ForceEvict))
+    if (!reserveSpaceImpl(file_type, estimated_size, EvictMode::ForceEvict, lock))
     {
         // Space not enough.
         GET_METRIC(tiflash_storage_remote_cache, type_dtfile_full).Increment();
@@ -416,7 +416,11 @@ std::pair<Int64, std::list<String>::iterator> FileCache::removeImpl(
     return {release_size, table.remove(s3_key)};
 }
 
-bool FileCache::reserveSpaceImpl(FileType reserve_for, UInt64 size, EvictMode mode)
+bool FileCache::reserveSpaceImpl(
+    FileType reserve_for,
+    UInt64 size,
+    EvictMode mode,
+    std::unique_lock<std::mutex> & guard)
 {
     if (cache_used + size <= cache_capacity)
     {
@@ -424,17 +428,37 @@ bool FileCache::reserveSpaceImpl(FileType reserve_for, UInt64 size, EvictMode mo
         CurrentMetrics::set(CurrentMetrics::DTFileCacheUsed, cache_used);
         return true;
     }
-    if (mode == EvictMode::TryEvict || mode == EvictMode::ForceEvict)
+    switch (mode)
     {
-        UInt64 min_evict_size = size - (cache_capacity - cache_used);
+    case EvictMode::NoEvict:
+        return false;
+    case EvictMode::ForceEvict:
+        [[fallthrough]]; // treat as same as "TryEvict" mode
+    case EvictMode::TryEvict:
+    {
+        const UInt64 min_evict_size = size - (cache_capacity - cache_used);
         LOG_DEBUG(
             log,
             "tryEvictFile for {} min_evict_size={} evict_mode={}",
             magic_enum::enum_name(reserve_for),
             min_evict_size,
             magic_enum::enum_name(mode));
-        tryEvictFile(reserve_for, min_evict_size, mode);
-        return reserveSpaceImpl(reserve_for, size, EvictMode::NoEvict);
+        const UInt64 size_after_try_evict = tryEvictFile(reserve_for, min_evict_size, mode, guard);
+        if (mode == EvictMode::ForceEvict && size_after_try_evict > 0)
+        {
+            // After tryEvictFile, the space is still not sufficient,
+            // so we do a force eviction.
+            auto evicted_size = forceEvict(size_after_try_evict, guard);
+            LOG_INFO(
+                log,
+                "forceEvict min_evict_size={} size_after_try_evict={} evicted_size={}",
+                min_evict_size,
+                size_after_try_evict,
+                evicted_size);
+        }
+        // try update `cache_used` after eviction
+        return reserveSpaceImpl(reserve_for, size, EvictMode::NoEvict, guard);
+    }
     }
     return false;
 }
@@ -479,7 +503,14 @@ std::vector<FileType> FileCache::getEvictFileTypes(FileType evict_for, bool evic
     }
 }
 
-void FileCache::tryEvictFile(FileType evict_for, UInt64 size, EvictMode mode)
+// Try best to evict files to free space.
+// `size_to_evict` is the required space to free.
+// return the remaining space that still need to evict after this function.
+UInt64 FileCache::tryEvictFile(
+    FileType evict_for,
+    UInt64 size_to_evict,
+    EvictMode mode,
+    std::unique_lock<std::mutex> & guard)
 {
     RUNTIME_CHECK(mode != EvictMode::NoEvict);
 
@@ -487,29 +518,26 @@ void FileCache::tryEvictFile(FileType evict_for, UInt64 size, EvictMode mode)
     for (auto evict_from : file_types)
     {
         // try to evict from `evict_from` file type.
-        auto evicted_size = tryEvictFileFrom(evict_for, size, evict_from);
-        if (size > evicted_size)
+        auto evicted_size = tryEvictFileFrom(evict_for, size_to_evict, evict_from, guard);
+        if (size_to_evict > evicted_size)
         {
-            size -= evicted_size;
+            size_to_evict -= evicted_size;
         }
         else
         {
-            // has enough space, break
-            size = 0;
+            // has enough space after eviction, break
+            size_to_evict = 0;
             break;
         }
     }
-
-    if (size > 0 && mode == EvictMode::ForceEvict)
-    {
-        // After a series of tryEvict, the space is still not sufficient,
-        // so we do a force eviction.
-        auto evicted_size = forceEvict(size);
-        LOG_DEBUG(log, "forceEvict required_size={} evicted_size={}", size, evicted_size);
-    }
+    return size_to_evict;
 }
 
-UInt64 FileCache::tryEvictFileFrom(FileType evict_for, UInt64 size, FileType evict_from)
+UInt64 FileCache::tryEvictFileFrom(
+    FileType evict_for,
+    UInt64 size,
+    FileType evict_from,
+    std::unique_lock<std::mutex> & /*guard*/)
 {
     auto & table = tables[static_cast<UInt64>(evict_from)];
     UInt64 total_released_size = 0;
@@ -523,6 +551,7 @@ UInt64 FileCache::tryEvictFileFrom(FileType evict_for, UInt64 size, FileType evi
     for (UInt32 try_evict_count = 0; try_evict_count < max_try_evict_count && itr != end; ++try_evict_count)
     {
         auto s3_key = *itr;
+        // protected under guard
         auto f = table.get(s3_key, /*update_lru*/ false);
         if (!check_last_access_time
             || !f->isRecentlyAccess(std::chrono::seconds(cache_min_age_seconds.load(std::memory_order_relaxed))))
@@ -572,9 +601,9 @@ struct ForceEvictCandidateComparer
     bool operator()(ForceEvictCandidate a, ForceEvictCandidate b) { return a.last_access_time > b.last_access_time; }
 };
 
-UInt64 FileCache::forceEvict(UInt64 size_to_evict)
+UInt64 FileCache::forceEvict(UInt64 size_to_evict, std::unique_lock<std::mutex> & /*guard*/)
 {
-    if (size_to_evict == 0)
+    if (unlikely(size_to_evict == 0))
         return 0;
 
     // For a force evict, we simply evict from the oldest to the newest, until
@@ -584,7 +613,7 @@ UInt64 FileCache::forceEvict(UInt64 size_to_evict)
         evict_candidates;
 
     // First, pick an item from all levels.
-
+    // Note that access to `tables` is protected under `guard`
     size_t total_released_size = 0;
 
     constexpr auto all_file_types = magic_enum::enum_values<FileType>();
@@ -631,7 +660,13 @@ UInt64 FileCache::forceEvict(UInt64 size_to_evict)
         }
 
         auto [released_size, next_itr] = removeImpl(tables[file_type_slot], to_evict.s3_key, to_evict.file_segment);
-        LOG_DEBUG(log, "ForceEvict {} size={}", to_evict.s3_key, released_size);
+        LOG_INFO(
+            log,
+            "ForceEvict {} size={} size_to_evict={} total_released={}",
+            to_evict.s3_key,
+            released_size,
+            size_to_evict,
+            total_released_size);
         if (released_size >= 0) // removed
         {
             total_released_size += released_size;
@@ -644,8 +679,8 @@ UInt64 FileCache::forceEvict(UInt64 size_to_evict)
 
 bool FileCache::reserveSpace(FileType reserve_for, UInt64 size, EvictMode mode)
 {
-    std::lock_guard lock(mtx);
-    return reserveSpaceImpl(reserve_for, size, mode);
+    std::unique_lock lock(mtx);
+    return reserveSpaceImpl(reserve_for, size, mode, lock);
 }
 
 void FileCache::releaseSpaceImpl(UInt64 size)

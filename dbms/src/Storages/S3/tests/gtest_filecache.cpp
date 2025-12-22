@@ -228,6 +228,12 @@ protected:
         }
     }
 
+    static UInt64 forceEvict(FileCache & file_cache, UInt64 size_to_evict)
+    {
+        std::unique_lock lock(file_cache.mtx);
+        return file_cache.forceEvict(size_to_evict, lock);
+    }
+
     String tmp_dir;
     UInt64 cache_capacity = 100 * 1024 * 1024;
     const UInt64 cache_level = 5;
@@ -829,7 +835,7 @@ try
 
     // Now, we want space=5, should evict:
     // {.name = "1.meta", .size = 10},
-    auto evicted = file_cache.forceEvict(5);
+    auto evicted = forceEvict(file_cache, 5);
     ASSERT_EQ(evicted, 10);
 
     ASSERT_EQ(file_cache.getAll().size(), 11);
@@ -839,7 +845,7 @@ try
     // {.name = "1.idx", .size = 1},
     // {.name = "2.idx", .size = 2},
     // {.name = "1.mrk", .size = 3},
-    evicted = file_cache.forceEvict(5);
+    evicted = forceEvict(file_cache, 5);
     ASSERT_EQ(evicted, 6);
 
     ASSERT_EQ(file_cache.getAll().size(), 8);
@@ -848,14 +854,14 @@ try
     ASSERT_TRUE(cache_not_contains("1.mrk"));
 
     // Evict 0
-    evicted = file_cache.forceEvict(0);
+    evicted = forceEvict(file_cache, 0);
     ASSERT_EQ(evicted, 0);
 
     ASSERT_EQ(file_cache.getAll().size(), 8);
 
     // Evict 1, should evict:
     // {.name = "2.meta", .size = 5},
-    evicted = file_cache.forceEvict(1);
+    evicted = forceEvict(file_cache, 1);
     ASSERT_EQ(evicted, 5);
 
     ASSERT_EQ(file_cache.getAll().size(), 7);

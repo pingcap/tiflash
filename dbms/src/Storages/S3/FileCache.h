@@ -362,7 +362,11 @@ public:
         ForceEvict,
     };
 
-    bool reserveSpaceImpl(FileSegment::FileType reserve_for, UInt64 size, EvictMode mode);
+    bool reserveSpaceImpl(
+        FileSegment::FileType reserve_for,
+        UInt64 size,
+        EvictMode mode,
+        std::unique_lock<std::mutex> & guard);
     void releaseSpaceImpl(UInt64 size);
     void releaseSpace(UInt64 size);
     bool reserveSpace(FileSegment::FileType reserve_for, UInt64 size, EvictMode mode);
@@ -373,9 +377,17 @@ public:
     static std::vector<FileSegment::FileType> getEvictFileTypes(
         FileSegment::FileType evict_for,
         bool evict_same_type_first);
-    void tryEvictFile(FileSegment::FileType evict_for, UInt64 size, EvictMode mode);
-    UInt64 tryEvictFileFrom(FileSegment::FileType evict_for, UInt64 size, FileSegment::FileType evict_from);
-    UInt64 forceEvict(UInt64 size);
+    UInt64 tryEvictFile(
+        FileSegment::FileType evict_for,
+        UInt64 size_to_evict,
+        EvictMode mode,
+        std::unique_lock<std::mutex> & guard);
+    UInt64 tryEvictFileFrom(
+        FileSegment::FileType evict_for,
+        UInt64 size,
+        FileSegment::FileType evict_from,
+        std::unique_lock<std::mutex> & guard);
+    UInt64 forceEvict(UInt64 size, std::unique_lock<std::mutex> & guard);
 
     // This function is used for test.
     std::vector<FileSegmentPtr> getAll();
