@@ -32,6 +32,7 @@
 #include <Storages/S3/S3Common.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <common/logger_useful.h>
+#include <fmt/chrono.h>
 
 #include <atomic>
 #include <chrono>
@@ -39,6 +40,13 @@
 #include <filesystem>
 #include <magic_enum.hpp>
 #include <queue>
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <Poco/JSON/Array.h>
+#include <Poco/JSON/Object.h>
+#pragma GCC diagnostic pop
+
 
 namespace ProfileEvents
 {
@@ -107,6 +115,110 @@ FileSegment::Status FileSegment::waitForNotEmpty()
     }
 
     return status;
+}
+
+void CacheSizeHistogram::addFileSegment(const FileSegmentPtr & file_seg)
+{
+    auto age = std::chrono::duration_cast<std::chrono::minutes>(
+                   std::chrono::system_clock::now() - file_seg->getLastAccessTime())
+                   .count();
+    UInt64 fsize = file_seg->getSize();
+    if (age <= 30)
+    {
+        in30min.count++;
+        in30min.bytes += fsize;
+    }
+    else if (age <= 60)
+    {
+        in60min.count++;
+        in60min.bytes += fsize;
+    }
+    else if (age <= 360)
+    {
+        in360min.count++;
+        in360min.bytes += fsize;
+    }
+    else if (age <= 720)
+    {
+        in720min.count++;
+        in720min.bytes += fsize;
+    }
+    else if (age <= 1440)
+    {
+        in1440min.count++;
+        in1440min.bytes += fsize;
+    }
+    else if (age <= 2880)
+    {
+        in2880min.count++;
+        in2880min.bytes += fsize;
+    }
+    else if (age <= 10080)
+    {
+        in10080min.count++;
+        in10080min.bytes += fsize;
+    }
+    else
+    {
+        over10080min.count++;
+        over10080min.bytes += fsize;
+    }
+    if (!oldest_access_time || file_seg->getLastAccessTime() < *oldest_access_time)
+    {
+        oldest_access_time = file_seg->getLastAccessTime();
+        oldest_file_size = fsize;
+    }
+}
+
+Poco::JSON::Object::Ptr CacheSizeHistogram::Stat::toJson() const
+{
+    if (count == 0)
+        return nullptr;
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    obj->set("count", count);
+    obj->set("bytes", bytes);
+    return obj;
+}
+
+Poco::JSON::Object::Ptr CacheSizeHistogram::toJson() const
+{
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    {
+        Poco::JSON::Object::Ptr total = new Poco::JSON::Object();
+        total->set(
+            "count",
+            in30min.count + in60min.count + in360min.count + in720min.count + in1440min.count + in2880min.count
+                + in10080min.count + over10080min.count);
+        total->set(
+            "bytes",
+            in30min.bytes + in60min.bytes + in360min.bytes + in720min.bytes + in1440min.bytes + in2880min.bytes
+                + in10080min.bytes + over10080min.bytes);
+        obj->set("total", total);
+    }
+    if (auto sub = in30min.toJson(); sub)
+        obj->set("in30min", sub);
+    if (auto sub = in60min.toJson(); sub)
+        obj->set("in60min", sub);
+    if (auto sub = in360min.toJson(); sub)
+        obj->set("in360min", sub);
+    if (auto sub = in720min.toJson(); sub)
+        obj->set("in720min", sub);
+    if (auto sub = in1440min.toJson(); sub)
+        obj->set("in1440min", sub);
+    if (auto sub = in2880min.toJson(); sub)
+        obj->set("in2880min", sub);
+    if (auto sub = in10080min.toJson(); sub)
+        obj->set("in10080min", sub);
+    if (auto sub = over10080min.toJson(); sub)
+        obj->set("over10080min", sub);
+    if (oldest_access_time)
+    {
+        Poco::JSON::Object::Ptr oldest = new Poco::JSON::Object();
+        oldest->set("access_time", fmt::format("{:%Y-%m-%d %H:%M:%S}", oldest_access_time.value()));
+        oldest->set("size", oldest_file_size);
+        obj->set("oldest", oldest);
+    }
+    return obj;
 }
 
 FileCache::FileCache(
@@ -1318,5 +1430,20 @@ UInt64 FileCache::evictBySize(UInt64 size_to_reserve, UInt64 min_age_seconds, bo
         cache_capacity,
         cache_used);
     return total_released_size;
+}
+
+std::vector<std::tuple<FileSegment::FileType, CacheSizeHistogram>> FileCache::getCacheSizeHistogram() const
+{
+    std::lock_guard lock(mtx);
+    std::vector<std::tuple<FileSegment::FileType, CacheSizeHistogram>> result;
+    for (const auto & file_type : magic_enum::enum_values<FileSegment::FileType>())
+    {
+        const auto & table = tables[static_cast<UInt64>(file_type)];
+        if (table.size() == 0)
+            continue;
+        CacheSizeHistogram histogram = table.getCacheSizeHistogram();
+        result.emplace_back(file_type, histogram);
+    }
+    return result;
 }
 } // namespace DB

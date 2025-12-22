@@ -25,6 +25,11 @@
 #include <Storages/S3/S3Filename.h>
 #include <common/types.h>
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <Poco/JSON/Object.h>
+#pragma GCC diagnostic pop
+
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -152,6 +157,41 @@ private:
 
 using FileSegmentPtr = std::shared_ptr<FileSegment>;
 
+struct CacheSizeHistogram
+{
+    struct Stat
+    {
+        UInt64 count = 0;
+        UInt64 bytes = 0;
+
+        Poco::JSON::Object::Ptr toJson() const;
+    };
+
+    // 30 minutes
+    Stat in30min;
+    // 60 minutes
+    Stat in60min;
+    // 6 hours
+    Stat in360min;
+    // 12 hours
+    Stat in720min;
+    // 1 day
+    Stat in1440min;
+    // 2 day
+    Stat in2880min;
+    // 7 day
+    Stat in10080min;
+    // more than 7 day
+    Stat over10080min;
+
+    std::optional<std::chrono::time_point<std::chrono::system_clock>> oldest_access_time;
+    UInt64 oldest_file_size = 0;
+
+    void addFileSegment(const FileSegmentPtr & file_seg);
+
+    Poco::JSON::Object::Ptr toJson() const;
+};
+
 class LRUFileTable
 {
 public:
@@ -209,6 +249,16 @@ public:
             files.push_back(pa.second.first);
         }
         return files;
+    }
+
+    CacheSizeHistogram getCacheSizeHistogram() const
+    {
+        CacheSizeHistogram histogram;
+        for (const auto & pa : table)
+        {
+            histogram.addFileSegment(pa.second.first);
+        }
+        return histogram;
     }
 
     size_t size() const { return table.size(); }
@@ -276,6 +326,8 @@ public:
     UInt64 evictByFileType(FileSegment::FileType file_type);
 
     UInt64 evictBySize(UInt64 size_to_reserve, UInt64 min_age_seconds, bool force_evict);
+
+    std::vector<std::tuple<FileSegment::FileType, CacheSizeHistogram>> getCacheSizeHistogram() const;
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -402,7 +454,7 @@ public:
     // This function is used for test.
     std::vector<FileSegmentPtr> getAll();
 
-    std::mutex mtx;
+    mutable std::mutex mtx;
     PathCapacityMetricsPtr capacity_metrics;
     String cache_dir;
     UInt64 cache_capacity;
