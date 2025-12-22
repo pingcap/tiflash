@@ -19,6 +19,9 @@
 namespace DB
 {
 
+using HttpQueryMap = std::unordered_map<std::string_view, std::string_view>;
+HttpQueryMap parseHttpQueryMap(std::string_view query);
+
 enum class EvictMethod
 {
     ByFileType = 0,
@@ -30,6 +33,7 @@ struct RemoteCacheEvictRequest
     EvictMethod evict_method;
     FileSegment::FileType evict_type;
     size_t reserve_size = 0;
+    UInt64 min_age = 0;
     bool force_evict = false;
     String err_msg;
 };
@@ -61,9 +65,10 @@ struct fmt::formatter<DB::RemoteCacheEvictRequest>
         case DB::EvictMethod::ByEvictSize:
             return fmt::format_to(
                 ctx.out(),
-                "{{method={} reserve_size={} force={}}}",
+                "{{method={} reserve_size={} min_age={} force={}}}",
                 magic_enum::enum_name(req.evict_method),
                 req.reserve_size,
+                req.min_age,
                 req.force_evict);
         }
         __builtin_unreachable();

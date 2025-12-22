@@ -435,7 +435,7 @@ bool FileCache::reserveSpaceImpl(
         return true;
     }
 
-    evictBySizeImpl(reserve_for, size, mode, guard);
+    evictBySizeImpl(reserve_for, size, cache_min_age_seconds.load(std::memory_order_relaxed), mode, guard);
     // try update `cache_used` after eviction
     if (cache_used + size <= cache_capacity)
     {
@@ -450,6 +450,7 @@ bool FileCache::reserveSpaceImpl(
 UInt64 FileCache::evictBySizeImpl(
     FileType evict_for,
     UInt64 size_to_reserve,
+    UInt64 min_age_seconds,
     EvictMode mode,
     std::unique_lock<std::mutex> & guard)
 {
@@ -487,7 +488,7 @@ UInt64 FileCache::evictBySizeImpl(
             magic_enum::enum_name(evict_for),
             min_evict_size,
             magic_enum::enum_name(mode));
-        const UInt64 size_evicted_during_try = tryEvictFile(evict_for, min_evict_size, mode, guard);
+        const UInt64 size_evicted_during_try = tryEvictFile(evict_for, min_evict_size, min_age_seconds, mode, guard);
         if (likely(min_evict_size <= size_evicted_during_try))
         {
             // has enough space after eviction, break
@@ -571,6 +572,7 @@ std::vector<FileType> FileCache::getEvictFileTypes(FileType evict_for, bool evic
 UInt64 FileCache::tryEvictFile(
     FileType evict_for,
     const UInt64 min_evict_size,
+    const UInt64 min_age_seconds,
     EvictMode mode,
     std::unique_lock<std::mutex> & guard)
 {
@@ -584,7 +586,7 @@ UInt64 FileCache::tryEvictFile(
     for (auto evict_from : file_types)
     {
         // try to evict from `evict_from` file type.
-        auto evicted_size = tryEvictFileFrom(evict_for, min_evict_size, evict_from, guard);
+        auto evicted_size = tryEvictFileFrom(evict_for, min_evict_size, min_age_seconds, evict_from, guard);
         total_size_evicted += evicted_size;
         if (total_size_evicted >= min_evict_size)
         {
@@ -598,6 +600,7 @@ UInt64 FileCache::tryEvictFile(
 UInt64 FileCache::tryEvictFileFrom(
     FileType evict_for,
     UInt64 min_evict_size,
+    UInt64 min_age_seconds,
     FileType evict_from,
     std::unique_lock<std::mutex> & /*guard*/)
 {
@@ -615,8 +618,7 @@ UInt64 FileCache::tryEvictFileFrom(
         auto s3_key = *itr;
         // protected under guard
         auto f = table.get(s3_key, /*update_lru*/ false);
-        if (!check_last_access_time
-            || !f->isRecentlyAccess(std::chrono::seconds(cache_min_age_seconds.load(std::memory_order_relaxed))))
+        if (!check_last_access_time || !f->isRecentlyAccess(std::chrono::seconds(min_age_seconds)))
         {
             auto [released_size, next_itr] = removeImpl(table, s3_key, f);
             LOG_DEBUG(log, "tryRemoveFile {} size={}", s3_key, released_size);
@@ -1234,6 +1236,7 @@ void FileCache::updateConfig(const Settings & settings)
     }
 }
 
+// Evict the cached files until no file of >= `file_type` is in cache.
 UInt64 FileCache::evictByFileType(FileSegment::FileType file_type)
 {
     // getEvictFileTypes is a static method that is not related to the current object state,
@@ -1277,7 +1280,11 @@ UInt64 FileCache::evictByFileType(FileSegment::FileType file_type)
     return total_released_size;
 }
 
-UInt64 FileCache::evictBySize(UInt64 size_to_reserve, bool force_evict)
+// Evict the cached files until at least `size_to_reserve` bytes are freed.
+// return the actual evicted size.
+// If `min_age_seconds == 0`, it will use the current `cache_min_age_seconds`, otherwise use the given value.
+// If `force_evict` is true, it will evict files even if they are being used recently.
+UInt64 FileCache::evictBySize(UInt64 size_to_reserve, UInt64 min_age_seconds, bool force_evict)
 {
     std::unique_lock lock(mtx);
     if (size_to_reserve + cache_used <= cache_capacity)
@@ -1293,16 +1300,19 @@ UInt64 FileCache::evictBySize(UInt64 size_to_reserve, bool force_evict)
         return 0;
     }
 
+    UInt64 min_age = min_age_seconds == 0 ? cache_min_age_seconds.load(std::memory_order_relaxed) : min_age_seconds;
     EvictMode mode = force_evict ? EvictMode::ForceEvict : EvictMode::TryEvict;
     // Should always use the last file type(lowest priority) to evict,
     // in order to respect the priority of file types and avoid evicting high priority files
     // by last_access_time in non-force evict.
     constexpr FileType max_file_type = magic_enum::enum_values<FileType>()[magic_enum::enum_count<FileType>() - 1];
-    auto total_released_size = evictBySizeImpl(max_file_type, size_to_reserve, mode, lock);
+    auto total_released_size = evictBySizeImpl(max_file_type, size_to_reserve, min_age, mode, lock);
     LOG_INFO(
         log,
-        "evictBySize finish, size_to_reserve={} force_evict={} total_released_size={} cache_capacity={} cache_used={}",
+        "evictBySize finish, size_to_reserve={} min_age={} force_evict={} total_released_size={} cache_capacity={} "
+        "cache_used={}",
         size_to_reserve,
+        min_age,
         force_evict,
         total_released_size,
         cache_capacity,
