@@ -460,7 +460,7 @@ UInt64 FileCache::evictBySizeImpl(
     case EvictMode::NoEvict:
         return 0;
     case EvictMode::ForceEvict:
-        [[fallthrough]]; // treat as same as "TryEvict" mode
+        [[fallthrough]]; // share initial try-eviction logic with "TryEvict" mode; ForceEvict may do additional eviction later
     case EvictMode::TryEvict:
     {
         LOG_DEBUG(
@@ -617,7 +617,7 @@ UInt64 FileCache::tryEvictFileFrom(
             ++itr;
         }
         // has released enough space or tried enough times, break
-        if (total_released_size >= min_evict_size || try_evict_count >= max_try_evict_count)
+        if (total_released_size >= min_evict_size)
         {
             break;
         }
@@ -1218,7 +1218,7 @@ void FileCache::updateConfig(const Settings & settings)
 
 UInt64 FileCache::evictByFileType(FileSegment::FileType file_type)
 {
-    // getEvictFileType is a static method that is not related to the current object state,
+    // getEvictFileTypes is a static method that is not related to the current object state,
     // so it is safe to call it before acquiring the lock.
     auto file_types = getEvictFileTypes(file_type, /*evict_same_type_first*/ false);
     std::lock_guard lock(mtx);
