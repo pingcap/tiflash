@@ -421,15 +421,59 @@ TEST_F(StatusServerTest, TestParseRemoteCacheEvictRequest)
         RemoteCacheEvictRequest req = parseEvictRequest(path, api_name);
         ASSERT_TRUE(req.err_msg.empty());
         ASSERT_EQ(req.evict_method, EvictMethod::ByFileType);
-        ASSERT_EQ(req.evict_until_type, FileSegment::FileType::Merged);
+        ASSERT_EQ(req.evict_type, FileSegment::FileType::Merged);
+    }
+    {
+        std::string path = api_name + "/type/5";
+        RemoteCacheEvictRequest req = parseEvictRequest(path, api_name);
+        ASSERT_TRUE(req.err_msg.empty());
+        ASSERT_EQ(req.evict_method, EvictMethod::ByFileType);
+        ASSERT_EQ(req.evict_type, FileSegment::FileType::Merged);
+    }
+    {
+        std::string path = api_name + "/type/0";
+        RemoteCacheEvictRequest req = parseEvictRequest(path, api_name);
+        ASSERT_TRUE(req.err_msg.empty());
+        ASSERT_EQ(req.evict_method, EvictMethod::ByFileType);
+        ASSERT_EQ(req.evict_type, FileSegment::FileType::Unknow);
     }
 
-    for (const auto & invalid_suffix: {"/invalid_type", "/1000", "/-1", ""})
+    // test evict by size
+    {
+        std::string path = api_name + "/size/102400";
+        RemoteCacheEvictRequest req = parseEvictRequest(path, api_name);
+        ASSERT_TRUE(req.err_msg.empty());
+        ASSERT_EQ(req.evict_method, EvictMethod::ByEvictSize);
+        ASSERT_EQ(req.evict_size, 102400);
+    }
+    {
+        std::string path = api_name + "/size/20480";
+        RemoteCacheEvictRequest req = parseEvictRequest(path, api_name);
+        ASSERT_TRUE(req.err_msg.empty());
+        ASSERT_EQ(req.evict_method, EvictMethod::ByEvictSize);
+        ASSERT_EQ(req.evict_size, 20480);
+    }
+
+    for (const auto & invalid_suffix : {
+             // empty suffix
+             "",
+             // invalid type
+             "/invalid_type",
+             "/1000",
+             "/-1",
+             // invalid type with "/type" prefix
+             "/type/invalid_type",
+             "/type/1000",
+             "/type/-1",
+             // invalid size
+             "/size/invalid_size",
+             "/size/-1000",
+         })
     {
         std::string path = api_name + invalid_suffix;
         RemoteCacheEvictRequest req = parseEvictRequest(path, api_name);
         LOG_INFO(Logger::get(), "path={} err_msg={}", path, req.err_msg);
-        ASSERT_FALSE(req.err_msg.empty()) << path;
+        EXPECT_FALSE(req.err_msg.empty()) << fmt::format("path={} req={}", path, req);
     }
 }
 
