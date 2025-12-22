@@ -260,7 +260,7 @@ FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname, const std::op
         // We don't know the exact size of a object/file, but we need reserve space to save the object/file.
         // A certain amount of space is reserved for each file type.
         auto estimated_size = filesize ? *filesize : getEstimatedSizeOfFileType(file_type);
-        if (!reserveSpaceImpl(file_type, estimated_size, EvictMode::TryEvict, lock))
+        if (auto res = reserveSpaceImpl(file_type, estimated_size, EvictMode::TryEvict, lock); !std::get<0>(res))
         {
             // Space still not enough after eviction.
             GET_METRIC(tiflash_storage_remote_cache, type_dtfile_full).Increment();
@@ -313,9 +313,9 @@ FileSegmentPtr FileCache::getOrWait(const S3::S3FilenameView & s3_fname, const s
     GET_METRIC(tiflash_storage_remote_cache, type_dtfile_miss).Increment();
 
     auto estimated_size = filesize ? *filesize : getEstimatedSizeOfFileType(file_type);
-    if (!reserveSpaceImpl(file_type, estimated_size, EvictMode::ForceEvict, lock))
+    if (auto res = reserveSpaceImpl(file_type, estimated_size, EvictMode::ForceEvict, lock); !std::get<0>(res))
     {
-        // Space not enough.
+        // Space still not enough after eviction.
         GET_METRIC(tiflash_storage_remote_cache, type_dtfile_full).Increment();
         LOG_INFO(
             log,
@@ -416,22 +416,25 @@ std::pair<Int64, std::list<String>::iterator> FileCache::removeImpl(
     return {release_size, table.remove(s3_key)};
 }
 
-bool FileCache::reserveSpaceImpl(
+// Try best to reserve space for new coming file.
+// return a tuple of (whether reserve success, actual evicted size).
+std::tuple<bool, UInt64> FileCache::reserveSpaceImpl(
     FileType reserve_for,
     UInt64 size,
     EvictMode mode,
     std::unique_lock<std::mutex> & guard)
 {
+    UInt64 actual_evict_size = 0;
     if (cache_used + size <= cache_capacity)
     {
         cache_used += size;
         CurrentMetrics::set(CurrentMetrics::DTFileCacheUsed, cache_used);
-        return true;
+        return {true, actual_evict_size};
     }
     switch (mode)
     {
     case EvictMode::NoEvict:
-        return false;
+        return {false, actual_evict_size};
     case EvictMode::ForceEvict:
         [[fallthrough]]; // treat as same as "TryEvict" mode
     case EvictMode::TryEvict:
@@ -444,19 +447,23 @@ bool FileCache::reserveSpaceImpl(
             min_evict_size,
             magic_enum::enum_name(mode));
         const UInt64 size_after_try_evict = tryEvictFile(reserve_for, min_evict_size, mode, guard);
+        // add the evict size during `tryEvictFile`
+        actual_evict_size += (min_evict_size - size_after_try_evict);
         if (unlikely(size_after_try_evict > 0))
         {
             if (mode == EvictMode::ForceEvict)
             {
                 // After tryEvictFile, the space is still not sufficient,
                 // so we do a force eviction.
-                auto evicted_size = forceEvict(size_after_try_evict, guard);
+                auto size_force_evicted = forceEvict(size_after_try_evict, guard);
+                // add the evict size during `forceEvict`
+                actual_evict_size += size_force_evicted;
                 LOG_INFO(
                     log,
-                    "forceEvict min_evict_size={} size_after_try_evict={} evicted_size={}",
+                    "forceEvict min_evict_size={} size_after_try_evict={} force_evicted_size={}",
                     min_evict_size,
                     size_after_try_evict,
-                    evicted_size);
+                    size_force_evicted);
             }
             else
             {
@@ -469,10 +476,11 @@ bool FileCache::reserveSpaceImpl(
             }
         }
         // try update `cache_used` after eviction
-        return reserveSpaceImpl(reserve_for, size, EvictMode::NoEvict, guard);
+        auto res = reserveSpaceImpl(reserve_for, size, EvictMode::NoEvict, guard);
+        return {std::get<0>(res), actual_evict_size + std::get<1>(res)};
     }
     }
-    return false;
+    return {false, actual_evict_size};
 }
 
 // The basic evict logic:
@@ -692,7 +700,7 @@ UInt64 FileCache::forceEvict(UInt64 size_to_evict, std::unique_lock<std::mutex> 
 bool FileCache::reserveSpace(FileType reserve_for, UInt64 size, EvictMode mode)
 {
     std::unique_lock lock(mtx);
-    return reserveSpaceImpl(reserve_for, size, mode, lock);
+    return std::get<0>(reserveSpaceImpl(reserve_for, size, mode, lock));
 }
 
 void FileCache::releaseSpaceImpl(UInt64 size)
@@ -1184,7 +1192,7 @@ void FileCache::updateConfig(const Settings & settings)
     }
 }
 
-UInt64 FileCache::evictUntil(FileSegment::FileType file_type)
+UInt64 FileCache::evictByFileType(FileSegment::FileType file_type)
 {
     auto file_types = getEvictFileTypes(file_type, /*evict_same_type_first*/ false);
     std::lock_guard lock(mtx);
@@ -1211,7 +1219,7 @@ UInt64 FileCache::evictUntil(FileSegment::FileType file_type)
         total_released_size += curr_released_size;
         LOG_INFO(
             log,
-            "evictUntil layer evict finish, evict_from={} file_type={} released_size={} tot_release_size={}",
+            "evictByFileType layer evict finish, evict_from={} file_type={} released_size={} tot_release_size={}",
             magic_enum::enum_name(evict_from),
             magic_enum::enum_name(file_type),
             curr_released_size,
@@ -1219,10 +1227,17 @@ UInt64 FileCache::evictUntil(FileSegment::FileType file_type)
     }
     LOG_INFO(
         log,
-        "evictUntil finish, file_type={} total_released_size={}",
+        "evictByFileType finish, file_type={} total_released_size={}",
         magic_enum::enum_name(file_type),
         total_released_size);
     return total_released_size;
 }
 
+UInt64 FileCache::evictBySize(UInt64 size_to_evict, bool force_evict)
+{
+    std::unique_lock lock(mtx);
+    EvictMode mode = force_evict ? EvictMode::ForceEvict : EvictMode::TryEvict;
+    auto res = reserveSpaceImpl(FileType::Unknow, size_to_evict, mode, lock);
+    return std::get<1>(res);
+}
 } // namespace DB
