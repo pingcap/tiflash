@@ -435,9 +435,7 @@ bool FileCache::reserveSpaceImpl(
         return true;
     }
 
-    assert(size > cache_capacity - cache_used);
-    const UInt64 min_evict_size = size - (cache_capacity - cache_used);
-    evictBySizeImpl(reserve_for, min_evict_size, mode, guard);
+    evictBySizeImpl(reserve_for, size, mode, guard);
     // try update `cache_used` after eviction
     if (cache_used + size <= cache_capacity)
     {
@@ -451,10 +449,30 @@ bool FileCache::reserveSpaceImpl(
 
 UInt64 FileCache::evictBySizeImpl(
     FileType evict_for,
-    UInt64 min_evict_size,
+    UInt64 size_to_reserve,
     EvictMode mode,
     std::unique_lock<std::mutex> & guard)
 {
+    UInt64 min_evict_size = 0;
+    if (cache_capacity < cache_used)
+    {
+        min_evict_size = cache_used - cache_capacity + size_to_reserve;
+        LOG_WARNING(
+            log,
+            "reserveSpaceImpl cache overused, capacity={} used={} reserve_size={} min_evict_size={} evict_mode={}",
+            cache_capacity,
+            cache_used,
+            size_to_reserve,
+            min_evict_size,
+            magic_enum::enum_name(mode));
+    }
+    else
+    {
+        assert(cache_capacity >= cache_used); // not underflow
+        assert(size_to_reserve > cache_capacity - cache_used); // not underflow, ensure by the caller
+        min_evict_size = size_to_reserve - (cache_capacity - cache_used);
+    }
+
     switch (mode)
     {
     case EvictMode::NoEvict:
@@ -1262,29 +1280,33 @@ UInt64 FileCache::evictByFileType(FileSegment::FileType file_type)
 UInt64 FileCache::evictBySize(UInt64 size_to_reserve, bool force_evict)
 {
     std::unique_lock lock(mtx);
-    // shortcut
-    if (size_to_reserve <= cache_capacity - cache_used)
+    if (size_to_reserve + cache_used <= cache_capacity)
     {
+        // shortcut for no need evict
         LOG_INFO(
             log,
-            "evictBySize no need evict, size_to_reserve={} force_evict={} free_capacity={}",
+            "evictBySize no need evict, size_to_reserve={} force_evict={} cache_capacity={} cache_used={}",
             size_to_reserve,
             force_evict,
-            cache_capacity - cache_used);
+            cache_capacity,
+            cache_used);
         return 0;
     }
 
     EvictMode mode = force_evict ? EvictMode::ForceEvict : EvictMode::TryEvict;
-    assert(size_to_reserve > cache_capacity - cache_used);
-    const UInt64 min_evict_size = size_to_reserve - (cache_capacity - cache_used);
-    auto total_released_size = evictBySizeImpl(FileType::Unknow, min_evict_size, mode, lock);
+    // Should always use the last file type(lowest priority) to evict,
+    // in order to respect the priority of file types and avoid evicting high priority files
+    // by last_access_time in non-force evict.
+    constexpr FileType max_file_type = magic_enum::enum_values<FileType>()[magic_enum::enum_count<FileType>() - 1];
+    auto total_released_size = evictBySizeImpl(max_file_type, size_to_reserve, mode, lock);
     LOG_INFO(
         log,
-        "evictBySize finish, size_to_reserve={} force_evict={} total_released_size={} free_capacity={}",
+        "evictBySize finish, size_to_reserve={} force_evict={} total_released_size={} cache_capacity={} cache_used={}",
         size_to_reserve,
         force_evict,
         total_released_size,
-        cache_capacity - cache_used);
+        cache_capacity,
+        cache_used);
     return total_released_size;
 }
 } // namespace DB
