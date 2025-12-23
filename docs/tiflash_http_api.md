@@ -234,9 +234,13 @@ curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tiflash/remote/cache/info"
 ### Response
 
 ```json
-{
-    [{"file_type":"Meta","file_type_int":1,"histogram":{"in360min":{"bytes":32582014,"count":3537},"oldest":{"access_time":"2025-12-22 21:23:30.447107","size":9105},"total":{"bytes":32582014,"count":3537}}},{"file_type":"Merged","file_type_int":5,"histogram":{"in360min":{"bytes":870994443,"count":3532},"oldest":{"access_time":"2025-12-22 21:23:30.447114","size":221668},"total":{"bytes":870994443,"count":3532}}},{"file_type":"VersionColData","file_type_int":10,"histogram":{"in360min":{"bytes":4220970,"count":7},"oldest":{"access_time":"2025-12-22 21:23:30.514550","size":643757},"total":{"bytes":4220970,"count":7}}},{"file_type":"HandleColData","file_type_int":11,"histogram":{"in360min":{"bytes":3386871454,"count":920},"oldest":{"access_time":"2025-12-22 21:23:30.447121","size":4033498},"total":{"bytes":3386871454,"count":920}}},{"file_type":"ColData","file_type_int":12,"histogram":{"in360min":{"bytes":17178044030,"count":7926},"oldest":{"access_time":"2025-12-22 21:23:30.447124","size":505010},"total":{"bytes":17178044030,"count":7926}}}]
-}
+[
+    {"file_type":"Meta","file_type_int":1,"histogram":{"in360min":{"bytes":32582014,"count":3537},"oldest":{"access_time":"2025-12-22 21:23:30.447107","size":9105},"total":{"bytes":32582014,"count":3537}}},
+    {"file_type":"Merged","file_type_int":5,"histogram":{"in360min":{"bytes":870994443,"count":3532},"oldest":{"access_time":"2025-12-22 21:23:30.447114","size":221668},"total":{"bytes":870994443,"count":3532}}},
+    {"file_type":"VersionColData","file_type_int":10,"histogram":{"in360min":{"bytes":4220970,"count":7},"oldest":{"access_time":"2025-12-22 21:23:30.514550","size":643757},"total":{"bytes":4220970,"count":7}}},
+    {"file_type":"HandleColData","file_type_int":11,"histogram":{"in360min":{"bytes":3386871454,"count":920},"oldest":{"access_time":"2025-12-22 21:23:30.447121","size":4033498},"total":{"bytes":3386871454,"count":920}}},
+    {"file_type":"ColData","file_type_int":12,"histogram":{"in360min":{"bytes":17178044030,"count":7926},"oldest":{"access_time":"2025-12-22 21:23:30.447124","size":505010},"total":{"bytes":17178044030,"count":7926}}}
+]
 ```
 
 ## Evict the local cache for TiFlash compute node under disaggregated arch
