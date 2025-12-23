@@ -167,19 +167,19 @@ struct CacheSizeHistogram
         Poco::JSON::Object::Ptr toJson() const;
     };
 
-    // 30 minutes
+    // [0, 30) minutes
     Stat in30min;
-    // 60 minutes
+    // [30, 60) minutes
     Stat in60min;
-    // 6 hours
+    // [60, 360) minutes
     Stat in360min;
-    // 12 hours
+    // [360, 720) minutes; 6 hours to 12 hours
     Stat in720min;
-    // 1 day
+    // [720, 1440) minutes; 12 hours to 1 day
     Stat in1440min;
-    // 2 day
+    // [1440, 2880) minutes; 1 day to 2 days
     Stat in2880min;
-    // 7 day
+    // [2880, 10080) minutes; 2 days to 7 days
     Stat in10080min;
     // more than 7 day
     Stat over10080min;
