@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashMetrics.h>
@@ -21,6 +22,7 @@
 #include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/FFI/ProxyFFICommon.h>
+#include <Storages/KVStore/FFI/ProxyFFIStatusService.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/S3/FileCache.h>
@@ -32,6 +34,7 @@
 #include <fmt/core.h>
 
 #include <boost/algorithm/string.hpp>
+#include <charconv>
 #include <magic_enum.hpp>
 #include <string>
 
@@ -355,11 +358,155 @@ HttpRequestRes HandleHttpRequestRemoteGC(
     return buildOkResp(api_name, std::move(body));
 }
 
+// Parse Http query string_view into a map
+HttpQueryMap parseHttpQueryMap(std::string_view query)
+{
+    HttpQueryMap query_map;
+
+    if (query.empty())
+    {
+        return query_map;
+    }
+
+    size_t start = 0;
+    while (start < query.size())
+    {
+        // Find the next '&' to separate key-value pairs
+        size_t end = query.find('&', start);
+        if (end == std::string_view::npos)
+        {
+            end = query.size();
+        }
+
+        std::string_view pair = query.substr(start, end - start);
+        if (!pair.empty())
+        {
+            // Find '=' to separate key and value
+            size_t eq_pos = pair.find('=');
+            if (eq_pos != std::string_view::npos)
+            {
+                std::string_view key = pair.substr(0, eq_pos);
+                std::string_view value = pair.substr(eq_pos + 1);
+                query_map[key] = value;
+            }
+            else
+            {
+                // Handle case where there's a key without a value
+                query_map[pair] = std::string_view{};
+            }
+        }
+
+        start = end + 1;
+    }
+    return query_map;
+}
+
+RemoteCacheEvictRequest parseEvictRequest(
+    const std::string_view path,
+    const std::string_view api_name,
+    const std::string_view query)
+{
+    RemoteCacheEvictRequest req{
+        .evict_method = EvictMethod::ByFileType,
+        .evict_type = FileSegment::FileType::Unknown,
+        .reserve_size = 0,
+        .min_age = 0,
+        .force_evict = false,
+        .err_msg = "",
+    };
+    // schema:
+    // - /tiflash/remote/cache/evict/{file_type_int}
+    // - /tiflash/remote/cache/evict/type/{file_type_int}
+    // - /tiflash/remote/cache/evict/size/{size_in_bytes}
+    auto trim_path = path.substr(api_name.size());
+    if (trim_path.empty() || trim_path[0] != '/')
+    {
+        req.err_msg = fmt::format("invalid remote cache evict request: {}", path);
+        return req;
+    }
+    trim_path.remove_prefix(1); // remove leading '/'
+
+    try
+    {
+        if (trim_path.starts_with("size/"))
+        {
+            trim_path.remove_prefix(5); // remove leading 'size/'
+            // reject negative size
+            if (trim_path.empty() || trim_path[0] == '-')
+            {
+                req.err_msg = fmt::format("invalid negative size in request: {}", path);
+                return req;
+            }
+            if (auto res = std::from_chars(trim_path.data(), trim_path.data() + trim_path.size(), req.reserve_size);
+                res.ec != std::errc())
+            {
+                req.err_msg = fmt::format("invalid size in request: {}", path);
+                return req;
+            }
+
+            req.evict_method = EvictMethod::ByEvictSize;
+
+            // parse query as map
+            auto query_map = parseHttpQueryMap(query);
+            // "age"
+            if (auto age_it = query_map.find("age"); age_it != query_map.end())
+            {
+                UInt64 min_age = 0;
+                if (auto res
+                    = std::from_chars(age_it->second.data(), age_it->second.data() + age_it->second.size(), min_age);
+                    res.ec == std::errc())
+                {
+                    req.min_age = min_age;
+                }
+                // else just keep min_age as default
+            }
+            // "force"
+            if (auto force_it = query_map.find("force"); force_it != query_map.end())
+            {
+                // any value other than "0" or "false" is considered as true
+                // if no value is provided, e.g. "xxx=yyy&force", then consider it as true
+                req.force_evict = !(force_it->second == "0" || force_it->second == "false");
+            }
+            return req;
+        }
+        else
+        {
+            if (trim_path.starts_with("type/"))
+            {
+                trim_path.remove_prefix(5); // remove leading 'type/'
+            }
+            UInt32 itype = 0;
+            if (auto res = std::from_chars(trim_path.data(), trim_path.data() + trim_path.size(), itype);
+                res.ec != std::errc())
+            {
+                req.err_msg = fmt::format("invalid file type in request: {}", path);
+                return req;
+            }
+            std::optional<FileSegment::FileType> opt_evict_until_type
+                = magic_enum::enum_cast<FileSegment::FileType>(itype);
+            if (!opt_evict_until_type.has_value())
+            {
+                req.err_msg = fmt::format("invalid file type enum value in request: {}", path);
+                return req;
+            }
+            // successfully parse the file type
+            req.evict_type = opt_evict_until_type.value();
+            req.evict_method = EvictMethod::ByFileType;
+            return req;
+        }
+    }
+    catch (...)
+    {
+        req.err_msg = fmt::format("invalid remote cache evict request: {}", path);
+    }
+    return req;
+}
+
 HttpRequestRes HandleHttpRequestRemoteCacheEvict(
     EngineStoreServerWrap * server,
     std::string_view path,
     const std::string & api_name,
-    std::string_view,
+    std::string_view query,
     std::string_view)
 {
     auto & global_ctx = server->tmt->getContext();
@@ -371,43 +518,88 @@ HttpRequestRes HandleHttpRequestRemoteCacheEvict(
     }
 
     auto log = Logger::get("HandleHttpRequestRemoteCacheEvict");
-    LOG_INFO(log, "handling remote cache evict request, path={} api_name={}", path, api_name);
-    FileSegment::FileType evict_until_type;
+    LOG_INFO(log, "handling remote cache evict request, path={} api_name={} query={}", path, api_name, query);
+    RemoteCacheEvictRequest req = parseEvictRequest(path, api_name, query);
+    if (!req.err_msg.empty())
     {
-        // schema: /tiflash/remote/cache/evict/{file_type_int}
-        auto query = path.substr(api_name.size());
-        if (query.empty() || query[0] != '/')
-        {
-            auto body = fmt::format(R"json({{"message":"invalid remote cache evict request: {}"}})json", path);
-            return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, std::move(body));
-        }
-        query.remove_prefix(1);
-        std::optional<FileSegment::FileType> opt_evict_until_type = std::nullopt;
-        try
-        {
-            auto itype = std::stoll(query.data());
-            opt_evict_until_type = magic_enum::enum_cast<FileSegment::FileType>(itype);
-        }
-        catch (...)
-        {
-            // ignore
-        }
-        if (!opt_evict_until_type.has_value())
-        {
-            auto body
-                = fmt::format(R"json({{"message":"invalid file_type in remote cache evict request: {}"}})json", path);
-            return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, std::move(body));
-        }
-        // successfully parse the file type
-        evict_until_type = opt_evict_until_type.value();
+        auto body = fmt::format(R"json({{"message":"{}"}})json", req.err_msg);
+        LOG_INFO(log, "invalid remote cache evict request, req={}", req);
+        return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, std::move(body));
     }
 
-    auto released_size = DB::FileCache::instance()->evictUntil(evict_until_type);
-    auto body = fmt::format(
-        R"json({{"file_type":"{}","released_size":"{}"}})json",
-        magic_enum::enum_name(evict_until_type),
-        released_size);
-    return buildOkResp(api_name, std::move(body));
+    LOG_INFO(log, "handling remote cache evict request, req={}", req);
+    auto * file_cache = DB::FileCache::instance();
+    if (!file_cache)
+    {
+        auto body = fmt::format(R"json({{"message":"file cache is not enabled"}})json");
+        return buildRespWithCode(HttpRequestStatus::InternalError, api_name, std::move(body));
+    }
+
+    switch (req.evict_method)
+    {
+    case EvictMethod::ByFileType:
+    {
+        auto released_size = file_cache->evictByFileType(req.evict_type);
+        auto body = fmt::format(R"json({{"req":"{}","released_size":"{}"}})json", req, released_size);
+        return buildOkResp(api_name, std::move(body));
+    }
+    case EvictMethod::ByEvictSize:
+    {
+        size_t released_size = file_cache->evictBySize(req.reserve_size, req.min_age, req.force_evict);
+        auto body = fmt::format(R"json({{"req":"{}","released_size":"{}"}})json", req, released_size);
+        return buildOkResp(api_name, std::move(body));
+    }
+    }
+    __builtin_unreachable();
+}
+
+HttpRequestRes HandleHttpRequestRemoteCacheInfo(
+    EngineStoreServerWrap * server,
+    std::string_view /*path*/,
+    const std::string & api_name,
+    std::string_view,
+    std::string_view)
+{
+    auto & global_ctx = server->tmt->getContext();
+    if (auto err_resp
+        = allowDisaggAPI(global_ctx, api_name, DisaggregatedMode::Compute, "can not get remote cache info");
+        err_resp)
+    {
+        return err_resp.value();
+    }
+
+    auto * file_cache = DB::FileCache::instance();
+    if (!file_cache)
+    {
+        auto body = fmt::format(R"json({{"message":"file cache is not enabled"}})json");
+        return buildRespWithCode(HttpRequestStatus::InternalError, api_name, std::move(body));
+    }
+
+    auto log = Logger::get("HandleHttpRequestRemoteCacheInfo");
+    try
+    {
+        Poco::JSON::Array::Ptr list = new Poco::JSON::Array();
+        for (const auto & [file_type, histogram] : file_cache->getCacheSizeHistogram())
+        {
+            Poco::JSON::Object::Ptr type_info = new Poco::JSON::Object();
+            type_info->set("file_type", std::string(magic_enum::enum_name(file_type)));
+            type_info->set("file_type_int", static_cast<UInt64>(file_type));
+            type_info->set("histogram", histogram.toJson());
+            list->add(type_info);
+        }
+
+        std::stringstream ss;
+        list->stringify(ss);
+        auto json_str = ss.str();
+        LOG_INFO(log, "remote cache info: {}", json_str);
+        return buildOkResp(api_name, json_str);
+    }
+    catch (...)
+    {
+        tryLogCurrentWarningException(log, "failed to get remote cache info");
+        auto body = fmt::format(R"json({{"message":"failed to get remote cache info"}})json");
+        return buildRespWithCode(HttpRequestStatus::InternalError, api_name, std::move(body));
+    }
 }
 
 // Acquiring the all the region ids created in this TiFlash node with given keyspace id.
@@ -567,6 +759,7 @@ static const std::map<std::string, HANDLE_HTTP_URI_METHOD> AVAILABLE_HTTP_URI = 
     {"/tiflash/remote/gc", HandleHttpRequestRemoteGC},
     {"/tiflash/remote/upload", HandleHttpRequestRemoteReUpload},
     {"/tiflash/remote/cache/evict", HandleHttpRequestRemoteCacheEvict},
+    {"/tiflash/remote/cache/info", HandleHttpRequestRemoteCacheInfo},
 };
 
 uint8_t CheckHttpUriAvailable(BaseBuffView path_)
