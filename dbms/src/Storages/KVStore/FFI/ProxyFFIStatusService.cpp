@@ -464,6 +464,7 @@ RemoteCacheEvictRequest parseEvictRequest(
             if (auto force_it = query_map.find("force"); force_it != query_map.end())
             {
                 // any value other than "0" or "false" is considered as true
+                // if no value is provided, e.g. "xxx=yyy&force", then consider it as true
                 req.force_evict = !(force_it->second == "0" || force_it->second == "false");
             }
             return req;

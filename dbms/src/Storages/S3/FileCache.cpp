@@ -119,41 +119,44 @@ FileSegment::Status FileSegment::waitForNotEmpty()
 
 void CacheSizeHistogram::addFileSegment(const FileSegmentPtr & file_seg)
 {
+    if (!file_seg)
+        return;
+
     auto age = std::chrono::duration_cast<std::chrono::minutes>(
                    std::chrono::system_clock::now() - file_seg->getLastAccessTime())
                    .count();
     UInt64 fsize = file_seg->getSize();
-    if (age <= 30)
+    if (age < 30)
     {
         in30min.count++;
         in30min.bytes += fsize;
     }
-    else if (age <= 60)
+    else if (age < 60)
     {
         in60min.count++;
         in60min.bytes += fsize;
     }
-    else if (age <= 360)
+    else if (age < 360)
     {
         in360min.count++;
         in360min.bytes += fsize;
     }
-    else if (age <= 720)
+    else if (age < 720)
     {
         in720min.count++;
         in720min.bytes += fsize;
     }
-    else if (age <= 1440)
+    else if (age < 1440)
     {
         in1440min.count++;
         in1440min.bytes += fsize;
     }
-    else if (age <= 2880)
+    else if (age < 2880)
     {
         in2880min.count++;
         in2880min.bytes += fsize;
     }
-    else if (age <= 10080)
+    else if (age < 10080)
     {
         in10080min.count++;
         in10080min.bytes += fsize;
@@ -530,8 +533,7 @@ std::pair<Int64, std::list<String>::iterator> FileCache::removeImpl(
 
 // Try best to reserve space for new coming file.
 // return true if reservation success.
-// `size` is the expected free size after reservation.
-// Note that `cache_used` will increase by `size` if reservation success.
+// `size` is the amount of space to reserve (cache_used will increase by this amount on success).
 bool FileCache::reserveSpaceImpl(
     FileType reserve_for,
     UInt64 size,
@@ -559,6 +561,11 @@ bool FileCache::reserveSpaceImpl(
     return false;
 }
 
+// Evict files to free space for new coming file.
+// `size_to_reserve` is the required space to reserve.
+// `min_age_seconds` is the minimum age of files to be evicted.
+// Return the total evicted size.
+// Caller should ensure that `size_to_reserve` is larger than available space.
 UInt64 FileCache::evictBySizeImpl(
     FileType evict_for,
     UInt64 size_to_reserve,
