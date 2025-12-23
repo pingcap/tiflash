@@ -2666,6 +2666,7 @@ Segment::ReadInfo Segment::getReadInfo(
         bool ok = segment_snap->delta->getSharedDeltaIndex()->updateIfAdvanced(*my_delta_index);
         if (ok)
         {
+            GET_METRIC(tiflash_storage_place_index_count, type_placed_fully_saved).Increment();
             LOG_DEBUG(
                 segment_snap->log,
                 "Segment updated delta index, my_delta_index={} {}",
@@ -2796,6 +2797,9 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(
             start_ts))
     {
         // We can reuse the shared-delta-index
+        GET_METRIC(tiflash_storage_place_index_count, type_reuse).Increment();
+        GET_METRIC(tiflash_storage_place_index_stats_count, type_rows_reuse_placed).Observe(my_placed_rows);
+        GET_METRIC(tiflash_storage_place_index_stats_count, type_deletes_reuse_placed).Observe(my_placed_deletes);
         return {my_delta_index, false};
     }
 
@@ -2815,6 +2819,8 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(
         delta_snap->getDeletes());
 
     bool fully_indexed = true;
+    size_t new_placed_rows = 0;
+    size_t new_placed_deletes = 0;
     for (auto & v : items)
     {
         if (v.isBlock())
@@ -2851,6 +2857,7 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(
                     relevant_place);
 
             my_placed_rows += rows;
+            new_placed_rows += rows;
         }
         else
         {
@@ -2874,6 +2881,7 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(
                     relevant_place);
 
             ++my_placed_deletes;
+            ++new_placed_deletes;
         }
     }
 
@@ -2887,6 +2895,13 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(
 
     my_delta_index->update(my_delta_tree, my_placed_rows, my_placed_deletes);
 
+    GET_METRIC(tiflash_storage_place_index_count, type_placed).Increment();
+    GET_METRIC(tiflash_storage_place_index_stats_count, type_rows_newly_placed).Observe(new_placed_rows);
+    GET_METRIC(tiflash_storage_place_index_stats_count, type_deletes_newly_placed).Observe(new_placed_deletes);
+    GET_METRIC(tiflash_storage_place_index_stats_count, type_rows_after_placed).Observe(my_placed_rows);
+    GET_METRIC(tiflash_storage_place_index_stats_count, type_deletes_after_placed).Observe(my_placed_deletes);
+    if (fully_indexed)
+        GET_METRIC(tiflash_storage_place_index_count, type_placed_fully_indexed).Increment();
     LOG_DEBUG(
         segment_snap->log,
         "Finish segment ensurePlace, read_ranges={} placed_items={} shared_delta_index={} my_delta_index={} {}",
