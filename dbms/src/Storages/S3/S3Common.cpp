@@ -841,7 +841,7 @@ void listPrefix(
         {
             throw fromS3Error(
                 outcome.GetError(),
-                "S3 ListObjectV2s failed, bucket={} root={} prefix={}",
+                "S3 ListObjectsV2 failed, bucket={} root={} prefix={}",
                 client.bucket(),
                 client.root(),
                 prefix);
@@ -852,6 +852,7 @@ void listPrefix(
         const auto & result = outcome.GetResult();
         auto page_keys = result.GetContents().size();
         num_keys += page_keys;
+        LOG_DEBUG(client.log, "listPrefix page result, prefix={} keys={} total_keys={}", prefix, page_keys, num_keys);
         for (const auto & object : result.GetContents())
         {
             if (!need_cut)
@@ -877,14 +878,19 @@ void listPrefix(
             req.SetContinuationToken(next_token);
             LOG_DEBUG(
                 client.log,
-                "listPrefix prefix={}, keys={}, total_keys={}, next_token={}",
+                "listPrefix next page, prefix={} keys={} total_keys={} next_token={}",
                 prefix,
                 page_keys,
                 num_keys,
                 next_token);
         }
     }
-    LOG_DEBUG(client.log, "listPrefix prefix={}, total_keys={}, cost={:.2f}s", prefix, num_keys, sw.elapsedSeconds());
+    LOG_DEBUG(
+        client.log,
+        "listPrefix done, prefix={} total_keys={} cost={:.2f}s",
+        prefix,
+        num_keys,
+        sw.elapsedSeconds());
 }
 
 // Check the docs here for Delimiter && CommonPrefixes when you really need it.

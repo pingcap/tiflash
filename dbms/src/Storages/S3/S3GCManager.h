@@ -83,6 +83,15 @@ struct S3GCConfig
     Int64 mark_delete_timeout_seconds = 10;
 };
 
+struct GcStats
+{
+    double duration_read_locks = 0.0;
+    double duration_clean_locks = 0.0;
+    double duration_clean_manifests = 0.0;
+    double duration_verify_locks = 0.0;
+    double duration_scan_then_clean_data_files = 0.0;
+};
+
 class S3GCManager
 {
 public:
@@ -174,3 +183,23 @@ private:
 };
 
 } // namespace DB::S3
+
+template <>
+struct fmt::formatter<DB::S3::GcStats>
+{
+    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
+
+    template <typename FormatContext>
+    auto format(const DB::S3::GcStats & stat, FormatContext & ctx) const
+    {
+        return fmt::format_to(
+            ctx.out(),
+            "{{read_locks={:.2f}s clean_locks={:.2f}s clean_manifests={:.2f}s verify_locks={:.2f}s "
+            "scan_then_clean_data_files={:.2f}s}}",
+            stat.duration_read_locks,
+            stat.duration_clean_locks,
+            stat.duration_clean_manifests,
+            stat.duration_verify_locks,
+            stat.duration_scan_then_clean_data_files);
+    }
+};
