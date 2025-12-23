@@ -25,6 +25,11 @@
 #include <Storages/S3/S3Filename.h>
 #include <common/types.h>
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <Poco/JSON/Object.h>
+#pragma GCC diagnostic pop
+
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -50,7 +55,7 @@ public:
     // The smaller the enum value, the higher the cache priority.
     enum class FileType : UInt64
     {
-        Unknow = 0,
+        Unknown = 0,
         Meta,
         // Vector index is always stored as a separate file and requires to be read through `mmap`
         // which must be downloaded to the local disk.
@@ -152,6 +157,41 @@ private:
 
 using FileSegmentPtr = std::shared_ptr<FileSegment>;
 
+struct CacheSizeHistogram
+{
+    struct Stat
+    {
+        UInt64 count = 0;
+        UInt64 bytes = 0;
+
+        Poco::JSON::Object::Ptr toJson() const;
+    };
+
+    // [0, 30) minutes
+    Stat in30min;
+    // [30, 60) minutes
+    Stat in60min;
+    // [60, 360) minutes
+    Stat in360min;
+    // [360, 720) minutes; 6 hours to 12 hours
+    Stat in720min;
+    // [720, 1440) minutes; 12 hours to 1 day
+    Stat in1440min;
+    // [1440, 2880) minutes; 1 day to 2 days
+    Stat in2880min;
+    // [2880, 10080) minutes; 2 days to 7 days
+    Stat in10080min;
+    // more than 7 day
+    Stat over10080min;
+
+    std::optional<std::chrono::time_point<std::chrono::system_clock>> oldest_access_time;
+    UInt64 oldest_file_size = 0;
+
+    void addFileSegment(const FileSegmentPtr & file_seg);
+
+    Poco::JSON::Object::Ptr toJson() const;
+};
+
 class LRUFileTable
 {
 public:
@@ -209,6 +249,16 @@ public:
             files.push_back(pa.second.first);
         }
         return files;
+    }
+
+    CacheSizeHistogram getCacheSizeHistogram() const
+    {
+        CacheSizeHistogram histogram;
+        for (const auto & pa : table)
+        {
+            histogram.addFileSegment(pa.second.first);
+        }
+        return histogram;
     }
 
     size_t size() const { return table.size(); }
@@ -272,8 +322,12 @@ public:
 
     void updateConfig(const Settings & settings);
 
-    // evict the cached files until no file of >= `file_type` is in cache.
-    UInt64 evictUntil(FileSegment::FileType file_type);
+
+    UInt64 evictByFileType(FileSegment::FileType file_type);
+
+    UInt64 evictBySize(UInt64 size_to_reserve, UInt64 min_age_seconds, bool force_evict);
+
+    std::vector<std::tuple<FileSegment::FileType, CacheSizeHistogram>> getCacheSizeHistogram() const;
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -362,22 +416,45 @@ public:
         ForceEvict,
     };
 
-    bool reserveSpaceImpl(FileSegment::FileType reserve_for, UInt64 size, EvictMode evict);
+    bool reserveSpaceImpl(
+        FileSegment::FileType reserve_for,
+        UInt64 size,
+        EvictMode mode,
+        std::unique_lock<std::mutex> & guard);
     void releaseSpaceImpl(UInt64 size);
     void releaseSpace(UInt64 size);
-    bool reserveSpace(FileSegment::FileType reserve_for, UInt64 size, EvictMode evict);
+    bool reserveSpace(FileSegment::FileType reserve_for, UInt64 size, EvictMode mode);
     bool finalizeReservedSize(FileSegment::FileType reserve_for, UInt64 reserved_size, UInt64 content_length);
+
+    // == evict cached files ==
+
     static std::vector<FileSegment::FileType> getEvictFileTypes(
         FileSegment::FileType evict_for,
         bool evict_same_type_first);
-    void tryEvictFile(FileSegment::FileType evict_for, UInt64 size, EvictMode evict);
-    UInt64 tryEvictFrom(FileSegment::FileType evict_for, UInt64 size, FileSegment::FileType evict_from);
-    UInt64 forceEvict(UInt64 size);
+    UInt64 evictBySizeImpl(
+        FileSegment::FileType evict_for,
+        UInt64 size_to_reserve,
+        UInt64 min_age_seconds,
+        EvictMode mode,
+        std::unique_lock<std::mutex> & guard);
+    UInt64 tryEvictFile(
+        FileSegment::FileType evict_for,
+        UInt64 min_evict_size,
+        UInt64 min_age_seconds,
+        EvictMode mode,
+        std::unique_lock<std::mutex> & guard);
+    UInt64 tryEvictFileFrom(
+        FileSegment::FileType evict_for,
+        UInt64 min_evict_size,
+        UInt64 min_age_seconds,
+        FileSegment::FileType evict_from,
+        std::unique_lock<std::mutex> & guard);
+    UInt64 forceEvict(UInt64 size, std::unique_lock<std::mutex> & guard);
 
     // This function is used for test.
     std::vector<FileSegmentPtr> getAll();
 
-    std::mutex mtx;
+    mutable std::mutex mtx;
     PathCapacityMetricsPtr capacity_metrics;
     String cache_dir;
     UInt64 cache_capacity;
