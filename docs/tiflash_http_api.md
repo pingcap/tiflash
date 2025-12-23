@@ -228,7 +228,7 @@ curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tifash/remote/upload"
 ## Get the local cache info for TiFlash compute node under disaggregated arch 
 
 ```bash
-curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tifash/remote/cache/info"
+curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tiflash/remote/cache/info"
 ```
 
 ### Response
@@ -245,12 +245,12 @@ curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tifash/remote/cache/info"
 # Evict by size. Will try to reserve ${size_in_bytes} free space, evicting
 # the old cache that is older than configured
 # `profiles.default.dt_filecache_min_age_seconds`.
-curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tifash/remote/cache/evict/size/{size_in_bytes}"
+curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tiflash/remote/cache/evict/size/{size_in_bytes}"
 # Evict by size. Will force to reserve ${size_in_bytes} free space when no
 # enough space after evicting old cache. The age is overwrite by ${min_age}.
-curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tifash/remote/cache/evict/size/{size_in_bytes}?force&age=<min_age>"
+curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tiflash/remote/cache/evict/size/{size_in_bytes}?force&age=<min_age>"
 # Evict by file type. Will evict all cache files with type >= ${file_type_int}.
-curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tifash/remote/cache/evict/type/{file_type_int}"
+curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tiflash/remote/cache/evict/type/{file_type_int}"
 ```
 
 ### Response
