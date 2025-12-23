@@ -1400,8 +1400,8 @@ UInt64 FileCache::evictByFileType(FileSegment::FileType file_type)
 }
 
 // Evict the cached files until at least `size_to_reserve` bytes are freed.
-// return the actual evicted size.
-// If `min_age_seconds == 0`, it will use the current `cache_min_age_seconds`, otherwise use the given value.
+// Return the actual evicted size.
+// When `min_age_seconds == 0`, this function uses the current `cache_min_age_seconds`; otherwise it uses the given value.
 // If `force_evict` is true, it will evict files even if they are being used recently.
 UInt64 FileCache::evictBySize(UInt64 size_to_reserve, UInt64 min_age_seconds, bool force_evict)
 {
