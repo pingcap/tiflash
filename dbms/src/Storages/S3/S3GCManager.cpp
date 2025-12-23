@@ -154,24 +154,30 @@ bool S3GCManager::runOnAllStores()
         Stopwatch store_gc_watch;
         SCOPE_EXIT(
             { GET_METRIC(tiflash_storage_s3_gc_seconds, type_one_store).Observe(store_gc_watch.elapsedSeconds()); });
-        std::optional<metapb::StoreState> s = std::nullopt;
+        std::optional<metapb::Store> s = std::nullopt;
         if (auto iter = stores_from_pd.find(gc_store_id); iter != stores_from_pd.end())
         {
-            s = iter->second.state();
+            s = iter->second;
         }
         try
         {
-            if (!s || *s == metapb::StoreState::Tombstone)
+            if (!s)
             {
-                if (!s)
-                {
-                    LOG_INFO(log, "store not found from pd, maybe already removed. gc_store_id={}", gc_store_id);
-                }
-                runForTombstoneStore(gc_store_id);
+                LOG_INFO(log, "store not found from pd, maybe already removed. gc_store_id={}", gc_store_id);
+                auto store_log = log->getChild(fmt::format("gc_store_id={}", gc_store_id));
+                runForTombstoneStore(gc_store_id, std::move(store_log));
+            }
+            else if (s->state() == metapb::StoreState::Tombstone)
+            {
+                auto addr = s->address();
+                auto store_log = log->getChild(fmt::format("gc_store_id={} addr={}", gc_store_id, addr));
+                runForTombstoneStore(gc_store_id, std::move(store_log));
             }
             else
             {
-                runForStore(gc_store_id);
+                auto addr = s->address();
+                auto store_log = log->getChild(fmt::format("gc_store_id={} addr={}", gc_store_id, addr));
+                runForStore(gc_store_id, std::move(store_log));
             }
         }
         catch (...)
@@ -184,56 +190,58 @@ bool S3GCManager::runOnAllStores()
     return false;
 }
 
-void S3GCManager::runForStore(UInt64 gc_store_id)
+void S3GCManager::runForStore(UInt64 gc_store_id, LoggerPtr slogger)
 {
     // get a timepoint at the begin, only remove objects that expired compare
     // to this timepoint
     auto client = S3::ClientFactory::instance().sharedTiFlashClient();
     const Aws::Utils::DateTime gc_timepoint = Aws::Utils::DateTime::Now();
-    LOG_INFO(
-        log,
-        "run gc, gc_store_id={} timepoint={}",
-        gc_store_id,
-        gc_timepoint.ToGmtString(Aws::Utils::DateFormat::ISO_8601));
+    LOG_INFO(slogger, "run gc, timepoint={}", gc_timepoint.ToGmtString(Aws::Utils::DateFormat::ISO_8601));
 
     Stopwatch watch;
     // Get the latest manifest
     const auto manifests = CheckpointManifestS3Set::getFromS3(*client, gc_store_id);
     if (manifests.empty())
     {
-        LOG_INFO(log, "no manifest on this store, skip gc_store_id={}", gc_store_id);
+        LOG_INFO(slogger, "no manifest on this store, skip");
         return;
     }
 
     GcStats gc_stats;
     LOG_INFO(
-        log,
-        "latest manifest, gc_store_id={} upload_seq={} key={}",
-        gc_store_id,
+        slogger,
+        "latest manifest, upload_seq={} key={}",
         manifests.latestUploadSequence(),
         manifests.latestManifestKey());
     // Parse from the latest manifest and collect valid lock files
     // collect valid lock files from preserved manifests
     std::unordered_set<String> valid_lock_files = getValidLocksFromManifest(
-        manifests.preservedManifests(config.manifest_preserve_count, config.manifest_expired_hour, gc_timepoint));
-    LOG_INFO(log, "latest manifest, key={} n_locks={}", manifests.latestManifestKey(), valid_lock_files.size());
+        manifests.preservedManifests(config.manifest_preserve_count, config.manifest_expired_hour, gc_timepoint),
+        slogger);
+    LOG_INFO(slogger, "latest manifest, key={} n_locks={}", manifests.latestManifestKey(), valid_lock_files.size());
     gc_stats.duration_read_locks = watch.elapsedMillisecondsFromLastTime() / 1000.0;
     GET_METRIC(tiflash_storage_s3_gc_seconds, type_read_locks).Observe(gc_stats.duration_read_locks);
 
     // Scan and remove the expired locks
     const auto lock_prefix = S3Filename::getLockPrefix();
-    cleanUnusedLocks(gc_store_id, lock_prefix, manifests.latestUploadSequence(), valid_lock_files, gc_timepoint);
+    cleanUnusedLocks(
+        gc_store_id,
+        lock_prefix,
+        manifests.latestUploadSequence(),
+        valid_lock_files,
+        gc_timepoint,
+        slogger);
     gc_stats.duration_clean_locks = watch.elapsedMillisecondsFromLastTime() / 1000.0;
     GET_METRIC(tiflash_storage_s3_gc_seconds, type_clean_locks).Observe(gc_stats.duration_clean_locks);
 
     // clean the outdated manifest objects
-    removeOutdatedManifest(manifests, &gc_timepoint);
+    removeOutdatedManifest(manifests, &gc_timepoint, slogger);
     gc_stats.duration_clean_manifests = watch.elapsedMillisecondsFromLastTime() / 1000.0;
     GET_METRIC(tiflash_storage_s3_gc_seconds, type_clean_manifests).Observe(gc_stats.duration_clean_manifests);
 
     if (config.verify_locks)
     {
-        verifyLocks(valid_lock_files);
+        verifyLocks(valid_lock_files, slogger);
         gc_stats.duration_verify_locks = watch.elapsedMillisecondsFromLastTime() / 1000.0;
     }
 
@@ -249,43 +257,48 @@ void S3GCManager::runForStore(UInt64 gc_store_id)
     {
         // After removing the expired lock, we need to scan the data files
         // with expired delmark
-        tryCleanExpiredDataFiles(gc_store_id, gc_timepoint);
+        tryCleanExpiredDataFiles(gc_store_id, gc_timepoint, slogger);
         gc_stats.duration_scan_then_clean_data_files = watch.elapsedMillisecondsFromLastTime() / 1000.0;
         GET_METRIC(tiflash_storage_s3_gc_seconds, type_scan_then_clean_data_files)
             .Observe(gc_stats.duration_scan_then_clean_data_files);
         break;
     }
     }
-    LOG_INFO(log, "gc on store done, gc_store_id={} stats={}", gc_store_id, gc_stats);
+    LOG_INFO(slogger, "gc on store done, stats={}", gc_stats);
 }
 
-void S3GCManager::runForTombstoneStore(UInt64 gc_store_id)
+void S3GCManager::runForTombstoneStore(UInt64 gc_store_id, LoggerPtr slogger)
 {
     // get a timepoint at the begin, only remove objects that expired compare
     // to this timepoint
     const Aws::Utils::DateTime gc_timepoint = Aws::Utils::DateTime::Now();
     LOG_INFO(
-        log,
-        "run gc, gc_store_id={} timepoint={} tombstone=true",
-        gc_store_id,
+        slogger,
+        "run gc, timepoint={} tombstone=true",
         gc_timepoint.ToGmtString(Aws::Utils::DateFormat::ISO_8601));
 
     Stopwatch watch;
     // If the store id is tombstone, then run gc on the store as if no locks.
     // Scan and remove all expired locks
     GcStats gc_stats;
-    LOG_INFO(log, "store is tombstone, clean all locks, gc_store_id={}", gc_store_id);
+    LOG_INFO(slogger, "store is tombstone, clean all locks");
     const auto lock_prefix = S3Filename::getLockPrefix();
     // clean all by setting `safe_sequence` to MaxUInt64 and empty `valid_lock_files`
     std::unordered_set<String> valid_lock_files;
-    cleanUnusedLocks(gc_store_id, lock_prefix, std::numeric_limits<UInt64>::max(), valid_lock_files, gc_timepoint);
+    cleanUnusedLocks(
+        gc_store_id,
+        lock_prefix,
+        std::numeric_limits<UInt64>::max(),
+        valid_lock_files,
+        gc_timepoint,
+        slogger);
     gc_stats.duration_clean_locks = watch.elapsedMillisecondsFromLastTime() / 1000.0;
     GET_METRIC(tiflash_storage_s3_gc_seconds, type_clean_locks).Observe(gc_stats.duration_clean_locks);
 
     // clean all manifest objects
     auto client = S3::ClientFactory::instance().sharedTiFlashClient();
     const auto manifests = CheckpointManifestS3Set::getFromS3(*client, gc_store_id);
-    removeOutdatedManifest(manifests, nullptr);
+    removeOutdatedManifest(manifests, nullptr, slogger);
     gc_stats.duration_clean_manifests = watch.elapsedMillisecondsFromLastTime() / 1000.0;
     GET_METRIC(tiflash_storage_s3_gc_seconds, type_clean_manifests).Observe(gc_stats.duration_clean_manifests);
 
@@ -304,14 +317,14 @@ void S3GCManager::runForTombstoneStore(UInt64 gc_store_id)
 
         // After all the locks removed, the data files may still being locked by another
         // store id, we need to scan the data files with expired delmark
-        tryCleanExpiredDataFiles(gc_store_id, gc_timepoint);
+        tryCleanExpiredDataFiles(gc_store_id, gc_timepoint, slogger);
         gc_stats.duration_scan_then_clean_data_files = watch.elapsedMillisecondsFromLastTime() / 1000.0;
         GET_METRIC(tiflash_storage_s3_gc_seconds, type_scan_then_clean_data_files)
             .Observe(gc_stats.duration_scan_then_clean_data_files);
         break;
     }
     }
-    LOG_INFO(log, "gc on store done, gc_store_id={} stats={} tombstone=true", gc_store_id, gc_stats);
+    LOG_INFO(slogger, "gc on store done, stats={} tombstone=true", gc_stats);
 }
 
 void S3GCManager::cleanUnusedLocks(
@@ -319,7 +332,8 @@ void S3GCManager::cleanUnusedLocks(
     const String & scan_prefix,
     UInt64 safe_sequence,
     const std::unordered_set<String> & valid_lock_files,
-    const Aws::Utils::DateTime & timepoint)
+    const Aws::Utils::DateTime & timepoint,
+    const LoggerPtr & slogger)
 {
     auto client = S3::ClientFactory::instance().sharedTiFlashClient();
     size_t keys_processed = 0;
@@ -327,7 +341,7 @@ void S3GCManager::cleanUnusedLocks(
     S3::listPrefix(*client, scan_prefix, [&](const Aws::S3::Model::Object & object) {
         if (shutdown_called)
         {
-            LOG_INFO(log, "shutting down, break, gc_store_id={} keys_processed={}", gc_store_id, keys_processed);
+            LOG_INFO(slogger, "shutting down, break, keys_processed={}", keys_processed);
             // .more=false to break the list
             return PageResult{.num_keys = 1, .more = false};
         }
@@ -336,7 +350,7 @@ void S3GCManager::cleanUnusedLocks(
         do
         {
             const auto & lock_key = object.GetKey();
-            LOG_TRACE(log, "lock_key={}", lock_key);
+            LOG_TRACE(slogger, "lock_key={}", lock_key);
             const auto lock_filename_view = S3FilenameView::fromKey(lock_key);
             RUNTIME_CHECK(lock_filename_view.isLockFile(), lock_key);
             const auto lock_info = lock_filename_view.getLockInfo();
@@ -352,17 +366,18 @@ void S3GCManager::cleanUnusedLocks(
                 break;
 
             // The data file is not used by `gc_store_id` anymore, remove the lock file
-            cleanOneLock(lock_key, lock_filename_view, timepoint);
+            cleanOneLock(lock_key, lock_filename_view, timepoint, slogger);
         } while (false);
         return PageResult{.num_keys = 1, .more = true};
     });
-    LOG_INFO(log, "cleanUnusedLocks done, gc_store_id={} total_keys_processed={}", gc_store_id, keys_processed);
+    LOG_INFO(slogger, "cleanUnusedLocks done, total_keys_processed={}", keys_processed);
 }
 
 void S3GCManager::cleanOneLock(
     const String & lock_key,
     const S3FilenameView & lock_filename_view,
-    const Aws::Utils::DateTime & timepoint)
+    const Aws::Utils::DateTime & timepoint,
+    const LoggerPtr & slogger)
 {
     Stopwatch watch;
     SCOPE_EXIT({ GET_METRIC(tiflash_storage_s3_gc_seconds, type_clean_one_lock).Observe(watch.elapsedSeconds()); });
@@ -370,7 +385,7 @@ void S3GCManager::cleanOneLock(
     RUNTIME_CHECK(unlocked_datafilename_view.isDataFile());
     const auto unlocked_datafile_key = unlocked_datafilename_view.toFullKey();
     const auto unlocked_datafile_delmark_key = unlocked_datafilename_view.getDelMarkKey();
-    auto sub_logger = log->getChild(fmt::format("remove_key={}", unlocked_datafile_key));
+    auto sub_logger = slogger->getChild(fmt::format("remove_key={}", unlocked_datafile_key));
 
     // delete S3 lock file
     auto client = S3::ClientFactory::instance().sharedTiFlashClient();
@@ -531,7 +546,10 @@ void S3GCManager::removeDataFileIfDelmarkExpired(
     LOG_INFO(sub_logger, "datafile delmark deleted, key={}", delmark_key);
 }
 
-void S3GCManager::tryCleanExpiredDataFiles(UInt64 gc_store_id, const Aws::Utils::DateTime & timepoint)
+void S3GCManager::tryCleanExpiredDataFiles(
+    UInt64 gc_store_id,
+    const Aws::Utils::DateTime & timepoint,
+    const LoggerPtr & slogger)
 {
     // StableFiles and CheckpointDataFile are stored with the same prefix, scan
     // the keys by prefix, and if there is an expired delmark, then try to remove
@@ -542,33 +560,29 @@ void S3GCManager::tryCleanExpiredDataFiles(UInt64 gc_store_id, const Aws::Utils:
     S3::listPrefix(*client, prefix, [&](const Aws::S3::Model::Object & object) {
         if (shutdown_called)
         {
-            LOG_INFO(log, "shutting down, break, gc_store_id={} keys_processed={}", gc_store_id, keys_processed);
+            LOG_INFO(slogger, "shutting down, break, keys_processed={}", keys_processed);
             // .more=false to break the list
             return PageResult{.num_keys = 1, .more = false};
         }
 
         keys_processed += 1;
         const auto & delmark_key = object.GetKey();
-        LOG_TRACE(log, "key={}", object.GetKey());
+        LOG_TRACE(slogger, "key={}", object.GetKey());
         const auto filename_view = S3FilenameView::fromKey(delmark_key);
         // Only remove the data file with expired delmark
         if (!filename_view.isDelMark())
         {
-            LOG_DEBUG(
-                log,
-                "skip for non delmark file, gc_store_id={} keys_processed={} key={}",
-                gc_store_id,
-                keys_processed,
-                delmark_key);
+            LOG_DEBUG(slogger, "skip for non delmark file, keys_processed={} key={}", keys_processed, delmark_key);
             return PageResult{.num_keys = 1, .more = true};
         }
 
         const auto datafile_key = filename_view.asDataFile().toFullKey();
-        auto sub_logger = log->getChild(fmt::format("keys_processed={} remove_key={}", keys_processed, datafile_key));
+        auto sub_logger
+            = slogger->getChild(fmt::format("keys_processed={} remove_key={}", keys_processed, datafile_key));
         removeDataFileIfDelmarkExpired(datafile_key, delmark_key, timepoint, object.GetLastModified(), sub_logger);
         return PageResult{.num_keys = 1, .more = true};
     });
-    LOG_INFO(log, "tryCleanExpiredDataFiles done, gc_store_id={} total_keys_processed={}", gc_store_id, keys_processed);
+    LOG_INFO(slogger, "tryCleanExpiredDataFiles done, total_keys_processed={}", keys_processed);
 }
 
 void S3GCManager::lifecycleMarkDataFileDeleted(const String & datafile_key, const LoggerPtr & sub_logger)
@@ -640,7 +654,7 @@ void S3GCManager::physicalRemoveDataFile(const String & datafile_key, const Logg
     }
 }
 
-void S3GCManager::verifyLocks(const std::unordered_set<String> & valid_lock_files)
+void S3GCManager::verifyLocks(const std::unordered_set<String> & valid_lock_files, const LoggerPtr & slogger)
 {
     for (const auto & lock_key : valid_lock_files)
     {
@@ -657,16 +671,16 @@ void S3GCManager::verifyLocks(const std::unordered_set<String> & valid_lock_file
         {
             data_file_check_key = data_file_view.toFullKey() + "/meta";
         }
-        LOG_INFO(log, "Checking consistency, lock_key={} data_file_key={}", lock_key, data_file_check_key);
+        LOG_INFO(slogger, "Checking consistency, lock_key={} data_file_key={}", lock_key, data_file_check_key);
         auto object_info = S3::tryGetObjectInfo(*client, data_file_check_key);
         RUNTIME_ASSERT(
             object_info.exist,
-            log,
+            slogger,
             "S3 file has already been removed! lock_key={} data_file={}",
             lock_key,
             data_file_check_key);
     }
-    LOG_INFO(log, "All valid lock consistency check passed, num_locks={}", valid_lock_files.size());
+    LOG_INFO(slogger, "All valid lock consistency check passed, num_locks={}", valid_lock_files.size());
 }
 
 std::vector<UInt64> S3GCManager::getAllStoreIds()
@@ -690,7 +704,9 @@ std::vector<UInt64> S3GCManager::getAllStoreIds()
     return all_store_ids;
 }
 
-std::unordered_set<String> S3GCManager::getValidLocksFromManifest(const Strings & manifest_keys)
+std::unordered_set<String> S3GCManager::getValidLocksFromManifest(
+    const Strings & manifest_keys,
+    const LoggerPtr & store_logger)
 {
     // parse lock from manifest
     std::unordered_set<String> locks;
@@ -698,7 +714,7 @@ std::unordered_set<String> S3GCManager::getValidLocksFromManifest(const Strings 
     using ManifestReader = DB::PS::V3::CPManifestFileReader;
     for (const auto & manifest_key : manifest_keys)
     {
-        LOG_INFO(log, "Reading manifest, key={}", manifest_key);
+        LOG_INFO(store_logger, "Reading manifest, key={}", manifest_key);
         auto manifest_file = S3RandomAccessFile::create(manifest_key);
         auto reader = ManifestReader::create(ManifestReader::Options{.plain_file = manifest_file});
         auto mf_prefix = reader->readPrefix();
@@ -725,7 +741,8 @@ std::unordered_set<String> S3GCManager::getValidLocksFromManifest(const Strings 
 
 void S3GCManager::removeOutdatedManifest(
     const CheckpointManifestS3Set & manifests,
-    const Aws::Utils::DateTime * const timepoint)
+    const Aws::Utils::DateTime * const timepoint,
+    const LoggerPtr & slogger) const
 {
     auto client = S3::ClientFactory::instance().sharedTiFlashClient();
     if (timepoint == nullptr)
@@ -735,7 +752,7 @@ void S3GCManager::removeOutdatedManifest(
             // store is tombstone, remove all manifests
             deleteObject(*client, mf.second.key);
             LOG_INFO(
-                log,
+                slogger,
                 "remove outdated manifest because store is tombstone, key={} mtime={}",
                 mf.second.key,
                 mf.second.last_modification.ToGmtString(Aws::Utils::DateFormat::ISO_8601));
@@ -752,7 +769,7 @@ void S3GCManager::removeOutdatedManifest(
         // expired manifest, remove
         deleteObject(*client, mf.key);
         LOG_INFO(
-            log,
+            slogger,
             "remove outdated manifest, key={} mtime={}",
             mf.key,
             mf.last_modification.ToGmtString(Aws::Utils::DateFormat::ISO_8601));

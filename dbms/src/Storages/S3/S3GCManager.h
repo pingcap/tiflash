@@ -110,20 +110,28 @@ public:
     void shutdown() { shutdown_called = true; }
 
     // private:
-    void runForStore(UInt64 gc_store_id);
+    void runForStore(UInt64 gc_store_id, LoggerPtr slogger);
 
-    void runForTombstoneStore(UInt64 gc_store_id);
+    void runForTombstoneStore(UInt64 gc_store_id, LoggerPtr slogger);
 
     void cleanUnusedLocks(
         UInt64 gc_store_id,
         const String & scan_prefix,
         UInt64 safe_sequence,
         const std::unordered_set<String> & valid_lock_files,
-        const Aws::Utils::DateTime &);
+        const Aws::Utils::DateTime & timepoint,
+        const LoggerPtr & slogger);
 
-    void cleanOneLock(const String & lock_key, const S3FilenameView & lock_filename_view, const Aws::Utils::DateTime &);
+    void cleanOneLock(
+        const String & lock_key,
+        const S3FilenameView & lock_filename_view,
+        const Aws::Utils::DateTime & timepoint,
+        const LoggerPtr & slogger);
 
-    void tryCleanExpiredDataFiles(UInt64 gc_store_id, const Aws::Utils::DateTime &);
+    void tryCleanExpiredDataFiles(
+        UInt64 gc_store_id,
+        const Aws::Utils::DateTime & timepoint,
+        const LoggerPtr & slogger);
 
     void removeDataFileIfDelmarkExpired(
         const String & datafile_key,
@@ -135,15 +143,18 @@ public:
     void lifecycleMarkDataFileDeleted(const String & datafile_key, const LoggerPtr & sub_logger);
     void physicalRemoveDataFile(const String & datafile_key, const LoggerPtr & sub_logger) const;
 
-    void verifyLocks(const std::unordered_set<String> & valid_lock_files);
+    static void verifyLocks(const std::unordered_set<String> & valid_lock_files, const LoggerPtr & slogger);
 
     static std::vector<UInt64> getAllStoreIds();
 
-    std::unordered_set<String> getValidLocksFromManifest(const Strings & manifest_keys);
+    static std::unordered_set<String> getValidLocksFromManifest(
+        const Strings & manifest_keys,
+        const LoggerPtr & store_logger);
 
     void removeOutdatedManifest(
         const CheckpointManifestS3Set & manifests,
-        const Aws::Utils::DateTime * const timepoint); // NOLINT(readability-avoid-const-params-in-decls)
+        const Aws::Utils::DateTime * const timepoint, // NOLINT(readability-avoid-const-params-in-decls)
+        const LoggerPtr & slogger) const;
 
 private:
     const pingcap::pd::ClientPtr pd_client;
