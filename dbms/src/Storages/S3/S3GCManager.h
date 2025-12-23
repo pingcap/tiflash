@@ -20,6 +20,7 @@
 #include <Storages/S3/CheckpointManifestS3Set.h>
 #include <Storages/S3/S3Common.h>
 #include <common/types.h>
+#include <fmt/format.h>
 
 #include <memory>
 #include <unordered_set>
