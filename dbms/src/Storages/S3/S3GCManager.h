@@ -24,6 +24,7 @@
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <Poco/JSON/Array.h>
 #include <Poco/JSON/Object.h>
 #pragma GCC diagnostic pop
 
@@ -99,7 +100,7 @@ struct GcStats
 };
 
 
-struct S3StorageDetails
+struct S3StoreStorageSummary
 {
     StoreID store_id = InvalidStoreID;
     CheckpointManifestS3Set manifests;
@@ -122,6 +123,13 @@ struct S3StorageDetails
     Poco::JSON::Object::Ptr toJson() const;
 };
 
+struct S3StorageSummary
+{
+    std::vector<S3StoreStorageSummary> stores;
+
+    Poco::JSON::Object::Ptr toJson() const;
+};
+
 class S3GCManager
 {
 public:
@@ -138,7 +146,8 @@ public:
 
     void shutdown() { shutdown_called = true; }
 
-    S3StorageDetails getS3StorageDetails(UInt64 store_id);
+    S3StoreStorageSummary getStoreStorageSummary(StoreID store_id);
+    S3StorageSummary getS3StorageSummary(std::vector<StoreID> store_ids);
 
     // private:
     void runForStore(UInt64 gc_store_id, LoggerPtr slogger);
@@ -219,7 +228,7 @@ public:
 
     void wake() const;
 
-    S3StorageDetails getS3StorageDetails(UInt64 store_id);
+    S3StorageSummary getS3StorageSummary(std::vector<StoreID> store_ids);
 
 private:
     Context & global_ctx;
@@ -250,12 +259,12 @@ struct fmt::formatter<DB::S3::GcStats>
 };
 
 template <>
-struct fmt::formatter<DB::S3::S3StorageDetails>
+struct fmt::formatter<DB::S3::S3StoreStorageSummary>
 {
     static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
 
     template <typename FormatContext>
-    auto format(const DB::S3::S3StorageDetails & details, FormatContext & ctx) const
+    auto format(const DB::S3::S3StoreStorageSummary & details, FormatContext & ctx) const
     {
         return fmt::format_to(
             ctx.out(),

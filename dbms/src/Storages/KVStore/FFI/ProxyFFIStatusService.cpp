@@ -358,6 +358,38 @@ HttpRequestRes HandleHttpRequestRemoteGC(
     return buildOkResp(api_name, std::move(body));
 }
 
+std::tuple<std::vector<StoreID>, String> parseStoreIds(std::string_view path)
+{
+    std::vector<StoreID> store_ids;
+    String err_msg;
+
+    if (path.empty() || path == "/")
+    {
+        // empty store_ids means all store ids
+        return {store_ids, err_msg};
+    }
+
+    if (path[0] == '/')
+        path.remove_prefix(1); // remove leading '/'
+
+    std::vector<std::string> parts;
+    boost::split(parts, path, boost::is_any_of(","));
+    for (const auto & part : parts)
+    {
+        try
+        {
+            StoreID store_id = std::stoull(part);
+            store_ids.push_back(store_id);
+        }
+        catch (...)
+        {
+            err_msg = fmt::format("invalid store_id in request: {}", path);
+            return {std::vector<StoreID>{}, err_msg};
+        }
+    }
+    return {store_ids, err_msg};
+}
+
 HttpRequestRes HandleHttpRequestRemoteInfo(
     EngineStoreServerWrap * server,
     std::string_view path,
@@ -372,34 +404,35 @@ HttpRequestRes HandleHttpRequestRemoteInfo(
         return err_resp.value();
     }
 
-    UInt64 store_id = 0;
+    auto [store_ids, err_msg] = parseStoreIds(path.substr(api_name.size()));
+    if (!err_msg.empty())
     {
-        auto trim_path = path.substr(api_name.size());
-        if (trim_path.empty() || trim_path[0] != '/')
-        {
-            auto body = fmt::format(R"json({{"message":"invalid remote info request: {}"}})json", path);
-            return buildOkResp(api_name, std::move(body));
-        }
-        trim_path.remove_prefix(1); // remove leading '/'
-        if (auto res = std::from_chars(trim_path.data(), trim_path.data() + trim_path.size(), store_id);
-            res.ec != std::errc())
-        {
-            auto body = fmt::format(R"json({{"message":"invalid store_id in request: {}"}})json", path);
-            return buildOkResp(api_name, std::move(body));
-        }
+        auto body = fmt::format(R"json({{"message":"{}"}})json", err_msg);
+        return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, std::move(body));
     }
 
     const auto & gc_mgr = server->tmt->getS3GCManager();
     if (!gc_mgr)
     {
         auto body = fmt::format(R"json({{"message":"S3 GC Manager is not enabled"}})json");
-        return buildOkResp(api_name, std::move(body));
+        return buildRespWithCode(HttpRequestStatus::InternalError, api_name, std::move(body));
     }
-    auto details = gc_mgr->getS3StorageDetails(store_id);
-    std::stringstream ss;
-    details.toJson()->stringify(ss);
-    auto json_str = ss.str();
-    return buildOkResp(api_name, std::move(json_str));
+
+    auto log = Logger::get("HandleHttpRequestRemoteInfo");
+    try
+    {
+        auto details = gc_mgr->getS3StorageSummary(store_ids);
+        std::stringstream ss;
+        details.toJson()->stringify(ss);
+        auto json_str = ss.str();
+        return buildOkResp(api_name, std::move(json_str));
+    }
+    catch (...)
+    {
+        auto body = fmt::format(R"json({{"message":"Exception occurred when getting remote info"}})json");
+        tryLogCurrentWarningException(log);
+        return buildRespWithCode(HttpRequestStatus::InternalError, api_name, std::move(body));
+    }
 }
 
 // Parse Http query string_view into a map

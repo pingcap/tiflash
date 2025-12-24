@@ -447,7 +447,7 @@ try
 }
 CATCH
 
-TEST_F(S3GCManagerTest, GetStorageDetails)
+TEST_F(S3GCManagerTest, GetStorageSummary)
 {
     StoreID store_id = 20;
     auto prefix = S3Filename::fromStoreId(store_id).toDataPrefix();
@@ -484,7 +484,7 @@ TEST_F(S3GCManagerTest, GetStorageDetails)
         }
     }
 
-    auto details = gc_mgr->getS3StorageDetails(store_id);
+    auto details = gc_mgr->getStoreStorageSummary(store_id);
     ASSERT_EQ(details.manifests.size(), 2);
     ASSERT_EQ(details.data_file.num, 3);
     ASSERT_EQ(details.data_file.num_delmark, 2);
