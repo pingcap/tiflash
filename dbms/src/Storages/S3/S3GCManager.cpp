@@ -55,6 +55,30 @@ extern const int TIMEOUT_EXCEEDED;
 namespace DB::S3
 {
 
+Poco::JSON::Object::Ptr S3StorageDetails::toJson() const
+{
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    obj->set("store_id", store_id);
+    obj->set("num_manifests", manifests.size());
+    obj->set("num_keys", num_keys);
+
+    Poco::JSON::Object::Ptr data_file_obj = new Poco::JSON::Object();
+    data_file_obj->set("num", data_file.num);
+    data_file_obj->set("num_delmark", data_file.num_delmark);
+    data_file_obj->set("bytes", data_file.bytes);
+    obj->set("data_file", data_file_obj);
+
+    Poco::JSON::Object::Ptr dt_file_obj = new Poco::JSON::Object();
+    dt_file_obj->set("num", dt_file.num);
+    dt_file_obj->set("num_keys", dt_file.num_keys);
+    dt_file_obj->set("num_delmark", dt_file.num_delmark);
+    dt_file_obj->set("bytes", dt_file.bytes);
+    obj->set("dt_file", dt_file_obj);
+
+    // never return a nullptr
+    return obj;
+}
+
 S3GCManager::S3GCManager(
     pingcap::pd::ClientPtr pd_client_,
     OwnerManagerPtr gc_owner_manager_,
@@ -776,6 +800,105 @@ void S3GCManager::removeOutdatedManifest(
     }
 }
 
+namespace details
+{
+String parseDTFileKeyFromDataSubpath(std::string_view data_subpath)
+{
+    // data_subpath=ks_1_t_333/dmf_664135/8.size.dat
+    // parse the last dmfile key part by removing the "/<file_name>" suffix
+    auto pos = data_subpath.find_last_of('/');
+    if (pos == String::npos)
+        return "";
+    return String(data_subpath.substr(0, pos));
+}
+} // namespace details
+
+S3StorageDetails S3GCManager::getS3StorageDetails(UInt64 store_id)
+{
+    auto client = S3::ClientFactory::instance().sharedTiFlashClient();
+
+    Stopwatch watch;
+    S3StorageDetails details{.store_id = store_id};
+    details.manifests = CheckpointManifestS3Set::getFromS3(*client, store_id);
+
+    const auto prefix = S3Filename::fromStoreId(store_id).toDataPrefix();
+
+    // TODO: collect the locks belong to the store_id
+    // collect the CheckpointDataFile and StableFiles belong to the store_id
+
+    double last_elapsed = 0.0;
+    constexpr double log_interval_seconds = 30.0;
+    size_t num_processed_keys = 0;
+    String last_dtfile_key;
+    size_t num_dtfile_keys_for_last_dtfile = 0;
+    S3::listPrefix(*client, prefix, [&](const Aws::S3::Model::Object & object) {
+        const auto & key = object.GetKey();
+        const auto view = S3FilenameView::fromKey(key);
+        if (watch.elapsedSeconds() - last_elapsed > log_interval_seconds)
+        {
+            last_elapsed = watch.elapsedSeconds();
+            LOG_INFO(
+                log,
+                "getS3StorageDetails processing, processed_keys={} current_key={} details={}",
+                num_processed_keys,
+                key,
+                details);
+        }
+
+        LOG_DEBUG(
+            log,
+            "getS3StorageDetails store_id={} key={} type={} isDMFile={} data_subpath={} processed_keys={}",
+            store_id,
+            object.GetKey(),
+            magic_enum::enum_name(view.type),
+            view.isDMFile(),
+            view.data_subpath,
+            num_processed_keys);
+
+        if (view.isDataFile())
+        {
+            if (view.isDMFile())
+            {
+                // key=s273/data/ks_1_t_333/dmf_664135/8.size.dat
+                // view.data_subpath=ks_1_t_333/dmf_664135/8.size.dat
+                auto curr_dtfile_key = details::parseDTFileKeyFromDataSubpath(view.data_subpath);
+                if (last_dtfile_key != curr_dtfile_key)
+                {
+                    details.dt_file.num += 1;
+                    LOG_DEBUG(
+                        log,
+                        "getS3StorageDetails meet new dtfile_key={} last_dtfile_key={} num_keys_for_last_dtfile={} "
+                        "store_id={}",
+                        curr_dtfile_key,
+                        last_dtfile_key,
+                        num_dtfile_keys_for_last_dtfile,
+                        store_id);
+                    last_dtfile_key = curr_dtfile_key;
+                    num_dtfile_keys_for_last_dtfile = 0;
+                }
+                num_dtfile_keys_for_last_dtfile += 1;
+                details.dt_file.num_keys += 1;
+                details.dt_file.bytes += object.GetSize();
+            }
+            else
+            {
+                details.data_file.num += 1;
+                details.data_file.bytes += object.GetSize();
+            }
+        }
+        else if (view.isDelMark())
+        {
+            auto datafile_view = view.asDataFile();
+            datafile_view.isDMFile() ? details.dt_file.num_delmark += 1 : details.data_file.num_delmark += 1;
+        }
+        num_processed_keys += 1;
+        return PageResult{.num_keys = 1, .more = true};
+    });
+    details.num_keys = num_processed_keys;
+    LOG_INFO(log, "getS3StorageDetails finish, elapsed={:.3f}s details={}", watch.elapsedSeconds(), details);
+    return details;
+}
+
 /// Service ///
 
 S3GCManagerService::S3GCManagerService(
@@ -828,6 +951,15 @@ void S3GCManagerService::wake() const
     {
         timer->wake();
     }
+}
+
+S3StorageDetails S3GCManagerService::getS3StorageDetails(UInt64 store_id)
+{
+    if (manager)
+    {
+        return manager->getS3StorageDetails(store_id);
+    }
+    return S3StorageDetails{};
 }
 
 } // namespace DB::S3

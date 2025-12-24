@@ -358,6 +358,50 @@ HttpRequestRes HandleHttpRequestRemoteGC(
     return buildOkResp(api_name, std::move(body));
 }
 
+HttpRequestRes HandleHttpRequestRemoteInfo(
+    EngineStoreServerWrap * server,
+    std::string_view path,
+    const std::string & api_name,
+    std::string_view,
+    std::string_view)
+{
+    auto & global_ctx = server->tmt->getContext();
+    if (auto err_resp = allowDisaggAPI(global_ctx, api_name, DisaggregatedMode::Storage, "can not get remote info");
+        err_resp)
+    {
+        return err_resp.value();
+    }
+
+    UInt64 store_id = 0;
+    {
+        auto trim_path = path.substr(api_name.size());
+        if (trim_path.empty() || trim_path[0] != '/')
+        {
+            auto body = fmt::format(R"json({{"message":"invalid remote info request: {}"}})json", path);
+            return buildOkResp(api_name, std::move(body));
+        }
+        trim_path.remove_prefix(1); // remove leading '/'
+        if (auto res = std::from_chars(trim_path.data(), trim_path.data() + trim_path.size(), store_id);
+            res.ec != std::errc())
+        {
+            auto body = fmt::format(R"json({{"message":"invalid store_id in request: {}"}})json", path);
+            return buildOkResp(api_name, std::move(body));
+        }
+    }
+
+    const auto & gc_mgr = server->tmt->getS3GCManager();
+    if (!gc_mgr)
+    {
+        auto body = fmt::format(R"json({{"message":"S3 GC Manager is not enabled"}})json");
+        return buildOkResp(api_name, std::move(body));
+    }
+    auto details = gc_mgr->getS3StorageDetails(store_id);
+    std::stringstream ss;
+    details.toJson()->stringify(ss);
+    auto json_str = ss.str();
+    return buildOkResp(api_name, std::move(json_str));
+}
+
 // Parse Http query string_view into a map
 HttpQueryMap parseHttpQueryMap(std::string_view query)
 {
@@ -758,6 +802,7 @@ static const std::map<std::string, HANDLE_HTTP_URI_METHOD> AVAILABLE_HTTP_URI = 
     {"/tiflash/remote/owner/resign", HandleHttpRequestRemoteOwnerResign},
     {"/tiflash/remote/gc", HandleHttpRequestRemoteGC},
     {"/tiflash/remote/upload", HandleHttpRequestRemoteReUpload},
+    {"/tiflash/remote/info", HandleHttpRequestRemoteInfo},
     {"/tiflash/remote/cache/evict", HandleHttpRequestRemoteCacheEvict},
     {"/tiflash/remote/cache/info", HandleHttpRequestRemoteCacheInfo},
 };

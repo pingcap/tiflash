@@ -22,6 +22,11 @@
 #include <common/types.h>
 #include <fmt/format.h>
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <Poco/JSON/Object.h>
+#pragma GCC diagnostic pop
+
 #include <memory>
 #include <unordered_set>
 
@@ -93,6 +98,30 @@ struct GcStats
     double duration_scan_then_clean_data_files = 0.0;
 };
 
+
+struct S3StorageDetails
+{
+    StoreID store_id = InvalidStoreID;
+    CheckpointManifestS3Set manifests;
+    struct DataFile
+    {
+        size_t num = 0;
+        size_t num_delmark = 0;
+        size_t bytes = 0;
+    } data_file;
+    struct DTFile
+    {
+        size_t num = 0;
+        size_t num_keys = 0;
+        size_t num_delmark = 0;
+        size_t bytes = 0;
+    } dt_file;
+
+    size_t num_keys = 0;
+
+    Poco::JSON::Object::Ptr toJson() const;
+};
+
 class S3GCManager
 {
 public:
@@ -108,6 +137,8 @@ public:
     bool runOnAllStores();
 
     void shutdown() { shutdown_called = true; }
+
+    S3StorageDetails getS3StorageDetails(UInt64 store_id);
 
     // private:
     void runForStore(UInt64 gc_store_id, LoggerPtr slogger);
@@ -188,6 +219,8 @@ public:
 
     void wake() const;
 
+    S3StorageDetails getS3StorageDetails(UInt64 store_id);
+
 private:
     Context & global_ctx;
     std::unique_ptr<S3GCManager> manager;
@@ -213,5 +246,32 @@ struct fmt::formatter<DB::S3::GcStats>
             stat.duration_clean_manifests,
             stat.duration_verify_locks,
             stat.duration_scan_then_clean_data_files);
+    }
+};
+
+template <>
+struct fmt::formatter<DB::S3::S3StorageDetails>
+{
+    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
+
+    template <typename FormatContext>
+    auto format(const DB::S3::S3StorageDetails & details, FormatContext & ctx) const
+    {
+        return fmt::format_to(
+            ctx.out(),
+            "{{store_id={} num_manifests={} num_keys={} "
+            "data_file={{num={} num_delmark={} bytes={}}} "
+            "dt_file={{num={} num_keys={} num_delmark={} bytes={}}} "
+            "}}",
+            details.store_id,
+            details.manifests.size(),
+            details.num_keys,
+            details.data_file.num,
+            details.data_file.num_delmark,
+            details.data_file.bytes,
+            details.dt_file.num,
+            details.dt_file.num_keys,
+            details.dt_file.num_delmark,
+            details.dt_file.bytes);
     }
 };
