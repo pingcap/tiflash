@@ -183,7 +183,7 @@ try
         EXPECT_EQ(outdated[2].key, S3Filename::newCheckpointManifest(store_id, 70).toFullKey());
     }
 
-    gc_mgr->removeOutdatedManifest(set, &timepoint);
+    gc_mgr->removeOutdatedManifest(set, &timepoint, log);
 
     for (const auto & [seq, obj] : set.objects())
     {
@@ -326,7 +326,7 @@ try
 
         ASSERT_FALSE(S3::objectExists(*mock_s3_client, delmark_key));
 
-        gc_mgr->cleanOneLock(lock_key, lock_view, timepoint);
+        gc_mgr->cleanOneLock(lock_key, lock_view, timepoint, log);
 
         // lock is deleted and delmark is created
         ASSERT_FALSE(S3::objectExists(*mock_s3_client, lock_key));
@@ -341,7 +341,7 @@ try
         // another lock
         auto another_lock_key = df.toView().getLockKey(store_id + 1, 450);
         S3::uploadEmptyFile(*mock_s3_client, another_lock_key);
-        gc_mgr->cleanOneLock(lock_key, lock_view, timepoint);
+        gc_mgr->cleanOneLock(lock_key, lock_view, timepoint, log);
 
         // lock is deleted but delmark is not created
         ASSERT_FALSE(S3::objectExists(*mock_s3_client, lock_key));
@@ -359,7 +359,7 @@ try
             FailPoints::force_set_mocked_s3_object_mtime,
             std::map<String, Aws::Utils::DateTime>{{delmark_key, delmark_mtime}});
         SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_set_mocked_s3_object_mtime); });
-        gc_mgr->cleanOneLock(lock_key, lock_view, timepoint);
+        gc_mgr->cleanOneLock(lock_key, lock_view, timepoint, log);
 
         // lock is deleted, datafile and delmark remain
         ASSERT_FALSE(S3::objectExists(*mock_s3_client, lock_key));
@@ -376,7 +376,7 @@ try
             FailPoints::force_set_mocked_s3_object_mtime,
             std::map<String, Aws::Utils::DateTime>{{delmark_key, delmark_mtime}});
         SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_set_mocked_s3_object_mtime); });
-        gc_mgr->cleanOneLock(lock_key, lock_view, timepoint);
+        gc_mgr->cleanOneLock(lock_key, lock_view, timepoint, log);
 
         // lock datafile and delmark are deleted
         ASSERT_FALSE(S3::objectExists(*mock_s3_client, lock_key));
@@ -412,7 +412,7 @@ try
 
         ASSERT_FALSE(S3::objectExists(*mock_s3_client, delmark_key));
 
-        gc_mgr->cleanOneLock(lock_key, lock_view, timepoint);
+        gc_mgr->cleanOneLock(lock_key, lock_view, timepoint, log);
 
         // lock is deleted, delmark is created, object is rewrite with tagging
         ASSERT_FALSE(S3::objectExists(*mock_s3_client, lock_key));
@@ -436,7 +436,7 @@ try
         // another lock
         auto another_lock_key = df.toView().getLockKey(store_id + 1, 450);
         S3::uploadEmptyFile(*mock_s3_client, another_lock_key);
-        gc_mgr->cleanOneLock(lock_key, lock_view, timepoint);
+        gc_mgr->cleanOneLock(lock_key, lock_view, timepoint, log);
 
         // lock is deleted but delmark is not created
         ASSERT_FALSE(S3::objectExists(*mock_s3_client, lock_key));
@@ -481,7 +481,7 @@ try
 
         ASSERT_FALSE(S3::objectExists(*mock_s3_client, delmark_key));
 
-        gc_mgr->cleanOneLock(lock_key, lock_view, timepoint);
+        gc_mgr->cleanOneLock(lock_key, lock_view, timepoint, log);
 
         // lock is deleted, delmark is created, object is rewrite with tagging
         ASSERT_FALSE(S3::objectExists(*mock_s3_client, lock_key));
@@ -518,7 +518,7 @@ try
         // another lock
         auto another_lock_key = cp_dmf2.toView().getLockKey(store_id + 1, 450);
         S3::uploadEmptyFile(*mock_s3_client, another_lock_key);
-        gc_mgr->cleanOneLock(lock_key, lock_view, timepoint);
+        gc_mgr->cleanOneLock(lock_key, lock_view, timepoint, log);
 
         // lock is deleted but delmark is not created
         ASSERT_FALSE(S3::objectExists(*mock_s3_client, lock_key));
@@ -575,7 +575,7 @@ try
             valid_lock_files.emplace(lock_key);
             keys.emplace_back(lock_key);
 
-            // not valid in latest manfiest, should be delete
+            // not valid in latest manifest, should be delete
             df = S3Filename::newCheckpointData(store_id, 300, 2);
             keys.emplace_back(df.toFullKey());
             lock_key = df.toView().getLockKey(lock_store_id, safe_sequence - 1);
@@ -593,8 +593,13 @@ try
 
     {
         auto timepoint = Aws::Utils::DateTime("2023-02-01T08:00:00Z", Aws::Utils::DateFormat::ISO_8601);
-        gc_mgr
-            ->cleanUnusedLocks(lock_store_id, S3Filename::getLockPrefix(), safe_sequence, valid_lock_files, timepoint);
+        gc_mgr->cleanUnusedLocks(
+            lock_store_id,
+            S3Filename::getLockPrefix(),
+            safe_sequence,
+            valid_lock_files,
+            timepoint,
+            log);
 
         // lock is deleted and delmark is created
         ASSERT_FALSE(S3::objectExists(*mock_s3_client, expected_deleted_lock_key));
@@ -715,7 +720,7 @@ try
 
     // read from S3 key
     {
-        auto locks = gc_mgr->getValidLocksFromManifest({manifest_file_id1});
+        auto locks = gc_mgr->getValidLocksFromManifest({manifest_file_id1}, log);
         EXPECT_EQ(locks.size(), 3) << fmt::format("{}", locks);
         // the lock ingest by FAP
         EXPECT_TRUE(locks.contains("apple_lock")) << fmt::format("{}", locks);
@@ -724,7 +729,7 @@ try
         EXPECT_TRUE(locks.contains("data1_0")) << fmt::format("{}", locks);
     }
     {
-        auto locks = gc_mgr->getValidLocksFromManifest({manifest_file_id1, manifest_file_id2});
+        auto locks = gc_mgr->getValidLocksFromManifest({manifest_file_id1, manifest_file_id2}, log);
         EXPECT_EQ(locks.size(), 4) << fmt::format("{}", locks);
         // the lock ingest by FAP
         EXPECT_TRUE(locks.contains("apple_lock")) << fmt::format("{}", locks);
