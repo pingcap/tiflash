@@ -217,8 +217,13 @@ SegmentReadTaskPtr SegmentReadTaskPool::getTask(const GlobalSegmentID & seg_id)
     std::lock_guard lock(mutex);
     auto t = tasks_wrapper.getTask(seg_id);
     RUNTIME_CHECK(t != nullptr, pool_id, seg_id);
+    auto no_task_left = tasks_wrapper.empty();
     active_segment_ids.insert(seg_id);
     peak_active_segments = std::max(peak_active_segments, active_segment_ids.size());
+    if (no_task_left)
+    {
+        LOG_INFO(log, "pool_id={} all tasks scheduled, active_segment_size={}", pool_id, active_segment_ids.size());
+    }
     return t;
 }
 
