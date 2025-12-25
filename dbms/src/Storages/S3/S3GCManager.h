@@ -20,6 +20,7 @@
 #include <Storages/S3/CheckpointManifestS3Set.h>
 #include <Storages/S3/S3Common.h>
 #include <common/types.h>
+#include <fmt/format.h>
 
 #include <memory>
 #include <unordered_set>
@@ -83,6 +84,15 @@ struct S3GCConfig
     Int64 mark_delete_timeout_seconds = 10;
 };
 
+struct GcStats
+{
+    double duration_read_locks = 0.0;
+    double duration_clean_locks = 0.0;
+    double duration_clean_manifests = 0.0;
+    double duration_verify_locks = 0.0;
+    double duration_scan_then_clean_data_files = 0.0;
+};
+
 class S3GCManager
 {
 public:
@@ -100,20 +110,28 @@ public:
     void shutdown() { shutdown_called = true; }
 
     // private:
-    void runForStore(UInt64 gc_store_id);
+    void runForStore(UInt64 gc_store_id, LoggerPtr slogger);
 
-    void runForTombstoneStore(UInt64 gc_store_id);
+    void runForTombstoneStore(UInt64 gc_store_id, LoggerPtr slogger);
 
     void cleanUnusedLocks(
         UInt64 gc_store_id,
         const String & scan_prefix,
         UInt64 safe_sequence,
         const std::unordered_set<String> & valid_lock_files,
-        const Aws::Utils::DateTime &);
+        const Aws::Utils::DateTime & timepoint,
+        const LoggerPtr & slogger);
 
-    void cleanOneLock(const String & lock_key, const S3FilenameView & lock_filename_view, const Aws::Utils::DateTime &);
+    void cleanOneLock(
+        const String & lock_key,
+        const S3FilenameView & lock_filename_view,
+        const Aws::Utils::DateTime & timepoint,
+        const LoggerPtr & slogger);
 
-    void tryCleanExpiredDataFiles(UInt64 gc_store_id, const Aws::Utils::DateTime &);
+    void tryCleanExpiredDataFiles(
+        UInt64 gc_store_id,
+        const Aws::Utils::DateTime & timepoint,
+        const LoggerPtr & slogger);
 
     void removeDataFileIfDelmarkExpired(
         const String & datafile_key,
@@ -125,15 +143,18 @@ public:
     void lifecycleMarkDataFileDeleted(const String & datafile_key, const LoggerPtr & sub_logger);
     void physicalRemoveDataFile(const String & datafile_key, const LoggerPtr & sub_logger) const;
 
-    void verifyLocks(const std::unordered_set<String> & valid_lock_files);
+    static void verifyLocks(const std::unordered_set<String> & valid_lock_files, const LoggerPtr & slogger);
 
     static std::vector<UInt64> getAllStoreIds();
 
-    std::unordered_set<String> getValidLocksFromManifest(const Strings & manifest_keys);
+    static std::unordered_set<String> getValidLocksFromManifest(
+        const Strings & manifest_keys,
+        const LoggerPtr & store_logger);
 
     void removeOutdatedManifest(
         const CheckpointManifestS3Set & manifests,
-        const Aws::Utils::DateTime * const timepoint); // NOLINT(readability-avoid-const-params-in-decls)
+        const Aws::Utils::DateTime * const timepoint, // NOLINT(readability-avoid-const-params-in-decls)
+        const LoggerPtr & slogger) const;
 
 private:
     const pingcap::pd::ClientPtr pd_client;
@@ -174,3 +195,23 @@ private:
 };
 
 } // namespace DB::S3
+
+template <>
+struct fmt::formatter<DB::S3::GcStats>
+{
+    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
+
+    template <typename FormatContext>
+    auto format(const DB::S3::GcStats & stat, FormatContext & ctx) const
+    {
+        return fmt::format_to(
+            ctx.out(),
+            "{{read_locks={:.2f}s clean_locks={:.2f}s clean_manifests={:.2f}s verify_locks={:.2f}s "
+            "scan_then_clean_data_files={:.2f}s}}",
+            stat.duration_read_locks,
+            stat.duration_clean_locks,
+            stat.duration_clean_manifests,
+            stat.duration_verify_locks,
+            stat.duration_scan_then_clean_data_files);
+    }
+};
