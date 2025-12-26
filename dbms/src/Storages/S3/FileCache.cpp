@@ -21,7 +21,9 @@
 #include <Common/TiFlashMetrics.h>
 #include <Common/escapeForFileName.h>
 #include <IO/BaseFile/PosixRandomAccessFile.h>
+#include <IO/BaseFile/PosixWritableFile.h>
 #include <IO/BaseFile/RateLimiter.h>
+#include <IO/Buffer/ReadBufferFromIStream.h>
 #include <IO/IOThreadPools.h>
 #include <Interpreters/Settings.h>
 #include <Server/StorageConfigParser.h>
@@ -32,9 +34,11 @@
 #include <Storages/S3/S3Common.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <common/logger_useful.h>
+#include <fcntl.h>
 #include <fmt/chrono.h>
 
 #include <atomic>
+#include <cerrno>
 #include <chrono>
 #include <cmath>
 #include <filesystem>
@@ -1009,22 +1013,26 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg, c
     prepareParentDir(local_fname);
     auto temp_fname = toTemporaryFilename(local_fname);
     {
-        Aws::OFStream ostr(temp_fname, std::ios_base::out | std::ios_base::binary);
-        RUNTIME_CHECK_MSG(ostr.is_open(), "Open {} failed: {}", temp_fname, strerror(errno));
+        PosixWritableFile ofile(temp_fname, true, O_CREAT | O_WRONLY, 0666, write_limiter);
+
         if (content_length > 0)
         {
-            if (write_limiter)
-                write_limiter->request(content_length);
             GET_METRIC(tiflash_storage_remote_cache_bytes, type_dtfile_download_bytes).Increment(content_length);
-            ostr << result.GetBody().rdbuf();
-            // If content_length == 0, ostr.good() is false. Does not know the reason.
-            RUNTIME_CHECK_MSG(
-                ostr.good(),
-                "Write {} content_length {} failed: {}",
-                temp_fname,
-                content_length,
-                strerror(errno));
-            ostr.flush();
+            ReadBufferFromIStream rbuf(result.GetBody(), std::min(content_length, static_cast<Int64>(16 * 1024)));
+            ssize_t write_res = 0;
+            while (!rbuf.eof())
+            {
+                size_t count = rbuf.buffer().end() - rbuf.position();
+                if (write_res = ofile.write(rbuf.position(), count); write_res < 0)
+                {
+                    throwFromErrno(fmt::format("write to file failed, fname={}", temp_fname), write_res, errno);
+                }
+                rbuf.position() += count;
+            }
+            if (auto res = ofile.fsync(); res < 0)
+            {
+                throwFromErrno(fmt::format("fsync file failed, fname={}", temp_fname), res, errno);
+            }
         }
     }
     std::filesystem::rename(temp_fname, local_fname);
