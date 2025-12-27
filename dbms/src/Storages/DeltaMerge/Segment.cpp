@@ -2904,9 +2904,16 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(
         GET_METRIC(tiflash_storage_place_index_count, type_placed_fully_indexed).Increment();
     LOG_DEBUG(
         segment_snap->log,
-        "Finish segment ensurePlace, read_ranges={} placed_items={} shared_delta_index={} my_delta_index={} {}",
+        "Finish segment ensurePlace, read_ranges={} placed_items={} "
+        "new_placed_rows={} new_placed_deletes={} my_placed_rows={} my_placed_deletes={} fully_indexed={} "
+        "shared_delta_index={} my_delta_index={} {}",
         read_ranges,
         items.size(),
+        new_placed_rows,
+        new_placed_deletes,
+        my_placed_rows,
+        my_placed_deletes,
+        fully_indexed,
         delta_snap->getSharedDeltaIndex()->toString(),
         my_delta_index->toString(),
         simpleInfo());

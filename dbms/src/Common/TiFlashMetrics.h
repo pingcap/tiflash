@@ -234,12 +234,12 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
     M(tiflash_storage_place_index_stats_count,                                                                                      \
       "Bucketed histogram of number of rows/deletes of index placement operations",                                                 \
       Histogram,                                                                                                                    \
-      F(type_rows_newly_placed, {{"type", "newly_placed_rows"}}, ExpBucketsWithRange{10, 10, 1'000'000}),                           \
-      F(type_deletes_newly_placed, {{"type", "newly_placed_deletes"}}, ExpBucketsWithRange{1, 2, 100}),                             \
-      F(type_rows_after_placed, {{"type", "after_placed_rows"}}, ExpBucketsWithRange{10, 10, 1'000'000}),                           \
-      F(type_deletes_after_placed, {{"type", "after_placed_deletes"}}, ExpBucketsWithRange{1, 2, 100}),                             \
-      F(type_rows_reuse_placed, {{"type", "reuse_placed_rows"}}, ExpBucketsWithRange{10, 10, 1'000'000}),                           \
-      F(type_deletes_reuse_placed, {{"type", "reuse_placed_deletes"}}, ExpBucketsWithRange{1, 2, 100}))                             \
+      F(type_rows_newly_placed, {{"type", "rows_newly_placed"}}, ExpBuckets{1000, 2, 10}),                                          \
+      F(type_deletes_newly_placed, {{"type", "deletes_newly_placed"}}, ExpBucketsWithRange{1, 2, 100}),                             \
+      F(type_rows_after_placed, {{"type", "rows_after_placed"}}, ExpBuckets{1000, 2, 10}),                                          \
+      F(type_deletes_after_placed, {{"type", "deletes_after_placed"}}, ExpBucketsWithRange{1, 2, 100}),                             \
+      F(type_rows_reuse_placed, {{"type", "rows_reuse_placed"}}, ExpBuckets{1000, 2, 10}),                                          \
+      F(type_deletes_reuse_placed, {{"type", "deletes_reuse_placed"}}, ExpBucketsWithRange{1, 2, 100}))                             \
     M(tiflash_storage_command_count,                                                                                                \
       "Total number of storage's command, such as delete range / shutdown /startup",                                                \
       Counter,                                                                                                                      \
