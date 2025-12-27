@@ -54,7 +54,9 @@
     M(RaftNumParallelPrehandlingTasks)          \
     M(RaftNumWaitedParallelPrehandlingTasks)    \
     M(RateLimiterPendingWriteRequest)           \
+    M(DT_SegmentReadTaskPool)                   \
     M(DT_SegmentReadTasks)                      \
+    M(DT_SegmentReadTasksActive)                \
     M(DT_SnapshotOfRead)                        \
     M(DT_SnapshotOfReadRaw)                     \
     M(DT_SnapshotOfSegmentSplit)                \
@@ -85,6 +87,7 @@
     M(StoragePoolUniPS)                         \
     M(RegionPersisterRunMode)                   \
     M(S3Requests)                               \
+    M(S3RandomAccessFile)                       \
     M(GlobalStorageRunMode)                     \
     M(GlobalThread)                             \
     M(GlobalThreadActive)                       \

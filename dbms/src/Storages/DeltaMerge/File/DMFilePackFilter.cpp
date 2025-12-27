@@ -23,6 +23,7 @@
 #include <Storages/DeltaMerge/Index/RSResult.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext.h>
+#include <Storages/S3/S3RandomAccessFile.h>
 
 namespace DB::DM
 {

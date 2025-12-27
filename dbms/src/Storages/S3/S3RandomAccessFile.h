@@ -50,6 +50,8 @@ public:
         const String & remote_fname_,
         const DM::ScanContextPtr & scan_context_);
 
+    ~S3RandomAccessFile() override;
+
     // Can only seek forward.
     [[nodiscard]] off_t seek(off_t offset, int whence) override;
 

@@ -40,6 +40,8 @@ struct RemoteCacheEvictRequest
 
 RemoteCacheEvictRequest parseEvictRequest(std::string_view path, std::string_view api_name, std::string_view query);
 
+std::tuple<std::vector<StoreID>, String> parseStoreIds(std::string_view path);
+
 } // namespace DB
 
 template <>

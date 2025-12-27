@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/ProfileEvents.h>
@@ -33,13 +34,19 @@
 #include <random>
 #include <string_view>
 
+namespace CurrentMetrics
+{
+extern const Metric S3RandomAccessFile;
+}
 namespace ProfileEvents
 {
 extern const Event S3GetObject;
 extern const Event S3ReadBytes;
 extern const Event S3GetObjectRetry;
 extern const Event S3IORead;
+extern const Event S3IOReadError;
 extern const Event S3IOSeek;
+extern const Event S3IOSeekError;
 extern const Event S3IOSeekBackward;
 } // namespace ProfileEvents
 namespace DB::FailPoints
@@ -67,6 +74,12 @@ S3RandomAccessFile::S3RandomAccessFile(
 {
     RUNTIME_CHECK(client_ptr != nullptr);
     initialize("init file");
+    CurrentMetrics::add(CurrentMetrics::S3RandomAccessFile);
+}
+
+S3RandomAccessFile::~S3RandomAccessFile()
+{
+    CurrentMetrics::sub(CurrentMetrics::S3RandomAccessFile);
 }
 
 std::string S3RandomAccessFile::getFileName() const
@@ -122,11 +135,14 @@ ssize_t S3RandomAccessFile::readImpl(char * buf, size_t size)
     // It's just a double check for more safety.
     if (gcount < size && (!istr.eof() || cur_offset + gcount != static_cast<size_t>(content_length)))
     {
+        ProfileEvents::increment(ProfileEvents::S3IOReadError);
         auto state = istr.rdstate();
+        auto elapsed_secs = sw.elapsedSeconds();
+        GET_METRIC(tiflash_storage_s3_request_seconds, type_read_stream_err).Observe(elapsed_secs);
         LOG_WARNING(
             log,
-            "Cannot read from istream, size={} gcount={} state=0x{:02X} cur_offset={} content_length={} errno={} "
-            "errmsg={} cost={}ns",
+            "Cannot read from istream, size={} gcount={} state=0x{:02X} cur_offset={} content_length={} "
+            "errno={} errmsg={} cost={:.6f}s",
             size,
             gcount,
             state,
@@ -134,9 +150,10 @@ ssize_t S3RandomAccessFile::readImpl(char * buf, size_t size)
             content_length,
             errno,
             strerror(errno),
-            sw.elapsed());
+            elapsed_secs);
         return (state & std::ios_base::failbit || state & std::ios_base::badbit) ? S3StreamError : S3UnknownError;
     }
+
     auto elapsed_secs = sw.elapsedSeconds();
     if (scan_context)
     {
@@ -206,16 +223,20 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
     auto & istr = read_result.GetBody();
     if (!istr.ignore(offset_ - cur_offset))
     {
+        ProfileEvents::increment(ProfileEvents::S3IOSeekError);
         auto state = istr.rdstate();
+        auto elapsed_secs = sw.elapsedSeconds();
+        GET_METRIC(tiflash_storage_s3_request_seconds, type_read_stream_err).Observe(elapsed_secs);
         LOG_WARNING(
             log,
-            "Cannot ignore from istream, state=0x{:02X}, errno={} errmsg={} cost={}ns",
+            "Cannot ignore from istream, state=0x{:02X}, errno={} errmsg={} cost={:.6f}s",
             state,
             errno,
             strerror(errno),
-            sw.elapsed());
+            elapsed_secs);
         return (state & std::ios_base::failbit || state & std::ios_base::badbit) ? S3StreamError : S3UnknownError;
     }
+
     auto elapsed_secs = sw.elapsedSeconds();
     if (scan_context)
     {

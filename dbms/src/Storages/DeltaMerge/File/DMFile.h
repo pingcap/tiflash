@@ -24,7 +24,6 @@
 #include <Storages/DeltaMerge/File/DMFile_fwd.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/S3/S3Filename.h>
-#include <Storages/S3/S3RandomAccessFile.h>
 #include <TiDB/Schema/TiDB.h>
 #include <common/logger_useful.h>
 

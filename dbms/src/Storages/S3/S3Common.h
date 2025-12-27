@@ -21,7 +21,6 @@
 #include <IO/FileProvider/FileProvider_fwd.h>
 #include <Interpreters/Context_fwd.h>
 #include <Server/StorageConfigParser.h>
-#include <Storages/S3/S3RandomAccessFile.h>
 #include <aws/core/Aws.h>
 #include <aws/core/http/Scheme.h>
 #include <aws/s3/S3Client.h>
