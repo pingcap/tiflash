@@ -888,7 +888,17 @@ S3StoreStorageSummary S3GCManager::getStoreStorageSummary(StoreID store_id)
                 // key=s273/data/ks_1_t_333/dmf_664135/8.size.dat
                 // view.data_subpath=ks_1_t_333/dmf_664135/8.size.dat
                 auto curr_dtfile_key = details::parseDTFileKeyFromDataSubpath(view.data_subpath);
-                if (last_dtfile_key != curr_dtfile_key)
+                if (curr_dtfile_key.empty())
+                {
+                    // log warning and ignore the parsed curr_dtfile_key
+                    LOG_WARNING(
+                        log,
+                        "getS3StorageSummary failed to parse dtfile_key, store_id={} key={} data_subpath={}",
+                        store_id,
+                        key,
+                        view.data_subpath);
+                }
+                else if (last_dtfile_key != curr_dtfile_key)
                 {
                     summary.dt_file.num += 1;
                     LOG_DEBUG(
