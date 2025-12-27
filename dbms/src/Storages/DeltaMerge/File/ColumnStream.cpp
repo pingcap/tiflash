@@ -16,6 +16,7 @@
 #include <Storages/DeltaMerge/File/ColumnStream.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/Page/PageUtil.h>
+#include <Storages/S3/S3RandomAccessFile.h>
 
 namespace DB::DM
 {

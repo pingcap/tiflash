@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/ProfileEvents.h>
@@ -33,6 +34,10 @@
 #include <random>
 #include <string_view>
 
+namespace CurrentMetrics
+{
+extern const Metric S3RandomAccessFile;
+}
 namespace ProfileEvents
 {
 extern const Event S3GetObject;
@@ -69,6 +74,12 @@ S3RandomAccessFile::S3RandomAccessFile(
 {
     RUNTIME_CHECK(client_ptr != nullptr);
     initialize("init file");
+    CurrentMetrics::add(CurrentMetrics::S3RandomAccessFile);
+}
+
+S3RandomAccessFile::~S3RandomAccessFile()
+{
+    CurrentMetrics::sub(CurrentMetrics::S3RandomAccessFile);
 }
 
 std::string S3RandomAccessFile::getFileName() const
