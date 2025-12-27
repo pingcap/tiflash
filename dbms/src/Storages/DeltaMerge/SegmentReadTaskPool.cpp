@@ -27,9 +27,7 @@ extern const char pause_when_reading_from_dt_stream[];
 
 namespace CurrentMetrics
 {
-extern const Metric DT_SegmentReadTaskPool;
 extern const Metric DT_SegmentReadTasks;
-extern const Metric DT_SegmentReadTasksActive;
 } // namespace CurrentMetrics
 namespace DB::DM
 {
@@ -157,7 +155,7 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     , keyspace_id(keyspace_id_)
     , res_group_name(res_group_name_)
 {
-    CurrentMetrics::add(CurrentMetrics::DT_SegmentReadTaskPool);
+    GET_METRIC(tiflash_storage_read_thread_gauge, type_read_task_pool).Increment();
     if (tasks_wrapper.empty())
     {
         q.finish();
@@ -166,7 +164,7 @@ SegmentReadTaskPool::SegmentReadTaskPool(
 
 SegmentReadTaskPool::~SegmentReadTaskPool()
 {
-    CurrentMetrics::sub(CurrentMetrics::DT_SegmentReadTaskPool);
+    GET_METRIC(tiflash_storage_read_thread_gauge, type_read_task_pool).Decrement();
     auto [pop_times, pop_empty_times, peak_blocks_in_queue] = q.getStat();
     auto pop_empty_ratio = pop_times > 0 ? pop_empty_times * 1.0 / pop_times : 0.0;
     auto total_count = blk_stat.totalCount();
@@ -206,7 +204,7 @@ void SegmentReadTaskPool::finishSegment(const SegmentReadTaskPtr & seg)
         active_segment_ids.erase(seg->getGlobalSegmentID());
         pool_finished = active_segment_ids.empty() && tasks_wrapper.empty();
     }
-    CurrentMetrics::sub(CurrentMetrics::DT_SegmentReadTasksActive);
+    GET_METRIC(tiflash_storage_read_thread_gauge, type_read_task_active).Decrement();
     LOG_INFO(log, "finishSegment pool_id={} segment={} pool_finished={}", pool_id, seg, pool_finished);
     if (pool_finished)
     {
@@ -228,7 +226,7 @@ SegmentReadTaskPtr SegmentReadTaskPool::getTask(const GlobalSegmentID & seg_id)
     RUNTIME_CHECK(t != nullptr, pool_id, seg_id);
     auto no_task_left = tasks_wrapper.empty();
     active_segment_ids.insert(seg_id);
-    CurrentMetrics::add(CurrentMetrics::DT_SegmentReadTasksActive);
+    GET_METRIC(tiflash_storage_read_thread_gauge, type_read_task_active).Increment();
     peak_active_segments = std::max(peak_active_segments, active_segment_ids.size());
     if (no_task_left)
     {
