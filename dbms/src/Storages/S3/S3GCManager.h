@@ -89,8 +89,6 @@ struct S3GCConfig
     Int64 mark_delete_timeout_seconds = 10;
 };
 
-<<<<<<< HEAD
-=======
 struct GcStats
 {
     double duration_read_locks = 0.0;
@@ -131,7 +129,6 @@ struct S3StorageSummary
     Poco::JSON::Object::Ptr toJson() const;
 };
 
->>>>>>> 965cc8c029 (disagg: Add metrics about disaggreated arch (#10631))
 class S3GCManager
 {
 public:
@@ -228,8 +225,6 @@ private:
 };
 
 } // namespace DB::S3
-<<<<<<< HEAD
-=======
 
 template <>
 struct fmt::formatter<DB::S3::GcStats>
@@ -277,4 +272,3 @@ struct fmt::formatter<DB::S3::S3StoreStorageSummary>
             details.dt_file.bytes);
     }
 };
->>>>>>> 965cc8c029 (disagg: Add metrics about disaggreated arch (#10631))
