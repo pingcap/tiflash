@@ -56,7 +56,8 @@ SegmentReadTask::SegmentReadTask(
     , dm_context(dm_context_)
     , ranges(ranges_)
 {
-    CurrentMetrics::add(CurrentMetrics::DT_SegmentReadTasks);
+    CurrentMetrics::add(CurrentMetrics::DT_SegmentReadTasks); // keep for compatibility.
+    GET_METRIC(tiflash_storage_read_thread_gauge, type_read_task).Increment();
 }
 
 SegmentReadTask::SegmentReadTask(
@@ -74,7 +75,8 @@ SegmentReadTask::SegmentReadTask(
     size_t establish_disagg_task_resp_size)
     : store_id(store_id_)
 {
-    CurrentMetrics::add(CurrentMetrics::DT_SegmentReadTasks);
+    CurrentMetrics::add(CurrentMetrics::DT_SegmentReadTasks); // keep for compatibility.
+    GET_METRIC(tiflash_storage_read_thread_gauge, type_read_task).Increment();
     auto tracing_id = fmt::format(
         "{} segment_id={} epoch={} delta_epoch={}",
         log->identifier(),
@@ -181,7 +183,8 @@ SegmentReadTask::SegmentReadTask(
 
 SegmentReadTask::~SegmentReadTask()
 {
-    CurrentMetrics::sub(CurrentMetrics::DT_SegmentReadTasks);
+    CurrentMetrics::sub(CurrentMetrics::DT_SegmentReadTasks); // keep for compatibility.
+    GET_METRIC(tiflash_storage_read_thread_gauge, type_read_task).Decrement();
 }
 
 void SegmentReadTask::addRange(const RowKeyRange & range)

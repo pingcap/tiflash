@@ -113,7 +113,7 @@ curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/debug/pprof/memory_status"
 Get the current status of TiFlash
 
 ```bash
-curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tifash/store-status"
+curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tiflash/store-status"
 ```
 
 ### Response
@@ -124,8 +124,8 @@ Return a string represent the current status of TiFlash. The returned result is 
 ## TiFlash replica syncing status
 
 ```bash
-curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tifash/sync-status/${table_id}"
-curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tifash/sync-status/keyspace/${keyspace_id}/table/${table_id}"
+curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tiflash/sync-status/${table_id}"
+curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tiflash/sync-status/keyspace/${keyspace_id}/table/${table_id}"
 ```
 
 ### Parameters
@@ -147,7 +147,7 @@ curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tifash/sync-status/keyspace/${
 ## TiFlash write node remote gc owner info under disaggregated arch 
 
 ```bash
-curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tifash/remote/owner/info"
+curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tiflash/remote/owner/info"
 ```
 
 ### Response
@@ -170,7 +170,7 @@ curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tifash/remote/owner/info"
 ## Resign the TiFlash write node remote gc owner under disaggregated arch 
 
 ```bash
-curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tifash/remote/owner/resign"
+curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tiflash/remote/owner/resign"
 ```
 
 ### Response
@@ -187,10 +187,30 @@ curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tifash/remote/owner/resign"
 }
 ```
 
+## Fetch the remote storage summary from TiFlash write node
+
+```bash
+# Fetch the remote storage summary of all TiFlash write node store_ids
+curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tiflash/remote/info"
+# Fetch the remote storage summary of given TiFlash write node store_ids.
+# Multiple store_ids are separated by ","
+curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tiflash/remote/info/store1_id,store2_id"
+```
+
+### Response
+```json
+{
+  "stores":[
+    {"data_file":{"bytes":131509,"num":391,"num_delmark":311},"dt_file":{"bytes":598122428067,"num":7648,"num_delmark":2705,"num_keys":73148},"num_keys":76555,"num_manifests":90,"store_id":272},
+    {"data_file":{"bytes":129603,"num":385,"num_delmark":311},"dt_file":{"bytes":597606637064,"num":7690,"num_delmark":2700,"num_keys":73317},"num_keys":76713,"num_manifests":83,"store_id":273}
+  ]
+}
+```
+
 ## Execute TiFlash write node remote gc under disaggregated arch 
 
 ```bash
-curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tifash/remote/gc"
+curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tiflash/remote/gc"
 ```
 
 ### Response
@@ -214,7 +234,7 @@ curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tifash/remote/gc"
 ## Execute TiFlash write node upload under disaggregated arch 
 
 ```bash
-curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tifash/remote/upload"
+curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tiflash/remote/upload"
 ```
 
 ### Response
