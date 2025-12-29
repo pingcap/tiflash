@@ -83,6 +83,7 @@
     M(StoragePoolUniPS)                         \
     M(RegionPersisterRunMode)                   \
     M(S3Requests)                               \
+    M(S3RandomAccessFile)                       \
     M(GlobalStorageRunMode)                     \
     M(GlobalThread)                             \
     M(GlobalThreadActive)                       \

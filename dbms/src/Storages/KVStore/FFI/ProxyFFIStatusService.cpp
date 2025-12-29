@@ -358,6 +358,83 @@ HttpRequestRes HandleHttpRequestRemoteGC(
     return buildOkResp(api_name, std::move(body));
 }
 
+std::tuple<std::vector<StoreID>, String> parseStoreIds(std::string_view path)
+{
+    std::vector<StoreID> store_ids;
+    String err_msg;
+
+    if (path.empty() || path == "/")
+    {
+        // empty store_ids means all store ids
+        return {store_ids, err_msg};
+    }
+
+    if (path[0] == '/')
+        path.remove_prefix(1); // remove leading '/'
+
+    std::vector<std::string> parts;
+    boost::split(parts, path, boost::is_any_of(","));
+    for (const auto & part : parts)
+    {
+        try
+        {
+            StoreID store_id = std::stoull(part);
+            store_ids.push_back(store_id);
+        }
+        catch (...)
+        {
+            err_msg = fmt::format("invalid store_id in request: {}", path);
+            return {std::vector<StoreID>{}, err_msg};
+        }
+    }
+    return {store_ids, err_msg};
+}
+
+HttpRequestRes HandleHttpRequestRemoteInfo(
+    EngineStoreServerWrap * server,
+    std::string_view path,
+    const std::string & api_name,
+    std::string_view,
+    std::string_view)
+{
+    auto & global_ctx = server->tmt->getContext();
+    if (auto err_resp = allowDisaggAPI(global_ctx, api_name, DisaggregatedMode::Storage, "can not get remote info");
+        err_resp)
+    {
+        return err_resp.value();
+    }
+
+    auto [store_ids, err_msg] = parseStoreIds(path.substr(api_name.size()));
+    if (!err_msg.empty())
+    {
+        auto body = fmt::format(R"json({{"message":"{}"}})json", err_msg);
+        return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, std::move(body));
+    }
+
+    const auto & gc_mgr = server->tmt->getS3GCManager();
+    if (!gc_mgr)
+    {
+        auto body = fmt::format(R"json({{"message":"S3 GC Manager is not enabled"}})json");
+        return buildRespWithCode(HttpRequestStatus::InternalError, api_name, std::move(body));
+    }
+
+    auto log = Logger::get("HandleHttpRequestRemoteInfo");
+    try
+    {
+        auto details = gc_mgr->getS3StorageSummary(store_ids);
+        std::stringstream ss;
+        details.toJson()->stringify(ss);
+        auto json_str = ss.str();
+        return buildOkResp(api_name, std::move(json_str));
+    }
+    catch (...)
+    {
+        auto body = fmt::format(R"json({{"message":"Exception occurred when getting remote info"}})json");
+        tryLogCurrentWarningException(log);
+        return buildRespWithCode(HttpRequestStatus::InternalError, api_name, std::move(body));
+    }
+}
+
 // Parse Http query string_view into a map
 HttpQueryMap parseHttpQueryMap(std::string_view query)
 {
@@ -758,6 +835,7 @@ static const std::map<std::string, HANDLE_HTTP_URI_METHOD> AVAILABLE_HTTP_URI = 
     {"/tiflash/remote/owner/resign", HandleHttpRequestRemoteOwnerResign},
     {"/tiflash/remote/gc", HandleHttpRequestRemoteGC},
     {"/tiflash/remote/upload", HandleHttpRequestRemoteReUpload},
+    {"/tiflash/remote/info", HandleHttpRequestRemoteInfo},
     {"/tiflash/remote/cache/evict", HandleHttpRequestRemoteCacheEvict},
     {"/tiflash/remote/cache/info", HandleHttpRequestRemoteCacheInfo},
 };

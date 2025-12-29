@@ -21,6 +21,12 @@
 #include <Storages/S3/S3Common.h>
 #include <common/types.h>
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <Poco/JSON/Array.h>
+#include <Poco/JSON/Object.h>
+#pragma GCC diagnostic pop
+
 #include <memory>
 #include <unordered_set>
 
@@ -83,6 +89,49 @@ struct S3GCConfig
     Int64 mark_delete_timeout_seconds = 10;
 };
 
+<<<<<<< HEAD
+=======
+struct GcStats
+{
+    double duration_read_locks = 0.0;
+    double duration_clean_locks = 0.0;
+    double duration_clean_manifests = 0.0;
+    double duration_verify_locks = 0.0;
+    double duration_scan_then_clean_data_files = 0.0;
+};
+
+
+struct S3StoreStorageSummary
+{
+    StoreID store_id = InvalidStoreID;
+    CheckpointManifestS3Set manifests;
+    struct DataFile
+    {
+        size_t num = 0;
+        size_t num_delmark = 0;
+        size_t bytes = 0;
+    } data_file;
+    struct DTFile
+    {
+        size_t num = 0;
+        size_t num_keys = 0;
+        size_t num_delmark = 0;
+        size_t bytes = 0;
+    } dt_file;
+
+    size_t num_keys = 0;
+
+    Poco::JSON::Object::Ptr toJson() const;
+};
+
+struct S3StorageSummary
+{
+    std::vector<S3StoreStorageSummary> stores;
+
+    Poco::JSON::Object::Ptr toJson() const;
+};
+
+>>>>>>> 965cc8c029 (disagg: Add metrics about disaggreated arch (#10631))
 class S3GCManager
 {
 public:
@@ -98,6 +147,9 @@ public:
     bool runOnAllStores();
 
     void shutdown() { shutdown_called = true; }
+
+    S3StoreStorageSummary getStoreStorageSummary(StoreID store_id);
+    S3StorageSummary getS3StorageSummary(std::vector<StoreID> store_ids);
 
     // private:
     void runForStore(UInt64 gc_store_id);
@@ -167,6 +219,8 @@ public:
 
     void wake() const;
 
+    S3StorageSummary getS3StorageSummary(std::vector<StoreID> store_ids);
+
 private:
     Context & global_ctx;
     std::unique_ptr<S3GCManager> manager;
@@ -174,3 +228,53 @@ private:
 };
 
 } // namespace DB::S3
+<<<<<<< HEAD
+=======
+
+template <>
+struct fmt::formatter<DB::S3::GcStats>
+{
+    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
+
+    template <typename FormatContext>
+    auto format(const DB::S3::GcStats & stat, FormatContext & ctx) const
+    {
+        return fmt::format_to(
+            ctx.out(),
+            "{{read_locks={:.2f}s clean_locks={:.2f}s clean_manifests={:.2f}s verify_locks={:.2f}s "
+            "scan_then_clean_data_files={:.2f}s}}",
+            stat.duration_read_locks,
+            stat.duration_clean_locks,
+            stat.duration_clean_manifests,
+            stat.duration_verify_locks,
+            stat.duration_scan_then_clean_data_files);
+    }
+};
+
+template <>
+struct fmt::formatter<DB::S3::S3StoreStorageSummary>
+{
+    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
+
+    template <typename FormatContext>
+    auto format(const DB::S3::S3StoreStorageSummary & details, FormatContext & ctx) const
+    {
+        return fmt::format_to(
+            ctx.out(),
+            "{{store_id={} num_manifests={} num_keys={} "
+            "data_file={{num={} num_delmark={} bytes={}}} "
+            "dt_file={{num={} num_keys={} num_delmark={} bytes={}}} "
+            "}}",
+            details.store_id,
+            details.manifests.size(),
+            details.num_keys,
+            details.data_file.num,
+            details.data_file.num_delmark,
+            details.data_file.bytes,
+            details.dt_file.num,
+            details.dt_file.num_keys,
+            details.dt_file.num_delmark,
+            details.dt_file.bytes);
+    }
+};
+>>>>>>> 965cc8c029 (disagg: Add metrics about disaggreated arch (#10631))

@@ -55,6 +55,40 @@ extern const int TIMEOUT_EXCEEDED;
 namespace DB::S3
 {
 
+Poco::JSON::Object::Ptr S3StoreStorageSummary::toJson() const
+{
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    obj->set("store_id", store_id);
+    obj->set("num_manifests", manifests.size());
+    obj->set("num_keys", num_keys);
+
+    Poco::JSON::Object::Ptr data_file_obj = new Poco::JSON::Object();
+    data_file_obj->set("num", data_file.num);
+    data_file_obj->set("num_delmark", data_file.num_delmark);
+    data_file_obj->set("bytes", data_file.bytes);
+    obj->set("data_file", data_file_obj);
+
+    Poco::JSON::Object::Ptr dt_file_obj = new Poco::JSON::Object();
+    dt_file_obj->set("num", dt_file.num);
+    dt_file_obj->set("num_keys", dt_file.num_keys);
+    dt_file_obj->set("num_delmark", dt_file.num_delmark);
+    dt_file_obj->set("bytes", dt_file.bytes);
+    obj->set("dt_file", dt_file_obj);
+
+    // never return a nullptr
+    return obj;
+}
+
+Poco::JSON::Object::Ptr S3StorageSummary::toJson() const
+{
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    Poco::JSON::Array::Ptr stores_arr = new Poco::JSON::Array();
+    for (const auto & store_details : stores)
+        stores_arr->add(store_details.toJson());
+    obj->set("stores", stores_arr);
+    return obj;
+}
+
 S3GCManager::S3GCManager(
     pingcap::pd::ClientPtr pd_client_,
     OwnerManagerPtr gc_owner_manager_,
@@ -742,6 +776,131 @@ void S3GCManager::removeOutdatedManifest(
     }
 }
 
+namespace details
+{
+String parseDTFileKeyFromDataSubpath(std::string_view data_subpath)
+{
+    // data_subpath=ks_1_t_333/dmf_664135/8.size.dat
+    // parse the last dmfile key part by removing the "/<file_name>" suffix
+    auto pos = data_subpath.find_last_of('/');
+    if (pos == String::npos)
+        return "";
+    return String(data_subpath.substr(0, pos));
+}
+} // namespace details
+
+S3StorageSummary S3GCManager::getS3StorageSummary(std::vector<StoreID> store_ids)
+{
+    S3StorageSummary summary;
+    // if no store_id specified, get all store_ids with data stored on S3
+    if (store_ids.empty())
+        store_ids = getAllStoreIds();
+
+    LOG_INFO(log, "getS3StorageSummary run on store_ids={}", store_ids);
+
+    for (const auto store_id : store_ids)
+        summary.stores.emplace_back(getStoreStorageSummary(store_id));
+    return summary;
+}
+
+S3StoreStorageSummary S3GCManager::getStoreStorageSummary(StoreID store_id)
+{
+    auto client = S3::ClientFactory::instance().sharedTiFlashClient();
+
+    Stopwatch watch;
+    S3StoreStorageSummary summary{
+        .store_id = store_id,
+        .manifests = CheckpointManifestS3Set::getFromS3(*client, store_id),
+    };
+
+    const auto prefix = S3Filename::fromStoreId(store_id).toDataPrefix();
+
+    // TODO: collect the locks belong to the store_id
+    // collect the CheckpointDataFile and StableFiles belong to the store_id
+
+    double last_elapsed = 0.0;
+    constexpr double log_interval_seconds = 30.0;
+    size_t num_processed_keys = 0;
+    String last_dtfile_key;
+    size_t num_dtfile_keys_for_last_dtfile = 0;
+    S3::listPrefix(*client, prefix, [&](const Aws::S3::Model::Object & object) {
+        const auto & key = object.GetKey();
+        const auto view = S3FilenameView::fromKey(key);
+        if (watch.elapsedSeconds() - last_elapsed > log_interval_seconds)
+        {
+            last_elapsed = watch.elapsedSeconds();
+            LOG_INFO(
+                log,
+                "getS3StorageSummary processing, processed_keys={} current_key={} details={}",
+                num_processed_keys,
+                key,
+                summary);
+        }
+
+        LOG_DEBUG(
+            log,
+            "getS3StorageSummary store_id={} key={} type={} isDMFile={} data_subpath={} processed_keys={}",
+            store_id,
+            object.GetKey(),
+            magic_enum::enum_name(view.type),
+            view.isDMFile(),
+            view.data_subpath,
+            num_processed_keys);
+
+        if (view.isDataFile())
+        {
+            if (view.isDMFile())
+            {
+                // key=s273/data/ks_1_t_333/dmf_664135/8.size.dat
+                // view.data_subpath=ks_1_t_333/dmf_664135/8.size.dat
+                auto curr_dtfile_key = details::parseDTFileKeyFromDataSubpath(view.data_subpath);
+                if (curr_dtfile_key.empty())
+                {
+                    // log warning and ignore the parsed curr_dtfile_key
+                    LOG_WARNING(
+                        log,
+                        "getS3StorageSummary failed to parse dtfile_key, store_id={} key={} data_subpath={}",
+                        store_id,
+                        key,
+                        view.data_subpath);
+                }
+                else if (last_dtfile_key != curr_dtfile_key)
+                {
+                    summary.dt_file.num += 1;
+                    LOG_DEBUG(
+                        log,
+                        "getS3StorageSummary meet new dtfile_key={} last_dtfile_key={} num_keys_for_last_dtfile={} "
+                        "store_id={}",
+                        curr_dtfile_key,
+                        last_dtfile_key,
+                        num_dtfile_keys_for_last_dtfile,
+                        store_id);
+                    last_dtfile_key = curr_dtfile_key;
+                    num_dtfile_keys_for_last_dtfile = 0;
+                }
+                num_dtfile_keys_for_last_dtfile += 1;
+                summary.dt_file.num_keys += 1;
+                summary.dt_file.bytes += object.GetSize();
+            }
+            else
+            {
+                summary.data_file.num += 1;
+                summary.data_file.bytes += object.GetSize();
+            }
+        }
+        else if (view.isDelMark())
+        {
+            auto datafile_view = view.asDataFile();
+            datafile_view.isDMFile() ? summary.dt_file.num_delmark += 1 : summary.data_file.num_delmark += 1;
+        }
+        num_processed_keys += 1;
+        return PageResult{.num_keys = 1, .more = true};
+    });
+    summary.num_keys = num_processed_keys;
+    LOG_INFO(log, "getS3StorageSummary finish, elapsed={:.3f}s summary={}", watch.elapsedSeconds(), summary);
+    return summary;
+}
+
 /// Service ///
 
 S3GCManagerService::S3GCManagerService(
@@ -794,6 +953,15 @@ void S3GCManagerService::wake() const
     {
         timer->wake();
     }
+}
+
+S3StorageSummary S3GCManagerService::getS3StorageSummary(std::vector<StoreID> store_ids)
+{
+    if (manager)
+    {
+        return manager->getS3StorageSummary(store_ids);
+    }
+    return S3StorageSummary{};
 }
 
 } // namespace DB::S3
