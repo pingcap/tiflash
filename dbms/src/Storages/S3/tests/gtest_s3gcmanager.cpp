@@ -447,6 +447,52 @@ try
 }
 CATCH
 
+TEST_F(S3GCManagerTest, GetStorageSummary)
+{
+    StoreID store_id = 20;
+    auto prefix = S3Filename::fromStoreId(store_id).toDataPrefix();
+
+    // prepare some empty files for scanning
+    {
+        for (auto seq : {2, 3})
+        {
+            auto m = S3Filename::newCheckpointManifest(store_id, seq).toFullKey();
+            uploadEmptyFile(*mock_s3_client, m);
+        }
+
+        for (auto idx : {1, 2, 3})
+        {
+            auto fname = S3Filename::newCheckpointData(store_id, 1, idx);
+            uploadEmptyFile(*mock_s3_client, fname.toFullKey());
+            if (idx == 1 || idx == 2)
+                uploadEmptyFile(*mock_s3_client, fname.toView().getDelMarkKey());
+        }
+
+        for (auto file_id : std::vector<UInt64>{10, 11, 12})
+        {
+            auto fname = S3Filename::fromDMFileOID( //
+                DMFileOID{
+                    .store_id = store_id,
+                    .table_id = 1000,
+                    .file_id = file_id,
+                });
+            auto dmf = fname.toFullKey();
+            uploadEmptyFile(*mock_s3_client, dmf + "/meta");
+            uploadEmptyFile(*mock_s3_client, dmf + "/8.size.dat");
+            if (file_id == 10 || file_id == 11)
+                uploadEmptyFile(*mock_s3_client, fname.toView().getDelMarkKey());
+        }
+    }
+
+    auto details = gc_mgr->getStoreStorageSummary(store_id);
+    ASSERT_EQ(details.manifests.size(), 2);
+    ASSERT_EQ(details.data_file.num, 3);
+    ASSERT_EQ(details.data_file.num_delmark, 2);
+    ASSERT_EQ(details.dt_file.num, 3);
+    ASSERT_EQ(details.dt_file.num_keys, 2 * 3); // each dmfile has 2 objects
+    ASSERT_EQ(details.dt_file.num_delmark, 2);
+}
+
 TEST_F(S3GCManagerTest, RemoveLockOfDMFile)
 try
 {
