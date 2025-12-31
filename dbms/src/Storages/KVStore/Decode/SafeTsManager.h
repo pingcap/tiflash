@@ -61,6 +61,24 @@ struct SafeTsManager
     static const SafeTS SafeTsDiffThreshold = 2 * 60 * 1000;
     bool isSafeTSLag(RegionID region_id, SafeTS * leader_safe_ts, SafeTS * self_safe_ts);
 
+    struct SafeTsPair
+    {
+        const SafeTS leader_safe_ts;
+        const SafeTS self_safe_ts;
+    };
+    SafeTsPair get(RegionID region_id) const
+    {
+        std::shared_lock read_lock(rw_lock);
+        if (auto iter = safe_ts_map.find(region_id); iter != safe_ts_map.end())
+        {
+            return SafeTsPair{
+                .leader_safe_ts = (*iter->second).leader_safe_ts.load(),
+                .self_safe_ts = (*iter->second).self_safe_ts.load(),
+            };
+        }
+        return SafeTsPair{0, 0};
+    }
+
     UInt64 getSelfSafeTS(RegionID region_id) const;
 
     void remove(RegionID region_id)
