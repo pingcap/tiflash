@@ -1027,10 +1027,15 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg, c
     SYNC_FOR("before_FileCache::downloadImpl_reserve_size");
     if (!finalizeReservedSize(file_seg->getFileType(), file_seg->getSize(), content_length))
     {
-        LOG_DEBUG(log, "s3_key={} finalizeReservedSize {}=>{} failed.", s3_key, file_seg->getSize(), content_length);
+        LOG_INFO(
+            log,
+            "Download finalizeReservedSize failed, s3_key={} seg_size={} size={}",
+            s3_key,
+            file_seg->getSize(),
+            content_length);
+        file_seg->setStatus(FileSegment::Status::Failed);
         return;
     }
-    file_seg->setSize(content_length);
 
     const auto & local_fname = file_seg->getLocalFileName();
     // download as a temp file then rename to a formal file
@@ -1038,19 +1043,24 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg, c
     auto temp_fname = toTemporaryFilename(local_fname);
     downloadToLocal(result.GetBody(), temp_fname, content_length, write_limiter);
     std::filesystem::rename(temp_fname, local_fname);
-    auto fsize = std::filesystem::file_size(local_fname);
 
-    capacity_metrics->addUsedSize(local_fname, fsize);
+#ifndef NDEBUG
+    // sanity check under debug mode
+    auto fsize = std::filesystem::file_size(local_fname);
     RUNTIME_CHECK_MSG(
         fsize == static_cast<UInt64>(content_length),
         "local_fname={}, file_size={}, content_length={}",
         local_fname,
         fsize,
         content_length);
-    file_seg->setStatus(FileSegment::Status::Complete);
+#endif
+
+    capacity_metrics->addUsedSize(local_fname, content_length);
+    // update the file segment size and set as complete
+    file_seg->setComplete(content_length);
     LOG_INFO(
         log,
-        "Download s3_key={} to local={} size={} cost={}ms",
+        "Download success, s3_key={} local={} size={} cost={}ms",
         s3_key,
         local_fname,
         content_length,
