@@ -24,7 +24,9 @@
 #include <IO/BaseFile/PosixWritableFile.h>
 #include <IO/BaseFile/RateLimiter.h>
 #include <IO/Buffer/ReadBufferFromIStream.h>
+#include <IO/Buffer/WriteBufferFromWritableFile.h>
 #include <IO/IOThreadPools.h>
+#include <IO/copyData.h>
 #include <Interpreters/Settings.h>
 #include <Server/StorageConfigParser.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
@@ -39,7 +41,6 @@
 #include <fmt/chrono.h>
 
 #include <atomic>
-#include <cerrno>
 #include <chrono>
 #include <cmath>
 #include <filesystem>
@@ -985,7 +986,7 @@ bool FileCache::finalizeReservedSize(FileType reserve_for, UInt64 reserved_size,
     return true;
 }
 
-size_t downloadToLocal(
+void downloadToLocal(
     Aws::IOStream & istr,
     const String & fname,
     Int64 content_length,
@@ -993,33 +994,17 @@ size_t downloadToLocal(
 {
     // create an empty file with write_limiter
     // each time `ofile.write` is called, the write speed will be controlled by the write_limiter.
-    PosixWritableFile ofile(fname, true, O_CREAT | O_WRONLY, 0666, write_limiter);
+    auto ofile = std::make_shared<PosixWritableFile>(fname, true, O_CREAT | O_WRONLY, 0666, write_limiter);
     // simply create an empty file
     if (unlikely(content_length <= 0))
-        return 0;
+        return;
 
     GET_METRIC(tiflash_storage_remote_cache_bytes, type_dtfile_download_bytes).Increment(content_length);
-    size_t total_written = 0;
     static const Int64 MAX_BUFFER_SIZE = 16 * 1024; // 16k
     ReadBufferFromIStream rbuf(istr, std::min(content_length, MAX_BUFFER_SIZE));
-    while (!rbuf.eof())
-    {
-        size_t count = rbuf.buffer().end() - rbuf.position();
-        if (ssize_t write_res = ofile.write(rbuf.position(), count); write_res < 0)
-        {
-            throwFromErrno(fmt::format("write to file failed, fname={}", fname), write_res, errno);
-        }
-        else
-        {
-            total_written += write_res;
-        }
-        rbuf.position() += count;
-    }
-    if (auto res = ofile.fsync(); res < 0)
-    {
-        throwFromErrno(fmt::format("fsync file failed, fname={}", fname), res, errno);
-    }
-    return total_written;
+    WriteBufferFromWritableFile wbuf(ofile, std::min(content_length, MAX_BUFFER_SIZE));
+    copyData(rbuf, wbuf, content_length);
+    wbuf.sync();
 }
 
 void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg, const WriteLimiterPtr & write_limiter)
@@ -1048,11 +1033,12 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg, c
     file_seg->setSize(content_length);
 
     const auto & local_fname = file_seg->getLocalFileName();
-    prepareParentDir(local_fname);
     // download as a temp file then rename to a formal file
+    prepareParentDir(local_fname);
     auto temp_fname = toTemporaryFilename(local_fname);
-    size_t fsize = downloadToLocal(result.GetBody(), temp_fname, content_length, write_limiter);
+    downloadToLocal(result.GetBody(), temp_fname, content_length, write_limiter);
     std::filesystem::rename(temp_fname, local_fname);
+    auto fsize = std::filesystem::file_size(local_fname);
 
     capacity_metrics->addUsedSize(local_fname, fsize);
     RUNTIME_CHECK_MSG(

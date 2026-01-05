@@ -113,7 +113,7 @@ protected:
         }
         auto r = file.fsync();
         ASSERT_EQ(r, 0);
-        LOG_DEBUG(log, "write fname={} size={} done, cost={}s", key, size, sw.elapsedSeconds());
+        LOG_DEBUG(log, "write fname={} size={} done, cost={:.3f}s", key, size, sw.elapsedSeconds());
     }
 
     void writeS3FileWithSize(const S3Filename & s3_dir, std::string_view file_name, size_t size)
@@ -199,14 +199,15 @@ protected:
         {
             std::this_thread::sleep_for(1000ms);
         }
-        LOG_DEBUG(
+        LOG_INFO(
             log,
-            "Download summary: succ={} fail={} cost={}s",
+            "Download summary: succ={} fail={} cost={:.3f}s",
             file_cache.bg_download_succ_count.load(std::memory_order_relaxed),
             file_cache.bg_download_fail_count.load(std::memory_order_relaxed),
             sw.elapsedSeconds());
     }
 
+    // Update the config.capacity to make sure dtfile cache capacity equals to `dt_size`.
     static void calculateCacheCapacity(StorageRemoteCacheConfig & config, UInt64 dt_size)
     {
         config.capacity = dt_size / (1.0 - config.delta_rate);
@@ -248,18 +249,19 @@ try
     Stopwatch sw;
     auto objects = genObjects(/*store_count*/ 1, /*table_count*/ 1, /*file_count*/ 1, basenames);
     auto total_size = objectsTotalSize(objects);
-    LOG_DEBUG(log, "genObjects: count={} total_size={} cost={}s", objects.size(), total_size, sw.elapsedSeconds());
+    LOG_INFO(log, "genObjects: count={} total_size={} cost={:.3f}s", objects.size(), total_size, sw.elapsedSeconds());
 
     auto cache_dir = fmt::format("{}/file_cache_all", tmp_dir);
     StorageRemoteCacheConfig cache_config{.dir = cache_dir, .dtfile_level = 100};
     calculateCacheCapacity(cache_config, total_size);
-    LOG_DEBUG(log, "total_size={} dt_cache_capacity={}", total_size, cache_config.getDTFileCapacity());
+    LOG_INFO(log, "total_size={} dt_cache_capacity={}", total_size, cache_config.getDTFileCapacity());
 
     UInt16 vcores = 4;
     IORateLimiter rate_limiter;
 
     {
-        LOG_DEBUG(log, "Cache all data");
+        // download all files to local filesystem as cache
+        LOG_INFO(log, "Cache all data");
         FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
         for (const auto & obj : objects)
         {
@@ -283,7 +285,8 @@ try
     }
 
     {
-        LOG_DEBUG(log, "Cache restore");
+        // restore cache from local filesystem after process restart
+        LOG_INFO(log, "Cache restore");
         FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
         ASSERT_EQ(file_cache.cache_used, file_cache.cache_capacity);
         for (const auto & obj : objects)
@@ -297,12 +300,42 @@ try
         }
     }
 
-    auto meta_objects = genObjects(/*store_count*/ 2, /*table_count*/ 2, /*file_count*/ 2, {"meta"});
-    ASSERT_EQ(meta_objects.size(), 2 * 2 * 2);
     {
-        LOG_DEBUG(log, "Evict success");
+        LOG_INFO(log, "Prepare for evict fail case");
+        auto meta_objects2 = genObjects(/*store_count*/ 2, /*table_count*/ 2, /*file_count*/ 2, {"meta"});
+        ASSERT_EQ(meta_objects2.size(), 2 * 2 * 2);
+
+        FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
+        UInt64 free_size = file_cache.cache_capacity - file_cache.cache_used;
+        LOG_INFO(log, "Running evict failed cases, free_size={}", free_size);
+        // Keep the file_seg ptrs to mock reading in progress, it should prevent file_segment from being evicted.
+        auto file_seg = file_cache.getAll();
+        for (const auto & obj : meta_objects2)
+        {
+            auto s3_fname = ::DB::S3::S3FilenameView::fromKey(obj.key);
+            ASSERT_TRUE(s3_fname.isDataFile()) << obj.key;
+            // cache miss and try init background download
+            auto file_seg = file_cache.get(s3_fname);
+            ASSERT_EQ(file_seg, nullptr) << obj.key;
+            waitForBgDownload(file_cache);
+            // after bg download finished, try get again, should still miss as evict failed
+            file_seg = file_cache.get(s3_fname);
+            ASSERT_EQ(file_seg, nullptr) << fmt::format("key={} size={} free_size={}", obj.key, obj.size, free_size);
+            LOG_INFO(log, "Evict failed as expected, key={} size={} free_size={}", obj.key, obj.size, free_size);
+        }
+        waitForBgDownload(file_cache);
+    }
+
+    {
+        // Evict cached files
+        LOG_INFO(log, "Prepare for evict success case");
+        auto meta_objects = genObjects(/*store_count*/ 2, /*table_count*/ 2, /*file_count*/ 2, {"meta"});
+        ASSERT_EQ(meta_objects.size(), 2 * 2 * 2);
+
         FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
         ASSERT_LE(file_cache.cache_used, file_cache.cache_capacity);
+        UInt64 free_size = file_cache.cache_capacity - file_cache.cache_used;
+        LOG_INFO(log, "Running evict success cases, free_size={}", free_size);
         for (const auto & obj : meta_objects)
         {
             auto s3_fname = ::DB::S3::S3FilenameView::fromKey(obj.key);
@@ -317,39 +350,10 @@ try
             ASSERT_TRUE(file_seg->isReadyToRead());
             ASSERT_EQ(file_seg->getSize(), obj.size);
         }
-    }
-
-    auto meta_objects2 = genObjects(/*store_count*/ 2, /*table_count*/ 2, /*file_count*/ 2, {"meta"});
-    ASSERT_EQ(meta_objects2.size(), 2 * 2 * 2);
-    {
-        LOG_DEBUG(log, "Evict failed");
-        FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
         ASSERT_LE(file_cache.cache_used, file_cache.cache_capacity);
-        UInt64 free_size = file_cache.cache_capacity - file_cache.cache_used;
-        auto file_seg = file_cache.getAll(); // Prevent file_segment from evicted.
-        for (const auto & obj : meta_objects2)
-        {
-            auto s3_fname = ::DB::S3::S3FilenameView::fromKey(obj.key);
-            ASSERT_TRUE(s3_fname.isDataFile()) << obj.key;
-            auto file_seg = file_cache.get(s3_fname);
-            if (file_seg == nullptr)
-            {
-                waitForBgDownload(file_cache);
-                file_seg = file_cache.get(s3_fname);
-                if (free_size > obj.size)
-                {
-                    free_size -= obj.size;
-                    ASSERT_EQ(free_size, file_cache.cache_capacity - file_cache.cache_used);
-                    ASSERT_NE(file_seg, nullptr) << obj.key;
-                    ASSERT_TRUE(file_seg->isReadyToRead());
-                    ASSERT_EQ(file_seg->getSize(), obj.size);
-                }
-                else
-                {
-                    ASSERT_EQ(file_seg, nullptr) << obj.key;
-                }
-            }
-        }
+        free_size = file_cache.cache_capacity - file_cache.cache_used;
+        LOG_INFO(log, "After evict and cache new files, free_size={}", free_size);
+
         waitForBgDownload(file_cache);
     }
 }
