@@ -309,7 +309,7 @@ try
         UInt64 free_size = file_cache.cache_capacity - file_cache.cache_used;
         LOG_INFO(log, "Running evict failed cases, free_size={}", free_size);
         // Keep the file_seg ptrs to mock reading in progress, it should prevent file_segment from being evicted.
-        auto file_seg = file_cache.getAll();
+        auto all_file_segs = file_cache.getAll();
         for (const auto & obj : meta_objects2)
         {
             auto s3_fname = ::DB::S3::S3FilenameView::fromKey(obj.key);
