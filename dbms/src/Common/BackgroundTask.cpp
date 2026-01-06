@@ -14,7 +14,6 @@
 
 #include <Common/BackgroundTask.h>
 #include <Common/MemoryTracker.h>
-
 #include <ProcessMetrics/ProcessMetrics.h>
 
 #include <fstream>
