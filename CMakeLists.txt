@@ -18,6 +18,9 @@ project (TiFlash LANGUAGES C CXX ASM)
 
 cmake_policy(SET CMP0048 NEW)
 
+# Bypass the CMake error "Compatibility with CMake < 3.5 has been removed" since CMake 4.0.
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+
 set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY true)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${TiFlash_SOURCE_DIR}/cmake/Modules/")
 set(CMAKE_MACOSX_RPATH 1)
