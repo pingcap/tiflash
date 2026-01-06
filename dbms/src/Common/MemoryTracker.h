@@ -22,7 +22,7 @@
 #include <atomic>
 #include <boost/noncopyable.hpp>
 
-extern std::atomic<Int64> real_rss, proc_num_threads, baseline_of_query_mem_tracker;
+extern std::atomic<Int64> real_rss, real_rss_file, proc_num_threads, baseline_of_query_mem_tracker;
 extern std::atomic<UInt64> proc_virt_size;
 namespace CurrentMetrics
 {
