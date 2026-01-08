@@ -1000,7 +1000,7 @@ void downloadToLocal(
         return;
 
     GET_METRIC(tiflash_storage_remote_cache_bytes, type_dtfile_download_bytes).Increment(content_length);
-    static const Int64 MAX_BUFFER_SIZE = 16 * 1024; // 16k
+    static const Int64 MAX_BUFFER_SIZE = 128 * 1024; // 128k
     ReadBufferFromIStream rbuf(istr, std::min(content_length, MAX_BUFFER_SIZE));
     WriteBufferFromWritableFile wbuf(ofile, std::min(content_length, MAX_BUFFER_SIZE));
     copyData(rbuf, wbuf, content_length);
