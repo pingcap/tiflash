@@ -109,30 +109,33 @@ try
     blob_store.registerPaths();
 
     {
-        blob_store.blob_stats.restoreByEntry(PageEntryV3{
-            .file_id = file_id1,
-            .size = 128,
-            .padded_size = 0,
-            .tag = 0,
-            .offset = 1024,
-            .checksum = 0x4567,
-        });
-        blob_store.blob_stats.restoreByEntry(PageEntryV3{
-            .file_id = file_id1,
-            .size = 512,
-            .padded_size = 0,
-            .tag = 0,
-            .offset = 2048,
-            .checksum = 0x4567,
-        });
-        blob_store.blob_stats.restoreByEntry(PageEntryV3{
-            .file_id = file_id2,
-            .size = 512,
-            .padded_size = 0,
-            .tag = 0,
-            .offset = 2048,
-            .checksum = 0x4567,
-        });
+        blob_store.blob_stats.restoreByEntry(
+            PageEntryV3{
+                .file_id = file_id1,
+                .size = 128,
+                .padded_size = 0,
+                .tag = 0,
+                .offset = 1024,
+                .checksum = 0x4567,
+            });
+        blob_store.blob_stats.restoreByEntry(
+            PageEntryV3{
+                .file_id = file_id1,
+                .size = 512,
+                .padded_size = 0,
+                .tag = 0,
+                .offset = 2048,
+                .checksum = 0x4567,
+            });
+        blob_store.blob_stats.restoreByEntry(
+            PageEntryV3{
+                .file_id = file_id2,
+                .size = 512,
+                .padded_size = 0,
+                .tag = 0,
+                .offset = 2048,
+                .checksum = 0x4567,
+            });
         blob_store.blob_stats.restore();
     }
 
@@ -234,14 +237,15 @@ try
         blob_store.registerPaths();
         for (const auto & id : blob_ids)
         {
-            blob_store.blob_stats.restoreByEntry(PageEntryV3{
-                .file_id = id,
-                .size = 1024,
-                .padded_size = 0,
-                .tag = 0,
-                .offset = 0,
-                .checksum = 0x4567,
-            });
+            blob_store.blob_stats.restoreByEntry(
+                PageEntryV3{
+                    .file_id = id,
+                    .size = 1024,
+                    .padded_size = 0,
+                    .tag = 0,
+                    .offset = 0,
+                    .checksum = 0x4567,
+                });
         }
     };
 
@@ -363,8 +367,7 @@ TEST_F(BlobStoreTest, testWriteRead)
             c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
         }
 
-        ReadBufferPtr buff
-            = std::make_shared<ReadBufferFromMemory>(c_buff.data() + i * buff_size, buff_size);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff.data() + i * buff_size, buff_size);
         wb.putPage(page_id++, /* tag */ 0, buff, buff_size);
     }
 
@@ -387,11 +390,13 @@ TEST_F(BlobStoreTest, testWriteRead)
             buildV3Id(TEST_NAMESPACE_ID, page_id),
             record.entry.file_id,
             record.entry.offset,
-            c_buff_read.data() +index * buff_size,
+            c_buff_read.data() + index * buff_size,
             record.entry.size,
             /* ReadLimiterPtr */ nullptr);
 
-        ASSERT_EQ(strncmp(c_buff.data() +index * buff_size, c_buff_read.data() +index * buff_size, record.entry.size), 0);
+        ASSERT_EQ(
+            strncmp(c_buff.data() + index * buff_size, c_buff_read.data() + index * buff_size, record.entry.size),
+            0);
         index++;
     }
     ASSERT_EQ(index, buff_nums);
@@ -412,7 +417,7 @@ TEST_F(BlobStoreTest, testWriteRead)
     {
         ASSERT_EQ(id, page_id++);
         ASSERT_EQ(page.data.size(), buff_size);
-        ASSERT_EQ(strncmp(c_buff.data() +index * buff_size, page.data.begin(), page.data.size()), 0);
+        ASSERT_EQ(strncmp(c_buff.data() + index * buff_size, page.data.begin(), page.data.size()), 0);
         index++;
     }
     ASSERT_EQ(index, buff_nums);
@@ -423,7 +428,7 @@ TEST_F(BlobStoreTest, testWriteRead)
     {
         auto page = blob_store.read(entry);
         ASSERT_EQ(page.data.size(), buff_size);
-        ASSERT_EQ(strncmp(c_buff.data() +index * buff_size, page.data.begin(), page.data.size()), 0);
+        ASSERT_EQ(strncmp(c_buff.data() + index * buff_size, page.data.begin(), page.data.size()), 0);
         index++;
     }
     ASSERT_EQ(index, buff_nums);
@@ -454,8 +459,7 @@ TEST_F(BlobStoreTest, testWriteReadWithIOLimiter)
             c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
         }
 
-        ReadBufferPtr buff
-            = std::make_shared<ReadBufferFromMemory>(c_buff.data() + i * buff_size, buff_size);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff.data() + i * buff_size, buff_size);
         wbs[i].putPage(page_id++, /* tag */ 0, buff, buff_size);
     }
 
@@ -636,8 +640,7 @@ TEST_F(BlobStoreTest, testFeildOffsetWriteRead)
             c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
         }
 
-        ReadBufferPtr buff
-            = std::make_shared<ReadBufferFromMemory>(c_buff.data() + i * buff_size, buff_size);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff.data() + i * buff_size, buff_size);
         wb.putPage(page_id++, /* tag */ 0, buff, buff_size, field_sizes);
     }
 
@@ -669,11 +672,13 @@ TEST_F(BlobStoreTest, testFeildOffsetWriteRead)
             buildV3Id(TEST_NAMESPACE_ID, page_id),
             record.entry.file_id,
             record.entry.offset,
-            c_buff_read.data() +index * buff_size,
+            c_buff_read.data() + index * buff_size,
             record.entry.size,
             /* ReadLimiterPtr */ nullptr);
 
-        ASSERT_EQ(strncmp(c_buff.data() +index * buff_size, c_buff_read.data() +index * buff_size, record.entry.size), 0);
+        ASSERT_EQ(
+            strncmp(c_buff.data() + index * buff_size, c_buff_read.data() + index * buff_size, record.entry.size),
+            0);
         index++;
     }
     ASSERT_EQ(index, buff_nums);
@@ -878,8 +883,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
             {
                 c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
             }
-            ReadBufferPtr buff
-                = std::make_shared<ReadBufferFromMemory>(c_buff.data() + i * buff_size, buff_size);
+            ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff.data() + i * buff_size, buff_size);
             wb.putPage(page_id, /* tag */ 0, buff, buff_size);
         }
     }
@@ -974,8 +978,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats2)
             {
                 c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
             }
-            ReadBufferPtr buff
-                = std::make_shared<ReadBufferFromMemory>(c_buff.data() + i * buff_size, buff_size);
+            ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff.data() + i * buff_size, buff_size);
             wb.putPage(page_id, /* tag */ 0, buff, buff_size);
         }
     }
@@ -1036,8 +1039,7 @@ TEST_F(BlobStoreTest, testBlobStoreRaftDataGcStats)
             {
                 c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
             }
-            ReadBufferPtr buff
-                = std::make_shared<ReadBufferFromMemory>(c_buff.data() + i * buff_size, buff_size);
+            ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff.data() + i * buff_size, buff_size);
             wb.putPage(page_id, /* tag */ 0, buff, buff_size);
         }
     }
@@ -1095,8 +1097,7 @@ TEST_F(BlobStoreTest, GC)
             c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
         }
 
-        ReadBufferPtr buff
-            = std::make_shared<ReadBufferFromMemory>(c_buff.data() + i * buff_size, buff_size);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff.data() + i * buff_size, buff_size);
         wb.putPage(page_id++, /* tag */ 0, buff, buff_size);
     }
 
@@ -1173,8 +1174,7 @@ try
             c_buff[j + i * buff_size] = static_cast<char>((j & 0xff) + i);
         }
 
-        ReadBufferPtr buff
-            = std::make_shared<ReadBufferFromMemory>(c_buff.data() + i * buff_size, buff_size);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff.data() + i * buff_size, buff_size);
         WriteBatch wb;
         wb.putPage(page_id, /* tag */ 0, buff, buff_size);
         PageEntriesEdit edit = blob_store.write(std::move(wb));
@@ -1231,8 +1231,7 @@ try
             c_buff[j + i * buff_size] = static_cast<char>(buildV3Id(TEST_NAMESPACE_ID, page_id + j));
         }
 
-        ReadBufferPtr buff
-            = std::make_shared<ReadBufferFromMemory>(c_buff.data() + i * buff_size, buff_size);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff.data() + i * buff_size, buff_size);
         PageFieldSizes field_sizes{1, 2, 4, 8, (buff_size - 1 - 2 - 4 - 8)};
         WriteBatch wb;
         wb.putPage(page_id, /* tag */ 0, buff, buff_size, field_sizes);

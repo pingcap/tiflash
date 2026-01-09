@@ -209,7 +209,12 @@ public:
 
         size_t crc_buff_size = header_size - Format::CHECKSUM_START_OFFSET + payload_len;
         std::vector<char> crc_buff(crc_buff_size);
-        PageUtil::readFile(wr_file, header_offset + Format::CHECKSUM_START_OFFSET, crc_buff.data(), crc_buff_size, nullptr);
+        PageUtil::readFile(
+            wr_file,
+            header_offset + Format::CHECKSUM_START_OFFSET,
+            crc_buff.data(),
+            crc_buff_size,
+            nullptr);
 
         digest.update(crc_buff.data(), crc_buff_size);
 
