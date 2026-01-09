@@ -336,7 +336,7 @@ void runStackedSeekingTest()
             auto x = buffer->count(); // compressed position
             auto y = compression_buffer.offset(); // uncompressed position
             compression_buffer.write(slice.data(), slice.size());
-            slices.template emplace_back(std::move(slice), x, y);
+            slices.emplace_back(std::move(slice), x, y);
         }
     }
     {

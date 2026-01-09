@@ -1411,7 +1411,7 @@ struct RowFlaggedHashMapAdder
                 added_columns[j]->insertFrom(
                     *current->block->getByPosition(right_indexes[j]).column.get(),
                     current->row_num);
-            container.template push_back(reinterpret_cast<std::intptr_t>(current));
+            container.push_back(reinterpret_cast<std::intptr_t>(current));
         };
         if unlikely (
             probe_process_info.cache_columns_threshold > 0 && rows_joined >= probe_process_info.cache_columns_threshold)
