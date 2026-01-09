@@ -26,7 +26,7 @@
 
 #define InitCipherContext(ctx) \
     EVP_CIPHER_CTX ctx##_var;  \
-    ctx = &ctx##_var;          \
+    (ctx) = &ctx##_var;        \
     EVP_CIPHER_CTX_init(ctx);
 
 // do nothing
@@ -161,7 +161,7 @@ void OpenSSLCipher(
     uint64_t data_offset = 0;
     size_t remaining_data_size = data_size;
     int output_size = 0;
-    // Block size is always 16 bytes (128-bit) for AES and SM4
+    // Block size is always 16 bytes (128-bit) for AES
     assert(block_size == AES_BLOCK_SIZE);
     unsigned char partial_block[AES_BLOCK_SIZE];
 
@@ -252,7 +252,9 @@ void GMSSLSM4Cipher(
 
     uint64_t data_offset = 0;
     size_t remaining_data_size = data_size;
-    unsigned char partial_block[block_size];
+    // Block size is always 16 bytes (128-bit) for SM4
+    assert(block_size == SM4_BLOCK_SIZE);
+    unsigned char partial_block[SM4_BLOCK_SIZE];
 
     // In the following we assume the encrypt/decrypt process allow in and out buffer are
     // the same, to save one memcpy. This is not specified in official man page.
