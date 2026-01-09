@@ -109,33 +109,30 @@ try
     blob_store.registerPaths();
 
     {
-        blob_store.blob_stats.restoreByEntry(
-            PageEntryV3{
-                .file_id = file_id1,
-                .size = 128,
-                .padded_size = 0,
-                .tag = 0,
-                .offset = 1024,
-                .checksum = 0x4567,
-            });
-        blob_store.blob_stats.restoreByEntry(
-            PageEntryV3{
-                .file_id = file_id1,
-                .size = 512,
-                .padded_size = 0,
-                .tag = 0,
-                .offset = 2048,
-                .checksum = 0x4567,
-            });
-        blob_store.blob_stats.restoreByEntry(
-            PageEntryV3{
-                .file_id = file_id2,
-                .size = 512,
-                .padded_size = 0,
-                .tag = 0,
-                .offset = 2048,
-                .checksum = 0x4567,
-            });
+        blob_store.blob_stats.restoreByEntry(PageEntryV3{
+            .file_id = file_id1,
+            .size = 128,
+            .padded_size = 0,
+            .tag = 0,
+            .offset = 1024,
+            .checksum = 0x4567,
+        });
+        blob_store.blob_stats.restoreByEntry(PageEntryV3{
+            .file_id = file_id1,
+            .size = 512,
+            .padded_size = 0,
+            .tag = 0,
+            .offset = 2048,
+            .checksum = 0x4567,
+        });
+        blob_store.blob_stats.restoreByEntry(PageEntryV3{
+            .file_id = file_id2,
+            .size = 512,
+            .padded_size = 0,
+            .tag = 0,
+            .offset = 2048,
+            .checksum = 0x4567,
+        });
         blob_store.blob_stats.restore();
     }
 
@@ -237,15 +234,14 @@ try
         blob_store.registerPaths();
         for (const auto & id : blob_ids)
         {
-            blob_store.blob_stats.restoreByEntry(
-                PageEntryV3{
-                    .file_id = id,
-                    .size = 1024,
-                    .padded_size = 0,
-                    .tag = 0,
-                    .offset = 0,
-                    .checksum = 0x4567,
-                });
+            blob_store.blob_stats.restoreByEntry(PageEntryV3{
+                .file_id = id,
+                .size = 1024,
+                .padded_size = 0,
+                .tag = 0,
+                .offset = 0,
+                .checksum = 0x4567,
+            });
         }
     };
 
