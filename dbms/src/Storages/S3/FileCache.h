@@ -89,10 +89,12 @@ public:
 
     Status waitForNotEmpty();
 
-    void setSize(UInt64 size_)
+    void setComplete(UInt64 size_)
     {
         std::lock_guard lock(mtx);
         size = size_;
+        status = FileSegment::Status::Complete;
+        cv_ready.notify_all();
     }
 
     void setStatus(Status s)
@@ -101,6 +103,12 @@ public:
         status = s;
         if (status != Status::Empty)
             cv_ready.notify_all();
+    }
+
+    Status getStatus() const
+    {
+        std::lock_guard lock(mtx);
+        return status;
     }
 
     UInt64 getSize() const
@@ -131,12 +139,6 @@ public:
     {
         std::lock_guard lock(mtx);
         return (std::chrono::system_clock::now() - last_access_time) < sec;
-    }
-
-    Status getStatus() const
-    {
-        std::lock_guard lock(mtx);
-        return status;
     }
 
     auto getLastAccessTime() const
