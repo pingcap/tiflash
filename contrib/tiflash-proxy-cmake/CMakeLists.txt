@@ -48,6 +48,9 @@ file(GLOB_RECURSE _TIFLASH_PROXY_SRCS "${_TIFLASH_PROXY_SOURCE_DIR}/*.rs")
 # Build in the build directory instead of the default source directory
 set(TIFLASH_RUST_ENV "CARGO_TARGET_DIR=${CMAKE_CURRENT_BINARY_DIR}" ${TIFLASH_RUST_ENV})
 
+# Set CMAKE_POLICY_VERSION_MINIMUM to support CMake 4.0+ with older crate CMakeLists.txt files.
+set(TIFLASH_RUST_ENV "CMAKE_POLICY_VERSION_MINIMUM=3.5" ${TIFLASH_RUST_ENV})
+
 # use `CFLAGS=-w CXXFLAGS=-w` to inhibit warning messages.
 if (TIFLASH_LLVM_TOOLCHAIN)
     set(TIFLASH_RUST_ENV CMAKE=${CMAKE_COMMAND} "CFLAGS=-w -fuse-ld=lld" "CXXFLAGS=-w -fuse-ld=lld -stdlib=libc++" ${TIFLASH_RUST_ENV})
