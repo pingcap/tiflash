@@ -17,6 +17,8 @@
 #include <DataStreams/JSONEachRowRowInputStream.h>
 #include <IO/ReadHelpers.h>
 
+#include <vector>
+
 
 namespace DB
 {
@@ -100,8 +102,7 @@ bool JSONEachRowRowInputStream::read(MutableColumns & columns)
 
     /// Set of columns for which the values were read. The rest will be filled with default values.
     /// TODO Ability to provide your DEFAULTs.
-    bool read_columns[num_columns];
-    memset(read_columns, 0, num_columns);
+    std::vector<bool> read_columns(num_columns, false);
 
     bool first = true;
     while (true)

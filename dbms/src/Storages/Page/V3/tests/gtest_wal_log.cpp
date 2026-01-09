@@ -208,10 +208,10 @@ public:
         Format::ChecksumClass digest;
 
         size_t crc_buff_size = header_size - Format::CHECKSUM_START_OFFSET + payload_len;
-        char crc_buff[crc_buff_size];
-        PageUtil::readFile(wr_file, header_offset + Format::CHECKSUM_START_OFFSET, crc_buff, crc_buff_size, nullptr);
+        std::vector<char> crc_buff(crc_buff_size);
+        PageUtil::readFile(wr_file, header_offset + Format::CHECKSUM_START_OFFSET, crc_buff.data(), crc_buff_size, nullptr);
 
-        digest.update(crc_buff, crc_buff_size);
+        digest.update(crc_buff.data(), crc_buff_size);
 
         auto checksum = digest.checksum();
         PageUtil::writeFile(wr_file, header_offset, reinterpret_cast<char *>(&checksum), sizeof(checksum), nullptr);

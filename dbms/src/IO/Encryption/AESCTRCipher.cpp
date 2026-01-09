@@ -160,7 +160,8 @@ void OpenSSLCipher(
     uint64_t data_offset = 0;
     size_t remaining_data_size = data_size;
     int output_size = 0;
-    unsigned char partial_block[block_size];
+    // Block size is always 16 bytes (128-bit) for AES and SM4
+    unsigned char partial_block[16];
 
     int ret = 1;
     EVP_CIPHER_CTX * ctx = nullptr;

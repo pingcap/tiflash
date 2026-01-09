@@ -685,9 +685,9 @@ std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::Res
     try
     {
         if constexpr (only_lookup)
-            return state.template findKey(method.data, key_holder, hashval);
+            return state.findKey(method.data, key_holder, hashval);
         else
-            return state.template emplaceKey(method.data, key_holder, hashval);
+            return state.emplaceKey(method.data, key_holder, hashval);
     }
     catch (ResizeException &)
     {
@@ -704,9 +704,9 @@ std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::Res
     try
     {
         if constexpr (only_lookup)
-            return state.template findKey(method.data, key_holder);
+            return state.findKey(method.data, key_holder);
         else
-            return state.template emplaceKey(method.data, key_holder);
+            return state.emplaceKey(method.data, key_holder);
     }
     catch (ResizeException &)
     {

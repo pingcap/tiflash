@@ -102,10 +102,10 @@ try
     size_t buff_size = 100ul * 1024;
     const size_t rate_target = buff_size - 1;
 
-    char c_buff[wb_nums * buff_size];
+    std::vector<char> c_buff(wb_nums * buff_size);
 
-    WriteBatch wbs[wb_nums];
-    u128::PageEntriesEdit edits[wb_nums];
+    std::vector<WriteBatch> wbs(wb_nums);
+    std::vector<u128::PageEntriesEdit> edits(wb_nums);
 
     for (size_t i = 0; i < wb_nums; ++i)
     {
@@ -115,7 +115,7 @@ try
         }
 
         ReadBufferPtr buff
-            = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
+            = std::make_shared<ReadBufferFromMemory>(c_buff.data() + i * buff_size, buff_size);
         wbs[i].putPage(page_id + i, /* tag */ 0, buff, buff_size);
     }
     WriteLimiterPtr write_limiter = std::make_shared<WriteLimiter>(rate_target, LimiterType::UNKNOW, 20);

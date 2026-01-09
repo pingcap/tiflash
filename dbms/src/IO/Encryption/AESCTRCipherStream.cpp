@@ -43,7 +43,8 @@ void AESCTRCipherStream::encrypt(UInt64 file_offset, char * data, size_t data_si
 {
     const size_t block_size = DB::Encryption::blockSize(method);
     UInt64 block_index = file_offset / block_size;
-    unsigned char iv[block_size];
+    // IV is always 16 bytes (128-bit) for AES and SM4
+    unsigned char iv[16];
     initIV(block_index, iv);
     DB::Encryption::Cipher(file_offset, data, data_size, key, method, iv, /*is_encrypt=*/true);
 }
@@ -52,7 +53,8 @@ void AESCTRCipherStream::decrypt(UInt64 file_offset, char * data, size_t data_si
 {
     const size_t block_size = DB::Encryption::blockSize(method);
     UInt64 block_index = file_offset / block_size;
-    unsigned char iv[block_size];
+    // IV is always 16 bytes (128-bit) for AES and SM4
+    unsigned char iv[16];
     initIV(block_index, iv);
     DB::Encryption::Cipher(file_offset, data, data_size, key, method, iv, /*is_encrypt=*/false);
 }

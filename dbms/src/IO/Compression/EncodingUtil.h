@@ -134,10 +134,10 @@ void FORDecoding(const char * src, UInt32 source_size, char * dest, UInt32 dest_
     if (round_size != count)
     {
         // Reserve enough space for the temporary buffer.
-        unsigned char tmp_buffer[round_size * BYTES_SIZE];
-        BitpackingPrimitives::unPackBuffer<T>(tmp_buffer, reinterpret_cast<const unsigned char *>(src), count, width);
-        applyFrameOfReference(reinterpret_cast<T *>(tmp_buffer), frame_of_reference, count);
-        memcpy(dest, tmp_buffer, dest_size);
+        std::vector<unsigned char> tmp_buffer(round_size * BYTES_SIZE);
+        BitpackingPrimitives::unPackBuffer<T>(tmp_buffer.data(), reinterpret_cast<const unsigned char *>(src), count, width);
+        applyFrameOfReference(reinterpret_cast<T *>(tmp_buffer.data()), frame_of_reference, count);
+        memcpy(dest, tmp_buffer.data(), dest_size);
         return;
     }
     BitpackingPrimitives::unPackBuffer<T>(
