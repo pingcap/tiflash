@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/TiFlashException.h>
 #include <IO/Encryption/AESCTRCipher.h>
+#include <openssl/aes.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
 
@@ -161,7 +162,8 @@ void OpenSSLCipher(
     size_t remaining_data_size = data_size;
     int output_size = 0;
     // Block size is always 16 bytes (128-bit) for AES and SM4
-    unsigned char partial_block[16];
+    assert(block_size == AES_BLOCK_SIZE);
+    unsigned char partial_block[AES_BLOCK_SIZE];
 
     int ret = 1;
     EVP_CIPHER_CTX * ctx = nullptr;
