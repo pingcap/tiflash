@@ -49,7 +49,6 @@ public:
     {
         for (size_t i = 0; i < this->partition_num; i++)
         {
-            this->partitions[i].mu_for_test = std::make_unique<std::mutex>();
             this->partitions[i].cv_for_test = std::make_unique<std::condition_variable>();
         }
     }
@@ -184,6 +183,8 @@ public:
 
     CTEPartition & getPartitionForTest(size_t partition_idx) { return this->partitions[partition_idx]; }
 
+    std::shared_mutex * getRWLockForTest() { return &(this->rw_lock); }
+
 private:
     template <bool need_lock>
     CTEOpStatus checkBlockAvailableImpl(size_t cte_reader_id, size_t partition_id)
@@ -239,6 +240,9 @@ private:
     const size_t partition_num;
     std::vector<CTEPartition> partitions;
 
+    // Protect fields:
+    //   next_cte_reader_id, is_eof, is_cancelled, get_resp, resp, err_msg,
+    //   sink_exit_num, source_exit_num, registered_sink_num
     std::shared_mutex rw_lock;
     size_t next_cte_reader_id = 0;
     bool is_eof = false;
