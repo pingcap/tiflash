@@ -1259,8 +1259,8 @@ try
 
         proxy_machine.runKVStore(tmt_context);
 
-        auto tici_reader_addr = config().getString("tici.reader_node.addr", "");
-        auto tici_reader_port = config().getInt("tici.reader_node.port", 0);
+        auto tici_reader_addr = config().getString("tici.reader-node.addr", "");
+        auto tici_reader_port = config().getInt("tici.reader-node.port", 0);
         if (!tici_reader_addr.empty() || tici_reader_port > 0)
         {
             Stopwatch watch;
