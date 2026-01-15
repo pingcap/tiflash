@@ -17,10 +17,16 @@
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
+#include <Storages/IManageableStorage.h>
+#include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/Types.h>
+#include <Storages/StorageDeltaMerge.h>
 #include <Storages/registerStorages.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <TiDB/Schema/TiDB.h>
+
+#include <memory>
 
 namespace DB::tests
 {
@@ -160,6 +166,83 @@ try
     for (auto & thread : threads)
     {
         thread.join();
+    }
+}
+CATCH
+
+TEST_F(InterperCreateQueryTiFlashTest, DifferentOriDefaultValue)
+try
+{
+    {
+        String stmt = R"stmt(CREATE TABLE t_130 (
+    a Int32,
+    b Nullable(Int32),
+    site_code StringV2,
+    _tidb_rowid Int64
+) ENGINE = DeltaMerge(_tidb_rowid, '{"cols":[{"id":1,"name":{"L":"a","O":"a"},"offset":0,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":3,"Flen":11,"Tp":3}},{"id":2,"name":{"L":"b","O":"b"},"offset":1,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":0,"Flen":11,"Tp":3}},{"default":"","id":3,"name":{"L":"site_code","O":"site_code"},"offset":2,"origin_default":"100","state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Flag":3,"Flen":64,"Tp":15}}],"id":130,"index_info":[{"id":1,"idx_cols":[{"length":-1,"name":{"L":"a","O":"a"},"offset":0},{"length":-1,"name":{"L":"site_code","O":"site_code"},"offset":2}],"idx_name":{"L":"primary","O":"primary"},"index_type":1,"is_global":false,"is_invisible":false,"is_primary":true,"is_unique":true,"state":5}],"is_common_handle":false,"keyspace_id":4294967295,"name":{"L":"t1","O":"t1"},"pk_is_handle":false,"state":5,"tiflash_replica":{"Available":true,"Count":1},"update_timestamp":463590354027544590}', 0))stmt";
+        auto ast = getASTCreateQuery(stmt);
+        InterpreterCreateQuery interpreter(ast, context);
+        interpreter.setInternal(true);
+        interpreter.setForceRestoreData(false);
+        interpreter.execute();
+        // check table exist
+        auto & tmt = context.getTMTContext();
+        auto s = tmt.getStorages().get(TiDB::NullspaceID, 130);
+        ASSERT_NE(s, nullptr);
+
+        // When reading from a non-existent column, the default value is filled by `DB::DM::createColumnWithDefaultValue`
+        // So here we check whether the default value in ColumnDefine is correctly set according to the `origin_default` in table info.
+        DM::DeltaMergeStorePtr store = std::dynamic_pointer_cast<StorageDeltaMerge>(s)->getStore();
+        auto col_defs = store->getStoreColumns();
+        bool col_found = false;
+        for (const auto & col_def : *col_defs)
+        {
+            if (col_def.name == "site_code")
+            {
+                col_found = true;
+                // check default value
+                auto default_value = col_def.default_value;
+                ASSERT_EQ(default_value.getType(), Field::Types::String);
+                ASSERT_EQ(default_value.get<String>(), "100");
+            }
+        }
+        ASSERT_TRUE(col_found);
+    }
+    {
+        // Similar as above, but the `origin_default` of `site_code` is different.
+        String stmt = R"stmt(CREATE TABLE t_139 (
+    a Int32,
+    b Nullable(Int32),
+    site_code StringV2,
+    _tidb_rowid Int64
+) ENGINE = DeltaMerge(_tidb_rowid, '{"cols":[{"id":1,"name":{"L":"a","O":"a"},"offset":0,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":3,"Flen":11,"Tp":3}},{"id":2,"name":{"L":"b","O":"b"},"offset":1,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":0,"Flen":11,"Tp":3}},{"default":"","id":3,"name":{"L":"site_code","O":"site_code"},"offset":2,"origin_default":"200","state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Flag":3,"Flen":64,"Tp":15}}],"id":139,"index_info":[{"id":1,"idx_cols":[{"length":-1,"name":{"L":"a","O":"a"},"offset":0},{"length":-1,"name":{"L":"site_code","O":"site_code"},"offset":2}],"idx_name":{"L":"primary","O":"primary"},"index_type":1,"is_global":false,"is_invisible":false,"is_primary":true,"is_unique":true,"state":5}],"is_common_handle":false,"keyspace_id":4294967295,"name":{"L":"t1","O":"t1"},"pk_is_handle":false,"state":5,"tiflash_replica":{"Available":true,"Count":1},"update_timestamp":463590371866443800}', 0))stmt";
+        auto ast = getASTCreateQuery(stmt);
+        InterpreterCreateQuery interpreter(ast, context);
+        interpreter.setInternal(true);
+        interpreter.setForceRestoreData(false);
+        interpreter.execute();
+        // check table exist
+        auto & tmt = context.getTMTContext();
+        auto s = tmt.getStorages().get(TiDB::NullspaceID, 139);
+        ASSERT_NE(s, nullptr);
+
+        // When reading from a non-existent column, the default value is filled by `DB::DM::createColumnWithDefaultValue`
+        // So here we check whether the default value in ColumnDefine is correctly set according to the `origin_default` in table info.
+        DM::DeltaMergeStorePtr store = std::dynamic_pointer_cast<StorageDeltaMerge>(s)->getStore();
+        auto col_defs = store->getStoreColumns();
+        bool col_found = false;
+        for (const auto & col_def : *col_defs)
+        {
+            if (col_def.name == "site_code")
+            {
+                col_found = true;
+                // check default value
+                auto default_value = col_def.default_value;
+                ASSERT_EQ(default_value.getType(), Field::Types::String);
+                ASSERT_EQ(default_value.get<String>(), "200");
+            }
+        }
+        ASSERT_TRUE(col_found);
     }
 }
 CATCH
