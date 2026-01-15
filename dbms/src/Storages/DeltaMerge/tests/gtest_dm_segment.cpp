@@ -1812,7 +1812,11 @@ try
     const String new_column_name = "i8";
     const ColumnID new_column_id = 4;
     const Int8 new_column_default_value_int = 16;
-    ColumnDefine new_column_define(new_column_id, new_column_name, typeFromString("Int8"),toField(new_column_default_value_int));
+    ColumnDefine new_column_define(
+        new_column_id,
+        new_column_name,
+        typeFromString("Int8"),
+        toField(new_column_default_value_int));
 
     const auto [write_type, flush_before_ddl] = GetParam();
 

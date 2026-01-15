@@ -146,7 +146,7 @@ try
                     auto col_3 = table_info.getColumnInfo(3);
                     ASSERT_EQ(col_3.tp, TiDB::TP::TypeVarchar);
                     ASSERT_TRUE(col_3.hasNotNullFlag());
-                    // The "original_default" is "100", which is used for filling default value for old rows that is inserted before this column is added.
+                    // The "origin_default" is "100", which is used for filling default value for old rows that is inserted before this column is added.
                     ASSERT_EQ(col_3.defaultValueToField().get<String>(), "100");
                 }},
             ParseCase{
@@ -159,7 +159,7 @@ try
                     auto col_3 = table_info.getColumnInfo(3);
                     ASSERT_EQ(col_3.tp, TiDB::TP::TypeVarchar);
                     ASSERT_TRUE(col_3.hasNotNullFlag());
-                    // The "original_default" is "200", which is used for filling default value for old rows that is inserted before this column is added.
+                    // The "origin_default" is "200", which is used for filling default value for old rows that is inserted before this column is added.
                     ASSERT_EQ(col_3.defaultValueToField().get<String>(), "200");
                 }},
     };
