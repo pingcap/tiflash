@@ -183,7 +183,7 @@ public:
 
     CTEPartition & getPartitionForTest(size_t partition_idx) { return this->partitions[partition_idx]; }
 
-    std::shared_mutex * getRWLockForTest() { return &(this->rw_lock); }
+    std::shared_mutex & getRWLockForTest() { return this->rw_lock; }
 
 private:
     template <bool need_lock>

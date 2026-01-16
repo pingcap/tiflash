@@ -39,8 +39,8 @@ CTEOpStatus CTEReader::fetchNextBlock(size_t source_id, Block & block)
 CTEOpStatus CTEReader::waitForBlockAvailableForTest(size_t partition_idx)
 {
     auto & partition = this->cte->getPartitionForTest(partition_idx);
-    auto * cte_rw_lock = this->cte->getRWLockForTest();
-    std::shared_lock<std::shared_mutex> rw_lock(*cte_rw_lock);
+    auto & cte_rw_lock = this->cte->getRWLockForTest();
+    std::shared_lock<std::shared_mutex> rw_lock(cte_rw_lock);
     std::unique_lock<std::mutex> lock(*(partition.mu));
     while (true)
     {
