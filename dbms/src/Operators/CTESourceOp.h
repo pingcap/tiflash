@@ -58,11 +58,12 @@ public:
         const NamesAndTypes & schema,
         const String & query_id_and_cte_id_)
         : SourceOp(exec_context_, req_id)
+        , query_id_and_cte_id(query_id_and_cte_id_)
         , cte_reader(cte_reader_)
         , io_profile_info(IOProfileInfo::createForRemote(profile_info_ptr, 1))
         , id(id_)
         , notifier(this->cte_reader->getCTE(), this->cte_reader->getID(), this->id)
-        , query_id_and_cte_id(query_id_and_cte_id_)
+        , io_notifier(this->cte_reader->getCTE(), this->id)
     {
         setHeader(Block(getColumnWithTypeAndName(schema)));
     }
@@ -74,6 +75,7 @@ protected:
     void operateSuffixImpl() override;
 
     OperatorStatus readImpl(Block & block) override;
+    OperatorStatus executeIOImpl() override;
 
     OperatorStatus awaitImpl() override
     {
@@ -88,13 +90,17 @@ protected:
     }
 
 private:
+    String query_id_and_cte_id;
+    Block block_from_disk;
+
     std::shared_ptr<CTEReader> cte_reader;
     uint64_t total_rows{};
+
     IOProfileInfoPtr io_profile_info;
     tipb::SelectResponse resp;
     size_t id;
     CTESourceNotifyFuture notifier;
+    CTEIONotifier io_notifier;
     Stopwatch sw;
-    String query_id_and_cte_id;
 };
 } // namespace DB

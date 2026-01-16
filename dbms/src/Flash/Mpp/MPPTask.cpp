@@ -43,7 +43,6 @@
 #include <ext/scope_guard.h>
 #include <magic_enum.hpp>
 
-
 namespace DB
 {
 namespace ErrorCodes

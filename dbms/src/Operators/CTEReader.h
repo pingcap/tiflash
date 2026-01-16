@@ -22,6 +22,7 @@
 #include <Operators/CTE.h>
 #include <tipb/select.pb.h>
 
+#include <atomic>
 #include <memory>
 #include <mutex>
 
@@ -39,6 +40,14 @@ public:
         RUNTIME_CHECK(cte);
     }
 
+    // TODO remove --------------
+    std::atomic_size_t total_fetch_blocks = 0;
+    std::atomic_size_t total_fetch_rows = 0;
+
+    std::atomic_size_t total_fetch_from_mem = 0;
+    std::atomic_size_t total_fetch_from_disk = 0;
+    // --------------
+
     // For Test
     CTEReader(const String & query_id_and_cte_id_, CTEManager * cte_manager_, std::shared_ptr<CTE> cte_)
         : query_id_and_cte_id(query_id_and_cte_id_)
@@ -51,9 +60,22 @@ public:
     {
         this->cte.reset();
         this->cte_manager->releaseCTEBySource(this->query_id_and_cte_id);
+
+        // TODO remove it
+        auto * log = &Poco::Logger::get("LRUCache");
+        LOG_INFO(
+            log,
+            fmt::format(
+                "xzxdebug CTEReader {} fb: {} fr: {}, from mem: {}, from disk: {}",
+                this->cte_reader_id,
+                this->total_fetch_blocks.load(),
+                this->total_fetch_rows.load(),
+                this->total_fetch_from_mem.load(),
+                this->total_fetch_from_disk.load()));
     }
 
     CTEOpStatus fetchNextBlock(size_t source_id, Block & block);
+    CTEOpStatus fetchBlockFromDisk(size_t source_id, Block & block);
 
     bool getResp(tipb::SelectResponse & resp)
     {
@@ -81,5 +103,7 @@ private:
     std::mutex mu;
     bool resp_fetched = false;
     tipb::SelectResponse resp;
+
+    std::atomic_bool is_first_log = false;
 };
 } // namespace DB

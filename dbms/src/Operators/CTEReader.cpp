@@ -31,18 +31,47 @@ CTEOpStatus CTEReader::fetchNextBlock(size_t source_id, Block & block)
         if (this->resp.execution_summaries_size() == 0)
             this->cte->tryToGetResp(this->resp);
     }
-    default:
+    case CTEOpStatus::WAIT_SPILL:
+    case CTEOpStatus::NEED_SPILL:
+    case CTEOpStatus::IO_IN:
+    case CTEOpStatus::SINK_NOT_REGISTERED:
+    case CTEOpStatus::BLOCK_NOT_AVAILABLE:
+    case CTEOpStatus::CANCELLED:
+        // TODO merge
+        return ret;
+    case CTEOpStatus::OK:
+        // TODO remove
+        this->total_fetch_blocks.fetch_add(1);
+        this->total_fetch_rows.fetch_add(block.rows());
+        this->total_fetch_from_mem.fetch_add(1);
         return ret;
     }
+    throw Exception("Should not reach here");
+}
+
+CTEOpStatus CTEReader::fetchBlockFromDisk(size_t source_id, Block & block)
+{
+    bool expected_bool = false;
+    if (this->is_first_log.compare_exchange_weak(expected_bool, true))
+        LOG_INFO(this->cte->getLog(), "Begin restore data from disk for cte.");
+    auto ret = this->cte->getBlockFromDisk(this->cte_reader_id, source_id, block);
+    if (block)
+    {
+        // TODO remove
+        this->total_fetch_blocks.fetch_add(1);
+        this->total_fetch_rows.fetch_add(block.rows());
+        this->total_fetch_from_disk.fetch_add(1);
+    }
+    return ret;
 }
 
 CTEOpStatus CTEReader::waitForBlockAvailableForTest(size_t partition_idx)
 {
     auto & partition = this->cte->getPartitionForTest(partition_idx);
-    std::unique_lock<std::mutex> lock(*(partition.mu_for_test));
+    std::unique_lock<std::mutex> lock(*(partition->mu_for_test));
     while (true)
     {
-        partition.cv_for_test->wait(lock);
+        partition->cv_for_test->wait(lock);
         auto status = this->cte->checkBlockAvailable(this->cte_reader_id, partition_idx);
         switch (status)
         {
