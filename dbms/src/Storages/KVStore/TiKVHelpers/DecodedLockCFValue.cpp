@@ -48,6 +48,10 @@ namespace RecordKVFormat
     case LockType::Pessimistic:
         lock_type = kvrpcpb::Op::PessimisticLock;
         break;
+    case LockType::Shared:
+        // Skip parsing shared locks as they do not block any read requests.
+        res.lock_type = kvrpcpb::Op::SharedLock;
+        return inner;
     }
     res.lock_type = lock_type;
     res.primary_lock = readVarString<std::string_view>(data, len);
@@ -244,7 +248,8 @@ void DecodedLockCFValue::Inner::getLockInfoPtr(
     LockInfoPtr & res) const
 {
     res = nullptr;
-    if (lock_version > query.read_tso || lock_type == kvrpcpb::Op::Lock || lock_type == kvrpcpb::Op::PessimisticLock)
+    if (lock_version > query.read_tso || lock_type == kvrpcpb::Op::Lock || lock_type == kvrpcpb::Op::PessimisticLock
+        || lock_type == kvrpcpb::Op::SharedLock)
         return;
     if (min_commit_ts > query.read_tso)
         return;

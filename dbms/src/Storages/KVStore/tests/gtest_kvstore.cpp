@@ -721,6 +721,19 @@ TEST_F(RegionKVStoreOldTest, RegionReadWrite)
         region->clearAllData();
     }
     {
+        region->insertFromSnap(
+            tmt,
+            "lock",
+            RecordKVFormat::genKey(table_id, 3),
+            RecordKVFormat::encodeLockCfValue(RecordKVFormat::LockType::Shared, "PK", 3, 20, nullptr, 5));
+        {
+            auto iter = region->createCommittedScanner(true, true);
+            auto lock = iter.getLockInfo({100, nullptr});
+            ASSERT_EQ(lock, nullptr);
+        }
+        region->clearAllData();
+    }
+    {
         // Test duplicate and tryCompactionFilter
         region->insertFromSnap(
             tmt,
