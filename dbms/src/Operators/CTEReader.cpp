@@ -36,9 +36,9 @@ CTEOpStatus CTEReader::fetchNextBlock(size_t source_id, Block & block)
     }
 }
 
+#ifndef NDEBUG
 CTEOpStatus CTEReader::waitForBlockAvailableForTest(size_t partition_idx)
 {
-#ifndef NDEBUG
     auto & partition = this->cte->getPartitionForTest(partition_idx);
     std::unique_lock<std::mutex> lock(*(partition.mu_for_test));
     while (true)
@@ -57,8 +57,6 @@ CTEOpStatus CTEReader::waitForBlockAvailableForTest(size_t partition_idx)
             throw Exception("Should not reach here");
         }
     }
-#else
-    throw Exception("waitForBlockAvailableForTest is only available in debug builds");
-#endif
 }
+#endif
 } // namespace DB
