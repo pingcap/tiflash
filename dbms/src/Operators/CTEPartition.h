@@ -49,7 +49,9 @@ struct CTEPartition
     size_t memory_usages = 0;
     std::unique_ptr<PipeConditionVariable> pipe_cv;
 
+#ifndef NDEBUG
     std::unique_ptr<std::mutex> mu_for_test;
     std::unique_ptr<std::condition_variable> cv_for_test;
+#endif
 };
 } // namespace DB
