@@ -70,7 +70,9 @@ public:
 
     bool areAllSinksRegistered() { return this->cte->areAllSinksRegistered<true>(); }
 
+#ifndef NDEBUG
     CTEOpStatus waitForBlockAvailableForTest(size_t partition_idx);
+#endif
 
 private:
     String query_id_and_cte_id;
