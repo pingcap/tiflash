@@ -1866,9 +1866,7 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
     while (data_index < rows)
     {
         if likely (data_index + agg_prefetch_step < rows)
-        {
             __builtin_prefetch(*places[data_index + agg_prefetch_step]);
-        }
 
         insertAggregatesIntoColumns(*places[data_index], final_aggregate_columns_vec[key_columns_vec_index], arena);
         ++data_index;
