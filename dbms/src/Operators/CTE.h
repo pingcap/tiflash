@@ -47,10 +47,12 @@ public:
 
     void initForTest()
     {
+#ifndef NDEBUG
         for (size_t i = 0; i < this->partition_num; i++)
         {
             this->partitions[i].cv_for_test = std::make_unique<std::condition_variable>();
         }
+#endif
     }
 
     size_t getCTEReaderID()
@@ -88,7 +90,9 @@ public:
     }
 
     void checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_id, size_t partition_id);
+#ifndef NDEBUG
     CTEOpStatus checkBlockAvailableForTest(size_t cte_reader_id, size_t partition_id);
+#endif
 
     void registerTask(size_t partition_id, TaskPtr && task, NotifyType type);
     void notifyTaskDirectly(size_t partition_id, TaskPtr && task)
@@ -181,7 +185,9 @@ public:
         return this->checkBlockAvailableImpl<false>(cte_reader_id, partition_id);
     }
 
+#ifndef NDEBUG
     CTEPartition & getPartitionForTest(size_t partition_idx) { return this->partitions[partition_idx]; }
+#endif
 
     std::shared_mutex & getRWLockForTest() { return this->rw_lock; }
 
@@ -231,7 +237,11 @@ private:
         for (auto & partition : this->partitions)
         {
             if constexpr (for_test)
+            {
+#ifndef NDEBUG
                 partition.cv_for_test->notify_all();
+#endif
+            }
             else
                 partition.pipe_cv->notifyAll();
         }

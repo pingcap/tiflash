@@ -58,7 +58,11 @@ bool CTE::pushBlock(size_t partition_id, const Block & block)
     this->partitions[partition_id].blocks.push_back(
         BlockWithCounter(block, static_cast<Int16>(this->expected_source_num)));
     if constexpr (for_test)
+    {
+#ifndef NDEBUG
         this->partitions[partition_id].cv_for_test->notify_all();
+#endif
+    }
     else
         this->partitions[partition_id].pipe_cv->notifyAll();
     return true;
@@ -85,12 +89,14 @@ void CTE::checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_
     this->notifyTaskDirectly(partition_id, std::move(task));
 }
 
+#ifndef NDEBUG
 CTEOpStatus CTE::checkBlockAvailableForTest(size_t cte_reader_id, size_t partition_id)
 {
     std::shared_lock<std::shared_mutex> rw_lock(this->rw_lock);
     std::lock_guard<std::mutex> lock(*this->partitions[partition_id].mu);
     return this->checkBlockAvailableNoLock(cte_reader_id, partition_id);
 }
+#endif
 
 template bool CTE::pushBlock<true>(size_t, const Block &);
 template bool CTE::pushBlock<false>(size_t, const Block &);

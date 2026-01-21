@@ -2023,9 +2023,8 @@ void DeltaMergeStore::applySchemaChanges(TiDB::TableInfo & table_info)
         if (iter == original_columns_index_map.end())
         {
             // create a new column
-            ColumnDefine define(column.id, column.name, getDataTypeByColumnInfo(column));
-            define.default_value = column.defaultValueToField();
-            new_original_table_columns.emplace_back(std::move(define));
+            new_original_table_columns.emplace_back(
+                ColumnDefine(column.id, column.name, getDataTypeByColumnInfo(column), column.defaultValueToField()));
         }
         else
         {

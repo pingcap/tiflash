@@ -36,6 +36,7 @@ CTEOpStatus CTEReader::fetchNextBlock(size_t source_id, Block & block)
     }
 }
 
+#ifndef NDEBUG
 CTEOpStatus CTEReader::waitForBlockAvailableForTest(size_t partition_idx)
 {
     auto & partition = this->cte->getPartitionForTest(partition_idx);
@@ -68,4 +69,5 @@ CTEOpStatus CTEReader::waitForBlockAvailableForTest(size_t partition_idx)
         lock.lock();
     }
 }
+#endif
 } // namespace DB
