@@ -1814,7 +1814,7 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
 
     size_t data_index = 0;
     const auto rows = data.size();
-    std::unique_ptr<AggregateDataPtr *[]> places(new AggregateDataPtr*[rows]);
+    std::unique_ptr<AggregateDataPtr *[]> places(new AggregateDataPtr *[rows]);
 
     PaddedPODArray<char *> key_places;
     if constexpr (batch_deserialize_key)
