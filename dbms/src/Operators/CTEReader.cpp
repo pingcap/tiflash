@@ -40,11 +40,12 @@ CTEOpStatus CTEReader::fetchNextBlock(size_t source_id, Block & block)
 CTEOpStatus CTEReader::waitForBlockAvailableForTest(size_t partition_idx)
 {
     auto & partition = this->cte->getPartitionForTest(partition_idx);
-    std::unique_lock<std::mutex> lock(*(partition.mu_for_test));
+    auto & cte_rw_lock = this->cte->getRWLockForTest();
+    std::shared_lock<std::shared_mutex> rw_lock(cte_rw_lock);
+    std::unique_lock<std::mutex> lock(*(partition.mu));
     while (true)
     {
-        partition.cv_for_test->wait(lock);
-        auto status = this->cte->checkBlockAvailable(this->cte_reader_id, partition_idx);
+        auto status = this->cte->checkBlockAvailableNoLock(this->cte_reader_id, partition_idx);
         switch (status)
         {
         case CTEOpStatus::BLOCK_NOT_AVAILABLE:
@@ -56,6 +57,16 @@ CTEOpStatus CTEReader::waitForBlockAvailableForTest(size_t partition_idx)
         default:
             throw Exception("Should not reach here");
         }
+        rw_lock.unlock();
+        partition.cv_for_test->wait(lock);
+        lock.unlock();
+
+        // ensure rw_lock to get lock first, or we will encounter deadlock
+        // For example: in `CTE::tryGetBlockAt`, we will lock rw_lock first then lock partition.mu.
+        // If locking partition.mu first here, `CTE::tryGetBlockAt` may have locked rw_lock. Then
+        // each of them needs to lock the other lock, but the other lock has been locked now.
+        rw_lock.lock();
+        lock.lock();
     }
 }
 #endif
