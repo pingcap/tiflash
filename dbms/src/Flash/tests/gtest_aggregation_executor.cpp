@@ -840,11 +840,8 @@ try
 
     auto agg_func = makeASTFunction("uniqRawRes", col("v"));
     const auto agg_name = agg_func->getColumnName();
-    auto request = buildDAGRequest(
-        std::make_pair("test_db", "agg_empty_string_key"),
-        {agg_func},
-        {col("k")},
-        {agg_name, "k"});
+    auto request
+        = buildDAGRequest(std::make_pair("test_db", "agg_empty_string_key"), {agg_func}, {col("k")}, {agg_name, "k"});
 
     WRAP_FOR_AGG_FAILPOINTS_START
     // Raw serialized state can vary by insertion order, so only check row count.
