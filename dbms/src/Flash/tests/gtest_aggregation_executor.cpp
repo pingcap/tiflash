@@ -827,6 +827,32 @@ try
 }
 CATCH
 
+TEST_F(AggExecutorTestRunner, AggEmptyStringKeyUniqRawRes)
+try
+{
+    // Keep empty-string keys to hit StringHashMap::m0 (regression for double-destroy in final output).
+    context.addMockTable(
+        {"test_db", "agg_empty_string_key"},
+        {{"k", TiDB::TP::TypeString, false}, {"v", TiDB::TP::TypeString, false}},
+        {toVec<String>("k", {"", "", "", ""}), toVec<String>("v", {"a", "b", "b", "c"})});
+
+    context.setCollation(0);
+
+    auto agg_func = makeASTFunction("uniqRawRes", col("v"));
+    const auto agg_name = agg_func->getColumnName();
+    auto request = buildDAGRequest(
+        std::make_pair("test_db", "agg_empty_string_key"),
+        {agg_func},
+        {col("k")},
+        {agg_name, "k"});
+
+    WRAP_FOR_AGG_FAILPOINTS_START
+    // Raw serialized state can vary by insertion order, so only check row count.
+    executeAndAssertRowsEqual(request, 1);
+    WRAP_FOR_AGG_FAILPOINTS_END
+}
+CATCH
+
 TEST_F(AggExecutorTestRunner, SplitAggOutput)
 try
 {
