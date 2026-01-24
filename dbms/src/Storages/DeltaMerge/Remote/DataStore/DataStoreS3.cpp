@@ -71,8 +71,7 @@ void DataStoreS3::putDMFileLocalFiles(
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
 
     // First, upload non-meta files.
-    std::vector<std::future<void>> upload_results;
-    upload_results.reserve(local_files.size() - 1);
+    IOPoolHelper::FutureContainer upload_results(log, local_files.size());
     for (const auto & fname : local_files)
     {
         if (DMFileMetaV2::isMetaFileName(fname))
@@ -80,24 +79,25 @@ void DataStoreS3::putDMFileLocalFiles(
 
         auto local_fname = fmt::format("{}/{}", local_dir, fname);
         auto remote_fname = fmt::format("{}/{}", remote_dir, fname);
-        auto task = std::make_shared<std::packaged_task<void()>>(
-            [&, local_fname = std::move(local_fname), remote_fname = std::move(remote_fname)]() -> void {
-                S3::uploadFile(
-                    *s3_client,
-                    local_fname,
-                    remote_fname,
-                    EncryptionPath(local_dir, fname, oid.keyspace_id),
-                    file_provider);
+        auto encryption_path = EncryptionPath(local_dir, fname, oid.keyspace_id);
+        // Capture shared resources by value in tasks to avoid dangling references on early errors.
+        auto task = std::make_shared<std::packaged_task<void()>>( //
+            [s3_client,
+             provider = file_provider,
+             local_fname = std::move(local_fname),
+             remote_fname = std::move(remote_fname),
+             encryption_path = std::move(encryption_path)]() -> void {
+                S3::uploadFile(*s3_client, local_fname, remote_fname, encryption_path, provider);
             });
-        upload_results.push_back(task->get_future());
+        upload_results.add(task->get_future());
         DataStoreS3Pool::get().scheduleOrThrowOnError([task]() { (*task)(); });
     }
-    for (auto & f : upload_results)
-        f.get();
+    // Wait for all tasks to finish before returning to keep captured resources alive.
+    upload_results.getAllResults();
 
     // Then, upload meta files.
     // Only when the meta upload is successful, the dmfile upload can be considered successful.
-    upload_results.clear();
+    IOPoolHelper::FutureContainer meta_upload_results(log, local_files.size());
     for (const auto & fname : local_files)
     {
         if (!DMFileMetaV2::isMetaFileName(fname))
@@ -105,20 +105,21 @@ void DataStoreS3::putDMFileLocalFiles(
 
         auto local_fname = fmt::format("{}/{}", local_dir, fname);
         auto remote_fname = fmt::format("{}/{}", remote_dir, fname);
-        auto task = std::make_shared<std::packaged_task<void()>>(
-            [&, local_fname = std::move(local_fname), remote_fname = std::move(remote_fname)]() {
-                S3::uploadFile(
-                    *s3_client,
-                    local_fname,
-                    remote_fname,
-                    EncryptionPath(local_dir, fname, oid.keyspace_id),
-                    file_provider);
+        auto encryption_path = EncryptionPath(local_dir, fname, oid.keyspace_id);
+        // Capture shared resources by value in tasks to avoid dangling references on early errors.
+        auto task = std::make_shared<std::packaged_task<void()>>( //
+            [s3_client,
+             provider = file_provider,
+             local_fname = std::move(local_fname),
+             remote_fname = std::move(remote_fname),
+             encryption_path = std::move(encryption_path)]() {
+                S3::uploadFile(*s3_client, local_fname, remote_fname, encryption_path, provider);
             });
-        upload_results.push_back(task->get_future());
+        meta_upload_results.add(task->get_future());
         DataStoreS3Pool::get().scheduleOrThrowOnError([task]() { (*task)(); });
     }
-    for (auto & f : upload_results)
-        f.get();
+    // Wait for all tasks to finish before returning to keep captured resources alive.
+    meta_upload_results.getAllResults();
 
     LOG_INFO(log, "Upload DMFile finished, key={}, cost={}ms", remote_dir, sw.elapsedMilliseconds());
 }
