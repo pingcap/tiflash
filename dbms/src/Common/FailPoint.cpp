@@ -107,6 +107,7 @@ namespace DB
     M(force_fail_in_flush_region_data)                       \
     M(force_use_dmfile_format_v3)                            \
     M(force_set_mocked_s3_object_mtime)                      \
+    M(force_syncpoint_on_s3_upload)                          \
     M(force_stop_background_checkpoint_upload)               \
     M(force_schema_sync_diff_fail)                           \
     M(exception_after_large_write_exceed)                    \
