@@ -69,7 +69,7 @@ TSAN_OPTIONS="suppressions=tests/sanitize/tsan.suppression" ./dbms/gtests_dbms
 
 ## 🎨 Code Style (C++)
 
-TiFlash follows a style based on Google/ClickHouse, enforced by `clang-format` 17.0.0+.
+TiFlash follows a style based on Google, enforced by `clang-format` 17.0.0+.
 
 ### General
 - **Naming:**
@@ -126,5 +126,4 @@ For more detailed information on specific subsystems, refer to:
 ## 📖 References
 - `docs/DEVELOPMENT.md`: General engineering practices.
 - `docs/design/`: Design documents for major features.
-- [ClickHouse Style Guide](https://clickhouse.com/docs/en/development/style/): Base for TiFlash style.
 - [TiDB Developer Guide](https://pingcap.github.io/tidb-dev-guide/): General TiDB ecosystem information.
