@@ -1,6 +1,12 @@
 # TiFlash Agent Guide
 
 This document provides essential information for agentic coding tools operating in the TiFlash repository.
+It focuses on the fastest safe path to build, test, and navigate the codebase.
+
+## 🚀 Quick Start
+- **Configure (preset):** `cmake --preset dev`
+- **Build (preset):** `cmake --build --preset dev`
+- **Run one test:** `cmake-build-debug/dbms/gtests_dbms --gtest_filter=TestName.*`
 
 ## 🛠 Build & Development
 
@@ -14,8 +20,16 @@ Common presets defined in `CMakePresets.json`:
 - `tsan`: ThreadSanitizer build.
 - `benchmarks`: RELEASE build with benchmarks.
 
+### Dependencies & Versions
+- **CMake/Ninja/Clang/LLVM/Python/Rust**: Use versions supported by your platform toolchain.
+- **Linux vs macOS**: Toolchains live under `release-linux-llvm/` and `release-darwin/` respectively.
+- **Submodules/third-party**: Ensure any required submodules are initialized before building.
+
 ### Common Commands
 - **Configure & Build (Dev):** `cmake --workflow --preset dev`
+- **Preset-only (recommended):**
+  - Configure: `cmake --preset dev`
+  - Build: `cmake --build --preset dev`
 - **Manual Build:**
   ```bash
   mkdir cmake-build-debug && cd cmake-build-debug
@@ -23,7 +37,8 @@ Common presets defined in `CMakePresets.json`:
   ninja tiflash
   ```
 - **Linting & Formatting:**
-  - Format diff: `python3 format-diff.py --diff_from $(git merge-base upstream/master HEAD)`
+  - Format diff: `python3 format-diff.py --diff_from $(git merge-base upstream/master HEAD)`  
+    (Use `origin/master` or another base if `upstream` is not configured.)
   - Clang-Tidy: `python3 release-linux-llvm/scripts/run-clang-tidy.py -p cmake-build-debug`
 
 ## 🧪 Testing
@@ -38,11 +53,12 @@ Build targets: `gtests_dbms`, `gtests_libdaemon`, `gtests_libcommon`.
   ```bash
   python3 tests/gtest_10x.py cmake-build-debug/dbms/gtests_dbms
   ```
+- **Other targets:**
+  - `cmake-build-debug/dbms/gtests_libdaemon`
+  - `cmake-build-debug/dbms/gtests_libcommon`
 
 ### Integration Tests
-Located in `tests/fullstack-test*`.
-- **Run:** `tidb_port=4000 storage_port=9000 ./run-test.sh <test-dir>`
-- See `tests/README.md` for cluster setup using `tiup playground`.
+See `tests/AGENTS.md` for prerequisites and usage.
 
 ### Sanitizers
 When running with ASAN/TSAN, use suppression files:
@@ -105,6 +121,7 @@ For more detailed information on specific subsystems, refer to:
 - **Failpoints:** TiFlash uses failpoints and syncpoints for testing error paths.
   - Search for `FAIL_POINT_TRIGGER_EXCEPTION` or `FAIL_POINT_PAUSE` for failpoints in the code.
   - Search for `SyncPointCtl` or `SYNC_FOR` for syncpoints in the code.
+- **Build artifacts:** If `compile_commands.json` is missing, ensure you configured with a preset.
 
 ## 📖 References
 - `docs/DEVELOPMENT.md`: General engineering practices.
