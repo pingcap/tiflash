@@ -17,9 +17,9 @@
 #include <Common/Logger.h>
 #include <Common/ProfileEvents.h>
 #include <Common/RemoteHostFilter.h>
-#include <Common/SyncPoint/SyncPoint.h>
 #include <Common/Stopwatch.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <IO/BaseFile/PosixRandomAccessFile.h>
 #include <IO/Buffer/ReadBufferFromRandomAccessFile.h>

@@ -145,6 +145,7 @@ bool DataStoreS3::putCheckpointFiles(
         auto remote_key = s3key.toFullKey();
         auto lock_key = s3key.toView().getLockKey(store_id, upload_seq);
         auto encryption_path = EncryptionPath(local_datafile, "", NullspaceID);
+        // Capture by value to avoid dangling references.
         auto task = std::make_shared<std::packaged_task<void()>>( //
             [s3_client,
              provider = file_provider,
@@ -253,12 +254,13 @@ void DataStoreS3::copyToLocal(
 void DataStoreS3::setTaggingsForKeys(const std::vector<String> & keys, std::string_view tagging)
 {
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
-    const String tagging_str(tagging);
     IOPoolHelper::FutureContainer results(log, keys.size());
     for (const auto & k : keys)
     {
         auto task = std::make_shared<std::packaged_task<void()>>( //
-            [s3_client, tagging_str, key = k] { rewriteObjectWithTagging(*s3_client, key, tagging_str); });
+            [s3_client, tagging_str = String(tagging), key = k] {
+                rewriteObjectWithTagging(*s3_client, key, tagging_str);
+            });
         results.add(task->get_future());
         DataStoreS3Pool::get().scheduleOrThrowOnError([task] { (*task)(); });
     }
