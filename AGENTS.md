@@ -85,6 +85,13 @@ Rust is used in:
 
 Follow standard Rust idioms and `cargo fmt`. Use `cargo clippy` for linting.
 
+## 📚 Module-Specific Guides
+For more detailed information on specific subsystems, refer to:
+- **Storage Engine**: `dbms/src/Storages/AGENTS.md` (DeltaMerge, KVStore, PageStorage)
+- **Computation Engine**: `dbms/src/Flash/AGENTS.md` (Planner, MPP, Pipeline)
+- **TiDB Integration**: `dbms/src/TiDB/AGENTS.md` (Schema Sync, Decoding, Collation)
+- **Testing Utilities**: `dbms/src/TestUtils/AGENTS.md` (Base classes, Mocking, Data generation)
+
 ## 📂 Directory Structure
 - `dbms/src`: Main TiFlash C++ source code.
 - `libs/`: Shared libraries used by TiFlash.
