@@ -52,3 +52,6 @@ Many computation features are verified via integration tests in `tests/fullstack
 
 ## 💡 Architecture Note
 TiFlash is transitioning from a `BlockInputStream`-based execution model to a `Pipeline`-based one. When adding new operators or features, prefer the `Pipeline` infrastructure if possible.
+
+## 📖 Recommended Reading
+- Design docs in `docs/design/2023-06-07-tiflash-pipeline-model.md` related to the `Pipeline model`.
