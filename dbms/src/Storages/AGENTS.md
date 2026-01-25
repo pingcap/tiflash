@@ -48,5 +48,4 @@ Storage tests heavily rely on failpoints to simulate crashes or specific race co
 - **Error Handling**: Use `DB::Exception` with appropriate error codes from `ErrorCodes.cpp`.
 
 ## 📖 Recommended Reading
-- `dbms/src/Storages/DeltaMerge/README.md` (if exists)
-- Design docs in `docs/design/` related to DeltaMerge and Disaggregated architecture.
+- Design docs in `docs/design/2023-02-23-cloud-native-architecture.md` related to Disaggregated architecture.

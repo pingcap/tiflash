@@ -9,7 +9,7 @@ This directory contains the computation layer (Flash) of TiFlash, responsible fo
   - `PhysicalPlanNode`: Represents physical operators in the plan tree.
 - **`Coprocessor/`**: Handles TiDB Coprocessor and DAG requests.
   - `DAGContext`: Stores query-level state and metadata.
-  - `DAGExpressionAnalyzer`: Analyzes and builds expressions from TiB/TiDB protobuf definitions.
+  - `DAGExpressionAnalyzer`: Analyzes and builds expressions from TiDB protobuf definitions.
 - **`Mpp/`**: Implements the MPP framework for distributed query execution.
   - `MPPTask`: Represents a unit of execution on a single node.
   - `ExchangeReceiver` & `ExchangeSender`: Handle data distribution between MPP tasks.
