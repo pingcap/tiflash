@@ -51,7 +51,7 @@ struct BuildReadTaskTrait
 class FutureContainer
 {
 public:
-    FutureContainer(const LoggerPtr & log_, size_t reserve_size = 0)
+    explicit FutureContainer(const LoggerPtr & log_, size_t reserve_size = 0)
         : log(log_)
     {
         futures.reserve(reserve_size);
