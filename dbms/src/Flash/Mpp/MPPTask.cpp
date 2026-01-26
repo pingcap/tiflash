@@ -223,7 +223,7 @@ void MPPTask::finishWrite()
 
         // The finish of pushing all blocks not means that cte sink job has been done.
         // Execution summary statistic also need to be sent. So we can release cte
-        // only when execution sumary statistic has been sent.
+        // only when execution summary statistic has been sent.
         this->context->getCTEManager()->releaseCTEBySink(resp, this->dag_context->getQueryIDAndCTEIDForSink());
         this->notify_cte_sink_finish = true;
     }

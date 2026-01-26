@@ -71,8 +71,7 @@ void DataStoreS3::putDMFileLocalFiles(
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
 
     // First, upload non-meta files.
-    std::vector<std::future<void>> upload_results;
-    upload_results.reserve(local_files.size() - 1);
+    IOPoolHelper::FutureContainer upload_results(log, local_files.size());
     for (const auto & fname : local_files)
     {
         if (DMFileMetaV2::isMetaFileName(fname))
@@ -80,24 +79,25 @@ void DataStoreS3::putDMFileLocalFiles(
 
         auto local_fname = fmt::format("{}/{}", local_dir, fname);
         auto remote_fname = fmt::format("{}/{}", remote_dir, fname);
-        auto task = std::make_shared<std::packaged_task<void()>>(
-            [&, local_fname = std::move(local_fname), remote_fname = std::move(remote_fname)]() -> void {
-                S3::uploadFile(
-                    *s3_client,
-                    local_fname,
-                    remote_fname,
-                    EncryptionPath(local_dir, fname, oid.keyspace_id),
-                    file_provider);
+        auto encryption_path = EncryptionPath(local_dir, fname, oid.keyspace_id);
+        // Capture shared resources by value in tasks to avoid dangling references on early errors.
+        auto task = std::make_shared<std::packaged_task<void()>>( //
+            [s3_client,
+             provider = file_provider,
+             local_fname = std::move(local_fname),
+             remote_fname = std::move(remote_fname),
+             encryption_path = std::move(encryption_path)]() -> void {
+                S3::uploadFile(*s3_client, local_fname, remote_fname, encryption_path, provider);
             });
-        upload_results.push_back(task->get_future());
+        upload_results.add(task->get_future());
         DataStoreS3Pool::get().scheduleOrThrowOnError([task]() { (*task)(); });
     }
-    for (auto & f : upload_results)
-        f.get();
+    // Wait for all tasks to finish before returning to keep captured resources alive.
+    upload_results.getAllResults();
 
     // Then, upload meta files.
     // Only when the meta upload is successful, the dmfile upload can be considered successful.
-    upload_results.clear();
+    IOPoolHelper::FutureContainer meta_upload_results(log, local_files.size());
     for (const auto & fname : local_files)
     {
         if (!DMFileMetaV2::isMetaFileName(fname))
@@ -105,20 +105,21 @@ void DataStoreS3::putDMFileLocalFiles(
 
         auto local_fname = fmt::format("{}/{}", local_dir, fname);
         auto remote_fname = fmt::format("{}/{}", remote_dir, fname);
-        auto task = std::make_shared<std::packaged_task<void()>>(
-            [&, local_fname = std::move(local_fname), remote_fname = std::move(remote_fname)]() {
-                S3::uploadFile(
-                    *s3_client,
-                    local_fname,
-                    remote_fname,
-                    EncryptionPath(local_dir, fname, oid.keyspace_id),
-                    file_provider);
+        auto encryption_path = EncryptionPath(local_dir, fname, oid.keyspace_id);
+        // Capture shared resources by value in tasks to avoid dangling references on early errors.
+        auto task = std::make_shared<std::packaged_task<void()>>( //
+            [s3_client,
+             provider = file_provider,
+             local_fname = std::move(local_fname),
+             remote_fname = std::move(remote_fname),
+             encryption_path = std::move(encryption_path)]() {
+                S3::uploadFile(*s3_client, local_fname, remote_fname, encryption_path, provider);
             });
-        upload_results.push_back(task->get_future());
+        meta_upload_results.add(task->get_future());
         DataStoreS3Pool::get().scheduleOrThrowOnError([task]() { (*task)(); });
     }
-    for (auto & f : upload_results)
-        f.get();
+    // Wait for all tasks to finish before returning to keep captured resources alive.
+    meta_upload_results.getAllResults();
 
     LOG_INFO(log, "Upload DMFile finished, key={}, cost={}ms", remote_dir, sw.elapsedMilliseconds());
 }
@@ -134,30 +135,31 @@ bool DataStoreS3::putCheckpointFiles(
     /// then upload the CheckpointManifest to make the files within
     /// `upload_seq` public to S3GCManager.
 
-    std::vector<std::future<void>> upload_results;
-    // upload in parallel
+    // Upload in parallel.
     // Note: Local checkpoint files are always not encrypted.
+    IOPoolHelper::FutureContainer upload_results(log, local_files.data_files.size());
     for (size_t file_idx = 0; file_idx < local_files.data_files.size(); ++file_idx)
     {
-        auto task = std::make_shared<std::packaged_task<void()>>([&, idx = file_idx] {
-            const auto & local_datafile = local_files.data_files[idx];
-            auto s3key = S3::S3Filename::newCheckpointData(store_id, upload_seq, idx);
-            auto lock_key = s3key.toView().getLockKey(store_id, upload_seq);
-            S3::uploadFile(
-                *s3_client,
-                local_datafile,
-                s3key.toFullKey(),
-                EncryptionPath(local_datafile, "", NullspaceID),
-                file_provider);
-            S3::uploadEmptyFile(*s3_client, lock_key);
-        });
-        upload_results.push_back(task->get_future());
+        auto local_datafile = local_files.data_files[file_idx];
+        auto s3key = S3::S3Filename::newCheckpointData(store_id, upload_seq, file_idx);
+        auto remote_key = s3key.toFullKey();
+        auto lock_key = s3key.toView().getLockKey(store_id, upload_seq);
+        auto encryption_path = EncryptionPath(local_datafile, "", NullspaceID);
+        // Capture by value to avoid dangling references.
+        auto task = std::make_shared<std::packaged_task<void()>>( //
+            [s3_client,
+             provider = file_provider,
+             local_datafile = std::move(local_datafile),
+             remote_key = std::move(remote_key),
+             lock_key = std::move(lock_key),
+             encryption_path = std::move(encryption_path)] {
+                S3::uploadFile(*s3_client, local_datafile, remote_key, encryption_path, provider);
+                S3::uploadEmptyFile(*s3_client, lock_key);
+            });
+        upload_results.add(task->get_future());
         DataStoreS3Pool::get().scheduleOrThrowOnError([task] { (*task)(); });
     }
-    for (auto & f : upload_results)
-    {
-        f.get();
-    }
+    upload_results.getAllResults();
 
     // upload manifest after all CheckpointData uploaded
     auto s3key = S3::S3Filename::newCheckpointManifest(store_id, upload_seq);
@@ -180,7 +182,7 @@ std::unordered_map<String, IDataStore::DataFileInfo> DataStoreS3::getDataFilesIn
     for (const auto & lock_key : lock_keys)
     {
         auto task = std::make_shared<std::packaged_task<std::tuple<String, DataFileInfo>()>>(
-            [&s3_client, lock_key = lock_key, log = this->log]() noexcept {
+            [s3_client, lock_key = lock_key, log = this->log]() noexcept {
                 auto key_view = S3::S3FilenameView::fromKey(lock_key);
                 auto datafile_key = key_view.asDataFile().toFullKey();
                 try
@@ -232,43 +234,37 @@ void DataStoreS3::copyToLocal(
 {
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
     const auto remote_dir = S3::S3Filename::fromDMFileOID(remote_oid).toFullKey();
-    std::vector<std::future<void>> results;
-    results.reserve(target_short_fnames.size());
+    IOPoolHelper::FutureContainer results(Logger::get("DataStoreS3"), target_short_fnames.size());
     for (const auto & fname : target_short_fnames)
     {
         auto remote_fname = fmt::format("{}/{}", remote_dir, fname);
         auto local_fname = fmt::format("{}/{}", local_dir, fname);
-        auto task = std::make_shared<std::packaged_task<void()>>(
-            [&, local_fname = std::move(local_fname), remote_fname = std::move(remote_fname)]() {
+        auto task = std::make_shared<std::packaged_task<void()>>( //
+            [s3_client, local_fname = std::move(local_fname), remote_fname = std::move(remote_fname)]() {
                 auto tmp_fname = fmt::format("{}.tmp", local_fname);
                 S3::downloadFile(*s3_client, tmp_fname, remote_fname);
                 Poco::File(tmp_fname).renameTo(local_fname);
             });
-        results.push_back(task->get_future());
+        results.add(task->get_future());
         DataStoreS3Pool::get().scheduleOrThrowOnError([task]() { (*task)(); });
     }
-    for (auto & f : results)
-    {
-        f.get();
-    }
+    results.getAllResults();
 }
 
 void DataStoreS3::setTaggingsForKeys(const std::vector<String> & keys, std::string_view tagging)
 {
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
-    std::vector<std::future<void>> results;
-    results.reserve(keys.size());
+    IOPoolHelper::FutureContainer results(log, keys.size());
     for (const auto & k : keys)
     {
-        auto task = std::make_shared<std::packaged_task<void()>>(
-            [&s3_client, &tagging, key = k] { rewriteObjectWithTagging(*s3_client, key, String(tagging)); });
-        results.emplace_back(task->get_future());
+        auto task = std::make_shared<std::packaged_task<void()>>( //
+            [s3_client, tagging_str = String(tagging), key = k] {
+                rewriteObjectWithTagging(*s3_client, key, tagging_str);
+            });
+        results.add(task->get_future());
         DataStoreS3Pool::get().scheduleOrThrowOnError([task] { (*task)(); });
     }
-    for (auto & f : results)
-    {
-        f.get();
-    }
+    results.getAllResults();
 }
 
 IPreparedDMFileTokenPtr DataStoreS3::prepareDMFile(const S3::DMFileOID & oid, UInt64 page_id)
