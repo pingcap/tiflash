@@ -159,6 +159,18 @@ static inline bool atomicReadWrite(
         std::tie(decoding_schema_snapshot, block_ptr)
             = storage->getSchemaSnapshotAndBlockForDecoding(lock, true, should_handle_version_col);
         block_decoding_schema_epoch = decoding_schema_snapshot->decoding_schema_epoch;
+        const auto & table_info = storage->getTableInfo();
+        LOG_INFO(
+            Logger::get("dddddddddd"),
+            "decode with schema snapshot, keyspace={} table_id={} region_id={} epoch={} update_ts={} "
+            "with_version_column={} columns={}",
+            rw_ctx.keyspace_id,
+            rw_ctx.table_id,
+            region->id(),
+            block_decoding_schema_epoch,
+            table_info.update_timestamp,
+            should_handle_version_col,
+            table_info.columns.size());
 
         auto reader = RegionBlockReader(decoding_schema_snapshot);
         if (!reader.read(*block_ptr, data_list_read, force_decode))

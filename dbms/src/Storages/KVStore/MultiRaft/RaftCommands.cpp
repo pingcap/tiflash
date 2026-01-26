@@ -368,6 +368,7 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
         {
             auto tikv_key = TiKVKey(cmds.keys[i].data, cmds.keys[i].len);
             auto tikv_value = TiKVValue(cmds.vals[i].data, cmds.vals[i].len);
+            LOG_INFO(Logger::get("dddddddddd"), "Region::handleWriteRaftCmd Put key={}, value={}", tikv_key.toDebugString(), tikv_value.toDebugString());
             if (cf == ColumnFamilyType::Write)
             {
                 write_put_key_count++;
