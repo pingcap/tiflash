@@ -5,7 +5,9 @@ It focuses on the fastest safe path to build, test, and navigate the codebase.
 
 ## 🚀 Quick Start
 - **Configure (preset):** `cmake --preset dev`
-- **Build (preset):** `cmake --build --preset dev`
+- **Build:**
+  * tiflash binary: `cmake --build --preset dev`
+  * unit test binary: `cmake --build --preset unit-tests`
 - **Run one test:** `cmake-build-debug/dbms/gtests_dbms --gtest_filter=TestName.*`
 
 ## 🛠 Build & Development
