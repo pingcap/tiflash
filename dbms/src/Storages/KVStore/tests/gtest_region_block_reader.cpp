@@ -693,4 +693,62 @@ try
 CATCH
 
 
+TEST_F(RegionBlockReaderTest, ReadFromRegionDefaultValue)
+try
+{
+    // With this table_info, c1 can be decoded to NULL value
+    // TableInfo table_info(
+    //     R"({"cols":[{"id":1,"name":{"L":"c0","O":"c0"},"offset":0,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":0,"Flen":4,"Tp":1}},{"id":2,"name":{"L":"handle","O":"handle"},"offset":1,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":515,"Flen":11,"Tp":3}},{"id":7,"name":{"L":"c1","O":"c1"},"offset":2,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":0,"Flen":20,"Tp":8}},{"id":4,"name":{"L":"c2","O":"c2"},"offset":3,"origin_default":"0.07954397","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":-1,"Flag":4097,"Flen":12,"Tp":4}},{"id":5,"name":{"L":"c5","O":"c5"},"offset":4,"origin_default":"0","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":0,"Flen":10,"Tp":246}},{"default":"247262911","id":6,"name":{"L":"c4","O":"c4"},"offset":5,"origin_default":"247262911","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":0,"Flen":10,"Tp":246}}],"id":681,"index_info":[],"is_common_handle":false,"keyspace_id":4294967295,"name":{"L":"t0","O":"t0"},"pk_is_handle":true,"state":5,"tiflash_replica":{"Available":true,"Count":1},"update_timestamp":463844343842340870})",
+    //     NullspaceID);
+
+    // With this table_info, c1 is filled with "0" according to ori_default
+    TableInfo table_info(
+        R"({"cols":[{"id":1,"name":{"L":"c0","O":"c0"},"offset":0,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":0,"Flen":4,"Tp":1}},{"id":2,"name":{"L":"handle","O":"handle"},"offset":1,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":515,"Flen":11,"Tp":3}},{"default":"-56083770","id":7,"name":{"L":"c1","O":"c1"},"offset":2,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":1,"Flen":20,"Tp":8}},{"id":4,"name":{"L":"c2","O":"c2"},"offset":3,"origin_default":"0.07954397","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":-1,"Flag":4097,"Flen":12,"Tp":4}},{"id":5,"name":{"L":"c5","O":"c5"},"offset":4,"origin_default":"0","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":0,"Flen":10,"Tp":246}},{"default":"247262911","id":6,"name":{"L":"c4","O":"c4"},"offset":5,"origin_default":"247262911","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":0,"Flen":10,"Tp":246}}],"id":711,"index_info":[],"is_common_handle":false,"keyspace_id":4294967295,"name":{"L":"t0","O":"t0"},"pk_is_handle":true,"state":5,"tiflash_replica":{"Available":true,"Count":1},"update_timestamp":463845180343844895})",
+        NullspaceID);
+
+    RegionID region_id = 4;
+    // the start_key and end_key for table_id = 68
+    String region_start_key(bytesFromHexString("7480000000000002FF7C5F720000000000FA"));
+    String region_end_key(bytesFromHexString("7480000000000002FF7D00000000000000F8"));
+    auto region = RegionBench::makeRegionForRange(region_id, region_start_key, region_end_key);
+    // the hex kv dump from SSTFile
+    std::vector<std::tuple<std::string_view, std::string_view>> kvs = {
+        {
+            "7480000000000002FFA95F728000000000FF0000010000000000FAF9901806DEF7FFDA",
+            "50A380A08892FFF9B706762C8000040000000405060708000F0016001A00BFDC4011A00000000A0080000000000A008000003CA339"
+            "1ABC85",
+        },
+        {
+            "7480000000000002FFA95F728000000000FF0000010000000000FAF9901806DEF7FFD8",
+            "50A680A08892FFF9B706762C8000040000000405060708000F0016001A00BFDC4011A00000000A008033E04D600A008000003CA339"
+            "1ABC85",
+        },
+        {
+            "7480000000000002FFA95F728000000000FF0000020000000000FAF9901806DE33FFE8",
+            "509680B08E92FFF9B706762580000300000004050608000F001600BF720CDD400000000A0080000000010A00800000393C",
+        },
+    };
+    for (const auto & [k, v] : kvs)
+    {
+        region->insertDebug("write", TiKVKey(bytesFromHexString(k)), TiKVValue(bytesFromHexString(v)));
+    }
+
+    auto data_list_read = ReadRegionCommitCache(region, true);
+    ASSERT_TRUE(data_list_read.has_value());
+
+    auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
+    {
+        // force_decode=false can not decode because there are
+        // missing value for column with primary key flag.
+        auto reader = RegionBlockReader(decoding_schema);
+        Block res_block = createBlockSortByColumnID(decoding_schema);
+        EXPECT_TRUE(reader.read(res_block, *data_list_read, false));
+        LOG_INFO(
+            Logger::get(),
+            "Decoded block:\n{}",
+            DB::tests::getColumnsContent(res_block.getColumnsWithTypeAndName()));
+    }
+}
+CATCH
+
 } // namespace DB::tests

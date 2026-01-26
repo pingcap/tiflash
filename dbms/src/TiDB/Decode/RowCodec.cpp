@@ -20,6 +20,8 @@
 #include <TiDB/Decode/RowCodec.h>
 #include <TiDB/Schema/TiDB.h>
 
+#include "Common/FieldVisitors.h"
+
 
 namespace DB
 {
@@ -459,6 +461,12 @@ bool appendRowV2ToBlockImpl(
         raw_value,
         num_not_null_columns,
         value_offsets);
+    LOG_INFO(
+        Logger::get("dddddddddd"),
+        "not_null_column_ids={} null_column_ids={}",
+        not_null_column_ids,
+        null_column_ids);
+
     size_t values_start_pos = cursor;
     size_t idx_not_null = 0;
     size_t idx_null = 0;
@@ -499,6 +507,18 @@ bool appendRowV2ToBlockImpl(
             // a column.
             // Fill with default value and continue to read data for next column id.
             const auto & column_info = column_infos[column_ids_iter->second];
+            LOG_INFO(
+                Logger::get("dddddddddd"),
+                "appendRowV2ToBlockImpl: fill default value for missing column,"
+                " next_column_id={} next_datum_column_id={} block_column_pos={}"
+                " column_info={{name={} id={} not_null={} default_value={}}}",
+                next_column_id,
+                next_datum_column_id,
+                block_column_pos,
+                column_info.name,
+                column_info.id,
+                column_info.hasNotNullFlag(),
+                applyVisitor(FieldVisitorToString(), column_info.defaultValueToField()));
             if (!addDefaultValueToColumnIfPossible(
                     column_info,
                     block,
@@ -575,6 +595,16 @@ bool appendRowV2ToBlockImpl(
         if (column_ids_iter->first != pk_handle_id)
         {
             const auto & column_info = column_infos[column_ids_iter->second];
+            LOG_INFO(
+                Logger::get("dddddddddd"),
+                "appendRowV2ToBlockImpl: fill default value for missing column,"
+                " block_column_pos={}"
+                " column_info={{name={} id={} not_null={} default_value={}}}",
+                block_column_pos,
+                column_info.name,
+                column_info.id,
+                column_info.hasNotNullFlag(),
+                applyVisitor(FieldVisitorToString(), column_info.defaultValueToField()));
             if (!addDefaultValueToColumnIfPossible(
                     column_info,
                     block,
