@@ -19,6 +19,7 @@
 #include <Common/RemoteHostFilter.h>
 #include <Common/Stopwatch.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <IO/BaseFile/PosixRandomAccessFile.h>
 #include <IO/Buffer/ReadBufferFromRandomAccessFile.h>
@@ -156,6 +157,7 @@ private:
 namespace DB::FailPoints
 {
 extern const char force_set_mocked_s3_object_mtime[];
+extern const char force_syncpoint_on_s3_upload[];
 } // namespace DB::FailPoints
 namespace DB::S3
 {
@@ -662,6 +664,14 @@ static bool doUploadFile(
     {
         ProfileEvents::increment(is_dmfile ? ProfileEvents::S3PutDMFileRetry : ProfileEvents::S3PutObjectRetry);
     }
+#ifdef FIU_ENABLE
+    if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_syncpoint_on_s3_upload); v)
+    {
+        const auto & prefix = std::any_cast<String>(v.value());
+        if (!prefix.empty() && startsWith(remote_fname, prefix))
+            SYNC_FOR("before_S3Common::uploadFile");
+    }
+#endif
     auto result = client.PutObject(req);
     if (!result.IsSuccess())
     {
