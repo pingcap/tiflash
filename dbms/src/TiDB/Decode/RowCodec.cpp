@@ -438,7 +438,7 @@ inline bool addDefaultValueToColumnIfPossible(
                 // Return false to trigger schema sync when `force_decode==false`.
                 return false;
             }
-            // Else the Column has a not null origin default value, the key-value should be encoded in a old schema that 
+            // Else the Column has a not null origin default value, the key-value should be encoded in a old schema that
             // this Column is not yet added. Fallthrough to fill the column with original default value.
         }
         // Else force_decode == true, the row does not contain this "not null" / "no default value" column.
