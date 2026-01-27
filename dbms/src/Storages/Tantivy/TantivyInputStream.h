@@ -155,23 +155,47 @@ protected:
             {
                 for (auto & doc : documents)
                 {
-                    const auto & v = doc.fieldValues[idx].string_value;
-                    col->insert(Field(String(v.begin(), v.end())));
+                    const auto & field_value = doc.fieldValues[idx];
+                    if (field_value.is_null)
+                    {
+                        col->insert(Field());
+                    }
+                    else
+                    {
+                        const auto & v = field_value.string_value;
+                        col->insert(Field(String(v.begin(), v.end())));
+                    }
                 }
             }
             if (removeNullable(name_and_type.type)->isInteger())
             {
                 for (auto & doc : documents)
                 {
-                    col->insert(Field(doc.fieldValues[idx].int_value));
+                    const auto & field_value = doc.fieldValues[idx];
+                    if (field_value.is_null)
+                    {
+                        col->insert(Field());
+                    }
+                    else
+                    {
+                        col->insert(Field(field_value.int_value));
+                    }
                 }
             }
             if (removeNullable(name_and_type.type)->isDateOrDateTime())
             {
                 for (auto & doc : documents)
                 {
-                    auto t = static_cast<UInt64>(doc.fieldValues[idx].int_value);
-                    col->insert(Field(t));
+                    const auto & field_value = doc.fieldValues[idx];
+                    if (field_value.is_null)
+                    {
+                        col->insert(Field());
+                    }
+                    else
+                    {
+                        auto t = static_cast<UInt64>(field_value.int_value);
+                        col->insert(Field(t));
+                    }
                 }
             }
         }
