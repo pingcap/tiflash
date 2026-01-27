@@ -414,10 +414,15 @@ inline bool addDefaultValueToColumnIfPossible(
         // fallthrough to fill default value when force_decode
     }
 
-    if (column_info.hasNoDefaultValueFlag() && column_info.hasNotNullFlag())
+    if (column_info.hasNotNullFlag())
     {
         if (!force_decode)
+        {
+            // This is a Column that does not have encoded datum in the value, but it is defined as NOT NULL.
+            // It could be a row encoded by newer schema after turning `NOT NULL` to `NULLABLE`.
+            // Return false to trigger schema sync when `force_decode==false`.
             return false;
+        }
         // Else the row does not contain this "not null" / "no default value" column,
         // it could be a row encoded by older schema.
         // fallthrough to fill default value when force_decode
@@ -468,7 +473,9 @@ bool appendRowV2ToBlockImpl(
         null_column_ids);
 
     size_t values_start_pos = cursor;
+    // how many not null columns have been processed
     size_t idx_not_null = 0;
+    // how many null columns have been processed
     size_t idx_null = 0;
     // Merge ordered not null/null columns to keep order.
     while (idx_not_null < not_null_column_ids.size() || idx_null < null_column_ids.size())
@@ -487,14 +494,21 @@ bool appendRowV2ToBlockImpl(
 
         auto next_datum_column_id = is_null ? null_column_ids[idx_null] : not_null_column_ids[idx_not_null];
         const auto next_column_id = column_ids_iter->first;
+        LOG_INFO(
+            Logger::get("dddddddddd"),
+            "next_column_id={} next_datum_column_id={} force_decode={}",
+            next_column_id,
+            next_datum_column_id,
+            force_decode);
         if (next_column_id > next_datum_column_id)
         {
-            // The next column id to read is bigger than the column id of next datum in encoded row.
+            // The next_column_id to read is bigger than the next_datum_column_id in encoded row.
             // It means this is the datum of extra column. May happen when reading after dropping
             // a column.
+            // For `force_decode == false`, we should return false to let upper layer trigger schema sync.
             if (!force_decode)
                 return false;
-            // Ignore the extra column and continue to parse other datum
+            // For `force_decode == true`, we just skip this extra column and continue to parse other datum.
             if (is_null)
                 idx_null++;
             else
@@ -502,7 +516,7 @@ bool appendRowV2ToBlockImpl(
         }
         else if (next_column_id < next_datum_column_id)
         {
-            // The next column id to read is less than the column id of next datum in encoded row.
+            // The next_column_id to read is less than the next_datum_column_id in encoded row.
             // It means this is the datum of missing column. May happen when reading after adding
             // a column.
             // Fill with default value and continue to read data for next column id.
@@ -511,13 +525,14 @@ bool appendRowV2ToBlockImpl(
                 Logger::get("dddddddddd"),
                 "appendRowV2ToBlockImpl: fill default value for missing column,"
                 " next_column_id={} next_datum_column_id={} block_column_pos={}"
-                " column_info={{name={} id={} not_null={} default_value={}}}",
+                " column_info={{name={} id={} not_null={} no_default_val={} default_value={}}}",
                 next_column_id,
                 next_datum_column_id,
                 block_column_pos,
                 column_info.name,
                 column_info.id,
                 column_info.hasNotNullFlag(),
+                column_info.hasNoDefaultValueFlag(),
                 applyVisitor(FieldVisitorToString(), column_info.defaultValueToField()));
             if (!addDefaultValueToColumnIfPossible(
                     column_info,
@@ -525,7 +540,9 @@ bool appendRowV2ToBlockImpl(
                     block_column_pos,
                     ignore_pk_if_absent,
                     force_decode))
+            {
                 return false;
+            }
             column_ids_iter++;
             block_column_pos++;
         }
@@ -590,8 +607,11 @@ bool appendRowV2ToBlockImpl(
             block_column_pos++;
         }
     }
+    // There are more columns to read other than the datum encoded in the row.
     while (column_ids_iter != column_ids_iter_end)
     {
+        // Skip if the column is the same as `pk_handle_id`. The value of column
+        // `pk_handle_id` will be filled in upper layer but not in this function.
         if (column_ids_iter->first != pk_handle_id)
         {
             const auto & column_info = column_infos[column_ids_iter->second];
@@ -599,11 +619,12 @@ bool appendRowV2ToBlockImpl(
                 Logger::get("dddddddddd"),
                 "appendRowV2ToBlockImpl: fill default value for missing column,"
                 " block_column_pos={}"
-                " column_info={{name={} id={} not_null={} default_value={}}}",
+                " column_info={{name={} id={} not_null={} no_default_val={} default_value={}}}",
                 block_column_pos,
                 column_info.name,
                 column_info.id,
                 column_info.hasNotNullFlag(),
+                column_info.hasNoDefaultValueFlag(),
                 applyVisitor(FieldVisitorToString(), column_info.defaultValueToField()));
             if (!addDefaultValueToColumnIfPossible(
                     column_info,
@@ -611,7 +632,9 @@ bool appendRowV2ToBlockImpl(
                     block_column_pos,
                     ignore_pk_if_absent,
                     force_decode))
+            {
                 return false;
+            }
         }
         column_ids_iter++;
         block_column_pos++;

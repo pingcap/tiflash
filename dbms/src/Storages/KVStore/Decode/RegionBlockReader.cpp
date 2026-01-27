@@ -189,6 +189,7 @@ bool RegionBlockReader::readImpl(Block & block, const ReadList & data_list, bool
 
     VersionColResolver<ReadList> version_col_resolver;
     version_col_resolver.check(block, schema_snapshot->column_defines->size());
+    // The column_ids to read according to schema_snapshot, each elem is (column_id, block_pos)
     const auto & read_column_ids = schema_snapshot->getColId2BlockPosMap();
     const auto & pk_column_ids = schema_snapshot->pk_column_ids;
     const auto & pk_pos_map = schema_snapshot->pk_pos_map;
@@ -204,12 +205,12 @@ bool RegionBlockReader::readImpl(Block & block, const ReadList & data_list, bool
     /// extra handle, del, version column is with column id smaller than other visible column id,
     /// so they must exists before all other columns, and we can get them before decoding other columns
     ColumnUInt8 * raw_delmark_col = nullptr;
-    const size_t invalid_column_pos = std::numeric_limits<size_t>::max();
+    const static size_t INVALID_COLUMN_POS = std::numeric_limits<size_t>::max();
     // we cannot figure out extra_handle's column type now, so we just remember it's pos here
-    size_t extra_handle_column_pos = invalid_column_pos;
+    size_t extra_handle_column_pos = INVALID_COLUMN_POS;
 
     while (raw_delmark_col == nullptr || version_col_resolver.needBuild()
-           || extra_handle_column_pos == invalid_column_pos)
+           || extra_handle_column_pos == INVALID_COLUMN_POS)
     {
         if (column_ids_iter->first == MutSup::delmark_col_id)
         {
@@ -279,6 +280,8 @@ bool RegionBlockReader::readImpl(Block & block, const ReadList & data_list, bool
             else
             {
                 // Parse column value from encoded value
+                // Decode the column_ids from `column_ids_iter` to `read_column_ids.end()`
+                // and insert into `block` at position starting from `next_column_pos`
                 if (!appendRowToBlock(
                         *value_ptr,
                         column_ids_iter,

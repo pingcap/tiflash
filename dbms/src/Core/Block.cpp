@@ -256,15 +256,14 @@ void Block::checkNumberOfRows() const
         {
             auto first_col = data.front();
             throw Exception(
-                fmt::format(
-                    "Sizes of columns doesn't match: {}(id={}): {}, {}(id={}): {}",
-                    first_col.name,
-                    first_col.column_id,
-                    rows,
-                    elem.name,
-                    elem.column_id,
-                    size),
-                ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+                ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH,
+                "Sizes of columns doesn't match: {}(id={}): rows={}, {}(id={}): rows={}",
+                first_col.name,
+                first_col.column_id,
+                rows,
+                elem.name,
+                elem.column_id,
+                size);
         }
     }
 }
