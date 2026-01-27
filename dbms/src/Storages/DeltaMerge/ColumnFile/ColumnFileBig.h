@@ -172,25 +172,16 @@ public:
         : dm_context(dm_context_)
         , column_file(column_file_)
         , col_defs(col_defs_)
+        , pk_ver_only(false)
         , read_tag(read_tag_)
     {
         if (col_defs_->size() == 1)
         {
-            if ((*col_defs)[0].id == MutSup::extra_handle_id)
-            {
-                pk_ver_only = true;
-            }
+            pk_ver_only = (*col_defs)[0].id == MutSup::extra_handle_id;
         }
         else if (col_defs_->size() == 2)
         {
-            if ((*col_defs)[0].id == MutSup::extra_handle_id && (*col_defs)[1].id == MutSup::version_col_id)
-            {
-                pk_ver_only = true;
-            }
-        }
-        else
-        {
-            pk_ver_only = false;
+            pk_ver_only = (*col_defs)[0].id == MutSup::extra_handle_id && (*col_defs)[1].id == MutSup::version_col_id;
         }
     }
 
