@@ -26,6 +26,7 @@ enum MppVersion : int64_t
     MppVersionV0 = 0,
     MppVersionV1,
     MppVersionV2,
+    MppVersionV3,
     //
     MppVersionMAX,
 };
