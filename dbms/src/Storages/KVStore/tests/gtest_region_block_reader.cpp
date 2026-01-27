@@ -354,9 +354,7 @@ TEST_F(RegionBlockReaderTest, MissingColumnRowV2)
     encodeColumns(table_info, fields, RowEncodeVersion::RowV2);
     auto new_table_info = getTableInfoWithMoreColumns({MutSup::extra_handle_id}, false);
     auto new_decoding_schema = getDecodingStorageSchemaSnapshot(new_table_info);
-    // `decodeAndCheckColumns` will return false because "column1" not_null=true but no_default_value=false
-    // FIXME: Re check the logic here
-    ASSERT_FALSE(decodeAndCheckColumns(new_decoding_schema, false));
+    ASSERT_TRUE(decodeAndCheckColumns(new_decoding_schema, false));
 }
 
 TEST_F(RegionBlockReaderTest, MissingColumnRowV1)
@@ -365,9 +363,7 @@ TEST_F(RegionBlockReaderTest, MissingColumnRowV1)
     encodeColumns(table_info, fields, RowEncodeVersion::RowV1);
     auto new_table_info = getTableInfoWithMoreColumns({MutSup::extra_handle_id}, false);
     auto new_decoding_schema = getDecodingStorageSchemaSnapshot(new_table_info);
-    // `decodeAndCheckColumns` will return false because "column1" not_null=true but no_default_value=false
-    // FIXME: Re check the logic here
-    ASSERT_FALSE(decodeAndCheckColumns(new_decoding_schema, false));
+    ASSERT_TRUE(decodeAndCheckColumns(new_decoding_schema, false));
 }
 
 TEST_F(RegionBlockReaderTest, ExtraColumnRowV2)
