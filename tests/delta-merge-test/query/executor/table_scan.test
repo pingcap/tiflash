@@ -22,7 +22,7 @@
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 String')
 => DBGInvoke __refresh_mapped_table_schema(default, test)
 => DBGInvoke __put_region(4, 0, 100, default, test)
-=> DBGInvoke __raft_insert_row(default, test, 4, 50, 'test1')
+=> DBGInvoke __raft_insert_row_full(default, test, 4, 50, 20000005, 0, 'test1')
 
 # DAG read by not specifying region id.
 => DBGInvoke dag('select * from default.test') 
@@ -52,6 +52,12 @@
 ┌─_tidb_rowid─┬─col_1─┐
 │          50 │ test1 │
 └─────────────┴───────┘
+
+# select TiDB commit ts
+=> DBGInvoke dag('select _tidb_commit_ts from default.test') 
+┌─_tidb_commit_ts─┐
+│        20000005 │
+└─────────────────┘
 
 # Clean up.
 => DBGInvoke __drop_tidb_table(default, test)
