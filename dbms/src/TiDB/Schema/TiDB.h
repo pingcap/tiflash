@@ -141,6 +141,7 @@ struct ColumnInfo
     COLUMN_FLAGS(M)
 #undef M
 
+    bool hasOriDefaultValue() const;
     DB::Field defaultValueToField() const;
     CodecFlag getCodecFlag() const;
     DB::Field getDecimalValue(const String &) const;

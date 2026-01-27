@@ -242,6 +242,11 @@ ColumnInfo::ColumnInfo(Poco::JSON::Object::Ptr json)
     }
 
 
+bool ColumnInfo::hasOriDefaultValue() const
+{
+    return !origin_default_value.isEmpty() || !origin_default_bit_value.isEmpty();
+}
+
 Field ColumnInfo::defaultValueToField() const
 {
     const auto & value = origin_default_value;
