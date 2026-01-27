@@ -466,11 +466,13 @@ bool appendRowV2ToBlockImpl(
         raw_value,
         num_not_null_columns,
         value_offsets);
+#if 0
     LOG_INFO(
         Logger::get("dddddddddd"),
         "not_null_column_ids={} null_column_ids={}",
         not_null_column_ids,
         null_column_ids);
+#endif
 
     size_t values_start_pos = cursor;
     // how many not null columns have been processed
@@ -494,12 +496,14 @@ bool appendRowV2ToBlockImpl(
 
         auto next_datum_column_id = is_null ? null_column_ids[idx_null] : not_null_column_ids[idx_not_null];
         const auto next_column_id = column_ids_iter->first;
+#if 0
         LOG_INFO(
             Logger::get("dddddddddd"),
             "next_column_id={} next_datum_column_id={} force_decode={}",
             next_column_id,
             next_datum_column_id,
             force_decode);
+#endif
         if (next_column_id > next_datum_column_id)
         {
             // The next_column_id to read is bigger than the next_datum_column_id in encoded row.
@@ -521,6 +525,7 @@ bool appendRowV2ToBlockImpl(
             // a column.
             // Fill with default value and continue to read data for next column id.
             const auto & column_info = column_infos[column_ids_iter->second];
+#if 0
             LOG_INFO(
                 Logger::get("dddddddddd"),
                 "appendRowV2ToBlockImpl: fill default value for missing column,"
@@ -534,6 +539,7 @@ bool appendRowV2ToBlockImpl(
                 column_info.hasNotNullFlag(),
                 column_info.hasNoDefaultValueFlag(),
                 applyVisitor(FieldVisitorToString(), column_info.defaultValueToField()));
+#endif
             if (!addDefaultValueToColumnIfPossible(
                     column_info,
                     block,
@@ -615,6 +621,7 @@ bool appendRowV2ToBlockImpl(
         if (column_ids_iter->first != pk_handle_id)
         {
             const auto & column_info = column_infos[column_ids_iter->second];
+#if 0
             LOG_INFO(
                 Logger::get("dddddddddd"),
                 "appendRowV2ToBlockImpl: fill default value for missing column,"
@@ -626,6 +633,7 @@ bool appendRowV2ToBlockImpl(
                 column_info.hasNotNullFlag(),
                 column_info.hasNoDefaultValueFlag(),
                 applyVisitor(FieldVisitorToString(), column_info.defaultValueToField()));
+#endif
             if (!addDefaultValueToColumnIfPossible(
                     column_info,
                     block,

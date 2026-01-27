@@ -44,10 +44,12 @@ bool RegionBlockReader::read(Block & block, const ReadList & data_list, bool for
 {
     try
     {
+#if 0
         for (const auto & data : data_list)
         {
             LOG_INFO(Logger::get("dddddddddd"), "RegionBlockReader::read data.value={}", data.value->toDebugString());
         }
+#endif
 
         switch (schema_snapshot->pk_type)
         {
@@ -182,10 +184,12 @@ private:
 template <TMTPKType pk_type, typename ReadList>
 bool RegionBlockReader::readImpl(Block & block, const ReadList & data_list, bool force_decode)
 {
+#if 0
     LOG_INFO(
         Logger::get("dddddddddd"),
         "RegionBlockReader::readImpl start, schema_snapshot.column_defines={}",
         *schema_snapshot->column_defines);
+#endif
 
     VersionColResolver<ReadList> version_col_resolver;
     version_col_resolver.check(block, schema_snapshot->column_defines->size());
