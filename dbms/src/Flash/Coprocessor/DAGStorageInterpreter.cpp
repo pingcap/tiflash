@@ -270,10 +270,10 @@ String genErrMsgForLocalRead(const KeyspaceID keyspace_id, const TableID & table
     return table_id == logical_table_id
         ? fmt::format("(while creating read sources from storage, keyspace_id={} table_id={})", keyspace_id, table_id)
         : fmt::format(
-            "(while creating read sources from storage, keyspace_id={} table_id={} logical_table_id={})",
-            keyspace_id,
-            table_id,
-            logical_table_id);
+              "(while creating read sources from storage, keyspace_id={} table_id={} logical_table_id={})",
+              keyspace_id,
+              table_id,
+              logical_table_id);
 }
 } // namespace
 
@@ -900,10 +900,11 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
         catch (DB::Exception & e)
         {
             const auto keyspace_id = context.getDAGContext()->getKeyspaceID();
-            e.addMessage(fmt::format(
-                "(while doing learner read for table, keyspace={} logical_table_id={})",
-                keyspace_id,
-                logical_table_id));
+            e.addMessage(
+                fmt::format(
+                    "(while doing learner read for table, keyspace={} logical_table_id={})",
+                    keyspace_id,
+                    logical_table_id));
             throw;
         }
     }
@@ -1521,6 +1522,8 @@ std::pair<Names, std::vector<UInt8>> DAGStorageInterpreter::getColumnsForTableSc
             name = handle_column_name;
         else if (cid == MutSup::extra_table_id_col_id)
             name = MutSup::extra_table_id_column_name;
+        else if (cid == MutSup::extra_commit_ts_col_id)
+            name = MutSup::extra_commit_ts_column_name;
         else
             name = storage_for_logical_table->getTableInfo().getColumnName(cid);
         required_columns_tmp.emplace_back(std::move(name));
@@ -1578,15 +1581,16 @@ std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests(const DM::
         for (const auto & r : retry_regions)
             context.getDAGContext()->retry_regions.push_back(r.get());
 
-        remote_requests.push_back(RemoteRequest::build(
-            retry_regions,
-            *context.getDAGContext(),
-            table_scan,
-            storages_with_structure_lock[physical_table_id].storage->getTableInfo(),
-            filter_conditions,
-            connection_id,
-            connection_alias,
-            log));
+        remote_requests.push_back(
+            RemoteRequest::build(
+                retry_regions,
+                *context.getDAGContext(),
+                table_scan,
+                storages_with_structure_lock[physical_table_id].storage->getTableInfo(),
+                filter_conditions,
+                connection_id,
+                connection_alias,
+                log));
     }
     LOG_DEBUG(log, "remote request size: {}", remote_requests.size());
     return remote_requests;

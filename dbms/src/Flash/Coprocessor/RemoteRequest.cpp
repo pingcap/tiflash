@@ -67,6 +67,13 @@ RemoteRequest RemoteRequest::build(
                 ci.tp = TiDB::TypeLongLong;
                 schema.emplace_back(std::make_pair(MutSup::extra_table_id_column_name, std::move(ci)));
             }
+            else if (col_id == MutSup::extra_commit_ts_col_id)
+            {
+                auto ci = col;
+                if (ci.name.empty())
+                    ci.name = MutSup::extra_commit_ts_column_name;
+                schema.emplace_back(std::make_pair(MutSup::extra_commit_ts_column_name, std::move(ci)));
+            }
             else
             {
                 // https://github.com/pingcap/tiflash/issues/8601

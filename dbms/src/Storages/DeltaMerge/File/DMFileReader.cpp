@@ -227,7 +227,8 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
 
 bool DMFileReader::isCacheableColumn(const ColumnDefine & cd)
 {
-    return cd.id == MutSup::extra_handle_id || cd.id == MutSup::version_col_id;
+    return cd.id == MutSup::extra_handle_id || cd.id == MutSup::version_col_id
+        || cd.id == MutSup::extra_commit_ts_col_id;
 }
 
 Block DMFileReader::read()
@@ -257,7 +258,8 @@ Block DMFileReader::readImpl(const ReadBlockInfo & read_info)
     /// 2. Find packs can do clean read.
 
     const bool need_read_extra_columns = std::any_of(read_columns.cbegin(), read_columns.cend(), [](const auto & cd) {
-        return cd.id == MutSup::extra_handle_id || cd.id == MutSup::delmark_col_id || cd.id == MutSup::version_col_id;
+        return cd.id == MutSup::extra_handle_id || cd.id == MutSup::delmark_col_id || cd.id == MutSup::version_col_id
+            || cd.id == MutSup::extra_commit_ts_col_id;
     });
     const auto & pack_stats = dmfile->getPackStats();
     const auto & pack_properties = dmfile->getPackProperties();
@@ -340,6 +342,7 @@ Block DMFileReader::readImpl(const ReadBlockInfo & read_info)
             case MutSup::delmark_col_id:
                 col = readExtraColumn(cd, start_pack_id, pack_count, read_rows, del_column_clean_read_packs);
                 break;
+            case MutSup::extra_commit_ts_col_id:
             case MutSup::version_col_id:
                 col = readExtraColumn(cd, start_pack_id, pack_count, read_rows, version_column_clean_read_packs);
                 break;
@@ -388,6 +391,7 @@ ColumnPtr DMFileReader::cleanRead(
     {
         return cd.type->createColumnConst(rows_count, Field(static_cast<UInt64>(pack_stats[range.first].first_tag)));
     }
+    case MutSup::extra_commit_ts_col_id:
     case MutSup::version_col_id:
     {
         return cd.type->createColumnConst(
@@ -412,9 +416,14 @@ ColumnPtr DMFileReader::readExtraColumn(
     size_t read_rows,
     const std::vector<size_t> & clean_read_packs)
 {
-    assert(cd.id == MutSup::extra_handle_id || cd.id == MutSup::delmark_col_id || cd.id == MutSup::version_col_id);
+    assert(
+        cd.id == MutSup::extra_handle_id || cd.id == MutSup::delmark_col_id || cd.id == MutSup::version_col_id
+        || cd.id == MutSup::extra_commit_ts_col_id);
 
     const auto & pack_stats = dmfile->getPackStats();
+    auto cd_for_storage = cd;
+    if (cd.id == MutSup::extra_commit_ts_col_id)
+        cd_for_storage.id = MutSup::version_col_id;
     auto read_strategy = ColumnCache::getCleanReadStrategy(start_pack_id, pack_count, clean_read_packs);
     if (read_strategy.size() != 1 && cd.id == MutSup::extra_handle_id)
     {
@@ -445,7 +454,7 @@ ColumnPtr DMFileReader::readExtraColumn(
         }
         case ColumnCache::Strategy::Disk:
         {
-            src_col = readColumn(cd, range.first, range.second - range.first, rows_count);
+            src_col = readColumn(cd_for_storage, range.first, range.second - range.first, rows_count);
             break;
         }
         default:

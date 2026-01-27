@@ -16,6 +16,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTinyReader.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
+#include <Storages/MutableSupport.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 
 
@@ -64,7 +65,8 @@ Columns ColumnFileTinyReader::readFromDisk(
     for (size_t index = 0; index < num_columns_read; ++index)
     {
         const auto & cd = column_defines[index];
-        if (auto it = colid_to_offset.find(cd.id); it != colid_to_offset.end())
+        auto read_col_id = cd.id == MutSup::extra_commit_ts_col_id ? MutSup::version_col_id : cd.id;
+        if (auto it = colid_to_offset.find(read_col_id); it != colid_to_offset.end())
         {
             auto col_index = it->second;
             fields.emplace_back(col_index);
@@ -99,11 +101,12 @@ Columns ColumnFileTinyReader::readFromDisk(
             continue;
 
         const auto & cd = column_defines[index];
-        auto col_index = colid_to_offset.at(cd.id);
+        auto read_col_id = cd.id == MutSup::extra_commit_ts_col_id ? MutSup::version_col_id : cd.id;
+        auto col_index = colid_to_offset.at(read_col_id);
         auto data_buf = page.getFieldData(col_index);
 
         // Deserialize column by pack's schema
-        const auto & type = tiny_file.getDataType(cd.id);
+        const auto & type = tiny_file.getDataType(read_col_id);
         auto col_data = type->createColumn();
         deserializeColumn(*col_data, type, data_buf, tiny_file.rows);
 

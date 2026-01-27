@@ -43,6 +43,8 @@ public:
 
     inline static constexpr ColumnID extra_handle_id = -1;
     inline static constexpr ColumnID extra_table_id_col_id = -3;
+    // `_tidb_commit_ts` in TiDB request, alias to `_INTERNAL_VERSION` in storage layer.
+    inline static constexpr ColumnID extra_commit_ts_col_id = -5;
     inline static constexpr ColumnID version_col_id = -1024;
     inline static constexpr ColumnID delmark_col_id = -1025;
     inline static constexpr ColumnID invalid_col_id = -10000;
@@ -51,6 +53,7 @@ public:
     inline static const String version_column_name = "_INTERNAL_VERSION";
     inline static const String delmark_column_name = "_INTERNAL_DELMARK";
     inline static const String extra_table_id_column_name = "_tidb_tid";
+    inline static const String extra_commit_ts_column_name = "_tidb_commit_ts";
 
     ALWAYS_INLINE static const DataTypePtr & getExtraHandleColumnIntType();
     ALWAYS_INLINE static const DataTypePtr & getExtraHandleColumnStringType();

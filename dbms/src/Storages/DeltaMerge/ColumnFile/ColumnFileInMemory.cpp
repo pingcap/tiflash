@@ -16,6 +16,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
+#include <Storages/MutableSupport.h>
 
 
 namespace DB::DM
@@ -35,11 +36,12 @@ void ColumnFileInMemory::fillColumns(const ColumnDefines & col_defs, size_t col_
     for (size_t i = col_start; i < col_end; ++i)
     {
         const auto & cd = col_defs[i];
-        if (auto it = colid_to_offset.find(cd.id); it != colid_to_offset.end())
+        auto read_col_id = cd.id == MutSup::extra_commit_ts_col_id ? MutSup::version_col_id : cd.id;
+        if (auto it = colid_to_offset.find(read_col_id); it != colid_to_offset.end())
         {
             auto col_offset = it->second;
             // Copy data from cache
-            const auto & type = getDataType(cd.id);
+            const auto & type = getDataType(read_col_id);
             auto col_data = type->createColumn();
             col_data->insertRangeFrom(*(cache->block.getByPosition(col_offset).column), 0, rows);
             // Cast if need

@@ -211,10 +211,11 @@ void StorageDeltaMerge::updateTableColumnInfo()
                 pks_combined_bytes += col.type->getSizeOfValueInMemory();
                 if (pks_combined_bytes > sizeof(Handle))
                 {
-                    throw Exception(fmt::format(
-                        "pk columns bytes exceeds size limit, {} > {}",
-                        pks_combined_bytes,
-                        sizeof(Handle)));
+                    throw Exception(
+                        fmt::format(
+                            "pk columns bytes exceeds size limit, {} > {}",
+                            pks_combined_bytes,
+                            sizeof(Handle)));
                 }
             }
             if (pks.size() == 1)
@@ -290,10 +291,12 @@ void StorageDeltaMerge::updateTableColumnInfo()
             all_columns.end(),
             [](const auto & col, FmtBuffer & fb) { fb.append(col.name); },
             ",");
-        throw Exception(fmt::format(
-            "Can not create table without primary key. Primary keys should be: {}, but only these columns are found:{}",
-            fmt::join(pks, ","),
-            fmt_buf.toString()));
+        throw Exception(
+            fmt::format(
+                "Can not create table without primary key. Primary keys should be: {}, but only these columns are "
+                "found:{}",
+                fmt::join(pks, ","),
+                fmt_buf.toString()));
     }
     assert(!table_column_defines.empty());
 
@@ -673,6 +676,12 @@ void setColumnsToRead(
             col_define = getVersionColumnDefine();
         else if (column_names[i] == MutSup::delmark_column_name)
             col_define = getTagColumnDefine();
+        else if (column_names[i] == MutSup::extra_commit_ts_column_name)
+        {
+            col_define = getVersionColumnDefine();
+            col_define.id = MutSup::extra_commit_ts_col_id;
+            col_define.name = column_names[i];
+        }
         else if (column_names[i] == MutSup::extra_table_id_column_name)
         {
             extra_table_id_index = i;
@@ -1577,10 +1586,11 @@ void updateDeltaMergeTableCreateStatement(
             }
             else
             {
-                throw Exception(fmt::format(
-                    "Try to update table({}.{}) statement with no primary key. ",
-                    database_name,
-                    table_name));
+                throw Exception(
+                    fmt::format(
+                        "Try to update table({}.{}) statement with no primary key. ",
+                        database_name,
+                        table_name));
             }
         }
 
