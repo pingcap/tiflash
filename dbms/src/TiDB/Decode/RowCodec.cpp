@@ -524,6 +524,7 @@ bool appendRowV2ToBlockImpl(
                     ignore_pk_if_absent,
                     force_decode))
             {
+                // If failed to fill default value, return false to let upper layer trigger schema sync.
                 return false;
             }
             column_ids_iter++;
@@ -606,6 +607,7 @@ bool appendRowV2ToBlockImpl(
                     ignore_pk_if_absent,
                     force_decode))
             {
+                // If failed to fill default value, return false to let upper layer trigger schema sync.
                 return false;
             }
         }
