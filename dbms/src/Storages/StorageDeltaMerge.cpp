@@ -1254,14 +1254,6 @@ std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> StorageDeltaMerg
             store->getHandle(),
             decoding_schema_epoch++,
             with_version_column);
-        LOG_INFO(
-            Logger::get("dddddddddd"),
-            "Refresh decoding schema snapshot, table_id={} epoch={} update_ts={} with_version_column={} table_info={}",
-            tidb_table_info.id,
-            decoding_schema_snapshot->decoding_schema_epoch,
-            tidb_table_info.update_timestamp,
-            with_version_column,
-            tidb_table_info.serialize());
         cache_blocks.clear();
         decoding_schema_changed = false;
     }

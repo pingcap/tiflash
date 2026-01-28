@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Columns/IColumn.h>
-#include <Common/FieldVisitors.h>
 #include <IO/Endian.h>
 #include <IO/Operators.h>
 #include <TiDB/Decode/Datum.h>
@@ -486,12 +485,6 @@ bool appendRowV2ToBlockImpl(
         raw_value,
         num_not_null_columns,
         value_offsets);
-    LOG_INFO(
-        Logger::get("dddddddddd"),
-        "not_null_column_ids={} null_column_ids={}",
-        not_null_column_ids,
-        null_column_ids);
-
     size_t values_start_pos = cursor;
     // how many not null columns have been processed
     size_t idx_not_null = 0;
@@ -514,12 +507,6 @@ bool appendRowV2ToBlockImpl(
 
         auto next_datum_column_id = is_null ? null_column_ids[idx_null] : not_null_column_ids[idx_not_null];
         const auto next_column_id = column_ids_iter->first;
-        LOG_INFO(
-            Logger::get("dddddddddd"),
-            "next_column_id={} next_datum_column_id={} force_decode={}",
-            next_column_id,
-            next_datum_column_id,
-            force_decode);
         if (next_column_id > next_datum_column_id)
         {
             // The next_column_id to read is bigger than the next_datum_column_id in encoded row.
@@ -541,19 +528,6 @@ bool appendRowV2ToBlockImpl(
             // a column.
             // Fill with default value and continue to read data for next column id.
             const auto & column_info = column_infos[column_ids_iter->second];
-            LOG_INFO(
-                Logger::get("dddddddddd"),
-                "appendRowV2ToBlockImpl: fill default value for missing column,"
-                " next_column_id={} next_datum_column_id={} block_column_pos={}"
-                " column_info={{name={} id={} not_null={} no_default_val={} default_value={}}}",
-                next_column_id,
-                next_datum_column_id,
-                block_column_pos,
-                column_info.name,
-                column_info.id,
-                column_info.hasNotNullFlag(),
-                column_info.hasNoDefaultValueFlag(),
-                applyVisitor(FieldVisitorToString(), column_info.defaultValueToField()));
             if (!addDefaultValueToColumnIfPossible(
                     column_info,
                     block,
@@ -637,17 +611,6 @@ bool appendRowV2ToBlockImpl(
         if (column_ids_iter->first != pk_handle_id)
         {
             const auto & column_info = column_infos[column_ids_iter->second];
-            LOG_INFO(
-                Logger::get("dddddddddd"),
-                "appendRowV2ToBlockImpl: fill default value for missing column,"
-                " block_column_pos={}"
-                " column_info={{name={} id={} not_null={} no_default_val={} default_value={}}}",
-                block_column_pos,
-                column_info.name,
-                column_info.id,
-                column_info.hasNotNullFlag(),
-                column_info.hasNoDefaultValueFlag(),
-                applyVisitor(FieldVisitorToString(), column_info.defaultValueToField()));
             if (!addDefaultValueToColumnIfPossible(
                     column_info,
                     block,
