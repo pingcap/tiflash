@@ -427,10 +427,21 @@ inline bool addDefaultValueToColumnIfPossible(
     //    - If the column has NO DEFAULT, TiDB should always encode a value. Missing datum implies mismatch.
     //    - If the column has NO origin default, missing datum may come from a newer schema where the column
     //      became NULLABLE and was skipped; require schema sync.
+    //    - If the column state is NOT public, missing datum may come from a newer schema where the column
+    //      became PUBLIC and then became NULLABLE, the datum was skipped; require schema sync.
     //    - If origin default exists, missing datum can be from older rows before the column was added; safe to fill.
+    //
+    // Note that for a non-public column, TiDB could use the `origin_default_value` to fill missing datum for backfilling
+    // during schema change. And before the column state becomes public, TiDB will reset the `origin_default_value` to null.
+    // So when all following conditions are met, it implies schema mismatch and TiFlash should require schema sync:
+    //  - the column datum is missing
+    //  - the column has not null flag
+    //  - the column state is not public
     if (!force_decode && column_info.hasNotNullFlag())
     {
-        if (column_info.hasNoDefaultValueFlag() || !column_info.hasOriginDefaultValue())
+        if (column_info.hasNoDefaultValueFlag() //
+            || column_info.state != TiDB::SchemaState::StatePublic //
+            || !column_info.hasOriginDefaultValue())
             return false;
     }
 
