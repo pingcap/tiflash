@@ -388,8 +388,20 @@ bool appendRowToBlock(
     }
 }
 
-// When the `column_info` is missing in the encoded row, we try to add default value to the `block` at `block_column_pos`.
-// Return true if we could add default value to the column. Otherwise false and the caller should trigger schema sync.
+// When a column is missing in the encoded row, decide whether we can append a value
+// (NULL or origin default) to `block` or we must trigger schema sync.
+//
+// Background
+// - TiDB encode semantics, see [tables.CanSkip](https://github.com/pingcap/tidb/blob/v8.5.5/pkg/table/tables/tables.go#L1463-L1489)
+// - PK handle columns may be omitted from the value part and decoded from the key.
+// - A NULL column may be omitted only when BOTH DefaultValue and OriginDefaultValue are empty.
+// - For NOT NULL columns, TiDB must encode the value in the row unless the column did not
+//   exist in the writer schema (old data); in that case OriginDefaultValue is expected.
+//
+// Policy here:
+// - If the omission is clearly valid under the current schema, we fill a value and return true.
+// - Otherwise return false (force_decode == false) to let the caller sync schema and retry.
+// - If force_decode == true, we fall back to best-effort filling.
 inline bool addDefaultValueToColumnIfPossible(
     const ColumnInfo & column_info,
     Block & block,
@@ -397,57 +409,34 @@ inline bool addDefaultValueToColumnIfPossible(
     bool ignore_pk_if_absent,
     bool force_decode)
 {
+    // 1) Primary-key columns can be decoded from the key for pk_is_handle / common-handle tables.
+    //    Skip value-part filling here if allowed.
     if (column_info.hasPriKeyFlag())
     {
-        // For clustered index or pk_is_handle, if the pk column does not exists, it can still be decoded from the key.
-        // just skip this column.
         if (ignore_pk_if_absent)
             return true;
 
-        assert(!ignore_pk_if_absent);
+        // For non-clustered tables, a missing PK column implies schema mismatch.
         if (!force_decode)
             return false;
-        // Else non-clustered index, and not pk_is_handle, it could be a row encoded by older schema,
-        // we need to fill the column which has primary key flag with default value.
-        // fallthrough to fill default value when `force_decode==true`
+        // fallthrough for best-effort fill when force_decode == true
     }
 
-    if (column_info.hasNotNullFlag())
+    // 2) NOT NULL columns:
+    //    - If the column has NO DEFAULT, TiDB should always encode a value. Missing datum implies mismatch.
+    //    - If the column has NO origin default, missing datum may come from a newer schema where the column
+    //      became NULLABLE and was skipped; require schema sync.
+    //    - If origin default exists, missing datum can be from older rows before the column was added; safe to fill.
+    if (!force_decode && column_info.hasNotNullFlag())
     {
-        if (!force_decode)
-        {
-            if (column_info.hasNoDefaultValueFlag())
-            {
-                // This is a Column that defined as NOT NULL but no default value. In this case, user
-                // should fill the column value when inserting data. But in the encoded value, the
-                // datum of this Column is missing.
-                // It could be a row encoded by newer schema after turning `NOT NULL` to `NULLABLE`.
-                // Return false to trigger schema sync when `force_decode==false`.
-                return false;
-            }
-
-            assert(!column_info.hasNoDefaultValueFlag());
-            if (!column_info.hasOriDefaultValue())
-            {
-                // This is a Column that defined as NOT NULL with default value. In this case, tidb-server
-                // should fill the column value when inserting data unless the Column's default value is null,
-                // and the value equals to that but has no origin default.
-                // Reference: https://github.com/pingcap/tidb/blob/v8.5.5/pkg/table/tables/tables.go#L1463-L1489
-                // Now in the encoded value, the datum of this Column is missing. It could be a row encoded by
-                // older schema after turning `NOT NULL` to `NULLABLE`. If the column_info has no origin default value,
-                // Return false to trigger schema sync when `force_decode==false`.
-                return false;
-            }
-            // Else the Column has a not null origin default value, the key-value should be encoded in a old schema that
-            // this Column is not yet added. Fallthrough to fill the column with original default value.
-        }
-        // Else force_decode == true, the row does not contain this "not null" / "no default value" column.
-        // It could be a row encoded by older schema, fallthrough to fill the column with original default value.
+        if (column_info.hasNoDefaultValueFlag() || !column_info.hasOriginDefaultValue())
+            return false;
     }
 
-    // We consider a missing column could be safely filled with NULL or original default value.
-    // This could saves lots of unnecessary schema syncs for old data with a newer schema that has newly added columns.
-    auto * raw_column = const_cast<IColumn *>((block.getByPosition(block_column_pos)).column.get());
+    // 3) Fill using origin default or NULL.
+    //    Note: defaultValueToField() uses origin_default_value/origin_default_bit_value,
+    //    and falls back to NULL (nullable) or GenDefaultField (NOT NULL) when they are empty.
+    auto * raw_column = const_cast<IColumn *>(block.getByPosition(block_column_pos).column.get());
     raw_column->insert(column_info.defaultValueToField());
     return true;
 }
