@@ -3402,7 +3402,10 @@ std::tuple<SkippableBlockInputStreamPtr, bool> Segment::getConcatVectorIndexBloc
     // set `is_fast_scan` to true to try to enable clean read
     auto enable_handle_clean_read = !hasColumn(columns_to_read, MutSup::extra_handle_id);
     constexpr auto is_fast_scan = true;
-    auto enable_del_clean_read = !hasColumn(columns_to_read, MutSup::delmark_col_id);
+    // `_tidb_commit_ts` is an alias of `_INTERNAL_VERSION`, so when it is requested, we must disable del clean read
+    // to make sure version column is actually read from storage.
+    auto enable_del_clean_read = !hasColumn(columns_to_read, MutSup::delmark_col_id)
+        && !hasColumn(columns_to_read, MutSup::version_col_id) && !hasColumn(columns_to_read, MutSup::extra_commit_ts_col_id);
 
     SkippableBlockInputStreamPtr stable_stream = segment_snap->stable->tryGetInputStreamWithVectorIndex(
         dm_context,
