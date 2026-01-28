@@ -47,6 +47,10 @@ struct RegionWriteCFDataTrait
 
         RawTiDBPK tidb_pk = RecordKVFormat::getRawTiDBPK(raw_key);
         Timestamp ts = RecordKVFormat::getTs(key);
+        // Some snapshot formats may miss the ts suffix in write cf key (or have it as 0).
+        // Fallback to `last_change_ts` in write cf value to recover commit_ts.
+        if (unlikely(ts == 0 && decoded_val->last_change_ts != 0))
+            ts = decoded_val->last_change_ts;
         return Map::value_type(
             Key(std::move(tidb_pk), ts),
             Value(

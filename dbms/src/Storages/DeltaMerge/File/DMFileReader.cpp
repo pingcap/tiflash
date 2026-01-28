@@ -83,23 +83,25 @@ DMFileReader::DMFileReader(
     // Initialize column_streams
     for (const auto & cd : read_columns)
     {
+        // `_tidb_commit_ts` is an alias to `_INTERNAL_VERSION` at storage layer.
+        const auto col_id_for_storage = cd.id == MutSup::extra_commit_ts_col_id ? MutSup::version_col_id : cd.id;
         // New inserted column, will be filled with default value later
-        if (!dmfile->isColumnExist(cd.id))
+        if (!dmfile->isColumnExist(col_id_for_storage))
             continue;
 
         // Load stream for existing columns according to DataType in disk
         auto callback = [&](const IDataType::SubstreamPath & substream) {
-            const auto stream_name = DMFile::getFileNameBase(cd.id, substream);
+            const auto stream_name = DMFile::getFileNameBase(col_id_for_storage, substream);
             auto stream = std::make_unique<ColumnReadStream>( //
                 *this,
-                cd.id,
+                col_id_for_storage,
                 stream_name,
                 max_read_buffer_size,
                 log,
                 read_limiter);
             column_streams.emplace(stream_name, std::move(stream));
         };
-        const auto data_type = dmfile->getColumnStat(cd.id).type;
+        const auto data_type = dmfile->getColumnStat(col_id_for_storage).type;
         data_type->enumerateStreams(callback, {});
     }
 
