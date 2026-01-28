@@ -355,12 +355,6 @@ struct InnerDecodedWriteCFValue
 {
     UInt8 write_type;
     Timestamp prewrite_ts;
-    // The `commit_ts` of the latest PUT/DELETE record in write cf value. For Put/Delete record,
-    // it should be the commit_ts of this record itself.
-    //
-    // NOTE: Under some snapshot formats, the commit_ts suffix in write cf key can be missing or 0.
-    // In that case, we can fallback to this field to recover commit_ts.
-    Timestamp last_change_ts = 0;
     std::shared_ptr<const TiKVValue> short_value;
 };
 
@@ -379,7 +373,6 @@ inline DecodedWriteCFValue decodeWriteCfValue(const TiKVValue & value)
 
     Timestamp prewrite_ts = RecordKVFormat::readVarUInt(data, len); // ts
 
-    Timestamp last_change_ts = 0;
     std::string_view short_value;
     while (len)
     {
@@ -406,8 +399,9 @@ inline DecodedWriteCFValue decodeWriteCfValue(const TiKVValue & value)
         case RecordKVFormat::LAST_CHANGE_PREFIX:
         {
             // Used to accelerate TiKV MVCC scan, useless for TiFlash.
-            last_change_ts = readUInt64(data, len);
+            UInt64 last_change_ts = readUInt64(data, len);
             UInt64 versions_to_last_change = readVarUInt(data, len);
+            UNUSED(last_change_ts);
             UNUSED(versions_to_last_change);
             break;
         }
@@ -426,7 +420,6 @@ inline DecodedWriteCFValue decodeWriteCfValue(const TiKVValue & value)
     return InnerDecodedWriteCFValue{
         write_type,
         prewrite_ts,
-        last_change_ts,
         short_value.empty() ? nullptr : std::make_shared<const TiKVValue>(short_value.data(), short_value.length())};
 }
 
