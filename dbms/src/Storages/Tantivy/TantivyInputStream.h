@@ -205,7 +205,7 @@ protected:
             if (has_null)
             {
                 RUNTIME_CHECK_MSG(
-                    col->isNullable(),
+                    col->isColumnNullable(),
                     "column {} is not nullable, but got null value from TiCI",
                     name_and_type.name);
             }
