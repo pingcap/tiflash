@@ -67,6 +67,8 @@ try
                 [](const TableInfo & table_info) {
                     ASSERT_EQ(table_info.name, "t");
                     ASSERT_EQ(table_info.id, 45L);
+                    ASSERT_EQ(table_info.columns.size(), 1U);
+                    ASSERT_FALSE(table_info.columns[0].hasOriginDefaultValue());
                 }},
             // Test with tiflash_replica information
             ParseCase{
@@ -79,6 +81,8 @@ try
             ParseCase{
                 R"json({"id":45,"name":{"O":"t","L":"t"},"charset":"utf8mb4","collate":"utf8mb4_bin","cols":[{"id":1,"name":{"O":"t","L":"t"},"offset":0,"origin_default":"\u0000\u00124","origin_default_bit":null,"default":null,"default_bit":null,"default_is_expr":false,"generated_expr_string":"","generated_stored":false,"dependences":null,"type":{"Tp":254,"Flag":129,"Flen":4,"Decimal":0,"Charset":"binary","Collate":"binary","Elems":null},"state":5,"comment":"","hidden":false,"change_state_info":null,"version":2}],"index_info":null,"constraint_info":null,"fk_info":null,"state":5,"pk_is_handle":false,"is_common_handle":false,"comment":"","auto_inc_id":0,"auto_id_cache":0,"auto_rand_id":0,"max_col_id":1,"max_idx_id":0,"max_cst_id":0,"update_timestamp":418683341902184450,"ShardRowIDBits":0,"max_shard_row_id_bits":0,"auto_random_bits":0,"pre_split_regions":0,"partition":null,"compression":"","view":null,"sequence":null,"Lock":null,"version":3,"tiflash_replica":{"Count":1,"LocationLabels":[],"Available":false,"AvailablePartitionIDs":null}})json",
                 [](const TableInfo & table_info) {
+                    ASSERT_EQ(table_info.columns.size(), 1U);
+                    ASSERT_EQ(table_info.columns[0].hasOriginDefaultValue(), true);
                     ASSERT_EQ(
                         table_info.columns[0].defaultValueToField().get<String>(),
                         Field(String(
@@ -91,6 +95,8 @@ try
             ParseCase{
                 R"json({"id":45,"name":{"O":"t","L":"t"},"charset":"utf8mb4","collate":"utf8mb4_bin","cols":[{"id":1,"name":{"O":"t","L":"t"},"offset":0,"origin_default":"\u0000\u00124","origin_default_bit":null,"default":null,"default_bit":null,"default_is_expr":false,"generated_expr_string":"","generated_stored":false,"dependences":null,"type":{"Tp":254,"Flag":129,"Flen":3,"Decimal":0,"Charset":"binary","Collate":"binary","Elems":null},"state":5,"comment":"","hidden":false,"change_state_info":null,"version":2}],"index_info":null,"constraint_info":null,"fk_info":null,"state":5,"pk_is_handle":false,"is_common_handle":false,"comment":"","auto_inc_id":0,"auto_id_cache":0,"auto_rand_id":0,"max_col_id":1,"max_idx_id":0,"max_cst_id":0,"update_timestamp":418683341902184450,"ShardRowIDBits":0,"max_shard_row_id_bits":0,"auto_random_bits":0,"pre_split_regions":0,"partition":null,"compression":"","view":null,"sequence":null,"Lock":null,"version":3,"tiflash_replica":{"Count":1,"LocationLabels":[],"Available":false,"AvailablePartitionIDs":null}})json",
                 [](const TableInfo & table_info) {
+                    ASSERT_EQ(table_info.columns.size(), 1U);
+                    ASSERT_EQ(table_info.columns[0].hasOriginDefaultValue(), true);
                     ASSERT_EQ(
                         table_info.columns[0].defaultValueToField().get<String>(),
                         Field(String(
@@ -137,6 +143,37 @@ try
                     ASSERT_TRUE(col_1.hasMultipleKeyFlag());
                     ASSERT_TRUE(col_1.hasBinaryFlag());
                 }},
+<<<<<<< HEAD
+=======
+            // Check the "origin_default" value parsing
+            // See https://github.com/pingcap/tiflash/issues/10663 for more details.
+            ParseCase{
+                R"json({"cols":[{"id":1,"name":{"L":"a","O":"a"},"offset":0,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":3,"Flen":11,"Tp":3}},{"id":2,"name":{"L":"b","O":"b"},"offset":1,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":0,"Flen":11,"Tp":3}},{"default":"","id":3,"name":{"L":"site_code","O":"site_code"},"offset":2,"origin_default":"100","state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Flag":3,"Flen":64,"Tp":15}}],"id":130,"index_info":[{"id":1,"idx_cols":[{"length":-1,"name":{"L":"a","O":"a"},"offset":0},{"length":-1,"name":{"L":"site_code","O":"site_code"},"offset":2}],"idx_name":{"L":"primary","O":"primary"},"index_type":1,"is_global":false,"is_invisible":false,"is_primary":true,"is_unique":true,"state":5}],"is_common_handle":false,"keyspace_id":4294967295,"name":{"L":"t1","O":"t1"},"pk_is_handle":false,"state":5,"tiflash_replica":{"Available":true,"Count":1},"update_timestamp":463590354027544590})json",
+                [](const TableInfo & table_info) {
+                    ASSERT_EQ(table_info.name, "t1");
+                    ASSERT_EQ(table_info.id, 130);
+                    ASSERT_EQ(table_info.columns.size(), 3);
+                    auto col_3 = table_info.getColumnInfo(3);
+                    ASSERT_EQ(col_3.tp, TiDB::TP::TypeVarchar);
+                    ASSERT_TRUE(col_3.hasNotNullFlag());
+                    ASSERT_TRUE(col_3.hasOriginDefaultValue());
+                    // The "origin_default" is "100", which is used for filling default value for old rows that is inserted before this column is added.
+                    ASSERT_EQ(col_3.defaultValueToField().get<String>(), "100");
+                }},
+            ParseCase{
+                // Similar to the previous case, but the default value is different
+                R"json({"cols":[{"id":1,"name":{"L":"a","O":"a"},"offset":0,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":3,"Flen":11,"Tp":3}},{"id":2,"name":{"L":"b","O":"b"},"offset":1,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":0,"Flen":11,"Tp":3}},{"default":"","id":3,"name":{"L":"site_code","O":"site_code"},"offset":2,"origin_default":"200","state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Flag":3,"Flen":64,"Tp":15}}],"id":139,"index_info":[{"id":1,"idx_cols":[{"length":-1,"name":{"L":"a","O":"a"},"offset":0},{"length":-1,"name":{"L":"site_code","O":"site_code"},"offset":2}],"idx_name":{"L":"primary","O":"primary"},"index_type":1,"is_global":false,"is_invisible":false,"is_primary":true,"is_unique":true,"state":5}],"is_common_handle":false,"keyspace_id":4294967295,"name":{"L":"t1","O":"t1"},"pk_is_handle":false,"state":5,"tiflash_replica":{"Available":true,"Count":1},"update_timestamp":463590371866443800})json",
+                [](const TableInfo & table_info) {
+                    ASSERT_EQ(table_info.name, "t1");
+                    ASSERT_EQ(table_info.id, 139);
+                    ASSERT_EQ(table_info.columns.size(), 3);
+                    auto col_3 = table_info.getColumnInfo(3);
+                    ASSERT_EQ(col_3.tp, TiDB::TP::TypeVarchar);
+                    ASSERT_TRUE(col_3.hasNotNullFlag());
+                    // The "origin_default" is "200", which is used for filling default value for old rows that is inserted before this column is added.
+                    ASSERT_EQ(col_3.defaultValueToField().get<String>(), "200");
+                }},
+>>>>>>> 01b12dd900 (ddl: Fix default value filling with finer granularity (#10682))
     };
 
     for (const auto & c : cases)
