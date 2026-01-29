@@ -151,6 +151,7 @@ protected:
             }
 
             auto col = res.getByName(name_and_type.name).column->assumeMutable();
+            bool has_null = false;
             if (removeNullable(name_and_type.type)->isStringOrFixedString())
             {
                 for (auto & doc : documents)
@@ -158,6 +159,7 @@ protected:
                     const auto & field_value = doc.fieldValues[idx];
                     if (field_value.is_null)
                     {
+                        has_null = true;
                         col->insert(Field());
                     }
                     else
@@ -174,6 +176,7 @@ protected:
                     const auto & field_value = doc.fieldValues[idx];
                     if (field_value.is_null)
                     {
+                        has_null = true;
                         col->insert(Field());
                     }
                     else
@@ -189,6 +192,7 @@ protected:
                     const auto & field_value = doc.fieldValues[idx];
                     if (field_value.is_null)
                     {
+                        has_null = true;
                         col->insert(Field());
                     }
                     else
@@ -197,6 +201,13 @@ protected:
                         col->insert(Field(t));
                     }
                 }
+            }
+            if (has_null)
+            {
+                RUNTIME_CHECK_MSG(
+                    col->isNullable(),
+                    "column {} is not nullable, but got null value from TiCI",
+                    name_and_type.name);
             }
         }
         return res;
