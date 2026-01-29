@@ -723,7 +723,7 @@ try
     // the start_key and end_key for table_id = 68
     String region_start_key(bytesFromHexString("7480000000000002FF7C5F720000000000FA"));
     String region_end_key(bytesFromHexString("7480000000000002FF7D00000000000000F8"));
-    auto region = RegionBench::makeRegionForRange(region_id, region_start_key, region_end_key);
+    auto region = makeRegion(region_id, region_start_key, region_end_key);
     // the hex kv dump from RaftLog
     std::vector<std::tuple<std::string_view, std::string_view>> kvs = {
         {
@@ -743,7 +743,7 @@ try
     };
     for (const auto & [k, v] : kvs)
     {
-        region->insertDebug("write", TiKVKey(bytesFromHexString(k)), TiKVValue(bytesFromHexString(v)));
+        region->insert("write", TiKVKey(bytesFromHexString(k)), TiKVValue(bytesFromHexString(v)));
     }
 
     auto data_list_read = ReadRegionCommitCache(region, true);
