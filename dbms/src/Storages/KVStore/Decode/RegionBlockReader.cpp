@@ -179,6 +179,7 @@ bool RegionBlockReader::readImpl(Block & block, const ReadList & data_list, bool
 {
     VersionColResolver<ReadList> version_col_resolver;
     version_col_resolver.check(block, schema_snapshot->column_defines->size());
+    // The column_ids to read according to schema_snapshot, each elem is (column_id, block_pos)
     const auto & read_column_ids = schema_snapshot->getColId2BlockPosMap();
     const auto & pk_column_ids = schema_snapshot->pk_column_ids;
     const auto & pk_pos_map = schema_snapshot->pk_pos_map;
@@ -269,6 +270,8 @@ bool RegionBlockReader::readImpl(Block & block, const ReadList & data_list, bool
             else
             {
                 // Parse column value from encoded value
+                // Decode the column_ids from `column_ids_iter` to `read_column_ids.end()`
+                // and insert into `block` at position starting from `next_column_pos`
                 if (!appendRowToBlock(
                         *value_ptr,
                         column_ids_iter,

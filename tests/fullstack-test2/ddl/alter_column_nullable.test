@@ -144,3 +144,124 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.alt
 +------+---+----+
 
 mysql> drop table if exists test.alt2
+
+#############
+# issue 10680, TiFlash data inconsistent with TiKV after modifying a column from NOT NULL to NULL
+mysql> DROP DATABASE IF EXISTS db_1483421321;
+mysql> CREATE DATABASE db_1483421321;
+mysql> CREATE TABLE db_1483421321.t0(c0 TINYINT, handle INT NOT NULL AUTO_INCREMENT, PRIMARY KEY(handle));
+mysql> ALTER TABLE db_1483421321.t0 SET TIFLASH REPLICA 1;
+func> wait_table db_1483421321 t0
+# empty table
+mysql> set session tidb_isolation_read_engines='tiflash'; SELECT * FROM db_1483421321.t0 order by handle;
+mysql> set session tidb_isolation_read_engines='tikv'; SELECT * FROM db_1483421321.t0 order by handle;
+
+mysql> ALTER TABLE db_1483421321.t0 ADD COLUMN c1 DECIMAL NULL;
+mysql> ALTER TABLE db_1483421321.t0 ADD COLUMN c2 FLOAT NULL DEFAULT 0.0795439693286002;
+mysql> ALTER TABLE db_1483421321.t0 ADD COLUMN c5 DECIMAL NOT NULL;
+mysql> ALTER TABLE db_1483421321.t0 ADD COLUMN c4 DECIMAL DEFAULT 247262911;
+mysql> ALTER TABLE db_1483421321.t0 MODIFY COLUMN c2 FLOAT NOT NULL;
+mysql> ALTER TABLE db_1483421321.t0 MODIFY COLUMN c5 DECIMAL NULL;
+mysql> ALTER TABLE db_1483421321.t0 MODIFY COLUMN c1 BIGINT DEFAULT -56083770 NOT NULL;
+
+# insert handle == 1
+mysql> INSERT INTO db_1483421321.t0 (c1, c2, c5, c4) VALUES (-2051270087, 0.44141045099028775, 0.0, 15523);
+# update handle == 1
+mysql> UPDATE db_1483421321.t0 SET c5 = 870337888;
+
+mysql> ALTER TABLE db_1483421321.t0 MODIFY COLUMN c1 BIGINT NULL;
+# insert handle == 2
+mysql> INSERT INTO db_1483421321.t0 (c2, c5, c4) VALUES (0.004406799693866592, 0.8752311290235516, 14652);
+mysql> set session tidb_isolation_read_engines='tiflash'; SELECT * FROM db_1483421321.t0 order by handle;
++------+--------+-------------+--------------+-----------+-------+
+| c0   | handle | c1          | c2           | c5        | c4    |
++------+--------+-------------+--------------+-----------+-------+
+| NULL |      1 | -2051270087 |   0.44141045 | 870337888 | 15523 |
+| NULL |      2 |        NULL | 0.0044067996 |         1 | 14652 |
++------+--------+-------------+--------------+-----------+-------+
+mysql> set session tidb_isolation_read_engines='tikv'; SELECT * FROM db_1483421321.t0 order by handle;
++------+--------+-------------+--------------+-----------+-------+
+| c0   | handle | c1          | c2           | c5        | c4    |
++------+--------+-------------+--------------+-----------+-------+
+| NULL |      1 | -2051270087 |   0.44141045 | 870337888 | 15523 |
+| NULL |      2 |        NULL | 0.0044067996 |         1 | 14652 |
++------+--------+-------------+--------------+-----------+-------+
+
+# insert handle == 3
+mysql> INSERT INTO db_1483421321.t0 (c2, c5, c4) VALUES (0.004406799693866592, 0.8752311290235516, 14652);
+mysql> set session tidb_isolation_read_engines='tiflash'; SELECT * FROM db_1483421321.t0 order by handle;
++------+--------+-------------+--------------+-----------+-------+
+| c0   | handle | c1          | c2           | c5        | c4    |
++------+--------+-------------+--------------+-----------+-------+
+| NULL |      1 | -2051270087 |   0.44141045 | 870337888 | 15523 |
+| NULL |      2 |        NULL | 0.0044067996 |         1 | 14652 |
+| NULL |      3 |        NULL | 0.0044067996 |         1 | 14652 |
++------+--------+-------------+--------------+-----------+-------+
+mysql> set session tidb_isolation_read_engines='tikv'; SELECT * FROM db_1483421321.t0 order by handle;
++------+--------+-------------+--------------+-----------+-------+
+| c0   | handle | c1          | c2           | c5        | c4    |
++------+--------+-------------+--------------+-----------+-------+
+| NULL |      1 | -2051270087 |   0.44141045 | 870337888 | 15523 |
+| NULL |      2 |        NULL | 0.0044067996 |         1 | 14652 |
+| NULL |      3 |        NULL | 0.0044067996 |         1 | 14652 |
++------+--------+-------------+--------------+-----------+-------+
+
+mysql> drop table if exists db_1483421321.t0
+
+#############
+# issue 10680 variation, TiFlash data inconsistent with TiKV after modifying a column from NULL TO NOT NULL then to NULL again
+mysql> DROP DATABASE IF EXISTS db_1483421321;
+mysql> CREATE DATABASE db_1483421321;
+mysql> CREATE TABLE db_1483421321.t1(c0 TINYINT, handle INT NOT NULL AUTO_INCREMENT, PRIMARY KEY(handle));
+mysql> ALTER TABLE db_1483421321.t1 SET TIFLASH REPLICA 1;
+func> wait_table db_1483421321 t1
+# empty table
+mysql> set session tidb_isolation_read_engines='tiflash'; SELECT * FROM db_1483421321.t1 order by handle;
+mysql> set session tidb_isolation_read_engines='tikv'; SELECT * FROM db_1483421321.t1 order by handle;
+
+mysql> ALTER TABLE db_1483421321.t1 ADD COLUMN c1 DECIMAL NULL;
+mysql> ALTER TABLE db_1483421321.t1 ADD COLUMN c2 FLOAT NULL DEFAULT 0.0795439693286002;
+mysql> ALTER TABLE db_1483421321.t1 ADD COLUMN c5 DECIMAL NOT NULL;
+mysql> ALTER TABLE db_1483421321.t1 ADD COLUMN c4 DECIMAL DEFAULT 247262911;
+
+mysql> INSERT INTO db_1483421321.t1 (c1, c2, c5, c4) VALUES (-2051270087, 0.44141045099028775, 0.0, 15523);
+
+mysql> ALTER TABLE db_1483421321.t1 MODIFY COLUMN c1 BIGINT DEFAULT -56083770 NOT NULL;
+mysql> UPDATE db_1483421321.t1 SET c5 = 870337888;
+
+mysql> ALTER TABLE db_1483421321.t1 MODIFY COLUMN c1 BIGINT NULL;
+mysql> INSERT INTO db_1483421321.t1 (c2, c5, c4) VALUES (0.004406799693866592, 0.8752311290235516, 14652);
+mysql> set session tidb_isolation_read_engines='tiflash'; SELECT * FROM db_1483421321.t1 order by handle;
++------+--------+-------------+--------------+-----------+-------+
+| c0   | handle | c1          | c2           | c5        | c4    |
++------+--------+-------------+--------------+-----------+-------+
+| NULL |      1 | -2051270087 |   0.44141045 | 870337888 | 15523 |
+| NULL |      2 |        NULL | 0.0044067996 |         1 | 14652 |
++------+--------+-------------+--------------+-----------+-------+
+mysql> set session tidb_isolation_read_engines='tikv'; SELECT * FROM db_1483421321.t1 order by handle;
++------+--------+-------------+--------------+-----------+-------+
+| c0   | handle | c1          | c2           | c5        | c4    |
++------+--------+-------------+--------------+-----------+-------+
+| NULL |      1 | -2051270087 |   0.44141045 | 870337888 | 15523 |
+| NULL |      2 |        NULL | 0.0044067996 |         1 | 14652 |
++------+--------+-------------+--------------+-----------+-------+
+
+mysql> INSERT INTO db_1483421321.t1 (c2, c5, c4) VALUES (0.44444, 0.8888, 22222);
+mysql> set session tidb_isolation_read_engines='tiflash'; SELECT * FROM db_1483421321.t1 order by handle;
++------+--------+-------------+--------------+-----------+-------+
+| c0   | handle | c1          | c2           | c5        | c4    |
++------+--------+-------------+--------------+-----------+-------+
+| NULL |      1 | -2051270087 |   0.44141045 | 870337888 | 15523 |
+| NULL |      2 |        NULL | 0.0044067996 |         1 | 14652 |
+| NULL |      3 |        NULL |      0.44444 |         1 | 22222 |
++------+--------+-------------+--------------+-----------+-------+
+mysql> set session tidb_isolation_read_engines='tikv'; SELECT * FROM db_1483421321.t1 order by handle;
++------+--------+-------------+--------------+-----------+-------+
+| c0   | handle | c1          | c2           | c5        | c4    |
++------+--------+-------------+--------------+-----------+-------+
+| NULL |      1 | -2051270087 |   0.44141045 | 870337888 | 15523 |
+| NULL |      2 |        NULL | 0.0044067996 |         1 | 14652 |
+| NULL |      3 |        NULL |      0.44444 |         1 | 22222 |
++------+--------+-------------+--------------+-----------+-------+
+
+mysql> drop table if exists db_1483421321.t1
