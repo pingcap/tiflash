@@ -117,6 +117,23 @@ ColumnInfo::ColumnInfo(Poco::JSON::Object::Ptr json)
     }
 
 
+bool ColumnInfo::hasOriginDefaultValue() const
+{
+    // Whether `origin_default_value` is set.
+    return !origin_default_value.isEmpty();
+}
+
+// Convert the column's *origin default* into a Field for storage decoding/backfill.
+//
+// Note: TiFlash intentionally uses origin_default_value
+// instead of ColumnInfo::default_value, because TiDB’s encoding/CanSkip logic is
+// based on origin defaults.
+//
+// Semantics:
+// - If both origin defaults are empty and the column is nullable -> return NULL Field.
+// - If both are empty and the column is NOT NULL -> return GenDefaultField (type-specific zero).
+// - Otherwise parse/convert the origin default according to column type
+//   (time/decimal/enum/set/bit/json/etc.).
 Field ColumnInfo::defaultValueToField() const
 {
     const auto & value = origin_default_value;
@@ -448,7 +465,8 @@ try
     if (!type_json->isNull("Collate"))
         collate = type_json->get("Collate");
     state = static_cast<SchemaState>(json->getValue<Int32>("state"));
-    comment = json->getValue<String>("comment");
+    if (json->has("comment") && !json->isNull("comment"))
+        comment = json->getValue<String>("comment");
 }
 catch (const Poco::Exception & e)
 {
@@ -988,7 +1006,8 @@ try
         is_common_handle = obj->getValue<bool>("is_common_handle");
     if (!is_common_handle)
         index_infos.clear();
-    comment = obj->getValue<String>("comment");
+    if (obj->has("comment") && !obj->isNull("comment"))
+        comment = obj->getValue<String>("comment");
     if (obj->has("update_timestamp"))
         update_timestamp = obj->getValue<Timestamp>("update_timestamp");
     auto partition_obj = obj->getObject("partition");

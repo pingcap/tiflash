@@ -60,6 +60,8 @@ try
                 [](const TableInfo & table_info) {
                     ASSERT_EQ(table_info.name, "t");
                     ASSERT_EQ(table_info.id, 45L);
+                    ASSERT_EQ(table_info.columns.size(), 1U);
+                    ASSERT_FALSE(table_info.columns[0].hasOriginDefaultValue());
                 }},
             // Test with tiflash_replica information
             ParseCase{
@@ -72,6 +74,8 @@ try
             ParseCase{
                 R"json({"id":45,"name":{"O":"t","L":"t"},"charset":"utf8mb4","collate":"utf8mb4_bin","cols":[{"id":1,"name":{"O":"t","L":"t"},"offset":0,"origin_default":"\u0000\u00124","origin_default_bit":null,"default":null,"default_bit":null,"default_is_expr":false,"generated_expr_string":"","generated_stored":false,"dependences":null,"type":{"Tp":254,"Flag":129,"Flen":4,"Decimal":0,"Charset":"binary","Collate":"binary","Elems":null},"state":5,"comment":"","hidden":false,"change_state_info":null,"version":2}],"index_info":null,"constraint_info":null,"fk_info":null,"state":5,"pk_is_handle":false,"is_common_handle":false,"comment":"","auto_inc_id":0,"auto_id_cache":0,"auto_rand_id":0,"max_col_id":1,"max_idx_id":0,"max_cst_id":0,"update_timestamp":418683341902184450,"ShardRowIDBits":0,"max_shard_row_id_bits":0,"auto_random_bits":0,"pre_split_regions":0,"partition":null,"compression":"","view":null,"sequence":null,"Lock":null,"version":3,"tiflash_replica":{"Count":1,"LocationLabels":[],"Available":false,"AvailablePartitionIDs":null}})json",
                 [](const TableInfo & table_info) {
+                    ASSERT_EQ(table_info.columns.size(), 1U);
+                    ASSERT_EQ(table_info.columns[0].hasOriginDefaultValue(), true);
                     ASSERT_EQ(
                         table_info.columns[0].defaultValueToField().get<String>(),
                         Field(String(
@@ -84,6 +88,8 @@ try
             ParseCase{
                 R"json({"id":45,"name":{"O":"t","L":"t"},"charset":"utf8mb4","collate":"utf8mb4_bin","cols":[{"id":1,"name":{"O":"t","L":"t"},"offset":0,"origin_default":"\u0000\u00124","origin_default_bit":null,"default":null,"default_bit":null,"default_is_expr":false,"generated_expr_string":"","generated_stored":false,"dependences":null,"type":{"Tp":254,"Flag":129,"Flen":3,"Decimal":0,"Charset":"binary","Collate":"binary","Elems":null},"state":5,"comment":"","hidden":false,"change_state_info":null,"version":2}],"index_info":null,"constraint_info":null,"fk_info":null,"state":5,"pk_is_handle":false,"is_common_handle":false,"comment":"","auto_inc_id":0,"auto_id_cache":0,"auto_rand_id":0,"max_col_id":1,"max_idx_id":0,"max_cst_id":0,"update_timestamp":418683341902184450,"ShardRowIDBits":0,"max_shard_row_id_bits":0,"auto_random_bits":0,"pre_split_regions":0,"partition":null,"compression":"","view":null,"sequence":null,"Lock":null,"version":3,"tiflash_replica":{"Count":1,"LocationLabels":[],"Available":false,"AvailablePartitionIDs":null}})json",
                 [](const TableInfo & table_info) {
+                    ASSERT_EQ(table_info.columns.size(), 1U);
+                    ASSERT_EQ(table_info.columns[0].hasOriginDefaultValue(), true);
                     ASSERT_EQ(
                         table_info.columns[0].defaultValueToField().get<String>(),
                         Field(String(
