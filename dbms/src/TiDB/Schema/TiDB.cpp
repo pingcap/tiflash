@@ -481,7 +481,8 @@ try
     if (!type_json->isNull("Collate"))
         collate = type_json->get("Collate");
     state = static_cast<SchemaState>(json->getValue<Int32>("state"));
-    comment = json->getValue<String>("comment");
+    if (json->has("comment") && !json->isNull("comment"))
+        comment = json->getValue<String>("comment");
 }
 catch (const Poco::Exception & e)
 {
@@ -856,7 +857,8 @@ try
 {
     id = json->getValue<Int64>("id");
     idx_name = json->getObject("idx_name")->getValue<String>("L");
-    tbl_name = json->getObject("tbl_name")->getValue<String>("L");
+    if (json->has("tbl_name"))
+        tbl_name = json->getObject("tbl_name")->getValue<String>("L");
 
     auto cols_array = json->getArray("idx_cols");
     idx_cols.clear();
@@ -1021,7 +1023,8 @@ try
         is_common_handle = obj->getValue<bool>("is_common_handle");
     if (!is_common_handle)
         index_infos.clear();
-    comment = obj->getValue<String>("comment");
+    if (obj->has("comment") && !obj->isNull("comment"))
+        comment = obj->getValue<String>("comment");
     if (obj->has("update_timestamp"))
         update_timestamp = obj->getValue<Timestamp>("update_timestamp");
     auto partition_obj = obj->getObject("partition");
