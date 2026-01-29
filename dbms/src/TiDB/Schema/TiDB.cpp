@@ -242,6 +242,23 @@ ColumnInfo::ColumnInfo(Poco::JSON::Object::Ptr json)
     }
 
 
+bool ColumnInfo::hasOriginDefaultValue() const
+{
+    // Whether `origin_default_value` or `origin_default_bit_value` is set.
+    return !origin_default_value.isEmpty() || !origin_default_bit_value.isEmpty();
+}
+
+// Convert the column's *origin default* into a Field for storage decoding/backfill.
+//
+// Note: TiFlash intentionally uses origin_default_value/origin_default_bit_value
+// instead of ColumnInfo::default_value, because TiDB’s encoding/CanSkip logic is
+// based on origin defaults.
+//
+// Semantics:
+// - If both origin defaults are empty and the column is nullable -> return NULL Field.
+// - If both are empty and the column is NOT NULL -> return GenDefaultField (type-specific zero).
+// - Otherwise parse/convert the origin default according to column type
+//   (time/decimal/enum/set/bit/json/etc.).
 Field ColumnInfo::defaultValueToField() const
 {
     const auto & value = origin_default_value;
