@@ -174,6 +174,7 @@ private:
             {
             case tipb::ScalarFuncSig::FTSMatchWord:
             case tipb::ScalarFuncSig::FTSMatchPrefix:
+            case tipb::ScalarFuncSig::FTSMatchPhrase:
             case tipb::ScalarFuncSig::LogicalAnd:
             case tipb::ScalarFuncSig::LogicalOr:
             case tipb::ScalarFuncSig::UnaryNotInt:
