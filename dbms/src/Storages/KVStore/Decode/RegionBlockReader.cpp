@@ -111,44 +111,8 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
     if (unlikely(block.columns() != schema_snapshot->column_defines->size()))
         throw Exception("block structure doesn't match schema_snapshot.", ErrorCodes::LOGICAL_ERROR);
 
-<<<<<<< HEAD
-    const auto & read_column_ids = schema_snapshot->sorted_column_id_with_pos;
-=======
-private:
-    ColumnUInt64 * raw_version_col = nullptr;
-};
-
-template <>
-struct VersionColResolver<RegionUncommittedDataList>
-{
-    VersionColResolver() = default;
-    bool needBuild() const { return false; } // NOLINT conform to main template
-    void build(ColumnUInt64 * raw_version_col_) { raw_version_col = raw_version_col_; }
-    void preRead(size_t) {} // NOLINT conform to main template
-    void read(const RegionUncommittedData &) {} // NOLINT conform to main template
-    void check(const Block & block, size_t expected) const // NOLINT conform to main template
-    {
-        if (unlikely(block.columns() + 1 != expected))
-            throw Exception(
-                ErrorCodes::LOGICAL_ERROR,
-                "Block structure doesn't match schema_snapshot, block={} def={}",
-                block.columns(),
-                expected);
-    }
-    size_t reservedCount() const { return 2; } // NOLINT conform to main template
-
-private:
-    ColumnUInt64 * raw_version_col = nullptr;
-};
-
-template <TMTPKType pk_type, typename ReadList>
-bool RegionBlockReader::readImpl(Block & block, const ReadList & data_list, bool force_decode)
-{
-    VersionColResolver<ReadList> version_col_resolver;
-    version_col_resolver.check(block, schema_snapshot->column_defines->size());
     // The column_ids to read according to schema_snapshot, each elem is (column_id, block_pos)
-    const auto & read_column_ids = schema_snapshot->getColId2BlockPosMap();
->>>>>>> 01b12dd900 (ddl: Fix default value filling with finer granularity (#10682))
+    const auto & read_column_ids = schema_snapshot->sorted_column_id_with_pos;
     const auto & pk_column_ids = schema_snapshot->pk_column_ids;
     const auto & pk_pos_map = schema_snapshot->pk_pos_map;
 
