@@ -415,13 +415,7 @@ inline bool addDefaultValueToColumnIfPossible(
         // For non-clustered tables, a missing PK column implies schema mismatch.
         if (!force_decode)
             return false;
-<<<<<<< HEAD
-        // Else non-clustered index, and not pk_is_handle, it could be a row encoded by older schema,
-        // we need to fill the column wich has primary key flag with default value.
-        // fallthrough to fill default value when force_decode
-=======
         // fallthrough for best-effort fill when force_decode == true
->>>>>>> 01b12dd900 (ddl: Fix default value filling with finer granularity (#10682))
     }
 
     // 2) NOT NULL columns:
