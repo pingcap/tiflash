@@ -483,6 +483,38 @@ void loadBlockList(
 #endif
 }
 
+std::tuple<bool, KeyManagerPtr> getKeyManager(
+    ProxyStateMachine & proxy_machine,
+    bool is_s3_enabled,
+    const LoggerPtr & log)
+{
+    if (!proxy_machine.isProxyRunnable())
+        return {false, std::make_shared<MockKeyManager>(false)};
+
+    const bool enable_encryption = proxy_machine.getProxyHelper()->checkEncryptionEnabled();
+    if (!enable_encryption)
+    {
+        LOG_INFO(log, "encryption is disabled");
+        return {false, std::make_shared<DataKeyManager>(proxy_machine.getEngineStoreServerWrap())};
+    }
+
+    if (is_s3_enabled)
+    {
+        LOG_INFO(log, "encryption can be enabled, method is Aes256Ctr");
+        // The UniversalPageStorage has not been init yet, the UniversalPageStoragePtr in KeyspacesKeyManager is nullptr.
+        KeyManagerPtr key_manager
+            = std::make_shared<KeyspacesKeyManager<TiFlashRaftProxyHelper>>(proxy_machine.getProxyHelper());
+        return {true, key_manager};
+    }
+    else
+    {
+        const auto method = proxy_machine.getProxyHelper()->getEncryptionMethod();
+        LOG_INFO(log, "encryption is enabled, method is {}", magic_enum::enum_name(method));
+        KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(proxy_machine.getEngineStoreServerWrap());
+        return {method != EncryptionMethod::Plaintext, key_manager};
+    }
+}
+
 int Server::main(const std::vector<std::string> & /*args*/)
 try
 {
@@ -621,35 +653,10 @@ try
     global_context->initializeJointThreadInfoJeallocMap();
 
     /// Init File Provider
-    if (proxy_machine.isProxyRunnable())
     {
-        const bool enable_encryption = proxy_machine.getProxyHelper()->checkEncryptionEnabled();
-        if (enable_encryption && storage_config.s3_config.isS3Enabled())
-        {
-            LOG_INFO(log, "encryption can be enabled, method is Aes256Ctr");
-            // The UniversalPageStorage has not been init yet, the UniversalPageStoragePtr in KeyspacesKeyManager is nullptr.
-            KeyManagerPtr key_manager
-                = std::make_shared<KeyspacesKeyManager<TiFlashRaftProxyHelper>>(proxy_machine.getProxyHelper());
-            global_context->initializeFileProvider(key_manager, true);
-        }
-        else if (enable_encryption)
-        {
-            const auto method = proxy_machine.getProxyHelper()->getEncryptionMethod();
-            LOG_INFO(log, "encryption is enabled, method is {}", magic_enum::enum_name(method));
-            KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(proxy_machine.getEngineStoreServerWrap());
-            global_context->initializeFileProvider(key_manager, method != EncryptionMethod::Plaintext);
-        }
-        else
-        {
-            LOG_INFO(log, "encryption is disabled");
-            KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(proxy_machine.getEngineStoreServerWrap());
-            global_context->initializeFileProvider(key_manager, false);
-        }
-    }
-    else
-    {
-        KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
-        global_context->initializeFileProvider(key_manager, false);
+        auto [enable_encryption, key_manager]
+            = getKeyManager(proxy_machine, storage_config.s3_config.isS3Enabled(), log);
+        global_context->initializeFileProvider(key_manager, enable_encryption);
     }
 
     /// ===== Paths related configuration initialized start ===== ///
