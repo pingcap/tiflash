@@ -571,6 +571,12 @@ void Server::initCaches(bool is_disagg_compute_mode, bool is_disagg_storage_mode
         size_t n = config().getUInt64("delta_index_cache_size", 0);
         global_context->setDeltaIndexManager(n);
     }
+
+    // Size of schema cache for blockschemas of tables.
+    // Note that the cache must be initialized before `loadMetadata` is called, because
+    // `StorageDeltaMerge` requires the cache when loading table metadata.
+    auto schema_cache_size = config().getInt("schema_cache_size", 10000);
+    global_context->initializeSharedBlockSchemas(schema_cache_size);
 }
 
 int Server::main(const std::vector<std::string> & /*args*/)
@@ -1050,9 +1056,6 @@ try
         DM::SegmentReaderPoolManager::instance().init(server_info.cpu_info.logical_cores, read_thread_final_scale);
         DM::SegmentReadTaskScheduler::instance().updateConfig(global_context->getSettingsRef());
     }
-
-    auto schema_cache_size = config().getInt("schema_cache_size", 10000);
-    global_context->initializeSharedBlockSchemas(schema_cache_size);
 
     // Load remaining databases
     loadMetadata(*global_context);
