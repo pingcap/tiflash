@@ -527,7 +527,7 @@ void Server::initCaches(bool is_disagg_compute_mode, bool is_disagg_storage_mode
     if (minmax_index_cache_size)
         global_context->setMinMaxIndexCache(minmax_index_cache_size);
 
-    /// The vector index cache by number instead of bytes. Because it use `mmap` and let the operator system decide the memory usage.
+    /// The vector index cache by number instead of bytes. Because it use `mmap` and let the operating system decide the memory usage.
     size_t light_local_index_cache_entities = config().getUInt64("light_local_index_cache_entities", 10000);
     size_t heavy_local_index_cache_entities = config().getUInt64("heavy_local_index_cache_entities", 500);
     if (light_local_index_cache_entities && heavy_local_index_cache_entities)
