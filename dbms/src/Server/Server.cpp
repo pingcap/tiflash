@@ -515,6 +515,64 @@ std::tuple<bool, KeyManagerPtr> getKeyManager(
     }
 }
 
+void Server::initCaches(bool is_disagg_compute_mode, bool is_disagg_storage_mode, const LoggerPtr & log) const
+{
+    /// Size of cache for marks (index of MergeTree family of tables). It is necessary.
+    size_t mark_cache_size = config().getUInt64("mark_cache_size", DEFAULT_MARK_CACHE_SIZE);
+    if (mark_cache_size)
+        global_context->setMarkCache(mark_cache_size);
+
+    /// Size of cache for minmax index, used by DeltaMerge engine.
+    size_t minmax_index_cache_size = config().getUInt64("minmax_index_cache_size", mark_cache_size);
+    if (minmax_index_cache_size)
+        global_context->setMinMaxIndexCache(minmax_index_cache_size);
+
+    /// The vector index cache by number instead of bytes. Because it use `mmap` and let the operator system decide the memory usage.
+    size_t light_local_index_cache_entities = config().getUInt64("light_local_index_cache_entities", 10000);
+    size_t heavy_local_index_cache_entities = config().getUInt64("heavy_local_index_cache_entities", 500);
+    if (light_local_index_cache_entities && heavy_local_index_cache_entities)
+        global_context->setLocalIndexCache(light_local_index_cache_entities, heavy_local_index_cache_entities);
+
+    size_t column_cache_long_term_size
+        = config().getUInt64("column_cache_long_term_size", 512 * 1024 * 1024 /* 512MB */);
+    if (column_cache_long_term_size)
+        global_context->setColumnCacheLongTerm(column_cache_long_term_size);
+
+    /// Size of max memory usage of DeltaIndex, used by DeltaMerge engine.
+    /// - In non-disaggregated mode, its default value is 0, means unlimited, and it
+    ///   controls the number of total bytes keep in the memory.
+    /// - In disaggregated compute node, its default value is memory_capacity_of_host * 0.02.
+    ///   0 means cache is disabled.
+    ///   We cannot support unlimited delta index cache in disaggregated mode for now,
+    ///   because cache items will be never explicitly removed.
+    /// - In disaggregated write node, its default value is 1GiB. Because write node manage
+    ///   much more data than non-disaggregated mode, and the delta index cache is less useful.
+    if (is_disagg_compute_mode)
+    {
+        constexpr auto delta_index_cache_ratio = 0.02;
+        constexpr auto backup_delta_index_cache_size = 1024 * 1024 * 1024; // 1GiB
+        const auto default_delta_index_cache_size = server_info.memory_info.capacity > 0
+            ? server_info.memory_info.capacity * delta_index_cache_ratio
+            : backup_delta_index_cache_size;
+        size_t n = config().getUInt64("delta_index_cache_size", default_delta_index_cache_size);
+        LOG_INFO(log, "delta_index_cache_size={}", n);
+        // In disaggregated compute node, we will not use DeltaIndexManager to cache the delta index.
+        // Instead, we use RNMVCCIndexCache.
+        global_context->getSharedContextDisagg()->initReadNodeMVCCIndexCache(n);
+    }
+    else if (is_disagg_storage_mode)
+    {
+        constexpr auto default_delta_index_cache_size = 1024 * 1024 * 1024; // 1GiB
+        size_t n = config().getUInt64("delta_index_cache_size", default_delta_index_cache_size);
+        global_context->setDeltaIndexManager(n);
+    }
+    else
+    {
+        size_t n = config().getUInt64("delta_index_cache_size", 0);
+        global_context->setDeltaIndexManager(n);
+    }
+}
+
 int Server::main(const std::vector<std::string> & /*args*/)
 try
 {
@@ -932,60 +990,9 @@ try
             users_config_reloader->reload();
     });
 
-    /// Size of cache for marks (index of MergeTree family of tables). It is necessary.
-    size_t mark_cache_size = config().getUInt64("mark_cache_size", DEFAULT_MARK_CACHE_SIZE);
-    if (mark_cache_size)
-        global_context->setMarkCache(mark_cache_size);
-
-    /// Size of cache for minmax index, used by DeltaMerge engine.
-    size_t minmax_index_cache_size = config().getUInt64("minmax_index_cache_size", mark_cache_size);
-    if (minmax_index_cache_size)
-        global_context->setMinMaxIndexCache(minmax_index_cache_size);
-
-    /// The vector index cache by number instead of bytes. Because it use `mmap` and let the operator system decide the memory usage.
-    size_t light_local_index_cache_entities = config().getUInt64("light_local_index_cache_entities", 10000);
-    size_t heavy_local_index_cache_entities = config().getUInt64("heavy_local_index_cache_entities", 500);
-    if (light_local_index_cache_entities && heavy_local_index_cache_entities)
-        global_context->setLocalIndexCache(light_local_index_cache_entities, heavy_local_index_cache_entities);
-
-    size_t column_cache_long_term_size
-        = config().getUInt64("column_cache_long_term_size", 512 * 1024 * 1024 /* 512MB */);
-    if (column_cache_long_term_size)
-        global_context->setColumnCacheLongTerm(column_cache_long_term_size);
-
-    /// Size of max memory usage of DeltaIndex, used by DeltaMerge engine.
-    /// - In non-disaggregated mode, its default value is 0, means unlimited, and it
-    ///   controls the number of total bytes keep in the memory.
-    /// - In disaggregated compute node, its default value is memory_capacity_of_host * 0.02.
-    ///   0 means cache is disabled.
-    ///   We cannot support unlimited delta index cache in disaggregated mode for now,
-    ///   because cache items will be never explicitly removed.
-    /// - In disaggregated write node, its default value is 1GiB. Because write node manage
-    ///   much more data than non-disaggregated mode, and the delta index cache is less useful.
-    if (is_disagg_compute_mode)
-    {
-        constexpr auto delta_index_cache_ratio = 0.02;
-        constexpr auto backup_delta_index_cache_size = 1024 * 1024 * 1024; // 1GiB
-        const auto default_delta_index_cache_size = server_info.memory_info.capacity > 0
-            ? server_info.memory_info.capacity * delta_index_cache_ratio
-            : backup_delta_index_cache_size;
-        size_t n = config().getUInt64("delta_index_cache_size", default_delta_index_cache_size);
-        LOG_INFO(log, "delta_index_cache_size={}", n);
-        // In disaggregated compute node, we will not use DeltaIndexManager to cache the delta index.
-        // Instead, we use RNMVCCIndexCache.
-        global_context->getSharedContextDisagg()->initReadNodeMVCCIndexCache(n);
-    }
-    else if (is_disagg_storage_mode)
-    {
-        constexpr auto default_delta_index_cache_size = 1024 * 1024 * 1024; // 1GiB
-        size_t n = config().getUInt64("delta_index_cache_size", default_delta_index_cache_size);
-        global_context->setDeltaIndexManager(n);
-    }
-    else
-    {
-        size_t n = config().getUInt64("delta_index_cache_size", 0);
-        global_context->setDeltaIndexManager(n);
-    }
+    // Note that `initCaches` should be done before `loadMetadataSystem` and `loadMetadata`
+    // otherwise some caches may not be initialized when loading metadata of some tables.
+    initCaches(is_disagg_compute_mode, is_disagg_storage_mode, log);
 
     loadBlockList(config(), *global_context, log);
 
