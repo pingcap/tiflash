@@ -483,13 +483,18 @@ void loadBlockList(
 #endif
 }
 
+// Returns whether encryption is enabled and the KeyManagerPtr
 std::tuple<bool, KeyManagerPtr> getKeyManager(
     ProxyStateMachine & proxy_machine,
     bool is_s3_enabled,
     const LoggerPtr & log)
 {
     if (!proxy_machine.isProxyRunnable())
+    {
+        // Proxy is not runnable, tiflash is run for mock tests
+        LOG_INFO(log, "encryption is using a mock key manager for mock tests");
         return {false, std::make_shared<MockKeyManager>(false)};
+    }
 
     const bool enable_encryption = proxy_machine.getProxyHelper()->checkEncryptionEnabled();
     if (!enable_encryption)
@@ -498,21 +503,20 @@ std::tuple<bool, KeyManagerPtr> getKeyManager(
         return {false, std::make_shared<DataKeyManager>(proxy_machine.getEngineStoreServerWrap())};
     }
 
-    if (is_s3_enabled)
-    {
-        LOG_INFO(log, "encryption can be enabled, method is Aes256Ctr");
-        // The UniversalPageStorage has not been init yet, the UniversalPageStoragePtr in KeyspacesKeyManager is nullptr.
-        KeyManagerPtr key_manager
-            = std::make_shared<KeyspacesKeyManager<TiFlashRaftProxyHelper>>(proxy_machine.getProxyHelper());
-        return {true, key_manager};
-    }
-    else
+    if (!is_s3_enabled)
     {
         const auto method = proxy_machine.getProxyHelper()->getEncryptionMethod();
         LOG_INFO(log, "encryption is enabled, method is {}", magic_enum::enum_name(method));
         KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(proxy_machine.getEngineStoreServerWrap());
         return {method != EncryptionMethod::Plaintext, key_manager};
     }
+
+    // When s3 is enabled, we could enable keyspace-level encryption
+    LOG_INFO(log, "encryption can be enabled at keyspace-level, method is Aes256Ctr");
+    // The UniversalPageStorage has not been init yet, the UniversalPageStoragePtr in KeyspacesKeyManager is nullptr.
+    KeyManagerPtr key_manager
+        = std::make_shared<KeyspacesKeyManager<TiFlashRaftProxyHelper>>(proxy_machine.getProxyHelper());
+    return {true, key_manager};
 }
 
 void Server::initCaches(bool is_disagg_compute_mode, bool is_disagg_storage_mode, const LoggerPtr & log) const
