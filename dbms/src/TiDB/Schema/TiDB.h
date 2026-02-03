@@ -202,13 +202,23 @@ struct ColumnInfo
 #ifdef M
 #error "Please undefine macro M first."
 #endif
-#define M(f, v)                                                    \
-    inline bool has##f##Flag() const { return (flag & (v)) != 0; } \
-    inline void set##f##Flag() { flag |= (v); }                    \
-    inline void clear##f##Flag() { flag &= (~(v)); }
+#define M(f, v)                      \
+    inline bool has##f##Flag() const \
+    {                                \
+        return (flag & (v)) != 0;    \
+    }                                \
+    inline void set##f##Flag()       \
+    {                                \
+        flag |= (v);                 \
+    }                                \
+    inline void clear##f##Flag()     \
+    {                                \
+        flag &= (~(v));              \
+    }
     COLUMN_FLAGS(M)
 #undef M
 
+    bool hasOriginDefaultValue() const;
     DB::Field defaultValueToField() const;
     CodecFlag getCodecFlag() const;
     DB::Field getDecimalValue(const String &) const;
