@@ -59,6 +59,8 @@ protected:
 
     std::string getDefaultCorePath() const override;
 
+    void initCaches(bool is_disagg_compute_mode, bool is_disagg_storage_mode, const LoggerPtr & log) const;
+
 private:
     std::unique_ptr<Context> global_context;
 
