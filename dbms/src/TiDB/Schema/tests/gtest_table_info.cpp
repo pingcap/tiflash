@@ -141,8 +141,6 @@ try
                     ASSERT_TRUE(col_1.hasMultipleKeyFlag());
                     ASSERT_TRUE(col_1.hasBinaryFlag());
                 }},
-<<<<<<< HEAD
-=======
             // Check the "origin_default" value parsing
             // See https://github.com/pingcap/tiflash/issues/10663 for more details.
             ParseCase{
@@ -171,7 +169,6 @@ try
                     // The "origin_default" is "200", which is used for filling default value for old rows that is inserted before this column is added.
                     ASSERT_EQ(col_3.defaultValueToField().get<String>(), "200");
                 }},
->>>>>>> 01b12dd900 (ddl: Fix default value filling with finer granularity (#10682))
     };
 
     for (const auto & c : cases)
