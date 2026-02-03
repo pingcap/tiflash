@@ -21,6 +21,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Flash/Pipeline/PipelineBuilder.h>
@@ -32,7 +33,6 @@
 #include <Interpreters/Context.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
-
 namespace DB
 {
 namespace FailPoints
@@ -158,8 +158,55 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     {
         build_key_names_map[original_build_key_names[i]] = build_key_names[i];
     }
-    auto runtime_filter_list
-        = tiflash_join.genRuntimeFilterList(context, build_source_columns, build_key_names_map, log);
+
+    // Conservative correctness guard:
+    // If join key *protobuf field types* across sides are not compatible, skip runtime filter as early as possible
+    // to avoid wrong filtering / wasted work.
+    //
+    // Why here:
+    // - We haven't created/registered any RuntimeFilter yet.
+    // - We still have access to `tipb::Join` and can cheaply check original field types.
+    //
+    // NOTE: This is intentionally conservative. Join itself will still work because join keys are cast to a common
+    // type for execution, but RF's Set header/value normalization may not be safe under mismatched signed/unsigned
+    // or integer/decimal scenarios.
+    auto is_join_key_field_type_compatible = [&]() -> bool {
+        const int n = join.left_join_keys_size();
+        if (n != join.right_join_keys_size())
+            return false;
+        for (int i = 0; i < n; ++i)
+        {
+            if (unlikely(
+                    !exprHasValidFieldType(join.left_join_keys(i)) || !exprHasValidFieldType(join.right_join_keys(i))))
+                return false;
+
+            const auto & lt = join.left_join_keys(i).field_type();
+            const auto & rt = join.right_join_keys(i).field_type();
+
+            // If TiDB says the two sides are different basic tp, we don't try to be smart here.
+            if (lt.tp() != rt.tp())
+                return false;
+
+            // Signed/unsigned mismatch: when the tp is integer-like, TiDB encodes unsigned via flag.
+            // This is the known problematic case for RF(IN).
+            if (hasUnsignedFlag(lt) != hasUnsignedFlag(rt))
+                return false;
+        }
+        return true;
+    };
+
+    const bool enable_runtime_filter = is_join_key_field_type_compatible();
+    if (!enable_runtime_filter && !join.runtime_filter_list().empty())
+    {
+        LOG_INFO(
+            log,
+            "Disable runtime filter for join {} due to join-side key type mismatch (left/right key field types differ)",
+            executor_id);
+    }
+
+    auto runtime_filter_list = enable_runtime_filter
+        ? tiflash_join.genRuntimeFilterList(context, build_source_columns, build_key_names_map, log)
+        : std::vector<RuntimeFilterPtr>{};
     LOG_DEBUG(log, "before register runtime filter list, list size:{}", runtime_filter_list.size());
     context.getDAGContext()->runtime_filter_mgr.registerRuntimeFilterList(runtime_filter_list);
 
