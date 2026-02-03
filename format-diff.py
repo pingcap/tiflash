@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 # Copyright 2023 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,6 +28,7 @@ def run_cmd(cmd, show_cmd=False):
         print("RUN CMD: {}".format(cmd))
     return res
 
+
 def try_find_clang_format(exec_path):
     candidates = ['clang-format']
     if exec_path is not None:
@@ -36,6 +37,13 @@ def try_find_clang_format(exec_path):
         if which(c) is not None:
             return c
     return candidates[-1]
+
+
+def get_clang_format_version(clang_format_cmd):
+    proc = subprocess.run([clang_format_cmd, '--version'], stdout=subprocess.PIPE, check=True)
+    clang_format_version = proc.stdout.decode().strip()
+    return clang_format_version
+
 
 def main():
     default_suffix = ['.cpp', '.h', '.cc', '.hpp']
@@ -92,8 +100,9 @@ def main():
             len(da), args.dump_diff_files_to))
 
     if files_to_format:
-        print('Files to format:\n  {}'.format('\n  '.join(files_to_format)))
         clang_format_cmd = try_find_clang_format(args.clang_format)
+        print('Using {}'.format(get_clang_format_version(clang_format_cmd)))
+        print('Files to format:\n  {}'.format('\n  '.join(files_to_format)))
         for file in files_to_format:
             cmd = clang_format_cmd + ' -i {}'.format(file)
             if subprocess.Popen(cmd, shell=True, cwd=tiflash_repo_path).wait():
