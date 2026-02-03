@@ -511,7 +511,8 @@ std::tuple<bool, KeyManagerPtr> getKeyManager(
         return {method != EncryptionMethod::Plaintext, key_manager};
     }
 
-    // When s3 is enabled, we could enable keyspace-level encryption
+    // When s3 is enabled, we could enable keyspace-level encryption. Currently only Aes256Ctr is supported
+    // for keyspace-level encryption.
     LOG_INFO(log, "encryption can be enabled at keyspace-level, method is Aes256Ctr");
     // The UniversalPageStorage has not been init yet, the UniversalPageStoragePtr in KeyspacesKeyManager is nullptr.
     KeyManagerPtr key_manager
@@ -579,7 +580,7 @@ void Server::initCaches(bool is_disagg_compute_mode, bool is_disagg_storage_mode
     // Size of schema cache for blockschemas of tables.
     // Note that the cache must be initialized before `loadMetadata` is called, because
     // `StorageDeltaMerge` requires the cache when loading table metadata.
-    auto schema_cache_size = config().getInt("schema_cache_size", 10000);
+    size_t schema_cache_size = config().getUInt64("schema_cache_size", 10000);
     global_context->initializeSharedBlockSchemas(schema_cache_size);
 }
 
