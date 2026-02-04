@@ -252,16 +252,16 @@ private:
 
 void FailPointHelper::enablePauseFailPoint(const String & fail_point_name, UInt64 time)
 {
-#define SUB_M(NAME, flags)                                                                                  \
-    if (fail_point_name == FailPoints::NAME)                                                                \
-    {                                                                                                       \
-        /* FIU_ONETIME -- Only fail once; the point of failure will be automatically disabled afterwards.*/ \
-        fiu_enable(FailPoints::NAME, 1, nullptr, flags);                                                    \
-        {                                                                                                   \
-            std::lock_guard lock(fail_point_wait_channels_mutex);                                           \
+#define SUB_M(NAME, flags)                                                                                    \
+    if (fail_point_name == FailPoints::NAME)                                                                  \
+    {                                                                                                         \
+        /* FIU_ONETIME -- Only fail once; the point of failure will be automatically disabled afterwards.*/   \
+        fiu_enable(FailPoints::NAME, 1, nullptr, flags);                                                      \
+        {                                                                                                     \
+            std::lock_guard lock(fail_point_wait_channels_mutex);                                             \
             fail_point_wait_channels.try_emplace(FailPoints::NAME, std::make_shared<FailPointChannel>(time)); \
-        }                                                                                                   \
-        return;                                                                                             \
+        }                                                                                                     \
+        return;                                                                                               \
     }
 
 #define M(NAME) SUB_M(NAME, FIU_ONETIME)
@@ -371,7 +371,7 @@ void FailPointHelper::wait(const String & fail_point_name)
             channel = iter->second;
     }
     if (!channel)
-        throw Exception("Can not find channel for fail point " + fail_point_name);
+        throw Exception(ErrorCodes::FAIL_POINT_ERROR, "Can not find channel for fail point {}", fail_point_name);
     channel->wait();
 }
 
