@@ -211,9 +211,11 @@ APPLY_FOR_RANDOM_FAILPOINTS(M)
 } // namespace FailPoints
 
 #ifdef FIU_ENABLE
+std::mutex FailPointHelper::fail_point_wait_channels_mutex;
+std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::fail_point_wait_channels;
 std::shared_mutex FailPointHelper::fail_point_val_mutex;
 std::unordered_map<String, std::any> FailPointHelper::fail_point_val;
-std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::fail_point_wait_channels;
+
 class FailPointChannel : private boost::noncopyable
 {
 public:
@@ -255,7 +257,10 @@ void FailPointHelper::enablePauseFailPoint(const String & fail_point_name, UInt6
     {                                                                                                       \
         /* FIU_ONETIME -- Only fail once; the point of failure will be automatically disabled afterwards.*/ \
         fiu_enable(FailPoints::NAME, 1, nullptr, flags);                                                    \
-        fail_point_wait_channels.try_emplace(FailPoints::NAME, std::make_shared<FailPointChannel>(time));   \
+        {                                                                                                   \
+            std::lock_guard lock(fail_point_wait_channels_mutex);                                           \
+            fail_point_wait_channels.try_emplace(FailPoints::NAME, std::make_shared<FailPointChannel>(time)); \
+        }                                                                                                   \
         return;                                                                                             \
     }
 
@@ -299,7 +304,10 @@ void FailPointHelper::enableFailPoint(const String & fail_point_name, std::optio
     {                                                                                                       \
         /* FIU_ONETIME -- Only fail once; the point of failure will be automatically disabled afterwards.*/ \
         fiu_enable(FailPoints::NAME, 1, nullptr, flags);                                                    \
-        fail_point_wait_channels.try_emplace(FailPoints::NAME, std::make_shared<FailPointChannel>());       \
+        {                                                                                                   \
+            std::lock_guard lock(fail_point_wait_channels_mutex);                                           \
+            fail_point_wait_channels.try_emplace(FailPoints::NAME, std::make_shared<FailPointChannel>());   \
+        }                                                                                                   \
         if (v.has_value())                                                                                  \
         {                                                                                                   \
             std::unique_lock lock(fail_point_val_mutex);                                                    \
@@ -332,12 +340,20 @@ std::optional<std::any> FailPointHelper::getFailPointVal(const String & fail_poi
 
 void FailPointHelper::disableFailPoint(const String & fail_point_name)
 {
-    if (auto iter = fail_point_wait_channels.find(fail_point_name); iter != fail_point_wait_channels.end())
+    std::shared_ptr<FailPointChannel> channel;
+    {
+        std::lock_guard lock(fail_point_wait_channels_mutex);
+        if (auto iter = fail_point_wait_channels.find(fail_point_name); iter != fail_point_wait_channels.end())
+        {
+            channel = iter->second;
+            fail_point_wait_channels.erase(iter);
+        }
+    }
+    if (channel)
     {
         /// can not rely on deconstruction to do the notify_all things, because
         /// if someone wait on this, the deconstruct will never be called.
-        iter->second->notifyAll();
-        fail_point_wait_channels.erase(iter);
+        channel->notifyAll();
     }
     {
         std::unique_lock lock(fail_point_val_mutex);
@@ -348,13 +364,15 @@ void FailPointHelper::disableFailPoint(const String & fail_point_name)
 
 void FailPointHelper::wait(const String & fail_point_name)
 {
-    if (auto iter = fail_point_wait_channels.find(fail_point_name); iter == fail_point_wait_channels.end())
-        throw Exception("Can not find channel for fail point " + fail_point_name);
-    else
+    std::shared_ptr<FailPointChannel> channel;
     {
-        auto ptr = iter->second;
-        ptr->wait();
+        std::lock_guard lock(fail_point_wait_channels_mutex);
+        if (auto iter = fail_point_wait_channels.find(fail_point_name); iter != fail_point_wait_channels.end())
+            channel = iter->second;
     }
+    if (!channel)
+        throw Exception("Can not find channel for fail point " + fail_point_name);
+    channel->wait();
 }
 
 void FailPointHelper::initRandomFailPoints(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log)
