@@ -359,6 +359,20 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
     const size_t lock_count
         = std::count_if(cmds.cmd_cf, cmds.cmd_cf + cmds.len, [](auto cf) { return cf == ColumnFamilyType::Lock; });
     deleting_lock_keys.reserve(lock_count);
+    auto update_write_size = [&](Int64 payload) {
+        if (payload > 0)
+        {
+            write_size += static_cast<size_t>(payload);
+        }
+        else if (payload < 0)
+        {
+            const auto dec = static_cast<size_t>(-(payload + 1)) + 1; // avoid INT64_MIN overflow
+            if (write_size >= dec)
+                write_size -= dec;
+            else
+                write_size = 0;
+        }
+    };
     const auto handle_by_index_func = [&](auto i) {
         auto type = cmds.cmd_types[i];
         auto cf = cmds.cmd_cf[i];
@@ -387,14 +401,12 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
                     // There may be orphan default key in a snapshot.
                     auto payload
                         = doInsert(cf, std::move(tikv_key), std::move(tikv_value), DupCheck::AllowSame).payload;
-                    if (payload > 0 || write_size >= static_cast<size_t>(-payload))
-                        write_size += payload;
+                    update_write_size(payload);
                 }
                 else
                 {
                     auto payload = doInsert(cf, std::move(tikv_key), std::move(tikv_value), DupCheck::Deny).payload;
-                    if (payload > 0 || write_size >= static_cast<size_t>(-payload))
-                        write_size += payload;
+                    update_write_size(payload);
                 }
             }
             catch (Exception & e)
