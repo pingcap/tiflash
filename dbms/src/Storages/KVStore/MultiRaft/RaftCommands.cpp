@@ -366,6 +366,8 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
         }
         else if (payload < 0)
         {
+            // A lock being rewritten could lead to a negative payload.
+            // Try to turn the negative payload into a positive decrement on `write_size`.
             const auto dec = static_cast<size_t>(-(payload + 1)) + 1; // avoid INT64_MIN overflow
             if (write_size >= dec)
                 write_size -= dec;
