@@ -359,7 +359,7 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
     const size_t lock_count
         = std::count_if(cmds.cmd_cf, cmds.cmd_cf + cmds.len, [](auto cf) { return cf == ColumnFamilyType::Lock; });
     deleting_lock_keys.reserve(lock_count);
-    auto update_write_size = [&](Int64 payload) {
+    auto update_write_size = [&write_size](Int64 payload) {
         if (payload > 0)
         {
             write_size += static_cast<size_t>(payload);
