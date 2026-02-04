@@ -211,6 +211,7 @@ APPLY_FOR_RANDOM_FAILPOINTS(M)
 } // namespace FailPoints
 
 #ifdef FIU_ENABLE
+std::shared_mutex FailPointHelper::fail_point_val_mutex;
 std::unordered_map<String, std::any> FailPointHelper::fail_point_val;
 std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::fail_point_wait_channels;
 class FailPointChannel : private boost::noncopyable
@@ -279,6 +280,7 @@ void FailPointHelper::enableFailPoint(const String & fail_point_name, std::optio
         fiu_enable(FailPoints::NAME, 1, nullptr, flags);                                                    \
         if (v.has_value())                                                                                  \
         {                                                                                                   \
+            std::unique_lock lock(fail_point_val_mutex);                                                    \
             fail_point_val.try_emplace(FailPoints::NAME, v.value());                                        \
         }                                                                                                   \
         return;                                                                                             \
@@ -300,6 +302,7 @@ void FailPointHelper::enableFailPoint(const String & fail_point_name, std::optio
         fail_point_wait_channels.try_emplace(FailPoints::NAME, std::make_shared<FailPointChannel>());       \
         if (v.has_value())                                                                                  \
         {                                                                                                   \
+            std::unique_lock lock(fail_point_val_mutex);                                                    \
             fail_point_val.try_emplace(FailPoints::NAME, v.value());                                        \
         }                                                                                                   \
         return;                                                                                             \
@@ -319,6 +322,7 @@ void FailPointHelper::enableFailPoint(const String & fail_point_name, std::optio
 
 std::optional<std::any> FailPointHelper::getFailPointVal(const String & fail_point_name)
 {
+    std::shared_lock lock(fail_point_val_mutex);
     if (auto iter = fail_point_val.find(fail_point_name); iter != fail_point_val.end())
     {
         return iter->second;
@@ -335,7 +339,10 @@ void FailPointHelper::disableFailPoint(const String & fail_point_name)
         iter->second->notifyAll();
         fail_point_wait_channels.erase(iter);
     }
-    fail_point_val.erase(fail_point_name);
+    {
+        std::unique_lock lock(fail_point_val_mutex);
+        fail_point_val.erase(fail_point_name);
+    }
     fiu_disable(fail_point_name.c_str());
 }
 
