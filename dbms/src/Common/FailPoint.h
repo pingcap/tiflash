@@ -22,7 +22,11 @@
 #include <fiu.h>
 
 #include <any>
+
+#ifdef FIU_ENABLE
+#include <shared_mutex>
 #include <unordered_map>
+#endif
 
 namespace Poco
 {
@@ -85,7 +89,9 @@ public:
 
 private:
 #ifdef FIU_ENABLE
+    static std::mutex fail_point_wait_channels_mutex;
     static std::unordered_map<String, std::shared_ptr<FailPointChannel>> fail_point_wait_channels;
+    static std::shared_mutex fail_point_val_mutex;
     static std::unordered_map<String, std::any> fail_point_val;
 #endif
 };
