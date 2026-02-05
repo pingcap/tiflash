@@ -348,6 +348,36 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
 
     auto is_v2 = this->getClusterRaftstoreVer() == RaftstoreVer::V2;
 
+<<<<<<< HEAD
+=======
+    // After removing the logic of the read thread writing to the storage engine during learner reads,
+    // if we remove the locks before committed data written to storage,
+    // it would cause concurrency control problems that could result in missing some of the latest data.
+    // The concurrency logic is as follows:
+    // 1. **Raft thread**: Receives a write log and removes the lock.
+    // 2. **Read thread**: Detects no lock and begins reading (missing the data written in step 3).
+    // 3. **Raft thread**: Writes the data.
+    std::vector<TiKVKey> deleting_lock_keys;
+    const size_t lock_count
+        = std::count_if(cmds.cmd_cf, cmds.cmd_cf + cmds.len, [](auto cf) { return cf == ColumnFamilyType::Lock; });
+    deleting_lock_keys.reserve(lock_count);
+    auto update_write_size = [&write_size](Int64 payload) {
+        if (payload > 0)
+        {
+            write_size += static_cast<size_t>(payload);
+        }
+        else if (payload < 0)
+        {
+            // A lock being rewritten could lead to a negative payload.
+            // Try to turn the negative payload into a positive decrement on `write_size`.
+            const auto dec = static_cast<size_t>(-(payload + 1)) + 1; // avoid INT64_MIN overflow
+            if (write_size >= dec)
+                write_size -= dec;
+            else
+                write_size = 0;
+        }
+    };
+>>>>>>> 74de3a584a (KVStore: fix tiflash_raft_throughput_bytes warp problem (#10700))
     const auto handle_by_index_func = [&](auto i) {
         auto type = cmds.cmd_types[i];
         auto cf = cmds.cmd_cf[i];
@@ -371,6 +401,7 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
             }
             try
             {
+<<<<<<< HEAD
                 if unlikely (is_v2)
                 {
                     // There may be orphan default key in a snapshot.
@@ -380,6 +411,12 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
                 {
                     write_size += doInsert(cf, std::move(tikv_key), std::move(tikv_value), DupCheck::Deny);
                 }
+=======
+                // There may be orphan default key in a snapshot under raftstore v2.
+                auto dup_check = is_v2 ? DupCheck::AllowSame : DupCheck::Deny;
+                auto payload = doInsert(cf, std::move(tikv_key), std::move(tikv_value), dup_check).payload;
+                update_write_size(payload);
+>>>>>>> 74de3a584a (KVStore: fix tiflash_raft_throughput_bytes warp problem (#10700))
             }
             catch (Exception & e)
             {
