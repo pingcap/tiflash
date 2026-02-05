@@ -396,18 +396,10 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
             }
             try
             {
-                if unlikely (is_v2)
-                {
-                    // There may be orphan default key in a snapshot.
-                    auto payload
-                        = doInsert(cf, std::move(tikv_key), std::move(tikv_value), DupCheck::AllowSame).payload;
-                    update_write_size(payload);
-                }
-                else
-                {
-                    auto payload = doInsert(cf, std::move(tikv_key), std::move(tikv_value), DupCheck::Deny).payload;
-                    update_write_size(payload);
-                }
+                // There may be orphan default key in a snapshot under raftstore v2.
+                auto dup_check = is_v2 ? DupCheck::AllowSame : DupCheck::Deny;
+                auto payload = doInsert(cf, std::move(tikv_key), std::move(tikv_value), dup_check).payload;
+                update_write_size(payload);
             }
             catch (Exception & e)
             {
