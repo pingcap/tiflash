@@ -359,13 +359,15 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
     const size_t lock_count
         = std::count_if(cmds.cmd_cf, cmds.cmd_cf + cmds.len, [](auto cf) { return cf == ColumnFamilyType::Lock; });
     deleting_lock_keys.reserve(lock_count);
-    auto update_write_size = [&](Int64 payload) {
+    auto update_write_size = [&write_size](Int64 payload) {
         if (payload > 0)
         {
             write_size += static_cast<size_t>(payload);
         }
         else if (payload < 0)
         {
+            // A lock being rewritten could lead to a negative payload.
+            // Try to turn the negative payload into a positive decrement on `write_size`.
             const auto dec = static_cast<size_t>(-(payload + 1)) + 1; // avoid INT64_MIN overflow
             if (write_size >= dec)
                 write_size -= dec;
