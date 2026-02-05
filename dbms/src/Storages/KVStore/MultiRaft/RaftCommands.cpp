@@ -348,6 +348,22 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
 
     auto is_v2 = this->getClusterRaftstoreVer() == RaftstoreVer::V2;
 
+    auto update_write_size = [&write_size](Int64 payload) {
+        if (payload > 0)
+        {
+            write_size += static_cast<size_t>(payload);
+        }
+        else if (payload < 0)
+        {
+            // A lock being rewritten could lead to a negative payload.
+            // Try to turn the negative payload into a positive decrement on `write_size`.
+            const auto dec = static_cast<size_t>(-(payload + 1)) + 1; // avoid INT64_MIN overflow
+            if (write_size >= dec)
+                write_size -= dec;
+            else
+                write_size = 0;
+        }
+    };
     const auto handle_by_index_func = [&](auto i) {
         auto type = cmds.cmd_types[i];
         auto cf = cmds.cmd_cf[i];
@@ -371,15 +387,10 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
             }
             try
             {
-                if unlikely (is_v2)
-                {
-                    // There may be orphan default key in a snapshot.
-                    write_size += doInsert(cf, std::move(tikv_key), std::move(tikv_value), DupCheck::AllowSame);
-                }
-                else
-                {
-                    write_size += doInsert(cf, std::move(tikv_key), std::move(tikv_value), DupCheck::Deny);
-                }
+                // There may be orphan default key in a snapshot under raftstore v2.
+                auto dup_check = is_v2 ? DupCheck::AllowSame : DupCheck::Deny;
+                auto payload = doInsert(cf, std::move(tikv_key), std::move(tikv_value), dup_check);
+                update_write_size(payload);
             }
             catch (Exception & e)
             {
