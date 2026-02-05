@@ -170,6 +170,10 @@ DecodedLockCFValue::DecodedLockCFValue(std::shared_ptr<const TiKVKey> key_, std:
     {
         GET_METRIC(tiflash_raft_process_keys, type_pessimistic_lock_put).Increment(1);
     }
+    else if (parsed->lock_type == kvrpcpb::Op::SharedLock)
+    {
+        GET_METRIC(tiflash_raft_process_keys, type_shared_lock_put).Increment(1);
+    }
     if (parsed->generation == 0)
     {
         // It is not a large txn, we cache the parsed lock.
