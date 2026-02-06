@@ -101,6 +101,12 @@ void PhysicalTiCIScan::buildPipeline(
     Context & context,
     PipelineExecutorContext & exec_context)
 {
+    LOG_INFO(
+        log,
+        "build tici pipeline: executor_id={} is_count={} max_streams={}",
+        executor_id,
+        tici_scan.isCount(),
+        context.getMaxStreams());
     // For building PipelineExec in compile time.
     StorageTantivyIterpreter storage_interpreter(context, tici_scan, context.getMaxStreams());
     storage_interpreter.execute(exec_context, pipeline_exec_builder);
