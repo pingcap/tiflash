@@ -35,6 +35,8 @@ public:
         ShardInfo query_shard_info_,
         NamesAndTypes return_columns_,
         UInt64 limit_,
+        std::vector<Int64> sort_column_ids_,
+        std::vector<bool> sort_column_asc_,
         UInt64 read_ts_,
         ::Expr match_expr_,
         bool is_count)
@@ -47,6 +49,8 @@ public:
             query_shard_info_,
             return_columns_,
             limit_,
+            sort_column_ids_,
+            sort_column_asc_,
             read_ts_,
             match_expr_,
             is_count);
@@ -81,6 +85,8 @@ public:
         const ShardInfoList & shard_infos,
         NamesAndTypes return_columns_,
         UInt64 limit_,
+        std::vector<Int64> sort_column_ids_,
+        std::vector<bool> sort_column_asc_,
         UInt64 read_ts_,
         google::protobuf::RepeatedPtrField<tipb::Expr> match_expr_,
         bool is_count,
@@ -91,6 +97,8 @@ public:
         , index_id(index_id_)
         , return_columns(return_columns_)
         , limit(limit_)
+        , sort_column_ids(sort_column_ids_)
+        , sort_column_asc(sort_column_asc_)
         , read_ts(read_ts_)
         , is_count(is_count)
     {
@@ -132,6 +140,8 @@ public:
                 task->getShardInfo(),
                 return_columns,
                 limit,
+                sort_column_ids,
+                sort_column_asc,
                 read_ts,
                 match_expr,
                 is_count);
@@ -149,6 +159,8 @@ private:
     Int64 index_id;
     NamesAndTypes return_columns;
     UInt64 limit;
+    std::vector<Int64> sort_column_ids;
+    std::vector<bool> sort_column_asc;
     UInt64 read_ts;
     ::Expr match_expr;
     bool is_count;
