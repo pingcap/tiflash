@@ -53,6 +53,10 @@ public:
 
     const String & getCountAggExecutorId() const { return count_agg_executor_id; }
 
+    const std::vector<Int64> & getSortColumnIds() const { return sort_column_ids; }
+
+    const std::vector<bool> & getSortColumnAsc() const { return sort_column_asc; }
+
 private:
     const tipb::Executor * tici_scan;
     [[maybe_unused]] String executor_id;
@@ -64,6 +68,8 @@ private:
     [[maybe_unused]] tipb::FTSQueryType query_type;
     const TableShardInfos shard_infos;
     const int limit;
+    std::vector<Int64> sort_column_ids;
+    std::vector<bool> sort_column_asc;
     bool is_count_agg = false;
     String count_agg_executor_id;
 };

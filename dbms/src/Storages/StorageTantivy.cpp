@@ -89,6 +89,8 @@ void StorageTantivy::read(
         local_read,
         return_columns,
         tici_scan.getLimit(),
+        tici_scan.getSortColumnIds(),
+        tici_scan.getSortColumnAsc(),
         context.getSettingsRef().read_tso,
         tici_scan.getMatchExpr(),
         tici_scan.isCount(),

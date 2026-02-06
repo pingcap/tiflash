@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/Logger.h>
 #include <Flash/Coprocessor/TiCIScan.h>
 #include <TiDB/Schema/TiDB.h>
 #include <tipb/executor.pb.h>
@@ -31,6 +32,12 @@ TiCIScan::TiCIScan(const tipb::Executor * tici_scan_, const String & executor_id
     , query_type(tici_scan->idx_scan().fts_query_info().query_type())
     , shard_infos(dag_context.query_shard_infos.getTableShardInfosByExecutorID(tici_scan_->executor_id()))
     , limit(tici_scan->idx_scan().fts_query_info().top_k())
+    , sort_column_ids(
+          tici_scan->idx_scan().fts_query_info().sort_column_ids().begin(),
+          tici_scan->idx_scan().fts_query_info().sort_column_ids().end())
+    , sort_column_asc(
+          tici_scan->idx_scan().fts_query_info().sort_column_asc().begin(),
+          tici_scan->idx_scan().fts_query_info().sort_column_asc().end())
 {}
 
 void TiCIScan::constructTiCIScanForRemoteRead(tipb::IndexScan * tipb_index_scan) const

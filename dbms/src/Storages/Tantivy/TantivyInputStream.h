@@ -59,6 +59,8 @@ public:
         ShardInfo query_shard_info_,
         NamesAndTypes return_columns_,
         UInt64 limit_,
+        std::vector<Int64> sort_column_ids_,
+        std::vector<bool> sort_column_asc_,
         UInt64 read_ts_,
         ::Expr match_expr_,
         bool is_count)
@@ -69,6 +71,8 @@ public:
         , query_shard_info(query_shard_info_)
         , return_columns(return_columns_)
         , limit(limit_)
+        , sort_column_ids(sort_column_ids_)
+        , sort_column_asc(sort_column_asc_)
         , read_ts(read_ts_)
         , match_expr(match_expr_)
         , is_count(is_count)
@@ -97,7 +101,22 @@ protected:
         LOG_DEBUG(log, "shard info: {}", shard_info.toString());
         auto key_ranges = getKeyRanges(shard_info.key_ranges);
 
-        auto search_param = SearchParam{static_cast<size_t>(limit)};
+        rust::Vec<rust::String> tici_sort_column_names;
+        for (const auto & sort_column_id : sort_column_ids)
+        {
+            tici_sort_column_names.push_back(rust::String("column_" + std::to_string(sort_column_id)));
+        }
+        rust::Vec<bool> tici_sort_column_asc;
+        for (const auto & asc : sort_column_asc)
+        {
+            tici_sort_column_asc.push_back(asc);
+        }
+
+        SearchParam search_param{
+            .limit = static_cast<size_t>(limit),
+            .sort_field_names = std::move(tici_sort_column_names),
+            .is_asc = std::move(tici_sort_column_asc),
+        };
         if (is_count)
             return_fields = {};
 
@@ -223,6 +242,8 @@ private:
     ShardInfo query_shard_info;
     NamesAndTypes return_columns;
     UInt64 limit;
+    std::vector<Int64> sort_column_ids;
+    std::vector<bool> sort_column_asc;
     UInt64 read_ts;
     ::Expr match_expr;
     bool is_count;
