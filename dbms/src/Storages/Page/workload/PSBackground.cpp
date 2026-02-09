@@ -77,7 +77,7 @@ void PSGc::doGcOnce()
     }
     catch (...)
     {
-        StressEnvStatus::getInstance().setStat(STATUS_LOOP);
+        StressEnvStatus::getInstance().setStat(StressEnvStat::STATUS_LOOP);
         DB::tryLogCurrentException(__PRETTY_FUNCTION__);
         throw;
     }
@@ -106,7 +106,7 @@ void PSSnapStatGetter::onTime(Poco::Timer & /*timer*/)
     catch (...)
     {
         // if gc throw exception stop the test
-        StressEnvStatus::getInstance().setStat(STATUS_EXCEPTION);
+        StressEnvStatus::getInstance().setStat(StressEnvStat::STATUS_EXCEPTION);
         DB::tryLogCurrentException(__PRETTY_FUNCTION__);
         throw;
     }
@@ -121,7 +121,7 @@ void PSSnapStatGetter::start()
 void StressTimeout::onTime(Poco::Timer & /* t */)
 {
     LOG_INFO(logger, "timeout.");
-    StressEnvStatus::getInstance().setStat(STATUS_TIMEOUT);
+    StressEnvStatus::getInstance().setStat(StressEnvStat::STATUS_TIMEOUT);
 }
 
 void StressTimeout::start()

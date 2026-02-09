@@ -18,6 +18,7 @@
 #include <Storages/Page/PageDefinesBase.h>
 #include <Storages/Page/workload/PSStressEnv.h>
 
+#include <chrono>
 #include <random>
 
 namespace DB::PS::tests
@@ -99,6 +100,7 @@ public:
     String description() override { return fmt::format("(Stress Test Writer {})", index); }
 
     void setBufferSizeRange(size_t min, size_t max);
+    void setWriteDelay(std::chrono::milliseconds ms) { write_delay = ms; }
 
     virtual DB::ReadBufferPtr getRandomData();
 
@@ -106,12 +108,15 @@ public:
 
     void write(const RandomPageId & r);
 
+    UInt32 id() const { return index; }
+
 protected:
     virtual RandomPageId genRandomPageId();
 
 protected:
     PSPtr ps;
-    DB::UInt32 index = 0;
+    const DB::UInt32 index = 0;
+    std::optional<std::chrono::milliseconds> write_delay = std::nullopt;
     std::mt19937 gen;
     DB::PageIdU64 max_page_id = MAX_PAGE_ID_DEFAULT;
     std::unique_ptr<char[]> memory;
@@ -154,7 +159,7 @@ protected:
     size_t batch_buffer_nums = 100;
     size_t batch_buffer_limit = 0;
 
-    DB::PageFieldSizes data_sizes = {};
+    DB::PageFieldSizes data_sizes;
 };
 
 // PSWindowsWriter can better simulate the user's workload in cooperation with PSWindowsReader
