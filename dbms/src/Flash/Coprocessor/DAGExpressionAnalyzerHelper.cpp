@@ -565,6 +565,7 @@ DAGExpressionAnalyzerHelper::FunctionBuilderMap DAGExpressionAnalyzerHelper::fun
      {"bitNot", DAGExpressionAnalyzerHelper::buildBitwiseFunction},
      {"bitShiftLeft", DAGExpressionAnalyzerHelper::buildBitwiseFunction},
      {"bitShiftRight", DAGExpressionAnalyzerHelper::buildBitwiseFunction},
+     {"bitCount", DAGExpressionAnalyzerHelper::buildBitwiseFunction},
      {"leftUTF8", DAGExpressionAnalyzerHelper::buildLeftUTF8Function},
      {"date_add", DAGExpressionAnalyzerHelper::buildDateAddOrSubFunction<DateAdd>},
      {"date_sub", DAGExpressionAnalyzerHelper::buildDateAddOrSubFunction<DateSub>},

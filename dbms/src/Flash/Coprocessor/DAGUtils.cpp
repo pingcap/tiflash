@@ -361,7 +361,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::LeftShift, "bitShiftLeft"},
     {tipb::ScalarFuncSig::RightShift, "bitShiftRight"},
 
-    //{tipb::ScalarFuncSig::BitCount, "cast"},
+    {tipb::ScalarFuncSig::BitCount, "bitCount"},
     //{tipb::ScalarFuncSig::GetParamString, "cast"},
     //{tipb::ScalarFuncSig::GetVar, "cast"},
     //{tipb::ScalarFuncSig::RowSig, "cast"},
