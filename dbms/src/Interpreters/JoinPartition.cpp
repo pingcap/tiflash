@@ -83,7 +83,7 @@ void RowsNotInsertToMap::insertRow(Block * stored_block, size_t index, bool need
     }
     else
     {
-        auto * elem = reinterpret_cast<RowRefList *>(pool.arena.alloc(sizeof(RowRefList)));
+        auto * elem = reinterpret_cast<RowRefList *>(pool.arena.alignedAlloc(sizeof(RowRefList), alignof(RowRefList)));
         new (elem) RowRefList(stored_block, index);
         /// don't need cache column since it will explicitly materialize of need_materialize is true
         insertRowToList(pool, &head, elem, 0);
@@ -514,7 +514,8 @@ struct Inserter<ASTTableJoin::Strictness::All, Map, KeyGetter>
                  * We will insert each time the element into the second place.
                  * That is, the former second element, if it was, will be the third, and so on.
                  */
-            auto elem = reinterpret_cast<MappedType *>(pool.arena.alloc(sizeof(MappedType)));
+            auto elem
+                = reinterpret_cast<MappedType *>(pool.arena.alignedAlloc(sizeof(MappedType), alignof(MappedType)));
             new (elem) typename Map::mapped_type(stored_block, i);
             insertRowToList(pool, &emplace_result.getMapped(), elem, cache_column_threshold);
         }
@@ -1410,7 +1411,7 @@ struct RowFlaggedHashMapAdder
                 added_columns[j]->insertFrom(
                     *current->block->getByPosition(right_indexes[j]).column.get(),
                     current->row_num);
-            container.template push_back(reinterpret_cast<std::intptr_t>(current));
+            container.push_back(reinterpret_cast<std::intptr_t>(current));
         };
         if unlikely (
             probe_process_info.cache_columns_threshold > 0 && rows_joined >= probe_process_info.cache_columns_threshold)

@@ -23,6 +23,7 @@
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 
 #include <memory>
+#include <vector>
 
 
 namespace DB::DM
@@ -380,12 +381,12 @@ PageIdU64 ColumnFileTiny::writeColumnFileData(
             file_provider->createEncryptionInfo(ep);
         }
 
-        char page_data[data_size];
-        buf->readStrict(page_data, data_size);
+        std::vector<char> page_data(data_size);
+        buf->readStrict(page_data.data(), data_size);
         // encrypt the page data in place
-        file_provider->encryptPage(dm_context.keyspace_id, page_data, data_size, page_id);
+        file_provider->encryptPage(dm_context.keyspace_id, page_data.data(), data_size, page_id);
         // ReadBufferFromOwnString will copy the data, and own the data.
-        buf = std::make_shared<ReadBufferFromOwnString>(std::string_view(page_data, data_size));
+        buf = std::make_shared<ReadBufferFromOwnString>(std::string_view(page_data.data(), data_size));
     }
     wbs.log.putPage(page_id, 0, buf, data_size, col_data_sizes);
 

@@ -32,7 +32,7 @@ TEST(S3CommonTest, updateRegionByEndpoint)
         String endpoint;
         String expected_region;
         Aws::Http::Scheme expected_scheme;
-        bool use_virtual_address = true;
+        CloudVendor expected_vendor;
     };
 
     std::vector<TestCase> cases{
@@ -41,63 +41,137 @@ TEST(S3CommonTest, updateRegionByEndpoint)
             "http://s3.us-east-1.amazonaws.com",
             "us-east-1",
             Aws::Http::Scheme::HTTP,
+            CloudVendor::AWS,
         },
         TestCase{
             "https://s3.us-west-1.amazonaws.com",
             "us-west-1",
             Aws::Http::Scheme::HTTPS,
+            CloudVendor::AWS,
         },
         // AWS dualstack endpoint
         TestCase{
             "http://s3.dualstack.us-east-1.amazonaws.com",
             "us-east-1",
             Aws::Http::Scheme::HTTP,
+            CloudVendor::AWS,
         },
         // AWS fips endpoint
         TestCase{
             "https://s3-fips.us-east-1.amazonaws.com",
             "us-east-1",
             Aws::Http::Scheme::HTTPS,
+            CloudVendor::AWS,
         },
         // AWS fips dualstack endpoint
         TestCase{
             "https://s3-fips.dualstack.us-east-1.amazonaws.com",
             "us-east-1",
             Aws::Http::Scheme::HTTPS,
+            CloudVendor::AWS,
         },
         // Alibaba Cloud endpoint (internal)
         TestCase{
             "http://oss-ap-southeast-1-internal.aliyuncs.com",
             "ap-southeast-1",
             Aws::Http::Scheme::HTTP,
+            CloudVendor::AlibabaCloud,
         },
         TestCase{
             "https://oss-eu-central-1-internal.aliyuncs.com",
             "eu-central-1",
             Aws::Http::Scheme::HTTPS,
+            CloudVendor::AlibabaCloud,
         },
         // Alibaba Cloud endpoint (external)
         TestCase{
             "http://oss-ap-southeast-1.aliyuncs.com",
             "ap-southeast-1",
             Aws::Http::Scheme::HTTP,
+            CloudVendor::AlibabaCloud,
         },
         TestCase{
             "https://oss-na-south-1.aliyuncs.com",
             "na-south-1",
             Aws::Http::Scheme::HTTPS,
+            CloudVendor::AlibabaCloud,
+        },
+        // Kingsoft Cloud endpoint (internal)
+        TestCase{
+            "http://ks3-cn-beijing-internal.ksyuncs.com",
+            "cn-beijing",
+            Aws::Http::Scheme::HTTP,
+            CloudVendor::KingsoftCloud,
+        },
+        TestCase{
+            "http://ks3-sgp-internal.ksyuncs.com",
+            "sgp",
+            Aws::Http::Scheme::HTTP,
+            CloudVendor::KingsoftCloud,
+        },
+        TestCase{
+            "http://ks3-jr-beijing-internal.ksyuncs.com",
+            "jr-beijing",
+            Aws::Http::Scheme::HTTP,
+            CloudVendor::KingsoftCloud,
+        },
+        // Kingsoft Cloud endpoint (external)
+        TestCase{
+            "http://ks3-cn-beijing.ksyuncs.com",
+            "cn-beijing",
+            Aws::Http::Scheme::HTTP,
+            CloudVendor::KingsoftCloud,
+        },
+        TestCase{
+            "http://ks3-sgp.ksyuncs.com",
+            "sgp",
+            Aws::Http::Scheme::HTTP,
+            CloudVendor::KingsoftCloud,
+        },
+        TestCase{
+            "http://ks3-jr-shanghai.ksyuncs.com",
+            "jr-shanghai",
+            Aws::Http::Scheme::HTTP,
+            CloudVendor::KingsoftCloud,
         },
         // non-AWS endpoint
         TestCase{
             "minio.mydomain.com",
             "us-west-2",
             Aws::Http::Scheme::HTTP,
+            CloudVendor::Unknown,
         },
+        TestCase{
+            "http://minio.mydomain.com",
+            "us-west-2",
+            Aws::Http::Scheme::HTTP,
+            CloudVendor::Unknown,
+        },
+        TestCase{
+            "http://minio.mydomain.com:80",
+            "us-west-2",
+            Aws::Http::Scheme::HTTP,
+            CloudVendor::Unknown,
+        },
+        TestCase{
+            "https://minio.mydomain.com",
+            "us-west-2",
+            Aws::Http::Scheme::HTTPS,
+            CloudVendor::Unknown,
+        },
+        TestCase{
+            "https://minio.mydomain.com:443",
+            "us-west-2",
+            Aws::Http::Scheme::HTTPS,
+            CloudVendor::Unknown,
+        },
+        // non-AWS endpoint with non default http/https port,
+        // should be UnknownFixAddress vendor and not need virtual addressing
         TestCase{
             "10.0.0.1:9000",
             "us-west-2",
             Aws::Http::Scheme::HTTP,
-            false,
+            CloudVendor::UnknownFixAddress,
         },
     };
 
@@ -107,11 +181,11 @@ TEST(S3CommonTest, updateRegionByEndpoint)
         Aws::Client::ClientConfiguration cfg(true, "standard", true);
         cfg.region = default_test_region;
         cfg.endpointOverride = c.endpoint;
-        bool use_virtual_address = updateRegionByEndpoint(cfg, log);
+        auto vendor = updateRegionByEndpoint(cfg, log);
         ASSERT_EQ(cfg.region, c.expected_region) << c.endpoint;
         ASSERT_EQ(cfg.scheme, c.expected_scheme) << c.endpoint;
         ASSERT_EQ(cfg.verifySSL, c.expected_scheme == Aws::Http::Scheme::HTTPS) << c.endpoint;
-        ASSERT_EQ(use_virtual_address, c.use_virtual_address) << c.endpoint;
+        ASSERT_EQ(vendor, c.expected_vendor) << c.endpoint;
     }
 }
 

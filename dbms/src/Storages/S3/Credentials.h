@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Storages/S3/S3Common.h>
 #include <aws/core/auth/AWSCredentialsProviderChain.h>
 
 namespace DB::S3
@@ -23,7 +24,7 @@ namespace DB::S3
 class S3CredentialsProviderChain : public Aws::Auth::AWSCredentialsProviderChain
 {
 public:
-    explicit S3CredentialsProviderChain(const Aws::Client::ClientConfiguration & cfg);
+    explicit S3CredentialsProviderChain(const Aws::Client::ClientConfiguration & cfg, CloudVendor vendor);
 
 private:
     LoggerPtr log;

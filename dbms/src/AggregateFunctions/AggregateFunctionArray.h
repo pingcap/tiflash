@@ -22,6 +22,8 @@
 #include <DataTypes/DataTypeArray.h>
 #include <IO/WriteHelpers.h>
 
+#include <vector>
+
 
 namespace DB
 {
@@ -70,7 +72,7 @@ public:
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
-        const IColumn * nested[num_arguments];
+        std::vector<const IColumn *> nested(num_arguments);
 
         for (size_t i = 0; i < num_arguments; ++i)
             nested[i] = &static_cast<const ColumnArray &>(*columns[i]).getData();
@@ -94,7 +96,7 @@ public:
         }
 
         for (size_t i = begin; i < end; ++i)
-            nested_func->add(place, nested, i, arena);
+            nested_func->add(place, nested.data(), i, arena);
     }
 
 

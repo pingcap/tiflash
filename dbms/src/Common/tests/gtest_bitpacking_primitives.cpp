@@ -181,15 +181,15 @@ try
     auto test_func = []<typename T>(const T * values, size_t size) {
         const auto width = BitpackingPrimitives::minimumBitWidth(values, size);
         const auto length = BitpackingPrimitives::getRequiredSize(size, width);
-        unsigned char buffer[length];
-        BitpackingPrimitives::packBuffer(buffer, values, size, width);
+        std::vector<unsigned char> buffer(length);
+        BitpackingPrimitives::packBuffer(buffer.data(), values, size, width);
         // dest buffer should be rounded up to group size
         const auto round_count = BitpackingPrimitives::roundUpToAlgorithmGroupSize(size);
-        unsigned char decoded[sizeof(T) * round_count];
-        BitpackingPrimitives::unPackBuffer<T>(decoded, buffer, size, width);
+        std::vector<unsigned char> decoded(sizeof(T) * round_count);
+        BitpackingPrimitives::unPackBuffer<T>(decoded.data(), buffer.data(), size, width);
         for (size_t i = 0; i < size; ++i)
         {
-            auto decode_value = unalignedLoad<T>(decoded + i * sizeof(T));
+            auto decode_value = unalignedLoad<T>(decoded.data() + i * sizeof(T));
             ASSERT_EQ(decode_value, values[i]);
         }
     };

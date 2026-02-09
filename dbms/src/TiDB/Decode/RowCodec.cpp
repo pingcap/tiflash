@@ -388,6 +388,20 @@ bool appendRowToBlock(
     }
 }
 
+// When a column is missing in the encoded row, decide whether we can append a value
+// (NULL or origin default) to `block` or we must trigger schema sync.
+//
+// Background
+// - TiDB encode semantics, see [tables.CanSkip](https://github.com/pingcap/tidb/blob/v8.5.5/pkg/table/tables/tables.go#L1463-L1489)
+// - PK handle columns may be omitted from the value part and decoded from the key.
+// - A NULL column may be omitted only when BOTH DefaultValue and OriginDefaultValue are empty.
+// - For NOT NULL columns, TiDB must encode the value in the row unless the column did not
+//   exist in the writer schema (old data); in that case OriginDefaultValue is expected.
+//
+// Policy here:
+// - If the omission is clearly valid under the current schema, we fill a value and return true.
+// - Otherwise return false (force_decode == false) to let the caller sync schema and retry.
+// - If force_decode == true, we fall back to best-effort filling.
 inline bool addDefaultValueToColumnIfPossible(
     const ColumnInfo & column_info,
     Block & block,
@@ -395,33 +409,45 @@ inline bool addDefaultValueToColumnIfPossible(
     bool ignore_pk_if_absent,
     bool force_decode)
 {
-    // We consider a missing column could be safely filled with NULL, unless it has not default value and is NOT NULL.
-    // This could saves lots of unnecessary schema syncs for old data with a newer schema that has newly added columns.
-
+    // 1) Primary-key columns can be decoded from the key for pk_is_handle / common-handle tables.
+    //    Skip value-part filling here if allowed.
     if (column_info.hasPriKeyFlag())
     {
-        // For clustered index or pk_is_handle, if the pk column does not exists, it can still be decoded from the key
         if (ignore_pk_if_absent)
             return true;
 
-        assert(!ignore_pk_if_absent);
+        // For non-clustered tables, a missing PK column implies schema mismatch.
         if (!force_decode)
             return false;
-        // Else non-clustered index, and not pk_is_handle, it could be a row encoded by older schema,
-        // we need to fill the column which has primary key flag with default value.
-        // fallthrough to fill default value when force_decode
+        // fallthrough for best-effort fill when force_decode == true
     }
 
-    if (column_info.hasNoDefaultValueFlag() && column_info.hasNotNullFlag())
+    // 2) NOT NULL columns:
+    //    - If the column has NO DEFAULT, TiDB should always encode a value. Missing datum implies mismatch.
+    //    - If the column has NO origin default, missing datum may come from a newer schema where the column
+    //      became NULLABLE and was skipped; require schema sync.
+    //    - If the column state is NOT public, missing datum may come from a newer schema where the column
+    //      became PUBLIC and then became NULLABLE, the datum was skipped; require schema sync.
+    //    - If origin default exists, missing datum can be from older rows before the column was added; safe to fill.
+    //
+    // Note that for a non-public column, TiDB could use the `origin_default_value` to fill missing datum for backfilling
+    // during schema change. And before the column state becomes public, TiDB will reset the `origin_default_value` to null.
+    // So when all following conditions are met, it implies schema mismatch and TiFlash should require schema sync:
+    //  - the column datum is missing
+    //  - the column has not null flag
+    //  - the column state is not public
+    if (!force_decode && column_info.hasNotNullFlag())
     {
-        if (!force_decode)
+        if (column_info.hasNoDefaultValueFlag() //
+            || column_info.state != TiDB::SchemaState::StatePublic //
+            || !column_info.hasOriginDefaultValue())
             return false;
-        // Else the row does not contain this "not null" / "no default value" column,
-        // it could be a row encoded by older schema.
-        // fallthrough to fill default value when force_decode
     }
-    // not null or has no default value, tidb will fill with specific value.
-    auto * raw_column = const_cast<IColumn *>((block.getByPosition(block_column_pos)).column.get());
+
+    // 3) Fill using origin default or NULL.
+    //    Note: defaultValueToField() uses origin_default_value/origin_default_bit_value,
+    //    and falls back to NULL (nullable) or GenDefaultField (NOT NULL) when they are empty.
+    auto * raw_column = const_cast<IColumn *>(block.getByPosition(block_column_pos).column.get());
     raw_column->insert(column_info.defaultValueToField());
     return true;
 }
@@ -460,7 +486,9 @@ bool appendRowV2ToBlockImpl(
         num_not_null_columns,
         value_offsets);
     size_t values_start_pos = cursor;
+    // how many not null columns have been processed
     size_t idx_not_null = 0;
+    // how many null columns have been processed
     size_t idx_null = 0;
     // Merge ordered not null/null columns to keep order.
     while (idx_not_null < not_null_column_ids.size() || idx_null < null_column_ids.size())
@@ -481,12 +509,13 @@ bool appendRowV2ToBlockImpl(
         const auto next_column_id = column_ids_iter->first;
         if (next_column_id > next_datum_column_id)
         {
-            // The next column id to read is bigger than the column id of next datum in encoded row.
+            // The next_column_id to read is bigger than the next_datum_column_id in encoded row.
             // It means this is the datum of extra column. May happen when reading after dropping
             // a column.
+            // For `force_decode == false`, we should return false to let upper layer trigger schema sync.
             if (!force_decode)
                 return false;
-            // Ignore the extra column and continue to parse other datum
+            // For `force_decode == true`, we just skip this extra column and continue to parse other datum.
             if (is_null)
                 idx_null++;
             else
@@ -494,7 +523,7 @@ bool appendRowV2ToBlockImpl(
         }
         else if (next_column_id < next_datum_column_id)
         {
-            // The next column id to read is less than the column id of next datum in encoded row.
+            // The next_column_id to read is less than the next_datum_column_id in encoded row.
             // It means this is the datum of missing column. May happen when reading after adding
             // a column.
             // Fill with default value and continue to read data for next column id.
@@ -505,7 +534,10 @@ bool appendRowV2ToBlockImpl(
                     block_column_pos,
                     ignore_pk_if_absent,
                     force_decode))
+            {
+                // If failed to fill default value, return false to let upper layer trigger schema sync.
                 return false;
+            }
             column_ids_iter++;
             block_column_pos++;
         }
@@ -570,8 +602,12 @@ bool appendRowV2ToBlockImpl(
             block_column_pos++;
         }
     }
+
+    // There are more columns to read other than the datum encoded in the row.
     while (column_ids_iter != column_ids_iter_end)
     {
+        // Skip if the column_id is the same as `pk_handle_id`. The value of column
+        // `pk_handle_id` will be filled in upper layer but not in this function.
         if (column_ids_iter->first != pk_handle_id)
         {
             const auto & column_info = column_infos[column_ids_iter->second];
@@ -581,7 +617,10 @@ bool appendRowV2ToBlockImpl(
                     block_column_pos,
                     ignore_pk_if_absent,
                     force_decode))
+            {
+                // If failed to fill default value, return false to let upper layer trigger schema sync.
                 return false;
+            }
         }
         column_ids_iter++;
         block_column_pos++;
