@@ -43,14 +43,17 @@ inline size_t getJoinBuildPartitionNum(HashValueType hash)
 struct alignas(CPU_CACHE_LINE_SIZE) JoinBuildWorkerData
 {
     std::unique_ptr<void, std::function<void(void *)>> key_getter;
-    /// Count of not-null rows
     size_t row_count = 0;
-
-    RowPtr null_rows_list_head = nullptr;
+    size_t non_joined_row_count = 0;
 
     PaddedPODArray<size_t> row_sizes;
     PaddedPODArray<size_t> hashes;
     RowPtrs row_ptrs;
+
+    IColumn::Selector right_semi_selector;
+    BlockSelective right_semi_selective;
+    Block non_joined_block;
+    IColumn::Offsets non_joined_offsets;
 
     PaddedPODArray<size_t> partition_row_sizes;
     PaddedPODArray<size_t> partition_row_count;
@@ -61,7 +64,7 @@ struct alignas(CPU_CACHE_LINE_SIZE) JoinBuildWorkerData
     size_t build_pointer_table_time = 0;
     size_t build_pointer_table_size = 0;
 
-    ssize_t build_pointer_table_iter = -1;
+    ssize_t current_build_table_index = -1;
 
     size_t padding_size = 0;
     size_t all_size = 0;
@@ -73,17 +76,30 @@ struct alignas(CPU_CACHE_LINE_SIZE) JoinBuildWorkerData
     size_t lm_row_count = 0;
 };
 
-void insertBlockToRowContainers(
-    HashJoinKeyMethod method,
-    bool need_record_null_rows,
-    Block & block,
-    size_t rows,
-    const ColumnRawPtrs & key_columns,
-    ConstNullMapPtr null_map,
-    const HashJoinRowLayout & row_layout,
-    std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
-    JoinBuildWorkerData & worker_data,
-    bool check_lm_row_size);
+class HashJoin;
+class JoinBuildHelper
+{
+public:
+    static void insertBlockToRowContainers(
+        HashJoin * join,
+        Block & block,
+        size_t rows,
+        const ColumnRawPtrs & key_columns,
+        ConstNullMapPtr null_map,
+        JoinBuildWorkerData & wd,
+        bool check_lm_row_size);
+
+private:
+    template <typename KeyGetter, bool has_null_map, bool need_record_null_rows>
+    static void NO_INLINE insertBlockToRowContainersImpl(
+        HashJoin * join,
+        Block & block,
+        size_t rows,
+        const ColumnRawPtrs & key_columns,
+        ConstNullMapPtr null_map,
+        JoinBuildWorkerData & wd,
+        bool check_lm_row_size);
+};
 
 
 } // namespace DB

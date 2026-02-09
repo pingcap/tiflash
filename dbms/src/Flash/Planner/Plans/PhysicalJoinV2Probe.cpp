@@ -36,6 +36,7 @@ void PhysicalJoinV2Probe::buildPipelineExecGroupImpl(
         builder.appendTransformOp(
             std::make_unique<HashJoinV2ProbeTransformOp>(exec_context, log->identifier(), join_ptr, probe_index++));
     });
+    exec_context.addOneTimeFuture(join_ptr->getWaitProbeFinishFuture());
     join_ptr.reset();
 }
 } // namespace DB
