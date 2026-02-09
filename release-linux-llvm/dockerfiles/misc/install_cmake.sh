@@ -13,6 +13,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+<<<<<<< HEAD:release-linux-llvm/dockerfiles/misc/install_cmake.sh
+=======
+[storage]
+# No space is reserved at all for testing
+reserve-space = "0"
+# Enable keyspace and ttl for next-gen
+api-version = 2
+enable-ttl = true
+low-space-threshold = 0
+>>>>>>> a5e14033f8 (Fix three schema mismatch bugs under disaggregated arch  (#10530)):tests/docker/next-gen-config/tikv.toml
 
 # Install cmake for CI/CD.
 # Require: wget
