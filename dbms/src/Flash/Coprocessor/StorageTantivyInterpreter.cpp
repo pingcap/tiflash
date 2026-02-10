@@ -50,12 +50,13 @@ void StorageTantivyIterpreter::execute(PipelineExecutorContext & exec_context, P
     const auto local_shards = total_shards >= remote_shards ? (total_shards - remote_shards) : 0;
     LOG_INFO(
         log,
-        "tici split shards: executor_id={} total={} local={} remote={} local_concurrency={}",
+        "tici split shards: executor_id={} total={} local={} remote={} local_concurrency={} read_ts={}",
         executor_id,
         total_shards,
         local_shards,
         remote_shards,
-        group_builder.concurrency());
+        group_builder.concurrency(),
+        context.getSettingsRef().read_tso);
     if (!remote_shard_infos.empty())
     {
         if (context.getDAGContext()->isCop())
@@ -74,10 +75,11 @@ void StorageTantivyIterpreter::execute(PipelineExecutorContext & exec_context, P
         if (!remote_builder.empty())
             LOG_INFO(
                 log,
-                "tici remote sourceOps built: executor_id={} remote_requests={} concurrency={}",
+                "tici remote sourceOps built: executor_id={} remote_requests={} concurrency={} read_ts={}",
                 executor_id,
                 remote_request.size(),
-                remote_builder.concurrency());
+                remote_builder.concurrency(),
+                context.getSettingsRef().read_tso);
         group_builder.merge(std::move(remote_builder));
     }
 }
