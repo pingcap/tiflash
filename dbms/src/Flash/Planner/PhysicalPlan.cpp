@@ -102,7 +102,8 @@ void PhysicalPlan::buildTiCIScan(const String & executor_id, const tipb::Executo
     TiCIScan tici_scan(executor, executor_id, dagContext());
     LOG_INFO(
         log,
-        "tici scan: keyspace_id={} table_id={} index_id={} limit={} shard_count={} match_expr_size={} query_type={} read_ts={}",
+        "tici scan: keyspace_id={} table_id={} index_id={} limit={} shard_count={} match_expr_size={} query_type={} "
+        "read_ts={}",
         tici_scan.getKeyspaceID(),
         tici_scan.getTableId(),
         tici_scan.getIndexId(),
