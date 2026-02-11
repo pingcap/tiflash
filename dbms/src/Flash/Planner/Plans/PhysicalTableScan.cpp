@@ -27,11 +27,13 @@
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Operators/ExpressionTransformOp.h>
 
+#include <cassert>
+
 namespace DB
 {
 namespace
 {
-NamesWithAliases buildTableScanProjectionCols(
+std::tuple<NamesWithAliases, Int32> buildTableScanProjectionCols(
     Int64 logical_table_id,
     const NamesAndTypes & schema,
     const Block & storage_header)
@@ -46,30 +48,39 @@ NamesWithAliases buildTableScanProjectionCols(
                 logical_table_id),
             Errors::Planner::BadRequest);
     NamesWithAliases schema_project_cols;
+    Int32 version_col_idx = -1;
     for (size_t i = 0; i < schema.size(); ++i)
     {
         const auto & table_scan_col_name = schema[i].name;
         const auto & table_scan_col_type = schema[i].type;
         const auto & storage_col_name = storage_header.getColumnsWithTypeAndName()[i].name;
         const auto & storage_col_type = storage_header.getColumnsWithTypeAndName()[i].type;
+
         if (unlikely(!table_scan_col_type->equals(*storage_col_type)))
-            throw TiFlashException(
-                fmt::format(
-                    R"(The data type {} from tidb table scan schema is different from the data type {} from tiflash storage schema, 
-                    table id is {}, 
-                    column index is {}, 
-                    column name from tidb table scan is {}, 
-                    column name from tiflash storage is {})",
-                    table_scan_col_type->getName(),
-                    storage_col_type->getName(),
-                    logical_table_id,
-                    i,
-                    table_scan_col_name,
-                    storage_col_name),
-                Errors::Planner::BadRequest);
+        {
+            if (storage_col_name != MutableSupport::version_column_name)
+            {
+                throw TiFlashException(
+                    fmt::format(
+                        R"(The data type {} from tidb table scan schema is different from the data type {} from tiflash storage schema, 
+                        table id is {}, 
+                        column index is {}, 
+                        column name from tidb table scan is {}, 
+                        column name from tiflash storage is {})",
+                        table_scan_col_type->getName(),
+                        storage_col_type->getName(),
+                        logical_table_id,
+                        i,
+                        table_scan_col_name,
+                        storage_col_name),
+                    Errors::Planner::BadRequest);
+            }
+            // We will align these two types outside of this function
+            version_col_idx = i;
+        }
         schema_project_cols.emplace_back(storage_col_name, table_scan_col_name);
     }
-    return schema_project_cols;
+    return std::tuple(schema_project_cols, version_col_idx);
 }
 } // namespace
 
@@ -113,7 +124,7 @@ void PhysicalTableScan::buildBlockInputStreamImpl(DAGPipeline & pipeline, Contex
         DAGStorageInterpreter storage_interpreter(context, tidb_table_scan, filter_conditions, max_streams);
         storage_interpreter.execute(pipeline);
     }
-    buildProjection(pipeline);
+    buildProjection(pipeline, context);
 }
 
 void PhysicalTableScan::buildPipeline(
@@ -136,7 +147,7 @@ void PhysicalTableScan::buildPipeline(
         DAGStorageInterpreter storage_interpreter(context, tidb_table_scan, filter_conditions, context.getMaxStreams());
         storage_interpreter.execute(exec_context, pipeline_exec_builder);
     }
-    buildProjection(exec_context, pipeline_exec_builder);
+    buildProjection(exec_context, pipeline_exec_builder, context);
 
     PhysicalPlanNode::buildPipeline(builder, context, exec_context);
 }
@@ -151,29 +162,52 @@ void PhysicalTableScan::buildPipelineExecGroupImpl(
     group_builder = std::move(pipeline_exec_builder);
 }
 
-void PhysicalTableScan::buildProjection(DAGPipeline & pipeline)
+void PhysicalTableScan::buildProjection(DAGPipeline & pipeline, Context & context)
 {
-    const auto & schema_project_cols = buildTableScanProjectionCols(
-        tidb_table_scan.getLogicalTableID(),
-        schema,
-        pipeline.firstStream()->getHeader());
+    auto sample_block = pipeline.firstStream()->getHeader();
+    auto [schema_project_cols, version_col_idx]
+        = buildTableScanProjectionCols(tidb_table_scan.getLogicalTableID(), schema, sample_block);
+
     /// In order to keep BlockInputStream's schema consistent with PhysicalPlan's schema.
     /// It is worth noting that the column uses the name as the unique identifier in the Block, so the column name must also be consistent.
     ExpressionActionsPtr schema_project = generateProjectExpressionActions(pipeline.firstStream(), schema_project_cols);
+
+    if (version_col_idx != -1)
+    {
+        DAGExpressionAnalyzer analyzer(sample_block, context);
+        analyzer.appendCast(
+            schema[version_col_idx].type,
+            schema_project,
+            sample_block.getByPosition(version_col_idx).name);
+        const auto & sample_block = schema_project->getSampleBlock();
+        schema_project_cols[version_col_idx].first = sample_block.getByPosition(sample_block.columns() - 1).name;
+    }
+
     executeExpression(pipeline, schema_project, log, "table scan schema projection");
 }
 
 void PhysicalTableScan::buildProjection(
     PipelineExecutorContext & exec_context,
-    PipelineExecGroupBuilder & group_builder)
+    PipelineExecGroupBuilder & group_builder,
+    Context & context)
 {
     auto header = group_builder.getCurrentHeader();
-    const auto & schema_project_cols
+    auto [schema_project_cols, version_col_idx]
         = buildTableScanProjectionCols(tidb_table_scan.getLogicalTableID(), schema, header);
 
     /// In order to keep TransformOp's schema consistent with PhysicalPlan's schema.
     /// It is worth noting that the column uses the name as the unique identifier in the Block, so the column name must also be consistent.
     ExpressionActionsPtr schema_actions = PhysicalPlanHelper::newActions(header);
+
+    // Convert version column to nullable when needed
+    if (version_col_idx != -1)
+    {
+        DAGExpressionAnalyzer analyzer(sample_block, context);
+        analyzer.appendCast(schema[version_col_idx].type, schema_actions, header.getByPosition(version_col_idx).name);
+        const auto & sample_block = schema_actions->getSampleBlock();
+        schema_project_cols[version_col_idx].first = sample_block.getByPosition(sample_block.columns() - 1).name;
+    }
+
     schema_actions->add(ExpressionAction::project(schema_project_cols));
     executeExpression(exec_context, group_builder, schema_actions, log);
 }
