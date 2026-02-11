@@ -81,6 +81,19 @@ void StorageTantivy::read(
         return_columns = genNamesAndTypesForTiCI(tici_scan.getReturnColumns(), "column");
     }
 
+    ::rust::Vec<::Shard> local_shards;
+    for (const auto & shard_info : local_read)
+    {
+        local_shards.push_back(::Shard{
+            .keyspace_id = tici_scan.getKeyspaceID(),
+            .table_id = tici_scan.getTableId(),
+            .index_id = tici_scan.getIndexId(),
+            .shard_id = shard_info.shard_id,
+            .shard_epoch = shard_info.shard_epoch,
+        });
+    }
+    auto shards_snapshot = acquire_snapshot(local_shards);
+
     auto tici_task_pool = std::make_shared<TS::TiCIReadTaskPool>(
         log,
         tici_scan.getKeyspaceID(),
@@ -94,7 +107,8 @@ void StorageTantivy::read(
         context.getSettingsRef().read_tso,
         tici_scan.getMatchExpr(),
         tici_scan.isCount(),
-        context.getTimezoneInfo());
+        context.getTimezoneInfo(),
+        std::move(shards_snapshot));
 
     num_streams = std::max(1, std::min(num_streams, local_read.size()));
     // local read
@@ -145,6 +159,7 @@ void StorageTantivy::splitRemoteReadAndLocalRead()
     for (const auto & shard_info : all)
     {
         shards.push_back(::Shard{
+            .keyspace_id = tici_scan.getKeyspaceID(),
             .table_id = table_id,
             .index_id = index_id,
             .shard_id = shard_info.shard_id,
