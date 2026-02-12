@@ -3,8 +3,8 @@
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/registerFunctions.h>
-#include <Interpreters/Context.h>
 #include <IO/Buffer/WriteBufferFromString.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
@@ -13,7 +13,6 @@
 #include <TiDB/Decode/TypeMapping.h>
 #include <TiDB/Schema/TiDB.h>
 #include <common/logger_useful.h>
-
 #include <gtest/gtest.h>
 #include <tipb/executor.pb.h>
 
@@ -133,7 +132,8 @@ try
     auto & step = analyzer.initAndGetLastStep(chain);
     auto & actions = step.actions;
 
-    auto [has_cast, casted_columns] = analyzer.buildExtraCastsAfterTS(actions, may_need_add_cast_column, table_scan_column_info);
+    auto [has_cast, casted_columns]
+        = analyzer.buildExtraCastsAfterTS(actions, may_need_add_cast_column, table_scan_column_info);
     ASSERT_TRUE(has_cast);
     ASSERT_EQ(casted_columns.size(), 1);
 
@@ -210,7 +210,8 @@ try
     DM::ColumnDefines table_column_defines;
     table_column_defines.emplace_back(VERSION_COLUMN_ID, VERSION_COLUMN_NAME, VERSION_COLUMN_TYPE);
 
-    auto rs_operator = DM::RSOperator::build(dag_query, scan_column_infos, table_column_defines, /*enable_rs_filter*/ true, log);
+    auto rs_operator
+        = DM::RSOperator::build(dag_query, scan_column_infos, table_column_defines, /*enable_rs_filter*/ true, log);
     ASSERT_TRUE(rs_operator);
 
     const auto col_ids = rs_operator->getColumnIDs();
