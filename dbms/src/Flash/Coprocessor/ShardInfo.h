@@ -90,9 +90,7 @@ public:
         buf.joinStr(
             shard_info_list.begin(),
             shard_info_list.end(),
-            [](const ShardInfo & shard_info, FmtBuffer & fb) {
-                fb.append(shard_info.toString());
-            },
+            [](const ShardInfo & shard_info, FmtBuffer & fb) { fb.append(shard_info.toString()); },
             " ");
         buf.append("]");
         return buf.toString();
@@ -139,9 +137,7 @@ public:
         buf.joinStr(
             table_shard_info_list.begin(),
             table_shard_info_list.end(),
-            [](const TableShardInfos & table_shard_info, FmtBuffer & fb) {
-                fb.append(table_shard_info.toString());
-            },
+            [](const TableShardInfos & table_shard_info, FmtBuffer & fb) { fb.append(table_shard_info.toString()); },
             ", ");
         buf.append("]");
         return buf.toString();
