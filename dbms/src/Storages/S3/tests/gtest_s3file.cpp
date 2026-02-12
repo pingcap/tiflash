@@ -14,9 +14,11 @@
 
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
+#include <Common/SyncPoint/Ctl.h>
 #include <IO/BaseFile/PosixWritableFile.h>
 #include <IO/Buffer/ReadBufferFromRandomAccessFile.h>
 #include <IO/Encryption/MockKeyManager.h>
+#include <IO/IOThreadPools.h>
 #include <Interpreters/Context.h>
 #include <Poco/DigestStream.h>
 #include <Poco/MD5Engine.h>
@@ -49,7 +51,9 @@
 #include <chrono>
 #include <ext/scope_guard.h>
 #include <fstream>
+#include <future>
 #include <memory>
+#include <thread>
 
 
 using namespace std::chrono_literals;
@@ -60,6 +64,7 @@ using namespace DB::S3;
 namespace DB::FailPoints
 {
 extern const char force_set_mocked_s3_object_mtime[];
+extern const char force_syncpoint_on_s3_upload[];
 extern const char force_s3_random_access_file_init_fail[];
 extern const char force_s3_random_access_file_read_fail[];
 } // namespace DB::FailPoints
@@ -771,6 +776,74 @@ try
             3);
         ASSERT_EQ(retry, 1);
     }
+}
+CATCH
+
+TEST_P(S3FileTest, PutDMFileLocalFilesWaitsForAllTasks)
+try
+{
+    // This test requires MockS3Client control hooks.
+    if (dynamic_cast<DB::S3::tests::MockS3Client *>(s3_client.get()) == nullptr)
+        return;
+
+    auto & pool = DataStoreS3Pool::get();
+    // Ensure at least two threads so the blocked and failed uploads can run concurrently.
+    const auto old_max_threads = pool.getMaxThreads();
+    const auto old_queue_size = pool.getQueueSize();
+    SCOPE_EXIT({
+        pool.setMaxThreads(old_max_threads);
+        pool.setQueueSize(old_queue_size);
+    });
+    pool.setMaxThreads(std::max<size_t>(2, old_max_threads));
+    pool.setQueueSize(std::max<size_t>(2, old_queue_size));
+
+    const String local_dir = fmt::format("{}/dmf_local", getTemporaryPath());
+    createIfNotExist(local_dir);
+    std::vector<String> local_files{"failed.dat", "blocked.dat"};
+    writeLocalFile(fmt::format("{}/{}", local_dir, local_files[0]), 16);
+    writeLocalFile(fmt::format("{}/{}", local_dir, local_files[1]), 16);
+
+    const S3::DMFileOID oid{
+        .store_id = 1,
+        .keyspace_id = keyspace_id,
+        .table_id = 100,
+        .file_id = 1,
+    };
+    const auto remote_dir = S3::S3Filename::fromDMFileOID(oid).toFullKey();
+
+    // Set up a syncpoint to block the "blocked.dat" from being uploaded.
+    const auto blocked_key = fmt::format("{}/{}", remote_dir, local_files[1]);
+    FailPointHelper::enableFailPoint(FailPoints::force_syncpoint_on_s3_upload, blocked_key);
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_syncpoint_on_s3_upload); });
+
+    auto sp_upload = SyncPointCtl::enableInScope("before_S3Common::uploadFile");
+
+    // The "failed.dat" upload should fail.
+    DB::S3::tests::MockS3Client::setPutObjectStatus(DB::S3::tests::MockS3Client::S3Status::FAILED);
+    SCOPE_EXIT({ DB::S3::tests::MockS3Client::setPutObjectStatus(DB::S3::tests::MockS3Client::S3Status::NORMAL); });
+
+    std::promise<void> done;
+    auto done_future = done.get_future();
+    // Run in a separate thread so we can observe whether it returns before "blocked.dat" upload is unblocked.
+    std::thread worker([&] {
+        try
+        {
+            data_store->putDMFileLocalFiles(local_dir, local_files, oid);
+        }
+        catch (...)
+        {}
+        done.set_value();
+    });
+
+    sp_upload.waitAndPause();
+
+    // The `putDMFileLocalFiles` should not return while "blocked.dat" is still blocked.
+    EXPECT_EQ(done_future.wait_for(200ms), std::future_status::timeout);
+
+    // Avoid pausing again on retries after unblocking.
+    FailPointHelper::disableFailPoint(FailPoints::force_syncpoint_on_s3_upload);
+    sp_upload.next();
+    worker.join();
 }
 CATCH
 

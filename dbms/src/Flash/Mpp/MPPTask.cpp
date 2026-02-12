@@ -223,7 +223,7 @@ void MPPTask::finishWrite()
 
         // The finish of pushing all blocks not means that cte sink job has been done.
         // Execution summary statistic also need to be sent. So we can release cte
-        // only when execution sumary statistic has been sent.
+        // only when execution summary statistic has been sent.
         this->context->getCTEManager()->releaseCTEBySink(resp, this->dag_context->getQueryIDAndCTEIDForSink());
         this->notify_cte_sink_finish = true;
     }
@@ -826,11 +826,16 @@ void MPPTask::reportStatus(const String & err_msg)
         auto rpc_status = rpc.call(&client_context, req, &resp);
         if (!rpc_status.ok())
         {
-            throw Exception(rpc.errMsg(rpc_status));
+            auto extra_msg = "addr: " + meta.coordinator_address();
+            throw Exception(rpc.errMsg(rpc_status, extra_msg));
         }
         if (resp.has_error())
         {
-            LOG_INFO(log, "ReportMPPTaskStatus resp error: {}", resp.error().msg());
+            LOG_INFO(
+                log,
+                "ReportMPPTaskStatus resp error: {}, addr={}",
+                resp.error().msg(),
+                meta.coordinator_address());
         }
     }
     catch (...)

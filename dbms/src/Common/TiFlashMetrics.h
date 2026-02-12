@@ -225,6 +225,22 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_uni_page_ids, {"type", "uni_page_ids"}),                                                                               \
       F(type_versioned_entries, {"type", "versioned_entries"}))                                                                     \
     M(tiflash_storage_read_tasks_count, "Total number of storage engine read tasks", Counter)                                       \
+    M(tiflash_storage_place_index_count,                                                                                            \
+      "Total number of place index operations",                                                                                     \
+      Counter,                                                                                                                      \
+      F(type_reuse, {"type", "reuse"}),                                                                                             \
+      F(type_placed, {"type", "placed"}),                                                                                           \
+      F(type_placed_fully_indexed, {"type", "placed_fully_indexed"}),                                                               \
+      F(type_placed_fully_saved, {"type", "placed_fully_saved"}))                                                                   \
+    M(tiflash_storage_place_index_stats_count,                                                                                      \
+      "Bucketed histogram of number of rows/deletes of index placement operations",                                                 \
+      Histogram,                                                                                                                    \
+      F(type_rows_newly_placed, {{"type", "rows_newly_placed"}}, ExpBuckets{1000, 2, 10}),                                          \
+      F(type_deletes_newly_placed, {{"type", "deletes_newly_placed"}}, ExpBucketsWithRange{1, 2, 100}),                             \
+      F(type_rows_after_placed, {{"type", "rows_after_placed"}}, ExpBuckets{1000, 2, 10}),                                          \
+      F(type_deletes_after_placed, {{"type", "deletes_after_placed"}}, ExpBucketsWithRange{1, 2, 100}),                             \
+      F(type_rows_reuse_placed, {{"type", "rows_reuse_placed"}}, ExpBuckets{1000, 2, 10}),                                          \
+      F(type_deletes_reuse_placed, {{"type", "deletes_reuse_placed"}}, ExpBucketsWithRange{1, 2, 100}))                             \
     M(tiflash_storage_command_count,                                                                                                \
       "Total number of storage's command, such as delete range / shutdown /startup",                                                \
       Counter,                                                                                                                      \
@@ -247,18 +263,18 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_place_index_update, {"type", "place_index_update"}))                                                                   \
     M(tiflash_storage_subtask_duration_seconds,                                                                                     \
       "Bucketed histogram of storage's sub task duration",                                                                          \
-      Histogram,                                                                                                                    \
-      F(type_delta_merge_bg, {{"type", "delta_merge_bg"}}, ExpBuckets{0.001, 2, 20}),                                               \
-      F(type_delta_merge_bg_gc, {{"type", "delta_merge_bg_gc"}}, ExpBuckets{0.001, 2, 20}),                                         \
-      F(type_delta_merge_fg, {{"type", "delta_merge_fg"}}, ExpBuckets{0.001, 2, 20}),                                               \
-      F(type_delta_merge_manual, {{"type", "delta_merge_manual"}}, ExpBuckets{0.001, 2, 20}),                                       \
-      F(type_delta_compact, {{"type", "delta_compact"}}, ExpBuckets{0.001, 2, 20}),                                                 \
-      F(type_delta_flush, {{"type", "delta_flush"}}, ExpBuckets{0.001, 2, 20}),                                                     \
-      F(type_seg_split_bg, {{"type", "seg_split_bg"}}, ExpBuckets{0.001, 2, 20}),                                                   \
-      F(type_seg_split_fg, {{"type", "seg_split_fg"}}, ExpBuckets{0.001, 2, 20}),                                                   \
-      F(type_seg_split_ingest, {{"type", "seg_split_ingest"}}, ExpBuckets{0.001, 2, 20}),                                           \
-      F(type_seg_merge_bg_gc, {{"type", "seg_merge_bg_gc"}}, ExpBuckets{0.001, 2, 20}),                                             \
-      F(type_place_index_update, {{"type", "place_index_update"}}, ExpBuckets{0.001, 2, 20}))                                       \
+      Histogram, /* increase the bucket from 10ms to 87 minutes */                                                                  \
+      F(type_delta_merge_bg, {{"type", "delta_merge_bg"}}, ExpBuckets{0.010, 2, 20}),                                               \
+      F(type_delta_merge_bg_gc, {{"type", "delta_merge_bg_gc"}}, ExpBuckets{0.010, 2, 20}),                                         \
+      F(type_delta_merge_fg, {{"type", "delta_merge_fg"}}, ExpBuckets{0.010, 2, 20}),                                               \
+      F(type_delta_merge_manual, {{"type", "delta_merge_manual"}}, ExpBuckets{0.010, 2, 20}),                                       \
+      F(type_delta_compact, {{"type", "delta_compact"}}, ExpBuckets{0.010, 2, 20}),                                                 \
+      F(type_delta_flush, {{"type", "delta_flush"}}, ExpBuckets{0.010, 2, 20}),                                                     \
+      F(type_seg_split_bg, {{"type", "seg_split_bg"}}, ExpBuckets{0.010, 2, 20}),                                                   \
+      F(type_seg_split_fg, {{"type", "seg_split_fg"}}, ExpBuckets{0.010, 2, 20}),                                                   \
+      F(type_seg_split_ingest, {{"type", "seg_split_ingest"}}, ExpBuckets{0.010, 2, 20}),                                           \
+      F(type_seg_merge_bg_gc, {{"type", "seg_merge_bg_gc"}}, ExpBuckets{0.010, 2, 20}),                                             \
+      F(type_place_index_update, {{"type", "place_index_update"}}, ExpBuckets{0.010, 2, 20}))                                       \
     M(tiflash_storage_subtask_throughput_bytes,                                                                                     \
       "Calculate the throughput of (maybe foreground) tasks of storage in bytes",                                                   \
       Counter, /**/                                                                                                                 \
@@ -492,6 +508,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_write_del, {"type", "write_del"}),                                                                                     \
       F(type_lock_del, {"type", "lock_del"}),                                                                                       \
       F(type_pessimistic_lock_put, {"type", "pessimistic_lock_put"}),                                                               \
+      F(type_shared_lock_put, {"type", "shared_lock_put"}),                                                                         \
       F(type_lock_replaced, {"type", "lock_replaced"}),                                                                             \
       F(type_default_del, {"type", "default_del"}),                                                                                 \
       F(type_apply_snapshot, {"type", "apply_snapshot"}),                                                                           \
@@ -678,12 +695,17 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
     M(tiflash_storage_read_thread_gauge,                                                                                            \
       "The gauge of storage read thread",                                                                                           \
       Gauge,                                                                                                                        \
+      F(type_read_task_pool, {"type", "read_task_pool"}),                                                                           \
+      F(type_read_task, {"type", "read_task"}),                                                                                     \
+      F(type_read_task_active, {"type", "read_task_active"}),                                                                       \
       F(type_merged_task, {"type", "merged_task"}),                                                                                 \
-      F(type_merged_task_active, {"type", "merged_task_active"}))                                                                   \
+      F(type_merged_task_units, /* num of merged task segments */ {"type", "merged_task_units"}),                                   \
+      F(type_merged_task_active, /* num of merged task actively reading by SegmentReader */                                         \
+        {"type", "merged_task_active"}))                                                                                            \
     M(tiflash_storage_read_thread_seconds,                                                                                          \
       "Bucketed histogram of read thread",                                                                                          \
-      Histogram,                                                                                                                    \
-      F(type_merged_task, {{"type", "merged_task"}}, ExpBuckets{0.001, 2, 20}))                                                     \
+      Histogram, /* increase the bucket from 10ms to 87 minutes */                                                                  \
+      F(type_merged_task, {{"type", "merged_task"}}, ExpBuckets{0.010, 2, 20}))                                                     \
     M(tiflash_mpp_task_manager,                                                                                                     \
       "The gauge of mpp task manager",                                                                                              \
       Gauge,                                                                                                                        \
@@ -768,7 +790,8 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_list_objects, {{"type", "list_objects"}}, ExpBuckets{0.001, 2, 20}),                                                   \
       F(type_delete_object, {{"type", "delete_object"}}, ExpBuckets{0.001, 2, 20}),                                                 \
       F(type_head_object, {{"type", "head_object"}}, ExpBuckets{0.001, 2, 20}),                                                     \
-      F(type_read_stream, {{"type", "read_stream"}}, ExpBuckets{0.0001, 2, 20}))                                                    \
+      F(type_read_stream, {{"type", "read_stream"}}, ExpBuckets{0.0001, 2, 20}),                                                    \
+      F(type_read_stream_err, {{"type", "read_stream_err"}}, ExpBuckets{0.0001, 2, 20}))                                            \
     M(tiflash_storage_s3_http_request_seconds,                                                                                      \
       "S3 request duration breakdown in seconds",                                                                                   \
       Histogram,                                                                                                                    \

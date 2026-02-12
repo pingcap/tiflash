@@ -362,7 +362,7 @@ try
             Field f = (*col)[i];
             EXPECT_FLOAT_EQ(f.get<Float64>(), 3.14);
         }
-        // Try to copy using inserRangeFrom
+        // Try to copy using insertRangeFrom
         auto col2 = cd.type->createColumn();
         col2->insertRangeFrom(*col, 0, num_rows);
         for (size_t i = 0; i < num_rows; ++i)
@@ -390,7 +390,7 @@ try
             Field f = (*col)[i];
             EXPECT_FLOAT_EQ(f.get<Float64>(), 3.14);
         }
-        // Try to copy using inserRangeFrom
+        // Try to copy using insertRangeFrom
         auto col2 = cd.type->createColumn();
         col2->insertRangeFrom(*col, 0, num_rows);
         for (size_t i = 0; i < num_rows; ++i)
@@ -427,7 +427,7 @@ try
             Field f = (*col)[i];
             EXPECT_FLOAT_EQ(f.get<DecimalField<Decimal32>>(), expected_default_value);
         }
-        // Try to copy using inserRangeFrom
+        // Try to copy using insertRangeFrom
         auto col2 = cd.type->createColumn();
         col2->insertRangeFrom(*col, 0, num_rows);
         for (size_t i = 0; i < num_rows; ++i)
@@ -464,7 +464,7 @@ try
             Field f = (*col)[i];
             EXPECT_FLOAT_EQ(f.get<DecimalField<Decimal32>>(), DecimalField(expected_default_value, /*scale*/ 1));
         }
-        // Try to copy using inserRangeFrom
+        // Try to copy using insertRangeFrom
         auto col2 = cd.type->createColumn();
         col2->insertRangeFrom(*col, 0, num_rows);
         for (size_t i = 0; i < num_rows; ++i)

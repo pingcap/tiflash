@@ -67,9 +67,9 @@ public:
         memcpy(plaintext, random_string.data(), MAX_SIZE);
         memcpy(ciphertext, random_string.data(), MAX_SIZE);
         size_t block_size = DB::Encryption::blockSize(method);
-        unsigned char own_iv[block_size];
-        memcpy(own_iv, iv, block_size);
-        DB::Encryption::Cipher(0, ciphertext, MAX_SIZE, key, method, own_iv, true);
+        std::vector<unsigned char> own_iv(block_size);
+        memcpy(own_iv.data(), iv, block_size);
+        DB::Encryption::Cipher(0, ciphertext, MAX_SIZE, key, method, own_iv.data(), true);
     }
 
     void testEncryptionImpl(size_t start, size_t end, const unsigned char * iv, bool * success)
@@ -188,13 +188,13 @@ try
             String key_str = DB::random::randomString(DB::Encryption::keySize(method));
             size_t block_size = DB::Encryption::blockSize(method);
             String iv_str = DB::random::randomString(block_size);
-            unsigned char iv[block_size];
-            memcpy(iv, iv_str.data(), block_size);
-            DB::Encryption::Cipher(0, text.data(), text.size(), key_str, method, iv, true);
+            std::vector<unsigned char> iv(block_size);
+            memcpy(iv.data(), iv_str.data(), block_size);
+            DB::Encryption::Cipher(0, text.data(), text.size(), key_str, method, iv.data(), true);
             ASSERT_EQ(plaintext.size(), text.size());
             ASSERT_NE(0, memcmp(plaintext.data(), text.data(), plaintext.size()));
-            memcpy(iv, iv_str.data(), block_size);
-            DB::Encryption::Cipher(0, text.data(), text.size(), key_str, method, iv, false);
+            memcpy(iv.data(), iv_str.data(), block_size);
+            DB::Encryption::Cipher(0, text.data(), text.size(), key_str, method, iv.data(), false);
             ASSERT_EQ(plaintext, text);
         }
     }
@@ -245,8 +245,8 @@ try
 {
     size_t buff_size = 123;
     size_t buff_offset = 20;
-    char buff_write[buff_size];
-    char buff_read[buff_size];
+    std::vector<char> buff_write(buff_size);
+    std::vector<char> buff_read(buff_size);
 
     for (size_t i = 0; i < buff_size; i++)
     {
@@ -256,9 +256,9 @@ try
     String file_path = tests::TiFlashTestEnv::getTemporaryPath("posix_wr_file");
     WriteReadableFilePtr file = std::make_shared<PosixWriteReadableFile>(file_path, true, -1, 0600, nullptr, nullptr);
 
-    ASSERT_EQ(buff_size, file->pwrite(buff_write, buff_size, buff_offset));
-    ASSERT_EQ(buff_size, file->pread(buff_read, buff_size, buff_offset));
-    ASSERT_EQ(strncmp(buff_write, buff_read, buff_size), 0);
+    ASSERT_EQ(buff_size, file->pwrite(buff_write.data(), buff_size, buff_offset));
+    ASSERT_EQ(buff_size, file->pread(buff_read.data(), buff_size, buff_offset));
+    ASSERT_EQ(strncmp(buff_write.data(), buff_read.data(), buff_size), 0);
 
     file->close();
     ASSERT_TRUE(file->isClosed());
@@ -275,8 +275,8 @@ try
 {
     size_t buff_size = 123;
     size_t buff_offset = 20;
-    char buff_write[buff_size];
-    char buff_read[buff_size];
+    std::vector<char> buff_write(buff_size);
+    std::vector<char> buff_read(buff_size);
 
     for (size_t i = 0; i < buff_size; i++)
     {
@@ -290,9 +290,9 @@ try
 
     WriteReadableFilePtr file = file_provider->newWriteReadableFile(file_path, EncryptionPath("encryption", ""));
 
-    ASSERT_EQ(buff_size, file->pwrite(buff_write, buff_size, buff_offset));
-    ASSERT_EQ(buff_size, file->pread(buff_read, buff_size, buff_offset));
-    ASSERT_EQ(strncmp(buff_write, buff_read, buff_size), 0);
+    ASSERT_EQ(buff_size, file->pwrite(buff_write.data(), buff_size, buff_offset));
+    ASSERT_EQ(buff_size, file->pread(buff_read.data(), buff_size, buff_offset));
+    ASSERT_EQ(strncmp(buff_write.data(), buff_read.data(), buff_size), 0);
 
     file->close();
     ASSERT_TRUE(file->isClosed());
@@ -308,16 +308,16 @@ try
 {
     size_t buff_size = 123;
     size_t buff_offset = 20;
-    char buff_write[buff_size];
-    char buff_read[buff_size];
-    char buff_write_cpy[buff_size];
+    std::vector<char> buff_write(buff_size);
+    std::vector<char> buff_read(buff_size);
+    std::vector<char> buff_write_cpy(buff_size);
 
     for (size_t i = 0; i < buff_size; i++)
     {
         buff_write[i] = i % 0xFF;
     }
 
-    memcpy(buff_write_cpy, buff_write, buff_size);
+    memcpy(buff_write_cpy.data(), buff_write.data(), buff_size);
 
     String file_path = tests::TiFlashTestEnv::getTemporaryPath("enc_posix_wr_file");
 
@@ -330,9 +330,9 @@ try
 
     WriteReadableFilePtr file = file_provider->newWriteReadableFile(file_path, EncryptionPath("encryption", ""));
 
-    ASSERT_EQ(buff_size, file->pwrite(buff_write, buff_size, buff_offset));
-    ASSERT_EQ(buff_size, file->pread(buff_read, buff_size, buff_offset));
-    ASSERT_EQ(strncmp(buff_write_cpy, buff_read, buff_size), 0);
+    ASSERT_EQ(buff_size, file->pwrite(buff_write.data(), buff_size, buff_offset));
+    ASSERT_EQ(buff_size, file->pread(buff_read.data(), buff_size, buff_offset));
+    ASSERT_EQ(strncmp(buff_write_cpy.data(), buff_read.data(), buff_size), 0);
 
     file->close();
     ASSERT_TRUE(file->isClosed());
@@ -361,19 +361,19 @@ try
 
     size_t buff_size = 123;
     size_t buff_offset = 20;
-    char buff_write[buff_size];
-    char buff_read[buff_size];
-    char buff_write_cpy[buff_size];
+    std::vector<char> buff_write(buff_size);
+    std::vector<char> buff_read(buff_size);
+    std::vector<char> buff_write_cpy(buff_size);
 
     for (size_t i = 0; i < buff_size; i++)
     {
         buff_write[i] = i % 0xFF;
     }
-    memcpy(buff_write_cpy, buff_write, buff_size);
+    memcpy(buff_write_cpy.data(), buff_write.data(), buff_size);
 
-    ASSERT_EQ(buff_size, enc_file->pwrite(buff_write, buff_size, buff_offset));
-    ASSERT_EQ(buff_size, enc_file->pread(buff_read, buff_size, buff_offset));
-    ASSERT_EQ(strncmp(buff_write_cpy, buff_read, buff_size), 0);
+    ASSERT_EQ(buff_size, enc_file->pwrite(buff_write.data(), buff_size, buff_offset));
+    ASSERT_EQ(buff_size, enc_file->pread(buff_read.data(), buff_size, buff_offset));
+    ASSERT_EQ(strncmp(buff_write_cpy.data(), buff_read.data(), buff_size), 0);
 
     enc_file->close();
     ASSERT_TRUE(enc_file->isClosed());
@@ -405,7 +405,7 @@ public:
 
         size_t buff_size = 123;
         size_t buff_need_delete_size = 23;
-        char buff_write[buff_size];
+        std::vector<char> buff_write(buff_size);
 
         size_t truncate_size = buff_size - buff_need_delete_size;
 
@@ -414,7 +414,7 @@ public:
             buff_write[i] = i % 0xFF;
         }
 
-        ASSERT_EQ(buff_size, file->pwrite(buff_write, buff_size, 0));
+        ASSERT_EQ(buff_size, file->pwrite(buff_write.data(), buff_size, 0));
         ASSERT_EQ(enc_file->fsync(), 0);
         ASSERT_EQ(enc_file->ftruncate(truncate_size), 0);
         ASSERT_EQ(Poco::File(file_path).getSize(), truncate_size);
@@ -428,7 +428,7 @@ public:
     {
         size_t buff_size = 123;
         size_t buff_need_delete_size = 23;
-        char buff_write[buff_size];
+        std::vector<char> buff_write(buff_size);
 
         size_t truncate_size = buff_size - buff_need_delete_size;
 
@@ -440,7 +440,7 @@ public:
         String file_path = tests::TiFlashTestEnv::getTemporaryPath(file_name);
         auto file = std::make_shared<T>(file_path, true, -1, 0600);
 
-        ASSERT_EQ(buff_size, file->pwrite(buff_write, buff_size, 0));
+        ASSERT_EQ(buff_size, file->pwrite(buff_write.data(), buff_size, 0));
         ASSERT_EQ(file->fsync(), 0);
         ASSERT_EQ(file->ftruncate(truncate_size), 0);
         ASSERT_EQ(Poco::File(file_path).getSize(), truncate_size);
@@ -464,7 +464,7 @@ TEST(PosixWritableFileTest, hardlink)
 try
 {
     size_t buff_size = 123;
-    char buff_write[buff_size];
+    std::vector<char> buff_write(buff_size);
 
     for (size_t i = 0; i < buff_size; i++)
     {
@@ -473,7 +473,7 @@ try
 
     String file_path = tests::TiFlashTestEnv::getTemporaryPath("posix_file");
     PosixWritableFile file(file_path, true, -1, 0600, nullptr);
-    auto n_write = file.write(buff_write, buff_size);
+    auto n_write = file.write(buff_write.data(), buff_size);
     ASSERT_EQ(n_write, buff_size);
     file.close();
 
@@ -495,12 +495,12 @@ try
     origin_file.remove();
 
     // Read and check
-    char buff_read[buff_size];
+    std::vector<char> buff_read(buff_size);
     RandomAccessFilePtr file_for_read = std::make_shared<PosixRandomAccessFile>(linked_file_path, -1, nullptr);
-    auto n_read = file_for_read->read(buff_read, buff_size);
+    auto n_read = file_for_read->read(buff_read.data(), buff_size);
     ASSERT_EQ(n_read, buff_size);
     file_for_read->close();
-    ASSERT_EQ(strncmp(buff_write, buff_read, buff_size), 0);
+    ASSERT_EQ(strncmp(buff_write.data(), buff_read.data(), buff_size), 0);
 }
 CATCH
 
@@ -521,17 +521,17 @@ try
     EncryptedWritableFile enc_file(file, cipher_stream);
 
     size_t buff_size = 123;
-    char buff_write[buff_size];
+    std::vector<char> buff_write(buff_size);
 
     for (size_t i = 0; i < buff_size; i++)
     {
         buff_write[i] = i % 0xFF;
     }
 
-    char buff_write_cpy[buff_size];
-    memcpy(buff_write_cpy, buff_write, buff_size);
+    std::vector<char> buff_write_cpy(buff_size);
+    memcpy(buff_write_cpy.data(), buff_write.data(), buff_size);
 
-    auto n_write = enc_file.write(buff_write_cpy, buff_size);
+    auto n_write = enc_file.write(buff_write_cpy.data(), buff_size);
     ASSERT_EQ(n_write, buff_size);
     enc_file.fsync();
     enc_file.close();
@@ -556,14 +556,14 @@ try
     origin_file.remove();
 
     // Read and check
-    char buff_read[buff_size];
+    std::vector<char> buff_read(buff_size);
     RandomAccessFilePtr file_for_read = std::make_shared<PosixRandomAccessFile>(linked_file_path, -1, nullptr);
     EncryptedRandomAccessFile enc_file_for_read(file_for_read, cipher_stream);
-    n_write = enc_file_for_read.read(buff_read, buff_size);
+    n_write = enc_file_for_read.read(buff_read.data(), buff_size);
     ASSERT_EQ(n_write, buff_size);
     enc_file_for_read.close();
 
-    ASSERT_EQ(strncmp(buff_write, buff_read, buff_size), 0);
+    ASSERT_EQ(strncmp(buff_write.data(), buff_read.data(), buff_size), 0);
 }
 CATCH
 

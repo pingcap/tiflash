@@ -50,6 +50,8 @@ class TantivyInputStream : public IProfilingBlockInputStream
 {
     static constexpr auto NAME = "TantivyInputStream";
 
+    static constexpr auto version_column_name = "column_-1024";
+
 public:
     TantivyInputStream(
         LoggerPtr log_,
@@ -165,6 +167,15 @@ protected:
             }
             if (idx == -1)
             {
+                if (name_and_type.name == version_column_name)
+                {
+                    auto col = res.getByName(name_and_type.name).column->assumeMutable();
+                    for (auto & doc : documents)
+                    {
+                        col->insert(Field(doc.version));
+                    }
+                    continue;
+                }
                 for (size_t j = 0; j < documents.size(); j++)
                 {
                     // Insert default value for missing fields

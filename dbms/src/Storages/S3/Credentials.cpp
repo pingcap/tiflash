@@ -282,38 +282,99 @@ std::shared_ptr<Aws::Auth::AWSCredentialsProvider> buildECSCredentialsProvider(c
     return nullptr;
 }
 
+class TiFlashEnvironmentCredentialsProvider : public Aws::Auth::AWSCredentialsProvider
+{
+public:
+    /**
+     * Reads credentials from the Environment variables ACCESS_KEY_ID and SECRET_ACCESS_KEY and SESSION_TOKEN if they exist.
+     * If they are not found, empty credentials are returned.
+    */
+    Aws::Auth::AWSCredentials GetAWSCredentials() override
+    {
+        auto log = Logger::get();
+        Aws::Auth::AWSCredentials credentials;
+
+        if (auto access_key = Aws::Environment::GetEnv("ACCESS_KEY_ID"); !access_key.empty())
+        {
+            credentials.SetAWSAccessKeyId(access_key);
+
+            auto secret_key = Aws::Environment::GetEnv("SECRET_ACCESS_KEY");
+            if (!secret_key.empty())
+            {
+                credentials.SetAWSSecretKey(secret_key);
+            }
+
+            auto session_token = Aws::Environment::GetEnv("SESSION_TOKEN");
+            if (!session_token.empty())
+            {
+                credentials.SetSessionToken(session_token);
+            }
+
+            LOG_INFO(
+                log,
+                "Creating TiFlashEnvironmentCredentialsProvider with ACCESS_KEY_ID, "
+                "access_key_id_size={} secret_key_size={} session_token_size={}",
+                access_key.size(),
+                secret_key.size(),
+                session_token.size());
+        }
+
+        return credentials;
+    }
+};
+
 /// S3CredentialsProviderChain ///
 
-S3CredentialsProviderChain::S3CredentialsProviderChain(const Aws::Client::ClientConfiguration & cfg)
+S3CredentialsProviderChain::S3CredentialsProviderChain(const Aws::Client::ClientConfiguration & cfg, CloudVendor vendor)
     : log(Logger::get())
 {
     /// AWS API tries credentials providers one by one. Some of providers (like ProfileConfigFileAWSCredentialsProvider) can be
     /// quite verbose even if nobody configured them. So tiflash use our provider first and only after it use default providers.
     /// And ProcessCredentialsProvider is useless in tiflash deployment cases, removed.
 
-    if (auto provider = DB::S3::STSAssumeRoleWebIdentityCredentialsProvider::build(); provider != nullptr)
-        AddProvider(provider);
-
-    // Alibaba Cloud credentials providers
-    if (auto provider = DB::S3::AlibabaCloud::ECSRAMRoleCredentialsProvider::build(cfg); provider != nullptr)
+    switch (vendor)
     {
-        AddProvider(provider);
-    }
-    if (auto provider = DB::S3::AlibabaCloud::OIDCCredentialsProvider::build(cfg); provider != nullptr)
+    case CloudVendor::KingsoftCloud:
+        [[fallthrough]]; // Seems that Kingsoft Cloud is S3-compatible, use the same credential providers as AWS vendor
+    case CloudVendor::AWS:
     {
-        AddProvider(provider);
+        if (auto provider = DB::S3::STSAssumeRoleWebIdentityCredentialsProvider::build(); provider != nullptr)
+            AddProvider(provider);
+        // AWS environment variable credentials provider always added
+        AddProvider(std::make_shared<Aws::Auth::EnvironmentAWSCredentialsProvider>());
+
+        // AWS ECS credentials provider
+        if (auto provider = buildECSCredentialsProvider(log); provider != nullptr)
+            AddProvider(provider);
+
+        /// Quite verbose provider (argues if file with credentials doesn't exist) so it's the last one
+        /// in chain.
+        AddProvider(std::make_shared<Aws::Auth::ProfileConfigFileAWSCredentialsProvider>());
+        break;
     }
-
-    // AWS environment variable credentials provider always added
-    AddProvider(std::make_shared<Aws::Auth::EnvironmentAWSCredentialsProvider>());
-
-    // AWS ECS credentials provider
-    if (auto provider = buildECSCredentialsProvider(log); provider != nullptr)
-        AddProvider(provider);
-
-    /// Quite verbose provider (argues if file with credentials doesn't exist) so it's the last one
-    /// in chain.
-    AddProvider(std::make_shared<Aws::Auth::ProfileConfigFileAWSCredentialsProvider>());
+    case CloudVendor::AlibabaCloud:
+    {
+        // Alibaba Cloud credentials providers
+        if (auto provider = DB::S3::AlibabaCloud::ECSRAMRoleCredentialsProvider::build(cfg); provider != nullptr)
+        {
+            AddProvider(provider);
+        }
+        if (auto provider = DB::S3::AlibabaCloud::OIDCCredentialsProvider::build(cfg); provider != nullptr)
+        {
+            AddProvider(provider);
+        }
+        break;
+    }
+    case CloudVendor::Unknown:
+        [[fallthrough]];
+    case CloudVendor::UnknownFixAddress:
+    {
+        AddProvider(std::make_shared<TiFlashEnvironmentCredentialsProvider>());
+        // Add AWS environment variable credentials provider as a default fallback
+        AddProvider(std::make_shared<Aws::Auth::EnvironmentAWSCredentialsProvider>());
+        break;
+    }
+    }
 }
 
 } // namespace DB::S3
