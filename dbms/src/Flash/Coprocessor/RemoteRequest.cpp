@@ -73,6 +73,10 @@ RemoteRequest RemoteRequest::build(
                 ci.tp = TiDB::TypeLongLong;
                 schema.emplace_back(std::make_pair(MutableSupport::extra_table_id_column_name, std::move(ci)));
             }
+            else if (col_id == ExtraCommitTSColumnID)
+            {
+                schema.emplace_back(std::make_pair(MutableSupport::version_column_name, col));
+            }
             else
             {
                 // https://github.com/pingcap/tiflash/issues/8601

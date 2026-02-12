@@ -18,6 +18,8 @@
 #include <TiDB/Decode/TypeMapping.h>
 #include <TiDB/Schema/TiDB.h>
 
+#include "Storages/KVStore/Types.h"
+
 
 namespace DB
 {
@@ -119,6 +121,14 @@ std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedRead(const
                 output_name, // MutableSupport::extra_table_id_column_name
                 MutableSupport::extra_table_id_column_type});
             extra_table_id_index = i;
+            break;
+        }
+        case ExtraCommitTSColumnID:
+        {
+            column_defines->emplace_back(DM::ColumnDefine{
+                VersionColumnID,
+                output_name, // MutableSupport::version_column_name
+                MutableSupport::version_column_type});
             break;
         }
         default:

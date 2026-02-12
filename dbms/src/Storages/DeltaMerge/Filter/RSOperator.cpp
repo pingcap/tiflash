@@ -69,6 +69,10 @@ RSOperatorPtr RSOperator::build(
 
     /// Query from TiDB / TiSpark
     auto create_attr_by_column_id = [&table_column_defines](ColumnID column_id) -> Attr {
+        // TiDB may request a hidden commit_ts column in TableScan with a special ColumnID.
+        // In TiFlash it is stored in `_INTERNAL_VERSION` (VersionColumnID), so create an alias mapping.
+        if (unlikely(column_id == ExtraCommitTSColumnID))
+            column_id = VersionColumnID;
         auto iter = std::find_if(
             table_column_defines.begin(),
             table_column_defines.end(),

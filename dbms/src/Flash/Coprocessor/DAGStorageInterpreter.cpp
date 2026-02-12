@@ -1598,7 +1598,7 @@ std::pair<Names, std::vector<UInt8>> DAGStorageInterpreter::getColumnsForTableSc
             name = handle_column_name;
         else if (cid == ExtraTableIDColumnID)
             name = MutableSupport::extra_table_id_column_name;
-        else if (cid == ExtraCommitTSID)
+        else if (cid == ExtraCommitTSColumnID)
             name = MutableSupport::version_column_name;
         else
             name = storage_for_logical_table->getTableInfo().getColumnName(cid);
