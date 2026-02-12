@@ -81,18 +81,9 @@ void StorageTantivy::read(
         return_columns = genNamesAndTypesForTiCI(tici_scan.getReturnColumns(), "column");
     }
 
-    ::rust::Vec<::Shard> local_shards;
-    for (const auto & shard_info : local_read)
-    {
-        local_shards.push_back(::Shard{
-            .keyspace_id = tici_scan.getKeyspaceID(),
-            .table_id = tici_scan.getTableId(),
-            .index_id = tici_scan.getIndexId(),
-            .shard_id = shard_info.shard_id,
-            .shard_epoch = shard_info.shard_epoch,
-        });
-    }
-    auto shards_snapshot = acquire_snapshot(local_shards);
+    RUNTIME_CHECK(local_shards_snapshot.has_value());
+    auto shards_snapshot = std::move(*local_shards_snapshot);
+    local_shards_snapshot.reset();
 
     auto tici_task_pool = std::make_shared<TS::TiCIReadTaskPool>(
         log,
@@ -167,10 +158,13 @@ void StorageTantivy::splitRemoteReadAndLocalRead()
         });
     }
 
-    auto result = check_shards(shards);
-    for (size_t i = 0; i < result.size(); ++i)
+    ::rust::Vec<bool> local_results;
+    local_shards_snapshot = check_shards_and_acquire_snapshot(shards, local_results);
+    RUNTIME_CHECK(local_shards_snapshot.has_value());
+    RUNTIME_CHECK(local_results.size() == all.size());
+    for (size_t i = 0; i < all.size(); ++i)
     {
-        const auto & is_local = result[i];
+        const auto is_local = local_results[i];
         if (is_local)
         {
             local_shard_infos.push_back(all[i]);
