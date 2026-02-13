@@ -171,6 +171,11 @@ if ((ARCH_AMD64 OR ARCH_AARCH64) AND OS_LINUX)
     option (GLIBC_COMPATIBILITY "Set to TRUE to enable compatibility with older glibc libraries. Only for x86_64, Linux. Implies USE_INTERNAL_MEMCPY." ON)
 endif ()
 
+# Asynchronous unwind tables are needed for Query Profiler.
+# They are already by default on some platforms but possibly not on all platforms.
+# Enable it explicitly.
+set (COMPILER_FLAGS "${COMPILER_FLAGS} -fasynchronous-unwind-tables")
+
 option (PIPE "-pipe compiler option [less /tmp usage, more ram usage]" ON)
 if (PIPE)
     set (COMPILER_FLAGS                  "${COMPILER_FLAGS} -pipe")
