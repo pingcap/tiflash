@@ -103,7 +103,7 @@ void PhysicalTiCIScan::buildPipeline(
 {
     LOG_INFO(
         log,
-        "build tici pipeline: executor_id={} is_count={} max_streams={} read_ts={}",
+        "build tici pipeline: executor_id={} is_count={} max_streams={} start_ts={}",
         executor_id,
         tici_scan.isCount(),
         context.getMaxStreams(),
