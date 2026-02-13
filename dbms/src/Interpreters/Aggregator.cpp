@@ -296,12 +296,14 @@ Aggregator::Aggregator(
     size_t concurrency,
     const RegisterOperatorSpillContext & register_operator_spill_context,
     bool is_auto_pass_through_,
-    bool use_magic_hash_)
+    bool use_magic_hash_,
+    bool use_phmap_)
     : params(params_)
     , log(Logger::get(req_id))
     , is_cancelled([]() { return false; })
     , is_auto_pass_through(is_auto_pass_through_)
     , use_magic_hash(use_magic_hash_)
+    , use_phmap(use_phmap_)
 {
     aggregate_functions.resize(params.aggregates_size);
     for (size_t i = 0; i < params.aggregates_size; ++i)
@@ -393,7 +395,7 @@ enum class AggFastPathType
 
 AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
 {
-    auto method = chooseAggregationMethodInner();
+    auto method = chooseAggregationMethodPhMap();
 #ifndef NDEBUG
     bool tmp_use_magic_hash = this->use_magic_hash;
     fiu_do_on(FailPoints::force_magic_hash, { tmp_use_magic_hash = true; });
@@ -414,6 +416,28 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
             return AggregatedDataVariants::Type::nullable_keys128_magic_hash;
         case AggregatedDataVariants::Type::nullable_keys256:
             return AggregatedDataVariants::Type::nullable_keys256_magic_hash;
+        default:
+            return method;
+        }
+    }
+    return method;
+}
+
+AggregatedDataVariants::Type Aggregator::chooseAggregationMethodPhMap()
+{
+    auto method = chooseAggregationMethodInner();
+    if (use_phmap)
+    {
+        switch (method)
+        {
+        case AggregatedDataVariants::Type::key32:
+            return AggregatedDataVariants::Type::key32_phmap;
+        case AggregatedDataVariants::Type::key64:
+            return AggregatedDataVariants::Type::key64_phmap;
+        case AggregatedDataVariants::Type::keys128:
+            return AggregatedDataVariants::Type::keys128_phmap;
+        case AggregatedDataVariants::Type::serialized:
+            return AggregatedDataVariants::Type::serialized_phmap;
         default:
             return method;
         }
