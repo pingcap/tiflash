@@ -103,7 +103,7 @@ void PhysicalPlan::buildTiCIScan(const String & executor_id, const tipb::Executo
     LOG_INFO(
         log,
         "tici scan: keyspace_id={} table_id={} index_id={} limit={} shard_count={} match_expr_size={} query_type={} "
-        "read_ts={}",
+        "start_ts={}",
         tici_scan.getKeyspaceID(),
         tici_scan.getTableId(),
         tici_scan.getIndexId(),
