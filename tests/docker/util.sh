@@ -97,6 +97,9 @@ function set_branch() {
     [ -z "$TIKV_BRANCH" ] && export TIKV_BRANCH="$BRANCH"
     [ -z "$TIDB_BRANCH" ] && export TIDB_BRANCH="$BRANCH"
   fi
+  export PD_BRANCH="${PD_BRANCH//\//-}"
+  export TIKV_BRANCH="${TIKV_BRANCH//\//-}"
+  export TIDB_BRANCH="${TIDB_BRANCH//\//-}"
   echo "use branch \`${BRANCH-master}\` for ci test"
 }
 
