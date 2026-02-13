@@ -30,7 +30,7 @@
 #include <Storages/DeltaMerge/Filter/Unsupported.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <TiDB/Schema/TiDB.h>
-
+#include <Storages/MutableSupport.h>
 
 namespace DB::DM
 {
@@ -70,10 +70,15 @@ RSOperatorPtr RSOperator::build(
     FilterParser::ColumnIDToAttrMap column_id_to_attr;
     for (const auto & col_info : scan_column_infos)
     {
+        ColumnID col_id = col_info.id;
+        // TiDB may request a hidden commit_ts column in TableScan with a special ColumnID.
+        // In TiFlash it is stored in `_INTERNAL_VERSION` (VersionColumnID), so create an alias mapping.
+        if (unlikely(col_id == MutSup::extra_commit_ts_col_id))
+            col_id = MutSup::version_col_id;
         auto iter = std::find_if(
             table_column_defines.cbegin(),
             table_column_defines.cend(),
-            [col_id = col_info.id](const ColumnDefine & cd) { return cd.id == col_id; });
+            [col_id](const ColumnDefine & cd) { return cd.id == col_id; });
         if (iter == table_column_defines.cend())
         {
             // Some columns may not be in the table schema, such as extra table id column.
