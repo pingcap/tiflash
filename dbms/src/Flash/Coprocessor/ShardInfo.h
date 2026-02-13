@@ -21,7 +21,6 @@
 #include <common/types.h>
 
 #include <cstddef>
-#include <sstream>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <kvproto/mpp.pb.h>
@@ -46,13 +45,19 @@ struct ShardInfo
 
     String toString() const
     {
-        std::ostringstream sb;
-        sb << "ShardID: " << shard_id << ", ShardEpoch: " << shard_epoch << ", KeyRanges: ";
-        for (const auto & range : key_ranges)
-        {
-            sb << "[" << range.start() << ", " << range.end() << ") ";
-        }
-        return sb.str();
+        FmtBuffer buf;
+        buf.fmtAppend("ShardID: {}, ShardEpoch: {}, KeyRanges: ", shard_id, shard_epoch);
+        buf.joinStr(
+            key_ranges.begin(),
+            key_ranges.end(),
+            [](const coprocessor::KeyRange & range, FmtBuffer & fb) {
+                fb.fmtAppend(
+                    "[{}, {})",
+                    Redact::keyToDebugString(range.start().data(), range.start().size()),
+                    Redact::keyToDebugString(range.end().data(), range.end().size()));
+            },
+            " ");
+        return buf.toString();
     }
 
     UInt64 getID() const { return shard_id; }
@@ -80,14 +85,15 @@ public:
 
     String toString() const
     {
-        std::ostringstream sb;
-        sb << "TableShardInfos: ExecutorID: " << executor_id << ", ShardInfos: [";
-        for (const auto & shard_info : shard_info_list)
-        {
-            sb << shard_info.toString() << ", ";
-        }
-        sb << "]";
-        return sb.str();
+        FmtBuffer buf;
+        buf.fmtAppend("ExecutorID: {}, ShardInfos: [", executor_id);
+        buf.joinStr(
+            shard_info_list.begin(),
+            shard_info_list.end(),
+            [](const ShardInfo & shard_info, FmtBuffer & fb) { fb.append(shard_info.toString()); },
+            " ");
+        buf.append("]");
+        return buf.toString();
     }
 
     String executor_id;
@@ -126,14 +132,15 @@ public:
 
     String toString() const
     {
-        std::ostringstream sb;
-        sb << "QueryShardInfos: [";
-        for (const auto & shard_info : table_shard_info_list)
-        {
-            sb << shard_info.toString() << ", ";
-        }
-        sb << "]";
-        return sb.str();
+        FmtBuffer buf;
+        buf.fmtAppend("QueryShardInfos: [");
+        buf.joinStr(
+            table_shard_info_list.begin(),
+            table_shard_info_list.end(),
+            [](const TableShardInfos & table_shard_info, FmtBuffer & fb) { fb.append(table_shard_info.toString()); },
+            ", ");
+        buf.append("]");
+        return buf.toString();
     }
 
     size_t size() const { return table_shard_info_list.size(); }
