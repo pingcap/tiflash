@@ -74,6 +74,7 @@ fi
 export PD_BRANCH="${PD_BRANCH//\//-}"
 export TIKV_BRANCH="${TIKV_BRANCH//\//-}"
 export TIDB_BRANCH="${TIDB_BRANCH//\//-}"
+export TAG="${TAG//\//-}"
 
 
 # Stop all docker instances if exist.
