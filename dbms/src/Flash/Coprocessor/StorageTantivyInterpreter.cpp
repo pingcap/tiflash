@@ -75,7 +75,7 @@ void StorageTantivyIterpreter::execute(PipelineExecutorContext & exec_context, P
         if (!remote_builder.empty())
             LOG_INFO(
                 log,
-                "tici remote sourceOps built: executor_id={} remote_requests={} concurrency={} read_ts={}",
+                "tici remote sourceOps built: executor_id={} remote_requests={} concurrency={} start_ts={}",
                 executor_id,
                 remote_request.size(),
                 remote_builder.concurrency(),
