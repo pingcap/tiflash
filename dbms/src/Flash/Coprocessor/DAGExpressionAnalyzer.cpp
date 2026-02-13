@@ -1735,7 +1735,7 @@ String DAGExpressionAnalyzer::appendCastForFunctionExpr(
                 return expr_name;
             }
         }
-        LOG_DEBUG(
+        LOG_TRACE(
             context.getDAGContext()->log,
             "Add implicit cast for column {}, expected type {}, actual type {}",
             expr_name,
