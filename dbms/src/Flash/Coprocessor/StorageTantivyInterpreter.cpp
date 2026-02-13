@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TiFlashMetrics.h>
 #include <Core/Names.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Coprocessor/DAGContext.h>
@@ -40,8 +41,22 @@ void StorageTantivyIterpreter::execute(PipelineExecutorContext & exec_context, P
     storage->splitRemoteReadAndLocalRead();
     // local_read
     storage->read(exec_context, group_builder, Names(), SelectQueryInfo(), context, 0, max_streams);
+
     // remote_read
+    const auto & executor_id = tici_scan.getTiCIScan()->executor_id();
     auto remote_shard_infos = storage->getRemoteShardInfos();
+    const auto total_shards = tici_scan.getShardInfos().shard_info_list.size();
+    const auto remote_shards = remote_shard_infos.size();
+    const auto local_shards = total_shards >= remote_shards ? (total_shards - remote_shards) : 0;
+    LOG_INFO(
+        log,
+        "tici split shards: executor_id={} total={} local={} remote={} local_concurrency={} start_ts={}",
+        executor_id,
+        total_shards,
+        local_shards,
+        remote_shards,
+        group_builder.concurrency(),
+        context.getSettingsRef().read_tso);
     if (!remote_shard_infos.empty())
     {
         if (context.getDAGContext()->isCop())
@@ -55,7 +70,17 @@ void StorageTantivyIterpreter::execute(PipelineExecutorContext & exec_context, P
     auto remote_request = buildRemoteRequests(remote_shard_infos);
     if (!remote_request.empty())
     {
-        buildRemoteExec(exec_context, group_builder, remote_request);
+        PipelineExecGroupBuilder remote_builder;
+        buildRemoteExec(exec_context, remote_builder, remote_request);
+        if (!remote_builder.empty())
+            LOG_INFO(
+                log,
+                "tici remote sourceOps built: executor_id={} remote_requests={} concurrency={} start_ts={}",
+                executor_id,
+                remote_request.size(),
+                remote_builder.concurrency(),
+                context.getSettingsRef().read_tso);
+        group_builder.merge(std::move(remote_builder));
     }
 }
 
@@ -174,12 +199,14 @@ std::vector<pingcap::coprocessor::CopTask> StorageTantivyIterpreter::buildCopTas
             remote_request.connection_alias,
             &Poco::Logger::get("pingcap/coprocessor"),
             std::move(meta_data),
-            [&] {},
+            [&] { GET_METRIC(tiflash_coprocessor_request_count, type_remote_read_sent).Increment(); },
             tici_scan.getTableId(),
             tici_scan.getIndexId(),
             tici_scan.getTiCIScan()->executor_id());
         all_tasks.insert(all_tasks.end(), tasks.begin(), tasks.end());
     }
+    GET_METRIC(tiflash_coprocessor_request_count, type_remote_read_constructed)
+        .Increment(static_cast<double>(all_tasks.size()));
     return all_tasks;
 }
 

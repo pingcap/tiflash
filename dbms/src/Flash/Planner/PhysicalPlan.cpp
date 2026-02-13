@@ -100,6 +100,18 @@ void PhysicalPlan::buildTiCIScan(const String & executor_id, const tipb::Executo
 {
     RUNTIME_ASSERT(executor->idx_scan().has_fts_query_info());
     TiCIScan tici_scan(executor, executor_id, dagContext());
+    LOG_INFO(
+        log,
+        "tici scan: keyspace_id={} table_id={} index_id={} limit={} shard_count={} match_expr_size={} query_type={} "
+        "start_ts={}",
+        tici_scan.getKeyspaceID(),
+        tici_scan.getTableId(),
+        tici_scan.getIndexId(),
+        tici_scan.getLimit(),
+        tici_scan.getShardInfos().shard_info_list.size(),
+        tici_scan.getMatchExpr().size(),
+        tipb::FTSQueryType_Name(executor->idx_scan().fts_query_info().query_type()),
+        context.getSettingsRef().read_tso);
     pushBack(PhysicalTiCIScan::build(executor_id, log, tici_scan));
     dagContext().table_scan_executor_id = executor_id;
 }
@@ -214,6 +226,7 @@ void PhysicalPlan::build(const tipb::Executor * executor)
         buildTableScan(executor_id, executor);
         break;
     case tipb::ExecType::TypeIndexScan:
+        GET_METRIC(tiflash_coprocessor_executor_count, type_tici).Increment();
         buildTiCIScan(executor_id, executor);
         break;
     case tipb::ExecType::TypeJoin:
