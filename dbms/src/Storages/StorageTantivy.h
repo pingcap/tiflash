@@ -29,8 +29,10 @@
 #include <Operators/TantivyReaderSourceOp.h>
 #include <Storages/IStorage.h>
 #include <TiDB/Schema/TiDB.h>
+#include <tici-search-lib/src/lib.rs.h>
 
 #include <cstdlib>
+#include <optional>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -83,5 +85,6 @@ private:
 
     ShardInfoList remote_read;
     ShardInfoList local_read;
+    std::optional<rust::Box<ShardsSnapshot>> local_shards_snapshot;
 };
 } // namespace DB
