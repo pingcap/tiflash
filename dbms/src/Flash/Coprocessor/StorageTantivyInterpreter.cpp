@@ -50,7 +50,7 @@ void StorageTantivyIterpreter::execute(PipelineExecutorContext & exec_context, P
     const auto local_shards = total_shards >= remote_shards ? (total_shards - remote_shards) : 0;
     LOG_INFO(
         log,
-        "tici split shards: executor_id={} total={} local={} remote={} local_concurrency={} read_ts={}",
+        "tici split shards: executor_id={} total={} local={} remote={} local_concurrency={} start_ts={}",
         executor_id,
         total_shards,
         local_shards,
