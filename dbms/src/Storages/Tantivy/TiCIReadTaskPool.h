@@ -39,7 +39,8 @@ public:
         std::vector<bool> sort_column_asc_,
         UInt64 read_ts_,
         ::Expr match_expr_,
-        bool is_count)
+        bool is_count,
+        const std::shared_ptr<rust::Box<ShardsSnapshot>> & shards_snapshot_)
     {
         input_stream = std::make_shared<TantivyInputStream>(
             log_,
@@ -53,7 +54,8 @@ public:
             sort_column_asc_,
             read_ts_,
             match_expr_,
-            is_count);
+            is_count,
+            shards_snapshot_);
     }
 
     bool isInitialized() const { return input_stream != nullptr; }
@@ -90,7 +92,8 @@ public:
         UInt64 read_ts_,
         google::protobuf::RepeatedPtrField<tipb::Expr> match_expr_,
         bool is_count,
-        const TimezoneInfo & timezone_info_)
+        const TimezoneInfo & timezone_info_,
+        rust::Box<ShardsSnapshot> shards_snapshot_)
         : log(log_)
         , keyspace_id(keyspace_id_)
         , table_id(table_id_)
@@ -101,6 +104,7 @@ public:
         , sort_column_asc(sort_column_asc_)
         , read_ts(read_ts_)
         , is_count(is_count)
+        , shards_snapshot(std::make_shared<rust::Box<ShardsSnapshot>>(std::move(shards_snapshot_)))
     {
         for (const auto & shard_info : shard_infos)
         {
@@ -144,7 +148,8 @@ public:
                 sort_column_asc,
                 read_ts,
                 match_expr,
-                is_count);
+                is_count,
+                shards_snapshot);
         }
         return task->getInputStream();
     }
@@ -164,6 +169,7 @@ private:
     UInt64 read_ts;
     ::Expr match_expr;
     bool is_count;
+    std::shared_ptr<rust::Box<ShardsSnapshot>> shards_snapshot;
 
     static std::tuple<::Expr, std::vector<ColumnID>> tipbToTiCIExpr(
         const tipb::Expr & expr,

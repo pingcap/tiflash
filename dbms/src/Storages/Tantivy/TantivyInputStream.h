@@ -65,7 +65,8 @@ public:
         std::vector<bool> sort_column_asc_,
         UInt64 read_ts_,
         ::Expr match_expr_,
-        bool is_count)
+        bool is_count,
+        std::shared_ptr<rust::Box<ShardsSnapshot>> shards_snapshot_)
         : log(log_)
         , keyspace_id(keyspace_id_)
         , table_id(table_id_)
@@ -78,6 +79,7 @@ public:
         , read_ts(read_ts_)
         , match_expr(match_expr_)
         , is_count(is_count)
+        , shards_snapshot(std::move(shards_snapshot_))
     {}
 
     String getName() const override { return NAME; }
@@ -122,7 +124,9 @@ protected:
         if (is_count)
             return_fields = {};
 
+        RUNTIME_CHECK(shards_snapshot != nullptr);
         SearchResult search_result = search(
+            **shards_snapshot,
             {
                 .keyspace_id = keyspace_id,
                 .table_id = table_id,
@@ -258,6 +262,7 @@ private:
     UInt64 read_ts;
     ::Expr match_expr;
     bool is_count;
+    std::shared_ptr<rust::Box<ShardsSnapshot>> shards_snapshot;
 
     static rust::Vec<rust::String> getFields(NamesAndTypes & columns)
     {
