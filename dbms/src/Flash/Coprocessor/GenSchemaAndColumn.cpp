@@ -82,6 +82,9 @@ NamesAndTypes genNamesAndTypes(const TiDB::ColumnInfos & column_infos, const Str
         case MutSup::extra_table_id_col_id:
             names_and_types.emplace_back(MutSup::extra_table_id_column_name, MutSup::getExtraTableIdColumnType());
             break;
+        case MutSup::extra_commit_ts_col_id:
+            names_and_types.emplace_back(MutSup::version_column_name, getDataTypeByColumnInfoForComputingLayer(column_info));
+            break;
         default:
             names_and_types.emplace_back(
                 column_info.name.empty() ? fmt::format("{}_{}", column_prefix, i) : column_info.name,
@@ -130,6 +133,8 @@ std::tuple<DM::ColumnDefinesPtr, int, std::vector<std::tuple<UInt64, String, Dat
             extra_table_id_index = i;
             break;
         }
+        case MutSup::extra_commit_ts_col_id:
+            throw Exception("Not supported in disaggregated read now");
         default:
             column_defines->emplace_back(DM::ColumnDefine{
                 column_info.id,
