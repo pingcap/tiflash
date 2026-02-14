@@ -76,6 +76,37 @@ try
 }
 CATCH
 
+TEST_F(TestTiDBNullEQ, ConstNullableNonNull)
+try
+{
+    auto a = createConstColumn<Nullable<Int64>>(4, 1);
+    auto b = createColumn<Nullable<Int64>>({1, std::nullopt, 2, 1});
+    auto res = executeFunction("tidbNullEQ", a, b);
+    ASSERT_EQ(res.type->getName(), "UInt8");
+    ASSERT_COLUMN_EQ(createColumn<UInt8>({1, 0, 0, 1}), res);
+
+    auto res2 = executeFunction("tidbNullEQ", b, a);
+    ASSERT_EQ(res2.type->getName(), "UInt8");
+    ASSERT_COLUMN_EQ(createColumn<UInt8>({1, 0, 0, 1}), res2);
+}
+CATCH
+
+TEST_F(TestTiDBNullEQ, ConstNullableNull)
+try
+{
+    auto a = createConstColumn<Nullable<Int64>>(4, std::nullopt);
+    auto b = createColumn<Nullable<Int64>>({1, std::nullopt, 2, std::nullopt});
+
+    auto res = executeFunction("tidbNullEQ", a, b);
+    ASSERT_EQ(res.type->getName(), "UInt8");
+    ASSERT_COLUMN_EQ(createColumn<UInt8>({0, 1, 0, 1}), res);
+
+    auto res2 = executeFunction("tidbNullEQ", b, a);
+    ASSERT_EQ(res2.type->getName(), "UInt8");
+    ASSERT_COLUMN_EQ(createColumn<UInt8>({0, 1, 0, 1}), res2);
+}
+CATCH
+
 TEST_F(TestTiDBNullEQ, CollatorIsForwardedToEquals)
 try
 {
