@@ -36,4 +36,3 @@ services:
     depends_on:
       - "pd0"
       - "tikv0"
-
