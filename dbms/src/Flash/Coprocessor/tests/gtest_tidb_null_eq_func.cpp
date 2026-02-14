@@ -30,6 +30,22 @@ TEST(TiDBNullEQFuncTest, DagUtilsMappedToTidbNullEQ)
     {
         tipb::Expr expr;
         expr.set_tp(tipb::ExprType::ScalarFunc);
+        expr.set_sig(tipb::ScalarFuncSig::NullEQString);
+
+        ASSERT_TRUE(isScalarFunctionExpr(expr));
+        ASSERT_EQ(getFunctionName(expr), "tidbNullEQ");
+    }
+    {
+        tipb::Expr expr;
+        expr.set_tp(tipb::ExprType::ScalarFunc);
+        expr.set_sig(tipb::ScalarFuncSig::NullEQDecimal);
+
+        ASSERT_TRUE(isScalarFunctionExpr(expr));
+        ASSERT_EQ(getFunctionName(expr), "tidbNullEQ");
+    }
+    {
+        tipb::Expr expr;
+        expr.set_tp(tipb::ExprType::ScalarFunc);
         expr.set_sig(tipb::ScalarFuncSig::NullEQVectorFloat32);
 
         ASSERT_TRUE(isScalarFunctionExpr(expr));
