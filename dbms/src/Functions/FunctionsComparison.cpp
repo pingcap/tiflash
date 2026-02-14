@@ -94,19 +94,18 @@ public:
             }
 
             const ColumnPtr & other_col = left_col->onlyNull() ? right_col : left_col;
-            auto res_col = ColumnUInt8::create();
-            auto & res_data = res_col->getData();
-            res_data.resize(rows);
             if (other_col->isColumnNullable())
             {
                 const auto & other_nullmap = assert_cast<const ColumnNullable &>(*other_col).getNullMapData();
+                auto res_col = ColumnUInt8::create();
+                auto & res_data = res_col->getData();
                 res_data.assign(other_nullmap.begin(), other_nullmap.end());
+                block.getByPosition(result).column = std::move(res_col);
             }
             else
             {
-                std::fill(res_data.begin(), res_data.end(), 0);
+                block.getByPosition(result).column = ColumnUInt8::create(rows, 0);
             }
-            block.getByPosition(result).column = std::move(res_col);
             return;
         }
 
@@ -188,7 +187,8 @@ public:
 
                 /// Keep equals result when `any_null == 0`, otherwise override it to 0.
                 /// Finally, override to 1 when `both_null == 1`.
-                res_data[i] = (res_data[i] & static_cast<UInt8>(!any_null)) | both_null;
+                const auto eq = static_cast<UInt8>(res_data[i] != 0);
+                res_data[i] = (eq & static_cast<UInt8>(!any_null)) | both_null;
             }
         }
         else if (left_nullmap != nullptr)
@@ -197,7 +197,8 @@ public:
             for (size_t i = 0; i < rows; ++i)
             {
                 const UInt8 left_is_null = left_data[i] != 0;
-                res_data[i] &= static_cast<UInt8>(!left_is_null);
+                const auto eq = static_cast<UInt8>(res_data[i] != 0);
+                res_data[i] = eq & static_cast<UInt8>(!left_is_null);
             }
         }
         else if (right_nullmap != nullptr)
@@ -206,7 +207,8 @@ public:
             for (size_t i = 0; i < rows; ++i)
             {
                 const UInt8 right_is_null = right_data[i] != 0;
-                res_data[i] &= static_cast<UInt8>(!right_is_null);
+                const auto eq = static_cast<UInt8>(res_data[i] != 0);
+                res_data[i] = eq & static_cast<UInt8>(!right_is_null);
             }
         }
 
