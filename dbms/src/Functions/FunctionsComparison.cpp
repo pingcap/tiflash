@@ -109,7 +109,7 @@ public:
             return;
         }
 
-        auto unwrapNullableColumn = [rows](const ColumnPtr & col, ColumnPtr & nested_col, const NullMap *& nullmap) {
+        auto unwrap_nullable_column = [rows](const ColumnPtr & col, ColumnPtr & nested_col, const NullMap *& nullmap) {
             nested_col = col;
             nullmap = nullptr;
 
@@ -136,11 +136,11 @@ public:
 
         ColumnPtr left_nested_col = left_col;
         const NullMap * left_nullmap = nullptr;
-        unwrapNullableColumn(left_col, left_nested_col, left_nullmap);
+        unwrap_nullable_column(left_col, left_nested_col, left_nullmap);
 
         ColumnPtr right_nested_col = right_col;
         const NullMap * right_nullmap = nullptr;
-        unwrapNullableColumn(right_col, right_nested_col, right_nullmap);
+        unwrap_nullable_column(right_col, right_nested_col, right_nullmap);
 
         /// Execute `equals` on nested columns.
         Block temp_block;
