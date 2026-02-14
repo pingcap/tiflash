@@ -141,26 +141,29 @@ public:
         DefaultExecutable(equals_function).execute(temp_block, {0, 1}, 2);
 
         ColumnPtr eq_col = temp_block.getByPosition(2).column;
+        if (left_nullmap == nullptr && right_nullmap == nullptr)
+        {
+            block.getByPosition(result).column = std::move(eq_col);
+            return;
+        }
+
         if (ColumnPtr converted = eq_col->convertToFullColumnIfConst())
             eq_col = converted;
-
-        const auto * eq_vec_col = checkAndGetColumn<ColumnUInt8>(eq_col.get());
-        if (unlikely(eq_vec_col == nullptr))
-            throw Exception(
-                ErrorCodes::LOGICAL_ERROR,
-                "Unexpected result column type {} for equals inside {}.",
-                eq_col->getName(),
-                getName());
-
-        auto res_col = ColumnUInt8::create();
-        auto & res_data = res_col->getData();
-        const auto & eq_data = eq_vec_col->getData();
-        res_data.assign(eq_data.begin(), eq_data.end());
 
         /// Adjust for NULL values:
         /// - both NULL => 1
         /// - one NULL  => 0
         /// - no NULL   => equals result
+        auto eq_mutable = (*std::move(eq_col)).mutate();
+        auto * eq_vec_col = typeid_cast<ColumnUInt8 *>(eq_mutable.get());
+        if (unlikely(eq_vec_col == nullptr))
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Unexpected result column type {} for equals inside {}.",
+                eq_mutable->getName(),
+                getName());
+
+        auto & res_data = eq_vec_col->getData();
         if (left_nullmap != nullptr || right_nullmap != nullptr)
         {
             for (size_t i = 0; i < rows; ++i)
@@ -174,7 +177,7 @@ public:
             }
         }
 
-        block.getByPosition(result).column = std::move(res_col);
+        block.getByPosition(result).column = std::move(eq_mutable);
     }
 
 private:
