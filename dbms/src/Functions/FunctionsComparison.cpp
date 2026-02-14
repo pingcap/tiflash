@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Columns/ColumnConst.h>
 #include <Columns/ColumnNullable.h>
 #include <Common/typeid_cast.h>
 #include <Functions/FunctionFactory.h>
@@ -73,12 +74,6 @@ public:
         ColumnPtr left_col = left.column;
         ColumnPtr right_col = right.column;
 
-        /// Need to materialize const columns since `removeNullable` does not unwrap `ColumnConst(ColumnNullable)`.
-        if (ColumnPtr converted = left_col->convertToFullColumnIfConst())
-            left_col = converted;
-        if (ColumnPtr converted = right_col->convertToFullColumnIfConst())
-            right_col = converted;
-
         const size_t rows = left_col->size();
         if (unlikely(right_col->size() != rows))
             throw Exception(
@@ -115,23 +110,38 @@ public:
             return;
         }
 
+        auto unwrapNullableColumn = [rows](const ColumnPtr & col, ColumnPtr & nested_col, const NullMap *& nullmap) {
+            nested_col = col;
+            nullmap = nullptr;
+
+            if (const auto * const_col = typeid_cast<const ColumnConst *>(col.get()))
+            {
+                const auto & data_col = const_col->getDataColumn();
+                if (data_col.isColumnNullable())
+                {
+                    /// `ColumnConst(ColumnNullable(NULL))` is handled by the `onlyNull()` fast path above.
+                    /// If we reach here, the nullable constant must be non-NULL, so there is no nullmap to apply.
+                    const auto & nullable_col = assert_cast<const ColumnNullable &>(data_col);
+                    nested_col = ColumnConst::create(nullable_col.getNestedColumnPtr(), rows);
+                }
+                return;
+            }
+
+            if (col->isColumnNullable())
+            {
+                const auto & nullable_col = assert_cast<const ColumnNullable &>(*col);
+                nested_col = nullable_col.getNestedColumnPtr();
+                nullmap = &nullable_col.getNullMapData();
+            }
+        };
+
         ColumnPtr left_nested_col = left_col;
         const NullMap * left_nullmap = nullptr;
-        if (left_col->isColumnNullable())
-        {
-            const auto & nullable_col = assert_cast<const ColumnNullable &>(*left_col);
-            left_nested_col = nullable_col.getNestedColumnPtr();
-            left_nullmap = &nullable_col.getNullMapData();
-        }
+        unwrapNullableColumn(left_col, left_nested_col, left_nullmap);
 
         ColumnPtr right_nested_col = right_col;
         const NullMap * right_nullmap = nullptr;
-        if (right_col->isColumnNullable())
-        {
-            const auto & nullable_col = assert_cast<const ColumnNullable &>(*right_col);
-            right_nested_col = nullable_col.getNestedColumnPtr();
-            right_nullmap = &nullable_col.getNullMapData();
-        }
+        unwrapNullableColumn(right_col, right_nested_col, right_nullmap);
 
         /// Execute `equals` on nested columns.
         Block temp_block;
