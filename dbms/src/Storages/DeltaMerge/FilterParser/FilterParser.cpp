@@ -215,7 +215,7 @@ inline RSOperatorPtr parseTiCompareExpr( //
         if ((expr.sig() == tipb::ScalarFuncSig::NullEQInt || expr.sig() == tipb::ScalarFuncSig::NullEQReal
              || expr.sig() == tipb::ScalarFuncSig::NullEQString || expr.sig() == tipb::ScalarFuncSig::NullEQDecimal
              || expr.sig() == tipb::ScalarFuncSig::NullEQTime || expr.sig() == tipb::ScalarFuncSig::NullEQDuration
-             || expr.sig() == tipb::ScalarFuncSig::NullEQJson || expr.sig() == tipb::ScalarFuncSig::NullEQVectorFloat32)
+             || expr.sig() == tipb::ScalarFuncSig::NullEQVectorFloat32)
             && values[0].isNull())
             return createIsNull(attr);
         return createEqual(attr, values[0]);
