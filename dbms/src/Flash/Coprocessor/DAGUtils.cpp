@@ -222,7 +222,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::NullEQDecimal, "tidbNullEQ"},
     {tipb::ScalarFuncSig::NullEQTime, "tidbNullEQ"},
     {tipb::ScalarFuncSig::NullEQDuration, "tidbNullEQ"},
-    {tipb::ScalarFuncSig::NullEQJson, "tidbNullEQ"},
+    //{tipb::ScalarFuncSig::NullEQJson, "tidbNullEQ"},
     {tipb::ScalarFuncSig::NullEQVectorFloat32, "tidbNullEQ"},
 
     {tipb::ScalarFuncSig::PlusReal, "plus"},
