@@ -174,16 +174,39 @@ public:
                 getName());
 
         auto & res_data = eq_vec_col->getData();
-        if (left_nullmap != nullptr || right_nullmap != nullptr)
+        if (left_nullmap != nullptr && right_nullmap != nullptr)
         {
+            const auto & left_data = *left_nullmap;
+            const auto & right_data = *right_nullmap;
             for (size_t i = 0; i < rows; ++i)
             {
-                const bool left_is_null = left_nullmap != nullptr && (*left_nullmap)[i];
-                const bool right_is_null = right_nullmap != nullptr && (*right_nullmap)[i];
-                if (left_is_null && right_is_null)
-                    res_data[i] = 1;
-                else if (left_is_null || right_is_null)
-                    res_data[i] = 0;
+                const UInt8 left_is_null = left_data[i] != 0;
+                const UInt8 right_is_null = right_data[i] != 0;
+
+                const UInt8 any_null = left_is_null | right_is_null;
+                const UInt8 both_null = left_is_null & right_is_null;
+
+                /// Keep equals result when `any_null == 0`, otherwise override it to 0.
+                /// Finally, override to 1 when `both_null == 1`.
+                res_data[i] = (res_data[i] & static_cast<UInt8>(!any_null)) | both_null;
+            }
+        }
+        else if (left_nullmap != nullptr)
+        {
+            const auto & left_data = *left_nullmap;
+            for (size_t i = 0; i < rows; ++i)
+            {
+                const UInt8 left_is_null = left_data[i] != 0;
+                res_data[i] &= static_cast<UInt8>(!left_is_null);
+            }
+        }
+        else if (right_nullmap != nullptr)
+        {
+            const auto & right_data = *right_nullmap;
+            for (size_t i = 0; i < rows; ++i)
+            {
+                const UInt8 right_is_null = right_data[i] != 0;
+                res_data[i] &= static_cast<UInt8>(!right_is_null);
             }
         }
 
