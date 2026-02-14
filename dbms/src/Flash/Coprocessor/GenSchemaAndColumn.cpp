@@ -14,10 +14,10 @@
 
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/MutableSupport.h>
 #include <TiDB/Decode/TypeMapping.h>
 #include <TiDB/Schema/TiDB.h>
-
 
 namespace DB
 {
@@ -78,6 +78,11 @@ NamesAndTypes genNamesAndTypes(const TiDB::ColumnInfos & column_infos, const Str
                 MutableSupport::extra_table_id_column_name,
                 MutableSupport::extra_table_id_column_type);
             break;
+        case ExtraCommitTSColumnID:
+            names_and_types.emplace_back(
+                MutableSupport::version_column_name,
+                getDataTypeByColumnInfoForComputingLayer(column_info));
+            break;
         default:
             names_and_types.emplace_back(
                 column_info.name.empty() ? fmt::format("{}_{}", column_prefix, i) : column_info.name,
@@ -121,6 +126,8 @@ std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedRead(const
             extra_table_id_index = i;
             break;
         }
+        case ExtraCommitTSColumnID:
+            throw Exception("Not supported in disaggregated read now");
         default:
             column_defines->emplace_back(DM::ColumnDefine{
                 column_info.id,
