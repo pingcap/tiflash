@@ -29,8 +29,8 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Filter/Unsupported.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
-#include <TiDB/Schema/TiDB.h>
 #include <Storages/MutableSupport.h>
+#include <TiDB/Schema/TiDB.h>
 
 namespace DB::DM
 {
@@ -86,7 +86,12 @@ RSOperatorPtr RSOperator::build(
             continue;
         }
         const auto & cd = *iter;
-        column_id_to_attr[cd.id] = Attr{.col_name = cd.name, .col_id = cd.id, .type = cd.type};
+        Attr attr{.col_name = cd.name, .col_id = cd.id, .type = cd.type};
+        column_id_to_attr[cd.id] = attr;
+        // When commit_ts (extra_commit_ts_col_id) is aliased to version_col_id, also register under
+        // col_info.id so that FilterParser lookups by column id from expressions find the Attr.
+        if (unlikely(col_info.id != cd.id))
+            column_id_to_attr[col_info.id] = attr;
     }
 
     auto rs_operator = FilterParser::parseDAGQuery(*dag_query, scan_column_infos, column_id_to_attr, tracing_logger);

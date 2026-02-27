@@ -1258,7 +1258,7 @@ std::pair<bool, std::vector<String>> DAGExpressionAnalyzer::buildExtraCastsAfter
             has_cast = true;
         }
 
-        if (may_need_add_cast_column[i] && table_scan_columns[i].id == ExtraCommitTSColumnID)
+        if (may_need_add_cast_column[i] && table_scan_columns[i].id == MutSup::extra_commit_ts_col_id)
         {
             const auto & expected_type = getDataTypeByColumnInfoForComputingLayer(table_scan_columns[i]);
             const auto & actual_type = actions->getSampleBlock().getByName(casted_name).type;

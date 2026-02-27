@@ -83,7 +83,9 @@ NamesAndTypes genNamesAndTypes(const TiDB::ColumnInfos & column_infos, const Str
             names_and_types.emplace_back(MutSup::extra_table_id_column_name, MutSup::getExtraTableIdColumnType());
             break;
         case MutSup::extra_commit_ts_col_id:
-            names_and_types.emplace_back(MutSup::version_column_name, getDataTypeByColumnInfoForComputingLayer(column_info));
+            names_and_types.emplace_back(
+                MutSup::version_column_name,
+                getDataTypeByColumnInfoForComputingLayer(column_info));
             break;
         default:
             names_and_types.emplace_back(
