@@ -433,6 +433,10 @@ std::optional<Attr> FilterParser::createAttr(
         return std::nullopt;
     }
     auto col_id = cop::getColumnIDForColumnExpr(expr, scan_column_infos);
+    // TiDB may request a hidden commit_ts column in TableScan with a special ColumnID.
+    // In TiFlash it is stored in `_INTERNAL_VERSION` (VersionColumnID), so create an alias mapping.
+    if (unlikely(col_id == MutSup::extra_commit_ts_col_id))
+        col_id = MutSup::version_col_id;
     auto it = std::find_if( //
         table_column_defines.cbegin(),
         table_column_defines.cend(),
