@@ -104,6 +104,7 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, const mpp::TaskMeta & me
     , resource_group_name(meta_.resource_group_name())
     , connection_id(meta_.connection_id())
     , connection_alias(meta_.connection_alias())
+    , sql_digest(meta_.sql_digest())
 {
     if (dag_request->has_div_precision_increment())
         div_precision_increment = dag_request->div_precision_increment();
@@ -483,7 +484,7 @@ UInt64 DAGContext::getReadBytes() const
     UInt64 read_bytes = 0;
     for (const auto & [id, sc] : scan_context_map)
     {
-        (void)id; // Disable unused variable warnning.
+        (void)id; // Disable unused variable warning.
         read_bytes += sc->userReadBytes();
     }
     return read_bytes;

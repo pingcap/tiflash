@@ -89,6 +89,7 @@ private:
     // executor dag
     bool is_root = false;
     String sender_executor_id;
+    String sql_digest;
 
     // resource
     RUConsumption ru_info{.cpu_ru = 0.0, .cpu_time_ns = 0, .read_ru = 0.0, .read_bytes = 0};
