@@ -77,6 +77,8 @@ void MPPTaskStatistics::initializeExecutorDAG(DAGContext * dag_context_)
 
     is_root = dag_context->isRootMPPTask();
     sender_executor_id = root_executor.executor_id();
+    connection_id = dag_context->getConnectionID();
+    connection_alias = dag_context->getConnectionAlias();
     sql_digest = dag_context->getSQLDigest();
     executor_statistics_collector.initialize(dag_context);
 }
@@ -110,7 +112,8 @@ void MPPTaskStatistics::logTracingJson()
         log,
         /// don't use info log for initializing status since it does not contains too many information
         status == INITIALIZING ? Poco::Message::PRIO_DEBUG : Poco::Message::PRIO_INFORMATION,
-        R"({{"query_tso":{},"task_id":{},"is_root":{},"sender_executor_id":"{}","executors":{},"host":"{}","sql_digest":"{}")"
+        R"({{"query_tso":{},"task_id":{},"is_root":{},"sender_executor_id":"{}","executors":{},"host":"{}")"
+        R"(,"connection_id":{},"connection_alias":"{}","sql_digest":"{}")"
         R"(,"task_init_timestamp":{},"task_start_timestamp":{},"task_end_timestamp":{})"
         R"(,"compile_start_timestamp":{},"compile_end_timestamp":{})"
         R"(,"read_wait_index_start_timestamp":{},"read_wait_index_end_timestamp":{})"
@@ -122,6 +125,8 @@ void MPPTaskStatistics::logTracingJson()
         sender_executor_id,
         executor_statistics_collector.profilesToJson(),
         host,
+        connection_id,
+        connection_alias,
         sql_digest,
         toNanoseconds(task_init_timestamp),
         toNanoseconds(task_start_timestamp),
