@@ -89,6 +89,8 @@ private:
     // executor dag
     bool is_root = false;
     String sender_executor_id;
+    UInt64 connection_id = 0;
+    String connection_alias;
     String sql_digest;
 
     // resource
