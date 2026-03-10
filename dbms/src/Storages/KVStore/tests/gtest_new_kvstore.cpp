@@ -393,11 +393,23 @@ try
                 ctx.getTMTContext()),
             EngineStoreApplyRes::None);
 
+        request.set_cmd_type(::raft_cmdpb::AdminCmdType::TransferLeader);
+        response = response2;
+        ASSERT_EQ(
+            kvs.handleAdminRaftCmd(
+                raft_cmdpb::AdminRequest{request},
+                std::move(response),
+                region_id,
+                26,
+                6,
+                ctx.getTMTContext()),
+            EngineStoreApplyRes::None);
+
         {
             kvs.debugGetConfigMut().debugSetCompactLogConfig(0, 0, 0, 0);
             request.set_cmd_type(::raft_cmdpb::AdminCmdType::CompactLog);
             ASSERT_EQ(
-                kvs.handleAdminRaftCmd(std::move(request), std::move(response2), region_id, 26, 6, ctx.getTMTContext()),
+                kvs.handleAdminRaftCmd(std::move(request), std::move(response2), region_id, 27, 6, ctx.getTMTContext()),
                 EngineStoreApplyRes::Persist);
         }
     }
