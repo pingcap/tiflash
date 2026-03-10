@@ -392,7 +392,7 @@ try
                 6,
                 ctx.getTMTContext()),
             EngineStoreApplyRes::None);
-
+        
         request.set_cmd_type(::raft_cmdpb::AdminCmdType::TransferLeader);
         response = response2;
         ASSERT_EQ(
