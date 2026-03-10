@@ -186,6 +186,7 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(
     // Initialy, with tiflash-proxy, TransferLeader will be rewrited into empty write cmd,
     // so this case is not possible. However, nextgen-proxy implements in another way, so we have to workaround here.
     case raft_cmdpb::AdminCmdType::TransferLeader:
+    case raft_cmdpb::AdminCmdType::UpdateGcPeer:
         return handleUselessAdminRaftCmd(type, curr_region_id, index, term, tmt);
     default:
         break;
