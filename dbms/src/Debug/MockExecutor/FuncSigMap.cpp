@@ -87,6 +87,8 @@ std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
 std::unordered_map<String, tipb::ExprType> agg_func_name_to_sig({
     {"min", tipb::ExprType::Min},
     {"max", tipb::ExprType::Max},
+    {"min_count", tipb::ExprType::MinCount},
+    {"max_count", tipb::ExprType::MaxCount},
     {"count", tipb::ExprType::Count},
     {"sum", tipb::ExprType::Sum},
     {"first_row", tipb::ExprType::First},

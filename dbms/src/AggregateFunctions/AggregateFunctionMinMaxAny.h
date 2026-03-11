@@ -19,8 +19,10 @@
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnVector.h>
 #include <Common/typeid_cast.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/IDataType.h>
 #include <IO/ReadHelpers.h>
+#include <IO/VarInt.h>
 #include <IO/WriteHelpers.h>
 #include <common/StringRef.h>
 
@@ -720,6 +722,114 @@ struct AggregateFunctionAnyHeavyData : Data
     static const char * name() { return "anyHeavy"; }
 };
 
+template <typename Data>
+struct AggregateFunctionMinCountData : Data
+{
+    using Self = AggregateFunctionMinCountData<Data>;
+
+    UInt64 count = 0;
+
+    bool changeIfBetter(const IColumn & column, size_t row_num, Arena * arena)
+    {
+        if (this->changeIfLess(column, row_num, arena))
+        {
+            count = 1;
+            return true;
+        }
+        if (this->isEqualTo(column, row_num))
+        {
+            ++count;
+            return true;
+        }
+        return false;
+    }
+
+    bool changeIfBetter(const Self & to, Arena * arena)
+    {
+        if (!to.has())
+            return false;
+        if (this->changeIfLess(to, arena))
+        {
+            count = to.count;
+            return true;
+        }
+        if (this->isEqualTo(to))
+        {
+            count += to.count;
+            return true;
+        }
+        return false;
+    }
+
+    void write(WriteBuffer & buf, const IDataType & data_type) const
+    {
+        Data::write(buf, data_type);
+        writeVarUInt(count, buf);
+    }
+
+    void read(ReadBuffer & buf, const IDataType & data_type, Arena * arena)
+    {
+        Data::read(buf, data_type, arena);
+        readVarUInt(count, buf);
+    }
+
+    static const char * name() { return "min_count"; }
+};
+
+template <typename Data>
+struct AggregateFunctionMaxCountData : Data
+{
+    using Self = AggregateFunctionMaxCountData<Data>;
+
+    UInt64 count = 0;
+
+    bool changeIfBetter(const IColumn & column, size_t row_num, Arena * arena)
+    {
+        if (this->changeIfGreater(column, row_num, arena))
+        {
+            count = 1;
+            return true;
+        }
+        if (this->isEqualTo(column, row_num))
+        {
+            ++count;
+            return true;
+        }
+        return false;
+    }
+
+    bool changeIfBetter(const Self & to, Arena * arena)
+    {
+        if (!to.has())
+            return false;
+        if (this->changeIfGreater(to, arena))
+        {
+            count = to.count;
+            return true;
+        }
+        if (this->isEqualTo(to))
+        {
+            count += to.count;
+            return true;
+        }
+        return false;
+    }
+
+    void write(WriteBuffer & buf, const IDataType & data_type) const
+    {
+        Data::write(buf, data_type);
+        writeVarUInt(count, buf);
+    }
+
+    void read(ReadBuffer & buf, const IDataType & data_type, Arena * arena)
+    {
+        Data::read(buf, data_type, arena);
+        readVarUInt(count, buf);
+    }
+
+    static const char * name() { return "max_count"; }
+};
+
 
 template <typename Data>
 class AggregateFunctionsSingleValue final
@@ -769,6 +879,59 @@ public:
     void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         this->data(place).insertResultInto(to);
+    }
+
+    const char * getHeaderFilePath() const override { return __FILE__; }
+};
+
+template <typename Data>
+class AggregateFunctionsSingleValueCount final
+    : public IAggregateFunctionDataHelper<Data, AggregateFunctionsSingleValueCount<Data>, true>
+{
+private:
+    DataTypePtr type;
+
+public:
+    explicit AggregateFunctionsSingleValueCount(const DataTypePtr & type_)
+        : type(type_)
+    {
+        if (StringRef(Data::name()) == StringRef("min_count") || StringRef(Data::name()) == StringRef("max_count"))
+        {
+            if (!type->isComparable())
+                throw Exception(
+                    "Illegal type " + type->getName() + " of argument of aggregate function " + getName()
+                        + " because the values of that data type are not comparable",
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+    }
+
+    String getName() const override { return Data::name(); }
+
+    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeUInt64>(); }
+
+    void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
+    {
+        this->data(place).changeIfBetter(*columns[0], row_num, arena);
+    }
+
+    void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
+    {
+        this->data(place).changeIfBetter(this->data(rhs), arena);
+    }
+
+    void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf) const override
+    {
+        this->data(place).write(buf, *type.get());
+    }
+
+    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, Arena * arena) const override
+    {
+        this->data(place).read(buf, *type.get(), arena);
+    }
+
+    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
+    {
+        static_cast<ColumnUInt64 &>(to).getData().push_back(this->data(place).count);
     }
 
     const char * getHeaderFilePath() const override { return __FILE__; }

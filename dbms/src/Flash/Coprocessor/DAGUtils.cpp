@@ -55,6 +55,8 @@ const std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::Sum, "sum"},
     {tipb::ExprType::Min, "min"},
     {tipb::ExprType::Max, "max"},
+    {tipb::ExprType::MinCount, "min_count"},
+    {tipb::ExprType::MaxCount, "max_count"},
     {tipb::ExprType::First, "first_row"},
     {tipb::ExprType::ApproxCountDistinct, uniq_raw_res_name},
     {tipb::ExprType::GroupConcat, "groupArray"},
@@ -997,6 +999,8 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
     case tipb::ExprType::Avg:
     case tipb::ExprType::Min:
     case tipb::ExprType::Max:
+    case tipb::ExprType::MinCount:
+    case tipb::ExprType::MaxCount:
     case tipb::ExprType::First:
     case tipb::ExprType::ApproxCountDistinct:
     case tipb::ExprType::GroupConcat:
@@ -1053,6 +1057,8 @@ bool isAggFunctionExpr(const tipb::Expr & expr)
     case tipb::ExprType::Avg:
     case tipb::ExprType::Min:
     case tipb::ExprType::Max:
+    case tipb::ExprType::MinCount:
+    case tipb::ExprType::MaxCount:
     case tipb::ExprType::First:
     case tipb::ExprType::GroupConcat:
     case tipb::ExprType::Agg_BitAnd:
