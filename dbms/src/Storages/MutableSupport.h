@@ -43,6 +43,7 @@ public:
 
     inline static constexpr ColumnID extra_handle_id = -1;
     inline static constexpr ColumnID extra_table_id_col_id = -3;
+    inline static constexpr ColumnID extra_commit_ts_col_id = -5;
     inline static constexpr ColumnID version_col_id = -1024;
     inline static constexpr ColumnID delmark_col_id = -1025;
     inline static constexpr ColumnID invalid_col_id = -10000;
