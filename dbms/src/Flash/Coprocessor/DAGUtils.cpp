@@ -53,6 +53,7 @@ const std::unordered_map<tipb::ExprType, String> window_func_map({
 const std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::Count, "count"},
     {tipb::ExprType::Sum, "sum"},
+    {tipb::ExprType::SumInt, "sum"},
     {tipb::ExprType::Min, "min"},
     {tipb::ExprType::Max, "max"},
     {tipb::ExprType::MinCount, "min_count"},
@@ -996,6 +997,7 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
         return getColumnNameForColumnExpr(expr, input_col);
     case tipb::ExprType::Count:
     case tipb::ExprType::Sum:
+    case tipb::ExprType::SumInt:
     case tipb::ExprType::Avg:
     case tipb::ExprType::Min:
     case tipb::ExprType::Max:
@@ -1054,6 +1056,7 @@ bool isAggFunctionExpr(const tipb::Expr & expr)
     {
     case tipb::ExprType::Count:
     case tipb::ExprType::Sum:
+    case tipb::ExprType::SumInt:
     case tipb::ExprType::Avg:
     case tipb::ExprType::Min:
     case tipb::ExprType::Max:

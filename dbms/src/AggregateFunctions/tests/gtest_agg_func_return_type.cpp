@@ -15,8 +15,8 @@
 #include <AggregateFunctions/AggregateFunctionSum.h>
 #include <Columns/ColumnsNumber.h>
 #include <DataTypes/DataTypeDecimal.h>
-#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <TestUtils/AggregationTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/mockExecutor.h>
@@ -109,7 +109,9 @@ try
     auto int_type = std::make_shared<DataTypeInt64>();
     auto nullable_int_type = makeNullable(int_type);
 
-    ASSERT_EQ(evalCountAgg("max_count", int_type, {Field(Int64(1)), Field(Int64(3)), Field(Int64(3)), Field(Int64(2))}), 2);
+    ASSERT_EQ(
+        evalCountAgg("max_count", int_type, {Field(Int64(1)), Field(Int64(3)), Field(Int64(3)), Field(Int64(2))}),
+        2);
     ASSERT_EQ(
         evalCountAgg(
             "min_count",

@@ -27,6 +27,8 @@
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Operators/ExpressionTransformOp.h>
 
+#include <cassert>
+
 namespace DB
 {
 namespace
@@ -52,6 +54,7 @@ NamesWithAliases buildTableScanProjectionCols(
         const auto & table_scan_col_type = schema[i].type;
         const auto & storage_col_name = storage_header.getColumnsWithTypeAndName()[i].name;
         const auto & storage_col_type = storage_header.getColumnsWithTypeAndName()[i].type;
+
         if (unlikely(!table_scan_col_type->equals(*storage_col_type)))
             throw TiFlashException(
                 fmt::format(
@@ -67,6 +70,7 @@ NamesWithAliases buildTableScanProjectionCols(
                     table_scan_col_name,
                     storage_col_name),
                 Errors::Planner::BadRequest);
+
         schema_project_cols.emplace_back(storage_col_name, table_scan_col_name);
     }
     return schema_project_cols;
@@ -153,10 +157,9 @@ void PhysicalTableScan::buildPipelineExecGroupImpl(
 
 void PhysicalTableScan::buildProjection(DAGPipeline & pipeline)
 {
-    const auto & schema_project_cols = buildTableScanProjectionCols(
-        tidb_table_scan.getLogicalTableID(),
-        schema,
-        pipeline.firstStream()->getHeader());
+    auto sample_block = pipeline.firstStream()->getHeader();
+    auto schema_project_cols = buildTableScanProjectionCols(tidb_table_scan.getLogicalTableID(), schema, sample_block);
+
     /// In order to keep BlockInputStream's schema consistent with PhysicalPlan's schema.
     /// It is worth noting that the column uses the name as the unique identifier in the Block, so the column name must also be consistent.
     ExpressionActionsPtr schema_project = generateProjectExpressionActions(pipeline.firstStream(), schema_project_cols);
@@ -168,12 +171,12 @@ void PhysicalTableScan::buildProjection(
     PipelineExecGroupBuilder & group_builder)
 {
     auto header = group_builder.getCurrentHeader();
-    const auto & schema_project_cols
-        = buildTableScanProjectionCols(tidb_table_scan.getLogicalTableID(), schema, header);
+    auto schema_project_cols = buildTableScanProjectionCols(tidb_table_scan.getLogicalTableID(), schema, header);
 
     /// In order to keep TransformOp's schema consistent with PhysicalPlan's schema.
     /// It is worth noting that the column uses the name as the unique identifier in the Block, so the column name must also be consistent.
     ExpressionActionsPtr schema_actions = PhysicalPlanHelper::newActions(header);
+
     schema_actions->add(ExpressionAction::project(schema_project_cols));
     executeExpression(exec_context, group_builder, schema_actions, log);
 }

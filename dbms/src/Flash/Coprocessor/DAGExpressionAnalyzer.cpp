@@ -1191,6 +1191,20 @@ std::pair<bool, std::vector<String>> DAGExpressionAnalyzer::buildExtraCastsAfter
             has_cast = true;
         }
 
+        if (may_need_add_cast_column[i] && table_scan_columns[i].id == ExtraCommitTSColumnID)
+        {
+            const auto & expected_type = getDataTypeByColumnInfoForComputingLayer(table_scan_columns[i]);
+            const auto & actual_type = actions->getSampleBlock().getByName(casted_name).type;
+            if (!expected_type->equals(*actual_type))
+            {
+                casted_name = appendCast(expected_type, actions, casted_name);
+                // We will replace the source_columns[i] with the casted column later
+                // so we need to update the type of the source_column[i]
+                source_columns[i].type = actions->getSampleBlock().getByName(casted_name).type;
+                has_cast = true;
+            }
+        }
+
         casted_columns.emplace_back(std::move(casted_name));
     }
 

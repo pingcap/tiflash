@@ -202,9 +202,8 @@ void AggregationBinder::buildAggFunc(tipb::Expr * agg_func, const ASTFunction * 
     auto agg_sig = agg_sig_it->second;
     agg_func->set_tp(agg_sig);
 
-    if (
-        agg_sig == tipb::ExprType::Count || agg_sig == tipb::ExprType::Sum || agg_sig == tipb::ExprType::MinCount
-        || agg_sig == tipb::ExprType::MaxCount)
+    if (agg_sig == tipb::ExprType::Count || agg_sig == tipb::ExprType::Sum || agg_sig == tipb::ExprType::SumInt
+        || agg_sig == tipb::ExprType::MinCount || agg_sig == tipb::ExprType::MaxCount)
     {
         auto * ft = agg_func->mutable_field_type();
         ft->set_tp(TiDB::TypeLongLong);

@@ -41,6 +41,11 @@ PushDownFilterPtr PushDownFilter::build(
     for (const auto & column : columns_to_read)
         columns_to_read_map.emplace(column.id, column);
 
+    // TiDB may request a hidden commit_ts column in TableScan with a special ColumnID.
+    // In TiFlash it is stored in `_INTERNAL_VERSION` (VersionColumnID), so create an alias mapping.
+    if (const auto it = columns_to_read_map.find(VersionColumnID); it != columns_to_read_map.end())
+        columns_to_read_map.try_emplace(ExtraCommitTSColumnID, it->second);
+
     // Get the columns of the filter, is a subset of columns_to_read
     std::unordered_set<ColumnID> filter_col_id_set;
     for (const auto & expr : pushed_down_filters)
