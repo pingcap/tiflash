@@ -119,21 +119,39 @@ public:
     template <typename Source>
     explicit TwoLevelHashTable(const Source & src)
     {
-        typename Source::const_iterator it = src.begin();
-
-        /// It is assumed that the zero key (stored separately) is first in iteration order.
-        if (it != src.end() && it.getPtr()->isZero(src))
+        if constexpr (Source::is_phmap)
         {
-            insert(it->getValue());
-            ++it;
+            for (typename Source::const_iterator it = src.begin(); it != src.end(); ++it)
+            {
+                const auto hashval = it.getPtr()->getHash(src);
+                const size_t bucket = getBucketFromHash(hashval);
+                bool inserted = false;
+                LookupResult lookup_it = nullptr;
+                impls[bucket].emplace(it->first, lookup_it, inserted, hashval);
+                if (inserted)
+                    lookup_it->getMapped() = it->second;
+            }
         }
-
-        for (; it != src.end(); ++it)
+        else
         {
-            const Cell * cell = it.getPtr();
-            size_t hash_value = cell->getHash(src);
-            size_t buck = getBucketFromHash(hash_value);
-            impls[buck].insertUniqueNonZero(cell, hash_value);
+            typename Source::const_iterator it = src.begin();
+
+            /// It is assumed that the zero key (stored separately) is first in iteration order.
+            if (it != src.end() && it.getPtr()->isZero(src))
+            {
+                insert(it->getValue());
+                ++it;
+            }
+
+            for (; it != src.end(); ++it)
+            {
+                // getPtr() return const HashMapCel<K, V>* for HashTable,
+                // it returns std::pair<K, V> for PhHashTable.
+                const auto * cell = it.getPtr();
+                size_t hash_value = cell->getHash(src);
+                size_t buck = getBucketFromHash(hash_value);
+                impls[buck].insertUniqueNonZero(cell, hash_value);
+            }
         }
     }
 
