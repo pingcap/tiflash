@@ -4821,6 +4821,358 @@ private:
     }
 };
 
+class FunctionInstrUTF8 : public IFunction
+{
+public:
+    static constexpr auto name = "instrUTF8";
+    static constexpr auto diff = 'Z' - 'z';
+
+    FunctionInstrUTF8() = default;
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionInstrUTF8>();
+    }
+
+    std::string getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 2; }
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        auto first_argument = arguments[0];
+        if (!first_argument->isString())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        auto second_argument = arguments[1];
+        if (!second_argument->isString())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", arguments[1]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        return std::make_shared<DataTypeInt64>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        auto c0_col_column = block.getByPosition(arguments[0]).column;
+        auto c1_col_column = block.getByPosition(arguments[1]).column;
+        size_t val_num = block.rows();
+
+        auto col_res = ColumnInt64::create();
+        col_res->reserve(val_num);
+        ColumnInt64::Container & res_vec = col_res->getData();
+        res_vec.resize(val_num);
+
+        if (const auto * str_const_string = checkAndGetColumnConst<ColumnString>(c0_col_column.get()))
+        {
+            const auto * substr_const_string = checkAndGetColumnConst<ColumnString>(c1_col_column.get());
+            if (!substr_const_string)
+            {
+                const auto * substr_vector_string = checkAndGetColumn<ColumnString>(c1_col_column.get());
+                const auto * str_const_string_value = checkAndGetColumn<ColumnString>(str_const_string->getDataColumnPtr().get());
+                constVector(str_const_string_value->getChars(), str_const_string_value->getOffsets(), substr_vector_string->getChars(), substr_vector_string->getOffsets(), val_num, res_vec);
+            }
+        }
+        else
+        {
+            const auto * str_vector_string = checkAndGetColumn<ColumnString>(c0_col_column.get());
+            if (const auto * substr_const_string = checkAndGetColumnConst<ColumnString>(c1_col_column.get()))
+            {
+                const auto * substr_const_string_value = checkAndGetColumn<ColumnString>(substr_const_string->getDataColumnPtr().get());
+                vectorConst(str_vector_string->getChars(), str_vector_string->getOffsets(), substr_const_string_value->getChars(), substr_const_string_value->getOffsets(), val_num, res_vec);
+            }
+            else
+            {
+                const auto * substr_vector_string = checkAndGetColumn<ColumnString>(c1_col_column.get());
+                vectorVector(str_vector_string->getChars(), str_vector_string->getOffsets(), substr_vector_string->getChars(), substr_vector_string->getOffsets(), val_num, res_vec);
+            }
+        }
+
+        block.getByPosition(result).column = std::move(col_res);
+    }
+
+private:
+    static Int64 find(
+        const ColumnString::Chars_t & col_vector_str_value,
+        const ColumnString::Offset & str_start_offset,
+        const ColumnString::Offset & str_end_offset,
+        const ColumnString::Chars_t & col_vector_substr_value,
+        const ColumnString::Offset & substr_start_offset,
+        const ColumnString::Offset & substr_end_offset)
+    {
+        unsigned int sub_search_index = 0;
+        unsigned int find_in_size = 0;
+        Int64 res = 0;
+        ColumnString::Offset substr_size = substr_end_offset - substr_start_offset - 1;
+        if (unlikely(substr_size == 0))
+        {
+            return 1;
+        }
+
+        for (ColumnString::Offset i = str_start_offset; i < str_end_offset; ++i)
+        {
+            auto char_str = col_vector_str_value[i];
+            auto char_substr = col_vector_substr_value[substr_start_offset + sub_search_index];
+            if (char_str <= 'Z' && char_str >= 'A')
+            {
+                char_str = char_str - diff;
+            }
+            if (char_substr <= 'Z' && char_substr >= 'A')
+            {
+                char_substr = char_substr - diff;
+            }
+            if (char_str == char_substr)
+            {
+                find_in_size++;
+                sub_search_index++;
+                if (find_in_size == substr_size)
+                {
+                    auto index = i - str_start_offset - substr_size + 2;
+                    for (ColumnString::Offset j = str_start_offset; j < index + str_start_offset; ++j)
+                    {
+                        res += static_cast<Int8>(col_vector_str_value[j]) > static_cast<Int8>(0xBF);
+                    }
+                    break;
+                }
+            }
+            else
+            {
+                sub_search_index = 0;
+                find_in_size = 0;
+            }
+        }
+        return res;
+    }
+
+    static void constVector(
+        const ColumnString::Chars_t & col_vector_str_value,
+        const ColumnString::Offsets & col_vector_str_offsets,
+        const ColumnString::Chars_t & col_vector_substr_value,
+        const ColumnString::Offsets & col_vector_substr_offsets,
+        size_t val_num,
+        ColumnInt64::Container & res_vec)
+    {
+        ColumnString::Offset prev_offset = 0;
+        for (size_t row = 0; row < val_num; ++row)
+        {
+            res_vec[row] = find(col_vector_str_value, 0, col_vector_str_offsets[0], col_vector_substr_value, prev_offset, col_vector_substr_offsets[row]);
+
+            prev_offset = col_vector_substr_offsets[row];
+        }
+    }
+
+    static void vectorConst(
+        const ColumnString::Chars_t & col_vector_str_value,
+        const ColumnString::Offsets & col_vector_str_offsets,
+        const ColumnString::Chars_t & col_vector_substr_value,
+        const ColumnString::Offsets & col_vector_substr_offsets,
+        size_t val_num,
+        ColumnInt64::Container & res_vec)
+    {
+        ColumnString::Offset prev_offset = 0;
+        const ColumnString::Offset substr_start_offset = 0;
+        auto substr_end_offset = col_vector_substr_offsets[0];
+        for (size_t row = 0; row < val_num; ++row)
+        {
+            res_vec[row] = find(col_vector_str_value, prev_offset, col_vector_str_offsets[row], col_vector_substr_value, substr_start_offset, substr_end_offset);
+
+            prev_offset = col_vector_str_offsets[row];
+        }
+    }
+
+    static void vectorVector(
+        const ColumnString::Chars_t & col_vector_str_value,
+        const ColumnString::Offsets & col_vector_str_offsets,
+        const ColumnString::Chars_t & col_vector_substr_value,
+        const ColumnString::Offsets & col_vector_substr_offsets,
+        size_t val_num,
+        ColumnInt64::Container & res_vec)
+    {
+        ColumnString::Offset str_prev_offset = 0;
+        ColumnString::Offset substr_prev_offset = 0;
+
+        for (size_t row = 0; row < val_num; ++row)
+        {
+            res_vec[row] = find(col_vector_str_value, str_prev_offset, col_vector_str_offsets[row], col_vector_substr_value, substr_prev_offset, col_vector_substr_offsets[row]);
+
+            str_prev_offset = col_vector_str_offsets[row];
+            substr_prev_offset = col_vector_substr_offsets[row];
+        }
+    }
+};
+
+class FunctionInstr : public IFunction
+{
+public:
+    static constexpr auto name = "instr";
+
+    FunctionInstr() = default;
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionInstr>();
+    }
+
+    std::string getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 2; }
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        auto first_argument = arguments[0];
+        if (!first_argument->isString())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        auto second_argument = arguments[1];
+        if (!second_argument->isString())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", arguments[1]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        return std::make_shared<DataTypeInt64>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        auto c0_col_column = block.getByPosition(arguments[0]).column;
+        auto c1_col_column = block.getByPosition(arguments[1]).column;
+        size_t val_num = block.rows();
+
+        auto col_res = ColumnInt64::create();
+        col_res->reserve(val_num);
+        ColumnInt64::Container & res_vec = col_res->getData();
+        res_vec.resize(val_num);
+
+        if (const auto * str_const_string = checkAndGetColumnConst<ColumnString>(c0_col_column.get()))
+        {
+            const auto * substr_const_string = checkAndGetColumnConst<ColumnString>(c1_col_column.get());
+            if (!substr_const_string)
+            {
+                const auto * substr_vector_string = checkAndGetColumn<ColumnString>(c1_col_column.get());
+                const auto * str_const_string_value = checkAndGetColumn<ColumnString>(str_const_string->getDataColumnPtr().get());
+                constVector(str_const_string_value->getChars(), str_const_string_value->getOffsets(), substr_vector_string->getChars(), substr_vector_string->getOffsets(), val_num, res_vec);
+            }
+        }
+        else
+        {
+            const auto * str_vector_string = checkAndGetColumn<ColumnString>(c0_col_column.get());
+            if (const auto * substr_const_string = checkAndGetColumnConst<ColumnString>(c1_col_column.get()))
+            {
+                const auto * substr_const_string_value = checkAndGetColumn<ColumnString>(substr_const_string->getDataColumnPtr().get());
+                vectorConst(str_vector_string->getChars(), str_vector_string->getOffsets(), substr_const_string_value->getChars(), substr_const_string_value->getOffsets(), val_num, res_vec);
+            }
+            else
+            {
+                const auto * substr_vector_string = checkAndGetColumn<ColumnString>(c1_col_column.get());
+                vectorVector(str_vector_string->getChars(), str_vector_string->getOffsets(), substr_vector_string->getChars(), substr_vector_string->getOffsets(), val_num, res_vec);
+            }
+        }
+
+        block.getByPosition(result).column = std::move(col_res);
+    }
+
+private:
+    static Int64 find(
+        const ColumnString::Chars_t & col_vector_str_value,
+        const ColumnString::Offset & str_start_offset,
+        const ColumnString::Offset & str_end_offset,
+        const ColumnString::Chars_t & col_vector_substr_value,
+        const ColumnString::Offset & substr_start_offset,
+        const ColumnString::Offset & substr_end_offset)
+    {
+        unsigned int sub_search_index = 0;
+        unsigned int find_in_size = 0;
+        Int64 res = 0;
+        ColumnString::Offset substr_size = substr_end_offset - substr_start_offset - 1;
+        if (unlikely(substr_size == 0))
+        {
+            return 1;
+        }
+
+        for (ColumnString::Offset i = str_start_offset; i < str_end_offset; ++i)
+        {
+            if (col_vector_str_value[i] == col_vector_substr_value[substr_start_offset + sub_search_index])
+            {
+                find_in_size++;
+                sub_search_index++;
+                if (find_in_size == substr_size)
+                {
+                    auto index = i - str_start_offset - substr_size + 2;
+                    for (ColumnString::Offset j = str_start_offset; j < index + str_start_offset; ++j)
+                    {
+                        res += static_cast<Int8>(col_vector_str_value[j]) > static_cast<Int8>(0xBF);
+                    }
+                    break;
+                }
+            }
+            else
+            {
+                sub_search_index = 0;
+                find_in_size = 0;
+            }
+        }
+        return res;
+    }
+
+    static void constVector(
+        const ColumnString::Chars_t & col_vector_str_value,
+        const ColumnString::Offsets & col_vector_str_offsets,
+        const ColumnString::Chars_t & col_vector_substr_value,
+        const ColumnString::Offsets & col_vector_substr_offsets,
+        size_t val_num,
+        ColumnInt64::Container & res_vec)
+    {
+        ColumnString::Offset prev_offset = 0;
+        for (size_t row = 0; row < val_num; ++row)
+        {
+            res_vec[row] = find(col_vector_str_value, 0, col_vector_str_offsets[0], col_vector_substr_value, prev_offset, col_vector_substr_offsets[row]);
+
+            prev_offset = col_vector_substr_offsets[row];
+        }
+    }
+
+    static void vectorConst(
+        const ColumnString::Chars_t & col_vector_str_value,
+        const ColumnString::Offsets & col_vector_str_offsets,
+        const ColumnString::Chars_t & col_vector_substr_value,
+        const ColumnString::Offsets & col_vector_substr_offsets,
+        size_t val_num,
+        ColumnInt64::Container & res_vec)
+    {
+        ColumnString::Offset prev_offset = 0;
+        const ColumnString::Offset substr_start_offset = 0;
+        const ColumnString::Offset substr_end_offset = col_vector_substr_offsets[0];
+        for (size_t row = 0; row < val_num; ++row)
+        {
+            res_vec[row] = find(col_vector_str_value, prev_offset, col_vector_str_offsets[row], col_vector_substr_value, substr_start_offset, substr_end_offset);
+
+            prev_offset = col_vector_str_offsets[row];
+        }
+    }
+
+    static void vectorVector(
+        const ColumnString::Chars_t & col_vector_str_value,
+        const ColumnString::Offsets & col_vector_str_offsets,
+        const ColumnString::Chars_t & col_vector_substr_value,
+        const ColumnString::Offsets & col_vector_substr_offsets,
+        size_t val_num,
+        ColumnInt64::Container & res_vec)
+    {
+        ColumnString::Offset str_prev_offset = 0;
+        ColumnString::Offset substr_prev_offset = 0;
+
+        for (size_t row = 0; row < val_num; ++row)
+        {
+            res_vec[row] = find(col_vector_str_value, str_prev_offset, col_vector_str_offsets[row], col_vector_substr_value, substr_prev_offset, col_vector_substr_offsets[row]);
+
+            str_prev_offset = col_vector_str_offsets[row];
+            substr_prev_offset = col_vector_substr_offsets[row];
+        }
+    }
+};
 
 class FunctionSpace : public IFunction
 {
@@ -7016,6 +7368,8 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionHexInt>();
     factory.registerFunction<FunctionRepeat>();
     factory.registerFunction<FunctionSpace>();
+    factory.registerFunction<FunctionInstr>();
+    factory.registerFunction<FunctionInstrUTF8>();
     factory.registerFunction<FunctionBin>();
     factory.registerFunction<FunctionElt>();
     factory.registerFunction<FunctionFormatDecimal>();
