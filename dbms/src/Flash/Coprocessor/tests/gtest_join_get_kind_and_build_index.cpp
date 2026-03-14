@@ -119,6 +119,12 @@ TEST(JoinKindAndBuildIndexTestRunner, TestEqualJoins)
     result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeRightOuterJoin, 1, false, 1);
     ASSERT_TRUE(result.first == ASTTableJoin::Kind::RightOuter && result.second == 1);
 
+    /// FullOuterJoin, keep full join kind and respect inner_idx as build side.
+    result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeFullOuterJoin, 0, false, 1);
+    ASSERT_TRUE(result.first == ASTTableJoin::Kind::Full && result.second == 0);
+    result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeFullOuterJoin, 1, false, 1);
+    ASSERT_TRUE(result.first == ASTTableJoin::Kind::Full && result.second == 1);
+
     /// Semi/Anti
     result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeSemiJoin, 1, false, 1);
     ASSERT_TRUE(result.first == ASTTableJoin::Kind::Semi && result.second == 1);
