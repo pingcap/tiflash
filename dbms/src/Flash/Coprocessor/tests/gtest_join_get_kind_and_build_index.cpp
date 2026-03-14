@@ -225,5 +225,23 @@ TEST(JoinKindAndBuildIndexTestRunner, TestFullJoinOtherConditionColumnsAreNullab
     }
 }
 
+TEST(JoinKindAndBuildIndexTestRunner, TestFullJoinAllowsLeftAndRightConditions)
+{
+    JoinNonEqualConditions full_conditions;
+    full_conditions.left_filter_column = "left_cond";
+    full_conditions.right_filter_column = "right_cond";
+    ASSERT_EQ(full_conditions.validate(ASTTableJoin::Kind::Full), nullptr);
+
+    JoinNonEqualConditions left_only_conditions;
+    left_only_conditions.left_filter_column = "left_cond";
+    ASSERT_EQ(left_only_conditions.validate(ASTTableJoin::Kind::LeftOuter), nullptr);
+    ASSERT_STREQ(left_only_conditions.validate(ASTTableJoin::Kind::Inner), "non left join with left conditions");
+
+    JoinNonEqualConditions right_only_conditions;
+    right_only_conditions.right_filter_column = "right_cond";
+    ASSERT_EQ(right_only_conditions.validate(ASTTableJoin::Kind::RightOuter), nullptr);
+    ASSERT_STREQ(right_only_conditions.validate(ASTTableJoin::Kind::Inner), "non right join with right conditions");
+}
+
 } // namespace tests
 } // namespace DB
