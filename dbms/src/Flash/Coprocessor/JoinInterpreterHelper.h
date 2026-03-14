@@ -119,6 +119,16 @@ struct JoinNonEqualConditions
 
 namespace JoinInterpreterHelper
 {
+constexpr bool makeLeftJoinSideNullable(tipb::JoinType join_type)
+{
+    return join_type == tipb::JoinType::TypeRightOuterJoin || join_type == tipb::JoinType::TypeFullOuterJoin;
+}
+
+constexpr bool makeRightJoinSideNullable(tipb::JoinType join_type)
+{
+    return join_type == tipb::JoinType::TypeLeftOuterJoin || join_type == tipb::JoinType::TypeFullOuterJoin;
+}
+
 struct TiFlashJoin
 {
     TiFlashJoin(const tipb::Join & join_, bool is_test);

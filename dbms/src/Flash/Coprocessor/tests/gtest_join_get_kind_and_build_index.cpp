@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Columns/ColumnNullable.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <TestUtils/ExecutorTestUtils.h>
 
 #include <Flash/Coprocessor/JoinInterpreterHelper.cpp>
@@ -25,6 +26,26 @@ namespace tests
 class JoinKindAndBuildIndexTestRunner : public testing::Test
 {
 };
+
+namespace
+{
+tipb::Expr makeJoinKeyWithFieldType()
+{
+    tipb::Expr expr;
+    expr.mutable_field_type()->set_tp(TiDB::TypeLong);
+    return expr;
+}
+
+tipb::Join makeFullOuterJoinForSchemaTest(size_t inner_index)
+{
+    tipb::Join join;
+    join.set_join_type(tipb::JoinType::TypeFullOuterJoin);
+    join.set_inner_idx(inner_index);
+    *join.add_left_join_keys() = makeJoinKeyWithFieldType();
+    *join.add_right_join_keys() = makeJoinKeyWithFieldType();
+    return join;
+}
+} // namespace
 
 bool invalidParams(tipb::JoinType tipb_join_type, size_t inner_index, bool is_null_aware, size_t join_keys_size)
 {
@@ -162,6 +183,46 @@ TEST(JoinKindAndBuildIndexTestRunner, TestEqualJoins)
 
     ASSERT_TRUE(invalidParams(tipb::JoinType::TypeLeftOuterSemiJoin, 0, false, 1));
     ASSERT_TRUE(invalidParams(tipb::JoinType::TypeAntiLeftOuterSemiJoin, 0, false, 1));
+}
+
+TEST(JoinKindAndBuildIndexTestRunner, TestFullJoinOutputColumnsAreNullable)
+{
+    auto join = makeFullOuterJoinForSchemaTest(1);
+    JoinInterpreterHelper::TiFlashJoin tiflash_join(join, false);
+
+    auto int_type = std::make_shared<DataTypeInt32>();
+    NamesAndTypes left_cols{{"l.a", int_type}, {"l.b", int_type}};
+    NamesAndTypes right_cols{{"r.a", int_type}, {"r.b", int_type}};
+
+    auto join_output_columns = tiflash_join.genJoinOutputColumns(left_cols, right_cols, "");
+    ASSERT_EQ(join_output_columns.size(), 4);
+    for (const auto & column : join_output_columns)
+        ASSERT_TRUE(column.type->isNullable()) << column.name;
+}
+
+TEST(JoinKindAndBuildIndexTestRunner, TestFullJoinOtherConditionColumnsAreNullable)
+{
+    auto int_type = std::make_shared<DataTypeInt32>();
+    NamesAndTypes left_cols{{"l.a", int_type}, {"l.b", int_type}};
+    NamesAndTypes right_cols{{"r.a", int_type}, {"r.b", int_type}};
+
+    for (size_t inner_index : {size_t{0}, size_t{1}})
+    {
+        auto join = makeFullOuterJoinForSchemaTest(inner_index);
+        JoinInterpreterHelper::TiFlashJoin tiflash_join(join, false);
+
+        NamesAndTypes probe_prepare_columns = inner_index == 1
+            ? NamesAndTypes{{"l.a", int_type}, {"l.b", int_type}, {"probe_extra", int_type}}
+            : NamesAndTypes{{"r.a", int_type}, {"r.b", int_type}, {"probe_extra", int_type}};
+        auto probe_prepare_join_actions = std::make_shared<ExpressionActions>(probe_prepare_columns);
+
+        auto columns_for_other_join_filter
+            = tiflash_join.genColumnsForOtherJoinFilter(left_cols, right_cols, probe_prepare_join_actions);
+        ASSERT_EQ(columns_for_other_join_filter.size(), 5);
+        ASSERT_EQ(columns_for_other_join_filter.back().name, "probe_extra");
+        for (const auto & column : columns_for_other_join_filter)
+            ASSERT_TRUE(column.type->isNullable()) << column.name;
+    }
 }
 
 } // namespace tests

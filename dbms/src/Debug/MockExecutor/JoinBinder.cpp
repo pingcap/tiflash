@@ -19,11 +19,36 @@
 #include <Debug/MockExecutor/ExecutorBinder.h>
 #include <Debug/MockExecutor/JoinBinder.h>
 #include <Flash/Coprocessor/DAGCodec.h>
+#include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 
 namespace DB::mock
 {
+namespace
+{
+void appendJoinSchema(DAGSchema & output_schema, const DAGSchema & input_schema, bool make_nullable)
+{
+    for (const auto & field : input_schema)
+    {
+        if (make_nullable && field.second.hasNotNullFlag())
+            output_schema.push_back(toNullableDAGColumnInfo(field));
+        else
+            output_schema.push_back(field);
+    }
+}
+
+DAGSchema buildOtherConditionSchema(
+    const DAGSchema & left_schema,
+    const DAGSchema & right_schema,
+    tipb::JoinType join_type)
+{
+    DAGSchema merged_children_schema;
+    appendJoinSchema(merged_children_schema, left_schema, JoinInterpreterHelper::makeLeftJoinSideNullable(join_type));
+    appendJoinSchema(merged_children_schema, right_schema, JoinInterpreterHelper::makeRightJoinSideNullable(join_type));
+    return merged_children_schema;
+}
+} // namespace
 
 void JoinBinder::addRuntimeFilter(MockRuntimeFilter & rf)
 {
@@ -95,22 +120,8 @@ void JoinBinder::columnPrune(std::unordered_set<String> & used_columns)
 
     /// update output schema
     output_schema.clear();
-
-    for (auto & field : children[0]->output_schema)
-    {
-        if (tp == tipb::TypeRightOuterJoin && field.second.hasNotNullFlag())
-            output_schema.push_back(toNullableDAGColumnInfo(field));
-        else
-            output_schema.push_back(field);
-    }
-
-    for (auto & field : children[1]->output_schema)
-    {
-        if (tp == tipb::TypeLeftOuterJoin && field.second.hasNotNullFlag())
-            output_schema.push_back(toNullableDAGColumnInfo(field));
-        else
-            output_schema.push_back(field);
-    }
+    appendJoinSchema(output_schema, children[0]->output_schema, JoinInterpreterHelper::makeLeftJoinSideNullable(tp));
+    appendJoinSchema(output_schema, children[1]->output_schema, JoinInterpreterHelper::makeRightJoinSideNullable(tp));
 }
 
 void JoinBinder::fillJoinKeyAndFieldType(
@@ -187,11 +198,8 @@ bool JoinBinder::toTiPBExecutor(
         astToPB(children[1]->output_schema, expr, cond, collator_id, context);
     }
 
-    DAGSchema merged_children_schema{children[0]->output_schema};
-    merged_children_schema.insert(
-        merged_children_schema.end(),
-        children[1]->output_schema.begin(),
-        children[1]->output_schema.end());
+    DAGSchema merged_children_schema
+        = buildOtherConditionSchema(children[0]->output_schema, children[1]->output_schema, tp);
 
     for (const auto & expr : other_conds)
     {
@@ -295,13 +303,7 @@ void JoinBinder::toMPPSubPlan(
 
 static void buildLeftSideJoinSchema(DAGSchema & schema, const DAGSchema & left_schema, tipb::JoinType tp)
 {
-    for (const auto & field : left_schema)
-    {
-        if (tp == tipb::JoinType::TypeRightOuterJoin && field.second.hasNotNullFlag())
-            schema.push_back(toNullableDAGColumnInfo(field));
-        else
-            schema.push_back(field);
-    }
+    appendJoinSchema(schema, left_schema, JoinInterpreterHelper::makeLeftJoinSideNullable(tp));
 }
 
 static void buildRightSideJoinSchema(DAGSchema & schema, const DAGSchema & right_schema, tipb::JoinType tp)
@@ -322,13 +324,7 @@ static void buildRightSideJoinSchema(DAGSchema & schema, const DAGSchema & right
     }
     else if (tp != tipb::JoinType::TypeSemiJoin && tp != tipb::JoinType::TypeAntiSemiJoin)
     {
-        for (const auto & field : right_schema)
-        {
-            if (tp == tipb::JoinType::TypeLeftOuterJoin && field.second.hasNotNullFlag())
-                schema.push_back(toNullableDAGColumnInfo(field));
-            else
-                schema.push_back(field);
-        }
+        appendJoinSchema(schema, right_schema, JoinInterpreterHelper::makeRightJoinSideNullable(tp));
     }
 }
 
