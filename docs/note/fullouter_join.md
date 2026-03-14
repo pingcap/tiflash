@@ -94,6 +94,13 @@ TiFlash 内核（继承自 ClickHouse 的 Join 架构）本身有 `ASTTableJoin:
 
 需要改成：`used` 只能在 `other condition` 通过后再设置。
 
+实现上，下面 1-6 点虽然可以按职责拆成“标记时机 / `handleOtherConditions` 语义 / probe 后扫描联动”三个子问题，但当前代码路径存在强耦合：
+
+1. 只切 row-flagged map，而不同时补 full 的 `handleOtherConditions` 分支，`full + other condition` 仍可能落到运行时错误分支。
+2. 只切 probe 侧 map，而不同时补 probe 后扫描分支，后扫阶段仍会读取错误的 hash map 类型。
+
+因此建议把下面 1-6 点至少作为同一个 review/提交单元交付；文档后面的第 6/7/8 步保留为概念拆分，便于逐项验收，但不建议机械地拆成三个互相独立、可单独合入的 patch。
+
 建议实现方向：
 
 1. 让 full 在 `has_other_condition=true` 时也走 row-flagged map（`MapsAllFullWithRowFlag`）。
@@ -174,7 +181,7 @@ TiFlash 内核（继承自 ClickHouse 的 Join 架构）本身有 `ASTTableJoin:
 1. 同步 tipb（拿到 `TypeFullOuterJoin`）。
 2. 打通 JoinType 映射 + schema nullable + `getJoinTypeName`。
 3. 放开 full 的 left/right condition 校验。
-4. 改 `full + other condition` 的 row-flagged 路径（核心 correctness）。
+4. 把 `full + other condition` 的 correctness 主链路一起打通（row-flagged 路径 + `handleOtherConditions` + probe 后扫描联动）。
 5. 增加无等值键 full 的显式拒绝（本轮不实现）。
 6. 补 gtest（先 targeted，再考虑扩大 join type 矩阵）。
 
@@ -221,8 +228,11 @@ TiFlash 内核（继承自 ClickHouse 的 Join 架构）本身有 `ASTTableJoin:
 - 验收：
   - full + left_condition、full + right_condition 的构造阶段不报 “non left/right join with ... conditions”。
 
-6. 第 6 步：核心改造 A - full + other condition 的 used 标记时机
+6. 第 6 步：核心改造 A - full + other condition 的 used 标记时机（建议与第 7、8 步合并交付）
 - 目标：只有当 `other condition` 通过时，build 行才标记 used，避免漏输出未匹配右行。
+- 说明：
+  - 当前代码上，row-flagged map 选择、`handleOtherConditions` 的 full 语义、probe 后扫描分支是强耦合的。
+  - 如果只落本步、不同时补第 7 和第 8 步，代码可能虽然能部分编译，但 `full + other condition` 仍无法形成可运行、可验证的完整链路。
 - 修改：
   - `dbms/src/Interpreters/JoinUtils.h`（让 full+other_condition 进入 row-flagged 路径）
   - `dbms/src/Interpreters/JoinPartition.cpp`（map 初始化、probe dispatch、adder not-found 行为）
@@ -230,14 +240,14 @@ TiFlash 内核（继承自 ClickHouse 的 Join 架构）本身有 `ASTTableJoin:
 - 验收：
   - 场景：key 命中但 `other condition` 全失败时，右侧行仍能在 probe 后扫描阶段输出。
 
-7. 第 7 步：核心改造 B - `handleOtherConditions` full 语义
+7. 第 7 步：核心改造 B - `handleOtherConditions` full 语义（通常在第 6 步一并落地）
 - 目标：full 下也要有“外连接至少保留一行 + 右侧置 null”的正确行为。
 - 修改：
   - `dbms/src/Interpreters/Join.cpp`（`handleOtherConditions` 分支）
 - 验收：
   - full + other_condition 返回结果与“left/right outer 的对称组合语义”一致。
 
-8. 第 8 步：probe 后扫描阶段联动
+8. 第 8 步：probe 后扫描阶段联动（通常在第 6 步一并落地）
 - 目标：full+other_condition 使用 row-flagged map 扫描未匹配右行。
 - 修改：
   - `dbms/src/DataStreams/ScanHashMapAfterProbeBlockInputStream.cpp`
