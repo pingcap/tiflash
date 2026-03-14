@@ -39,6 +39,19 @@ bool invalidParams(tipb::JoinType tipb_join_type, size_t inner_index, bool is_nu
     }
 }
 
+String getErrorMessage(tipb::JoinType tipb_join_type, size_t inner_index, bool is_null_aware, size_t join_keys_size)
+{
+    try
+    {
+        JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb_join_type, inner_index, is_null_aware, join_keys_size);
+        return "";
+    }
+    catch (Exception & e)
+    {
+        return e.message();
+    }
+}
+
 TEST(JoinKindAndBuildIndexTestRunner, TestNullAwareJoins)
 {
     auto result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeAntiSemiJoin, 1, true, 1);
@@ -97,6 +110,11 @@ TEST(JoinKindAndBuildIndexTestRunner, TestCrossJoins)
 
     ASSERT_TRUE(invalidParams(tipb::JoinType::TypeLeftOuterSemiJoin, 0, false, 0));
     ASSERT_TRUE(invalidParams(tipb::JoinType::TypeAntiLeftOuterSemiJoin, 0, false, 0));
+
+    /// Cross FullOuterJoin is out of scope in this round and should fail with a clear message.
+    auto error_message = getErrorMessage(tipb::JoinType::TypeFullOuterJoin, 0, false, 0);
+    ASSERT_FALSE(error_message.empty());
+    ASSERT_NE(error_message.find("Cartesian full outer join"), String::npos);
 }
 
 TEST(JoinKindAndBuildIndexTestRunner, TestEqualJoins)

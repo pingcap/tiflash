@@ -106,6 +106,10 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(
             {{tipb::JoinType::TypeAntiLeftOuterSemiJoin, 1}, {ASTTableJoin::Kind::NullAware_LeftOuterAnti, 1}}};
 
     RUNTIME_ASSERT(inner_index == 0 || inner_index == 1);
+    if (unlikely(tipb_join_type == tipb::JoinType::TypeFullOuterJoin && join_keys_size == 0))
+        throw TiFlashException(
+            "Cartesian full outer join is not supported yet",
+            Errors::Coprocessor::BadRequest);
     const auto & join_type_map = [is_null_aware, join_keys_size]() {
         if (is_null_aware)
         {
