@@ -126,7 +126,7 @@ AggregateFunctionPtr createAggregateFunctionMinCount(
     const Array & parameters)
 {
     return AggregateFunctionPtr(
-        createAggregateFunctionSingleValue<AggregateFunctionsSingleValueCount, AggregateFunctionMinCountData>(
+        createAggregateFunctionSingleValue<AggregateFunctionsSingleValueMinMaxCount, AggregateFunctionMinCountData>(
             name,
             argument_types,
             parameters));
@@ -139,7 +139,7 @@ AggregateFunctionPtr createAggregateFunctionMaxCount(
     const Array & parameters)
 {
     return AggregateFunctionPtr(
-        createAggregateFunctionSingleValue<AggregateFunctionsSingleValueCount, AggregateFunctionMaxCountData>(
+        createAggregateFunctionSingleValue<AggregateFunctionsSingleValueMinMaxCount, AggregateFunctionMaxCountData>(
             name,
             argument_types,
             parameters));

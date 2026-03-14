@@ -885,14 +885,14 @@ public:
 };
 
 template <typename Data>
-class AggregateFunctionsSingleValueCount final
-    : public IAggregateFunctionDataHelper<Data, AggregateFunctionsSingleValueCount<Data>, true>
+class AggregateFunctionsSingleValueMinMaxCount final
+    : public IAggregateFunctionDataHelper<Data, AggregateFunctionsSingleValueMinMaxCount<Data>, true>
 {
 private:
     DataTypePtr type;
 
 public:
-    explicit AggregateFunctionsSingleValueCount(const DataTypePtr & type_)
+    explicit AggregateFunctionsSingleValueMinMaxCount(const DataTypePtr & type_)
         : type(type_)
     {
         if (StringRef(Data::name()) == StringRef("min_count") || StringRef(Data::name()) == StringRef("max_count"))
