@@ -119,6 +119,32 @@ AggregateFunctionPtr createAggregateFunctionArgMax(
         createAggregateFunctionArgMinMax<AggregateFunctionMaxData>(name, argument_types, parameters));
 }
 
+AggregateFunctionPtr createAggregateFunctionMinCount(
+    const Context & /* context not used */,
+    const std::string & name,
+    const DataTypes & argument_types,
+    const Array & parameters)
+{
+    return AggregateFunctionPtr(
+        createAggregateFunctionSingleValue<AggregateFunctionsSingleValueMinMaxCount, AggregateFunctionMinCountData>(
+            name,
+            argument_types,
+            parameters));
+}
+
+AggregateFunctionPtr createAggregateFunctionMaxCount(
+    const Context & /* context not used */,
+    const std::string & name,
+    const DataTypes & argument_types,
+    const Array & parameters)
+{
+    return AggregateFunctionPtr(
+        createAggregateFunctionSingleValue<AggregateFunctionsSingleValueMinMaxCount, AggregateFunctionMaxCountData>(
+            name,
+            argument_types,
+            parameters));
+}
+
 } // namespace
 
 void registerAggregateFunctionsMinMaxAny(AggregateFunctionFactory & factory)
@@ -129,6 +155,8 @@ void registerAggregateFunctionsMinMaxAny(AggregateFunctionFactory & factory)
     factory.registerFunction("anyHeavy", createAggregateFunctionAnyHeavy);
     factory.registerFunction("min", createAggregateFunctionMin, AggregateFunctionFactory::CaseInsensitive);
     factory.registerFunction("max", createAggregateFunctionMax, AggregateFunctionFactory::CaseInsensitive);
+    factory.registerFunction("min_count", createAggregateFunctionMinCount, AggregateFunctionFactory::CaseInsensitive);
+    factory.registerFunction("max_count", createAggregateFunctionMaxCount, AggregateFunctionFactory::CaseInsensitive);
     factory.registerFunction("argMin", createAggregateFunctionArgMin);
     factory.registerFunction("argMax", createAggregateFunctionArgMax);
 }
