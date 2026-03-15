@@ -168,6 +168,7 @@ public:
     Join(
         const Names & key_names_left_,
         const Names & key_names_right_,
+        const std::vector<UInt8> & is_null_eq_,
         ASTTableJoin::Kind kind_,
         const String & req_id,
         size_t fine_grained_shuffle_count_,
@@ -253,6 +254,7 @@ public:
     ASTTableJoin::Kind getKind() const { return kind; }
 
     const Names & getLeftJoinKeys() const { return key_names_left; }
+    const std::vector<UInt8> & getNullEqFlags() const { return is_null_eq; }
 
     void setInitActiveBuildThreads()
     {
@@ -350,6 +352,8 @@ private:
     const Names key_names_left;
     /// Names of key columns (columns for equi-JOIN) in "right" table (in the order they appear in USING clause).
     const Names key_names_right;
+    /// Per join-key-pair null-safe-equal flags, aligned with key_names_left/key_names_right.
+    const std::vector<UInt8> is_null_eq;
 
     mutable std::mutex build_probe_mutex;
 

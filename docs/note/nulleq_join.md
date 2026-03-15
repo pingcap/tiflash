@@ -523,10 +523,10 @@ Done 标准：
 
 ### 当前进度
 
-- 说明：以下勾选按当前分支**已提交代码**核对，不把本地 workspace 的未提交改动计入进度。
-- [ ] tipb: `Join.is_null_eq` 字段定义
-- [ ] TiFlash: `JoinInterpreterHelper::TiFlashJoin` 解析 `is_null_eq[]`
-- [ ] TiFlash: `DB::Join` 保存/打印 `is_null_eq`
+- 说明：以下勾选按当前 workspace 核对，用于记录本轮开发推进状态。
+- [x] tipb: `Join.is_null_eq` 字段定义
+- [x] TiFlash: `JoinInterpreterHelper::TiFlashJoin` 解析 `is_null_eq[]`
+- [x] TiFlash: `DB::Join` 保存/打印 `is_null_eq`
 - [ ] TiFlash: nullable NullEQ 强制 serialized + NullAware 互斥 fail-fast
 - [ ] TiFlash: build/probe 的 row_filter_map 语义拆分
 - [ ] TiFlash: `RowsNotInsertToMap` / scan-after-probe 调整

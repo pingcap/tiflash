@@ -166,6 +166,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     JoinPtr join_ptr = std::make_shared<Join>(
         probe_key_names,
         build_key_names,
+        tiflash_join.is_null_eq,
         tiflash_join.kind,
         join_req_id,
         fine_grained_shuffle.stream_count,

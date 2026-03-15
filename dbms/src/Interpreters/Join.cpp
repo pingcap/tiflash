@@ -96,6 +96,31 @@ size_t getRestoreJoinBuildConcurrency(
     }
 }
 
+String formatNullEqFlags(const std::vector<UInt8> & flags)
+{
+    String result;
+    result.reserve(flags.size() * 2 + 2);
+    result += "[";
+    for (size_t i = 0; i < flags.size(); ++i)
+    {
+        if (i != 0)
+            result += ",";
+        result += flags[i] == 0 ? "0" : "1";
+    }
+    result += "]";
+    return result;
+}
+
+bool hasNullEqKey(const std::vector<UInt8> & flags)
+{
+    for (auto flag : flags)
+    {
+        if (flag != 0)
+            return true;
+    }
+    return false;
+}
+
 } // namespace
 
 using PointerHelper = PointerTypeColumnHelper<sizeof(void *)>;
@@ -111,6 +136,7 @@ const size_t MAX_RESTORE_ROUND_IN_GTEST = 2;
 Join::Join(
     const Names & key_names_left_,
     const Names & key_names_right_,
+    const std::vector<UInt8> & is_null_eq_,
     ASTTableJoin::Kind kind_,
     const String & req_id,
     size_t fine_grained_shuffle_count_,
@@ -140,6 +166,7 @@ Join::Join(
     , may_probe_side_expanded_after_join(mayProbeSideExpandedAfterJoin(kind))
     , key_names_left(key_names_left_)
     , key_names_right(key_names_right_)
+    , is_null_eq(is_null_eq_)
     , build_concurrency(0)
     , active_build_threads(0)
     , probe_concurrency(0)
@@ -202,9 +229,11 @@ Join::Join(
 
     LOG_DEBUG(
         log,
-        "FineGrainedShuffle flag {}, stream count {}",
+        "FineGrainedShuffle flag {}, stream count {}, has_null_eq_key {}, is_null_eq {}",
         enable_fine_grained_shuffle,
-        fine_grained_shuffle_count);
+        fine_grained_shuffle_count,
+        hasNullEqKey(is_null_eq),
+        formatNullEqFlags(is_null_eq));
 }
 
 void Join::meetError(const String & error_message_)
@@ -357,6 +386,7 @@ std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_j
     auto ret = std::make_shared<Join>(
         key_names_left,
         key_names_right,
+        is_null_eq,
         kind,
         join_req_id,
         /// restore join never enable fine grained shuffle
