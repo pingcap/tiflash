@@ -4261,6 +4261,89 @@ try
 }
 CATCH
 
+TEST_F(JoinExecutorTestRunner, FullOuterJoinWithOtherCondition)
+try
+{
+    using tipb::JoinType;
+
+    const std::vector<
+        std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnsWithTypeAndName, String>>
+        test_cases = {{
+                          {toNullableVec<Int32>("a", {1}), toNullableVec<Int32>("c", {10})},
+                          {toNullableVec<Int32>("a", {1}), toNullableVec<Int32>("c", {5})},
+                          {toNullableVec<Int32>("a", {1, {}}),
+                           toNullableVec<Int32>("c", {10, {}}),
+                           toNullableVec<Int32>("a", {{}, 1}),
+                           toNullableVec<Int32>("c", {{}, 5})},
+                          "key matched but other condition failed for all rows",
+                      },
+                      {
+                          {toNullableVec<Int32>("a", {2}), toNullableVec<Int32>("c", {20})},
+                          {toNullableVec<Int32>("a", {1}), toNullableVec<Int32>("c", {5})},
+                          {toNullableVec<Int32>("a", {2, {}}),
+                           toNullableVec<Int32>("c", {20, {}}),
+                           toNullableVec<Int32>("a", {{}, 1}),
+                           toNullableVec<Int32>("c", {{}, 5})},
+                          "key not matched",
+                      },
+                      {
+                          {toNullableVec<Int32>("a", {1}), toNullableVec<Int32>("c", {3})},
+                          {toNullableVec<Int32>("a", {1, 1}), toNullableVec<Int32>("c", {2, 4})},
+                          {toNullableVec<Int32>("a", {1, {}}),
+                           toNullableVec<Int32>("c", {3, {}}),
+                           toNullableVec<Int32>("a", {1, 1}),
+                           toNullableVec<Int32>("c", {4, 2})},
+                          "only rows that pass other condition should be marked used",
+                      }};
+
+    for (const auto & [left, right, res, test_case_name] : test_cases)
+    {
+        SCOPED_TRACE(test_case_name);
+        context.addMockTable(
+            "full_outer_other_condition",
+            "t",
+            {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}},
+            left);
+        context.addMockTable(
+            "full_outer_other_condition",
+            "s",
+            {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}},
+            right);
+
+        auto request = context.scan("full_outer_other_condition", "t")
+                           .join(
+                               context.scan("full_outer_other_condition", "s"),
+                               JoinType::TypeFullOuterJoin,
+                               {col("a")},
+                               {},
+                               {},
+                               {lt(col("t.c"), col("s.c"))},
+                               {},
+                               0,
+                               false,
+                               1)
+                           .build(context);
+        executeAndAssertColumnsEqual(request, res);
+
+        auto request_column_prune = context.scan("full_outer_other_condition", "t")
+                                        .join(
+                                            context.scan("full_outer_other_condition", "s"),
+                                            JoinType::TypeFullOuterJoin,
+                                            {col("a")},
+                                            {},
+                                            {},
+                                            {lt(col("t.c"), col("s.c"))},
+                                            {},
+                                            0,
+                                            false,
+                                            1)
+                                        .aggregation({Count(lit(static_cast<UInt64>(1)))}, {})
+                                        .build(context);
+        ASSERT_COLUMNS_EQ_UR(genScalarCountResults(res), executeStreams(request_column_prune, 2));
+    }
+}
+CATCH
+
 #undef WRAP_FOR_JOIN_TEST_BEGIN
 #undef WRAP_FOR_JOIN_TEST_END
 

@@ -1452,6 +1452,28 @@ struct RowFlaggedHashMapAdder
         (*offsets)[i] = current_offset;
         return false;
     }
+
+    static bool addNotFoundForFull(
+        size_t num_columns_to_add,
+        MutableColumns & added_columns,
+        size_t i,
+        IColumn::Offset & current_offset,
+        IColumn::Offsets * offsets,
+        ProbeProcessInfo & probe_process_info)
+    {
+        assert(num_columns_to_add + 1 == added_columns.size());
+        if (current_offset && current_offset + 1 > probe_process_info.max_block_size)
+            return true;
+
+        ++current_offset;
+        (*offsets)[i] = current_offset;
+        for (size_t j = 0; j < num_columns_to_add; ++j)
+            added_columns[j]->insertDefault();
+
+        auto & actual_ptr_col = static_cast<PointerHelper::ColumnType &>(*added_columns[num_columns_to_add]);
+        actual_ptr_col.getData().push_back(0);
+        return false;
+    }
 };
 
 template <
@@ -1615,8 +1637,21 @@ void NO_INLINE probeBlockImplTypeCase(
             {
                 if constexpr (row_flagged_map)
                 {
-                    block_full
-                        = RowFlaggedHashMapAdder<Map>::addNotFound(i, current_offset, offsets_to_replicate.get());
+                    if constexpr (KIND == ASTTableJoin::Kind::Full)
+                    {
+                        block_full = RowFlaggedHashMapAdder<Map>::addNotFoundForFull(
+                            num_columns_to_add,
+                            added_columns,
+                            i,
+                            current_offset,
+                            offsets_to_replicate.get(),
+                            probe_process_info);
+                    }
+                    else
+                    {
+                        block_full
+                            = RowFlaggedHashMapAdder<Map>::addNotFound(i, current_offset, offsets_to_replicate.get());
+                    }
                 }
                 /// RightSemi/RightAnti without other conditions, just ignore not matched probe rows
                 else if constexpr (KIND != ASTTableJoin::Kind::RightSemi && KIND != ASTTableJoin::Kind::RightAnti)
@@ -2121,8 +2156,10 @@ void JoinPartition::probeBlock(
         CALL(Inner, All, MapsAll, false)
     else if (kind == LeftOuter && strictness == All)
         CALL(LeftOuter, All, MapsAll, false)
-    else if (kind == Full && strictness == All)
+    else if (kind == Full && strictness == All && !use_row_flagged_map)
         CALL(LeftOuter, All, MapsAllFull, false)
+    else if (kind == Full && strictness == All && use_row_flagged_map)
+        CALL(Full, All, MapsAllFullWithRowFlag, true)
     else if (kind == RightOuter && strictness == All && !use_row_flagged_map)
         CALL(Inner, All, MapsAllFull, false)
     else if (kind == RightOuter && strictness == All && use_row_flagged_map)
