@@ -188,6 +188,19 @@ JoinKeyTypes getJoinKeyTypes(const tipb::Join & join)
     return join_key_types;
 }
 
+std::vector<UInt8> getJoinKeyNullEqFlags(const tipb::Join & join)
+{
+    if (unlikely(join.is_null_eq_size() != 0 && join.is_null_eq_size() != join.left_join_keys_size()))
+        throw TiFlashException(
+            "size of join.is_null_eq does not match size of join.left_join_keys/right_join_keys",
+            Errors::Coprocessor::BadRequest);
+
+    std::vector<UInt8> is_null_eq(join.left_join_keys_size(), 0);
+    for (int i = 0; i < join.is_null_eq_size(); ++i)
+        is_null_eq[i] = join.is_null_eq(i) ? 1 : 0;
+    return is_null_eq;
+}
+
 TiDB::TiDBCollators getJoinKeyCollators(const tipb::Join & join, const JoinKeyTypes & join_key_types, bool is_test)
 {
     TiDB::TiDBCollators collators;
@@ -217,6 +230,7 @@ TiFlashJoin::TiFlashJoin(const tipb::Join & join_, bool is_test) // NOLINT(cppco
     : join(join_)
     , join_key_types(getJoinKeyTypes(join_))
     , join_key_collators(getJoinKeyCollators(join_, join_key_types, is_test))
+    , is_null_eq(getJoinKeyNullEqFlags(join_))
 {
     std::tie(kind, build_side_index) = getJoinKindAndBuildSideIndex(join);
 }

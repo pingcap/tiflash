@@ -140,6 +140,7 @@ struct TiFlashJoin
 
     JoinKeyTypes join_key_types;
     TiDB::TiDBCollators join_key_collators;
+    std::vector<UInt8> is_null_eq;
 
     /// (cartesian) (anti) left outer semi join.
     bool isLeftOuterSemiFamily() const
