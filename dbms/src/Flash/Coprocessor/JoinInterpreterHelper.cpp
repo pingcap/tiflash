@@ -513,6 +513,25 @@ std::vector<RuntimeFilterPtr> TiFlashJoin::genRuntimeFilterList(
     return result;
 }
 
+bool TiFlashJoin::shouldDisableRuntimeFilter(
+    const ExpressionActionsPtr & build_prepare_actions,
+    const Names & build_key_names) const
+{
+    RUNTIME_CHECK(build_prepare_actions != nullptr);
+    RUNTIME_CHECK(build_key_names.size() == is_null_eq.size());
+
+    const auto & sample_block = build_prepare_actions->getSampleBlock();
+    for (size_t i = 0; i < is_null_eq.size(); ++i)
+    {
+        if (is_null_eq[i] == 0)
+            continue;
+
+        if (sample_block.getByName(build_key_names[i]).type->isNullable())
+            return true;
+    }
+    return false;
+}
+
 NamesAndTypes genDAGExpressionAnalyzerSourceColumns(Block block, const NamesAndTypes & tidb_schema)
 {
     /// generate source_columns that is used to compile tipb::Expr, the rule is columns in `tidb_schema`

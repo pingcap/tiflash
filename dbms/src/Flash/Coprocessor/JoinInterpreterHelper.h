@@ -218,6 +218,9 @@ struct TiFlashJoin
         const NamesAndTypes & source_columns,
         const std::unordered_map<String, String> & key_names_map,
         const LoggerPtr & log);
+
+    bool shouldDisableRuntimeFilter(const ExpressionActionsPtr & build_prepare_actions, const Names & build_key_names)
+        const;
 };
 
 /// @join_prepare_expr_actions: generates join key columns and join filter column
