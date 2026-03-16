@@ -42,9 +42,9 @@
 #include <tipb/expression.pb.h>
 
 #include <ext/range.h>
+#include <limits>
 #include <magic_enum.hpp>
 #include <map>
-#include <limits>
 #include <string_view>
 #include <type_traits>
 
