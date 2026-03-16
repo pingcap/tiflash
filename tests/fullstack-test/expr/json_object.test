@@ -23,14 +23,14 @@ mysql> insert into test.t_json_object values
 
 func> wait_table test t_json_object
 
-# explain should show json_object projected on tiflash
-mysql> set tidb_allow_mpp=1; set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; desc format='brief' select id, json_object(k1, v_int, k2, v_str) as res from test.t_json_object where id in (1, 2) order by id;
-{#REGEXP}id\s+estRows\s+task\s+access object\s+operator info
-{#REGEXP}Sort\s+\d+\.\d+\s+root\s+.*test\.t_json_object\.id
-{#REGEXP}└─TableReader\s+\d+\.\d+\s+root\s+.*MppVersion: 2, data:ExchangeSender
-{#REGEXP}.*ExchangeSender\s+\d+\.\d+\s+mpp\[tiflash\]\s+.*ExchangeType: PassThrough
-{#REGEXP}.*Projection\s+\d+\.\d+\s+mpp\[tiflash\]\s+.*json_object\(test\.t_json_object\.k1, cast\(test\.t_json_object\.v_int, json BINARY\), test\.t_json_object\.k2, cast\(test\.t_json_object\.v_str, json BINARY\)\)->Column#\d+
-{#REGEXP}.*TableFullScan\s+\d+\.\d+\s+mpp\[tiflash\]\s+table:t_json_object\s+pushed down filter:in\(test\.t_json_object\.id, 1, 2\), keep order:false, stats:pseudo
+# TODO: re-enable this explain check after the TiDB-side explain change is merged.
+# mysql> set tidb_allow_mpp=1; set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; desc format='brief' select id, json_object(k1, v_int, k2, v_str) as res from test.t_json_object where id in (1, 2) order by id;
+# {#REGEXP}id\s+estRows\s+task\s+access object\s+operator info
+# {#REGEXP}Sort\s+\d+\.\d+\s+root\s+.*test\.t_json_object\.id
+# {#REGEXP}└─TableReader\s+\d+\.\d+\s+root\s+.*MppVersion: 2, data:ExchangeSender
+# {#REGEXP}.*ExchangeSender\s+\d+\.\d+\s+mpp\[tiflash\]\s+.*ExchangeType: PassThrough
+# {#REGEXP}.*Projection\s+\d+\.\d+\s+mpp\[tiflash\]\s+.*json_object\(test\.t_json_object\.k1, cast\(test\.t_json_object\.v_int, json BINARY\), test\.t_json_object\.k2, cast\(test\.t_json_object\.v_str, json BINARY\)\)->Column#\d+
+# {#REGEXP}.*TableFullScan\s+\d+\.\d+\s+mpp\[tiflash\]\s+table:t_json_object\s+pushed down filter:in\(test\.t_json_object\.id, 1, 2\), keep order:false, stats:pseudo
 
 # empty object
 mysql> set tidb_allow_mpp=1; set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select json_object() from test.t_json_object where id = 1;
