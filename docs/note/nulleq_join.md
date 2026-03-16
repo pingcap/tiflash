@@ -561,7 +561,7 @@ Done 标准：
 - [x] TiFlash: `DB::Join` 保存/打印 `is_null_eq`
 - [x] TiFlash: nullable NullEQ 强制 serialized + mixed-nullability key schema 对齐 + NullAware 互斥 fail-fast
 - [x] TiFlash: build/probe 的 row_filter_map 语义拆分
-- [ ] TiFlash: `RowsNotInsertToMap` / scan-after-probe 调整
+- [x] TiFlash: `RowsNotInsertToMap` / scan-after-probe 调整
 - [ ] TiFlash: `FULL OUTER JOIN + other condition` 与 NullEQ 联动验证
 - [ ] TiFlash: runtime filter 禁用
 - [ ] TiFlash: gtest 覆盖

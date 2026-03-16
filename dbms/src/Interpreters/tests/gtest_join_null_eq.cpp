@@ -28,6 +28,10 @@ constexpr auto * test_key_name = "k";
 constexpr auto * probe_eq_key_name = "eq_k";
 constexpr auto * probe_null_eq_key_name = "null_eq_k";
 constexpr auto * probe_filter_name = "filter";
+constexpr auto * outer_probe_key_name = "probe_k";
+constexpr auto * outer_probe_value_name = "probe_v";
+constexpr auto * outer_build_key_name = "build_k";
+constexpr auto * outer_build_value_name = "build_v";
 
 Block makeSampleBlock(const DataTypePtr & key_type)
 {
@@ -62,6 +66,61 @@ JoinPtr makeTestJoin(const DataTypePtr & key_type, const std::vector<UInt8> & is
         true);
 }
 
+JoinPtr makeOuterJoinTestJoin(ASTTableJoin::Kind kind)
+{
+    auto nullable_int_type = makeNullable(std::make_shared<DataTypeInt32>());
+    auto nullable_value_type = makeNullable(std::make_shared<DataTypeInt32>());
+    SpillConfig build_spill_config("/tmp", "join_null_eq_build", 0, 0, 0, nullptr);
+    SpillConfig probe_spill_config("/tmp", "join_null_eq_probe", 0, 0, 0, nullptr);
+    return std::make_shared<Join>(
+        Names{outer_probe_key_name},
+        Names{outer_build_key_name},
+        std::vector<UInt8>{1},
+        kind,
+        "join_null_eq_outer_test",
+        0,
+        0,
+        build_spill_config,
+        probe_spill_config,
+        RestoreConfig{1, 0, 0},
+        NamesAndTypes{
+            {outer_probe_key_name, nullable_int_type},
+            {outer_probe_value_name, nullable_value_type},
+            {outer_build_key_name, nullable_int_type},
+            {outer_build_value_name, nullable_value_type},
+        },
+        RegisterOperatorSpillContext{},
+        nullptr,
+        TiDB::TiDBCollators{},
+        JoinNonEqualConditions{},
+        1024,
+        0,
+        "",
+        "",
+        0,
+        true);
+}
+
+Block makeOuterProbeSampleBlock()
+{
+    auto nullable_int_type = makeNullable(std::make_shared<DataTypeInt32>());
+    auto int_type = std::make_shared<DataTypeInt32>();
+    return Block{
+        {nullable_int_type->createColumn(), nullable_int_type, outer_probe_key_name},
+        {int_type->createColumn(), int_type, outer_probe_value_name},
+    };
+}
+
+Block makeOuterBuildSampleBlock()
+{
+    auto nullable_int_type = makeNullable(std::make_shared<DataTypeInt32>());
+    auto int_type = std::make_shared<DataTypeInt32>();
+    return Block{
+        {nullable_int_type->createColumn(), nullable_int_type, outer_build_key_name},
+        {int_type->createColumn(), int_type, outer_build_value_name},
+    };
+}
+
 ColumnPtr makeNullableInt32Column(std::initializer_list<std::optional<Int32>> values)
 {
     auto nested = ColumnInt32::create();
@@ -94,6 +153,57 @@ ColumnPtr makeUInt8Column(std::initializer_list<UInt8> values)
     for (auto value : values)
         data.push_back(value);
     return column;
+}
+
+ColumnPtr makeInt32Column(std::initializer_list<Int32> values)
+{
+    auto column = ColumnInt32::create();
+    column->reserve(values.size());
+    auto & data = column->getData();
+    for (auto value : values)
+        data.push_back(value);
+    return column;
+}
+
+Block readAllBlocks(const BlockInputStreamPtr & stream)
+{
+    stream->readPrefix();
+    Blocks blocks;
+    while (true)
+    {
+        auto block = stream->read();
+        if (!block)
+            break;
+        blocks.push_back(std::move(block));
+    }
+    stream->readSuffix();
+    if (blocks.empty())
+        return stream->getHeader().cloneEmpty();
+    return vstackBlocks(std::move(blocks));
+}
+
+std::optional<Int32> getInt32Value(const Block & block, const String & name, size_t row)
+{
+    const auto & column = block.getByName(name).column;
+    if (const auto * nullable_column = checkAndGetColumn<ColumnNullable>(column.get()); nullable_column != nullptr)
+    {
+        if (nullable_column->getNullMapData()[row] != 0)
+            return std::nullopt;
+        return checkAndGetColumn<ColumnInt32>(nullable_column->getNestedColumnPtr().get())->getData()[row];
+    }
+    return checkAndGetColumn<ColumnInt32>(column.get())->getData()[row];
+}
+
+void prepareAndFinalizeOuterJoin(const JoinPtr & join)
+{
+    join->initBuild(makeOuterBuildSampleBlock(), 1);
+    join->initProbe(makeOuterProbeSampleBlock(), 1);
+    join->finalize(Names{
+        outer_probe_key_name,
+        outer_probe_value_name,
+        outer_build_key_name,
+        outer_build_value_name,
+    });
 }
 } // namespace
 
@@ -161,6 +271,108 @@ TEST(JoinNullEqTest, ProbeRowFilterSkipsOnlyNonNullEqNullKeys)
     EXPECT_EQ((*probe_process_info.row_filter_map)[0], 0);
     EXPECT_EQ((*probe_process_info.row_filter_map)[1], 1);
     EXPECT_EQ((*probe_process_info.row_filter_map)[2], 1);
+}
+
+TEST(JoinNullEqTest, RightOuterNullEqNullMatchDoesNotLeakToScanAfterProbe)
+{
+    auto nullable_int_type = makeNullable(std::make_shared<DataTypeInt32>());
+    auto int_type = std::make_shared<DataTypeInt32>();
+    auto join = makeOuterJoinTestJoin(ASTTableJoin::Kind::RightOuter);
+    prepareAndFinalizeOuterJoin(join);
+
+    join->setInitActiveBuildThreads();
+    join->insertFromBlock(
+        Block{
+            {makeNullableInt32Column({std::nullopt}), nullable_int_type, outer_build_key_name},
+            {makeInt32Column({100}), int_type, outer_build_value_name},
+        },
+        0);
+    ASSERT_TRUE(join->finishOneBuild(0));
+    join->finalizeBuild();
+
+    ProbeProcessInfo probe_process_info(1024, 0);
+    probe_process_info.resetBlock(Block{
+        {makeNullableInt32Column({std::nullopt}), nullable_int_type, outer_probe_key_name},
+        {makeInt32Column({10}), int_type, outer_probe_value_name},
+    });
+    Block probe_result = join->joinBlock(probe_process_info);
+
+    ASSERT_EQ(probe_result.rows(), 1);
+    EXPECT_EQ(getInt32Value(probe_result, outer_probe_key_name, 0), std::nullopt);
+    EXPECT_EQ(getInt32Value(probe_result, outer_probe_value_name, 0), 10);
+    EXPECT_EQ(getInt32Value(probe_result, outer_build_key_name, 0), std::nullopt);
+    EXPECT_EQ(getInt32Value(probe_result, outer_build_value_name, 0), 100);
+
+    ASSERT_TRUE(join->finishOneProbe(0));
+    join->finalizeProbe();
+
+    Block scan_result = readAllBlocks(join->createScanHashMapAfterProbeStream(makeOuterProbeSampleBlock(), 0, 1, 1024));
+    EXPECT_EQ(scan_result.rows(), 0);
+}
+
+TEST(JoinNullEqTest, RightOuterNullEqUnmatchedNullBuildRowStillScansFromHashMap)
+{
+    auto nullable_int_type = makeNullable(std::make_shared<DataTypeInt32>());
+    auto int_type = std::make_shared<DataTypeInt32>();
+    auto join = makeOuterJoinTestJoin(ASTTableJoin::Kind::RightOuter);
+    prepareAndFinalizeOuterJoin(join);
+
+    join->setInitActiveBuildThreads();
+    join->insertFromBlock(
+        Block{
+            {makeNullableInt32Column({std::nullopt}), nullable_int_type, outer_build_key_name},
+            {makeInt32Column({100}), int_type, outer_build_value_name},
+        },
+        0);
+    ASSERT_TRUE(join->finishOneBuild(0));
+    join->finalizeBuild();
+
+    ASSERT_TRUE(join->finishOneProbe(0));
+    join->finalizeProbe();
+
+    Block scan_result = readAllBlocks(join->createScanHashMapAfterProbeStream(makeOuterProbeSampleBlock(), 0, 1, 1024));
+    ASSERT_EQ(scan_result.rows(), 1);
+    EXPECT_EQ(getInt32Value(scan_result, outer_probe_key_name, 0), std::nullopt);
+    EXPECT_EQ(getInt32Value(scan_result, outer_probe_value_name, 0), std::nullopt);
+    EXPECT_EQ(getInt32Value(scan_result, outer_build_key_name, 0), std::nullopt);
+    EXPECT_EQ(getInt32Value(scan_result, outer_build_value_name, 0), 100);
+}
+
+TEST(JoinNullEqTest, FullJoinNullEqNullMatchDoesNotSplitIntoTwoUnmatchedRows)
+{
+    auto nullable_int_type = makeNullable(std::make_shared<DataTypeInt32>());
+    auto int_type = std::make_shared<DataTypeInt32>();
+    auto join = makeOuterJoinTestJoin(ASTTableJoin::Kind::Full);
+    prepareAndFinalizeOuterJoin(join);
+
+    join->setInitActiveBuildThreads();
+    join->insertFromBlock(
+        Block{
+            {makeNullableInt32Column({std::nullopt}), nullable_int_type, outer_build_key_name},
+            {makeInt32Column({100}), int_type, outer_build_value_name},
+        },
+        0);
+    ASSERT_TRUE(join->finishOneBuild(0));
+    join->finalizeBuild();
+
+    ProbeProcessInfo probe_process_info(1024, 0);
+    probe_process_info.resetBlock(Block{
+        {makeNullableInt32Column({std::nullopt}), nullable_int_type, outer_probe_key_name},
+        {makeInt32Column({10}), int_type, outer_probe_value_name},
+    });
+    Block probe_result = join->joinBlock(probe_process_info);
+
+    ASSERT_EQ(probe_result.rows(), 1);
+    EXPECT_EQ(getInt32Value(probe_result, outer_probe_key_name, 0), std::nullopt);
+    EXPECT_EQ(getInt32Value(probe_result, outer_probe_value_name, 0), 10);
+    EXPECT_EQ(getInt32Value(probe_result, outer_build_key_name, 0), std::nullopt);
+    EXPECT_EQ(getInt32Value(probe_result, outer_build_value_name, 0), 100);
+
+    ASSERT_TRUE(join->finishOneProbe(0));
+    join->finalizeProbe();
+
+    Block scan_result = readAllBlocks(join->createScanHashMapAfterProbeStream(makeOuterProbeSampleBlock(), 0, 1, 1024));
+    EXPECT_EQ(scan_result.rows(), 0);
 }
 
 } // namespace DB::tests
