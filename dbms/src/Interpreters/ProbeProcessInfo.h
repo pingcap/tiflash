@@ -76,16 +76,18 @@ struct NullAwareJoinProbeProcessData
 {
     Columns materialized_columns;
     ColumnRawPtrs key_columns;
-    ColumnPtr filter_map_holder = nullptr;
-    ConstNullMapPtr filter_map = nullptr;
+    /// Rows where any null-aware join key is NULL.
+    ColumnPtr key_null_map_holder = nullptr;
+    ConstNullMapPtr key_null_map = nullptr;
+    /// Rows where all null-aware join keys are NULL.
     ColumnPtr all_key_null_map_holder = nullptr;
     ConstNullMapPtr all_key_null_map = nullptr;
     void reset()
     {
         key_columns.clear();
         materialized_columns.clear();
-        filter_map_holder = nullptr;
-        filter_map = nullptr;
+        key_null_map_holder = nullptr;
+        key_null_map = nullptr;
         all_key_null_map_holder = nullptr;
         all_key_null_map = nullptr;
     }
@@ -104,8 +106,12 @@ struct ProbeProcessInfo
 
     /// these should be inited before probe each block
     bool prepare_for_probe_done = false;
-    ColumnPtr null_map_holder = nullptr;
-    ConstNullMapPtr null_map = nullptr;
+    /// Unified probe-side row filter map.
+    /// For regular hash/cross join, it contains ordinary '=' key NULLs plus side-condition failures.
+    /// For null-aware join, it contains side-condition failures only; key-null rows stay in
+    /// null_aware_join_data->key_null_map.
+    ColumnPtr row_filter_map_holder = nullptr;
+    ConstNullMapPtr row_filter_map = nullptr;
     /// Used with ANY INNER ANTI JOIN
     std::unique_ptr<IColumn::Filter> filter = nullptr;
     /// Used with ALL ... JOIN
@@ -171,6 +177,7 @@ struct ProbeProcessInfo
 
     void prepareForHashProbe(
         const Names & key_names,
+        const std::vector<UInt8> & is_null_eq,
         const String & filter_column,
         ASTTableJoin::Kind kind,
         ASTTableJoin::Strictness strictness,

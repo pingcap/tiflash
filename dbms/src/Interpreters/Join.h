@@ -152,9 +152,8 @@ using OneTimeNotifyFuturePtr = std::shared_ptr<OneTimeNotifyFuture>;
   *
   * How Nullable keys are processed:
   *
-  * NULLs never join to anything, even to each other.
-  * During building of map, we just skip keys with NULL value of any component.
-  * During joining, we simply treat rows with any NULLs in key as non joined.
+  * For ordinary '=' keys, rows with NULL in any key component are filtered before build/probe.
+  * For NullEQ keys, NULL is allowed to participate in key comparison.
   *
   * Default values for outer joins (LEFT, RIGHT, FULL):
   *
