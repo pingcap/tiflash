@@ -15,6 +15,7 @@
 #include <Columns/ColumnNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <TestUtils/ExecutorTestUtils.h>
+#include <TestUtils/ColumnsToTiPBExpr.h>
 
 #include <Flash/Coprocessor/JoinInterpreterHelper.cpp>
 #include <tuple>
@@ -45,6 +46,18 @@ tipb::Join makeFullOuterJoinForSchemaTest(size_t inner_index)
     *join.add_right_join_keys() = makeJoinKeyWithFieldType();
     return join;
 }
+
+tipb::Join makeNullAwareJoinWithNullEq()
+{
+    tipb::Join join;
+    join.set_join_type(tipb::JoinType::TypeAntiSemiJoin);
+    join.set_inner_idx(1);
+    join.set_is_null_aware_semi_join(true);
+    *join.add_left_join_keys() = makeJoinKeyWithFieldType();
+    *join.add_right_join_keys() = makeJoinKeyWithFieldType();
+    join.add_is_null_eq(true);
+    return join;
+}
 } // namespace
 
 bool invalidParams(tipb::JoinType tipb_join_type, size_t inner_index, bool is_null_aware, size_t join_keys_size)
@@ -73,6 +86,20 @@ String getErrorMessage(tipb::JoinType tipb_join_type, size_t inner_index, bool i
     }
 }
 
+String getTiFlashJoinErrorMessage(const tipb::Join & join)
+{
+    try
+    {
+        JoinInterpreterHelper::TiFlashJoin tiflash_join(join, false);
+        static_cast<void>(tiflash_join);
+        return "";
+    }
+    catch (Exception & e)
+    {
+        return e.message();
+    }
+}
+
 TEST(JoinKindAndBuildIndexTestRunner, TestNullAwareJoins)
 {
     auto result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeAntiSemiJoin, 1, true, 1);
@@ -91,6 +118,73 @@ TEST(JoinKindAndBuildIndexTestRunner, TestNullAwareJoins)
     ASSERT_TRUE(invalidParams(tipb::JoinType::TypeAntiSemiJoin, 0, true, 1));
     ASSERT_TRUE(invalidParams(tipb::JoinType::TypeLeftOuterSemiJoin, 0, true, 1));
     ASSERT_TRUE(invalidParams(tipb::JoinType::TypeAntiLeftOuterSemiJoin, 0, true, 1));
+}
+
+TEST(JoinKindAndBuildIndexTestRunner, TestNullAwareJoinRejectsNullEqKeys)
+{
+    auto error_message = getTiFlashJoinErrorMessage(makeNullAwareJoinWithNullEq());
+    ASSERT_FALSE(error_message.empty());
+    ASSERT_NE(error_message.find("NullEQ"), String::npos);
+}
+
+TEST(JoinKindAndBuildIndexTestRunner, TestNullEqAlignsMixedNullabilityKeySchema)
+{
+    try
+    {
+        auto int_type = std::make_shared<DataTypeInt32>();
+        auto nullable_int_type = makeNullable(int_type);
+        auto context = TiFlashTestEnv::getContext();
+
+        ColumnWithTypeAndName probe_column{nullptr, int_type, "probe_k"};
+        ColumnWithTypeAndName build_column{nullptr, nullable_int_type, "build_k"};
+
+        tipb::Join join;
+        join.set_join_type(tipb::JoinType::TypeInnerJoin);
+        join.set_inner_idx(1);
+        *join.add_left_join_keys() = columnToTiPBExpr(probe_column, 0);
+        *join.add_right_join_keys() = columnToTiPBExpr(build_column, 0);
+        join.add_is_null_eq(true);
+
+        JoinInterpreterHelper::TiFlashJoin tiflash_join(join, true);
+
+        NamesAndTypes probe_source_columns{{probe_column.name, probe_column.type}};
+        NamesAndTypes build_source_columns{{build_column.name, build_column.type}};
+
+        auto [probe_prepare_actions, probe_key_names, original_probe_key_names, probe_filter_column_name]
+            = JoinInterpreterHelper::prepareJoin(
+                *context,
+                probe_source_columns,
+                tiflash_join.getProbeJoinKeys(),
+                tiflash_join.join_key_types,
+                tiflash_join.getProbeConditions());
+        auto [build_prepare_actions, build_key_names, original_build_key_names, build_filter_column_name]
+            = JoinInterpreterHelper::prepareJoin(
+                *context,
+                build_source_columns,
+                tiflash_join.getBuildJoinKeys(),
+                tiflash_join.join_key_types,
+                tiflash_join.getBuildConditions());
+
+        ASSERT_FALSE(probe_prepare_actions->getSampleBlock().getByName(probe_key_names[0]).type->isNullable());
+        ASSERT_TRUE(build_prepare_actions->getSampleBlock().getByName(build_key_names[0]).type->isNullable());
+
+        JoinInterpreterHelper::alignNullEqKeyTypes(
+            tiflash_join.is_null_eq,
+            probe_prepare_actions,
+            probe_key_names,
+            build_prepare_actions,
+            build_key_names);
+
+        ASSERT_TRUE(probe_prepare_actions->getSampleBlock().getByName(probe_key_names[0]).type->isNullable());
+        ASSERT_TRUE(build_prepare_actions->getSampleBlock().getByName(build_key_names[0]).type->isNullable());
+        ASSERT_TRUE(
+            probe_prepare_actions->getSampleBlock().getByName(probe_key_names[0]).type->equals(
+                *build_prepare_actions->getSampleBlock().getByName(build_key_names[0]).type));
+    }
+    catch (Exception & e)
+    {
+        FAIL() << e.message();
+    }
 }
 
 TEST(JoinKindAndBuildIndexTestRunner, TestCrossJoins)

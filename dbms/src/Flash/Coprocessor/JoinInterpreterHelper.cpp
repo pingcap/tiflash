@@ -232,6 +232,16 @@ TiFlashJoin::TiFlashJoin(const tipb::Join & join_, bool is_test) // NOLINT(cppco
     , join_key_collators(getJoinKeyCollators(join_, join_key_types, is_test))
     , is_null_eq(getJoinKeyNullEqFlags(join_))
 {
+    if (unlikely(join.is_null_aware_semi_join()))
+    {
+        for (auto flag : is_null_eq)
+        {
+            if (flag != 0)
+                throw TiFlashException(
+                    "NullEQ join keys are incompatible with null-aware semi join",
+                    Errors::Coprocessor::BadRequest);
+        }
+    }
     std::tie(kind, build_side_index) = getJoinKindAndBuildSideIndex(join);
 }
 
@@ -424,6 +434,43 @@ std::tuple<ExpressionActionsPtr, Names, Names, String> prepareJoin(
         filters,
         filter_column_name);
     return {chain.getLastActions(), std::move(key_names), std::move(original_key_names), std::move(filter_column_name)};
+}
+
+void alignNullEqKeyTypes(
+    const std::vector<UInt8> & is_null_eq,
+    const ExpressionActionsPtr & probe_prepare_actions,
+    Names & probe_key_names,
+    const ExpressionActionsPtr & build_prepare_actions,
+    Names & build_key_names)
+{
+    RUNTIME_CHECK(probe_key_names.size() == build_key_names.size());
+    RUNTIME_CHECK(probe_key_names.size() == is_null_eq.size());
+
+    for (size_t i = 0; i < is_null_eq.size(); ++i)
+    {
+        if (is_null_eq[i] == 0)
+            continue;
+
+        const auto & probe_type = probe_prepare_actions->getSampleBlock().getByName(probe_key_names[i]).type;
+        const auto & build_type = build_prepare_actions->getSampleBlock().getByName(build_key_names[i]).type;
+        if (probe_type->equals(*build_type))
+            continue;
+
+        RUNTIME_CHECK_MSG(
+            removeNullable(probe_type)->equals(*removeNullable(build_type)),
+            "NullEQ key type mismatch after prepareJoin is not a pure nullability mismatch: probe={} build={}",
+            probe_type->getName(),
+            build_type->getName());
+
+        if (!probe_type->isNullable())
+        {
+            probe_prepare_actions->add(ExpressionAction::convertToNullable(probe_key_names[i]));
+        }
+        if (!build_type->isNullable())
+        {
+            build_prepare_actions->add(ExpressionAction::convertToNullable(build_key_names[i]));
+        }
+    }
 }
 
 std::vector<RuntimeFilterPtr> TiFlashJoin::genRuntimeFilterList(

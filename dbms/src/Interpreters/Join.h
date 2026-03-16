@@ -252,6 +252,7 @@ public:
     size_t getTotalBuildInputRows() const { return total_input_build_rows; }
 
     ASTTableJoin::Kind getKind() const { return kind; }
+    JoinMapMethod getJoinMapMethod() const { return join_map_method; }
 
     const Names & getLeftJoinKeys() const { return key_names_left; }
     const std::vector<UInt8> & getNullEqFlags() const { return is_null_eq; }

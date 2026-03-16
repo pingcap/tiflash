@@ -67,6 +67,18 @@ ColumnRawPtrs getKeyColumns(const Names & key_names, const Block & block)
 
     return key_columns;
 }
+
+bool hasNullableNullEqKey(const Names & key_names, const Block & block, const std::vector<UInt8> & is_null_eq)
+{
+    RUNTIME_CHECK(key_names.size() == is_null_eq.size());
+    for (size_t i = 0; i < key_names.size(); ++i)
+    {
+        if (is_null_eq[i] != 0 && block.getByName(key_names[i]).type->isNullable())
+            return true;
+    }
+    return false;
+}
+
 size_t getRestoreJoinBuildConcurrency(
     size_t total_partitions,
     size_t spilled_partitions,
@@ -426,6 +438,12 @@ void Join::initBuild(const Block & sample_block, size_t build_concurrency_)
         throw Exception("Logical error: Join has been initialized", ErrorCodes::LOGICAL_ERROR);
     initialized = true;
     join_map_method = chooseJoinMapMethod(getKeyColumns(key_names_right, sample_block), key_sizes, collators);
+    if (hasNullableNullEqKey(key_names_right, sample_block, is_null_eq))
+    {
+        if (join_map_method != JoinMapMethod::serialized)
+            LOG_DEBUG(log, "Force serialized join map method because a nullable NullEQ key is present");
+        join_map_method = JoinMapMethod::serialized;
+    }
     build_sample_block = sample_block;
     setBuildConcurrencyAndInitJoinPartition(build_concurrency_);
     hash_join_spill_context->init(build_concurrency);
