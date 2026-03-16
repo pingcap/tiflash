@@ -723,13 +723,12 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
         }
     }
 
-    /// We will insert to the map only keys, where all components are not NULL.
-    ColumnPtr null_map_holder;
-    ConstNullMapPtr null_map{};
-    extractNestedColumnsAndNullMap(key_columns, null_map_holder, null_map);
-    /// Reuse null_map to record the filtered rows, the rows contains NULL or does not
-    /// match the join filter will not insert to the maps
-    recordFilteredRows(block, non_equal_conditions.right_filter_column, null_map_holder, null_map);
+    /// Build a unified row filter map: ordinary '=' key NULLs and side-condition failures skip insertion,
+    /// while NullEQ key NULLs remain eligible for matching.
+    ColumnPtr row_filter_map_holder;
+    ConstNullMapPtr row_filter_map{};
+    extractJoinKeyColumnsAndFilterNullMap(key_columns, is_null_eq, row_filter_map_holder, row_filter_map);
+    recordFilteredRows(block, non_equal_conditions.right_filter_column, row_filter_map_holder, row_filter_map);
 
     size_t size = stored_block->columns();
 
@@ -764,7 +763,7 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
             key_sizes,
             collators,
             stored_block,
-            null_map,
+            row_filter_map,
             stream_index,
             getBuildConcurrency(),
             enable_fine_grained_shuffle,
@@ -1331,7 +1330,7 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info, const JoinBui
         probe_process_info.hash_join_data->key_columns,
         key_sizes,
         added_columns,
-        probe_process_info.null_map,
+        probe_process_info.row_filter_map,
         current_offset,
         offsets_to_replicate,
         right_indexes,
@@ -1443,6 +1442,7 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
         restore_config.restore_round};
     probe_process_info.prepareForHashProbe(
         key_names_left,
+        is_null_eq,
         non_equal_conditions.left_filter_column,
         kind,
         strictness,
@@ -1621,8 +1621,8 @@ Block Join::joinBlockNullAwareSemiImpl(const ProbeProcessInfo & probe_process_in
         null_rows[i] = partitions[i]->getRowsNotInsertedToMap();
 
     NALeftSideInfo left_side_info(
-        probe_process_info.null_map,
-        probe_process_info.null_aware_join_data->filter_map,
+        probe_process_info.null_aware_join_data->key_null_map,
+        probe_process_info.row_filter_map,
         probe_process_info.null_aware_join_data->all_key_null_map);
     NARightSideInfo right_side_info(
         right_has_all_key_null_row.load(std::memory_order_relaxed),
@@ -1779,6 +1779,7 @@ Block Join::joinBlockSemi(ProbeProcessInfo & probe_process_info) const
 
     probe_process_info.prepareForHashProbe(
         key_names_left,
+        is_null_eq,
         non_equal_conditions.left_filter_column,
         kind,
         strictness,
