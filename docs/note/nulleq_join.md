@@ -563,7 +563,7 @@ Done 标准：
 - [x] TiFlash: build/probe 的 row_filter_map 语义拆分
 - [x] TiFlash: `RowsNotInsertToMap` / scan-after-probe 调整
 - [x] TiFlash: `FULL OUTER JOIN + other condition` 与 NullEQ 联动验证
-- [ ] TiFlash: runtime filter 禁用
+- [x] TiFlash: runtime filter 禁用
 - [ ] TiFlash: gtest 覆盖
 - [ ] TiFlash: packed keys 优化
 

@@ -14,8 +14,8 @@
 
 #include <Columns/ColumnNullable.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/ColumnsToTiPBExpr.h>
+#include <TestUtils/ExecutorTestUtils.h>
 
 #include <Flash/Coprocessor/JoinInterpreterHelper.cpp>
 #include <tuple>
@@ -177,9 +177,114 @@ TEST(JoinKindAndBuildIndexTestRunner, TestNullEqAlignsMixedNullabilityKeySchema)
 
         ASSERT_TRUE(probe_prepare_actions->getSampleBlock().getByName(probe_key_names[0]).type->isNullable());
         ASSERT_TRUE(build_prepare_actions->getSampleBlock().getByName(build_key_names[0]).type->isNullable());
-        ASSERT_TRUE(
-            probe_prepare_actions->getSampleBlock().getByName(probe_key_names[0]).type->equals(
-                *build_prepare_actions->getSampleBlock().getByName(build_key_names[0]).type));
+        ASSERT_TRUE(probe_prepare_actions->getSampleBlock()
+                        .getByName(probe_key_names[0])
+                        .type->equals(*build_prepare_actions->getSampleBlock().getByName(build_key_names[0]).type));
+    }
+    catch (Exception & e)
+    {
+        FAIL() << e.message();
+    }
+}
+
+TEST(JoinKindAndBuildIndexTestRunner, TestNullableNullEqDisablesRuntimeFilter)
+{
+    try
+    {
+        auto int_type = std::make_shared<DataTypeInt32>();
+        auto nullable_int_type = makeNullable(int_type);
+        auto context = TiFlashTestEnv::getContext();
+
+        ColumnWithTypeAndName probe_column{nullptr, int_type, "probe_k"};
+        ColumnWithTypeAndName build_column{nullptr, nullable_int_type, "build_k"};
+
+        tipb::Join join;
+        join.set_join_type(tipb::JoinType::TypeInnerJoin);
+        join.set_inner_idx(1);
+        *join.add_left_join_keys() = columnToTiPBExpr(probe_column, 0);
+        *join.add_right_join_keys() = columnToTiPBExpr(build_column, 0);
+        join.add_is_null_eq(true);
+
+        JoinInterpreterHelper::TiFlashJoin tiflash_join(join, true);
+
+        NamesAndTypes probe_source_columns{{probe_column.name, probe_column.type}};
+        NamesAndTypes build_source_columns{{build_column.name, build_column.type}};
+
+        auto [probe_prepare_actions, probe_key_names, original_probe_key_names, probe_filter_column_name]
+            = JoinInterpreterHelper::prepareJoin(
+                *context,
+                probe_source_columns,
+                tiflash_join.getProbeJoinKeys(),
+                tiflash_join.join_key_types,
+                tiflash_join.getProbeConditions());
+        auto [build_prepare_actions, build_key_names, original_build_key_names, build_filter_column_name]
+            = JoinInterpreterHelper::prepareJoin(
+                *context,
+                build_source_columns,
+                tiflash_join.getBuildJoinKeys(),
+                tiflash_join.join_key_types,
+                tiflash_join.getBuildConditions());
+
+        JoinInterpreterHelper::alignNullEqKeyTypes(
+            tiflash_join.is_null_eq,
+            probe_prepare_actions,
+            probe_key_names,
+            build_prepare_actions,
+            build_key_names);
+
+        ASSERT_TRUE(tiflash_join.shouldDisableRuntimeFilter(build_prepare_actions, build_key_names));
+    }
+    catch (Exception & e)
+    {
+        FAIL() << e.message();
+    }
+}
+
+TEST(JoinKindAndBuildIndexTestRunner, TestNonNullableNullEqKeepsRuntimeFilterEnabled)
+{
+    try
+    {
+        auto int_type = std::make_shared<DataTypeInt32>();
+        auto context = TiFlashTestEnv::getContext();
+
+        ColumnWithTypeAndName probe_column{nullptr, int_type, "probe_k"};
+        ColumnWithTypeAndName build_column{nullptr, int_type, "build_k"};
+
+        tipb::Join join;
+        join.set_join_type(tipb::JoinType::TypeInnerJoin);
+        join.set_inner_idx(1);
+        *join.add_left_join_keys() = columnToTiPBExpr(probe_column, 0);
+        *join.add_right_join_keys() = columnToTiPBExpr(build_column, 0);
+        join.add_is_null_eq(true);
+
+        JoinInterpreterHelper::TiFlashJoin tiflash_join(join, true);
+
+        NamesAndTypes probe_source_columns{{probe_column.name, probe_column.type}};
+        NamesAndTypes build_source_columns{{build_column.name, build_column.type}};
+
+        auto [probe_prepare_actions, probe_key_names, original_probe_key_names, probe_filter_column_name]
+            = JoinInterpreterHelper::prepareJoin(
+                *context,
+                probe_source_columns,
+                tiflash_join.getProbeJoinKeys(),
+                tiflash_join.join_key_types,
+                tiflash_join.getProbeConditions());
+        auto [build_prepare_actions, build_key_names, original_build_key_names, build_filter_column_name]
+            = JoinInterpreterHelper::prepareJoin(
+                *context,
+                build_source_columns,
+                tiflash_join.getBuildJoinKeys(),
+                tiflash_join.join_key_types,
+                tiflash_join.getBuildConditions());
+
+        JoinInterpreterHelper::alignNullEqKeyTypes(
+            tiflash_join.is_null_eq,
+            probe_prepare_actions,
+            probe_key_names,
+            build_prepare_actions,
+            build_key_names);
+
+        ASSERT_FALSE(tiflash_join.shouldDisableRuntimeFilter(build_prepare_actions, build_key_names));
     }
     catch (Exception & e)
     {
