@@ -123,6 +123,13 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         original_build_key_names,
         join_non_equal_conditions);
 
+    JoinInterpreterHelper::alignNullEqKeyTypes(
+        tiflash_join.is_null_eq,
+        probe_side_prepare_actions,
+        probe_key_names,
+        build_side_prepare_actions,
+        build_key_names);
+
     const Settings & settings = context.getSettingsRef();
     size_t max_bytes_before_external_join = settings.max_bytes_before_external_join;
     auto join_req_id = fmt::format("{}_{}", log->identifier(), executor_id);

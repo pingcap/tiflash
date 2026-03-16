@@ -343,6 +343,35 @@ probe 阶段的目标是：
 - `serialized` 能自然把 `ColumnNullable` 的 nullness 编进 key
 - 可以先保证正确性，避免在 MVP 阶段就同时重写 packed key 路径
 
+但这里有一个必须显式满足的前提：
+
+- `serialized` 只是在“当前列对象长什么样”这个层面保留 nullness
+- 它不会自动把 `Nullable(T)` 与 `T` 归一成同一种物理编码
+
+当前 `ColumnNullable::serializeValueIntoArena()` 会先写入 null flag，再写 nested value。
+因此对于同一个非空值：
+
+- `Nullable(Int32)` 的序列化结果
+- `Int32` 的序列化结果
+
+并不相同。
+
+这意味着：
+
+- 若某个 NullEQ key pair 一侧是 nullable、另一侧是 non-nullable
+- 即使 build/probe 两边都走 `serialized`
+- 只要两边最终 key schema 仍分别是 `Nullable(T)` 与 `T`
+- 相同的非空值也可能 hash / probe 不命中
+
+因此 MVP 不能只做“nullable NullEQ 强制 serialized”，还必须保证：
+
+- 对每个 `is_null_eq[i] = true` 的 key pair
+- 只要任一侧最终需要保留 nullable 语义
+- build/probe 两边就必须在 prepare key 阶段对齐到同一个物理 key schema
+- 最直接的做法是统一到 `Nullable(common_type)`
+
+这一步属于 `serialized` 正确性兜底的一部分，应该在后续 row_filter_map / RowsNotInsertToMap 语义改造之前完成。
+
 ### 后续优化方向
 
 对 fixed-size key，后续可以参考 HashAgg 的 nullable packed keys：
@@ -357,9 +386,11 @@ NullEQ 真正落地到 JoinPartition 时，关键不是“有没有 nullable 列
 
 - key getter 能不能把 nullness 编进 key
 
-MVP 若强制 `serialized`，则这一步无需额外改动 key getter 类型分派，只要保证：
+MVP 若强制 `serialized`，则这一步无需额外改动 key getter 类型分派，但仍要保证：
 
 - build/probe 传进来的 key columns 保留了 NullEQ key 的 nullable 信息
+- 对任意 NullEQ key pair，build/probe 两边最终参与编码的 key schema 一致
+- 尤其是 mixed nullable / non-nullable 的场景，不能保留成 `Nullable(T)` 对 `T`
 
 若后续要做 packed key 优化，则需要显式引入 nullable-aware 的 KeyGetter 分支。
 
@@ -486,6 +517,7 @@ Done 标准：
 Done 标准：
 
 - nullable NullEQ key 能正确 build / probe
+- mixed nullable / non-nullable 的 NullEQ key pair 能正确对齐 key schema 并命中
 - outer join / scan-after-probe 不把 NullEQ 的 `NULL` 行误判为 unmatched
 - `FULL OUTER JOIN + other condition` 与 NullEQ 组合语义正确
 - runtime filter 在该模式下被禁用
@@ -513,7 +545,7 @@ Done 标准：
 
 - CP0：tipb 字段 + TiFlash 解析
 - CP1：`DB::Join` 保存/打印 `is_null_eq`
-- CP2.1：nullable NullEQ 强制 serialized + NullAware 互斥检查
+- CP2.1：nullable NullEQ 强制 serialized + mixed-nullability key schema 对齐 + NullAware 互斥检查
 - CP2.2：build/probe 的 row_filter_map 语义拆分
 - CP2.3：`RowsNotInsertToMap` / scan-after-probe 调整
 - CP2.4：`FULL OUTER JOIN + other condition` 与 NullEQ 联动自测
@@ -527,7 +559,7 @@ Done 标准：
 - [x] tipb: `Join.is_null_eq` 字段定义
 - [x] TiFlash: `JoinInterpreterHelper::TiFlashJoin` 解析 `is_null_eq[]`
 - [x] TiFlash: `DB::Join` 保存/打印 `is_null_eq`
-- [ ] TiFlash: nullable NullEQ 强制 serialized + NullAware 互斥 fail-fast
+- [ ] TiFlash: nullable NullEQ 强制 serialized + mixed-nullability key schema 对齐 + NullAware 互斥 fail-fast
 - [ ] TiFlash: build/probe 的 row_filter_map 语义拆分
 - [ ] TiFlash: `RowsNotInsertToMap` / scan-after-probe 调整
 - [ ] TiFlash: `FULL OUTER JOIN + other condition` 与 NullEQ 联动验证
