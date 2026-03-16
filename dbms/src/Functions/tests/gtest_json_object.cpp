@@ -12,13 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Columns/ColumnNullable.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Schema/TiDBTypes.h>
 #include <gtest/gtest.h>
 
 #include <limits>
+
+namespace DB::ErrorCodes
+{
+extern const int ARGUMENT_OUT_OF_BOUND;
+extern const int BAD_ARGUMENTS;
+} // namespace DB::ErrorCodes
 
 namespace DB::tests
 {
@@ -44,6 +49,20 @@ public:
         return executeCastJsonAsStringFunction(json_column, field_type);
     }
 };
+
+template <typename Fn>
+void assertThrowsCode(Fn && fn, int expected_code)
+{
+    try
+    {
+        fn();
+        FAIL() << "Expected DB::Exception to be thrown";
+    }
+    catch (const Exception & e)
+    {
+        ASSERT_EQ(expected_code, e.code()) << e.displayText();
+    }
+}
 
 TEST_F(TestJsonObject, TestBasicSemantics)
 try
@@ -88,10 +107,18 @@ try
     ASSERT_THROW(executeFunction("json_object", {createColumn<String>({"a"})}), Exception);
 
     auto value = castStringToJson(createColumn<String>({"1"}));
-    ASSERT_THROW(executeFunction("json_object", {createColumn<Nullable<String>>({{}}), value}), Exception);
+    assertThrowsCode(
+        [&] {
+            executeFunction("json_object", {createColumn<Nullable<String>>({{}}), value});
+        },
+        ErrorCodes::BAD_ARGUMENTS);
 
     String too_long_key(std::numeric_limits<UInt16>::max() + 1, 'a');
-    ASSERT_THROW(executeFunction("json_object", {createColumn<String>({too_long_key}), value}), Exception);
+    assertThrowsCode(
+        [&] {
+            executeFunction("json_object", {createColumn<String>({too_long_key}), value});
+        },
+        ErrorCodes::ARGUMENT_OUT_OF_BOUND);
 }
 CATCH
 

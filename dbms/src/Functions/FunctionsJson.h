@@ -41,10 +41,10 @@
 #include <simdjson.h>
 #include <tipb/expression.pb.h>
 
+#include <algorithm>
 #include <ext/range.h>
 #include <limits>
 #include <magic_enum.hpp>
-#include <map>
 #include <string_view>
 #include <type_traits>
 
@@ -65,6 +65,8 @@ namespace DB
 
 namespace ErrorCodes
 {
+extern const int ARGUMENT_OUT_OF_BOUND;
+extern const int BAD_ARGUMENTS;
 extern const int ILLEGAL_COLUMN;
 extern const int UNKNOWN_TYPE;
 } // namespace ErrorCodes
@@ -1086,35 +1088,45 @@ private:
         ColumnString::Offsets & offsets_to,
         const std::vector<const NullMap *> & nullmaps)
     {
+        struct JsonObjectEntry
+        {
+            StringRef key;
+            JsonBinary value;
+            size_t input_order;
+        };
+
         const size_t pair_count = sources.size() / 2;
         size_t reserve_size = rows * (1 + pair_count * 16);
         for (const auto & source : sources)
             reserve_size += source ? source->getSizeForReserve() : rows;
         JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
 
-        std::map<String, JsonBinary> key_value_map;
+        std::vector<JsonObjectEntry> entries;
         std::vector<StringRef> keys;
         std::vector<JsonBinary> values;
+        entries.reserve(pair_count);
         keys.reserve(pair_count);
         values.reserve(pair_count);
 
         for (size_t i = 0; i < rows; ++i)
         {
-            key_value_map.clear();
+            entries.clear();
             for (size_t col = 0; col < sources.size(); col += 2)
             {
                 if constexpr (is_input_nullable)
                 {
                     const auto * key_nullmap = nullmaps[col];
                     if (!sources[col] || (key_nullmap && (*key_nullmap)[i]))
-                        throw Exception("JSON documents may not contain NULL member names.");
+                        throw Exception("JSON documents may not contain NULL member names.", ErrorCodes::BAD_ARGUMENTS);
                 }
 
                 assert(sources[col]);
                 const auto & key_from = sources[col]->getWhole();
                 if (unlikely(key_from.size > std::numeric_limits<UInt16>::max()))
-                    throw Exception("TiDB/TiFlash does not yet support JSON objects with the key length >= 65536");
-                String key(reinterpret_cast<const char *>(key_from.data), key_from.size);
+                    throw Exception(
+                        "TiDB/TiFlash does not yet support JSON objects with the key length >= 65536",
+                        ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+                StringRef key{key_from.data, key_from.size};
 
                 JsonBinary value(JsonBinary::TYPE_CODE_LITERAL, StringRef(&JsonBinary::LITERAL_NIL, 1));
                 if constexpr (is_input_nullable)
@@ -1133,15 +1145,24 @@ private:
                     value = JsonBinary(data_from.data[0], StringRef(&data_from.data[1], data_from.size - 1));
                 }
 
-                key_value_map.insert_or_assign(std::move(key), value);
+                entries.push_back({key, value, col >> 1});
             }
+
+            std::sort(entries.begin(), entries.end(), [](const auto & lhs, const auto & rhs) {
+                return lhs.key == rhs.key ? lhs.input_order < rhs.input_order : lhs.key < rhs.key;
+            });
 
             keys.clear();
             values.clear();
-            for (const auto & [key, value] : key_value_map)
+            for (size_t entry_idx = 0; entry_idx < entries.size();)
             {
-                keys.emplace_back(key.data(), key.size());
-                values.push_back(value);
+                size_t last_idx = entry_idx;
+                while (last_idx + 1 < entries.size() && entries[last_idx + 1].key == entries[entry_idx].key)
+                    ++last_idx;
+
+                keys.push_back(entries[last_idx].key);
+                values.push_back(entries[last_idx].value);
+                entry_idx = last_idx + 1;
             }
 
             JsonBinary::buildBinaryJsonObjectInBuffer(keys, values, write_buffer);

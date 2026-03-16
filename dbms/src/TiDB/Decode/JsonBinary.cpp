@@ -34,6 +34,7 @@ namespace DB
 {
 namespace ErrorCodes
 {
+extern const int ARGUMENT_OUT_OF_BOUND;
 extern const int LOGICAL_ERROR;
 extern const int UNKNOWN_TYPE;
 } // namespace ErrorCodes
@@ -264,7 +265,9 @@ inline UInt64 appendValueOfSIMDJsonElem(
             encodeNumeric(write_buffer, data_offset);
             data_offset += key.size();
             if (unlikely(key.size() > std::numeric_limits<UInt16>::max()))
-                throw Exception("TiDB/TiFlash does not yet support JSON objects with the key length >= 65536");
+                throw Exception(
+                    "TiDB/TiFlash does not yet support JSON objects with the key length >= 65536",
+                    ErrorCodes::ARGUMENT_OUT_OF_BOUND);
             UInt16 key_len = key.size();
             encodeNumeric(write_buffer, key_len);
         }
@@ -1121,7 +1124,9 @@ void JsonBinary::buildBinaryJsonObjectInBuffer(
     {
         encodeNumeric(write_buffer, data_offset);
         if (unlikely(key.size > std::numeric_limits<UInt16>::max()))
-            throw Exception("TiDB/TiFlash does not yet support JSON objects with the key length >= 65536");
+            throw Exception(
+                "TiDB/TiFlash does not yet support JSON objects with the key length >= 65536",
+                ErrorCodes::ARGUMENT_OUT_OF_BOUND);
         UInt16 key_len = key.size;
         encodeNumeric(write_buffer, key_len);
         data_offset += key.size;
