@@ -64,8 +64,7 @@ try
             castStringToJson(createColumn<Nullable<String>>({{}, "\"x\""})),
         };
         auto res = executeFunctionWithCast({0, 1, 2, 3}, inputs);
-        auto expect = createColumn<Nullable<String>>(
-            {R"({"a": null, "b": 1})", R"({"a": "x", "b": 1})"});
+        auto expect = createColumn<Nullable<String>>({R"({"a": null, "b": 1})", R"({"a": "x", "b": 1})"});
         ASSERT_COLUMN_EQ(expect, res);
     }
 
