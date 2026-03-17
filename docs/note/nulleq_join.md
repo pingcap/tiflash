@@ -471,6 +471,19 @@ MVP 至少应覆盖：
 8. spill / fine-grained shuffle
    - 特别是 `FULL OUTER JOIN + NullEQ`
 
+### CP3 剩余测试项
+
+按当前 workspace 的进度，基础 hash-path 的 gtest 矩阵已经基本补齐；CP3 剩余重点放在 spill / FGS 链路：
+
+1. `spill + FULL OUTER JOIN + NullEQ`
+   - `NULL <=> NULL` 命中后不会被拆成两条 unmatched
+2. `spill + FULL OUTER JOIN + NullEQ + other condition`
+   - `other condition = false` 时，build 行仍会在 scan-after-probe 正确输出
+   - `other condition = true` 时，build 行会被消费，不应再次输出
+3. `fine-grained shuffle + NullEQ`
+   - 至少覆盖一组 nullable key
+   - 验证 build / probe 两侧 key schema 对齐后，probe 不会把 NullEQ 的 `NULL` 误判成 filtered / unmatched
+
 ## 代码热点
 
 - `dbms/src/Flash/Coprocessor/JoinInterpreterHelper.*`
@@ -564,7 +577,9 @@ Done 标准：
 - [x] TiFlash: `RowsNotInsertToMap` / scan-after-probe 调整
 - [x] TiFlash: `FULL OUTER JOIN + other condition` 与 NullEQ 联动验证
 - [x] TiFlash: runtime filter 禁用
-- [ ] TiFlash: gtest 覆盖
+- [x] TiFlash: gtest 已覆盖 inner / left / right / full / semi / anti 基础矩阵
+- [x] TiFlash: gtest 已覆盖 mixed key 与 side-condition 交互
+- [ ] TiFlash: spill / fine-grained shuffle 测试覆盖
 - [ ] TiFlash: packed keys 优化
 
 ### Open Questions
