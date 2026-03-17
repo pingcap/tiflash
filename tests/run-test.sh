@@ -205,13 +205,13 @@ if [ -z "fullstack" ]; then
 	fullstack="false"
 fi
 
-mysql_client="mysql -u root -P $tidb_port -h $tidb_server -e"
-
 "$storage_bin" client --host="$storage_server" --port="$storage_port" --query="create database if not exists $storage_db"
 if [ $? != 0 ]; then
-	echo "create database '$storage_db' failed" >&2
+	echo "create database '"$storage_db"' failed" >&2
 	exit 1
 fi
+
+mysql_client="mysql -u root -P $tidb_port -h $tidb_server -e"
 
 if [ "$fullstack" = true ]; then
 	mysql -u root -P $tidb_port -h $tidb_server -e "create database if not exists $tidb_db"
