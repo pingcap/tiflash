@@ -362,6 +362,7 @@ public:
     UInt64 getConnectionID() const { return connection_id; }
     const String & getConnectionAlias() const { return connection_alias; }
     const String & getSQLDigest() const { return sql_digest; }
+    const String & getPlanDigest() const { return plan_digest; }
 
     MPPReceiverSetPtr getMPPReceiverSet() const { return mpp_receiver_set; }
 
@@ -546,6 +547,7 @@ private:
     // It's the session alias between mysql client and tidb
     String connection_alias;
     String sql_digest;
+    String plan_digest;
 
     String query_id_and_cte_id_for_sink;
     std::unordered_map<size_t, String> query_id_and_cte_id_for_sources;
