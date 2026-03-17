@@ -27,10 +27,10 @@
 #include <Storages/Page/PageUtil.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <fmt/format.h>
+#include <unistd.h>
 
 #include <ext/scope_guard.h>
 #include <random>
-#include <unistd.h>
 
 namespace DB::tests
 {
