@@ -92,6 +92,7 @@ private:
     UInt64 connection_id = 0;
     String connection_alias;
     String sql_digest;
+    String plan_digest;
 
     // resource
     RUConsumption ru_info{.cpu_ru = 0.0, .cpu_time_ns = 0, .read_ru = 0.0, .read_bytes = 0};

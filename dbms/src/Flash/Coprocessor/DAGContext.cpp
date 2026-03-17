@@ -105,6 +105,7 @@ DAGContext::DAGContext(tipb::DAGRequest & dag_request_, const mpp::TaskMeta & me
     , connection_id(meta_.connection_id())
     , connection_alias(meta_.connection_alias())
     , sql_digest(meta_.sql_digest())
+    , plan_digest(meta_.plan_digest())
 {
     if (dag_request->has_div_precision_increment())
         div_precision_increment = dag_request->div_precision_increment();
