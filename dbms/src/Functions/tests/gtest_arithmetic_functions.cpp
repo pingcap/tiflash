@@ -1379,6 +1379,58 @@ try
 }
 CATCH
 
+TEST_F(TestBinaryArithmeticFunctions, TiDBUnaryMinusInt)
+try
+{
+    {
+        auto result = executeFunction("tidbUnaryMinusInt", createColumn<UInt8>({0, 1, 255}));
+        ASSERT_EQ(result.type->getName(), "Int64");
+        ASSERT_COLUMN_EQ(createColumn<Int64>({0, -1, -255}), result);
+    }
+
+    {
+        auto result = executeFunction(
+            "tidbUnaryMinusInt",
+            createColumn<UInt64>({0, 1, static_cast<UInt64>(std::numeric_limits<Int64>::max()) + 1}));
+        ASSERT_EQ(result.type->getName(), "Int64");
+        ASSERT_COLUMN_EQ(createColumn<Int64>({0, -1, std::numeric_limits<Int64>::min()}), result);
+    }
+
+    {
+        auto result = executeFunction("tidbUnaryMinusInt", createColumn<Int64>({0, 1, -1}));
+        ASSERT_EQ(result.type->getName(), "Int64");
+        ASSERT_COLUMN_EQ(createColumn<Int64>({0, -1, 1}), result);
+    }
+
+    ASSERT_THROW(
+        executeFunction("tidbUnaryMinusInt", createColumn<UInt64>({std::numeric_limits<UInt64>::max()})),
+        Exception);
+    ASSERT_THROW(
+        executeFunction("tidbUnaryMinusInt", createColumn<Int64>({std::numeric_limits<Int64>::min()})),
+        Exception);
+}
+CATCH
+
+TEST_F(TestBinaryArithmeticFunctions, TiDBUnaryMinusReal)
+try
+{
+    auto result = executeFunction("tidbUnaryMinusReal", createColumn<Float32>({0.0F, 1.25F, -3.5F}));
+    ASSERT_EQ(result.type->getName(), "Float64");
+    ASSERT_COLUMN_EQ(createColumn<Float64>({-0.0, -1.25, 3.5}), result);
+}
+CATCH
+
+TEST_F(TestBinaryArithmeticFunctions, TiDBUnaryMinusDecimal)
+try
+{
+    auto result = executeFunction(
+        "tidbUnaryMinusDecimal",
+        createColumn<Decimal64>(std::make_tuple(10, 2), {"0.00", "1.23", "-4.56"}));
+    ASSERT_EQ(result.type->getName(), "Decimal(10,2)");
+    ASSERT_COLUMN_EQ(createColumn<Decimal64>(std::make_tuple(10, 2), {"0.00", "-1.23", "4.56"}), result);
+}
+CATCH
+
 
 } // namespace tests
 } // namespace DB

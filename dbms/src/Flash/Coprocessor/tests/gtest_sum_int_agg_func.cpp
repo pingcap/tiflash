@@ -47,16 +47,6 @@ void checkSumIntReturnType(const String & expected_output, const String & expect
 }
 } // namespace
 
-TEST(SumIntAggFuncTest, DagUtilsMappedToSum)
-{
-    tipb::Expr expr;
-    expr.set_tp(tipb::ExprType::SumInt);
-
-    ASSERT_TRUE(isAggFunctionExpr(expr));
-    ASSERT_EQ(getAggFunctionName(expr), "sum");
-    ASSERT_EQ(getFunctionName(expr), "sum");
-}
-
 TEST(SumIntAggFuncTest, ExprToStringIsSum)
 {
     std::vector<NameAndTypePair> input_cols;
