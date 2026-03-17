@@ -1004,6 +1004,9 @@ public:
         }
         for (const auto arg_idx : ext::range(0, arguments.size()))
         {
+            if (arg_idx % 2 == 0 && arguments[arg_idx]->onlyNull())
+                throw Exception("JSON documents may not contain NULL member names.", ErrorCodes::BAD_ARGUMENTS);
+
             if (!arguments[arg_idx]->onlyNull())
             {
                 const auto * arg = removeNullable(arguments[arg_idx]).get();

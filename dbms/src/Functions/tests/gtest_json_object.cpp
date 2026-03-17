@@ -109,6 +109,12 @@ try
     auto value = castStringToJson(createColumn<String>({"1"}));
     assertThrowsCode(
         [&] {
+            executeFunction("json_object", {createOnlyNullColumn(1), value});
+        },
+        ErrorCodes::BAD_ARGUMENTS);
+
+    assertThrowsCode(
+        [&] {
             executeFunction("json_object", {createColumn<Nullable<String>>({{}}), value});
         },
         ErrorCodes::BAD_ARGUMENTS);
