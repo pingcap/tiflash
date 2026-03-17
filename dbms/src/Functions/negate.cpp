@@ -20,6 +20,11 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int OVERFLOW_ERROR;
+} // namespace ErrorCodes
+
 namespace
 {
 template <typename A>
@@ -73,9 +78,9 @@ struct TiDBUnaryMinusIntOp<UInt64>
     static Int64 apply(UInt64 value)
     {
         constexpr UInt64 signed_min_abs = static_cast<UInt64>(std::numeric_limits<Int64>::max()) + 1;
-        if (value > signed_min_abs)
-            throw Exception(fmt::format("BIGINT value is out of range in '-{}'", value), ErrorCodes::DECIMAL_OVERFLOW);
-        if (value == signed_min_abs)
+        if (unlikely(value > signed_min_abs))
+            throw Exception(fmt::format("BIGINT value is out of range in '-{}'", value), ErrorCodes::OVERFLOW_ERROR);
+        if (unlikely(value == signed_min_abs))
             return std::numeric_limits<Int64>::min();
         return -static_cast<Int64>(value);
     }
@@ -86,8 +91,8 @@ struct TiDBUnaryMinusIntOp<Int64>
 {
     static Int64 apply(Int64 value)
     {
-        if (value == std::numeric_limits<Int64>::min())
-            throw Exception(fmt::format("BIGINT value is out of range in '-{}'", value), ErrorCodes::DECIMAL_OVERFLOW);
+        if (unlikely(value == std::numeric_limits<Int64>::min()))
+            throw Exception(fmt::format("BIGINT value is out of range in '-{}'", value), ErrorCodes::OVERFLOW_ERROR);
         return -value;
     }
 };
