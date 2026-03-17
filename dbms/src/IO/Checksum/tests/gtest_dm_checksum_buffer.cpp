@@ -27,6 +27,7 @@
 #include <Storages/Page/PageUtil.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <fmt/format.h>
+#include <unistd.h>
 
 #include <ext/scope_guard.h>
 #include <random>
@@ -373,13 +374,23 @@ TEST_STACKED_SEEKING(CRC64)
 TEST_STACKED_SEEKING(City128)
 TEST_STACKED_SEEKING(XXH3)
 
+std::string makeUniqueCompressedSeekTestPath()
+{
+    const auto * test_info = ::testing::UnitTest::GetInstance()->current_test_info();
+    return fmt::format(
+        "/tmp/tiflash_compressed_seek_test_{}_{}_{}.dat",
+        test_info->test_case_name(),
+        test_info->name(),
+        ::getpid());
+}
+
 template <ChecksumAlgo D>
 void runCompressedSeekableReaderBufferTest()
 try
 {
     auto log = Logger::get();
-    // Create a temporary file for testing
-    const std::string temp_file_path = "/tmp/tiflash_compressed_seek_test.dat";
+    // Create a unique temporary file path to avoid conflicts in parallel tests
+    const auto temp_file_path = makeUniqueCompressedSeekTestPath();
     SCOPE_EXIT({
         Poco::File file(temp_file_path);
         if (file.exists())

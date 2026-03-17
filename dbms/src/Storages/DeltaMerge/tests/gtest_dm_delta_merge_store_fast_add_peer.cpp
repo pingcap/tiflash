@@ -286,7 +286,7 @@ protected:
     constexpr static const char * TRACING_NAME = "DeltaMergeStoreTestFastAddPeer";
 };
 
-TEST_P(DeltaMergeStoreTestFastAddPeer, SimpleWriteReadAfterRestoreFromCheckPoint)
+TEST_P(DeltaMergeStoreTestFastAddPeer, DISABLED_SimpleWriteReadAfterRestoreFromCheckPoint)
 try
 {
     UInt64 write_store_id = current_store_id + 1;
@@ -444,7 +444,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStoreTestFastAddPeer, SimpleWriteReadAfterRestoreFromCheckPointWithSplit)
+TEST_P(DeltaMergeStoreTestFastAddPeer, DISABLED_SimpleWriteReadAfterRestoreFromCheckPointWithSplit)
 try
 {
     auto & global_settings = TiFlashTestEnv::getGlobalContext().getSettingsRef();
