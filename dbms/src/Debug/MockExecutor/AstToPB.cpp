@@ -34,6 +34,63 @@
 
 namespace DB
 {
+namespace
+{
+bool isUnaryMinusIntType(TiDB::TP tp)
+{
+    switch (tp)
+    {
+    case TiDB::TypeTiny:
+    case TiDB::TypeShort:
+    case TiDB::TypeLong:
+    case TiDB::TypeInt24:
+    case TiDB::TypeLongLong:
+    case TiDB::TypeYear:
+    case TiDB::TypeBit:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool isUnaryMinusDecimalType(TiDB::TP tp)
+{
+    switch (tp)
+    {
+    case TiDB::TypeNewDecimal:
+    case TiDB::TypeDate:
+    case TiDB::TypeDatetime:
+    case TiDB::TypeTimestamp:
+    case TiDB::TypeTime:
+        return true;
+    default:
+        return false;
+    }
+}
+
+std::pair<tipb::ScalarFuncSig, TiDB::ColumnInfo> inferUnaryMinus(const TiDB::ColumnInfo & child_ci)
+{
+    TiDB::ColumnInfo result_ci;
+
+    if (isUnaryMinusIntType(child_ci.tp))
+    {
+        result_ci.tp = TiDB::TypeLongLong;
+        return {tipb::ScalarFuncSig::UnaryMinusInt, result_ci};
+    }
+
+    if (isUnaryMinusDecimalType(child_ci.tp))
+    {
+        result_ci = child_ci;
+        result_ci.tp = TiDB::TypeNewDecimal;
+        result_ci.flag = 0;
+        return {tipb::ScalarFuncSig::UnaryMinusDecimal, result_ci};
+    }
+
+    result_ci.tp = TiDB::TypeDouble;
+    return {tipb::ScalarFuncSig::UnaryMinusReal, result_ci};
+}
+} // namespace
+
 void literalFieldToTiPBExpr(const TiDB::ColumnInfo & ci, const Field & val_field, tipb::Expr * expr, Int32 collator_id)
 {
     *(expr->mutable_field_type()) = columnInfoToFieldType(ci);
@@ -251,6 +308,22 @@ void functionToPB(
         throw Exception("No such column: " + func->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
     }
     String func_name_lowercase = Poco::toLower(func->name);
+    if (func_name_lowercase == "negate")
+    {
+        RUNTIME_CHECK(func->arguments != nullptr && func->arguments->children.size() == 1);
+        const auto & child_ast = func->arguments->children[0];
+        const auto child_ci = compileExpr(input, child_ast);
+        const auto [sig, result_ci] = inferUnaryMinus(child_ci);
+
+        expr->set_sig(sig);
+        *(expr->mutable_field_type()) = columnInfoToFieldType(result_ci);
+        expr->mutable_field_type()->set_collate(collator_id);
+        expr->set_tp(tipb::ExprType::ScalarFunc);
+
+        auto * child = expr->add_children();
+        astToPB(input, child_ast, child, collator_id, context);
+        return;
+    }
     // TODO: Support more functions.
     // TODO: Support type inference.
 
@@ -533,6 +606,11 @@ TiDB::ColumnInfo compileFunction(const DAGSchema & input, ASTFunction * func)
     TiDB::ColumnInfo ci;
     /// check function
     String func_name_lowercase = Poco::toLower(func->name);
+    if (func_name_lowercase == "negate")
+    {
+        RUNTIME_CHECK(func->arguments != nullptr && func->arguments->children.size() == 1);
+        return inferUnaryMinus(compileExpr(input, func->arguments->children[0])).second;
+    }
     const auto it_sig = tests::func_name_to_sig.find(func_name_lowercase);
     if (it_sig == tests::func_name_to_sig.end())
     {
