@@ -46,6 +46,83 @@ struct NameNegate               { static constexpr auto name = "negate"; };
 
 using FunctionNegate = FunctionUnaryArithmetic<NegateImpl, NameNegate, true>;
 
+template <typename ColumnType, typename ResultColumnType, typename Op>
+bool executeUnaryMinusTyped(const IColumn * argument_column, ResultColumnType & result_column)
+{
+    const auto * column = checkAndGetColumn<ColumnType>(argument_column);
+    if (column == nullptr)
+        return false;
+
+    const auto & input_data = column->getData();
+    auto & result_data = result_column.getData();
+    result_data.resize(input_data.size());
+    for (size_t i = 0; i < input_data.size(); ++i)
+        result_data[i] = Op::apply(input_data[i]);
+    return true;
+}
+
+template <typename SourceType>
+struct TiDBUnaryMinusIntOp
+{
+    static Int64 apply(SourceType value) { return -static_cast<Int64>(value); }
+};
+
+template <>
+struct TiDBUnaryMinusIntOp<UInt64>
+{
+    static Int64 apply(UInt64 value)
+    {
+        constexpr UInt64 signed_min_abs = static_cast<UInt64>(std::numeric_limits<Int64>::max()) + 1;
+        if (value > signed_min_abs)
+            throw Exception(fmt::format("BIGINT value is out of range in '-{}'", value), ErrorCodes::DECIMAL_OVERFLOW);
+        if (value == signed_min_abs)
+            return std::numeric_limits<Int64>::min();
+        return -static_cast<Int64>(value);
+    }
+};
+
+template <>
+struct TiDBUnaryMinusIntOp<Int64>
+{
+    static Int64 apply(Int64 value)
+    {
+        if (value == std::numeric_limits<Int64>::min())
+            throw Exception(fmt::format("BIGINT value is out of range in '-{}'", value), ErrorCodes::DECIMAL_OVERFLOW);
+        return -value;
+    }
+};
+
+template <typename SourceType>
+struct TiDBUnaryMinusRealOp
+{
+    static Float64 apply(SourceType value) { return -static_cast<Float64>(value); }
+};
+
+template <typename DecimalType>
+struct TiDBUnaryMinusDecimalOp
+{
+    static DecimalType apply(DecimalType value) { return DecimalType(-value.value); }
+};
+
+template <typename DecimalType, typename Op>
+bool executeUnaryMinusDecimal(const IColumn * argument_column, ColumnPtr & result_column)
+{
+    using ColumnType = ColumnDecimal<DecimalType>;
+    const auto * column = checkAndGetColumn<ColumnType>(argument_column);
+    if (column == nullptr)
+        return false;
+
+    auto typed_result_column = ColumnType::create(0, column->getData().getScale());
+    const auto & input_data = column->getData();
+    auto & result_data = typed_result_column->getData();
+    result_data.resize(input_data.size());
+    for (size_t i = 0; i < input_data.size(); ++i)
+        result_data[i] = Op::apply(input_data[i]);
+
+    result_column = std::move(typed_result_column);
+    return true;
+}
+
 template <typename Name>
 class FunctionTiDBUnaryMinusInt : public IFunction
 {
@@ -71,63 +148,35 @@ public:
     {
         const auto & argument_column = block.getByPosition(arguments[0]).column;
         auto result_column = ColumnInt64::create();
-        auto & result_data = result_column->getData();
-        result_data.resize(argument_column->size());
+        if (!(executeUnaryMinusTyped<ColumnUInt8, ColumnInt64, TiDBUnaryMinusIntOp<UInt8>>(
+                  argument_column.get(),
+                  *result_column)
+              || executeUnaryMinusTyped<ColumnUInt16, ColumnInt64, TiDBUnaryMinusIntOp<UInt16>>(
+                  argument_column.get(),
+                  *result_column)
+              || executeUnaryMinusTyped<ColumnUInt32, ColumnInt64, TiDBUnaryMinusIntOp<UInt32>>(
+                  argument_column.get(),
+                  *result_column)
+              || executeUnaryMinusTyped<ColumnUInt64, ColumnInt64, TiDBUnaryMinusIntOp<UInt64>>(
+                  argument_column.get(),
+                  *result_column)
+              || executeUnaryMinusTyped<ColumnInt8, ColumnInt64, TiDBUnaryMinusIntOp<Int8>>(
+                  argument_column.get(),
+                  *result_column)
+              || executeUnaryMinusTyped<ColumnInt16, ColumnInt64, TiDBUnaryMinusIntOp<Int16>>(
+                  argument_column.get(),
+                  *result_column)
+              || executeUnaryMinusTyped<ColumnInt32, ColumnInt64, TiDBUnaryMinusIntOp<Int32>>(
+                  argument_column.get(),
+                  *result_column)
+              || executeUnaryMinusTyped<ColumnInt64, ColumnInt64, TiDBUnaryMinusIntOp<Int64>>(
+                  argument_column.get(),
+                  *result_column)))
+            throw Exception(
+                fmt::format("Illegal column {} of argument of function {}", argument_column->getName(), getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
 
-        auto execute = [&](const auto * column, auto apply) {
-            if (column == nullptr)
-                return false;
-            const auto & data = column->getData();
-            for (size_t i = 0; i < data.size(); ++i)
-                result_data[i] = apply(data[i]);
-            return true;
-        };
-
-        if (execute(
-                checkAndGetColumn<ColumnUInt8>(argument_column.get()),
-                [](UInt8 value) { return -static_cast<Int64>(value); })
-            || execute(
-                checkAndGetColumn<ColumnUInt16>(argument_column.get()),
-                [](UInt16 value) { return -static_cast<Int64>(value); })
-            || execute(
-                checkAndGetColumn<ColumnUInt32>(argument_column.get()),
-                [](UInt32 value) { return -static_cast<Int64>(value); })
-            || execute(
-                checkAndGetColumn<ColumnUInt64>(argument_column.get()),
-                [](UInt64 value) {
-                    constexpr UInt64 signed_min_abs = static_cast<UInt64>(std::numeric_limits<Int64>::max()) + 1;
-                    if (value > signed_min_abs)
-                        throw Exception(
-                            fmt::format("BIGINT value is out of range in '-{}'", value),
-                            ErrorCodes::DECIMAL_OVERFLOW);
-                    if (value == signed_min_abs)
-                        return std::numeric_limits<Int64>::min();
-                    return -static_cast<Int64>(value);
-                })
-            || execute(
-                checkAndGetColumn<ColumnInt8>(argument_column.get()),
-                [](Int8 value) { return -static_cast<Int64>(value); })
-            || execute(
-                checkAndGetColumn<ColumnInt16>(argument_column.get()),
-                [](Int16 value) { return -static_cast<Int64>(value); })
-            || execute(
-                checkAndGetColumn<ColumnInt32>(argument_column.get()),
-                [](Int32 value) { return -static_cast<Int64>(value); })
-            || execute(checkAndGetColumn<ColumnInt64>(argument_column.get()), [](Int64 value) {
-                   if (value == std::numeric_limits<Int64>::min())
-                       throw Exception(
-                           fmt::format("BIGINT value is out of range in '-{}'", value),
-                           ErrorCodes::DECIMAL_OVERFLOW);
-                   return -value;
-               }))
-        {
-            block.getByPosition(result).column = std::move(result_column);
-            return;
-        }
-
-        throw Exception(
-            fmt::format("Illegal column {} of argument of function {}", argument_column->getName(), getName()),
-            ErrorCodes::ILLEGAL_COLUMN);
+        block.getByPosition(result).column = std::move(result_column);
     }
 };
 
@@ -156,28 +205,17 @@ public:
     {
         const auto & argument_column = block.getByPosition(arguments[0]).column;
         auto result_column = ColumnFloat64::create();
-        auto & result_data = result_column->getData();
-        result_data.resize(argument_column->size());
+        if (!(executeUnaryMinusTyped<ColumnFloat32, ColumnFloat64, TiDBUnaryMinusRealOp<Float32>>(
+                  argument_column.get(),
+                  *result_column)
+              || executeUnaryMinusTyped<ColumnFloat64, ColumnFloat64, TiDBUnaryMinusRealOp<Float64>>(
+                  argument_column.get(),
+                  *result_column)))
+            throw Exception(
+                fmt::format("Illegal column {} of argument of function {}", argument_column->getName(), getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
 
-        auto execute = [&](const auto * column) {
-            if (column == nullptr)
-                return false;
-            const auto & data = column->getData();
-            for (size_t i = 0; i < data.size(); ++i)
-                result_data[i] = -static_cast<Float64>(data[i]);
-            return true;
-        };
-
-        if (execute(checkAndGetColumn<ColumnFloat32>(argument_column.get()))
-            || execute(checkAndGetColumn<ColumnFloat64>(argument_column.get())))
-        {
-            block.getByPosition(result).column = std::move(result_column);
-            return;
-        }
-
-        throw Exception(
-            fmt::format("Illegal column {} of argument of function {}", argument_column->getName(), getName()),
-            ErrorCodes::ILLEGAL_COLUMN);
+        block.getByPosition(result).column = std::move(result_column);
     }
 };
 
@@ -205,31 +243,21 @@ public:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const auto & argument_column = block.getByPosition(arguments[0]).column;
-
-        auto execute = [&](auto dummy_decimal) {
-            using DecimalType = decltype(dummy_decimal);
-            using ColumnType = ColumnDecimal<DecimalType>;
-            const auto * column = checkAndGetColumn<ColumnType>(argument_column.get());
-            if (column == nullptr)
-                return false;
-
-            auto result_column = ColumnType::create(0, column->getData().getScale());
-            auto & result_data = result_column->getData();
-            result_data.resize(column->getData().size());
-            const auto & input_data = column->getData();
-            for (size_t i = 0; i < input_data.size(); ++i)
-                result_data[i] = DecimalType(-input_data[i].value);
-
-            block.getByPosition(result).column = std::move(result_column);
-            return true;
-        };
-
-        if (execute(Decimal32()) || execute(Decimal64()) || execute(Decimal128()) || execute(Decimal256()))
-            return;
-
-        throw Exception(
-            fmt::format("Illegal column {} of argument of function {}", argument_column->getName(), getName()),
-            ErrorCodes::ILLEGAL_COLUMN);
+        if (!(executeUnaryMinusDecimal<Decimal32, TiDBUnaryMinusDecimalOp<Decimal32>>(
+                  argument_column.get(),
+                  block.getByPosition(result).column)
+              || executeUnaryMinusDecimal<Decimal64, TiDBUnaryMinusDecimalOp<Decimal64>>(
+                  argument_column.get(),
+                  block.getByPosition(result).column)
+              || executeUnaryMinusDecimal<Decimal128, TiDBUnaryMinusDecimalOp<Decimal128>>(
+                  argument_column.get(),
+                  block.getByPosition(result).column)
+              || executeUnaryMinusDecimal<Decimal256, TiDBUnaryMinusDecimalOp<Decimal256>>(
+                  argument_column.get(),
+                  block.getByPosition(result).column)))
+            throw Exception(
+                fmt::format("Illegal column {} of argument of function {}", argument_column->getName(), getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
     }
 };
 
