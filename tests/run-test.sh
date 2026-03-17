@@ -143,23 +143,6 @@ function run_path()
 	fi
 }
 
-function path_needs_storage_client()
-{
-	local path="$1"
-
-	if [ -f "$path" ]; then
-		rg -q '^(>> |=> )' "$path"
-		return $?
-	fi
-
-	if [ -d "$path" ]; then
-		rg -q '^(>> |=> )' "$path" -g '*.test' -g '*.visual'
-		return $?
-	fi
-
-	return 1
-}
-
 set -e
 
 # Export the `PY` env so that it can be
@@ -224,17 +207,10 @@ fi
 
 mysql_client="mysql -u root -P $tidb_port -h $tidb_server -e"
 
-need_storage_client="false"
-if path_needs_storage_client "$target"; then
-	need_storage_client="true"
-fi
-
-if [ "$need_storage_client" = "true" ]; then
-	"$storage_bin" client --host="$storage_server" --port="$storage_port" --query="create database if not exists $storage_db"
-	if [ $? != 0 ]; then
-		echo "create database '$storage_db' failed" >&2
-		exit 1
-	fi
+"$storage_bin" client --host="$storage_server" --port="$storage_port" --query="create database if not exists $storage_db"
+if [ $? != 0 ]; then
+	echo "create database '$storage_db' failed" >&2
+	exit 1
 fi
 
 if [ "$fullstack" = true ]; then
