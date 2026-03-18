@@ -533,6 +533,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     dag_context = std::make_unique<DAGContext>(dag_req, task_request.meta(), is_root_mpp_task);
     dag_context->log = log;
     dag_context->tables_regions_info = std::move(tables_regions_info);
+    dag_context->query_shard_infos = QueryShardInfos::create(task_request.table_shard_infos());
     dag_context->tidb_host = context->getClientInfo().current_address.toString();
 
     context->setDAGContext(dag_context.get());
