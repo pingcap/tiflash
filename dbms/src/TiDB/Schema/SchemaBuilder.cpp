@@ -292,11 +292,21 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         break;
     }
     case SchemaActionType::CreateTable:
+    case SchemaActionType::ActionCreateMaterializedViewLog:
+    case SchemaActionType::ActionCreateMaterializedView:
     {
         /// Because we can't ensure set tiflash replica is earlier than insert,
         /// so we have to update table_id_map when create table.
         /// the table will not be created physically here.
         applyCreateTable(diff.schema_id, diff.table_id, magic_enum::enum_name(diff.type));
+        break;
+    }
+    case SchemaActionType::ActionAlterMaterializedViewRefresh:
+    case SchemaActionType::ActionAlterMaterializedViewLogPurge:
+    case SchemaActionType::ActionAlterMaterializedViewAttributes:
+    {
+        // Materialized view alter actions only change metadata in TiDB.
+        // No schema update is needed for TiFlash local storage.
         break;
     }
     case SchemaActionType::RecoverTable:
