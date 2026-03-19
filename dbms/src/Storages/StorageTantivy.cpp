@@ -85,21 +85,41 @@ void StorageTantivy::read(
     auto shards_snapshot = std::move(*local_shards_snapshot);
     local_shards_snapshot.reset();
 
-    auto tici_task_pool = std::make_shared<TS::TiCIReadTaskPool>(
-        log,
-        tici_scan.getKeyspaceID(),
-        tici_scan.getTableId(),
-        tici_scan.getIndexId(),
-        local_read,
-        return_columns,
-        tici_scan.getLimit(),
-        tici_scan.getSortColumnIds(),
-        tici_scan.getSortColumnAsc(),
-        context.getSettingsRef().read_tso,
-        tici_scan.getMatchExpr(),
-        tici_scan.isCount(),
-        context.getTimezoneInfo(),
-        std::move(shards_snapshot));
+    std::shared_ptr<TS::TiCIReadTaskPool> tici_task_pool;
+    if (tici_scan.getQueryMode() == TiCIQueryMode::Vector)
+    {
+        auto vector_state = TS::TiCIReadTaskPool::buildVectorState(
+            tici_scan.getVectorQueryInfo(),
+            context.getTimezoneInfo());
+        tici_task_pool = std::make_shared<TS::TiCIReadTaskPool>(
+            log,
+            tici_scan.getKeyspaceID(),
+            tici_scan.getTableId(),
+            tici_scan.getIndexId(),
+            local_read,
+            return_columns,
+            context.getSettingsRef().read_tso,
+            std::move(vector_state),
+            std::move(shards_snapshot));
+    }
+    else
+    {
+        tici_task_pool = std::make_shared<TS::TiCIReadTaskPool>(
+            log,
+            tici_scan.getKeyspaceID(),
+            tici_scan.getTableId(),
+            tici_scan.getIndexId(),
+            local_read,
+            return_columns,
+            tici_scan.getLimit(),
+            tici_scan.getSortColumnIds(),
+            tici_scan.getSortColumnAsc(),
+            context.getSettingsRef().read_tso,
+            tici_scan.getMatchExpr(),
+            tici_scan.isCount(),
+            context.getTimezoneInfo(),
+            std::move(shards_snapshot));
+    }
 
     num_streams = std::max(1, std::min(num_streams, local_read.size()));
     // local read

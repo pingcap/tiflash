@@ -98,20 +98,43 @@ void PhysicalPlan::buildTableScan(const String & executor_id, const tipb::Execut
 
 void PhysicalPlan::buildTiCIScan(const String & executor_id, const tipb::Executor * executor)
 {
-    RUNTIME_ASSERT(executor->idx_scan().has_fts_query_info());
+    RUNTIME_ASSERT(
+        executor->idx_scan().has_fts_query_info() || executor->idx_scan().has_tici_vector_query_info(),
+        "IndexScan must have either fts_query_info or tici_vector_query_info");
     TiCIScan tici_scan(executor, executor_id, dagContext());
-    LOG_INFO(
-        log,
-        "tici scan: keyspace_id={} table_id={} index_id={} limit={} shard_count={} match_expr_size={} query_type={} "
-        "start_ts={}",
-        tici_scan.getKeyspaceID(),
-        tici_scan.getTableId(),
-        tici_scan.getIndexId(),
-        tici_scan.getLimit(),
-        tici_scan.getShardInfos().shard_info_list.size(),
-        tici_scan.getMatchExpr().size(),
-        tipb::FTSQueryType_Name(executor->idx_scan().fts_query_info().query_type()),
-        context.getSettingsRef().read_tso);
+    if (tici_scan.getQueryMode() == TiCIQueryMode::Vector)
+    {
+        const auto & vqi = executor->idx_scan().tici_vector_query_info();
+        LOG_INFO(
+            log,
+            "tici vector scan: keyspace_id={} table_id={} index_id={} col_id={} distance_metric={} top_k={} "
+            "dimension={} filter_expr_size={} shard_count={} start_ts={}",
+            tici_scan.getKeyspaceID(),
+            tici_scan.getTableId(),
+            tici_scan.getIndexId(),
+            vqi.column_id(),
+            tipb::VectorDistanceMetric_Name(vqi.distance_metric()),
+            vqi.top_k(),
+            vqi.dimension(),
+            vqi.filter_expr_size(),
+            tici_scan.getShardInfos().shard_info_list.size(),
+            context.getSettingsRef().read_tso);
+    }
+    else
+    {
+        LOG_INFO(
+            log,
+            "tici scan: keyspace_id={} table_id={} index_id={} limit={} shard_count={} match_expr_size={} "
+            "query_type={} start_ts={}",
+            tici_scan.getKeyspaceID(),
+            tici_scan.getTableId(),
+            tici_scan.getIndexId(),
+            tici_scan.getLimit(),
+            tici_scan.getShardInfos().shard_info_list.size(),
+            tici_scan.getMatchExpr().size(),
+            tipb::FTSQueryType_Name(executor->idx_scan().fts_query_info().query_type()),
+            context.getSettingsRef().read_tso);
+    }
     pushBack(PhysicalTiCIScan::build(executor_id, log, tici_scan));
     dagContext().table_scan_executor_id = executor_id;
 }

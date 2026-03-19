@@ -26,13 +26,16 @@ target_include_directories(tici_search_lib_static  INTERFACE
 add_library(tici_search_lib SHARED "${TiFlash_SOURCE_DIR}/libs/libclara-cmake/dummy.cpp")
 target_compile_options(tici_search_lib PRIVATE -pthread)
 target_link_options(tici_search_lib PRIVATE -pthread)
-target_link_libraries(tici_search_lib PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,tici_search_lib_static>")
 if(APPLE)
-  target_link_libraries(tici_search_lib PRIVATE
+  target_link_options(tici_search_lib PRIVATE "LINKER:-force_load,${TICI_LIB}")
+  target_link_libraries(tici_search_lib PRIVATE tici_search_lib_static
       "-framework Security"
       "-framework CoreFoundation"
       "-framework IOKit"
       )
+else()
+  target_link_libraries(tici_search_lib PRIVATE
+      -Wl,--whole-archive tici_search_lib_static -Wl,--no-whole-archive)
 endif()
 
 target_include_directories(tici_search_lib  INTERFACE
