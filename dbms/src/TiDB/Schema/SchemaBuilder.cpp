@@ -292,6 +292,8 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         break;
     }
     case SchemaActionType::CreateTable:
+    // In TiDB metadata, CREATE MATERIALIZED VIEW/VIEW LOG creates physical TableInfo entries.
+    // So in TiFlash schema sync, these actions follow the same path as CreateTable.
     case SchemaActionType::ActionCreateMaterializedViewLog:
     case SchemaActionType::ActionCreateMaterializedView:
     {
