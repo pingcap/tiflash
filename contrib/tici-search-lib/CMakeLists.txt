@@ -7,7 +7,7 @@ file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/cxxbridge)
 
 add_custom_command(
     OUTPUT ${TICI_LIB} 
-    COMMAND cargo build -p tici-search-lib --release --target-dir ${CMAKE_CURRENT_BINARY_DIR} --manifest-path ${TICI_PROJECT_DIR}/Cargo.toml
+    COMMAND ${CMAKE_COMMAND} -E env "CC=gcc" cargo build -p tici-search-lib --release --target-dir ${CMAKE_CURRENT_BINARY_DIR} --manifest-path ${TICI_PROJECT_DIR}/Cargo.toml
     WORKING_DIRECTORY ${TICI_PROJECT_DIR}
     DEPENDS ${LIB_SOURCE_FILES}
     COMMENT "Build Rust lib"${CMAKE_CURRENT_BINARY_DIR}
