@@ -8,6 +8,11 @@ Current rollout scope:
 
 - vector-only TiCI queries first
 - pushed-down `filter + vector` deferred to a later phase
+- runtime validation should currently avoid add-index-on-existing-data.
+  `import into` / backfill for hybrid-vector data is not adapted yet; use
+  empty-table DDL plus CDC writes for e2e.
+- the local validation harness should now reuse the playground-managed TiCDC
+  changefeed instead of creating a second one manually.
 
 TiFlash should support:
 
@@ -24,7 +29,9 @@ TiFlash should support:
 - The legacy ANN path still exists in DeltaMerge, but it is not the target for hybrid vector.
 - Current upstream rollout does not populate `filter_expr` for TiCI vector queries yet.
 - Local macOS build validation passed on `2026-03-19` in `cmake-build-codex-release`; the `dbms/src/Server/tiflash` binary was built successfully.
-- Runtime smoke/e2e validation is still pending after compile success.
+- Runtime smoke/e2e validation passed on `2026-03-20` with
+  `playground:v1.16.2-feature.fts`, `upstream/vector@db0a4054`, and the
+  playground-managed changefeed.
 
 ## Chosen Direction
 
@@ -41,7 +48,7 @@ For vector mode, `filter_expr` stays part of the long-term payload shape, but th
 
 ## Prerequisites
 
-- ✅ TiCI `search_vector` FFI ready (merged to `vector` branch, HEAD `500b4a99`)
+- ✅ TiCI `search_vector` FFI ready on `upstream/vector@db0a4054`
 - ✅ tipb `TiCIVectorQueryInfo` proto merged (commit `a25a67b`)
 - ✅ TiDB planner populates `TiCIVectorQueryInfo` on `tipb.IndexScan` (PR #67103)
 - ✅ Update `contrib/tici` submodule to vector-capable upstream

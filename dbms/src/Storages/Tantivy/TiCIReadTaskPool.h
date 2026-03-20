@@ -458,7 +458,9 @@ public:
         state.distance_metric = static_cast<Int32>(info.distance_metric());
         state.top_k = info.top_k();
 
-        // Deserialize query_vector from little-endian float32 bytes.
+        // TiDB currently serializes VectorFloat32 with a 4-byte little-endian
+        // dimension prefix. Keep accepting the original raw-float payload too
+        // so TiFlash stays compatible with both callers during rollout.
         const auto & qv = info.query_vector();
         RUNTIME_CHECK_MSG(!qv.empty(), "TiCI vector query_vector must not be empty");
         RUNTIME_CHECK_MSG(
@@ -467,14 +469,26 @@ public:
             qv.size(),
             sizeof(float));
         const auto expected_bytes = static_cast<size_t>(info.dimension()) * sizeof(float);
+        size_t qv_offset = 0;
+        size_t qv_bytes = qv.size();
+        if (qv.size() == expected_bytes + sizeof(UInt32))
+        {
+            UInt32 encoded_dimension = 0;
+            std::memcpy(&encoded_dimension, qv.data(), sizeof(UInt32));
+            if (encoded_dimension == info.dimension())
+            {
+                qv_offset = sizeof(UInt32);
+                qv_bytes = expected_bytes;
+            }
+        }
         RUNTIME_CHECK_MSG(
-            qv.size() == expected_bytes,
+            qv_bytes == expected_bytes,
             "TiCI query_vector length mismatch: expected {} bytes for dimension {}, got {} bytes",
             expected_bytes,
             info.dimension(),
             qv.size());
         state.query_vector.reserve(info.dimension());
-        for (size_t offset = 0; offset < qv.size(); offset += sizeof(float))
+        for (size_t offset = qv_offset; offset < qv.size(); offset += sizeof(float))
         {
             float value = 0;
             std::memcpy(&value, qv.data() + offset, sizeof(float));
