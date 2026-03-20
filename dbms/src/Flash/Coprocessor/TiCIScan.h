@@ -50,11 +50,13 @@ public:
 
     const ::google::protobuf::RepeatedPtrField<::tipb::Expr> & getMatchExpr() const
     {
+        RUNTIME_CHECK(query_mode == TiCIQueryMode::FTS);
         return tici_scan->idx_scan().fts_query_info().match_expr();
     }
 
     const tipb::TiCIVectorQueryInfo & getVectorQueryInfo() const
     {
+        RUNTIME_CHECK(query_mode == TiCIQueryMode::Vector);
         return tici_scan->idx_scan().tici_vector_query_info();
     }
 

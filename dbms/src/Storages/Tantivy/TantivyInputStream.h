@@ -148,6 +148,7 @@ protected:
         auto key_ranges = getKeyRanges(shard_info.key_ranges);
 
         rust::Vec<float> query_vec;
+        query_vec.reserve(vector_state.query_vector.size());
         for (auto v : vector_state.query_vector)
             query_vec.push_back(v);
 
@@ -298,13 +299,10 @@ private:
                     }
                     continue;
                 }
-                if (query_mode == TiCIQueryMode::Vector && isVectorFloat32Type(nested_type))
-                {
-                    RUNTIME_CHECK_MSG(
-                        false,
-                        "TiCI vector query did not materialize requested vector column {}",
-                        name_and_type.name);
-                }
+                RUNTIME_CHECK_MSG(
+                    !isVectorFloat32Type(nested_type),
+                    "TiCI query did not materialize requested vector column {}",
+                    name_and_type.name);
                 for (size_t j = 0; j < documents.size(); j++)
                 {
                     // Insert default value for missing fields
@@ -323,13 +321,6 @@ private:
                     const auto & field_value = doc.fieldValues[idx];
                     if (field_value.is_null)
                     {
-                        if (query_mode == TiCIQueryMode::Vector)
-                        {
-                            RUNTIME_CHECK_MSG(
-                                false,
-                                "TiCI vector query returned null payload for vector column {}",
-                                name_and_type.name);
-                        }
                         has_null = true;
                         col->insert(Field());
                     }
