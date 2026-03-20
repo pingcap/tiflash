@@ -48,8 +48,11 @@ public:
     void SetUp() override
     {
         client = ClientFactory::instance().sharedTiFlashClient();
-        ::DB::tests::TiFlashTestEnv::deleteBucket(*client);
-        ::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*client);
+        if (DB::tests::TiFlashTestEnv::isMockedS3Client())
+        {
+            ::DB::tests::TiFlashTestEnv::deleteBucket(*client);
+            ::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*client);
+        }
     }
 
     std::shared_ptr<TiFlashS3Client> client;
