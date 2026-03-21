@@ -652,6 +652,140 @@ TEST_F(PageDirectoryTest, BatchWriteException)
     EXPECT_ENTRY_EQ(entry1, dir, 1, snap);
 }
 
+TEST_F(PageDirectoryTest, BatchWriteRemoteCheckpointOnlyOwnerReturnsAppliedDataFiles)
+{
+    auto make_remote_entry = [](String data_file_id) {
+        return PageEntryV3{
+            .file_id = 0,
+            .size = 1024,
+            .padded_size = 0,
+            .tag = 0,
+            .offset = 0,
+            .checksum = 0,
+            .checkpoint_info = OptionalCheckpointInfo(
+                CheckpointLocation{
+                    .data_file_id = std::make_shared<const String>(std::move(data_file_id)),
+                    .offset_in_file = 0,
+                    .size_in_file = 1024},
+                true,
+                true),
+        };
+    };
+
+    const String key1 = "lock/s272/ks_1_t_169/dmf_1.lock_s272_1";
+    const String key2 = "lock/s272/ks_1_t_169/dmf_2.lock_s272_1";
+    const String key3 = "lock/s272/ks_1_t_169/dmf_3.lock_s272_1";
+
+    auto sp_before_leader_apply = SyncPointCtl::enableInScope("before_PageDirectory::leader_apply");
+    auto th_write1 = std::async([&]() {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 101), make_remote_entry(key1));
+        return dir->apply(std::move(edit));
+    });
+    sp_before_leader_apply.waitAndPause();
+
+    // Let write2/write3 join write pipeline behind write1.
+    auto sp_after_enter_write_group = SyncPointCtl::enableInScope("after_PageDirectory::enter_write_group");
+    auto th_write2 = std::async([&]() {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 102), make_remote_entry(key2));
+        return dir->apply(std::move(edit));
+    });
+    auto th_write3 = std::async([&]() {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 103), make_remote_entry(key3));
+        return dir->apply(std::move(edit));
+    });
+    sp_after_enter_write_group.waitAndNext();
+    sp_after_enter_write_group.waitAndNext();
+    ASSERT_EQ(dir->getWritersQueueSizeForTest(), 3);
+    sp_before_leader_apply.next();
+
+    auto applied1 = th_write1.get();
+    sp_before_leader_apply.waitAndNext();
+    auto applied2 = th_write2.get();
+    auto applied3 = th_write3.get();
+
+    // Root-cause behavior: at least one follower returns empty set.
+    // In this setup, write1 is owner of first apply and returns its own key.
+    ASSERT_EQ(applied1.size(), 1);
+    ASSERT_EQ(applied1.count(key1), 1);
+    ASSERT_TRUE(applied2.empty() || applied3.empty());
+
+    std::unordered_set<String> union_keys;
+    union_keys.insert(applied1.begin(), applied1.end());
+    union_keys.insert(applied2.begin(), applied2.end());
+    union_keys.insert(applied3.begin(), applied3.end());
+    ASSERT_EQ(union_keys.size(), 3);
+    ASSERT_EQ(union_keys.count(key1), 1);
+    ASSERT_EQ(union_keys.count(key2), 1);
+    ASSERT_EQ(union_keys.count(key3), 1);
+}
+
+TEST_F(PageDirectoryTest, DISABLED_BatchWriteRemoteCheckpointEachWriterShouldGetAppliedDataFiles)
+{
+    auto make_remote_entry = [](String data_file_id) {
+        return PageEntryV3{
+            .file_id = 0,
+            .size = 1024,
+            .padded_size = 0,
+            .tag = 0,
+            .offset = 0,
+            .checksum = 0,
+            .checkpoint_info = OptionalCheckpointInfo(
+                CheckpointLocation{
+                    .data_file_id = std::make_shared<const String>(std::move(data_file_id)),
+                    .offset_in_file = 0,
+                    .size_in_file = 1024},
+                true,
+                true),
+        };
+    };
+
+    const String key1 = "lock/s272/ks_1_t_169/dmf_fix_1.lock_s272_1";
+    const String key2 = "lock/s272/ks_1_t_169/dmf_fix_2.lock_s272_1";
+    const String key3 = "lock/s272/ks_1_t_169/dmf_fix_3.lock_s272_1";
+
+    auto sp_before_leader_apply = SyncPointCtl::enableInScope("before_PageDirectory::leader_apply");
+    auto th_write1 = std::async([&]() {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 201), make_remote_entry(key1));
+        return dir->apply(std::move(edit));
+    });
+    sp_before_leader_apply.waitAndPause();
+
+    auto sp_after_enter_write_group = SyncPointCtl::enableInScope("after_PageDirectory::enter_write_group");
+    auto th_write2 = std::async([&]() {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 202), make_remote_entry(key2));
+        return dir->apply(std::move(edit));
+    });
+    auto th_write3 = std::async([&]() {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 203), make_remote_entry(key3));
+        return dir->apply(std::move(edit));
+    });
+    sp_after_enter_write_group.waitAndNext();
+    sp_after_enter_write_group.waitAndNext();
+    ASSERT_EQ(dir->getWritersQueueSizeForTest(), 3);
+    sp_before_leader_apply.next();
+
+    auto applied1 = th_write1.get();
+    sp_before_leader_apply.waitAndNext();
+    auto applied2 = th_write2.get();
+    auto applied3 = th_write3.get();
+
+    // Future target after fixing write-group behavior:
+    // each writer should get non-empty applied_data_files to avoid
+    // losing lock-cleaning signals in upper layer.
+    ASSERT_FALSE(applied1.empty());
+    ASSERT_FALSE(applied2.empty());
+    ASSERT_FALSE(applied3.empty());
+    ASSERT_EQ(applied1.count(key1), 1);
+    ASSERT_EQ(applied2.count(key2), 1);
+    ASSERT_EQ(applied3.count(key3), 1);
+}
+
 TEST_F(PageDirectoryTest, IdempotentNewExtPageAfterAllCleaned)
 {
     // Make sure creating ext page after itself and all its reference are clean
