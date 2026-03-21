@@ -628,6 +628,7 @@ private:
     struct Writer
     {
         PageEntriesEdit * edit;
+        std::unordered_set<String> applied_data_files;
         bool done = false; // The work has been performed by other thread
         bool success = false; // The work complete successfully
         std::unique_ptr<DB::Exception> exception;

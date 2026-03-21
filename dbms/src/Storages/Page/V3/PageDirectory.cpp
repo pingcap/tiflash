@@ -1614,6 +1614,11 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
     CurrentMetrics::Increment pending_writer_size{CurrentMetrics::PSPendingWriterNum};
     Writer w;
     w.edit = &edit;
+    for (const auto & r : edit.getRecords())
+    {
+        if (r.entry.checkpoint_info.has_value())
+            w.applied_data_files.emplace(*r.entry.checkpoint_info.data_location.data_file_id);
+    }
 
     Stopwatch watch;
     std::unique_lock apply_lock(apply_mutex);
@@ -1642,8 +1647,8 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
             }
         }
         // the `applied_data_files` will be returned by the write
-        // group owner, others just return an empty set.
-        return {};
+        // group owner, followers return their own data_file_ids.
+        return std::move(w.applied_data_files);
     }
 
     /// This thread now is the write group owner, build the group. It will merge the
@@ -1885,7 +1890,7 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
     }
 
     success = true;
-    return applied_data_files;
+    return std::move(w.applied_data_files);
 }
 
 template <typename Trait>

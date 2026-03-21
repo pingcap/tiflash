@@ -652,7 +652,7 @@ TEST_F(PageDirectoryTest, BatchWriteException)
     EXPECT_ENTRY_EQ(entry1, dir, 1, snap);
 }
 
-TEST_F(PageDirectoryTest, BatchWriteRemoteCheckpointOnlyOwnerReturnsAppliedDataFiles)
+TEST_F(PageDirectoryTest, BatchWriteRemoteCheckpointEachWriterReturnsAppliedDataFiles)
 {
     auto make_remote_entry = [](String data_file_id) {
         return PageEntryV3{
@@ -706,11 +706,13 @@ TEST_F(PageDirectoryTest, BatchWriteRemoteCheckpointOnlyOwnerReturnsAppliedDataF
     auto applied2 = th_write2.get();
     auto applied3 = th_write3.get();
 
-    // Root-cause behavior: at least one follower returns empty set.
-    // In this setup, write1 is owner of first apply and returns its own key.
+    // Fixed behavior: every writer should get its own applied_data_files.
     ASSERT_EQ(applied1.size(), 1);
     ASSERT_EQ(applied1.count(key1), 1);
-    ASSERT_TRUE(applied2.empty() || applied3.empty());
+    ASSERT_EQ(applied2.size(), 1);
+    ASSERT_EQ(applied2.count(key2), 1);
+    ASSERT_EQ(applied3.size(), 1);
+    ASSERT_EQ(applied3.count(key3), 1);
 
     std::unordered_set<String> union_keys;
     union_keys.insert(applied1.begin(), applied1.end());
@@ -722,7 +724,7 @@ TEST_F(PageDirectoryTest, BatchWriteRemoteCheckpointOnlyOwnerReturnsAppliedDataF
     ASSERT_EQ(union_keys.count(key3), 1);
 }
 
-TEST_F(PageDirectoryTest, DISABLED_BatchWriteRemoteCheckpointEachWriterShouldGetAppliedDataFiles)
+TEST_F(PageDirectoryTest, BatchWriteRemoteCheckpointEachWriterShouldGetAppliedDataFiles)
 {
     auto make_remote_entry = [](String data_file_id) {
         return PageEntryV3{

@@ -195,4 +195,47 @@ try
 }
 CATCH
 
+TEST_F(S3LockLocalManagerTest, CleanAppliedS3ExternalFilesPartialCleanup)
+try
+{
+    StoreID this_store_id = 100;
+    PS::V3::S3LockLocalManager mgr;
+    auto mock_s3lock_client = std::make_shared<S3::MockS3LockClient>(s3_client);
+    auto last_mf = mgr.initStoreInfo(this_store_id, mock_s3lock_client, PS::V3::universal::PageDirectoryPtr{});
+    ASSERT_FALSE(last_mf.has_value());
+
+    UniversalWriteBatch wb;
+    StoreID old_store_id = 5;
+    UInt64 old_store_seq = 55;
+    auto s3name_datafile1 = S3::S3Filename::newCheckpointData(old_store_id, old_store_seq, 1);
+    auto s3name_datafile2 = S3::S3Filename::newCheckpointData(old_store_id, old_store_seq, 2);
+    {
+        auto key1 = std::make_shared<String>(s3name_datafile1.toFullKey());
+        auto key2 = std::make_shared<String>(s3name_datafile2.toFullKey());
+        S3::uploadEmptyFile(*s3_client, *key1);
+        S3::uploadEmptyFile(*s3_client, *key2);
+        PS::V3::CheckpointLocation loc1{.data_file_id = key1, .offset_in_file = 0, .size_in_file = 1024};
+        PS::V3::CheckpointLocation loc2{.data_file_id = key2, .offset_in_file = 0, .size_in_file = 1024};
+        wb.putRemotePage("1", 0, 1024, loc1, {});
+        wb.putRemotePage("2", 0, 1024, loc2, {});
+    }
+
+    mgr.createS3LockForWriteBatch(wb);
+    auto info = mgr.allocateNewUploadLocksInfo();
+    ASSERT_EQ(info.pre_lock_keys.size(), 2);
+
+    const String expected_lockkey1 = s3name_datafile1.toView().getLockKey(this_store_id, info.upload_sequence);
+    const String expected_lockkey2 = s3name_datafile2.toView().getLockKey(this_store_id, info.upload_sequence);
+
+    mgr.cleanAppliedS3ExternalFiles({expected_lockkey1});
+    info = mgr.allocateNewUploadLocksInfo();
+    ASSERT_EQ(info.pre_lock_keys.size(), 1);
+    ASSERT_EQ(info.pre_lock_keys.count(expected_lockkey2), 1);
+
+    mgr.cleanAppliedS3ExternalFiles({expected_lockkey2});
+    info = mgr.allocateNewUploadLocksInfo();
+    ASSERT_TRUE(info.pre_lock_keys.empty());
+}
+CATCH
+
 } // namespace DB::tests
