@@ -50,7 +50,16 @@ constexpr auto * full_flag_helper_name = "__full_flag_helper";
 void ensureFunctionsRegistered()
 {
     static std::once_flag once;
-    std::call_once(once, [] { registerFunctions(); });
+    std::call_once(once, [] {
+        try
+        {
+            registerFunctions();
+        }
+        catch (DB::Exception &)
+        {
+            // Another test suite may have already registered the functions.
+        }
+    });
 }
 
 Block makeSampleBlock(const DataTypePtr & key_type)
