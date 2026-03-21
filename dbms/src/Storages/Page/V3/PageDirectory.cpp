@@ -32,12 +32,14 @@
 #include <common/logger_useful.h>
 
 #include <magic_enum.hpp>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 
 #ifdef FIU_ENABLE
@@ -1704,12 +1706,53 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
 
     SYNC_FOR("before_PageDirectory::apply_to_memory");
     std::unordered_set<String> applied_data_files;
+    size_t edit_digest = 0;
+    size_t put_count = 0;
+    size_t put_external_count = 0;
+    size_t checkpoint_info_count = 0;
+    size_t put_external_with_checkpoint_info_count = 0;
+    std::vector<String> suspicious_records;
+    std::vector<String> candidate_records;
     {
         std::unique_lock table_lock(table_rw_mutex);
 
         // create entry version list for page_id.
         for (const auto & r : edit.getRecords())
         {
+            if (r.type == EditRecordType::PUT)
+                ++put_count;
+            else if (r.type == EditRecordType::PUT_EXTERNAL)
+                ++put_external_count;
+            if (r.entry.checkpoint_info.has_value())
+            {
+                ++checkpoint_info_count;
+                if (r.type == EditRecordType::PUT_EXTERNAL)
+                    ++put_external_with_checkpoint_info_count;
+            }
+            if (r.type == EditRecordType::PUT_EXTERNAL && !r.entry.checkpoint_info.has_value()
+                && suspicious_records.size() < 8)
+            {
+                suspicious_records.emplace_back(fmt::format("page_id={}", r.page_id));
+            }
+            if ((r.type == EditRecordType::PUT || r.type == EditRecordType::PUT_EXTERNAL) && candidate_records.size() < 12)
+            {
+                if (r.entry.checkpoint_info.has_value())
+                {
+                    candidate_records.emplace_back(fmt::format(
+                        "type={} page_id={} has_checkpoint=1 data_file_id={}",
+                        magic_enum::enum_name(r.type),
+                        r.page_id,
+                        *r.entry.checkpoint_info.data_location.data_file_id));
+                }
+                else
+                {
+                    candidate_records.emplace_back(fmt::format(
+                        "type={} page_id={} has_checkpoint=0",
+                        magic_enum::enum_name(r.type),
+                        r.page_id));
+                }
+            }
+
             // Protected in write_lock
             if (r.type == EditRecordType::DEL)
             {
@@ -1797,6 +1840,48 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
 
         // stage 3, the edit committed, incr the sequence number to publish changes for `createSnapshot`
         sequence.fetch_add(edit_size);
+    }
+
+    for (const auto & rec : candidate_records)
+    {
+        size_t rec_hash = std::hash<String>{}(rec);
+        edit_digest ^= rec_hash + 0x9e3779b97f4a7c15ULL + (edit_digest << 6) + (edit_digest >> 2);
+    }
+
+    if (checkpoint_info_count > 0)
+    {
+        // NOTE: test-only verbose diagnostics. Remove or lower level before production rollout.
+        LOG_INFO(
+            log,
+            "PageDirectory apply checkpoint summary, edit_size={} put_count={} put_external_count={} "
+            "checkpoint_info_count={} put_external_with_checkpoint_info_count={} edit_digest={} applied_data_files={} "
+            "candidate_records={} suspicious_records={}",
+            edit_size,
+            put_count,
+            put_external_count,
+            checkpoint_info_count,
+            put_external_with_checkpoint_info_count,
+            edit_digest,
+            applied_data_files,
+            candidate_records,
+            suspicious_records);
+    }
+
+    if (applied_data_files.empty() && checkpoint_info_count > 0)
+    {
+        LOG_INFO(
+            log,
+            "PageDirectory apply has no applied_data_files with checkpoint_info records, edit_size={} put_count={} "
+            "put_external_count={} checkpoint_info_count={} put_external_with_checkpoint_info_count={} edit_digest={} "
+            "suspicious_records={} candidate_records={}",
+            edit_size,
+            put_count,
+            put_external_count,
+            checkpoint_info_count,
+            put_external_with_checkpoint_info_count,
+            edit_digest,
+            suspicious_records,
+            candidate_records);
     }
 
     success = true;

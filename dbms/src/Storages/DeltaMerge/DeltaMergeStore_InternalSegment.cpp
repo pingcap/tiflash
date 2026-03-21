@@ -1283,6 +1283,10 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
 
         if (!isSegmentValid(lock, segment))
         {
+            LOG_INFO(
+                log,
+                "MergeDelta - Give up segmentMergeDelta because segment not valid, reason=concurrent_update segment={}",
+                segment->simpleInfo());
             LOG_DEBUG(
                 log,
                 "MergeDelta - Give up segmentMergeDelta because segment not valid, segment={}",

@@ -182,6 +182,18 @@ void S3LockLocalManager::createS3LockForWriteBatch(UniversalWriteBatch & write_b
         lock_key = std::make_shared<String>(lock_result);
     }
 
+    if (!s3_datafiles_to_lock.empty())
+    {
+        std::vector<String> lock_mappings;
+        lock_mappings.reserve(s3_datafiles_to_lock.size());
+        for (const auto & [input_key, lock_key] : s3_datafiles_to_lock)
+        {
+            if (lock_key)
+                lock_mappings.emplace_back(fmt::format("{} -> {}", input_key, *lock_key));
+        }
+        LOG_INFO(log, "S3 lock mapping for write batch, mapping_count={} mappings={}", lock_mappings.size(), lock_mappings);
+    }
+
     for (auto & w : write_batch.getMutWrites())
     {
         // Here we will replace the name to be the S3LockFile key name for later
