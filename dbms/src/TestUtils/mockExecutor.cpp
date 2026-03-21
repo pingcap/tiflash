@@ -332,7 +332,8 @@ DAGRequestBuilder & DAGRequestBuilder::join(
     MockAstVec other_eq_conds_from_in,
     uint64_t fine_grained_shuffle_stream_count,
     bool is_null_aware_semi_join,
-    int64_t inner_index)
+    int64_t inner_index,
+    std::vector<UInt8> is_null_eq)
 {
     assert(root);
     assert(right.root);
@@ -342,6 +343,7 @@ DAGRequestBuilder & DAGRequestBuilder::join(
         right.root,
         tp,
         join_col_exprs,
+        is_null_eq,
         left_conds,
         right_conds,
         other_conds,
