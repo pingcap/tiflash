@@ -405,41 +405,6 @@ typename BlobStore<Trait>::PageEntriesEdit BlobStore<Trait>::write(
     const size_t all_page_data_size = wb.getTotalDataSize();
 
     PageEntriesEdit edit;
-    auto log_remote_edit_summary = [&](const char * stage) {
-        size_t put_external_count = 0;
-        size_t put_remote_count = 0;
-        size_t checkpoint_info_count = 0;
-        std::vector<String> sample_data_file_ids;
-        for (const auto & rec : edit.getRecords())
-        {
-            if (rec.type == EditRecordType::PUT_EXTERNAL)
-                ++put_external_count;
-            else if (rec.type == EditRecordType::PUT)
-                ++put_remote_count;
-            if (rec.entry.checkpoint_info.has_value())
-            {
-                ++checkpoint_info_count;
-                if (sample_data_file_ids.size() < 8)
-                {
-                    sample_data_file_ids.emplace_back(*rec.entry.checkpoint_info.data_location.data_file_id);
-                }
-            }
-        }
-        if (checkpoint_info_count == 0)
-            return;
-        LOG_INFO(
-            log,
-            "BlobStore::write remote edit summary, stage={} wb_size={} edit_size={} put_external_count={} "
-            "put_remote_count={} checkpoint_info_count={} sample_data_file_ids={} wb={}",
-            stage,
-            wb.size(),
-            edit.size(),
-            put_external_count,
-            put_remote_count,
-            checkpoint_info_count,
-            sample_data_file_ids,
-            wb.toString());
-    };
 
     if (all_page_data_size == 0)
     {
@@ -526,7 +491,6 @@ typename BlobStore<Trait>::PageEntriesEdit BlobStore<Trait>::write(
                 throw Exception(fmt::format("Unknown write type: {}", magic_enum::enum_name(write.type)));
             }
         }
-        log_remote_edit_summary("zero_data_path");
         return edit;
     }
 
@@ -700,7 +664,6 @@ typename BlobStore<Trait>::PageEntriesEdit BlobStore<Trait>::write(
         throw e;
     }
 
-    log_remote_edit_summary("normal_path");
     return edit;
 }
 

@@ -27,8 +27,6 @@
 
 #include <magic_enum.hpp>
 
-#include <vector>
-
 
 namespace DB::ErrorCodes
 {
@@ -182,18 +180,6 @@ void S3LockLocalManager::createS3LockForWriteBatch(UniversalWriteBatch & write_b
         lock_key = std::make_shared<String>(lock_result);
     }
 
-    if (!s3_datafiles_to_lock.empty())
-    {
-        std::vector<String> lock_mappings;
-        lock_mappings.reserve(s3_datafiles_to_lock.size());
-        for (const auto & [input_key, lock_key] : s3_datafiles_to_lock)
-        {
-            if (lock_key)
-                lock_mappings.emplace_back(fmt::format("{} -> {}", input_key, *lock_key));
-        }
-        LOG_INFO(log, "S3 lock mapping for write batch, mapping_count={} mappings={}", lock_mappings.size(), lock_mappings);
-    }
-
     for (auto & w : write_batch.getMutWrites())
     {
         // Here we will replace the name to be the S3LockFile key name for later
@@ -240,7 +226,7 @@ String S3LockLocalManager::createS3Lock(
         auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
         S3::uploadEmptyFile(*s3_client, lockkey);
         GET_METRIC(tiflash_storage_s3_lock_mgr_counter, type_create_lock_local).Increment();
-        LOG_INFO(log, "S3 lock created for local datafile, datafile_key={} lockkey={}", datafile_key, lockkey);
+        LOG_DEBUG(log, "S3 lock created for local datafile, datafile_key={} lockkey={}", datafile_key, lockkey);
     }
     else
     {
@@ -254,7 +240,7 @@ String S3LockLocalManager::createS3Lock(
             throw Exception(ErrorCodes::S3_LOCK_CONFLICT, err_msg);
         }
         GET_METRIC(tiflash_storage_s3_lock_mgr_counter, type_create_lock_ingest).Increment();
-        LOG_INFO(log, "S3 lock created for ingest datafile, datafile_key={} lockkey={}", datafile_key, lockkey);
+        LOG_DEBUG(log, "S3 lock created for ingest datafile, datafile_key={} lockkey={}", datafile_key, lockkey);
     }
 
     // The related S3 data files in write batch is not applied into PageDirectory,
@@ -274,10 +260,6 @@ void S3LockLocalManager::cleanAppliedS3ExternalFiles(std::unordered_set<String> 
     size_t erase_hit = 0;
     size_t erase_miss = 0;
     size_t remaining_pre_lock_keys = 0;
-    std::vector<String> erased_keys;
-    std::vector<String> missing_keys;
-    erased_keys.reserve(applied_s3files.size());
-    missing_keys.reserve(applied_s3files.size());
     {
         // After the entries applied into PageDirectory, manifest can get the S3 lock key
         // from `VersionedPageEntries`, cleanup the pre lock files.
@@ -287,31 +269,34 @@ void S3LockLocalManager::cleanAppliedS3ExternalFiles(std::unordered_set<String> 
             if (pre_lock_keys.erase(file) > 0)
             {
                 ++erase_hit;
-                erased_keys.emplace_back(file);
             }
             else
             {
                 ++erase_miss;
-                missing_keys.emplace_back(file);
             }
         }
         remaining_pre_lock_keys = pre_lock_keys.size();
         GET_METRIC(tiflash_storage_s3_lock_mgr_status, type_prelock_keys).Set(remaining_pre_lock_keys);
     } // release the lock on mtx_lock_keys before logging
-    LOG_INFO(
-        log,
-        "Clean applied S3 external files, applied_count={} erase_hit={} erase_miss={} remaining_pre_lock_keys={}",
-        applied_s3files.size(),
-        erase_hit,
-        erase_miss,
-        remaining_pre_lock_keys);
-    for (const auto & key : erased_keys)
+    if (erase_miss > 0)
     {
-        LOG_INFO(log, "Clean applied S3 external files, erase_hit lockkey={}", key);
+        LOG_WARNING(
+            log,
+            "Clean applied S3 external files, applied_count={} erase_hit={} erase_miss={} remaining_pre_lock_keys={}",
+            applied_s3files.size(),
+            erase_hit,
+            erase_miss,
+            remaining_pre_lock_keys);
     }
-    for (const auto & key : missing_keys)
+    else
     {
-        LOG_INFO(log, "Clean applied S3 external files, erase_miss lockkey={}", key);
+        LOG_DEBUG(
+            log,
+            "Clean applied S3 external files, applied_count={} erase_hit={} erase_miss={} remaining_pre_lock_keys={}",
+            applied_s3files.size(),
+            erase_hit,
+            erase_miss,
+            remaining_pre_lock_keys);
     }
     GET_METRIC(tiflash_storage_s3_lock_mgr_counter, type_clean_lock).Increment();
     GET_METRIC(tiflash_storage_s3_lock_mgr_counter, type_clean_lock_erase_hit).Increment(erase_hit);

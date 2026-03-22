@@ -115,10 +115,8 @@ void UniversalPageStorage::write(
         { GET_METRIC(tiflash_storage_page_write_duration_seconds, type_total).Observe(watch.elapsedSeconds()); });
     bool has_writes_from_remote = write_batch.hasWritesFromRemote();
     static std::atomic_uint64_t remote_write_trace_id{0};
-    const auto trace_id = remote_write_trace_id.fetch_add(1, std::memory_order_relaxed) + 1;
-    std::vector<String> remote_lock_keys;
-    String write_batch_debug;
-    size_t edit_digest = 0;
+    const auto trace_id = has_writes_from_remote ? remote_write_trace_id.fetch_add(1, std::memory_order_relaxed) + 1 : 0;
+    size_t remote_lock_key_count = 0;
     if (has_writes_from_remote)
     {
         assert(remote_locks_local_mgr != nullptr);
@@ -134,19 +132,17 @@ void UniversalPageStorage::write(
             case WriteBatchWriteType::PUT_EXTERNAL:
             case WriteBatchWriteType::PUT_REMOTE:
                 if (w.data_location.has_value())
-                    remote_lock_keys.emplace_back(*w.data_location->data_file_id);
+                    ++remote_lock_key_count;
                 break;
             default:
                 break;
             }
         }
-        write_batch_debug = write_batch.toString();
-        LOG_INFO(
+        LOG_DEBUG(
             log,
-            "Remote write batch begin, trace_id={} write_batch={} lock_keys={}",
+            "Remote write batch begin, trace_id={} lock_key_count={}",
             trace_id,
-            write_batch_debug,
-            remote_lock_keys);
+            remote_lock_key_count);
     }
     auto edit = [&]() {
         try
@@ -157,12 +153,11 @@ void UniversalPageStorage::write(
         {
             if (has_writes_from_remote)
             {
-                LOG_INFO(
+                LOG_WARNING(
                     log,
-                    "Remote write batch failed at blob_store->write, trace_id={} write_batch={} lock_keys={} err={}",
+                    "Remote write batch failed at blob_store->write, trace_id={} lock_key_count={} err={}",
                     trace_id,
-                    write_batch_debug,
-                    remote_lock_keys,
+                    remote_lock_key_count,
                     e.message());
             }
             throw;
@@ -171,53 +166,16 @@ void UniversalPageStorage::write(
         {
             if (has_writes_from_remote)
             {
-                LOG_INFO(
+                LOG_WARNING(
                     log,
-                    "Remote write batch failed at blob_store->write, trace_id={} write_batch={} lock_keys={} err={}",
+                    "Remote write batch failed at blob_store->write, trace_id={} lock_key_count={} err={}",
                     trace_id,
-                    write_batch_debug,
-                    remote_lock_keys,
+                    remote_lock_key_count,
                     e.what());
             }
             throw;
         }
     }();
-    std::vector<String> edit_records_debug;
-    if (has_writes_from_remote)
-    {
-        // NOTE: test-only verbose diagnostics. Remove or lower level before production rollout.
-        edit_records_debug.reserve(edit.size());
-        for (const auto & r : edit.getRecords())
-        {
-            if (r.entry.checkpoint_info.has_value())
-            {
-                edit_records_debug.emplace_back(fmt::format(
-                    "type={} page_id={} has_checkpoint=1 data_file_id={}",
-                    magic_enum::enum_name(r.type),
-                    r.page_id,
-                    *r.entry.checkpoint_info.data_location.data_file_id));
-            }
-            else
-            {
-                edit_records_debug.emplace_back(fmt::format(
-                    "type={} page_id={} has_checkpoint=0",
-                    magic_enum::enum_name(r.type),
-                    r.page_id));
-            }
-        }
-        for (const auto & rec : edit_records_debug)
-        {
-            size_t rec_hash = std::hash<String>{}(rec);
-            edit_digest ^= rec_hash + 0x9e3779b97f4a7c15ULL + (edit_digest << 6) + (edit_digest >> 2);
-        }
-        LOG_INFO(
-            log,
-            "Remote write batch pre-apply edit records, trace_id={} edit_size={} edit_digest={} records={}",
-            trace_id,
-            edit.size(),
-            edit_digest,
-            edit_records_debug);
-    }
     auto applied_lock_ids = [&]() {
         try
         {
@@ -227,13 +185,11 @@ void UniversalPageStorage::write(
         {
             if (has_writes_from_remote)
             {
-                LOG_INFO(
+                LOG_WARNING(
                     log,
-                    "Remote write batch failed at page_directory->apply, trace_id={} edit_digest={} write_batch={} lock_keys={} err={}",
+                    "Remote write batch failed at page_directory->apply, trace_id={} lock_key_count={} err={}",
                     trace_id,
-                    edit_digest,
-                    write_batch_debug,
-                    remote_lock_keys,
+                    remote_lock_key_count,
                     e.message());
             }
             throw;
@@ -242,13 +198,11 @@ void UniversalPageStorage::write(
         {
             if (has_writes_from_remote)
             {
-                LOG_INFO(
+                LOG_WARNING(
                     log,
-                    "Remote write batch failed at page_directory->apply, trace_id={} edit_digest={} write_batch={} lock_keys={} err={}",
+                    "Remote write batch failed at page_directory->apply, trace_id={} lock_key_count={} err={}",
                     trace_id,
-                    edit_digest,
-                    write_batch_debug,
-                    remote_lock_keys,
+                    remote_lock_key_count,
                     e.what());
             }
             throw;
@@ -257,26 +211,22 @@ void UniversalPageStorage::write(
     if (has_writes_from_remote)
     {
         assert(remote_locks_local_mgr != nullptr);
-        if (!remote_lock_keys.empty() && applied_lock_ids.empty())
+        if (remote_lock_key_count > 0 && applied_lock_ids.empty())
         {
-            LOG_INFO(
+            LOG_WARNING(
                 log,
-                "Remote write batch has lock keys but no applied lock ids, trace_id={} edit_digest={} write_batch={} lock_keys={}",
+                "Remote write batch has lock keys but no applied lock ids, trace_id={} lock_key_count={}",
                 trace_id,
-                edit_digest,
-                write_batch_debug,
-                remote_lock_keys);
+                remote_lock_key_count);
         }
         else
         {
-            LOG_INFO(
+            LOG_DEBUG(
                 log,
-                "Remote write batch end, trace_id={} edit_digest={} applied_lock_ids={} lock_keys={} pre_apply_records={}",
+                "Remote write batch end, trace_id={} applied_lock_count={} lock_key_count={}",
                 trace_id,
-                edit_digest,
-                applied_lock_ids,
-                remote_lock_keys,
-                edit_records_debug);
+                applied_lock_ids.size(),
+                remote_lock_key_count);
         }
         // Remove the applied locks from checkpoint_manager.pre_lock_files
         remote_locks_local_mgr->cleanAppliedS3ExternalFiles(std::move(applied_lock_ids));
