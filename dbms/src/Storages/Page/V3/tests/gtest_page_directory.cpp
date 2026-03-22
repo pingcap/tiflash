@@ -575,7 +575,7 @@ TEST_F(PageDirectoryTest, BatchWriteSuccess)
     PageEntryV3 entry3{.file_id = 3, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
 
     auto sp_before_leader_apply = SyncPointCtl::enableInScope("before_PageDirectory::leader_apply");
-    auto th_write1 = std::async([&]() {
+    auto th_write1 = std::async(std::launch::async, [&]() {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry1);
         dir->apply(std::move(edit));
@@ -584,12 +584,12 @@ TEST_F(PageDirectoryTest, BatchWriteSuccess)
 
     // form a write group
     auto sp_after_enter_write_group = SyncPointCtl::enableInScope("after_PageDirectory::enter_write_group");
-    auto th_write2 = std::async([&]() {
+    auto th_write2 = std::async(std::launch::async, [&]() {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 2), entry2);
         dir->apply(std::move(edit));
     });
-    auto th_write3 = std::async([&]() {
+    auto th_write3 = std::async(std::launch::async, [&]() {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 3), entry3);
         dir->apply(std::move(edit));
@@ -617,7 +617,7 @@ TEST_F(PageDirectoryTest, BatchWriteException)
     PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
 
     auto sp_before_leader_apply = SyncPointCtl::enableInScope("before_PageDirectory::leader_apply");
-    auto th_write1 = std::async([&]() {
+    auto th_write1 = std::async(std::launch::async, [&]() {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry1);
         dir->apply(std::move(edit));
@@ -626,12 +626,12 @@ TEST_F(PageDirectoryTest, BatchWriteException)
 
     // form a write group
     auto sp_after_enter_write_group = SyncPointCtl::enableInScope("after_PageDirectory::enter_write_group");
-    auto th_write2 = std::async([&]() {
+    auto th_write2 = std::async(std::launch::async, [&]() {
         PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 2), buildV3Id(TEST_NAMESPACE_ID, 100));
         ASSERT_ANY_THROW(dir->apply(std::move(edit)));
     });
-    auto th_write3 = std::async([&]() {
+    auto th_write3 = std::async(std::launch::async, [&]() {
         PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 3), buildV3Id(TEST_NAMESPACE_ID, 100));
         ASSERT_ANY_THROW(dir->apply(std::move(edit)));

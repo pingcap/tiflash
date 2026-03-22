@@ -645,18 +645,18 @@ TEST_F(UniPageStorageTest, ConcurrentRemoteWriteShouldNotLeavePreLockKeys)
 
     // Step 1: pause leader apply so three write threads join one write group.
     auto sp_before_leader_apply = SyncPointCtl::enableInScope("before_PageDirectory::leader_apply");
-    auto th_write1 = std::async([&]() {
+    auto th_write1 = std::async(std::launch::async, [&]() {
         auto wb = build_wb(1);
         page_storage->write(std::move(wb));
     });
     sp_before_leader_apply.waitAndPause();
 
     auto sp_after_enter_write_group = SyncPointCtl::enableInScope("after_PageDirectory::enter_write_group");
-    auto th_write2 = std::async([&]() {
+    auto th_write2 = std::async(std::launch::async, [&]() {
         auto wb = build_wb(2);
         page_storage->write(std::move(wb));
     });
-    auto th_write3 = std::async([&]() {
+    auto th_write3 = std::async(std::launch::async, [&]() {
         auto wb = build_wb(3);
         page_storage->write(std::move(wb));
     });
