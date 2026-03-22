@@ -144,6 +144,8 @@ public:
 
     bool runOnAllStores();
 
+    bool isOwner() const;
+
     void shutdown() { shutdown_called = true; }
 
     S3StoreStorageSummary getStoreStorageSummary(StoreID store_id);
@@ -234,6 +236,7 @@ private:
     Context & global_ctx;
     std::unique_ptr<S3GCManager> manager;
     BackgroundProcessingPool::TaskHandle timer;
+    BackgroundProcessingPool::TaskHandle summary_timer;
 };
 
 } // namespace DB::S3
