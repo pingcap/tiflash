@@ -680,7 +680,7 @@ TEST_F(PageDirectoryTest, BatchWriteRemoteCheckpointEachWriterReturnsAppliedData
 
     // Step 1: pause leader apply so 3 concurrent writers form one write group.
     auto sp_before_leader_apply = SyncPointCtl::enableInScope("before_PageDirectory::leader_apply");
-    auto th_write1 = std::async([&]() {
+    auto th_write1 = std::async(std::launch::async, [&]() {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 101), make_remote_entry(key1));
         return dir->apply(std::move(edit));
@@ -689,12 +689,12 @@ TEST_F(PageDirectoryTest, BatchWriteRemoteCheckpointEachWriterReturnsAppliedData
 
     // Let write2/write3 join write pipeline behind write1.
     auto sp_after_enter_write_group = SyncPointCtl::enableInScope("after_PageDirectory::enter_write_group");
-    auto th_write2 = std::async([&]() {
+    auto th_write2 = std::async(std::launch::async, [&]() {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 102), make_remote_entry(key2));
         return dir->apply(std::move(edit));
     });
-    auto th_write3 = std::async([&]() {
+    auto th_write3 = std::async(std::launch::async, [&]() {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 103), make_remote_entry(key3));
         return dir->apply(std::move(edit));
@@ -758,7 +758,7 @@ TEST_F(PageDirectoryTest, BatchWriteRemoteCheckpointEachWriterShouldGetAppliedDa
 
     // Step 1: force concurrent writes into one write group.
     auto sp_before_leader_apply = SyncPointCtl::enableInScope("before_PageDirectory::leader_apply");
-    auto th_write1 = std::async([&]() {
+    auto th_write1 = std::async(std::launch::async, [&]() {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 201), make_remote_entry(key1));
         return dir->apply(std::move(edit));
@@ -766,12 +766,12 @@ TEST_F(PageDirectoryTest, BatchWriteRemoteCheckpointEachWriterShouldGetAppliedDa
     sp_before_leader_apply.waitAndPause();
 
     auto sp_after_enter_write_group = SyncPointCtl::enableInScope("after_PageDirectory::enter_write_group");
-    auto th_write2 = std::async([&]() {
+    auto th_write2 = std::async(std::launch::async, [&]() {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 202), make_remote_entry(key2));
         return dir->apply(std::move(edit));
     });
-    auto th_write3 = std::async([&]() {
+    auto th_write3 = std::async(std::launch::async, [&]() {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 203), make_remote_entry(key3));
         return dir->apply(std::move(edit));
