@@ -35,11 +35,8 @@
 #include <common/logger_useful.h>
 #include <fiu.h>
 
-#include <atomic>
-#include <exception>
 #include <functional>
 #include <mutex>
-#include <vector>
 
 namespace DB
 {
@@ -114,8 +111,6 @@ void UniversalPageStorage::write(
     SCOPE_EXIT(
         { GET_METRIC(tiflash_storage_page_write_duration_seconds, type_total).Observe(watch.elapsedSeconds()); });
     bool has_writes_from_remote = write_batch.hasWritesFromRemote();
-    static std::atomic_uint64_t remote_write_trace_id{0};
-    const auto trace_id = has_writes_from_remote ? remote_write_trace_id.fetch_add(1, std::memory_order_relaxed) + 1 : 0;
     size_t remote_lock_key_count = 0;
     if (has_writes_from_remote)
     {
@@ -140,74 +135,30 @@ void UniversalPageStorage::write(
         }
         LOG_DEBUG(
             log,
-            "Remote write batch begin, trace_id={} lock_key_count={}",
-            trace_id,
+            "Remote write batch begin, lock_key_count={}",
             remote_lock_key_count);
     }
-    auto edit = [&]() {
-        try
+    std::unordered_set<String> applied_lock_ids;
+    const char * failed_stage = "blob_store->write";
+    try
+    {
+        auto edit = blob_store->write(std::move(write_batch), page_type, write_limiter);
+        failed_stage = "page_directory->apply";
+        applied_lock_ids = page_directory->apply(std::move(edit), write_limiter);
+    }
+    catch (...)
+    {
+        if (has_writes_from_remote)
         {
-            return blob_store->write(std::move(write_batch), page_type, write_limiter);
+            tryLogCurrentException(
+                log,
+                fmt::format(
+                    "Remote write batch failed, stage={} lock_key_count={}",
+                    failed_stage,
+                    remote_lock_key_count));
         }
-        catch (const DB::Exception & e)
-        {
-            if (has_writes_from_remote)
-            {
-                LOG_WARNING(
-                    log,
-                    "Remote write batch failed at blob_store->write, trace_id={} lock_key_count={} err={}",
-                    trace_id,
-                    remote_lock_key_count,
-                    e.message());
-            }
-            throw;
-        }
-        catch (const std::exception & e)
-        {
-            if (has_writes_from_remote)
-            {
-                LOG_WARNING(
-                    log,
-                    "Remote write batch failed at blob_store->write, trace_id={} lock_key_count={} err={}",
-                    trace_id,
-                    remote_lock_key_count,
-                    e.what());
-            }
-            throw;
-        }
-    }();
-    auto applied_lock_ids = [&]() {
-        try
-        {
-            return page_directory->apply(std::move(edit), write_limiter);
-        }
-        catch (const DB::Exception & e)
-        {
-            if (has_writes_from_remote)
-            {
-                LOG_WARNING(
-                    log,
-                    "Remote write batch failed at page_directory->apply, trace_id={} lock_key_count={} err={}",
-                    trace_id,
-                    remote_lock_key_count,
-                    e.message());
-            }
-            throw;
-        }
-        catch (const std::exception & e)
-        {
-            if (has_writes_from_remote)
-            {
-                LOG_WARNING(
-                    log,
-                    "Remote write batch failed at page_directory->apply, trace_id={} lock_key_count={} err={}",
-                    trace_id,
-                    remote_lock_key_count,
-                    e.what());
-            }
-            throw;
-        }
-    }();
+        throw;
+    }
     if (has_writes_from_remote)
     {
         assert(remote_locks_local_mgr != nullptr);
@@ -215,16 +166,14 @@ void UniversalPageStorage::write(
         {
             LOG_WARNING(
                 log,
-                "Remote write batch has lock keys but no applied lock ids, trace_id={} lock_key_count={}",
-                trace_id,
+                "Remote write batch has lock keys but no applied lock ids, lock_key_count={}",
                 remote_lock_key_count);
         }
         else
         {
             LOG_DEBUG(
                 log,
-                "Remote write batch end, trace_id={} applied_lock_count={} lock_key_count={}",
-                trace_id,
+                "Remote write batch end, applied_lock_count={} lock_key_count={}",
                 applied_lock_ids.size(),
                 remote_lock_key_count);
         }

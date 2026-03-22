@@ -24,6 +24,8 @@
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 #include <Storages/S3/S3RandomAccessFile.h>
+#include <Poco/Message.h>
+#include <common/logger_useful.h>
 
 #include <magic_enum.hpp>
 
@@ -278,26 +280,15 @@ void S3LockLocalManager::cleanAppliedS3ExternalFiles(std::unordered_set<String> 
         remaining_pre_lock_keys = pre_lock_keys.size();
         GET_METRIC(tiflash_storage_s3_lock_mgr_status, type_prelock_keys).Set(remaining_pre_lock_keys);
     } // release the lock on mtx_lock_keys before logging
-    if (erase_miss > 0)
-    {
-        LOG_WARNING(
-            log,
-            "Clean applied S3 external files, applied_count={} erase_hit={} erase_miss={} remaining_pre_lock_keys={}",
-            applied_s3files.size(),
-            erase_hit,
-            erase_miss,
-            remaining_pre_lock_keys);
-    }
-    else
-    {
-        LOG_DEBUG(
-            log,
-            "Clean applied S3 external files, applied_count={} erase_hit={} erase_miss={} remaining_pre_lock_keys={}",
-            applied_s3files.size(),
-            erase_hit,
-            erase_miss,
-            remaining_pre_lock_keys);
-    }
+    const auto log_lvl = erase_miss > 0 ? Poco::Message::PRIO_WARNING : Poco::Message::PRIO_DEBUG;
+    LOG_IMPL(
+        log,
+        log_lvl,
+        "Clean applied S3 external files, applied_count={} erase_hit={} erase_miss={} remaining_pre_lock_keys={}",
+        applied_s3files.size(),
+        erase_hit,
+        erase_miss,
+        remaining_pre_lock_keys);
     GET_METRIC(tiflash_storage_s3_lock_mgr_counter, type_clean_lock).Increment();
     GET_METRIC(tiflash_storage_s3_lock_mgr_counter, type_clean_lock_erase_hit).Increment(erase_hit);
     GET_METRIC(tiflash_storage_s3_lock_mgr_counter, type_clean_lock_erase_miss).Increment(erase_miss);
