@@ -110,9 +110,8 @@ void UniversalPageStorage::write(
     Stopwatch watch;
     SCOPE_EXIT(
         { GET_METRIC(tiflash_storage_page_write_duration_seconds, type_total).Observe(watch.elapsedSeconds()); });
-    bool has_writes_from_remote = write_batch.hasWritesFromRemote();
-    size_t remote_lock_key_count = 0;
-    if (has_writes_from_remote)
+    const size_t remote_lock_key_count = write_batch.writesRemoteCount();
+    if (remote_lock_key_count > 0)
     {
         assert(remote_locks_local_mgr != nullptr);
         // Before ingesting remote pages/remote external pages, we need to create "lock" on S3
@@ -120,23 +119,6 @@ void UniversalPageStorage::write(
         // If any "lock" failed to be created, then it will throw exception.
         // Note that if `remote_locks_local_mgr`'s store_id is not inited, it will blocks until inited
         remote_locks_local_mgr->createS3LockForWriteBatch(write_batch);
-        for (const auto & w : write_batch.getWrites())
-        {
-            switch (w.type)
-            {
-            case WriteBatchWriteType::PUT_EXTERNAL:
-            case WriteBatchWriteType::PUT_REMOTE:
-                if (w.data_location.has_value())
-                    ++remote_lock_key_count;
-                break;
-            default:
-                break;
-            }
-        }
-        LOG_DEBUG(
-            log,
-            "Remote write batch begin, lock_key_count={}",
-            remote_lock_key_count);
     }
     std::unordered_set<String> applied_lock_ids;
     const char * failed_stage = "blob_store->write";
@@ -148,7 +130,7 @@ void UniversalPageStorage::write(
     }
     catch (...)
     {
-        if (has_writes_from_remote)
+        if (remote_lock_key_count > 0)
         {
             tryLogCurrentException(
                 log,
@@ -159,22 +141,14 @@ void UniversalPageStorage::write(
         }
         throw;
     }
-    if (has_writes_from_remote)
+    if (remote_lock_key_count > 0)
     {
         assert(remote_locks_local_mgr != nullptr);
-        if (remote_lock_key_count > 0 && applied_lock_ids.empty())
+        if (applied_lock_ids.empty())
         {
             LOG_WARNING(
                 log,
                 "Remote write batch has lock keys but no applied lock ids, lock_key_count={}",
-                remote_lock_key_count);
-        }
-        else
-        {
-            LOG_DEBUG(
-                log,
-                "Remote write batch end, applied_lock_count={} lock_key_count={}",
-                applied_lock_ids.size(),
                 remote_lock_key_count);
         }
         // Remove the applied locks from checkpoint_manager.pre_lock_files

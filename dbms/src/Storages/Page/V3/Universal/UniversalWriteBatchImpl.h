@@ -163,7 +163,7 @@ public:
             std::move(offset_and_checksums),
             data_location};
         writes.emplace_back(std::move(w));
-        has_writes_from_remote = true;
+        ++writes_remote_count;
         PS::PageStorageMemorySummary::universal_write_count.fetch_add(1);
     }
 
@@ -172,7 +172,8 @@ public:
         Write w{WriteBatchWriteType::UPDATE_DATA_FROM_REMOTE, page_id, 0, read_buffer, size, "", {}};
         total_data_size += size;
         writes.emplace_back(std::move(w));
-        // This is use for update local page data from remote, don't need to set `has_writes_from_remote`
+        // This updates local cached page data from remote read, not a remote checkpoint write.
+        // So it should not increase `writes_remote_count`.
         PS::PageStorageMemorySummary::universal_write_count.fetch_add(1);
     }
 
@@ -189,7 +190,7 @@ public:
         // TODO: do we need another write type for PUT_REMOTE_EXTERNAL?
         Write w{WriteBatchWriteType::PUT_EXTERNAL, page_id, /*tag*/ 0, nullptr, 0, "", {}, data_location};
         writes.emplace_back(std::move(w));
-        has_writes_from_remote = true;
+        ++writes_remote_count;
         PS::PageStorageMemorySummary::universal_write_count.fetch_add(1);
     }
 
@@ -223,8 +224,9 @@ public:
         return count;
     }
 
-    // This write batch contains any `putRemotePage` or `putRemoteExternal`
-    bool hasWritesFromRemote() const { return !remote_lock_disabled && has_writes_from_remote; }
+    // Returns number of remote writes (`putRemotePage`/`putRemoteExternal`).
+    // If `disableRemoteLock()` is set, this returns 0 because remote lock handling is bypassed.
+    size_t writesRemoteCount() const { return remote_lock_disabled ? 0 : writes_remote_count; }
 
     // There are some cases that we don't want to do remote lock when write to ps:
     // 1. Parse checkpoint files and write its contents to a temp ps for later use when do FAP;
@@ -281,7 +283,7 @@ public:
             writes.emplace_back(r);
         }
         total_data_size += rhs.total_data_size;
-        has_writes_from_remote |= rhs.has_writes_from_remote;
+        writes_remote_count += rhs.writes_remote_count;
     }
 
     [[clang::reinitializes]] void clear()
@@ -290,14 +292,14 @@ public:
         Writes tmp;
         writes.swap(tmp);
         total_data_size = 0;
-        has_writes_from_remote = false;
+        writes_remote_count = 0;
         remote_lock_disabled = false;
     }
 
     UniversalWriteBatch(UniversalWriteBatch && rhs) noexcept
         : prefix(std::move(rhs.prefix))
         , total_data_size(rhs.total_data_size)
-        , has_writes_from_remote(rhs.has_writes_from_remote)
+        , writes_remote_count(rhs.writes_remote_count)
         , remote_lock_disabled(rhs.remote_lock_disabled)
         , fsync(rhs.fsync)
     {
@@ -310,7 +312,7 @@ public:
         prefix.swap(o.prefix);
         writes.swap(o.writes);
         std::swap(total_data_size, o.total_data_size);
-        std::swap(has_writes_from_remote, o.has_writes_from_remote);
+        std::swap(writes_remote_count, o.writes_remote_count);
         std::swap(remote_lock_disabled, o.remote_lock_disabled);
         std::swap(fsync, o.fsync);
     }
@@ -322,7 +324,7 @@ private:
     String prefix;
     Writes writes;
     size_t total_data_size = 0;
-    bool has_writes_from_remote = false;
+    size_t writes_remote_count = 0;
     bool remote_lock_disabled = false;
     bool fsync = true;
 };
