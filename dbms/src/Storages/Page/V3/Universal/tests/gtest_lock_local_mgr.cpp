@@ -288,4 +288,107 @@ try
 }
 CATCH
 
+TEST_F(S3LockLocalManagerTest, CreateS3LockForWriteBatchReturnsOnlyNewlyAppendedKeys)
+try
+{
+    // Purpose: verify return keys only contain newly created lock keys appended
+    // into pre_lock_keys, and exclude lock-file inputs that are already locked.
+    StoreID this_store_id = 100;
+    PS::V3::S3LockLocalManager mgr;
+    auto mock_s3lock_client = std::make_shared<S3::MockS3LockClient>(s3_client);
+    auto last_mf = mgr.initStoreInfo(this_store_id, mock_s3lock_client, PS::V3::universal::PageDirectoryPtr{});
+    ASSERT_FALSE(last_mf.has_value());
+
+    UniversalWriteBatch wb;
+    StoreID old_store_id = 5;
+    UInt64 old_store_seq = 99;
+    auto s3name_datafile = S3::S3Filename::newCheckpointData(old_store_id, old_store_seq, 1);
+    auto s3name_locked_file = S3::S3Filename::newCheckpointData(old_store_id, old_store_seq, 2);
+
+    // Step 1: add one normal data-file input and one already-lock-file input.
+    {
+        auto data_file_key = std::make_shared<String>(s3name_datafile.toFullKey());
+        S3::uploadEmptyFile(*s3_client, *data_file_key);
+        PS::V3::CheckpointLocation loc{
+            .data_file_id = data_file_key,
+            .offset_in_file = 0,
+            .size_in_file = 1024,
+        };
+        wb.putRemotePage("1", 0, 1024, loc, {});
+    }
+    String reused_lock_key = s3name_locked_file.toView().getLockKey(this_store_id, 233);
+    {
+        auto lock_file_key = std::make_shared<String>(reused_lock_key);
+        PS::V3::CheckpointLocation loc{
+            .data_file_id = lock_file_key,
+            .offset_in_file = 0,
+            .size_in_file = 1024,
+        };
+        wb.putRemotePage("2", 0, 1024, loc, {});
+    }
+
+    // Step 2: create locks and check returned key set.
+    auto created_keys = mgr.createS3LockForWriteBatch(wb);
+    const String expected_new_lock = s3name_datafile.toView().getLockKey(this_store_id, 1);
+    ASSERT_EQ(created_keys.size(), 1);
+    ASSERT_EQ(created_keys.count(expected_new_lock), 1);
+    ASSERT_EQ(created_keys.count(reused_lock_key), 0);
+
+    // Step 3: pre_lock_keys should only contain newly appended lock keys.
+    auto info = mgr.allocateNewUploadLocksInfo();
+    ASSERT_EQ(info.pre_lock_keys.size(), 1);
+    ASSERT_EQ(info.pre_lock_keys.count(expected_new_lock), 1);
+    ASSERT_EQ(info.pre_lock_keys.count(reused_lock_key), 0);
+}
+CATCH
+
+TEST_F(S3LockLocalManagerTest, CreateS3LockForWriteBatchPartialFailureKeepsPreLockKeysEmpty)
+try
+{
+    // Purpose: verify partial lock creation failure does not append partial keys
+    // into pre_lock_keys.
+    StoreID this_store_id = 100;
+    PS::V3::S3LockLocalManager mgr;
+    auto mock_s3lock_client = std::make_shared<S3::MockS3LockClient>(s3_client);
+    auto last_mf = mgr.initStoreInfo(this_store_id, mock_s3lock_client, PS::V3::universal::PageDirectoryPtr{});
+    ASSERT_FALSE(last_mf.has_value());
+
+    UniversalWriteBatch wb;
+    StoreID old_store_id = 5;
+    UInt64 old_store_seq = 123;
+    auto s3name_datafile_ok = S3::S3Filename::newCheckpointData(old_store_id, old_store_seq, 1);
+    auto s3name_datafile_conflict = S3::S3Filename::newCheckpointData(old_store_id, old_store_seq, 2);
+    {
+        auto key_ok = std::make_shared<String>(s3name_datafile_ok.toFullKey());
+        auto key_conflict = std::make_shared<String>(s3name_datafile_conflict.toFullKey());
+        S3::uploadEmptyFile(*s3_client, *key_ok);
+        S3::uploadEmptyFile(*s3_client, *key_conflict);
+        PS::V3::CheckpointLocation loc1{.data_file_id = key_ok, .offset_in_file = 0, .size_in_file = 1024};
+        PS::V3::CheckpointLocation loc2{.data_file_id = key_conflict, .offset_in_file = 0, .size_in_file = 1024};
+        wb.putRemotePage("1", 0, 1024, loc1, {});
+        wb.putRemotePage("2", 0, 1024, loc2, {});
+    }
+
+    // Step 1: make the second file conflict, so the batch fails after at least
+    // one successful lock creation attempt.
+    auto mark_del_res = mock_s3lock_client->sendTryMarkDeleteRequest(s3name_datafile_conflict.toFullKey(), 1);
+    ASSERT_TRUE(mark_del_res.first) << mark_del_res.second;
+
+    // Step 2: batch lock creation should throw S3_LOCK_CONFLICT.
+    try
+    {
+        mgr.createS3LockForWriteBatch(wb);
+        FAIL() << "should throw S3_LOCK_CONFLICT";
+    }
+    catch (DB::Exception & e)
+    {
+        ASSERT_EQ(ErrorCodes::S3_LOCK_CONFLICT, e.code());
+    }
+
+    // Step 3: no partial pre_lock_keys should be appended on failure.
+    auto info = mgr.allocateNewUploadLocksInfo();
+    ASSERT_TRUE(info.pre_lock_keys.empty());
+}
+CATCH
+
 } // namespace DB::tests
