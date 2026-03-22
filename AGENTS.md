@@ -86,9 +86,12 @@ TiFlash follows a style based on Google, enforced by `clang-format` 17.0.0+.
 - **Smart Pointers:** Prefer `std::shared_ptr` and `std::unique_ptr`. Use `std::make_shared` and `std::make_unique`.
 - **Error Handling:**
   - Use `DB::Exception`.
-  - Pattern: `throw Exception("Message", ErrorCodes::SOME_CODE);`
+  - Prefer the fmt-style constructor with error code first: `throw Exception(ErrorCodes::SOME_CODE, "Message with {}", arg);`
+  - For fixed strings without formatting, `throw Exception("Message", ErrorCodes::SOME_CODE);` is still acceptable.
   - Error codes are defined in `dbms/src/Common/ErrorCodes.cpp` and `errors.toml`.
+  - In broad `catch (...)` paths, prefer `tryLogCurrentException(log, "context")` to avoid duplicated exception-formatting code.
 - **Logging:** Use macros like `LOG_INFO(log, "message {}", arg)`. `log` is usually a `DB::LoggerPtr`.
+  - When only log level differs by runtime condition, prefer `LOG_IMPL(log, level, ...)` (with `Poco::Message::Priority`) instead of duplicated `if/else` log blocks.
 
 ### Modern C++ Practices
 - Prefer `auto` for complex iterators/templates.
