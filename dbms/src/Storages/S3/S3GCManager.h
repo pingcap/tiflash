@@ -72,6 +72,9 @@ struct S3GCConfig
     // The interval of the S3 GC routine runs
     Int64 interval_seconds = 600;
 
+    // The interval of periodic S3 storage summary task.
+    Int64 summary_interval_seconds = 24 * 60 * 60;
+
     // The maximum number of manifest files preserve
     // for each store
     size_t manifest_preserve_count = 10;

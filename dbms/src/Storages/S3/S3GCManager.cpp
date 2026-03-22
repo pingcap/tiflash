@@ -865,7 +865,11 @@ S3StoreStorageSummary S3GCManager::getStoreStorageSummary(StoreID store_id)
     S3::listPrefix(*client, prefix, [&](const Aws::S3::Model::Object & object) {
         if (shutdown_called)
         {
-            LOG_INFO(log, "getS3StorageSummary shutting down, break, store_id={} processed_keys={}", store_id, num_processed_keys);
+            LOG_INFO(
+                log,
+                "getS3StorageSummary shutting down, break, store_id={} processed_keys={}",
+                store_id,
+                num_processed_keys);
             // .more=false to break the listing early
             return PageResult{.num_keys = 1, .more = false};
         }
@@ -943,6 +947,7 @@ S3StoreStorageSummary S3GCManager::getStoreStorageSummary(StoreID store_id)
         return PageResult{.num_keys = 1, .more = true};
     });
     summary.num_keys = num_processed_keys;
+    TiFlashMetrics::instance().setS3StoreSummaryBytes(store_id, summary.data_file.bytes, summary.dt_file.bytes);
     LOG_INFO(log, "getS3StorageSummary finish, elapsed={:.3f}s summary={}", watch.elapsedSeconds(), summary);
     return summary;
 }
@@ -957,8 +962,6 @@ S3GCManagerService::S3GCManagerService(
     const S3GCConfig & config)
     : global_ctx(context.getGlobalContext())
 {
-    static constexpr Int64 s3_summary_interval_ms = 24 * 60 * 60 * 1000;
-
     manager = std::make_unique<S3GCManager>(
         std::move(pd_client),
         std::move(gc_owner_manager_),
@@ -971,27 +974,40 @@ S3GCManagerService::S3GCManagerService(
         false,
         /*interval_ms*/ config.interval_seconds * 1000);
 
-    summary_timer = global_ctx.getBackgroundPool().addTask(
-        [this]() {
-            if (!manager || !manager->isOwner())
-                return false;
+    if (config.summary_interval_seconds > 0)
+    {
+        if (config.summary_interval_seconds < 12 * 3600)
+        {
+            LOG_WARNING(
+                Logger::get("S3GCManagerService"),
+                "The summary_interval_seconds={} is too small, it may cause high overhead on S3. "
+                "It is recommended to set it to a value larger than 12 hours (43200 seconds).",
+                config.summary_interval_seconds);
+        }
 
-            try
-            {
-                auto summary = manager->getS3StorageSummary({});
-                LOG_INFO(
-                    Logger::get("S3GCManagerService"),
-                    "Periodic S3 storage summary finished, num_stores={}",
-                    summary.stores.size());
-            }
-            catch (...)
-            {
-                tryLogCurrentException(Logger::get("S3GCManagerService"), "periodic getS3StorageSummary failed");
-            }
-            return false;
-        },
-        false,
-        s3_summary_interval_ms);
+        summary_timer = global_ctx.getBackgroundPool().addTask(
+            [this]() {
+                // Only run summary in the owner instance
+                if (!manager || !manager->isOwner())
+                    return false;
+
+                try
+                {
+                    auto summary = manager->getS3StorageSummary({});
+                    LOG_INFO(
+                        Logger::get("S3GCManagerService"),
+                        "Periodic S3 storage summary finished, num_stores={}",
+                        summary.stores.size());
+                }
+                catch (...)
+                {
+                    tryLogCurrentException(Logger::get("S3GCManagerService"), "periodic getS3StorageSummary failed");
+                }
+                return false;
+            },
+            false,
+            config.summary_interval_seconds * 1000);
+    }
 }
 
 S3GCManagerService::~S3GCManagerService()
