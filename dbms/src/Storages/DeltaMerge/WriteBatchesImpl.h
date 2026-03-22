@@ -171,12 +171,6 @@ struct WriteBatches : private boost::noncopyable
 
     void rollbackWrittenLogAndData()
     {
-        LOG_INFO(
-            Logger::get("WriteBatches"),
-            "Rollback written log/data, run_mode={} written_log_pages={} written_data_pages={}",
-            magic_enum::enum_name(run_mode),
-            written_log.size(),
-            written_data.size());
         WriteBatchWrapper log_wb(run_mode, keyspace_id, StorageType::Log, ns_id);
         for (auto p : written_log)
             log_wb.delPage(p);

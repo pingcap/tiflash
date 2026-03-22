@@ -73,7 +73,7 @@ public:
 
 
 private:
-    std::tuple<std::size_t, std::size_t, std::size_t>
+    std::tuple<std::size_t, std::size_t, std::size_t> //
     cleanPreLockKeysImpl(const std::unordered_set<String> & lock_keys_to_clean);
 
     // return the s3 lock_key
