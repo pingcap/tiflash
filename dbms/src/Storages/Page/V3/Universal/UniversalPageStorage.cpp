@@ -111,6 +111,7 @@ void UniversalPageStorage::write(
     SCOPE_EXIT(
         { GET_METRIC(tiflash_storage_page_write_duration_seconds, type_total).Observe(watch.elapsedSeconds()); });
     const size_t remote_lock_key_count = write_batch.writesRemoteCount();
+    std::unordered_set<String> created_pre_lock_keys;
     if (remote_lock_key_count > 0)
     {
         assert(remote_locks_local_mgr != nullptr);
@@ -119,6 +120,17 @@ void UniversalPageStorage::write(
         // If any "lock" failed to be created, then it will throw exception.
         // Note that if `remote_locks_local_mgr`'s store_id is not inited, it will blocks until inited
         remote_locks_local_mgr->createS3LockForWriteBatch(write_batch);
+
+        // After lock creation, write batch keeps lock keys in data_location.data_file_id.
+        created_pre_lock_keys.reserve(remote_lock_key_count);
+        for (const auto & w : write_batch.getWrites())
+        {
+            if ((w.type == WriteBatchWriteType::PUT_EXTERNAL || w.type == WriteBatchWriteType::PUT_REMOTE)
+                && w.data_location.has_value())
+            {
+                created_pre_lock_keys.emplace(*w.data_location->data_file_id);
+            }
+        }
     }
     std::unordered_set<String> applied_lock_ids;
     const char * failed_stage = "blob_store->write";
@@ -132,6 +144,9 @@ void UniversalPageStorage::write(
     {
         if (remote_lock_key_count > 0)
         {
+            // If write fails after pre-lock creation, clean these pre-lock keys
+            // to avoid residual entries in checkpoint_manager.pre_lock_keys.
+            remote_locks_local_mgr->cleanPreLockKeysOnWriteFailure(std::move(created_pre_lock_keys));
             tryLogCurrentException(
                 log,
                 fmt::format(

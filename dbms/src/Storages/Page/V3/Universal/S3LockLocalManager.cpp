@@ -257,7 +257,8 @@ String S3LockLocalManager::createS3Lock(
     return lockkey;
 }
 
-void S3LockLocalManager::cleanAppliedS3ExternalFiles(std::unordered_set<String> && applied_s3files)
+std::tuple<std::size_t, std::size_t, std::size_t>
+S3LockLocalManager::cleanPreLockKeysImpl(const std::unordered_set<String> & lock_keys_to_clean)
 {
     size_t erase_hit = 0;
     size_t erase_miss = 0;
@@ -266,7 +267,7 @@ void S3LockLocalManager::cleanAppliedS3ExternalFiles(std::unordered_set<String> 
         // After the entries applied into PageDirectory, manifest can get the S3 lock key
         // from `VersionedPageEntries`, cleanup the pre lock files.
         std::unique_lock wlatch_keys(mtx_lock_keys);
-        for (const auto & file : applied_s3files)
+        for (const auto & file : lock_keys_to_clean)
         {
             if (pre_lock_keys.erase(file) > 0)
             {
@@ -279,13 +280,36 @@ void S3LockLocalManager::cleanAppliedS3ExternalFiles(std::unordered_set<String> 
         }
         remaining_pre_lock_keys = pre_lock_keys.size();
         GET_METRIC(tiflash_storage_s3_lock_mgr_status, type_prelock_keys).Set(remaining_pre_lock_keys);
-    } // release the lock on mtx_lock_keys before logging
+    }
+    return {erase_hit, erase_miss, remaining_pre_lock_keys};
+}
+
+void S3LockLocalManager::cleanAppliedS3ExternalFiles(std::unordered_set<String> && applied_s3files)
+{
+    auto [erase_hit, erase_miss, remaining_pre_lock_keys] = cleanPreLockKeysImpl(applied_s3files);
     const auto log_lvl = erase_miss > 0 ? Poco::Message::PRIO_WARNING : Poco::Message::PRIO_DEBUG;
     LOG_IMPL(
         log,
         log_lvl,
         "Clean applied S3 external files, applied_count={} erase_hit={} erase_miss={} remaining_pre_lock_keys={}",
         applied_s3files.size(),
+        erase_hit,
+        erase_miss,
+        remaining_pre_lock_keys);
+    GET_METRIC(tiflash_storage_s3_lock_mgr_counter, type_clean_lock).Increment();
+    GET_METRIC(tiflash_storage_s3_lock_mgr_counter, type_clean_lock_erase_hit).Increment(erase_hit);
+    GET_METRIC(tiflash_storage_s3_lock_mgr_counter, type_clean_lock_erase_miss).Increment(erase_miss);
+}
+
+void S3LockLocalManager::cleanPreLockKeysOnWriteFailure(std::unordered_set<String> && pre_lock_keys_on_failure)
+{
+    auto [erase_hit, erase_miss, remaining_pre_lock_keys] = cleanPreLockKeysImpl(pre_lock_keys_on_failure);
+    const auto log_lvl = erase_miss > 0 ? Poco::Message::PRIO_WARNING : Poco::Message::PRIO_DEBUG;
+    LOG_IMPL(
+        log,
+        log_lvl,
+        "Clean pre-lock keys on write failure, requested={} erase_hit={} erase_miss={} remaining_pre_lock_keys={}",
+        pre_lock_keys_on_failure.size(),
         erase_hit,
         erase_miss,
         remaining_pre_lock_keys);

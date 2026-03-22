@@ -23,6 +23,8 @@
 #include <Storages/S3/S3Filename.h>
 #include <aws/s3/S3Client.h>
 
+#include <tuple>
+
 
 namespace DB::S3
 {
@@ -64,10 +66,16 @@ public:
     // after write batch applied, we can clean the applied locks from `pre_locks_files`
     void cleanAppliedS3ExternalFiles(std::unordered_set<String> && applied_s3files);
 
+    // If write fails after creating pre-locks, clean these pre-lock keys to avoid residual entries.
+    void cleanPreLockKeysOnWriteFailure(std::unordered_set<String> && pre_lock_keys_on_failure);
+
     DISALLOW_COPY_AND_MOVE(S3LockLocalManager);
 
 
 private:
+    std::tuple<std::size_t, std::size_t, std::size_t>
+    cleanPreLockKeysImpl(const std::unordered_set<String> & lock_keys_to_clean);
+
     // return the s3 lock_key
     String createS3Lock(const String & datafile_key, const S3::S3FilenameView & s3_file, UInt64 lock_store_id);
 
