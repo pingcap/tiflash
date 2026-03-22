@@ -199,9 +199,8 @@ JoinPtr makeSemiJoinTestJoin(ASTTableJoin::Kind kind)
         true);
 }
 
-JoinPtr makeMixedKeyJoin(const std::vector<UInt8> & is_null_eq)
+JoinPtr makeMixedKeyJoin(const std::vector<UInt8> & is_null_eq, const DataTypePtr & key_type)
 {
-    auto nullable_int_type = makeNullable(std::make_shared<DataTypeInt32>());
     auto int_type = std::make_shared<DataTypeInt32>();
     SpillConfig build_spill_config("/tmp", "join_null_eq_build", 0, 0, 0, nullptr);
     SpillConfig probe_spill_config("/tmp", "join_null_eq_probe", 0, 0, 0, nullptr);
@@ -217,11 +216,11 @@ JoinPtr makeMixedKeyJoin(const std::vector<UInt8> & is_null_eq)
         probe_spill_config,
         RestoreConfig{1, 0, 0},
         NamesAndTypes{
-            {mixed_probe_key1_name, nullable_int_type},
-            {mixed_probe_key2_name, nullable_int_type},
+            {mixed_probe_key1_name, key_type},
+            {mixed_probe_key2_name, key_type},
             {mixed_probe_value_name, int_type},
-            {mixed_build_key1_name, nullable_int_type},
-            {mixed_build_key2_name, nullable_int_type},
+            {mixed_build_key1_name, key_type},
+            {mixed_build_key2_name, key_type},
             {mixed_build_value_name, int_type},
         },
         RegisterOperatorSpillContext{},
@@ -234,6 +233,11 @@ JoinPtr makeMixedKeyJoin(const std::vector<UInt8> & is_null_eq)
         "",
         0,
         true);
+}
+
+JoinPtr makeMixedKeyJoin(const std::vector<UInt8> & is_null_eq)
+{
+    return makeMixedKeyJoin(is_null_eq, makeNullable(std::make_shared<DataTypeInt32>()));
 }
 
 Block makeOuterProbeSampleBlock(bool include_filter = false)
@@ -268,26 +272,34 @@ Block makeOuterBuildSampleBlock(bool include_filter = false)
     return block;
 }
 
-Block makeMixedProbeSampleBlock()
+Block makeMixedProbeSampleBlock(const DataTypePtr & key_type)
 {
-    auto nullable_int_type = makeNullable(std::make_shared<DataTypeInt32>());
     auto int_type = std::make_shared<DataTypeInt32>();
     return Block{
-        {nullable_int_type->createColumn(), nullable_int_type, mixed_probe_key1_name},
-        {nullable_int_type->createColumn(), nullable_int_type, mixed_probe_key2_name},
+        {key_type->createColumn(), key_type, mixed_probe_key1_name},
+        {key_type->createColumn(), key_type, mixed_probe_key2_name},
         {int_type->createColumn(), int_type, mixed_probe_value_name},
+    };
+}
+
+Block makeMixedProbeSampleBlock()
+{
+    return makeMixedProbeSampleBlock(makeNullable(std::make_shared<DataTypeInt32>()));
+}
+
+Block makeMixedBuildSampleBlock(const DataTypePtr & key_type)
+{
+    auto int_type = std::make_shared<DataTypeInt32>();
+    return Block{
+        {key_type->createColumn(), key_type, mixed_build_key1_name},
+        {key_type->createColumn(), key_type, mixed_build_key2_name},
+        {int_type->createColumn(), int_type, mixed_build_value_name},
     };
 }
 
 Block makeMixedBuildSampleBlock()
 {
-    auto nullable_int_type = makeNullable(std::make_shared<DataTypeInt32>());
-    auto int_type = std::make_shared<DataTypeInt32>();
-    return Block{
-        {nullable_int_type->createColumn(), nullable_int_type, mixed_build_key1_name},
-        {nullable_int_type->createColumn(), nullable_int_type, mixed_build_key2_name},
-        {int_type->createColumn(), int_type, mixed_build_value_name},
-    };
+    return makeMixedBuildSampleBlock(makeNullable(std::make_shared<DataTypeInt32>()));
 }
 
 ColumnPtr makeNullableInt32Column(std::initializer_list<std::optional<Int32>> values)
@@ -403,13 +415,22 @@ void prepareAndFinalizeMixedJoin(const JoinPtr & join)
 }
 } // namespace
 
-TEST(JoinNullEqTest, NullableNullEqKeyForcesSerializedJoinMapMethod)
+TEST(JoinNullEqTest, NullableNullEqKeyUsesNullablePackedJoinMapMethod)
 {
     auto nullable_int_type = makeNullable(std::make_shared<DataTypeInt32>());
     auto join = makeTestJoin(nullable_int_type, {1});
     join->initBuild(makeSampleBlock(nullable_int_type), 1);
 
-    ASSERT_EQ(join->getJoinMapMethod(), JoinMapMethod::serialized);
+    ASSERT_EQ(join->getJoinMapMethod(), JoinMapMethod::nullable_keys128);
+}
+
+TEST(JoinNullEqTest, NullableMixedNullEqKeysCanUseNullableKeys256JoinMapMethod)
+{
+    auto nullable_int64_type = makeNullable(std::make_shared<DataTypeInt64>());
+    auto join = makeMixedKeyJoin({1, 1}, nullable_int64_type);
+    join->initBuild(makeMixedBuildSampleBlock(nullable_int64_type), 1);
+
+    ASSERT_EQ(join->getJoinMapMethod(), JoinMapMethod::nullable_keys256);
 }
 
 TEST(JoinNullEqTest, DefaultMethodSelectionRemainsForOtherCases)

@@ -51,17 +51,19 @@ extern const int TYPE_MISMATCH;
 
 namespace
 {
-ColumnRawPtrs getKeyColumns(const Names & key_names, const Block & block)
+ColumnRawPtrs getKeyColumns(const Names & key_names, const Block & block, const std::vector<UInt8> & is_null_eq = {})
 {
     size_t keys_size = key_names.size();
+    RUNTIME_CHECK(is_null_eq.empty() || is_null_eq.size() == keys_size);
     ColumnRawPtrs key_columns(keys_size);
 
     for (size_t i = 0; i < keys_size; ++i)
     {
         key_columns[i] = block.getByName(key_names[i]).column.get();
 
-        /// We will join only keys, where all components are not NULL.
-        if (key_columns[i]->isColumnNullable())
+        /// Ordinary '=' keys join only nested values where all components are not NULL.
+        /// NullEQ keys must keep their nullable wrapper so nullness can participate in key comparison.
+        if (key_columns[i]->isColumnNullable() && (is_null_eq.empty() || is_null_eq[i] == 0))
             key_columns[i] = &static_cast<const ColumnNullable &>(*key_columns[i]).getNestedColumn();
     }
 
@@ -437,12 +439,15 @@ void Join::initBuild(const Block & sample_block, size_t build_concurrency_)
     if (unlikely(initialized))
         throw Exception("Logical error: Join has been initialized", ErrorCodes::LOGICAL_ERROR);
     initialized = true;
-    join_map_method = chooseJoinMapMethod(getKeyColumns(key_names_right, sample_block), key_sizes, collators);
+    join_map_method = chooseJoinMapMethod(
+        getKeyColumns(key_names_right, sample_block, is_null_eq),
+        key_sizes,
+        collators,
+        is_null_eq);
     if (hasNullableNullEqKey(key_names_right, sample_block, is_null_eq))
     {
-        if (join_map_method != JoinMapMethod::serialized)
-            LOG_DEBUG(log, "Force serialized join map method because a nullable NullEQ key is present");
-        join_map_method = JoinMapMethod::serialized;
+        if (join_map_method == JoinMapMethod::serialized)
+            LOG_DEBUG(log, "Use serialized join map method because nullable NullEQ keys do not fit packed fixed keys");
     }
     build_sample_block = sample_block;
     setBuildConcurrencyAndInitJoinPartition(build_concurrency_);
