@@ -654,6 +654,8 @@ TEST_F(PageDirectoryTest, BatchWriteException)
 
 TEST_F(PageDirectoryTest, BatchWriteRemoteCheckpointEachWriterReturnsAppliedDataFiles)
 {
+    // Purpose: verify each writer in a write group returns its own remote lock key set,
+    // instead of inheriting merged results from the write-group owner.
     auto make_remote_entry = [](String data_file_id) {
         return PageEntryV3{
             .file_id = 0,
@@ -676,6 +678,7 @@ TEST_F(PageDirectoryTest, BatchWriteRemoteCheckpointEachWriterReturnsAppliedData
     const String key2 = "lock/s272/ks_1_t_169/dmf_2.lock_s272_1";
     const String key3 = "lock/s272/ks_1_t_169/dmf_3.lock_s272_1";
 
+    // Step 1: pause leader apply so 3 concurrent writers form one write group.
     auto sp_before_leader_apply = SyncPointCtl::enableInScope("before_PageDirectory::leader_apply");
     auto th_write1 = std::async([&]() {
         PageEntriesEdit edit;
@@ -699,6 +702,8 @@ TEST_F(PageDirectoryTest, BatchWriteRemoteCheckpointEachWriterReturnsAppliedData
     sp_after_enter_write_group.waitAndNext();
     sp_after_enter_write_group.waitAndNext();
     ASSERT_EQ(dir->getWritersQueueSizeForTest(), 3);
+
+    // Step 2: release apply and collect returned applied_data_files from each writer.
     sp_before_leader_apply.next();
 
     auto applied1 = th_write1.get();
@@ -706,7 +711,7 @@ TEST_F(PageDirectoryTest, BatchWriteRemoteCheckpointEachWriterReturnsAppliedData
     auto applied2 = th_write2.get();
     auto applied3 = th_write3.get();
 
-    // Fixed behavior: every writer should get its own applied_data_files.
+    // Step 3: each writer should only get its own lock key.
     ASSERT_EQ(applied1.size(), 1);
     ASSERT_EQ(applied1.count(key1), 1);
     ASSERT_EQ(applied2.size(), 1);
@@ -714,6 +719,7 @@ TEST_F(PageDirectoryTest, BatchWriteRemoteCheckpointEachWriterReturnsAppliedData
     ASSERT_EQ(applied3.size(), 1);
     ASSERT_EQ(applied3.count(key3), 1);
 
+    // Step 4: union of all per-writer results should cover all keys.
     std::unordered_set<String> union_keys;
     union_keys.insert(applied1.begin(), applied1.end());
     union_keys.insert(applied2.begin(), applied2.end());
@@ -726,6 +732,8 @@ TEST_F(PageDirectoryTest, BatchWriteRemoteCheckpointEachWriterReturnsAppliedData
 
 TEST_F(PageDirectoryTest, BatchWriteRemoteCheckpointEachWriterShouldGetAppliedDataFiles)
 {
+    // Purpose: regression guard for write-group remote checkpoint apply.
+    // Every writer should receive non-empty applied_data_files for upper-layer cleanup.
     auto make_remote_entry = [](String data_file_id) {
         return PageEntryV3{
             .file_id = 0,
@@ -748,6 +756,7 @@ TEST_F(PageDirectoryTest, BatchWriteRemoteCheckpointEachWriterShouldGetAppliedDa
     const String key2 = "lock/s272/ks_1_t_169/dmf_fix_2.lock_s272_1";
     const String key3 = "lock/s272/ks_1_t_169/dmf_fix_3.lock_s272_1";
 
+    // Step 1: force concurrent writes into one write group.
     auto sp_before_leader_apply = SyncPointCtl::enableInScope("before_PageDirectory::leader_apply");
     auto th_write1 = std::async([&]() {
         PageEntriesEdit edit;
@@ -770,6 +779,8 @@ TEST_F(PageDirectoryTest, BatchWriteRemoteCheckpointEachWriterShouldGetAppliedDa
     sp_after_enter_write_group.waitAndNext();
     sp_after_enter_write_group.waitAndNext();
     ASSERT_EQ(dir->getWritersQueueSizeForTest(), 3);
+
+    // Step 2: resume apply and get per-writer results.
     sp_before_leader_apply.next();
 
     auto applied1 = th_write1.get();
@@ -777,9 +788,7 @@ TEST_F(PageDirectoryTest, BatchWriteRemoteCheckpointEachWriterShouldGetAppliedDa
     auto applied2 = th_write2.get();
     auto applied3 = th_write3.get();
 
-    // Future target after fixing write-group behavior:
-    // each writer should get non-empty applied_data_files to avoid
-    // losing lock-cleaning signals in upper layer.
+    // Step 3: assert each writer gets its own lock-cleaning signal.
     ASSERT_FALSE(applied1.empty());
     ASSERT_FALSE(applied2.empty());
     ASSERT_FALSE(applied3.empty());

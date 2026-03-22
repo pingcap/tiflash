@@ -198,6 +198,8 @@ CATCH
 TEST_F(S3LockLocalManagerTest, CleanAppliedS3ExternalFilesPartialCleanup)
 try
 {
+    // Purpose: verify partial cleanup only removes applied lock keys and keeps
+    // remaining pre-lock keys for later manifest upload.
     StoreID this_store_id = 100;
     PS::V3::S3LockLocalManager mgr;
     auto mock_s3lock_client = std::make_shared<S3::MockS3LockClient>(s3_client);
@@ -221,17 +223,21 @@ try
     }
 
     mgr.createS3LockForWriteBatch(wb);
+
+    // Step 1: confirm two pre-lock keys are present after lock creation.
     auto info = mgr.allocateNewUploadLocksInfo();
     ASSERT_EQ(info.pre_lock_keys.size(), 2);
 
     const String expected_lockkey1 = s3name_datafile1.toView().getLockKey(this_store_id, info.upload_sequence);
     const String expected_lockkey2 = s3name_datafile2.toView().getLockKey(this_store_id, info.upload_sequence);
 
+    // Step 2: clean one applied lock key, then verify the other remains.
     mgr.cleanAppliedS3ExternalFiles({expected_lockkey1});
     info = mgr.allocateNewUploadLocksInfo();
     ASSERT_EQ(info.pre_lock_keys.size(), 1);
     ASSERT_EQ(info.pre_lock_keys.count(expected_lockkey2), 1);
 
+    // Step 3: clean the remaining lock key and verify no residual keys.
     mgr.cleanAppliedS3ExternalFiles({expected_lockkey2});
     info = mgr.allocateNewUploadLocksInfo();
     ASSERT_TRUE(info.pre_lock_keys.empty());

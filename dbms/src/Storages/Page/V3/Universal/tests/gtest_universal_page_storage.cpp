@@ -617,6 +617,8 @@ TEST_F(UniPageStorageTest, OnlyScanRaftLog)
 
 TEST_F(UniPageStorageTest, ConcurrentRemoteWriteShouldNotLeavePreLockKeys)
 {
+    // Purpose: simulate concurrent remote writes in one write-group and verify
+    // lock cleanup does not leave residual pre_lock_keys.
     DB::tests::TiFlashTestEnv::enableS3Config();
     page_storage = reopenWithConfig(config);
 
@@ -641,6 +643,7 @@ TEST_F(UniPageStorageTest, ConcurrentRemoteWriteShouldNotLeavePreLockKeys)
         return wb;
     };
 
+    // Step 1: pause leader apply so three write threads join one write group.
     auto sp_before_leader_apply = SyncPointCtl::enableInScope("before_PageDirectory::leader_apply");
     auto th_write1 = std::async([&]() {
         auto wb = build_wb(1);
@@ -659,6 +662,8 @@ TEST_F(UniPageStorageTest, ConcurrentRemoteWriteShouldNotLeavePreLockKeys)
     });
     sp_after_enter_write_group.waitAndNext();
     sp_after_enter_write_group.waitAndNext();
+
+    // Step 2: resume apply and wait all writes complete.
     sp_before_leader_apply.next();
 
     th_write1.get();
@@ -666,6 +671,7 @@ TEST_F(UniPageStorageTest, ConcurrentRemoteWriteShouldNotLeavePreLockKeys)
     th_write2.get();
     th_write3.get();
 
+    // Step 3: verify all created pre-lock keys are cleaned after apply.
     const auto lock_info = page_storage->allocateNewUploadLocksInfo();
     ASSERT_TRUE(lock_info.pre_lock_keys.empty()) << fmt::format("{}", lock_info.pre_lock_keys);
 
