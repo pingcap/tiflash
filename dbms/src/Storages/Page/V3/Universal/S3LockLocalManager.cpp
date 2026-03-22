@@ -16,6 +16,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Disaggregated/S3LockClient.h>
+#include <Poco/Message.h>
 #include <Storages/Page/V3/CheckpointFile/CPManifestFileReader.h>
 #include <Storages/Page/V3/CheckpointFile/Proto/manifest_file.pb.h>
 #include <Storages/Page/V3/Universal/S3LockLocalManager.h>
@@ -24,7 +25,6 @@
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 #include <Storages/S3/S3RandomAccessFile.h>
-#include <Poco/Message.h>
 #include <common/logger_useful.h>
 
 #include <magic_enum.hpp>
@@ -140,7 +140,7 @@ S3LockLocalManager::ExtraLockInfo S3LockLocalManager::allocateNewUploadLocksInfo
     };
 }
 
-void S3LockLocalManager::createS3LockForWriteBatch(UniversalWriteBatch & write_batch)
+std::unordered_set<String> S3LockLocalManager::createS3LockForWriteBatch(UniversalWriteBatch & write_batch)
 {
     waitUntilInited();
 
@@ -165,6 +165,10 @@ void S3LockLocalManager::createS3LockForWriteBatch(UniversalWriteBatch & write_b
         }
     }
 
+    // If there are multiple data files need to create locks but only partially created, the
+    // created "locks" will be cleaned up by S3GCManager because `pre_lock_keys` does not contain
+    // the keys that are only partially created.
+    std::vector<String> lock_keys_to_append;
     for (auto & [input_key, lock_key] : s3_datafiles_to_lock)
     {
         auto view = S3::S3FilenameView::fromKey(input_key);
@@ -173,13 +177,35 @@ void S3LockLocalManager::createS3LockForWriteBatch(UniversalWriteBatch & write_b
             "invalid data_file_id, input_key={} type={}",
             input_key,
             magic_enum::enum_name(view.type));
+        // Already a lock file, which means the data file has been locked. This can happen when
+        // FAP apply a write batch with pages reference a file that is already uploaded. Just
+        // reuse the existing lock file
         if (view.isLockFile())
         {
             lock_key = std::make_shared<String>(input_key);
             continue;
         }
+        // Only a data file, we need to create a lock file for it.
         auto lock_result = createS3Lock(input_key, view, store_id);
         lock_key = std::make_shared<String>(lock_result);
+        lock_keys_to_append.push_back(lock_result);
+    }
+
+    {
+        // The related S3 data files in write batch is not applied into PageDirectory,
+        // but we need to ensure they exist in the next manifest file so that these
+        // S3 data files will not be deleted by the S3GCManager.
+        // Add the lock file key to `pre_locks_files` for manifest uploading.
+        std::unique_lock wlatch_keys(mtx_lock_keys);
+        for (const auto & lock_key : lock_keys_to_append)
+        {
+            const auto [_, inserted] = pre_lock_keys.emplace(lock_key);
+            if (!inserted)
+            {
+                LOG_WARNING(log, "Duplicate pre-lock key detected, lockkey={} lock_store_id={}", lock_key, store_id);
+            }
+        }
+        GET_METRIC(tiflash_storage_s3_lock_mgr_status, type_prelock_keys).Set(pre_lock_keys.size());
     }
 
     for (auto & w : write_batch.getMutWrites())
@@ -203,8 +229,13 @@ void S3LockLocalManager::createS3LockForWriteBatch(UniversalWriteBatch & write_b
             break;
         }
     }
+
+    // Return only the lock keys newly appended into `pre_lock_keys`.
+    // Existing lock-file inputs are intentionally excluded.
+    return std::unordered_set<String>(lock_keys_to_append.begin(), lock_keys_to_append.end());
 }
 
+// If any "lock" failed to be created, this function will throw exception.
 String S3LockLocalManager::createS3Lock(
     const String & datafile_key,
     const S3::S3FilenameView & s3_file,
@@ -245,20 +276,11 @@ String S3LockLocalManager::createS3Lock(
         LOG_DEBUG(log, "S3 lock created for ingest datafile, datafile_key={} lockkey={}", datafile_key, lockkey);
     }
 
-    // The related S3 data files in write batch is not applied into PageDirectory,
-    // but we need to ensure they exist in the next manifest file so that these
-    // S3 data files will not be deleted by the S3GCManager.
-    // Add the lock file key to `pre_locks_files` for manifest uploading.
-    {
-        std::unique_lock wlatch_keys(mtx_lock_keys);
-        pre_lock_keys.emplace(lockkey);
-        GET_METRIC(tiflash_storage_s3_lock_mgr_status, type_prelock_keys).Set(pre_lock_keys.size());
-    }
     return lockkey;
 }
 
-std::tuple<std::size_t, std::size_t, std::size_t>
-S3LockLocalManager::cleanPreLockKeysImpl(const std::unordered_set<String> & lock_keys_to_clean)
+std::tuple<std::size_t, std::size_t, std::size_t> S3LockLocalManager::cleanPreLockKeysImpl(
+    const std::unordered_set<String> & lock_keys_to_clean)
 {
     size_t erase_hit = 0;
     size_t erase_miss = 0;

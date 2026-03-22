@@ -117,20 +117,14 @@ void UniversalPageStorage::write(
         assert(remote_locks_local_mgr != nullptr);
         // Before ingesting remote pages/remote external pages, we need to create "lock" on S3
         // to ensure the correctness between FAP and S3GC.
-        // If any "lock" failed to be created, then it will throw exception.
-        // Note that if `remote_locks_local_mgr`'s store_id is not inited, it will blocks until inited
-        remote_locks_local_mgr->createS3LockForWriteBatch(write_batch);
-
-        // After lock creation, write batch keeps lock keys in data_location.data_file_id.
-        created_pre_lock_keys.reserve(remote_lock_key_count);
-        for (const auto & w : write_batch.getWrites())
-        {
-            if ((w.type == WriteBatchWriteType::PUT_EXTERNAL || w.type == WriteBatchWriteType::PUT_REMOTE)
-                && w.data_location.has_value())
-            {
-                created_pre_lock_keys.emplace(*w.data_location->data_file_id);
-            }
-        }
+        // Note that if `remote_locks_local_mgr`'s store_id is not inited, this function
+        // call will be blocked until inited.
+        // Assumption: different write batches should not concurrently create lock
+        // for the same remote data file. Under this assumption, failure-path
+        // cleanup of `created_pre_lock_keys` is ownership-safe for this batch.
+        // If this invariant changes in the future, pre-lock ownership tracking
+        // (for example, ref-count per lock key) should be introduced.
+        created_pre_lock_keys = remote_locks_local_mgr->createS3LockForWriteBatch(write_batch);
     }
     std::unordered_set<String> applied_lock_ids;
     const char * failed_stage = "blob_store->write";

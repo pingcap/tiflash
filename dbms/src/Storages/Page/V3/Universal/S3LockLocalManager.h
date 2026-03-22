@@ -61,7 +61,7 @@ public:
     };
     ExtraLockInfo allocateNewUploadLocksInfo();
 
-    void createS3LockForWriteBatch(UniversalWriteBatch & write_batch);
+    std::unordered_set<String> createS3LockForWriteBatch(UniversalWriteBatch & write_batch);
 
     // after write batch applied, we can clean the applied locks from `pre_locks_files`
     void cleanAppliedS3ExternalFiles(std::unordered_set<String> && applied_s3files);
