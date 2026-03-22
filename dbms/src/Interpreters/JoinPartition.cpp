@@ -440,6 +440,16 @@ struct KeyGetterForTypeImpl<JoinMapMethod::keys256, Value, Mapped>
     using Type = ColumnsHashing::HashMethodKeysFixed<Value, UInt256, Mapped, false, false>;
 };
 template <typename Value, typename Mapped>
+struct KeyGetterForTypeImpl<JoinMapMethod::nullable_keys128, Value, Mapped>
+{
+    using Type = ColumnsHashing::HashMethodKeysFixed<Value, UInt128, Mapped, true, false>;
+};
+template <typename Value, typename Mapped>
+struct KeyGetterForTypeImpl<JoinMapMethod::nullable_keys256, Value, Mapped>
+{
+    using Type = ColumnsHashing::HashMethodKeysFixed<Value, UInt256, Mapped, true, false>;
+};
+template <typename Value, typename Mapped>
 struct KeyGetterForTypeImpl<JoinMapMethod::serialized, Value, Mapped>
 {
     using Type = ColumnsHashing::HashMethodSerialized<Value, Mapped>;

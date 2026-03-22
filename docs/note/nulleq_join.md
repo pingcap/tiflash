@@ -332,16 +332,25 @@ probe 阶段的目标是：
 
 ## 5. Hash key 编码策略
 
-### MVP 方案
+### 当前实现
 
-当存在 **nullable 的 NullEQ key** 时，强制走：
+当存在 **nullable 的 NullEQ key** 时，当前 Join map method 的选择规则是：
 
-- `JoinMapMethod::serialized`
+- 若参与编码的 key columns 都是 fixed-size，且 `null bitmap + payload` 能放进 `UInt128/UInt256`
+  - 分别走 `JoinMapMethod::nullable_keys128` / `JoinMapMethod::nullable_keys256`
+- 其它情况继续回退到 `JoinMapMethod::serialized`
 
-原因很直接：
+fixed-size 路径复用了 HashAgg / Set 已有的 nullable packed keys 思路：
 
-- `serialized` 能自然把 `ColumnNullable` 的 nullness 编进 key
-- 可以先保证正确性，避免在 MVP 阶段就同时重写 packed key 路径
+- `keys128/keys256 + has_nullable_keys = true`
+- 把 nullness bitmap 与 key payload 一起编码进 packed key
+
+这样常见的 nullable numeric / datetime NullEQ join 不必再一律退化到 `serialized`。
+
+`serialized` 仍然保留为正确性兜底：
+
+- 变长 key 仍可自然保留 `ColumnNullable` 的 nullness
+- fixed-size key 若带 bitmap 后放不进 `UInt256`，仍可继续工作
 
 但这里有一个必须显式满足的前提：
 
@@ -370,15 +379,7 @@ probe 阶段的目标是：
 - build/probe 两边就必须在 prepare key 阶段对齐到同一个物理 key schema
 - 最直接的做法是统一到 `Nullable(common_type)`
 
-这一步属于 `serialized` 正确性兜底的一部分，应该在后续 row_filter_map / RowsNotInsertToMap 语义改造之前完成。
-
-### 后续优化方向
-
-对 fixed-size key，后续可以参考 HashAgg 的 nullable packed keys：
-
-- `keys128/keys256 + has_nullable_keys = true`
-
-这样能把常见 nullable numeric / datetime 的 NullEQ join 拉回高性能路径。
+这一步最初属于 `serialized` 正确性兜底的一部分；在 fixed-size packed key 优化落地后，这个 schema 对齐约束仍然需要继续保持。
 
 ## 6. JoinPartition / KeyGetter 语义
 
@@ -386,13 +387,21 @@ NullEQ 真正落地到 JoinPartition 时，关键不是“有没有 nullable 列
 
 - key getter 能不能把 nullness 编进 key
 
-MVP 若强制 `serialized`，则这一步无需额外改动 key getter 类型分派，但仍要保证：
+当前 JoinPartition 已显式引入 nullable-aware 的 fixed-key KeyGetter 分支：
+
+- `nullable_keys128 -> HashMethodKeysFixed<..., UInt128, ..., true, false>`
+- `nullable_keys256 -> HashMethodKeysFixed<..., UInt256, ..., true, false>`
+
+对应语义是：
+
+- packed key 路径会把 nullness bitmap 编进 key
+- 变长 key 或超出 `UInt256` 的 fixed-size key 仍走 `serialized`
+
+无论走哪条路径，仍要保证：
 
 - build/probe 传进来的 key columns 保留了 NullEQ key 的 nullable 信息
 - 对任意 NullEQ key pair，build/probe 两边最终参与编码的 key schema 一致
 - 尤其是 mixed nullable / non-nullable 的场景，不能保留成 `Nullable(T)` 对 `T`
-
-若后续要做 packed key 优化，则需要显式引入 nullable-aware 的 KeyGetter 分支。
 
 ## 7. FULL + other condition 语义
 
@@ -581,7 +590,7 @@ Done 标准：
 - [x] TiFlash: gtest 已覆盖 inner / left / right / full / semi / anti 基础矩阵
 - [x] TiFlash: gtest 已覆盖 mixed key 与 side-condition 交互
 - [x] TiFlash: spill / fine-grained shuffle 测试覆盖
-- [ ] TiFlash: packed keys 优化
+- [x] TiFlash: packed keys 优化（nullable fixed-size NullEQ key 可走 `nullable_keys128/256`，其余场景回退 `serialized`）
 
 ### Open Questions
 
