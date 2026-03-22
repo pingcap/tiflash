@@ -12,8 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Columns/ColumnFixedString.h>
+#include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
+#include <DataTypes/DataTypeFixedString.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/registerFunctions.h>
@@ -46,6 +50,10 @@ constexpr auto * mixed_build_key2_name = "build_k2";
 constexpr auto * mixed_build_value_name = "build_multi_v";
 constexpr auto * full_other_cond_name = "full_other_cond";
 constexpr auto * full_flag_helper_name = "__full_flag_helper";
+
+Block makeOuterProbeSampleBlock(const DataTypePtr & key_type, bool include_filter);
+Block makeOuterBuildSampleBlock(const DataTypePtr & key_type, bool include_filter);
+void prepareAndFinalizeMixedJoin(const JoinPtr & join, const DataTypePtr & key_type);
 
 void ensureFunctionsRegistered()
 {
@@ -130,10 +138,10 @@ JoinNonEqualConditions makeOuterJoinSideConditions(
 
 JoinPtr makeOuterJoinTestJoin(
     ASTTableJoin::Kind kind,
+    const DataTypePtr & key_type,
     const JoinNonEqualConditions & non_equal_conditions = JoinNonEqualConditions{},
     const String & flag_helper_name = "")
 {
-    auto nullable_int_type = makeNullable(std::make_shared<DataTypeInt32>());
     auto nullable_value_type = makeNullable(std::make_shared<DataTypeInt32>());
     SpillConfig build_spill_config("/tmp", "join_null_eq_build", 0, 0, 0, nullptr);
     SpillConfig probe_spill_config("/tmp", "join_null_eq_probe", 0, 0, 0, nullptr);
@@ -149,9 +157,9 @@ JoinPtr makeOuterJoinTestJoin(
         probe_spill_config,
         RestoreConfig{1, 0, 0},
         NamesAndTypes{
-            {outer_probe_key_name, nullable_int_type},
+            {outer_probe_key_name, key_type},
             {outer_probe_value_name, nullable_value_type},
-            {outer_build_key_name, nullable_int_type},
+            {outer_build_key_name, key_type},
             {outer_build_value_name, nullable_value_type},
         },
         RegisterOperatorSpillContext{},
@@ -164,6 +172,18 @@ JoinPtr makeOuterJoinTestJoin(
         flag_helper_name,
         0,
         true);
+}
+
+JoinPtr makeOuterJoinTestJoin(
+    ASTTableJoin::Kind kind,
+    const JoinNonEqualConditions & non_equal_conditions = JoinNonEqualConditions{},
+    const String & flag_helper_name = "")
+{
+    return makeOuterJoinTestJoin(
+        kind,
+        makeNullable(std::make_shared<DataTypeInt32>()),
+        non_equal_conditions,
+        flag_helper_name);
 }
 
 JoinPtr makeSemiJoinTestJoin(ASTTableJoin::Kind kind)
@@ -242,10 +262,14 @@ JoinPtr makeMixedKeyJoin(const std::vector<UInt8> & is_null_eq)
 
 Block makeOuterProbeSampleBlock(bool include_filter = false)
 {
-    auto nullable_int_type = makeNullable(std::make_shared<DataTypeInt32>());
+    return makeOuterProbeSampleBlock(makeNullable(std::make_shared<DataTypeInt32>()), include_filter);
+}
+
+Block makeOuterProbeSampleBlock(const DataTypePtr & key_type, bool include_filter = false)
+{
     auto int_type = std::make_shared<DataTypeInt32>();
     auto block = Block{
-        {nullable_int_type->createColumn(), nullable_int_type, outer_probe_key_name},
+        {key_type->createColumn(), key_type, outer_probe_key_name},
         {int_type->createColumn(), int_type, outer_probe_value_name},
     };
     if (include_filter)
@@ -258,10 +282,14 @@ Block makeOuterProbeSampleBlock(bool include_filter = false)
 
 Block makeOuterBuildSampleBlock(bool include_filter = false)
 {
-    auto nullable_int_type = makeNullable(std::make_shared<DataTypeInt32>());
+    return makeOuterBuildSampleBlock(makeNullable(std::make_shared<DataTypeInt32>()), include_filter);
+}
+
+Block makeOuterBuildSampleBlock(const DataTypePtr & key_type, bool include_filter = false)
+{
     auto int_type = std::make_shared<DataTypeInt32>();
     auto block = Block{
-        {nullable_int_type->createColumn(), nullable_int_type, outer_build_key_name},
+        {key_type->createColumn(), key_type, outer_build_key_name},
         {int_type->createColumn(), int_type, outer_build_value_name},
     };
     if (include_filter)
@@ -282,11 +310,6 @@ Block makeMixedProbeSampleBlock(const DataTypePtr & key_type)
     };
 }
 
-Block makeMixedProbeSampleBlock()
-{
-    return makeMixedProbeSampleBlock(makeNullable(std::make_shared<DataTypeInt32>()));
-}
-
 Block makeMixedBuildSampleBlock(const DataTypePtr & key_type)
 {
     auto int_type = std::make_shared<DataTypeInt32>();
@@ -297,14 +320,10 @@ Block makeMixedBuildSampleBlock(const DataTypePtr & key_type)
     };
 }
 
-Block makeMixedBuildSampleBlock()
+template <typename T, typename ColumnType>
+ColumnPtr makeNullableNumberColumn(std::initializer_list<std::optional<T>> values)
 {
-    return makeMixedBuildSampleBlock(makeNullable(std::make_shared<DataTypeInt32>()));
-}
-
-ColumnPtr makeNullableInt32Column(std::initializer_list<std::optional<Int32>> values)
-{
-    auto nested = ColumnInt32::create();
+    auto nested = ColumnType::create();
     auto null_map = ColumnUInt8::create();
     nested->reserve(values.size());
     null_map->reserve(values.size());
@@ -320,6 +339,60 @@ ColumnPtr makeNullableInt32Column(std::initializer_list<std::optional<Int32>> va
         else
         {
             nested_data.push_back(0);
+            null_map_data.push_back(1);
+        }
+    }
+    return ColumnNullable::create(std::move(nested), std::move(null_map));
+}
+
+ColumnPtr makeNullableInt32Column(std::initializer_list<std::optional<Int32>> values)
+{
+    return makeNullableNumberColumn<Int32, ColumnInt32>(values);
+}
+
+ColumnPtr makeNullableInt64Column(std::initializer_list<std::optional<Int64>> values)
+{
+    return makeNullableNumberColumn<Int64, ColumnInt64>(values);
+}
+
+ColumnPtr makeNullableStringColumn(std::initializer_list<std::optional<String>> values)
+{
+    auto nested = ColumnString::create();
+    auto null_map = ColumnUInt8::create();
+    null_map->reserve(values.size());
+    auto & null_map_data = null_map->getData();
+    for (const auto & value : values)
+    {
+        if (value.has_value())
+        {
+            nested->insertData(value->data(), value->size());
+            null_map_data.push_back(0);
+        }
+        else
+        {
+            nested->insertData("", 0);
+            null_map_data.push_back(1);
+        }
+    }
+    return ColumnNullable::create(std::move(nested), std::move(null_map));
+}
+
+ColumnPtr makeNullableFixedStringColumn(size_t string_size, std::initializer_list<std::optional<String>> values)
+{
+    auto nested = ColumnFixedString::create(string_size);
+    auto null_map = ColumnUInt8::create();
+    null_map->reserve(values.size());
+    auto & null_map_data = null_map->getData();
+    for (const auto & value : values)
+    {
+        if (value.has_value())
+        {
+            nested->insertData(value->data(), value->size());
+            null_map_data.push_back(0);
+        }
+        else
+        {
+            nested->insertData("", 0);
             null_map_data.push_back(1);
         }
     }
@@ -390,6 +463,22 @@ void prepareAndFinalizeOuterJoin(
     });
 }
 
+void prepareAndFinalizeOuterJoin(
+    const JoinPtr & join,
+    const DataTypePtr & key_type,
+    bool include_probe_filter = false,
+    bool include_build_filter = false)
+{
+    join->initBuild(makeOuterBuildSampleBlock(key_type, include_build_filter), 1);
+    join->initProbe(makeOuterProbeSampleBlock(key_type, include_probe_filter), 1);
+    join->finalize(Names{
+        outer_probe_key_name,
+        outer_probe_value_name,
+        outer_build_key_name,
+        outer_build_value_name,
+    });
+}
+
 void prepareAndFinalizeSemiJoin(const JoinPtr & join)
 {
     join->initBuild(makeOuterBuildSampleBlock(), 1);
@@ -402,8 +491,13 @@ void prepareAndFinalizeSemiJoin(const JoinPtr & join)
 
 void prepareAndFinalizeMixedJoin(const JoinPtr & join)
 {
-    join->initBuild(makeMixedBuildSampleBlock(), 1);
-    join->initProbe(makeMixedProbeSampleBlock(), 1);
+    prepareAndFinalizeMixedJoin(join, makeNullable(std::make_shared<DataTypeInt32>()));
+}
+
+void prepareAndFinalizeMixedJoin(const JoinPtr & join, const DataTypePtr & key_type)
+{
+    join->initBuild(makeMixedBuildSampleBlock(key_type), 1);
+    join->initProbe(makeMixedProbeSampleBlock(key_type), 1);
     join->finalize(Names{
         mixed_probe_key1_name,
         mixed_probe_key2_name,
@@ -431,6 +525,114 @@ TEST(JoinNullEqTest, NullableMixedNullEqKeysCanUseNullableKeys256JoinMapMethod)
     join->initBuild(makeMixedBuildSampleBlock(nullable_int64_type), 1);
 
     ASSERT_EQ(join->getJoinMapMethod(), JoinMapMethod::nullable_keys256);
+}
+
+TEST(JoinNullEqTest, NullableMixedNullEqKeys256JoinProducesJoinedRow)
+{
+    auto nullable_int64_type = makeNullable(std::make_shared<DataTypeInt64>());
+    auto int_type = std::make_shared<DataTypeInt32>();
+    auto join = makeMixedKeyJoin({1, 1}, nullable_int64_type);
+    prepareAndFinalizeMixedJoin(join, nullable_int64_type);
+
+    ASSERT_EQ(join->getJoinMapMethod(), JoinMapMethod::nullable_keys256);
+
+    join->setInitActiveBuildThreads();
+    join->insertFromBlock(
+        Block{
+            {makeNullableInt64Column({std::nullopt}), nullable_int64_type, mixed_build_key1_name},
+            {makeNullableInt64Column({11}), nullable_int64_type, mixed_build_key2_name},
+            {makeInt32Column({100}), int_type, mixed_build_value_name},
+        },
+        0);
+    ASSERT_TRUE(join->finishOneBuild(0));
+    join->finalizeBuild();
+
+    ProbeProcessInfo probe_process_info(1024, 0);
+    probe_process_info.resetBlock(Block{
+        {makeNullableInt64Column({std::nullopt}), nullable_int64_type, mixed_probe_key1_name},
+        {makeNullableInt64Column({11}), nullable_int64_type, mixed_probe_key2_name},
+        {makeInt32Column({10}), int_type, mixed_probe_value_name},
+    });
+    Block probe_result = join->joinBlock(probe_process_info);
+
+    ASSERT_EQ(probe_result.rows(), 1);
+    EXPECT_EQ(getInt32Value(probe_result, mixed_probe_value_name, 0), 10);
+    EXPECT_EQ(getInt32Value(probe_result, mixed_build_value_name, 0), 100);
+}
+
+TEST(JoinNullEqTest, NullableStringNullEqFallsBackToSerializedJoinMapMethod)
+{
+    auto nullable_string_type = makeNullable(std::make_shared<DataTypeString>());
+    auto int_type = std::make_shared<DataTypeInt32>();
+    auto join = makeOuterJoinTestJoin(ASTTableJoin::Kind::Inner, nullable_string_type);
+    prepareAndFinalizeOuterJoin(join, nullable_string_type);
+
+    ASSERT_EQ(join->getJoinMapMethod(), JoinMapMethod::serialized);
+
+    join->setInitActiveBuildThreads();
+    join->insertFromBlock(
+        Block{
+            {makeNullableStringColumn({std::nullopt, "alpha"}), nullable_string_type, outer_build_key_name},
+            {makeInt32Column({100, 200}), int_type, outer_build_value_name},
+        },
+        0);
+    ASSERT_TRUE(join->finishOneBuild(0));
+    join->finalizeBuild();
+
+    ProbeProcessInfo probe_process_info(1024, 0);
+    probe_process_info.resetBlock(Block{
+        {makeNullableStringColumn({std::nullopt, "alpha", "beta"}), nullable_string_type, outer_probe_key_name},
+        {makeInt32Column({10, 20, 30}), int_type, outer_probe_value_name},
+    });
+    Block probe_result = join->joinBlock(probe_process_info);
+
+    ASSERT_EQ(probe_result.rows(), 2);
+    EXPECT_EQ(getInt32Value(probe_result, outer_probe_value_name, 0), 10);
+    EXPECT_EQ(getInt32Value(probe_result, outer_build_value_name, 0), 100);
+    EXPECT_EQ(getInt32Value(probe_result, outer_probe_value_name, 1), 20);
+    EXPECT_EQ(getInt32Value(probe_result, outer_build_value_name, 1), 200);
+}
+
+TEST(JoinNullEqTest, OversizedNullableFixedKeysFallBackToSerializedJoinMapMethod)
+{
+    constexpr size_t fixed_string_size = 16;
+    auto nullable_fixed_string_type = makeNullable(std::make_shared<DataTypeFixedString>(fixed_string_size));
+    auto int_type = std::make_shared<DataTypeInt32>();
+    auto join = makeMixedKeyJoin({1, 1}, nullable_fixed_string_type);
+    prepareAndFinalizeMixedJoin(join, nullable_fixed_string_type);
+
+    ASSERT_EQ(join->getJoinMapMethod(), JoinMapMethod::serialized);
+
+    join->setInitActiveBuildThreads();
+    join->insertFromBlock(
+        Block{
+            {makeNullableFixedStringColumn(fixed_string_size, {std::nullopt}),
+             nullable_fixed_string_type,
+             mixed_build_key1_name},
+            {makeNullableFixedStringColumn(fixed_string_size, {"abcdefghijklmnop"}),
+             nullable_fixed_string_type,
+             mixed_build_key2_name},
+            {makeInt32Column({100}), int_type, mixed_build_value_name},
+        },
+        0);
+    ASSERT_TRUE(join->finishOneBuild(0));
+    join->finalizeBuild();
+
+    ProbeProcessInfo probe_process_info(1024, 0);
+    probe_process_info.resetBlock(Block{
+        {makeNullableFixedStringColumn(fixed_string_size, {std::nullopt, std::nullopt}),
+         nullable_fixed_string_type,
+         mixed_probe_key1_name},
+        {makeNullableFixedStringColumn(fixed_string_size, {"abcdefghijklmnop", "qrstuvwxyzabcdef"}),
+         nullable_fixed_string_type,
+         mixed_probe_key2_name},
+        {makeInt32Column({10, 20}), int_type, mixed_probe_value_name},
+    });
+    Block probe_result = join->joinBlock(probe_process_info);
+
+    ASSERT_EQ(probe_result.rows(), 1);
+    EXPECT_EQ(getInt32Value(probe_result, mixed_probe_value_name, 0), 10);
+    EXPECT_EQ(getInt32Value(probe_result, mixed_build_value_name, 0), 100);
 }
 
 TEST(JoinNullEqTest, DefaultMethodSelectionRemainsForOtherCases)
