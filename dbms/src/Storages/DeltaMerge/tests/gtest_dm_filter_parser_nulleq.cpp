@@ -143,6 +143,19 @@ try
         expr.add_children()->CopyFrom(buildColumnRefExpr(/*column_index*/ 0, TiDB::TypeLongLong));
         EXPECT_EQ(parseToDebugString(*context, expr), R"raw({"op":"equal","col":"a","value":"1"})raw");
     }
+
+    {
+        // White-box regression for the NullEQJson signature.
+        // DM rough set filter does not currently support JSON ColumnRef directly,
+        // so use a supported ColumnRef type here and verify the NullEQJson sig still
+        // lowers `<=> NULL` to `isnull(col)` once it reaches parseTiCompareExpr.
+        tipb::Expr expr;
+        expr.set_sig(tipb::ScalarFuncSig::NullEQJson);
+        expr.set_tp(tipb::ExprType::ScalarFunc);
+        expr.add_children()->CopyFrom(buildColumnRefExpr(/*column_index*/ 0, TiDB::TypeLongLong));
+        expr.add_children()->CopyFrom(buildNullLiteralExpr());
+        EXPECT_EQ(parseToDebugString(*context, expr), R"raw({"op":"isnull","col":"a"})raw");
+    }
 }
 CATCH
 
