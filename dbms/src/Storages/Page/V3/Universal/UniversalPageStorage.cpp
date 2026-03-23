@@ -110,9 +110,9 @@ void UniversalPageStorage::write(
     Stopwatch watch;
     SCOPE_EXIT(
         { GET_METRIC(tiflash_storage_page_write_duration_seconds, type_total).Observe(watch.elapsedSeconds()); });
-    const size_t remote_lock_key_count = write_batch.writesRemoteCount();
+    const size_t remote_write_count = write_batch.writesRemoteCount();
     std::unordered_set<String> created_pre_lock_keys;
-    if (remote_lock_key_count > 0)
+    if (remote_write_count > 0)
     {
         assert(remote_locks_local_mgr != nullptr);
         // Before ingesting remote pages/remote external pages, we need to create "lock" on S3
@@ -136,7 +136,7 @@ void UniversalPageStorage::write(
     }
     catch (...)
     {
-        if (remote_lock_key_count > 0)
+        if (remote_write_count > 0)
         {
             // If write fails after pre-lock creation, clean these pre-lock keys
             // to avoid residual entries in checkpoint_manager.pre_lock_keys.
@@ -144,21 +144,21 @@ void UniversalPageStorage::write(
             tryLogCurrentException(
                 log,
                 fmt::format(
-                    "Remote write batch failed, stage={} lock_key_count={}",
+                    "Remote write batch failed, stage={} remote_write_count={}",
                     failed_stage,
-                    remote_lock_key_count));
+                    remote_write_count));
         }
         throw;
     }
-    if (remote_lock_key_count > 0)
+    if (remote_write_count > 0)
     {
         assert(remote_locks_local_mgr != nullptr);
         if (applied_lock_ids.empty())
         {
             LOG_WARNING(
                 log,
-                "Remote write batch has lock keys but no applied lock ids, lock_key_count={}",
-                remote_lock_key_count);
+                "Remote write batch has lock keys but no applied lock ids, remote_write_count={}",
+                remote_write_count);
         }
         // Remove the applied locks from checkpoint_manager.pre_lock_files
         remote_locks_local_mgr->cleanAppliedS3ExternalFiles(std::move(applied_lock_ids));
