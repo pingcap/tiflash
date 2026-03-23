@@ -52,7 +52,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1774097820692,
+  "iteration": 1766901450632,
   "links": [],
   "panels": [
     {
@@ -1062,117 +1062,6 @@
               "max": null,
               "min": null,
               "show": false
-            }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
-        },
-        {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "${DS_TEST-CLUSTER}",
-          "decimals": 1,
-          "description": "",
-          "editable": true,
-          "error": false,
-          "fieldConfig": {
-            "defaults": {},
-            "overrides": []
-          },
-          "fill": 0,
-          "fillGradient": 0,
-          "grid": {},
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 12,
-            "y": 25
-          },
-          "hiddenSeries": false,
-          "id": 366,
-          "legend": {
-            "alignAsTable": true,
-            "avg": false,
-            "current": true,
-            "hideEmpty": false,
-            "hideZero": true,
-            "max": false,
-            "min": false,
-            "rightSide": true,
-            "show": true,
-            "sideWidth": null,
-            "sort": "current",
-            "sortDesc": true,
-            "total": false,
-            "values": true
-          },
-          "lines": true,
-          "linewidth": 1,
-          "links": [],
-          "nullPointMode": "null as zero",
-          "options": {
-            "alertThreshold": false
-          },
-          "percentage": false,
-          "pluginVersion": "7.5.11",
-          "pointradius": 5,
-          "points": false,
-          "renderer": "flot",
-          "seriesOverrides": [],
-          "spaceLength": 10,
-          "stack": false,
-          "steppedLine": false,
-          "targets": [
-            {
-              "exemplar": true,
-              "expr": "sum(tiflash_storage_s3_store_summary_bytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}) by (instance, store_id,type)",
-              "format": "time_series",
-              "interval": "",
-              "intervalFactor": 2,
-              "legendFormat": "store-{{store_id}}-{{type}}",
-              "refId": "A",
-              "step": 10
-            }
-          ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeRegions": [],
-          "timeShift": null,
-          "title": "Remote Store Summary (Disagg arch)",
-          "tooltip": {
-            "msResolution": false,
-            "shared": true,
-            "sort": 2,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "yaxes": [
-            {
-              "format": "bytes",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": "0",
-              "show": true
-            },
-            {
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
             }
           ],
           "yaxis": {
@@ -12090,7 +11979,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 11
+            "y": 43
           },
           "hiddenSeries": false,
           "id": 128,
@@ -12233,7 +12122,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 11
+            "y": 43
           },
           "hiddenSeries": false,
           "id": 129,
@@ -12350,7 +12239,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 19
+            "y": 51
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -12412,7 +12301,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 19
+            "y": 51
           },
           "hiddenSeries": false,
           "id": 158,
@@ -12548,7 +12437,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 27
+            "y": 59
           },
           "hiddenSeries": false,
           "id": 163,
@@ -12653,7 +12542,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 27
+            "y": 59
           },
           "hiddenSeries": false,
           "id": 162,
@@ -12773,7 +12662,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 35
+            "y": 67
           },
           "hiddenSeries": false,
           "id": 164,
@@ -12889,7 +12778,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 35
+            "y": 67
           },
           "hiddenSeries": false,
           "id": 231,
@@ -12996,7 +12885,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 43
+            "y": 75
           },
           "height": "",
           "hiddenSeries": false,
@@ -13109,7 +12998,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 43
+            "y": 75
           },
           "hiddenSeries": false,
           "id": 123,
@@ -13240,7 +13129,7 @@
             "h": 9,
             "w": 24,
             "x": 0,
-            "y": 51
+            "y": 83
           },
           "hiddenSeries": false,
           "id": 232,
@@ -13347,7 +13236,7 @@
             "h": 9,
             "w": 24,
             "x": 0,
-            "y": 60
+            "y": 92
           },
           "hiddenSeries": false,
           "id": 345,
@@ -13469,7 +13358,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 12
+            "y": 44
           },
           "hiddenSeries": false,
           "id": 84,
@@ -13574,7 +13463,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 12
+            "y": 44
           },
           "hiddenSeries": false,
           "id": 305,
@@ -13680,7 +13569,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 20
+            "y": 52
           },
           "hiddenSeries": false,
           "id": 266,
@@ -13712,7 +13601,7 @@
           "renderer": "flot",
           "seriesOverrides": [
             {
-              "alias": "",
+              "alias": "/-/",
               "yaxis": 2
             }
           ],
@@ -13735,7 +13624,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "I/O Limiter Pending Rate",
+          "title": "I/O Limiter Pending Rate and Duration",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -13790,7 +13679,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 20
+            "y": 52
           },
           "hiddenSeries": false,
           "id": 86,
@@ -18179,7 +18068,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 25
+            "y": 17
           },
           "hiddenSeries": false,
           "id": 187,
@@ -18299,7 +18188,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 25
+            "y": 17
           },
           "height": "",
           "hiddenSeries": false,
@@ -18418,7 +18307,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 33
+            "y": 25
           },
           "height": "",
           "hiddenSeries": false,
@@ -18528,7 +18417,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 33
+            "y": 25
           },
           "height": "",
           "hiddenSeries": false,
@@ -18641,7 +18530,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 41
+            "y": 33
           },
           "hiddenSeries": false,
           "id": 176,
@@ -18749,7 +18638,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 41
+            "y": 33
           },
           "hiddenSeries": false,
           "id": 175,
@@ -18876,7 +18765,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 49
+            "y": 41
           },
           "hiddenSeries": false,
           "id": 189,
@@ -18978,7 +18867,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 49
+            "y": 41
           },
           "hiddenSeries": false,
           "id": 191,
@@ -19068,128 +18957,17 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "decimals": 1,
-          "description": "",
-          "editable": true,
-          "error": false,
           "fieldConfig": {
             "defaults": {},
             "overrides": []
           },
           "fill": 0,
           "fillGradient": 0,
-          "grid": {},
           "gridPos": {
             "h": 8,
-            "w": 8,
+            "w": 12,
             "x": 0,
-            "y": 57
-          },
-          "hiddenSeries": false,
-          "id": 365,
-          "legend": {
-            "alignAsTable": true,
-            "avg": false,
-            "current": true,
-            "hideEmpty": false,
-            "hideZero": true,
-            "max": false,
-            "min": false,
-            "rightSide": true,
-            "show": true,
-            "sideWidth": null,
-            "sort": "current",
-            "sortDesc": true,
-            "total": false,
-            "values": true
-          },
-          "lines": true,
-          "linewidth": 1,
-          "links": [],
-          "nullPointMode": "null as zero",
-          "options": {
-            "alertThreshold": false
-          },
-          "percentage": false,
-          "pluginVersion": "7.5.11",
-          "pointradius": 5,
-          "points": false,
-          "renderer": "flot",
-          "seriesOverrides": [],
-          "spaceLength": 10,
-          "stack": false,
-          "steppedLine": false,
-          "targets": [
-            {
-              "exemplar": true,
-              "expr": "sum(tiflash_storage_s3_store_summary_bytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}) by (instance, store_id,type)",
-              "format": "time_series",
-              "interval": "",
-              "intervalFactor": 2,
-              "legendFormat": "store-{{store_id}}-{{type}}",
-              "refId": "A",
-              "step": 10
-            }
-          ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeRegions": [],
-          "timeShift": null,
-          "title": "Remote Store Summary",
-          "tooltip": {
-            "msResolution": false,
-            "shared": true,
-            "sort": 2,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "yaxes": [
-            {
-              "format": "bytes",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": "0",
-              "show": true
-            },
-            {
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
-        },
-        {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "${DS_TEST-CLUSTER}",
-          "fieldConfig": {
-            "defaults": {},
-            "overrides": []
-          },
-          "fill": 0,
-          "fillGradient": 0,
-          "gridPos": {
-            "h": 8,
-            "w": 9,
-            "x": 8,
-            "y": 57
+            "y": 49
           },
           "hiddenSeries": false,
           "id": 193,
@@ -19314,9 +19092,9 @@
           "grid": {},
           "gridPos": {
             "h": 8,
-            "w": 7,
-            "x": 17,
-            "y": 57
+            "w": 12,
+            "x": 12,
+            "y": 49
           },
           "hiddenSeries": false,
           "id": 195,
@@ -19412,219 +19190,6 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "decimals": 1,
-          "description": "",
-          "editable": true,
-          "error": false,
-          "fieldConfig": {
-            "defaults": {},
-            "overrides": []
-          },
-          "fill": 0,
-          "fillGradient": 0,
-          "grid": {},
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 0,
-            "y": 65
-          },
-          "hiddenSeries": false,
-          "id": 363,
-          "legend": {
-            "alignAsTable": true,
-            "avg": false,
-            "current": true,
-            "hideEmpty": false,
-            "hideZero": true,
-            "max": false,
-            "min": false,
-            "rightSide": true,
-            "show": true,
-            "sideWidth": null,
-            "sort": "current",
-            "sortDesc": true,
-            "total": false,
-            "values": true
-          },
-          "lines": true,
-          "linewidth": 1,
-          "links": [],
-          "nullPointMode": "null as zero",
-          "options": {
-            "alertThreshold": false
-          },
-          "percentage": false,
-          "pluginVersion": "7.5.11",
-          "pointradius": 5,
-          "points": false,
-          "renderer": "flot",
-          "seriesOverrides": [],
-          "spaceLength": 10,
-          "stack": false,
-          "steppedLine": false,
-          "targets": [
-            {
-              "exemplar": true,
-              "expr": "sum(tiflash_storage_s3_lock_mgr_status{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}) by (instance,type)",
-              "format": "time_series",
-              "interval": "",
-              "intervalFactor": 2,
-              "legendFormat": "{{instance}}-{{type}}",
-              "refId": "A",
-              "step": 10
-            }
-          ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeRegions": [],
-          "timeShift": null,
-          "title": "Local Lock Manager status",
-          "tooltip": {
-            "msResolution": false,
-            "shared": true,
-            "sort": 2,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "yaxes": [
-            {
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": "0",
-              "show": true
-            },
-            {
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
-        },
-        {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "${DS_TEST-CLUSTER}",
-          "fieldConfig": {
-            "defaults": {},
-            "overrides": []
-          },
-          "fill": 0,
-          "fillGradient": 0,
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 12,
-            "y": 65
-          },
-          "hiddenSeries": false,
-          "id": 364,
-          "legend": {
-            "alignAsTable": true,
-            "avg": false,
-            "current": true,
-            "hideEmpty": true,
-            "hideZero": false,
-            "max": true,
-            "min": false,
-            "rightSide": true,
-            "show": true,
-            "total": false,
-            "values": true
-          },
-          "lines": true,
-          "linewidth": 1,
-          "links": [],
-          "nullPointMode": "null",
-          "options": {
-            "alertThreshold": true
-          },
-          "percentage": false,
-          "pluginVersion": "7.5.11",
-          "pointradius": 5,
-          "points": false,
-          "renderer": "flot",
-          "seriesOverrides": [],
-          "spaceLength": 10,
-          "stack": false,
-          "steppedLine": false,
-          "targets": [
-            {
-              "exemplar": true,
-              "expr": "sum(rate(tiflash_storage_s3_lock_mgr_counter{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
-              "format": "time_series",
-              "interval": "",
-              "intervalFactor": 1,
-              "legendFormat": "{{type}} {{$additional_groupby}}",
-              "refId": "A"
-            }
-          ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeRegions": [],
-          "timeShift": null,
-          "title": "Local Lock Manager QPS",
-          "tooltip": {
-            "shared": true,
-            "sort": 0,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "yaxes": [
-            {
-              "decimals": null,
-              "format": "none",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": "0",
-              "show": true
-            },
-            {
-              "format": "none",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
-        },
-        {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "${DS_TEST-CLUSTER}",
           "description": "",
           "fieldConfig": {
             "defaults": {},
@@ -19636,7 +19201,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 73
+            "y": 57
           },
           "hiddenSeries": false,
           "id": 251,
@@ -19743,7 +19308,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 73
+            "y": 57
           },
           "hiddenSeries": false,
           "id": 252,
@@ -19850,7 +19415,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 81
+            "y": 65
           },
           "hiddenSeries": false,
           "id": 254,
@@ -19957,7 +19522,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 81
+            "y": 65
           },
           "hiddenSeries": false,
           "id": 253,
