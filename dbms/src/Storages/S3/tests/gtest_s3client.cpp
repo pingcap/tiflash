@@ -252,4 +252,25 @@ try
 }
 CATCH
 
+TEST_F(S3ClientTest, ListPrefixEarlyStopOnTruncatedResult)
+try
+{
+    // Keep key count above S3's default one-page listing size so listing is truncated.
+    constexpr size_t key_count = 1100;
+    for (size_t i = 0; i < key_count; ++i)
+    {
+        uploadEmptyFile(*client, fmt::format("s999/list_prefix_early_stop/key_{}", i));
+    }
+
+    size_t visited = 0;
+    listPrefix(*client, "s999/list_prefix_early_stop/", [&](const Aws::S3::Model::Object & object) {
+        UNUSED(object);
+        ++visited;
+        return PageResult{.num_keys = 1, .more = false};
+    });
+
+    ASSERT_EQ(visited, 1);
+}
+CATCH
+
 } // namespace DB::S3::tests
