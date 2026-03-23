@@ -222,7 +222,6 @@ void TMTContext::initS3GCManager(const TiFlashRaftProxyHelper * proxy_helper)
         }
         // TODO: make it reloadable
         remote_gc_config.interval_seconds = context.getSettingsRef().remote_gc_interval_seconds;
-        remote_gc_config.summary_interval_seconds = context.getSettingsRef().remote_summary_interval_seconds;
         remote_gc_config.verify_locks = context.getSettingsRef().remote_gc_verify_consistency > 0;
         // set the gc_method so that S3LockService can set tagging when create delmark
         S3::ClientFactory::instance().gc_method = remote_gc_config.method;

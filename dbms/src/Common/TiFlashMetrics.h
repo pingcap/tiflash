@@ -1335,8 +1335,6 @@ public:
         const String & resource_group,
         const DM::ReadRUType type);
 
-    void setS3StoreSummaryBytes(UInt64 store_id, UInt64 data_file_bytes, UInt64 dt_file_bytes);
-
 private:
     TiFlashMetrics();
 
@@ -1377,15 +1375,6 @@ private:
     std::shared_mutex storage_ru_read_bytes_mtx;
     // {keyspace}_{resource_group}_{type} -> Counter
     std::unordered_map<std::string, prometheus::Counter *> registered_storage_ru_read_bytes_metrics;
-
-    struct S3StoreSummaryBytesMetrics
-    {
-        prometheus::Gauge * data_file_bytes;
-        prometheus::Gauge * dt_file_bytes;
-    };
-    prometheus::Family<prometheus::Gauge> * registered_s3_store_summary_bytes_family;
-    std::shared_mutex s3_store_summary_bytes_mtx;
-    std::unordered_map<UInt64, S3StoreSummaryBytesMetrics> registered_s3_store_summary_bytes_metrics;
 
 public:
 #define MAKE_METRIC_MEMBER_M(family_name, help, type, ...) \
