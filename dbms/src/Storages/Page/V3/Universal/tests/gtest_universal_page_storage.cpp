@@ -13,12 +13,19 @@
 // limitations under the License.
 
 #include <Common/MemoryAllocTrace.h>
+#include <Common/SyncPoint/Ctl.h>
+#include <Debug/TiFlashTestEnv.h>
+#include <Flash/Disaggregated/MockS3LockClient.h>
 #include <Storages/Page/V3/Universal/RaftDataReader.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
+#include <Storages/S3/S3Common.h>
+#include <Storages/S3/S3Filename.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
+
+#include <future>
 
 namespace DB
 {
@@ -606,6 +613,71 @@ TEST_F(UniPageStorageTest, OnlyScanRaftLog)
             checker);
         ASSERT_EQ(count, 3);
     }
+}
+
+TEST_F(UniPageStorageTest, ConcurrentRemoteWriteShouldNotLeavePreLockKeys)
+{
+    // Purpose: simulate concurrent remote writes in one write-group and verify
+    // lock cleanup does not leave residual pre_lock_keys.
+    DB::tests::TiFlashTestEnv::enableS3Config();
+    page_storage = reopenWithConfig(config);
+
+    constexpr StoreID store_id = 272;
+    const UInt64 tag = 0;
+    auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
+    if (DB::tests::TiFlashTestEnv::isMockedS3Client())
+        DB::tests::TiFlashTestEnv::deleteBucket(*s3_client);
+    DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client);
+
+    auto mock_s3lock_client = std::make_shared<S3::MockS3LockClient>(s3_client);
+    page_storage->initLocksLocalManager(store_id, mock_s3lock_client);
+
+    auto build_wb = [&](UInt64 idx) {
+        UniversalWriteBatch wb;
+        auto loc = PS::V3::CheckpointLocation{
+            .data_file_id = std::make_shared<String>(S3::S3Filename::newCheckpointData(store_id, 100, idx).toFullKey()),
+            .offset_in_file = 0,
+            .size_in_file = 1024,
+        };
+        wb.putRemotePage(UniversalPageIdFormat::toFullPageId("remote", idx), tag, 0, loc, {});
+        return wb;
+    };
+
+    // Step 1: pause leader apply so three write threads join one write group.
+    auto sp_before_leader_apply = SyncPointCtl::enableInScope("before_PageDirectory::leader_apply");
+    auto th_write1 = std::async(std::launch::async, [&]() {
+        auto wb = build_wb(1);
+        page_storage->write(std::move(wb));
+    });
+    sp_before_leader_apply.waitAndPause();
+
+    auto sp_after_enter_write_group = SyncPointCtl::enableInScope("after_PageDirectory::enter_write_group");
+    auto th_write2 = std::async(std::launch::async, [&]() {
+        auto wb = build_wb(2);
+        page_storage->write(std::move(wb));
+    });
+    auto th_write3 = std::async(std::launch::async, [&]() {
+        auto wb = build_wb(3);
+        page_storage->write(std::move(wb));
+    });
+    sp_after_enter_write_group.waitAndNext();
+    sp_after_enter_write_group.waitAndNext();
+
+    // Step 2: resume apply and wait all writes complete.
+    sp_before_leader_apply.next();
+
+    th_write1.get();
+    sp_before_leader_apply.waitAndNext();
+    th_write2.get();
+    th_write3.get();
+
+    // Step 3: verify all created pre-lock keys are cleaned after apply.
+    const auto lock_info = page_storage->allocateNewUploadLocksInfo();
+    ASSERT_TRUE(lock_info.pre_lock_keys.empty()) << fmt::format("{}", lock_info.pre_lock_keys);
+
+    if (DB::tests::TiFlashTestEnv::isMockedS3Client())
+        DB::tests::TiFlashTestEnv::deleteBucket(*s3_client);
+    DB::tests::TiFlashTestEnv::disableS3Config();
 }
 
 TEST(UniPageStorageIdTest, UniversalPageId)
