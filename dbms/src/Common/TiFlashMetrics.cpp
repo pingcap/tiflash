@@ -75,9 +75,9 @@ TiFlashMetrics::TiFlashMetrics()
                                                    .Register(*registry);
 
     registered_s3_store_summary_bytes_family = &prometheus::BuildGauge()
-                                                   .Name("tiflash_storage_s3_store_summary_bytes")
-                                                   .Help("S3 storage summary bytes by store and file type")
-                                                   .Register(*registry);
+                                                    .Name("tiflash_storage_s3_store_summary_bytes")
+                                                    .Help("S3 storage summary bytes by store and file type")
+                                                    .Register(*registry);
 }
 
 void TiFlashMetrics::addReplicaSyncRU(UInt32 keyspace_id, UInt64 ru)
