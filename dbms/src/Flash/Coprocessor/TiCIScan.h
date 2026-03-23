@@ -21,6 +21,12 @@ namespace DB
 {
 class DAGContext;
 
+enum class TiCIQueryMode
+{
+    FTS,
+    Vector,
+};
+
 class TiCIScan
 {
 public:
@@ -38,11 +44,20 @@ public:
     const int & getLimit() const { return limit; }
     const tipb::Executor * getTiCIScan() const { return tici_scan; }
 
+    TiCIQueryMode getQueryMode() const { return query_mode; }
+
     void constructTiCIScanForRemoteRead(tipb::IndexScan * tipb_index_scan) const;
 
     const ::google::protobuf::RepeatedPtrField<::tipb::Expr> & getMatchExpr() const
     {
+        RUNTIME_CHECK(query_mode == TiCIQueryMode::FTS);
         return tici_scan->idx_scan().fts_query_info().match_expr();
+    }
+
+    const tipb::TiCIVectorQueryInfo & getVectorQueryInfo() const
+    {
+        RUNTIME_CHECK(query_mode == TiCIQueryMode::Vector);
+        return tici_scan->idx_scan().tici_vector_query_info();
     }
 
     bool isCount() const { return is_count_agg; }
@@ -65,7 +80,7 @@ private:
     const int index_id;
     TiDB::ColumnInfos return_columns;
     NamesAndTypes names_and_types;
-    [[maybe_unused]] tipb::FTSQueryType query_type;
+    TiCIQueryMode query_mode;
     const TableShardInfos shard_infos;
     const int limit;
     std::vector<Int64> sort_column_ids;

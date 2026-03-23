@@ -7,7 +7,7 @@ file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/cxxbridge)
 
 add_custom_command(
     OUTPUT ${TICI_LIB} 
-    COMMAND cargo build -p tici-search-lib --release --target-dir ${CMAKE_CURRENT_BINARY_DIR} --manifest-path ${TICI_PROJECT_DIR}/Cargo.toml
+    COMMAND ${CMAKE_COMMAND} -E env "CC=gcc" cargo build -p tici-search-lib --release --target-dir ${CMAKE_CURRENT_BINARY_DIR} --manifest-path ${TICI_PROJECT_DIR}/Cargo.toml
     WORKING_DIRECTORY ${TICI_PROJECT_DIR}
     DEPENDS ${LIB_SOURCE_FILES}
     COMMENT "Build Rust lib"${CMAKE_CURRENT_BINARY_DIR}
@@ -26,13 +26,16 @@ target_include_directories(tici_search_lib_static  INTERFACE
 add_library(tici_search_lib SHARED "${TiFlash_SOURCE_DIR}/libs/libclara-cmake/dummy.cpp")
 target_compile_options(tici_search_lib PRIVATE -pthread)
 target_link_options(tici_search_lib PRIVATE -pthread)
-target_link_libraries(tici_search_lib PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,tici_search_lib_static>")
 if(APPLE)
-  target_link_libraries(tici_search_lib PRIVATE
+  target_link_options(tici_search_lib PRIVATE "LINKER:-force_load,${TICI_LIB}")
+  target_link_libraries(tici_search_lib PRIVATE tici_search_lib_static
       "-framework Security"
       "-framework CoreFoundation"
       "-framework IOKit"
       )
+else()
+  target_link_libraries(tici_search_lib PRIVATE
+      -Wl,--whole-archive tici_search_lib_static -Wl,--no-whole-archive)
 endif()
 
 target_include_directories(tici_search_lib  INTERFACE
