@@ -879,7 +879,6 @@ void listPrefix(
 
         if (!should_continue)
         {
-            done = true;
             break;
         }
 
@@ -966,7 +965,6 @@ void listPrefixWithDelimiter(
 
         if (!should_continue)
         {
-            done = true;
             break;
         }
 
