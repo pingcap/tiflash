@@ -628,6 +628,9 @@ private:
     struct Writer
     {
         PageEntriesEdit * edit;
+        // Keep per-writer checkpoint lock keys before write-group merge so
+        // followers can still return their own applied ids for lock cleanup.
+        std::unordered_set<String> applied_data_files;
         bool done = false; // The work has been performed by other thread
         bool success = false; // The work complete successfully
         std::unique_ptr<DB::Exception> exception;

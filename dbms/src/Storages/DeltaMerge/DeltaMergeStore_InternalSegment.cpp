@@ -1283,9 +1283,9 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
 
         if (!isSegmentValid(lock, segment))
         {
-            LOG_DEBUG(
+            LOG_INFO(
                 log,
-                "MergeDelta - Give up segmentMergeDelta because segment not valid, segment={}",
+                "MergeDelta - Give up segmentMergeDelta because segment not valid, reason=concurrent_update segment={}",
                 segment->simpleInfo());
             wbs.setRollback();
             return {};

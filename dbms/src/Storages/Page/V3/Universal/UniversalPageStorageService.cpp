@@ -263,6 +263,11 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
     {
         LOG_INFO(log, "Upload checkpoint with all existing data");
     }
+    LOG_INFO(
+        log,
+        "Checkpoint lock set, upload_sequence={} pre_lock_keys_size={}",
+        upload_info.upload_sequence,
+        upload_info.pre_lock_keys.size());
     UniversalPageStorage::DumpCheckpointOptions opts{
         .data_file_id_pattern = S3::S3Filename::newCheckpointDataNameTemplate(store_info.id(), upload_info.upload_sequence),
         .data_file_path_pattern = local_dir_str + "dat_{seq}_{index}",
