@@ -974,14 +974,22 @@ S3GCManagerService::S3GCManagerService(
         false,
         /*interval_ms*/ config.interval_seconds * 1000);
 
-    if (config.summary_interval_seconds > 0)
+    if (config.summary_interval_seconds <= 0)
+    {
+        LOG_INFO(
+            Logger::get("S3GCManagerService"),
+            "The periodic S3 storage summary will be disabled, summary_interval_seconds={}",
+            config.summary_interval_seconds);
+    }
+    else
     {
         if (config.summary_interval_seconds < 12 * 3600)
         {
             LOG_WARNING(
                 Logger::get("S3GCManagerService"),
-                "The summary_interval_seconds={} is too small, it may cause high overhead on S3. "
-                "It is recommended to set it to a value larger than 12 hours (43200 seconds).",
+                "The summary_interval_seconds is too small, it may cause high overhead on S3. "
+                "It is recommended to set it to a value larger than 12 hours (43200 seconds), "
+                "summary_interval_seconds={}",
                 config.summary_interval_seconds);
         }
 
