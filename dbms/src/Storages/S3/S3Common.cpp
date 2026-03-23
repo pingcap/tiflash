@@ -859,7 +859,7 @@ void listPrefix(
         }
         GET_METRIC(tiflash_storage_s3_request_seconds, type_list_objects).Observe(sw_list.elapsedSeconds());
 
-        PageResult page_res{};
+        bool should_continue = true;
         const auto & result = outcome.GetResult();
         auto page_keys = result.GetContents().size();
         num_keys += page_keys;
@@ -868,22 +868,28 @@ void listPrefix(
         {
             if (!need_cut)
             {
-                page_res = pager(object);
+                should_continue = pager(object).more;
             }
             else
             {
                 // Copy the `Object` to cut off the `root` from key, the cost should be acceptable :(
                 auto object_without_root = object;
                 object_without_root.SetKey(object.GetKey().substr(cut_size, object.GetKey().size()));
-                page_res = pager(object_without_root);
+                should_continue = pager(object_without_root).more;
             }
-            if (!page_res.more)
+            if (!should_continue)
                 break;
+        }
+
+        if (!should_continue)
+        {
+            done = true;
+            break;
         }
 
         // handle the result size over max size
         done = !result.GetIsTruncated();
-        if (!done && page_res.more)
+        if (!done)
         {
             const auto & next_token = result.GetNextContinuationToken();
             req.SetContinuationToken(next_token);
@@ -946,7 +952,7 @@ void listPrefixWithDelimiter(
         }
         GET_METRIC(tiflash_storage_s3_request_seconds, type_list_objects).Observe(sw_list.elapsedSeconds());
 
-        PageResult page_res{};
+        bool should_continue = true;
         const auto & result = outcome.GetResult();
         auto page_keys = result.GetCommonPrefixes().size();
         num_keys += page_keys;
@@ -954,22 +960,28 @@ void listPrefixWithDelimiter(
         {
             if (!need_cut)
             {
-                page_res = pager(prefix);
+                should_continue = pager(prefix).more;
             }
             else
             {
                 // Copy the `CommonPrefix` to cut off the `root`, the cost should be acceptable :(
                 auto prefix_without_root = prefix;
                 prefix_without_root.SetPrefix(prefix.GetPrefix().substr(cut_size, prefix.GetPrefix().size()));
-                page_res = pager(prefix_without_root);
+                should_continue = pager(prefix_without_root).more;
             }
-            if (!page_res.more)
+            if (!should_continue)
                 break;
+        }
+
+        if (!should_continue)
+        {
+            done = true;
+            break;
         }
 
         // handle the result size over max size
         done = !result.GetIsTruncated();
-        if (!done && page_res.more)
+        if (!done)
         {
             const auto & next_token = result.GetNextContinuationToken();
             req.SetContinuationToken(next_token);
