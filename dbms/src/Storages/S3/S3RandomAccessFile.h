@@ -18,6 +18,7 @@
 #include <Common/Logger.h>
 #include <IO/BaseFile/RandomAccessFile.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
+#include <Storages/S3/S3ReadLimiter.h>
 #include <aws/s3/model/GetObjectResult.h>
 #include <common/types.h>
 
@@ -31,6 +32,7 @@
 namespace DB::S3
 {
 class TiFlashS3Client;
+class S3ReadLimiter;
 }
 
 namespace DB::ErrorCodes
@@ -93,6 +95,9 @@ private:
     off_t seekImpl(off_t offset, int whence);
     ssize_t readImpl(char * buf, size_t size);
     String readRangeOfObject();
+    ssize_t readChunked(char * buf, size_t size);
+    off_t seekChunked(off_t offset);
+    void resetReadStreamToken();
 
     // When reading, it is necessary to pass the extra information of file, such file size, to S3RandomAccessFile::create.
     // It is troublesome to pass parameters layer by layer. So currently, use thread_local global variable to pass parameters.
@@ -105,6 +110,8 @@ private:
     off_t cur_offset;
     Aws::S3::Model::GetObjectResult read_result;
     Int64 content_length = 0;
+    std::shared_ptr<S3ReadLimiter> read_limiter;
+    std::unique_ptr<S3ReadLimiter::StreamToken> read_stream_token;
 
     DB::LoggerPtr log;
     bool is_close = false;

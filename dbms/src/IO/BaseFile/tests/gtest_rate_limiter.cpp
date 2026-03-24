@@ -14,12 +14,14 @@
 
 #include <Common/Exception.h>
 #include <IO/BaseFile/RateLimiter.h>
+#include <Storages/S3/S3ReadLimiter.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <fcntl.h>
 #include <gtest/gtest.h>
 #include <unistd.h>
 
 #include <ctime>
+#include <future>
 #include <random>
 #include <thread>
 
@@ -372,6 +374,33 @@ TEST(ReadLimiterTest, ReadMany)
     request(read_limiter, 1000);
     ASSERT_EQ(read_limiter.getAvailableBalance(), -900);
     ASSERT_EQ(read_limiter.alloc_bytes, 100);
+}
+
+TEST(S3ReadLimiterTest, StreamTokenBlocksUntilRelease)
+{
+    auto limiter = std::make_shared<S3::S3ReadLimiter>(0, 1);
+    auto token1 = limiter->acquireStream();
+    ASSERT_NE(token1, nullptr);
+    ASSERT_EQ(limiter->activeStreams(), 1);
+
+    auto future = std::async(std::launch::async, [&]() { return limiter->acquireStream(); });
+    ASSERT_EQ(future.wait_for(50ms), std::future_status::timeout);
+
+    token1.reset();
+    auto token2 = future.get();
+    ASSERT_NE(token2, nullptr);
+    ASSERT_EQ(limiter->activeStreams(), 1);
+    token2.reset();
+    ASSERT_EQ(limiter->activeStreams(), 0);
+}
+
+TEST(S3ReadLimiterTest, ByteRequestsWaitForRefill)
+{
+    S3::S3ReadLimiter limiter(1000, 0, 100);
+    limiter.requestBytes(100, S3::S3ReadSource::DirectRead);
+    AtomicStopwatch watch;
+    limiter.requestBytes(100, S3::S3ReadSource::DirectRead);
+    ASSERT_GE(watch.elapsedMilliseconds(), 80);
 }
 
 #ifdef __linux__
