@@ -29,8 +29,16 @@ public:
         const String & bucket,
         const String & root,
         const Aws::Auth::AWSCredentials & cred,
-        const Aws::Client::ClientConfiguration & cfg)
-        : TiFlashS3Client(bucket, root, cred, cfg, Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never, false)
+        const Aws::Client::ClientConfiguration & cfg,
+        std::shared_ptr<S3ReadLimiter> s3_read_limiter = nullptr)
+        : TiFlashS3Client(
+            bucket,
+            root,
+            cred,
+            cfg,
+            Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
+            false,
+            std::move(s3_read_limiter))
     {}
 
     ~MockS3Client() override = default;

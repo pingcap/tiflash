@@ -17,6 +17,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <IO/BaseFile/RateLimiter.h>
 #include <Poco/Util/AbstractConfiguration.h>
+#include <Storages/S3/S3ReadLimiter.h>
 #include <boost_wrapper/string.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
@@ -482,6 +483,12 @@ ReadLimiterPtr IORateLimiter::getReadLimiter()
     return is_background_thread ? bg_read_limiter : fg_read_limiter;
 }
 
+std::shared_ptr<S3::S3ReadLimiter> IORateLimiter::getS3ReadLimiter()
+{
+    std::lock_guard lock(limiter_mtx);
+    return s3_read_limiter;
+}
+
 void IORateLimiter::updateConfig(Poco::Util::AbstractConfiguration & config_)
 {
     if (!reloadConfig(config_))
@@ -518,6 +525,20 @@ void IORateLimiter::updateLimiterByConfig(const IORateLimitConfig & cfg)
     std::lock_guard lock(limiter_mtx);
     updateReadLimiter(cfg.getBgReadMaxBytesPerSec(), cfg.getFgReadMaxBytesPerSec());
     updateWriteLimiter(cfg.getBgWriteMaxBytesPerSec(), cfg.getFgWriteMaxBytesPerSec());
+    if (cfg.s3_max_read_bytes_per_sec == 0 && cfg.s3_max_get_object_streams == 0)
+    {
+        s3_read_limiter = nullptr;
+    }
+    else if (s3_read_limiter == nullptr)
+    {
+        s3_read_limiter = std::make_shared<S3::S3ReadLimiter>(
+            cfg.s3_max_read_bytes_per_sec,
+            cfg.s3_max_get_object_streams);
+    }
+    else
+    {
+        s3_read_limiter->updateConfig(cfg.s3_max_read_bytes_per_sec, cfg.s3_max_get_object_streams);
+    }
 }
 
 void IORateLimiter::updateReadLimiter(Int64 bg_bytes, Int64 fg_bytes)

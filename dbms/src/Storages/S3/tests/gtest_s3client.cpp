@@ -15,8 +15,10 @@
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Debug/TiFlashTestEnv.h>
+#include <IO/BaseFile/RateLimiter.h>
 #include <Storages/S3/Lifecycle.h>
 #include <Storages/S3/S3Common.h>
+#include <Storages/S3/S3ReadLimiter.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <aws/core/AmazonWebServiceRequest.h>
 #include <aws/core/utils/xml/XmlSerializer.h>
@@ -251,6 +253,26 @@ try
     }
 }
 CATCH
+
+TEST_F(S3ClientTest, PublishS3ReadLimiter)
+{
+    auto limiter = std::make_shared<S3ReadLimiter>(4096, 7);
+    ClientFactory::instance().setS3ReadLimiter(limiter);
+    ASSERT_EQ(client->getS3ReadLimiter(), limiter);
+
+    IORateLimiter io_rate_limiter;
+    IORateLimitConfig cfg;
+    cfg.s3_max_read_bytes_per_sec = 8192;
+    cfg.s3_max_get_object_streams = 9;
+    io_rate_limiter.updateLimiterByConfig(cfg);
+
+    auto published = io_rate_limiter.getS3ReadLimiter();
+    ASSERT_NE(published, nullptr);
+    ClientFactory::instance().setS3ReadLimiter(published);
+    ASSERT_EQ(ClientFactory::instance().sharedTiFlashClient()->getS3ReadLimiter(), published);
+    ASSERT_EQ(published->maxReadBytesPerSec(), 8192);
+    ASSERT_EQ(published->maxStreams(), 9);
+}
 
 TEST_F(S3ClientTest, ListPrefixEarlyStopOnTruncatedResult)
 try
