@@ -44,6 +44,10 @@ inline void decodeLockCfValue(DecodedLockCFValue & res)
     case LockType::Pessimistic:
         lock_type = kvrpcpb::Op::PessimisticLock;
         break;
+    case LockType::Shared:
+        // Skip parsing shared locks as they do not block any read requests.
+        res.lock_type = kvrpcpb::Op::SharedLock;
+        return;
     }
     res.lock_type = lock_type;
     res.primary_lock = readVarString<std::string_view>(data, len);
