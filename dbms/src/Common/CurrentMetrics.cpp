@@ -86,6 +86,7 @@
     M(RegionPersisterRunMode)                   \
     M(S3Requests)                               \
     M(S3RandomAccessFile)                       \
+    M(S3ActiveGetObjectStreams)                 \
     M(GlobalStorageRunMode)                     \
     M(GlobalThread)                             \
     M(GlobalThreadActive)                       \

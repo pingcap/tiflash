@@ -942,6 +942,7 @@ try
 
     /// Initialize RateLimiter.
     global_context->initializeRateLimiter(config(), bg_pool, blockable_bg_pool);
+    S3::ClientFactory::instance().setS3ReadLimiter(global_context->getIORateLimiter().getS3ReadLimiter());
 
     global_context->setServerInfo(server_info);
     if (server_info.memory_info.capacity == 0)
@@ -971,6 +972,7 @@ try
             buildLoggers(*config);
             global_context->getTMTContext().reloadConfig(*config);
             global_context->getIORateLimiter().updateConfig(*config);
+            S3::ClientFactory::instance().setS3ReadLimiter(global_context->getIORateLimiter().getS3ReadLimiter());
             global_context->reloadDeltaTreeConfig(*config);
             DM::SegmentReadTaskScheduler::instance().updateConfig(global_context->getSettingsRef());
             if (FileCache::instance() != nullptr)

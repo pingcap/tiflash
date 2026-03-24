@@ -791,6 +791,24 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_head_object, {{"type", "head_object"}}, ExpBuckets{0.001, 2, 20}),                                                     \
       F(type_read_stream, {{"type", "read_stream"}}, ExpBuckets{0.0001, 2, 20}),                                                    \
       F(type_read_stream_err, {{"type", "read_stream_err"}}, ExpBuckets{0.0001, 2, 20}))                                            \
+    M(tiflash_storage_s3_read_limiter,                                                                                              \
+      "S3 read limiter counters",                                                                                                   \
+      Counter,                                                                                                                      \
+      F(type_stream_wait_count, {{"type", "stream_wait_count"}}),                                                                   \
+      F(type_byte_wait_count, {{"type", "byte_wait_count"}}),                                                                       \
+      F(type_direct_read_bytes, {{"type", "direct_read_bytes"}}),                                                                   \
+      F(type_filecache_download_bytes, {{"type", "filecache_download_bytes"}}))                                                     \
+    M(tiflash_storage_s3_read_limiter_wait_seconds,                                                                                 \
+      "S3 read limiter wait duration in seconds",                                                                                   \
+      Histogram,                                                                                                                    \
+      F(type_stream_wait, {{"type", "stream_wait"}}, ExpBuckets{0.0001, 2, 20}),                                                   \
+      F(type_byte_wait, {{"type", "byte_wait"}}, ExpBuckets{0.0001, 2, 20}))                                                       \
+    M(tiflash_storage_s3_read_limiter_status,                                                                                       \
+      "S3 read limiter status",                                                                                                     \
+      Gauge,                                                                                                                        \
+      F(type_active_get_object_streams, {{"type", "active_get_object_streams"}}),                                                   \
+      F(type_max_get_object_streams, {{"type", "max_get_object_streams"}}),                                                         \
+      F(type_max_read_bytes_per_sec, {{"type", "max_read_bytes_per_sec"}}))                                                         \
     M(tiflash_storage_s3_http_request_seconds,                                                                                      \
       "S3 request duration breakdown in seconds",                                                                                   \
       Histogram,                                                                                                                    \

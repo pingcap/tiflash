@@ -28,6 +28,8 @@ public:
     // For disk that read bandwidth and write bandwith are calculated separately, such as GCP's persistent disks.
     UInt64 max_read_bytes_per_sec;
     UInt64 max_write_bytes_per_sec;
+    UInt64 s3_max_read_bytes_per_sec;
+    UInt64 s3_max_get_object_streams;
 
     // only true when both max_read_bytes_per_sec and max_write_bytes_per_sec are 0
     bool use_max_bytes_per_sec;
@@ -54,6 +56,8 @@ public:
         : max_bytes_per_sec(0)
         , max_read_bytes_per_sec(0)
         , max_write_bytes_per_sec(0)
+        , s3_max_read_bytes_per_sec(0)
+        , s3_max_get_object_streams(0)
         , use_max_bytes_per_sec(true)
         // only limit background write by default
         , fg_write_weight(0)
