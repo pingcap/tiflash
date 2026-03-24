@@ -88,6 +88,7 @@ public:
     }
 
     Status waitForNotEmpty();
+    Status waitForNotEmptyFor(std::chrono::milliseconds timeout);
 
     void setComplete(UInt64 size_)
     {
@@ -351,7 +352,11 @@ public:
 
     void bgDownload(const String & s3_key, FileSegmentPtr & file_seg);
     void fgDownload(const String & s3_key, FileSegmentPtr & file_seg);
-    void bgDownloadExecutor(const String & s3_key, FileSegmentPtr & file_seg, const WriteLimiterPtr & write_limiter);
+    void bgDownloadExecutor(
+        const String & s3_key,
+        FileSegmentPtr & file_seg,
+        const WriteLimiterPtr & write_limiter,
+        std::chrono::steady_clock::time_point enqueue_time);
     void downloadImpl(const String & s3_key, FileSegmentPtr & file_seg, const WriteLimiterPtr & write_limiter);
 
     static String toTemporaryFilename(const String & fname);
@@ -465,6 +470,7 @@ public:
     const UInt16 logical_cores;
     IORateLimiter & rate_limiter;
     std::atomic<UInt64> cache_min_age_seconds = 1800;
+    std::atomic<UInt64> wait_on_downloading_ms = 0;
     std::atomic<double> download_count_scale = 2.0;
     std::atomic<double> max_downloading_count_scale = 10.0;
     // the on-going background download count

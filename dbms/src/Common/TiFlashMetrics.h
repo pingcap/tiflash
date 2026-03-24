@@ -901,6 +901,10 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_dtfile_full, {"type", "dtfile_full"}),                                                                                 \
       F(type_dtfile_download, {"type", "dtfile_download"}),                                                                         \
       F(type_dtfile_download_failed, {"type", "dtfile_download_failed"}),                                                           \
+      F(type_wait_on_downloading, {"type", "wait_on_downloading"}),                                                                 \
+      F(type_wait_on_downloading_hit, {"type", "wait_on_downloading_hit"}),                                                         \
+      F(type_wait_on_downloading_timeout, {"type", "wait_on_downloading_timeout"}),                                                 \
+      F(type_wait_on_downloading_failed, {"type", "wait_on_downloading_failed"}),                                                   \
       F(type_page_hit, {"type", "page_hit"}),                                                                                       \
       F(type_page_miss, {"type", "page_miss"}),                                                                                     \
       F(type_page_evict, {"type", "page_evict"}),                                                                                   \
@@ -915,6 +919,10 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_page_evict_bytes, {"type", "page_evict_bytes"}),                                                                       \
       F(type_page_download_bytes, {"type", "page_download_bytes"}),                                                                 \
       F(type_page_read_bytes, {"type", "page_read_bytes"}))                                                                         \
+    M(tiflash_storage_remote_cache_status,                                                                                           \
+      "Remote cache status",                                                                                                        \
+      Gauge,                                                                                                                        \
+      F(type_bg_downloading_count, {{"type", "bg_downloading_count"}}))                                                            \
     M(tiflash_storage_io_limiter_pending_seconds,                                                                                   \
       "I/O limiter pending duration in seconds",                                                                                    \
       Histogram,                                                                                                                    \
