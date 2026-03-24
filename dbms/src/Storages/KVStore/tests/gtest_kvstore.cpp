@@ -676,8 +676,7 @@ TEST_F(RegionKVStoreOldTest, RegionReadWrite)
         region->clearAllData();
     }
     {
-        region->insertFromSnap(
-            tmt,
+        region->insert(
             "lock",
             RecordKVFormat::genKey(table_id, 3),
             RecordKVFormat::encodeLockCfValue(RecordKVFormat::LockType::Shared, "PK", 3, 20, nullptr, 5));
