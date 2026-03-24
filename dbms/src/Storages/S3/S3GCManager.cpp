@@ -218,16 +218,12 @@ bool S3GCManager::runOnAllStores()
     return false;
 }
 
-<<<<<<< HEAD
-void S3GCManager::runForStore(UInt64 gc_store_id)
-=======
 bool S3GCManager::isOwner() const
 {
     return gc_owner_manager->isOwner();
 }
 
-void S3GCManager::runForStore(UInt64 gc_store_id, LoggerPtr slogger)
->>>>>>> 943351404a (disagg: Add O11y on object store usage summary of each tiflash store (#10764))
+void S3GCManager::runForStore(UInt64 gc_store_id)
 {
     // get a timepoint at the begin, only remove objects that expired compare
     // to this timepoint
