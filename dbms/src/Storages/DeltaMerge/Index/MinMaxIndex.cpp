@@ -290,10 +290,10 @@ RSResults MinMaxIndex::checkNullableIn(
             size_t pos = i * 2;
             size_t prev_offset = pos == 0 ? 0 : offsets[pos - 1];
             // todo use StringRef instead of String
-            auto min = String(chars[prev_offset], offsets[pos] - prev_offset - 1);
+            auto min = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
             pos = i * 2 + 1;
             prev_offset = offsets[pos - 1];
-            auto max = String(chars[prev_offset], offsets[pos] - prev_offset - 1);
+            auto max = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
             auto value_result = RoughCheck::CheckIn::check<String>(values, type, min, max);
             results[i - start_pack] = addNullIfHasNull(value_result, i);
         }
@@ -564,10 +564,10 @@ RSResults MinMaxIndex::checkNullableNullEqual(
             size_t pos = i * 2;
             size_t prev_offset = pos == 0 ? 0 : offsets[pos - 1];
             // todo use StringRef instead of String
-            auto min = String(chars[prev_offset], offsets[pos] - prev_offset - 1);
+            auto min = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
             pos = i * 2 + 1;
             prev_offset = offsets[pos - 1];
-            auto max = String(chars[prev_offset], offsets[pos] - prev_offset - 1);
+            auto max = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
             auto value_result = RoughCheck::CheckEqual::check<String>(value, type, min, max);
             if (has_null_marks[i] && value_result == RSResult::All)
                 results[i - start_pack] = RSResult::Some;
@@ -680,10 +680,10 @@ RSResults MinMaxIndex::checkNullableCmp(
             size_t pos = i * 2;
             size_t prev_offset = pos == 0 ? 0 : offsets[pos - 1];
             // todo use StringRef instead of String
-            auto min = String(chars[prev_offset], offsets[pos] - prev_offset - 1);
+            auto min = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
             pos = i * 2 + 1;
             prev_offset = offsets[pos - 1];
-            auto max = String(chars[prev_offset], offsets[pos] - prev_offset - 1);
+            auto max = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
             auto value_result = Op::template check<String>(value, type, min, max);
             results[i - start_pack] = addNullIfHasNull(value_result, i);
         }

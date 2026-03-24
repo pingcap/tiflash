@@ -2115,6 +2115,59 @@ try
 }
 CATCH
 
+TEST_F(MinMaxIndexTest, NullableStringCmpInAndNullEQ)
+try
+{
+    struct NullableStringTestCase
+    {
+        std::vector<std::optional<String>> column_data;
+        std::vector<UInt64> del_mark;
+    };
+
+    std::vector<NullableStringTestCase> cases = {
+        {{String("aa"), std::nullopt}, {0, 0}},
+        {{String("bb"), std::nullopt}, {0, 0}},
+        {{std::nullopt}, {0}},
+    };
+
+    auto col_type = makeNullable(std::make_shared<DataTypeString>());
+    auto minmax_index = std::make_shared<MinMaxIndex>(*col_type);
+    for (const auto & c : cases)
+    {
+        RUNTIME_CHECK(c.column_data.size(), c.del_mark.size());
+        auto col_data = createColumn<Nullable<String>>(c.column_data).column;
+        auto del_mark_col = createColumn<UInt8>(c.del_mark).column;
+        minmax_index->addPack(*col_data, static_cast<const ColumnVector<UInt8> *>(del_mark_col.get()));
+    }
+
+    auto eq_results = minmax_index->checkCmp<RoughCheck::CheckEqual>(0, cases.size(), Field(String("aa")), col_type);
+    ASSERT_EQ(eq_results[0], RSResult::AllNull);
+    ASSERT_EQ(eq_results[1], RSResult::NoneNull);
+    ASSERT_EQ(eq_results[2], RSResult::SomeNull);
+
+    auto in_results = minmax_index->checkIn(0, cases.size(), {Field(String("aa"))}, col_type);
+    ASSERT_EQ(in_results[0], RSResult::AllNull);
+    ASSERT_EQ(in_results[1], RSResult::NoneNull);
+    ASSERT_EQ(in_results[2], RSResult::SomeNull);
+
+    RSCheckParam param;
+    param.indexes.emplace(DEFAULT_COL_ID, RSIndex(col_type, minmax_index));
+
+    auto null_eq = createNullEqual(attr("Nullable(String)"), Field(String("aa")));
+    auto not_null_eq = createNot(null_eq);
+    auto null_eq_results = null_eq->roughCheck(0, cases.size(), param);
+    auto not_null_eq_results = not_null_eq->roughCheck(0, cases.size(), param);
+
+    ASSERT_EQ(null_eq_results[0], RSResult::Some);
+    ASSERT_EQ(null_eq_results[1], RSResult::None);
+    ASSERT_EQ(null_eq_results[2], RSResult::None);
+
+    ASSERT_EQ(not_null_eq_results[0], RSResult::Some);
+    ASSERT_EQ(not_null_eq_results[1], RSResult::All);
+    ASSERT_EQ(not_null_eq_results[2], RSResult::All);
+}
+CATCH
+
 TEST_F(MinMaxIndexTest, InOrNotInNULL)
 try
 {
