@@ -25,6 +25,7 @@
 #include <Storages/DeltaMerge/Filter/Like.h>
 #include <Storages/DeltaMerge/Filter/Not.h>
 #include <Storages/DeltaMerge/Filter/NotEqual.h>
+#include <Storages/DeltaMerge/Filter/NullEqual.h>
 #include <Storages/DeltaMerge/Filter/Or.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Filter/Unsupported.h>
@@ -39,6 +40,7 @@ namespace DB::DM
 // clang-format off
 RSOperatorPtr createAnd(const RSOperators & children)                           { return std::make_shared<And>(children); }
 RSOperatorPtr createEqual(const Attr & attr, const Field & value)               { return std::make_shared<Equal>(attr, value); }
+RSOperatorPtr createNullEqual(const Attr & attr, const Field & value)           { return std::make_shared<NullEqual>(attr, value); }
 RSOperatorPtr createGreater(const Attr & attr, const Field & value)             { return std::make_shared<Greater>(attr, value); }
 RSOperatorPtr createGreaterEqual(const Attr & attr, const Field & value)        { return std::make_shared<GreaterEqual>(attr, value); }
 RSOperatorPtr createIn(const Attr & attr, const Fields & values)                { return std::make_shared<In>(attr, values); }
