@@ -38,6 +38,7 @@
 #include <shared_mutex>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 
 #ifdef FIU_ENABLE
@@ -1612,6 +1613,13 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
     CurrentMetrics::Increment pending_writer_size{CurrentMetrics::PSPendingWriterNum};
     Writer w;
     w.edit = &edit;
+    // Capture this writer's checkpoint data_file_ids before write-group merge.
+    // Followers' edit objects are cleared by the owner during merge.
+    for (const auto & r : edit.getRecords())
+    {
+        if (r.entry.checkpoint_info.has_value())
+            w.applied_data_files.emplace(*r.entry.checkpoint_info.data_location.data_file_id);
+    }
 
     Stopwatch watch;
     std::unique_lock apply_lock(apply_mutex);
@@ -1639,9 +1647,9 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
                 throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown exception");
             }
         }
-        // the `applied_data_files` will be returned by the write
-        // group owner, others just return an empty set.
-        return {};
+        // Return per-writer ids instead of merged-group ids, so upper-layer
+        // lock cleanup can always clean locks created by this writer.
+        return std::move(w.applied_data_files);
     }
 
     /// This thread now is the write group owner, build the group. It will merge the
@@ -1703,7 +1711,6 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
     });
 
     SYNC_FOR("before_PageDirectory::apply_to_memory");
-    std::unordered_set<String> applied_data_files;
     {
         std::unique_lock table_lock(table_rw_mutex);
 
@@ -1775,12 +1782,6 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
                         "should not handle edit with invalid type, type={}",
                         magic_enum::enum_name(r.type));
                 }
-
-                // collect the applied remote data_file_ids
-                if (r.entry.checkpoint_info.has_value())
-                {
-                    applied_data_files.emplace(*r.entry.checkpoint_info.data_location.data_file_id);
-                }
             }
             catch (DB::Exception & e)
             {
@@ -1800,7 +1801,9 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
     }
 
     success = true;
-    return applied_data_files;
+    // Even for write-group owner, return only this writer's pre-captured ids.
+    // Other writers return their own ids in the `w.done` branch above.
+    return std::move(w.applied_data_files);
 }
 
 template <typename Trait>
