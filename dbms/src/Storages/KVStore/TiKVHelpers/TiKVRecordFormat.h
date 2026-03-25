@@ -370,6 +370,7 @@ enum LockType : UInt8
     Delete = 'D',
     Lock = 'L',
     Pessimistic = 'S',
+    Shared = 'H',
 };
 
 struct InnerDecodedWriteCFValue

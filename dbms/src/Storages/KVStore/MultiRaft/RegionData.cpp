@@ -225,7 +225,7 @@ DecodedLockCFValuePtr RegionData::getLockInfo(const RegionLockReadQuery & query)
         const auto & lock_info = *lock_info_ptr;
 
         if (lock_info.lock_version > query.read_tso || lock_info.lock_type == kvrpcpb::Op::Lock
-            || lock_info.lock_type == kvrpcpb::Op::PessimisticLock)
+            || lock_info.lock_type == kvrpcpb::Op::PessimisticLock || lock_info.lock_type == kvrpcpb::Op::SharedLock)
             continue;
         if (lock_info.min_commit_ts > query.read_tso)
             continue;

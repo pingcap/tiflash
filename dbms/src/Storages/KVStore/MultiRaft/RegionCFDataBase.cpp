@@ -72,6 +72,10 @@ RegionDataRes RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key, Ti
             {
                 GET_METRIC(tiflash_raft_process_keys, type_large_txn_lock_put).Increment(1);
             }
+            if (decoded->lock_type == kvrpcpb::Op::SharedLock)
+            {
+                GET_METRIC(tiflash_raft_process_keys, type_shared_lock_put).Increment(1);
+            }
         }
     }
     // according to the process of pessimistic lock, just overwrite.
