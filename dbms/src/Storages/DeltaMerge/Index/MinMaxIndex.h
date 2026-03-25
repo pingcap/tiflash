@@ -69,6 +69,7 @@ public:
 
     template <typename Op>
     RSResults checkCmp(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type);
+    RSResults checkNullEqual(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type);
 
     // TODO: merge with checkCmp
     RSResults checkIn(
@@ -101,6 +102,19 @@ private:
     RSResults checkNullableCmpImpl(
         const DB::ColumnNullable & column_nullable,
         const DB::ColumnUInt8 & null_map,
+        size_t start_pack,
+        size_t pack_count,
+        const Field & value,
+        const DataTypePtr & type);
+    template <typename T>
+    RSResults checkNullableNullEqualImpl(
+        const DB::ColumnNullable & column_nullable,
+        const DB::ColumnUInt8 & null_map,
+        size_t start_pack,
+        size_t pack_count,
+        const Field & value,
+        const DataTypePtr & type);
+    RSResults checkNullableNullEqual(
         size_t start_pack,
         size_t pack_count,
         const Field & value,
