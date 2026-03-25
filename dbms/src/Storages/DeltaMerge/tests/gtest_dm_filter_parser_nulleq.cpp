@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Inc.
+// Copyright 2026 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -61,6 +61,15 @@ tipb::Expr buildNullLiteralExpr()
     return lit;
 }
 
+tipb::Expr buildLogicalNotExpr(const tipb::Expr & child)
+{
+    tipb::Expr expr;
+    expr.set_sig(tipb::ScalarFuncSig::UnaryNotInt);
+    expr.set_tp(tipb::ExprType::ScalarFunc);
+    expr.add_children()->CopyFrom(child);
+    return expr;
+}
+
 String parseToDebugString(Context & context, const tipb::Expr & filter_expr)
 {
     google::protobuf::RepeatedPtrField<tipb::Expr> filters;
@@ -105,13 +114,13 @@ try
     auto context = DMTestEnv::getContext();
 
     {
-        // a <=> 1 -> equal(a, 1)
+        // a <=> 1 -> null_equal(a, 1)
         tipb::Expr expr;
         expr.set_sig(tipb::ScalarFuncSig::NullEQInt);
         expr.set_tp(tipb::ExprType::ScalarFunc);
         expr.add_children()->CopyFrom(buildColumnRefExpr(/*column_index*/ 0, TiDB::TypeLongLong));
         expr.add_children()->CopyFrom(buildInt64LiteralExpr(1));
-        EXPECT_EQ(parseToDebugString(*context, expr), R"raw({"op":"equal","col":"a","value":"1"})raw");
+        EXPECT_EQ(parseToDebugString(*context, expr), R"raw({"op":"null_equal","col":"a","value":"1"})raw");
     }
 
     {
@@ -135,13 +144,25 @@ try
     }
 
     {
-        // 1 <=> a -> equal(a, 1)
+        // 1 <=> a -> null_equal(a, 1)
         tipb::Expr expr;
         expr.set_sig(tipb::ScalarFuncSig::NullEQInt);
         expr.set_tp(tipb::ExprType::ScalarFunc);
         expr.add_children()->CopyFrom(buildInt64LiteralExpr(1));
         expr.add_children()->CopyFrom(buildColumnRefExpr(/*column_index*/ 0, TiDB::TypeLongLong));
-        EXPECT_EQ(parseToDebugString(*context, expr), R"raw({"op":"equal","col":"a","value":"1"})raw");
+        EXPECT_EQ(parseToDebugString(*context, expr), R"raw({"op":"null_equal","col":"a","value":"1"})raw");
+    }
+
+    {
+        // not(a <=> 1) keeps the dedicated null_equal node under logical not.
+        tipb::Expr expr;
+        expr.set_sig(tipb::ScalarFuncSig::NullEQInt);
+        expr.set_tp(tipb::ExprType::ScalarFunc);
+        expr.add_children()->CopyFrom(buildColumnRefExpr(/*column_index*/ 0, TiDB::TypeLongLong));
+        expr.add_children()->CopyFrom(buildInt64LiteralExpr(1));
+        EXPECT_EQ(
+            parseToDebugString(*context, buildLogicalNotExpr(expr)),
+            R"raw({"op":"not","children":[{"op":"null_equal","col":"a","value":"1"}]})raw");
     }
 
     {
