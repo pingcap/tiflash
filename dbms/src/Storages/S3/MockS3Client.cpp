@@ -195,6 +195,8 @@ Model::DeleteObjectOutcome MockS3Client::DeleteObject(const Model::DeleteObjectR
 
 Model::ListObjectsV2Outcome MockS3Client::ListObjectsV2(const Model::ListObjectsV2Request & request) const
 {
+    constexpr int default_max_keys = 1000;
+
     std::lock_guard lock(mtx);
     auto itr = storage.find(request.GetBucket());
     if (itr == storage.end())
@@ -203,25 +205,60 @@ Model::ListObjectsV2Outcome MockS3Client::ListObjectsV2(const Model::ListObjects
     }
     const auto & bucket_storage = itr->second;
     Model::ListObjectsV2Result result;
-    RUNTIME_CHECK(!request.DelimiterHasBeenSet() || request.GetDelimiter() == "/", request.GetDelimiter());
+    if (request.DelimiterHasBeenSet())
+        RUNTIME_CHECK(request.GetDelimiter() == "/", request.GetDelimiter());
+
+    const auto max_keys = request.MaxKeysHasBeenSet() ? request.GetMaxKeys() : default_max_keys;
+    RUNTIME_CHECK(max_keys > 0, max_keys);
+    const auto continuation_token = request.ContinuationTokenHasBeenSet() ? request.GetContinuationToken() : String{};
+
+    auto finalize_page = [&](const auto & sorted_keys, auto append_result) {
+        auto begin = sorted_keys.begin();
+        if (!continuation_token.empty())
+            begin = sorted_keys.lower_bound(continuation_token);
+
+        int key_count = 0;
+        for (auto iter = begin; iter != sorted_keys.end() && key_count < max_keys; ++iter, ++key_count)
+            append_result(*iter);
+
+        result.SetKeyCount(key_count);
+
+        auto next_iter = begin;
+        for (int i = 0; i < key_count && next_iter != sorted_keys.end(); ++i)
+            ++next_iter;
+        if (next_iter != sorted_keys.end())
+        {
+            result.SetIsTruncated(true);
+            result.SetNextContinuationToken(*next_iter);
+        }
+        else
+        {
+            result.SetIsTruncated(false);
+        }
+    };
 
     auto normalized_prefix = normalizedKey(request.GetPrefix());
     if (!request.DelimiterHasBeenSet())
     {
+        std::set<String> matched_keys;
         for (auto itr_obj = bucket_storage.lower_bound(normalized_prefix); itr_obj != bucket_storage.end(); ++itr_obj)
         {
             if (startsWith(itr_obj->first, normalized_prefix))
             {
-                Model::Object obj;
-                obj.SetKey(itr_obj->first);
-                obj.SetSize(itr_obj->second.size());
-                result.AddContents(std::move(obj));
+                matched_keys.insert(itr_obj->first);
             }
             else
             {
                 break;
             }
         }
+
+        finalize_page(matched_keys, [&](const auto & key) {
+            Model::Object obj;
+            obj.SetKey(key);
+            obj.SetSize(bucket_storage.at(key).size());
+            result.AddContents(std::move(obj));
+        });
     }
     else
     {
@@ -237,10 +274,9 @@ Model::ListObjectsV2Outcome MockS3Client::ListObjectsV2(const Model::ListObjects
                 continue;
             common_prefix.insert(key.substr(0, pos + delimiter.size()));
         }
-        for (const auto & p : common_prefix)
-        {
-            result.AddCommonPrefixes(Model::CommonPrefix().WithPrefix(p));
-        }
+        finalize_page(common_prefix, [&](const auto & key) {
+            result.AddCommonPrefixes(Model::CommonPrefix().WithPrefix(key));
+        });
     }
     return result;
 }

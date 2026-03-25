@@ -252,4 +252,78 @@ try
 }
 CATCH
 
+TEST_F(S3ClientTest, ListPrefixEarlyStopOnTruncatedResult)
+try
+{
+    // Keep key count above S3's default one-page listing size so listing is truncated.
+    constexpr size_t key_count = 1001;
+    SCOPE_EXIT({
+        for (size_t i = 0; i < key_count; ++i)
+            deleteObject(*client, fmt::format("s999/list_prefix_early_stop/key_{}", i));
+    });
+    for (size_t i = 0; i < key_count; ++i)
+    {
+        uploadEmptyFile(*client, fmt::format("s999/list_prefix_early_stop/key_{}", i));
+    }
+
+    Aws::S3::Model::ListObjectsV2Request req;
+    req.WithBucket(client->bucket()).WithPrefix(client->root() + "s999/list_prefix_early_stop/");
+    auto outcome = client->ListObjectsV2(req);
+    ASSERT_TRUE(outcome.IsSuccess());
+    const auto & result = outcome.GetResult();
+    ASSERT_TRUE(result.GetIsTruncated());
+    ASSERT_EQ(result.GetContents().size(), 1000);
+    ASSERT_FALSE(result.GetNextContinuationToken().empty());
+
+    size_t visited = 0;
+    listPrefix(*client, "s999/list_prefix_early_stop/", [&](const Aws::S3::Model::Object & object) {
+        UNUSED(object);
+        ++visited;
+        return PageResult{.num_keys = 1, .more = false};
+    });
+
+    ASSERT_EQ(visited, 1);
+}
+CATCH
+
+TEST_F(S3ClientTest, ListPrefixWithDelimiterEarlyStopOnTruncatedResult)
+try
+{
+    // Keep common prefix count above S3's default one-page listing size so listing is truncated.
+    constexpr size_t prefix_count = 1001;
+    SCOPE_EXIT({
+        for (size_t i = 0; i < prefix_count; ++i)
+            deleteObject(*client, fmt::format("s999/list_prefix_with_delimiter_early_stop/dir_{}/key", i));
+    });
+    for (size_t i = 0; i < prefix_count; ++i)
+    {
+        uploadEmptyFile(*client, fmt::format("s999/list_prefix_with_delimiter_early_stop/dir_{}/key", i));
+    }
+
+    Aws::S3::Model::ListObjectsV2Request req;
+    req.WithBucket(client->bucket())
+        .WithPrefix(client->root() + "s999/list_prefix_with_delimiter_early_stop/")
+        .WithDelimiter("/");
+    auto outcome = client->ListObjectsV2(req);
+    ASSERT_TRUE(outcome.IsSuccess());
+    const auto & result = outcome.GetResult();
+    ASSERT_TRUE(result.GetIsTruncated());
+    ASSERT_EQ(result.GetCommonPrefixes().size(), 1000);
+    ASSERT_FALSE(result.GetNextContinuationToken().empty());
+
+    size_t visited = 0;
+    listPrefixWithDelimiter(
+        *client,
+        "s999/list_prefix_with_delimiter_early_stop/",
+        "/",
+        [&](const Aws::S3::Model::CommonPrefix & prefix) {
+            UNUSED(prefix);
+            ++visited;
+            return PageResult{.num_keys = 1, .more = false};
+        });
+
+    ASSERT_EQ(visited, 1);
+}
+CATCH
+
 } // namespace DB::S3::tests
