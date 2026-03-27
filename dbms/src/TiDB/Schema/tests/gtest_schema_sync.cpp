@@ -33,6 +33,7 @@
 #include <Storages/registerStorages.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
+#include <TiDB/Schema/SchemaBuilder.h>
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <common/defines.h>
@@ -241,6 +242,62 @@ try
     std::string data = "{\"version\":40,\"type\":31,\"schema_id\":69,\"table_id\":71,\"old_table_id\":0,\"old_schema_"
                        "id\":0,\"affected_options\":null}";
     ASSERT_NO_THROW(diff.deserialize(data));
+}
+CATCH
+
+TEST_F(SchemaSyncTest, MViewRefreshOutOfPlaceSchemaDiffs)
+try
+{
+    auto pd_client = global_ctx.getTMTContext().getPDClient();
+
+    const String db_name = "mock_db";
+    MockTiDB::instance().newDataBase(db_name);
+
+    auto cols = ColumnsDescription({
+        {"col1", typeFromString("String")},
+        {"col2", typeFromString("Int64")},
+    });
+    const auto old_mview_id = MockTiDB::instance().newTable(db_name, "mv", cols, pd_client->getTS(), "");
+    const auto shadow_table_id = MockTiDB::instance().newTable(db_name, "__mv_shadow_1", cols, pd_client->getTS(), "");
+
+    auto [db_exists, db_id] = MockTiDB::instance().getDBIDByName(db_name);
+    ASSERT_TRUE(db_exists);
+
+    MockSchemaGetter getter;
+    DatabaseInfoCache databases;
+    TableIDMap table_id_map(Logger::get("SchemaSyncTest"));
+    SchemaBuilder<MockSchemaGetter, SchemaNameMapper> builder(getter, global_ctx, databases, table_id_map);
+
+    SchemaDiff create_old_mview_diff;
+    create_old_mview_diff.type = SchemaActionType::CreateTable;
+    create_old_mview_diff.schema_id = db_id;
+    create_old_mview_diff.table_id = old_mview_id;
+    builder.applyDiff(create_old_mview_diff);
+    ASSERT_TRUE(builder.applyTable(db_id, old_mview_id, old_mview_id, true));
+
+    SchemaDiff create_shadow_diff;
+    create_shadow_diff.type = SchemaActionType::ActionCreateMaterializedViewShadow;
+    create_shadow_diff.schema_id = db_id;
+    create_shadow_diff.table_id = shadow_table_id;
+    builder.applyDiff(create_shadow_diff);
+    ASSERT_TRUE(table_id_map.tableIDInDatabaseIdMap(shadow_table_id));
+    ASSERT_TRUE(builder.applyTable(db_id, shadow_table_id, shadow_table_id, true));
+    ASSERT_EQ(mustGetSyncedTable(shadow_table_id)->getTableInfo().name, "__mv_shadow_1");
+
+    MockTiDB::instance().dropTable(global_ctx, db_name, "mv", false);
+    MockTiDB::instance().renameTable(db_name, "__mv_shadow_1", "mv");
+
+    SchemaDiff cutover_diff;
+    cutover_diff.type = SchemaActionType::ActionMViewRefreshOutOfPlaceCutover;
+    cutover_diff.schema_id = db_id;
+    cutover_diff.table_id = shadow_table_id;
+    cutover_diff.old_table_id = old_mview_id;
+    builder.applyDiff(cutover_diff);
+
+    // The old MV keeps its table ID mapping until SchemaSyncService physically drops the tombstoned table.
+    ASSERT_TRUE(table_id_map.tableIDInDatabaseIdMap(old_mview_id));
+    ASSERT_TRUE(mustGetSyncedTable(old_mview_id)->isTombstone());
+    ASSERT_EQ(mustGetSyncedTable(shadow_table_id)->getTableInfo().name, "mv");
 }
 CATCH
 
