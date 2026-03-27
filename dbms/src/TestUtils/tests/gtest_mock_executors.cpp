@@ -316,6 +316,37 @@ try
 }
 CATCH
 
+TEST_F(MockDAGRequestTest, SemiJoinColumnPruneKeepsJoinOutputSchema)
+try
+{
+    const std::vector<std::pair<tipb::JoinType, size_t>> test_cases = {
+        {tipb::JoinType::TypeSemiJoin, 3},
+        {tipb::JoinType::TypeAntiSemiJoin, 3},
+        {tipb::JoinType::TypeLeftOuterSemiJoin, 4},
+        {tipb::JoinType::TypeAntiLeftOuterSemiJoin, 4},
+    };
+
+    for (const auto & [join_type, expected_size] : test_cases)
+    {
+        auto request = context.scan("test_db", "l_table")
+                           .join(context.scan("test_db", "r_table"), join_type, {col("join_c")})
+                           .build(context);
+
+        auto output_field_types = collectOutputFieldTypes(*request);
+        ASSERT_EQ(output_field_types.size(), expected_size) << fmt::underlying(join_type);
+        ASSERT_EQ(output_field_types[0].tp(), TiDB::TypeLong);
+        ASSERT_EQ(output_field_types[1].tp(), TiDB::TypeString);
+        ASSERT_EQ(output_field_types[2].tp(), TiDB::TypeString);
+
+        if (expected_size == 4)
+        {
+            ASSERT_EQ(output_field_types[3].tp(), TiDB::TypeTiny);
+            ASSERT_EQ(output_field_types[3].flag() & TiDB::ColumnFlagNotNull, 0);
+        }
+    }
+}
+CATCH
+
 TEST_F(MockDAGRequestTest, ExchangeSender)
 try
 {

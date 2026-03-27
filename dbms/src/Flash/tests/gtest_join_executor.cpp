@@ -4266,35 +4266,44 @@ try
 {
     using tipb::JoinType;
 
-    const std::vector<
-        std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnsWithTypeAndName, String>>
-        test_cases = {{
-                          {toNullableVec<Int32>("a", {1}), toNullableVec<Int32>("c", {10})},
-                          {toNullableVec<Int32>("a", {1}), toNullableVec<Int32>("c", {5})},
-                          {toNullableVec<Int32>("a", {1, {}}),
-                           toNullableVec<Int32>("c", {10, {}}),
-                           toNullableVec<Int32>("a", {{}, 1}),
-                           toNullableVec<Int32>("c", {{}, 5})},
-                          "key matched but other condition failed for all rows",
-                      },
-                      {
-                          {toNullableVec<Int32>("a", {2}), toNullableVec<Int32>("c", {20})},
-                          {toNullableVec<Int32>("a", {1}), toNullableVec<Int32>("c", {5})},
-                          {toNullableVec<Int32>("a", {2, {}}),
-                           toNullableVec<Int32>("c", {20, {}}),
-                           toNullableVec<Int32>("a", {{}, 1}),
-                           toNullableVec<Int32>("c", {{}, 5})},
-                          "key not matched",
-                      },
-                      {
-                          {toNullableVec<Int32>("a", {1}), toNullableVec<Int32>("c", {3})},
-                          {toNullableVec<Int32>("a", {1, 1}), toNullableVec<Int32>("c", {2, 4})},
-                          {toNullableVec<Int32>("a", {1, {}}),
-                           toNullableVec<Int32>("c", {3, {}}),
-                           toNullableVec<Int32>("a", {1, 1}),
-                           toNullableVec<Int32>("c", {4, 2})},
-                          "only rows that pass other condition should be marked used",
-                      }};
+    const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnsWithTypeAndName, String>>
+        test_cases
+        = {{
+               {toNullableVec<Int32>("a", {1}), toNullableVec<Int32>("c", {10})},
+               {toNullableVec<Int32>("a", {1}), toNullableVec<Int32>("c", {5})},
+               {toNullableVec<Int32>("a", {1, {}}),
+                toNullableVec<Int32>("c", {10, {}}),
+                toNullableVec<Int32>("a", {{}, 1}),
+                toNullableVec<Int32>("c", {{}, 5})},
+               "key matched but other condition failed for all rows",
+           },
+           {
+               {toNullableVec<Int32>("a", {2}), toNullableVec<Int32>("c", {20})},
+               {toNullableVec<Int32>("a", {1}), toNullableVec<Int32>("c", {5})},
+               {toNullableVec<Int32>("a", {2, {}}),
+                toNullableVec<Int32>("c", {20, {}}),
+                toNullableVec<Int32>("a", {{}, 1}),
+                toNullableVec<Int32>("c", {{}, 5})},
+               "key not matched",
+           },
+           {
+               {toNullableVec<Int32>("a", {{}}), toNullableVec<Int32>("c", {10})},
+               {toNullableVec<Int32>("a", {1}), toNullableVec<Int32>("c", {5})},
+               {toNullableVec<Int32>("a", {{}, {}}),
+                toNullableVec<Int32>("c", {10, {}}),
+                toNullableVec<Int32>("a", {{}, 1}),
+                toNullableVec<Int32>("c", {{}, 5})},
+               "probe-side null key should still be emitted as unmatched row",
+           },
+           {
+               {toNullableVec<Int32>("a", {1}), toNullableVec<Int32>("c", {3})},
+               {toNullableVec<Int32>("a", {1, 1}), toNullableVec<Int32>("c", {2, 4})},
+               {toNullableVec<Int32>("a", {1, {}}),
+                toNullableVec<Int32>("c", {3, {}}),
+                toNullableVec<Int32>("a", {1, 1}),
+                toNullableVec<Int32>("c", {4, 2})},
+               "only rows that pass other condition should be marked used",
+           }};
 
     for (const auto & [left, right, res, test_case_name] : test_cases)
     {

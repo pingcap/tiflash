@@ -1536,7 +1536,21 @@ void NO_INLINE probeBlockImplTypeCase(
         {
             if constexpr (row_flagged_map)
             {
-                block_full = RowFlaggedHashMapAdder<Map>::addNotFound(i, current_offset, offsets_to_replicate.get());
+                if constexpr (KIND == ASTTableJoin::Kind::Full)
+                {
+                    block_full = RowFlaggedHashMapAdder<Map>::addNotFoundForFull(
+                        num_columns_to_add,
+                        added_columns,
+                        i,
+                        current_offset,
+                        offsets_to_replicate.get(),
+                        probe_process_info);
+                }
+                else
+                {
+                    block_full
+                        = RowFlaggedHashMapAdder<Map>::addNotFound(i, current_offset, offsets_to_replicate.get());
+                }
             }
             /// RightSemi/RightAnti without other conditions, just ignore not matched probe rows
             else if constexpr (KIND != ASTTableJoin::Kind::RightSemi && KIND != ASTTableJoin::Kind::RightAnti)
