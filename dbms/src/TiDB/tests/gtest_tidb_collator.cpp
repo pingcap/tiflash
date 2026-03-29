@@ -18,6 +18,8 @@
 #include <TiDB/Collation/CollatorUtils.h>
 #include <gtest/gtest.h>
 
+#include <cstring>
+
 namespace DB::tests
 {
 
@@ -489,6 +491,43 @@ TEST(CollatorSuite, Utf8Mb40900AICICollator)
 TEST(CollatorSuite, Utf8Mb40900BinCollator)
 {
     testCollator<Utf8Mb40900BinCollator>();
+}
+
+TEST(CollatorSuite, Latin1SwedishCICollator)
+{
+    const auto * collator_by_id = ITiDBCollator::getCollator(ITiDBCollator::LATIN1_SWEDISH_CI);
+    const auto * collator_by_name = ITiDBCollator::getCollator("latin1_swedish_ci");
+
+    ASSERT_NE(collator_by_id, nullptr);
+    ASSERT_EQ(collator_by_id, collator_by_name);
+    ASSERT_TRUE(collator_by_id->isCI());
+
+    ASSERT_EQ(collator_by_id->compare("a", 1, "A", 1), 0);
+    ASSERT_EQ(collator_by_id->compare("y", 1, "ü", strlen("ü")), 0);
+    ASSERT_EQ(collator_by_id->compare("ä", strlen("ä"), "æ", strlen("æ")), 0);
+    ASSERT_LT(collator_by_id->compare("z", 1, "å", strlen("å")), 0);
+    ASSERT_LT(collator_by_id->compare("å", strlen("å"), "ä", strlen("ä")), 0);
+    ASSERT_LT(collator_by_id->compare("æ", strlen("æ"), "ö", strlen("ö")), 0);
+    ASSERT_EQ(collator_by_id->compare("A  ", 3, "a", 1), 0);
+
+    std::string sort_key;
+    ASSERT_EQ(collator_by_id->sortKey("😀", strlen("😀"), sort_key).toString(), std::string("?"));
+    ASSERT_EQ(collator_by_id->sortKey("Ā", strlen("Ā"), sort_key).toString(), std::string("?"));
+    ASSERT_EQ(
+        collator_by_id->sortKey("€‚ƒ„…†‡ˆ‰Š‹ŒŽ", strlen("€‚ƒ„…†‡ˆ‰Š‹ŒŽ"), sort_key).toString(),
+        std::string("\x80\x82\x83\x84\x85\x86\x87\x88\x89\x8A\x8B\x8C\x8E", 13));
+    ASSERT_EQ(
+        collator_by_id->sortKey("‘’“”•–—˜™š›œžŸ", strlen("‘’“”•–—˜™š›œžŸ"), sort_key).toString(),
+        std::string("\x91\x92\x93\x94\x95\x96\x97\x98\x99\x9A\x9B\x9C\x9E\x9F", 14));
+    ASSERT_EQ(
+        collator_by_id->sortKey("aüäæåöz", strlen("aüäæåöz"), sort_key).toString(),
+        std::string("\x41\x59\x5C\x5C\x5B\x5D\x5A", 7));
+
+    auto pattern = collator_by_id->pattern();
+    pattern->compile("Ä__", ESCAPE);
+    ASSERT_TRUE(pattern->match("Äta", strlen("Äta")));
+    ASSERT_TRUE(pattern->match("æta", strlen("æta")));
+    ASSERT_FALSE(pattern->match("åka", strlen("åka")));
 }
 
 } // namespace DB::tests
