@@ -360,3 +360,5 @@ python3 format-diff.py --diff_from $merge_base
 ## License
 
 TiFlash is under the Apache 2.0 license. See the [LICENSE](./LICENSE) file for details.
+
+<!-- VERSION_PLACEHOLDER: vrelease-nextgen-202603 -->
