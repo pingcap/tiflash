@@ -123,6 +123,13 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         original_build_key_names,
         join_non_equal_conditions);
 
+    JoinInterpreterHelper::alignNullEqKeyTypes(
+        tiflash_join.is_null_eq,
+        probe_side_prepare_actions,
+        probe_key_names,
+        build_side_prepare_actions,
+        build_key_names);
+
     const Settings & settings = context.getSettingsRef();
     size_t max_bytes_before_external_join = settings.max_bytes_before_external_join;
     auto join_req_id = fmt::format("{}_{}", log->identifier(), executor_id);
@@ -152,20 +159,29 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         right_input_header,
         join_non_equal_conditions.other_cond_expr != nullptr);
 
-    assert(build_key_names.size() == original_build_key_names.size());
-    std::unordered_map<String, String> build_key_names_map;
-    for (size_t i = 0; i < original_build_key_names.size(); ++i)
+    std::vector<RuntimeFilterPtr> runtime_filter_list;
+    if (tiflash_join.shouldDisableRuntimeFilter(build_side_prepare_actions, build_key_names))
     {
-        build_key_names_map[original_build_key_names[i]] = build_key_names[i];
+        LOG_INFO(log, "Disable runtime filter because a nullable NullEQ build key is present");
     }
-    auto runtime_filter_list
-        = tiflash_join.genRuntimeFilterList(context, build_source_columns, build_key_names_map, log);
+    else
+    {
+        assert(build_key_names.size() == original_build_key_names.size());
+        std::unordered_map<String, String> build_key_names_map;
+        for (size_t i = 0; i < original_build_key_names.size(); ++i)
+        {
+            build_key_names_map[original_build_key_names[i]] = build_key_names[i];
+        }
+        runtime_filter_list
+            = tiflash_join.genRuntimeFilterList(context, build_source_columns, build_key_names_map, log);
+    }
     LOG_DEBUG(log, "before register runtime filter list, list size:{}", runtime_filter_list.size());
     context.getDAGContext()->runtime_filter_mgr.registerRuntimeFilterList(runtime_filter_list);
 
     JoinPtr join_ptr = std::make_shared<Join>(
         probe_key_names,
         build_key_names,
+        tiflash_join.is_null_eq,
         tiflash_join.kind,
         join_req_id,
         fine_grained_shuffle.stream_count,

@@ -88,7 +88,7 @@ inline bool needScanHashMapAfterProbe(ASTTableJoin::Kind kind)
 
 inline bool isNecessaryKindToUseRowFlaggedHashMap(ASTTableJoin::Kind kind)
 {
-    return isRightSemiFamily(kind) || kind == ASTTableJoin::Kind::RightOuter;
+    return isRightSemiFamily(kind) || kind == ASTTableJoin::Kind::RightOuter || kind == ASTTableJoin::Kind::Full;
 }
 
 inline bool useRowFlaggedHashMap(ASTTableJoin::Kind kind, bool has_other_condition)
@@ -142,6 +142,11 @@ ColumnRawPtrs extractAndMaterializeKeyColumns(
     const Block & block,
     Columns & materialized_columns,
     const Strings & key_columns_names);
+void extractJoinKeyColumnsAndFilterNullMap(
+    ColumnRawPtrs & key_columns,
+    const std::vector<UInt8> & is_null_eq,
+    ColumnPtr & null_map_holder,
+    ConstNullMapPtr & null_map);
 void recordFilteredRows(
     const Block & block,
     const String & filter_column,

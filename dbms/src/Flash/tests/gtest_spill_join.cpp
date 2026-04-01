@@ -15,6 +15,7 @@
 #include <Flash/tests/gtest_join.h>
 
 #include <magic_enum.hpp>
+#include <optional>
 
 namespace DB
 {
@@ -29,6 +30,50 @@ public:
         dag_context_ptr->log = Logger::get("JoinSpillTest");
     }
 };
+
+namespace
+{
+constexpr auto * null_eq_join_db = "null_eq_join_test";
+constexpr auto * null_eq_left_table = "left_nullable_table";
+constexpr auto * null_eq_right_table = "right_nullable_table";
+constexpr auto * null_eq_right_exchange = "right_nullable_exchange";
+constexpr size_t null_eq_rows = 4096;
+constexpr size_t null_eq_fgs_stream_count = 5;
+
+ColumnsWithTypeAndName makeNullEqJoinColumns(size_t rows, Int32 value_shift)
+{
+    std::vector<ColInt32NullableType> keys;
+    std::vector<ColInt32NullableType> values;
+    keys.reserve(rows);
+    values.reserve(rows);
+    for (size_t i = 0; i < rows; ++i)
+    {
+        if (i % 64 == 0)
+            keys.emplace_back(std::nullopt);
+        else
+            keys.emplace_back(static_cast<Int32>(i));
+        values.emplace_back(static_cast<Int32>((i + value_shift) % 11));
+    }
+    return {toNullableVec<Int32>("k", keys), toNullableVec<Int32>("v", values)};
+}
+
+void addNullEqJoinSources(MockDAGRequestContext & context)
+{
+    MockColumnInfoVec column_infos{{"k", TiDB::TP::TypeLong}, {"v", TiDB::TP::TypeLong}};
+    MockColumnInfoVec partition_column_infos{{"k", TiDB::TP::TypeLong}};
+    auto left_columns = makeNullEqJoinColumns(null_eq_rows, 1);
+    auto right_columns = makeNullEqJoinColumns(null_eq_rows, 5);
+
+    context.addMockTable(null_eq_join_db, null_eq_left_table, column_infos, left_columns, 10);
+    context.addMockTable(null_eq_join_db, null_eq_right_table, column_infos, right_columns, 10);
+    context.addExchangeReceiver(
+        null_eq_right_exchange,
+        column_infos,
+        right_columns,
+        null_eq_fgs_stream_count,
+        partition_column_infos);
+}
+} // namespace
 
 #define WRAP_FOR_SPILL_TEST_BEGIN                  \
     std::vector<bool> pipeline_bools{false, true}; \
@@ -571,6 +616,172 @@ try
                 ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams_small));
         }
     }
+    WRAP_FOR_SPILL_TEST_END
+}
+CATCH
+
+TEST_F(SpillJoinTestRunner, FullOuterJoinWithOtherConditionSpill)
+try
+{
+    UInt64 max_block_size = 800;
+    size_t original_max_streams = 20;
+    UInt64 max_bytes_before_external_join = 20000;
+    String left_table_name = "left_table_10_concurrency";
+    String right_table_name = "right_table_10_concurrency";
+
+    WRAP_FOR_SPILL_TEST_BEGIN
+    auto request = context.scan("outer_join_test", left_table_name)
+                       .join(
+                           context.scan("outer_join_test", right_table_name),
+                           tipb::JoinType::TypeFullOuterJoin,
+                           {col("a")},
+                           {},
+                           {},
+                           {lt(col(left_table_name + ".b"), col(right_table_name + ".b"))},
+                           {},
+                           0,
+                           false,
+                           1)
+                       .project(
+                           {fmt::format("{}.a", left_table_name),
+                            fmt::format("{}.b", left_table_name),
+                            fmt::format("{}.a", right_table_name),
+                            fmt::format("{}.b", right_table_name)})
+                       .build(context);
+    auto request_column_prune = context.scan("outer_join_test", left_table_name)
+                                    .join(
+                                        context.scan("outer_join_test", right_table_name),
+                                        tipb::JoinType::TypeFullOuterJoin,
+                                        {col("a")},
+                                        {},
+                                        {},
+                                        {lt(col(left_table_name + ".b"), col(right_table_name + ".b"))},
+                                        {},
+                                        0,
+                                        false,
+                                        1)
+                                    .aggregation({Count(lit(static_cast<UInt64>(1)))}, {})
+                                    .build(context);
+
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
+    context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
+    auto ref_columns = executeStreams(request, original_max_streams);
+
+    context.context->setSetting(
+        "max_bytes_before_external_join",
+        Field(static_cast<UInt64>(max_bytes_before_external_join)));
+    ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
+    ASSERT_COLUMNS_EQ_UR(genScalarCountResults(ref_columns), executeStreams(request_column_prune, 2));
+    WRAP_FOR_SPILL_TEST_END
+}
+CATCH
+
+TEST_F(SpillJoinTestRunner, FullOuterJoinWithOtherConditionNullEqSpill)
+try
+{
+    constexpr UInt64 max_block_size = 800;
+    constexpr size_t original_max_streams = 20;
+    constexpr UInt64 max_bytes_before_external_join = 20000;
+    addNullEqJoinSources(context);
+
+    auto left_key = fmt::format("{}.k", null_eq_left_table);
+    auto left_value = fmt::format("{}.v", null_eq_left_table);
+    auto right_key = fmt::format("{}.k", null_eq_right_table);
+    auto right_value = fmt::format("{}.v", null_eq_right_table);
+
+    WRAP_FOR_SPILL_TEST_BEGIN
+    auto request = context.scan(null_eq_join_db, null_eq_left_table)
+                       .join(
+                           context.scan(null_eq_join_db, null_eq_right_table),
+                           tipb::JoinType::TypeFullOuterJoin,
+                           {col("k")},
+                           {},
+                           {},
+                           {lt(col(left_value), col(right_value))},
+                           {},
+                           0,
+                           false,
+                           1,
+                           {1})
+                       .project({left_key, left_value, right_key, right_value})
+                       .build(context);
+    auto request_column_prune = context.scan(null_eq_join_db, null_eq_left_table)
+                                    .join(
+                                        context.scan(null_eq_join_db, null_eq_right_table),
+                                        tipb::JoinType::TypeFullOuterJoin,
+                                        {col("k")},
+                                        {},
+                                        {},
+                                        {lt(col(left_value), col(right_value))},
+                                        {},
+                                        0,
+                                        false,
+                                        1,
+                                        {1})
+                                    .aggregation({Count(lit(static_cast<UInt64>(1)))}, {})
+                                    .build(context);
+
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
+    context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
+    auto ref_columns = executeStreams(request, original_max_streams);
+
+    context.context->setSetting(
+        "max_bytes_before_external_join",
+        Field(static_cast<UInt64>(max_bytes_before_external_join)));
+    ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
+    ASSERT_COLUMNS_EQ_UR(genScalarCountResults(ref_columns), executeStreams(request_column_prune, 2));
+    WRAP_FOR_SPILL_TEST_END
+}
+CATCH
+
+TEST_F(SpillJoinTestRunner, FineGrainedShuffleNullEqJoin)
+try
+{
+    constexpr size_t original_max_streams = 20;
+    constexpr size_t original_max_streams_small = 4;
+    addNullEqJoinSources(context);
+
+    auto left_key = fmt::format("{}.k", null_eq_left_table);
+    auto left_value = fmt::format("{}.v", null_eq_left_table);
+    auto right_value = fmt::format("{}.v", null_eq_right_table);
+    auto exchange_right_value = fmt::format("{}.v", null_eq_right_exchange);
+
+    WRAP_FOR_SPILL_TEST_BEGIN
+    context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
+    auto reference = context.scan(null_eq_join_db, null_eq_left_table)
+                         .join(
+                             context.scan(null_eq_join_db, null_eq_right_table),
+                             tipb::JoinType::TypeInnerJoin,
+                             {col("k")},
+                             {},
+                             {},
+                             {},
+                             {},
+                             0,
+                             false,
+                             1,
+                             {1})
+                         .project({left_key, left_value, right_value})
+                         .build(context);
+    auto ref_columns = executeStreams(reference, original_max_streams);
+
+    auto request = context.scan(null_eq_join_db, null_eq_left_table)
+                       .join(
+                           context.receive(null_eq_right_exchange, null_eq_fgs_stream_count),
+                           tipb::JoinType::TypeInnerJoin,
+                           {col("k")},
+                           {},
+                           {},
+                           {},
+                           {},
+                           null_eq_fgs_stream_count,
+                           false,
+                           1,
+                           {1})
+                       .project({left_key, left_value, exchange_right_value})
+                       .build(context);
+    ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
+    ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams_small));
     WRAP_FOR_SPILL_TEST_END
 }
 CATCH

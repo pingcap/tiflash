@@ -94,9 +94,9 @@ struct JoinNonEqualConditions
     /// Validate this JoinNonEqualConditions and return error message if any.
     const char * validate(ASTTableJoin::Kind kind) const
     {
-        if unlikely (!left_filter_column.empty() && !isLeftOuterJoin(kind))
+        if unlikely (!left_filter_column.empty() && !(isLeftOuterJoin(kind) || kind == ASTTableJoin::Kind::Full))
             return "non left join with left conditions";
-        if unlikely (!right_filter_column.empty() && !isRightOuterJoin(kind))
+        if unlikely (!right_filter_column.empty() && !(isRightOuterJoin(kind) || kind == ASTTableJoin::Kind::Full))
             return "non right join with right conditions";
 
         if unlikely ((!other_cond_name.empty() || !other_eq_cond_from_in_name.empty()) && other_cond_expr == nullptr)
@@ -119,6 +119,16 @@ struct JoinNonEqualConditions
 
 namespace JoinInterpreterHelper
 {
+constexpr bool makeLeftJoinSideNullable(tipb::JoinType join_type)
+{
+    return join_type == tipb::JoinType::TypeRightOuterJoin || join_type == tipb::JoinType::TypeFullOuterJoin;
+}
+
+constexpr bool makeRightJoinSideNullable(tipb::JoinType join_type)
+{
+    return join_type == tipb::JoinType::TypeLeftOuterJoin || join_type == tipb::JoinType::TypeFullOuterJoin;
+}
+
 struct TiFlashJoin
 {
     TiFlashJoin(const tipb::Join & join_, bool is_test);
@@ -130,6 +140,7 @@ struct TiFlashJoin
 
     JoinKeyTypes join_key_types;
     TiDB::TiDBCollators join_key_collators;
+    std::vector<UInt8> is_null_eq;
 
     /// (cartesian) (anti) left outer semi join.
     bool isLeftOuterSemiFamily() const
@@ -207,6 +218,9 @@ struct TiFlashJoin
         const NamesAndTypes & source_columns,
         const std::unordered_map<String, String> & key_names_map,
         const LoggerPtr & log);
+
+    bool shouldDisableRuntimeFilter(const ExpressionActionsPtr & build_prepare_actions, const Names & build_key_names)
+        const;
 };
 
 /// @join_prepare_expr_actions: generates join key columns and join filter column
@@ -219,6 +233,13 @@ std::tuple<ExpressionActionsPtr, Names, Names, String> prepareJoin(
     const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
     const JoinKeyTypes & join_key_types,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters);
+
+void alignNullEqKeyTypes(
+    const std::vector<UInt8> & is_null_eq,
+    const ExpressionActionsPtr & probe_prepare_actions,
+    Names & probe_key_names,
+    const ExpressionActionsPtr & build_prepare_actions,
+    Names & build_key_names);
 
 /// generate source_columns that is used to compile tipb::Expr, the rule is columns in `tidb_schema`
 /// must be the first part of the source_columns

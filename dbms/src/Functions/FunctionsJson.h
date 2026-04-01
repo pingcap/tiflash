@@ -42,7 +42,9 @@
 #include <tipb/expression.pb.h>
 
 #include <ext/range.h>
+#include <limits>
 #include <magic_enum.hpp>
+#include <map>
 #include <string_view>
 #include <type_traits>
 
@@ -970,6 +972,186 @@ private:
                     assert(source);
                     source->next();
                 }
+            }
+        }
+    }
+};
+
+
+class FunctionJsonObject : public IFunction
+{
+public:
+    static constexpr auto name = "json_object";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionJsonObject>(); }
+
+    String getName() const override { return name; }
+
+    size_t getNumberOfArguments() const override { return 0; }
+
+    bool isVariadic() const override { return true; }
+
+    bool useDefaultImplementationForNulls() const override { return false; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (unlikely(arguments.size() % 2 != 0))
+        {
+            throw Exception(
+                fmt::format("Incorrect parameter count in the call to native function '{}'", getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+        for (const auto arg_idx : ext::range(0, arguments.size()))
+        {
+            if (!arguments[arg_idx]->onlyNull())
+            {
+                const auto * arg = removeNullable(arguments[arg_idx]).get();
+                if (!arg->isStringOrFixedString())
+                    throw Exception(
+                        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                        "Illegal type {} of argument {} of function {}",
+                        arg->getName(),
+                        arg_idx + 1,
+                        getName());
+            }
+        }
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        if (arguments.empty())
+        {
+            // clang-format off
+            const UInt8 empty_object_json_value[] = {
+                JsonBinary::TYPE_CODE_OBJECT, // object_type
+                0x0, 0x0, 0x0, 0x0, // element_count
+                0x8, 0x0, 0x0, 0x0}; // total_size
+            // clang-format on
+            auto empty_object_json = ColumnString::create();
+            empty_object_json->insertData(
+                reinterpret_cast<const char *>(empty_object_json_value),
+                sizeof(empty_object_json_value) / sizeof(UInt8));
+            block.getByPosition(result).column = ColumnConst::create(std::move(empty_object_json), block.rows());
+            return;
+        }
+
+        auto nested_block = createBlockWithNestedColumns(block, arguments);
+        StringSources sources;
+        for (auto column_number : arguments)
+        {
+            sources.push_back(
+                block.getByPosition(column_number).column->onlyNull()
+                    ? nullptr
+                    : createDynamicStringSource(*nested_block.getByPosition(column_number).column));
+        }
+
+        auto rows = block.rows();
+        auto col_to = ColumnString::create();
+        auto & data_to = col_to->getChars();
+        auto & offsets_to = col_to->getOffsets();
+        offsets_to.resize(rows);
+
+        std::vector<const NullMap *> nullmaps;
+        nullmaps.reserve(sources.size());
+        bool is_input_nullable = false;
+        for (auto column_number : arguments)
+        {
+            const auto & col = block.getByPosition(column_number).column;
+            if (col->isColumnNullable())
+            {
+                const auto & column_nullable = static_cast<const ColumnNullable &>(*col);
+                nullmaps.push_back(&(column_nullable.getNullMapData()));
+                is_input_nullable = true;
+            }
+            else
+            {
+                nullmaps.push_back(nullptr);
+            }
+        }
+
+        if (is_input_nullable)
+            doExecuteImpl<true>(sources, rows, data_to, offsets_to, nullmaps);
+        else
+            doExecuteImpl<false>(sources, rows, data_to, offsets_to, nullmaps);
+
+        block.getByPosition(result).column = std::move(col_to);
+    }
+
+private:
+    template <bool is_input_nullable>
+    static void doExecuteImpl(
+        StringSources & sources,
+        size_t rows,
+        ColumnString::Chars_t & data_to,
+        ColumnString::Offsets & offsets_to,
+        const std::vector<const NullMap *> & nullmaps)
+    {
+        const size_t pair_count = sources.size() / 2;
+        size_t reserve_size = rows * (1 + pair_count * 16);
+        for (const auto & source : sources)
+            reserve_size += source ? source->getSizeForReserve() : rows;
+        JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
+
+        std::map<String, JsonBinary> key_value_map;
+        std::vector<StringRef> keys;
+        std::vector<JsonBinary> values;
+        keys.reserve(pair_count);
+        values.reserve(pair_count);
+
+        for (size_t i = 0; i < rows; ++i)
+        {
+            key_value_map.clear();
+            for (size_t col = 0; col < sources.size(); col += 2)
+            {
+                if constexpr (is_input_nullable)
+                {
+                    const auto * key_nullmap = nullmaps[col];
+                    if (!sources[col] || (key_nullmap && (*key_nullmap)[i]))
+                        throw Exception("JSON documents may not contain NULL member names.");
+                }
+
+                assert(sources[col]);
+                const auto & key_from = sources[col]->getWhole();
+                if (unlikely(key_from.size > std::numeric_limits<UInt16>::max()))
+                    throw Exception("TiDB/TiFlash does not yet support JSON objects with the key length >= 65536");
+                String key(reinterpret_cast<const char *>(key_from.data), key_from.size);
+
+                JsonBinary value(JsonBinary::TYPE_CODE_LITERAL, StringRef(&JsonBinary::LITERAL_NIL, 1));
+                if constexpr (is_input_nullable)
+                {
+                    const auto * value_nullmap = nullmaps[col + 1];
+                    if (sources[col + 1] && !(value_nullmap && (*value_nullmap)[i]))
+                    {
+                        const auto & data_from = sources[col + 1]->getWhole();
+                        value = JsonBinary(data_from.data[0], StringRef(&data_from.data[1], data_from.size - 1));
+                    }
+                }
+                else
+                {
+                    assert(sources[col + 1]);
+                    const auto & data_from = sources[col + 1]->getWhole();
+                    value = JsonBinary(data_from.data[0], StringRef(&data_from.data[1], data_from.size - 1));
+                }
+
+                key_value_map.insert_or_assign(std::move(key), value);
+            }
+
+            keys.clear();
+            values.clear();
+            for (const auto & [key, value] : key_value_map)
+            {
+                keys.emplace_back(key.data(), key.size());
+                values.push_back(value);
+            }
+
+            JsonBinary::buildBinaryJsonObjectInBuffer(keys, values, write_buffer);
+            writeChar(0, write_buffer);
+            offsets_to[i] = write_buffer.count();
+
+            for (const auto & source : sources)
+            {
+                if (source)
+                    source->next();
             }
         }
     }
