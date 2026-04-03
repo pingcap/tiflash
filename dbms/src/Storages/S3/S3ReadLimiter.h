@@ -34,6 +34,11 @@ enum class S3ReadSource
 class S3ReadLimiter : public std::enable_shared_from_this<S3ReadLimiter>
 {
 public:
+    /// RAII handle for one live `GetObject` body stream.
+    ///
+    /// The token is acquired before the request body starts being consumed and released when the
+    /// response stream is destroyed or re-opened. This keeps the stream limiter aligned with the
+    /// actual number of concurrent remote-read streams instead of just the number of requests sent.
     class StreamToken
     {
     public:
@@ -62,6 +67,7 @@ public:
             return *this;
         }
 
+        /// Releases one active stream slot early. Destruction does the same automatically.
         void reset();
 
     private:
@@ -99,8 +105,11 @@ public:
 private:
     using Clock = std::chrono::steady_clock;
 
+    /// Return one `GetObject` stream slot back to the limiter and wake one waiter.
     void releaseStream();
+    /// Refill the token bucket according to elapsed wall time. Caller must hold `bytes_mutex`.
     void refillBytesLocked(Clock::time_point now);
+    /// Limit the instantaneous burst so long reads are naturally split into small limiter-aware chunks.
     UInt64 burstBytesPerPeriod(UInt64 max_read_bytes_per_sec_) const;
 
     const UInt64 refill_period_ms;
@@ -113,6 +122,7 @@ private:
 
     mutable std::mutex bytes_mutex;
     std::condition_variable bytes_cv;
+    // Token-bucket state for S3 byte throttling.
     double available_bytes;
     Clock::time_point last_refill_time;
     bool stop;

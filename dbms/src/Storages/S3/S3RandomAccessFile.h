@@ -33,7 +33,7 @@ namespace DB::S3
 {
 class TiFlashS3Client;
 class S3ReadLimiter;
-}
+} // namespace DB::S3
 
 namespace DB::ErrorCodes
 {
