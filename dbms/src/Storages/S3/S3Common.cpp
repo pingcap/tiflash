@@ -349,8 +349,11 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
     {
         auto [s3_client, vendor] = create(config, log);
         cloud_vendor = vendor;
-        shared_tiflash_client
-            = std::make_shared<TiFlashS3Client>(config.bucket, config.root, std::move(s3_client), shared_s3_read_limiter);
+        shared_tiflash_client = std::make_shared<TiFlashS3Client>(
+            config.bucket,
+            config.root,
+            std::move(s3_client),
+            shared_s3_read_limiter);
     }
     else
     {
@@ -358,12 +361,8 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
         Aws::Client::ClientConfiguration cfg(true, /*defaultMode=*/"standard", /*shouldDisableIMDS=*/true);
         cfg.region = Aws::Region::US_EAST_1; // default region
         Aws::Auth::AWSCredentials cred("mock_access_key", "mock_secret_key");
-        shared_tiflash_client = std::make_unique<tests::MockS3Client>(
-            config.bucket,
-            config.root,
-            cred,
-            cfg,
-            shared_s3_read_limiter);
+        shared_tiflash_client
+            = std::make_unique<tests::MockS3Client>(config.bucket, config.root, cred, cfg, shared_s3_read_limiter);
     }
     client_is_inited = true; // init finish
 }

@@ -18,7 +18,6 @@
 #include <Storages/S3/S3ReadLimiter.h>
 
 #include <algorithm>
-
 #include <ext/scope_guard.h>
 
 namespace CurrentMetrics
@@ -30,6 +29,7 @@ namespace DB::S3
 {
 namespace
 {
+// We only emit wait metrics after the call actually blocked, so the hot path keeps the zero-wait case cheap.
 template <typename F>
 void recordWaitIfNeeded(bool waited, const Stopwatch & sw, F && observe)
 {
@@ -62,7 +62,7 @@ S3ReadLimiter::S3ReadLimiter(UInt64 max_read_bytes_per_sec_, UInt64 max_streams_
     , stop(false)
     , log(Logger::get("S3ReadLimiter"))
 {
-    GET_METRIC(tiflash_storage_s3_read_limiter_status, type_max_read_bytes_per_sec).Set(max_read_bytes_per_sec_);
+    GET_METRIC(tiflash_storage_io_limiter_curr, type_s3_read_bytes).Set(max_read_bytes_per_sec_);
     GET_METRIC(tiflash_storage_s3_read_limiter_status, type_max_get_object_streams).Set(max_streams_);
     GET_METRIC(tiflash_storage_s3_read_limiter_status, type_active_get_object_streams).Set(0);
 }
@@ -86,7 +86,7 @@ void S3ReadLimiter::updateConfig(UInt64 max_read_bytes_per_sec_, UInt64 max_stre
         std::lock_guard lock(stream_mutex);
         max_streams.store(max_streams_, std::memory_order_relaxed);
     }
-    GET_METRIC(tiflash_storage_s3_read_limiter_status, type_max_read_bytes_per_sec).Set(max_read_bytes_per_sec_);
+    GET_METRIC(tiflash_storage_io_limiter_curr, type_s3_read_bytes).Set(max_read_bytes_per_sec_);
     GET_METRIC(tiflash_storage_s3_read_limiter_status, type_max_get_object_streams).Set(max_streams_);
     bytes_cv.notify_all();
     stream_cv.notify_all();
@@ -101,19 +101,20 @@ std::unique_ptr<S3ReadLimiter::StreamToken> S3ReadLimiter::acquireStream()
     Stopwatch sw;
     bool waited = false;
     std::unique_lock lock(stream_mutex);
+    // A token is held for the whole lifetime of one `GetObject` body, not just the initial request.
     while (!stop && max_streams.load(std::memory_order_relaxed) != 0
            && active_streams.load(std::memory_order_relaxed) >= max_streams.load(std::memory_order_relaxed))
     {
         if (!waited)
         {
-            GET_METRIC(tiflash_storage_s3_read_limiter, type_stream_wait_count).Increment();
+            GET_METRIC(tiflash_storage_io_limiter_pending_count, type_s3_read_stream).Increment();
             waited = true;
         }
         stream_cv.wait(lock);
     }
 
     recordWaitIfNeeded(waited, sw, [](double seconds) {
-        GET_METRIC(tiflash_storage_s3_read_limiter_wait_seconds, type_stream_wait).Observe(seconds);
+        GET_METRIC(tiflash_storage_io_limiter_pending_seconds, type_s3_read_stream).Observe(seconds);
     });
 
     if (stop || max_streams.load(std::memory_order_relaxed) == 0)
@@ -133,10 +134,10 @@ void S3ReadLimiter::requestBytes(UInt64 bytes, S3ReadSource source)
     switch (source)
     {
     case S3ReadSource::DirectRead:
-        GET_METRIC(tiflash_storage_s3_read_limiter, type_direct_read_bytes).Increment(bytes);
+        GET_METRIC(tiflash_storage_io_limiter, type_s3_direct_read_bytes).Increment(bytes);
         break;
     case S3ReadSource::FileCacheDownload:
-        GET_METRIC(tiflash_storage_s3_read_limiter, type_filecache_download_bytes).Increment(bytes);
+        GET_METRIC(tiflash_storage_io_limiter, type_s3_filecache_download_bytes).Increment(bytes);
         break;
     }
 
@@ -149,12 +150,13 @@ void S3ReadLimiter::requestBytes(UInt64 bytes, S3ReadSource source)
     std::unique_lock lock(bytes_mutex);
     SCOPE_EXIT({
         recordWaitIfNeeded(waited, sw, [](double seconds) {
-            GET_METRIC(tiflash_storage_s3_read_limiter_wait_seconds, type_byte_wait).Observe(seconds);
+            GET_METRIC(tiflash_storage_io_limiter_pending_seconds, type_s3_read_byte).Observe(seconds);
         });
     });
     while (!stop)
     {
         const auto current_limit = max_read_bytes_per_sec.load(std::memory_order_relaxed);
+        // Config reload can disable the limiter while callers are waiting.
         if (current_limit == 0)
             return;
 
@@ -168,14 +170,15 @@ void S3ReadLimiter::requestBytes(UInt64 bytes, S3ReadSource source)
 
         if (!waited)
         {
-            GET_METRIC(tiflash_storage_s3_read_limiter, type_byte_wait_count).Increment();
+            GET_METRIC(tiflash_storage_io_limiter_pending_count, type_s3_read_byte).Increment();
             waited = true;
         }
 
+        // Sleep only for the missing budget instead of a fixed interval so large readers converge quickly
+        // after budget becomes available again.
         const auto missing = static_cast<double>(bytes) - available_bytes;
-        const auto wait_us = std::max<UInt64>(
-            1,
-            static_cast<UInt64>(missing * 1000000.0 / static_cast<double>(current_limit)));
+        const auto wait_us
+            = std::max<UInt64>(1, static_cast<UInt64>(missing * 1000000.0 / static_cast<double>(current_limit)));
         bytes_cv.wait_for(lock, std::chrono::microseconds(wait_us));
     }
 }
@@ -219,12 +222,12 @@ void S3ReadLimiter::refillBytesLocked(Clock::time_point now)
         return;
     }
 
-    const auto elapsed_ns
-        = std::chrono::duration_cast<std::chrono::nanoseconds>(now - last_refill_time).count();
+    const auto elapsed_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now - last_refill_time).count();
     if (elapsed_ns <= 0)
         return;
 
     const auto burst_bytes = static_cast<double>(burstBytesPerPeriod(current_limit));
+    // Clamp to one refill-period burst so a temporarily idle reader cannot accumulate an unbounded burst.
     available_bytes = std::min(
         burst_bytes,
         available_bytes + static_cast<double>(current_limit) * static_cast<double>(elapsed_ns) / 1000000000.0);

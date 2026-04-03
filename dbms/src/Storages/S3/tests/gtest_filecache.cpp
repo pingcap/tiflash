@@ -1146,7 +1146,8 @@ TEST_F(FileCacheTest, FileSegmentWaitForNotEmptyFor)
     file_seg->setComplete(256);
     ASSERT_EQ(complete_future.get(), FileSegment::Status::Complete);
 
-    auto failed_seg = std::make_shared<FileSegment>("/tmp/test_failed", FileSegment::Status::Empty, 128, FileType::Meta);
+    auto failed_seg
+        = std::make_shared<FileSegment>("/tmp/test_failed", FileSegment::Status::Empty, 128, FileType::Meta);
     auto failed_future = std::async(std::launch::async, [&]() { return failed_seg->waitForNotEmptyFor(200ms); });
     std::this_thread::sleep_for(20ms);
     failed_seg->setStatus(FileSegment::Status::Failed);

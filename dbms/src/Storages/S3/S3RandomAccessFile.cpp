@@ -129,6 +129,7 @@ ssize_t S3RandomAccessFile::read(char * buf, size_t size)
 ssize_t S3RandomAccessFile::readImpl(char * buf, size_t size)
 {
     if (read_limiter != nullptr)
+        // Charge the shared node-level budget in small chunks instead of allowing a single large `read()` to burst.
         return readChunked(buf, size);
 
     Stopwatch sw;
@@ -198,6 +199,8 @@ ssize_t S3RandomAccessFile::readChunked(char * buf, size_t size)
     size_t total_gcount = 0;
     while (total_gcount < size)
     {
+        // The limiter charges requested bytes before the actual stream read so direct reads and FileCache downloads
+        // compete for the same node-level remote-read budget.
         auto to_read = std::min(size - total_gcount, static_cast<size_t>(chunk_size));
         read_limiter->requestBytes(to_read, S3ReadSource::DirectRead);
         istr.read(buf + total_gcount, to_read);
@@ -289,7 +292,7 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
     if (offset_ < cur_offset)
     {
         ProfileEvents::increment(ProfileEvents::S3IOSeekBackward, 1);
-        // Backward seek, need to reset the retry count and re-initialize
+        // The current body stream is forward-only. Re-open from the target offset and release the old stream slot first.
         resetReadStreamToken();
         cur_offset = offset_;
         cur_retry = 0;
@@ -353,6 +356,7 @@ off_t S3RandomAccessFile::seekChunked(off_t offset)
     const auto bytes_to_ignore = static_cast<size_t>(offset - cur_offset);
     while (total_ignored < bytes_to_ignore)
     {
+        // `ignore()` still drains the response body from S3, so it must be accounted against the same byte budget.
         auto to_ignore = std::min(bytes_to_ignore - total_ignored, static_cast<size_t>(chunk_size));
         read_limiter->requestBytes(to_ignore, S3ReadSource::DirectRead);
         istr.ignore(to_ignore);
@@ -422,6 +426,8 @@ void S3RandomAccessFile::initialize(std::string_view action)
 {
     while (cur_retry < max_retry)
     {
+        // Hold the token for the whole body lifetime so the stream cap reflects live `GetObject` responses,
+        // including callers that read slowly or perform forward seeks.
         auto next_stream_token = read_limiter != nullptr ? read_limiter->acquireStream() : nullptr;
         Stopwatch sw_get_object;
         SCOPE_EXIT({

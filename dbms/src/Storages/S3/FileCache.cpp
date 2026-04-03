@@ -47,6 +47,7 @@
 #include <filesystem>
 #include <magic_enum.hpp>
 #include <queue>
+#include <ranges>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -406,6 +407,8 @@ FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname, const std::op
             }
             else
             {
+                // Another thread is already downloading the same object. Optionally wait for a bounded time and
+                // reuse that result instead of opening one more `GetObject` stream for the same key.
                 wait_ms = wait_on_downloading_ms.load(std::memory_order_relaxed);
                 if (wait_ms == 0)
                 {
@@ -465,11 +468,7 @@ FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname, const std::op
         const auto waited_bytes = filesize.value_or(file_seg->getSize());
         if (status == FileSegment::Status::Complete)
         {
-            observeWaitOnDownloadingMetrics(
-                file_type,
-                WaitResult::Hit,
-                waited_bytes,
-                wait_watch.elapsedSeconds());
+            observeWaitOnDownloadingMetrics(file_type, WaitResult::Hit, waited_bytes, wait_watch.elapsedSeconds());
             GET_METRIC(tiflash_storage_remote_cache, type_dtfile_hit).Increment();
             return file_seg;
         }
@@ -747,10 +746,10 @@ std::vector<FileType> FileCache::getEvictFileTypes(FileType evict_for, bool evic
         std::vector<FileType> evict_types;
         evict_types.push_back(evict_for); // First, try evict with the same file type.
         // Second, try evict from the lower priority file type.
-        for (auto itr = std::rbegin(all_file_types); itr != std::rend(all_file_types); ++itr)
+        for (auto file_type : all_file_types | std::views::reverse)
         {
-            if (*itr != evict_for)
-                evict_types.push_back(*itr);
+            if (file_type != evict_for)
+                evict_types.push_back(file_type);
         }
         return evict_types;
     }
@@ -758,10 +757,10 @@ std::vector<FileType> FileCache::getEvictFileTypes(FileType evict_for, bool evic
     {
         std::vector<FileType> evict_types;
         // Evict from the lower priority file type first.
-        for (auto itr = std::rbegin(all_file_types); itr != std::rend(all_file_types); ++itr)
+        for (auto file_type : all_file_types | std::views::reverse)
         {
-            evict_types.push_back(*itr);
-            if (*itr == evict_for)
+            evict_types.push_back(file_type);
+            if (file_type == evict_for)
             {
                 // Do not evict higher priority file type
                 break;
@@ -1095,6 +1094,8 @@ void downloadToLocal(
     Int64 remaining = content_length;
     while (remaining > 0)
     {
+        // Avoid `ReadBufferFromIStream` here so FileCache downloads can charge the shared S3 byte limiter per chunk
+        // without introducing extra heap allocation on the hot path.
         auto to_read = std::min<Int64>(remaining, static_cast<Int64>(buffer.size()));
         read_limiter->requestBytes(to_read, S3::S3ReadSource::FileCacheDownload);
         istr.read(buffer.data(), to_read);
@@ -1108,7 +1109,12 @@ void downloadToLocal(
         if (gcount < to_read)
             break;
     }
-    RUNTIME_CHECK_MSG(remaining == 0, "download {} incomplete, remaining={} content_length={}", fname, remaining, content_length);
+    RUNTIME_CHECK_MSG(
+        remaining == 0,
+        "download {} incomplete, remaining={} content_length={}",
+        fname,
+        remaining,
+        content_length);
     ofile->fsync();
 }
 
@@ -1120,6 +1126,7 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg, c
     Aws::S3::Model::GetObjectRequest req;
     client->setBucketAndKeyWithRoot(req, s3_key);
     ProfileEvents::increment(ProfileEvents::S3GetObject);
+    // Limit live background-download streams with the same token used by direct readers.
     auto stream_token = read_limiter != nullptr ? read_limiter->acquireStream() : nullptr;
     auto outcome = client->GetObject(req);
     if (!outcome.IsSuccess())

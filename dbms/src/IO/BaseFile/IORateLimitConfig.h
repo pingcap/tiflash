@@ -28,7 +28,9 @@ public:
     // For disk that read bandwidth and write bandwith are calculated separately, such as GCP's persistent disks.
     UInt64 max_read_bytes_per_sec;
     UInt64 max_write_bytes_per_sec;
+    // Node-level byte budget shared by all S3 direct reads and FileCache downloads. `0` disables byte throttling.
     UInt64 s3_max_read_bytes_per_sec;
+    // Node-level cap for concurrently active `GetObject` response bodies. `0` disables stream throttling.
     UInt64 s3_max_get_object_streams;
 
     // only true when both max_read_bytes_per_sec and max_write_bytes_per_sec are 0

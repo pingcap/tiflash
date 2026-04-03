@@ -172,12 +172,12 @@ bool IORateLimitConfig::operator==(const IORateLimitConfig & config) const
     return config.max_bytes_per_sec == max_bytes_per_sec && config.max_read_bytes_per_sec == max_read_bytes_per_sec
         && config.max_write_bytes_per_sec == max_write_bytes_per_sec
         && config.s3_max_read_bytes_per_sec == s3_max_read_bytes_per_sec
-        && config.s3_max_get_object_streams == s3_max_get_object_streams
+        && config.s3_max_get_object_streams == s3_max_get_object_streams //
         && config.bg_write_weight == bg_write_weight && config.fg_write_weight == fg_write_weight
         && config.bg_read_weight == bg_read_weight && config.fg_read_weight == fg_read_weight
-        && config.emergency_pct == emergency_pct
-        && config.high_pct == high_pct && config.medium_pct == medium_pct && config.tune_base == tune_base
-        && config.min_bytes_per_sec == min_bytes_per_sec && config.auto_tune_sec == auto_tune_sec;
+        && config.emergency_pct == emergency_pct && config.high_pct == high_pct && config.medium_pct == medium_pct
+        && config.tune_base == tune_base && config.min_bytes_per_sec == min_bytes_per_sec
+        && config.auto_tune_sec == auto_tune_sec;
 }
 
 } // namespace DB
