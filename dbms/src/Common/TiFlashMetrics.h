@@ -385,8 +385,8 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_fg_write_alloc_bytes, {"type", "fg_write_alloc_bytes"}),                                                               \
       F(type_bg_write_req_bytes, {"type", "bg_write_req_bytes"}),                                                                   \
       F(type_bg_write_alloc_bytes, {"type", "bg_write_alloc_bytes"}),                                                               \
-      F(type_s3_direct_read_bytes, {{"type", "s3_direct_read_bytes"}}),                                                             \
-      F(type_s3_filecache_download_bytes, {{"type", "s3_filecache_download_bytes"}}))                                               \
+      F(type_s3_direct_read_bytes, {"type", "s3_direct_read_bytes"}),                                                               \
+      F(type_s3_filecache_download_bytes, {"type", "s3_filecache_download_bytes"}))                                                 \
     M(tiflash_storage_io_limiter_curr,                                                                                              \
       "Current limit bytes per second of Storage I/O limiter",                                                                      \
       Gauge,                                                                                                                        \

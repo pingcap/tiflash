@@ -1256,7 +1256,7 @@ TEST_F(FileCacheTest, GetWaitOnDownloadingReturnsMissWhenDownloaderFails)
     ASSERT_EQ(file_seg->getSize(), objects[0].size);
 }
 
-TEST_F(FileCacheTest, BgDownloadRespectsS3StreamLimiter)
+TEST_F(FileCacheTest, BgDownloadWorksWithSharedS3ReadLimiter)
 {
     auto cache_dir = fmt::format("{}/bg_download_limiter", tmp_dir);
     StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = 100};
@@ -1269,6 +1269,10 @@ TEST_F(FileCacheTest, BgDownloadRespectsS3StreamLimiter)
     settings.dt_filecache_max_downloading_count_scale = 2.0;
     file_cache.updateConfig(settings);
 
+    // This test is kept as a regression check for the shared-limiter plumbing on the FileCache download
+    // path. Stream-based limiting has been removed, and the byte limit is intentionally disabled here,
+    // so the expectation is simply that background downloads still make progress and do not deadlock when
+    // a shared S3ReadLimiter object is attached to the client.
     auto limiter = std::make_shared<S3ReadLimiter>(0, 1);
     s3_client->setS3ReadLimiter(limiter);
     SCOPE_EXIT({ s3_client->setS3ReadLimiter(nullptr); });
@@ -1276,9 +1280,12 @@ TEST_F(FileCacheTest, BgDownloadRespectsS3StreamLimiter)
     auto objects = genObjects(/*store_count*/ 1, /*table_count*/ 1, /*file_count*/ 1, {"3.merged", "4.merged"});
     auto sp_download = SyncPointCtl::enableInScope("before_FileCache::downloadImpl_download_to_local");
 
+    // Start one background download and pause it at the download-to-local boundary.
     ASSERT_EQ(file_cache.get(S3FilenameView::fromKey(objects[0].key), objects[0].size), nullptr);
     sp_download.waitAndPause();
 
+    // Submit a second download while the first one is paused. The test passes as long as both downloads
+    // complete normally after the pause is released.
     ASSERT_EQ(file_cache.get(S3FilenameView::fromKey(objects[1].key), objects[1].size), nullptr);
     std::this_thread::sleep_for(50ms);
 
