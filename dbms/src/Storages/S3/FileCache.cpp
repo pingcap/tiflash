@@ -88,7 +88,47 @@ namespace
 {
 constexpr UInt64 default_wait_log_interval_seconds = 30;
 constexpr UInt64 wait_ready_timeout_seconds = 300;
-constexpr size_t s3_download_limiter_buffer_size = 128 * 1024;
+
+// A tiny FileCache-only ReadBuffer variant that charges the shared S3 limiter before each refill.
+// This lets downloadToLocal keep using the existing copyData/write-buffer path instead of maintaining
+// a separate hand-written read/write loop for limiter-enabled downloads.
+class ReadBufferFromIStreamWithLimiter : public BufferWithOwnMemory<ReadBuffer>
+{
+public:
+    ReadBufferFromIStreamWithLimiter(
+        std::istream & istr_,
+        size_t size,
+        const std::shared_ptr<S3::S3ReadLimiter> & limiter_,
+        S3::S3ReadSource source_)
+        : BufferWithOwnMemory<ReadBuffer>(size)
+        , istr(istr_)
+        , limiter(limiter_)
+        , source(source_)
+    {}
+
+private:
+    bool nextImpl() override
+    {
+        if (limiter != nullptr)
+            limiter->requestBytes(internal_buffer.size(), source);
+
+        istr.read(internal_buffer.begin(), internal_buffer.size());
+        auto gcount = istr.gcount();
+        if (!gcount)
+        {
+            if (istr.eof())
+                return false;
+            throw Exception("Cannot read from istream", ErrorCodes::CANNOT_READ_FROM_ISTREAM);
+        }
+
+        working_buffer.resize(gcount);
+        return true;
+    }
+
+    std::istream & istr;
+    std::shared_ptr<S3::S3ReadLimiter> limiter;
+    S3::S3ReadSource source;
+};
 
 enum class WaitResult
 {
@@ -1177,7 +1217,7 @@ void downloadToLocal(
     const String & fname,
     Int64 content_length,
     const WriteLimiterPtr & write_limiter,
-    const std::shared_ptr<S3::S3ReadLimiter> & read_limiter)
+    const std::shared_ptr<S3::S3ReadLimiter> & s3_read_limiter)
 {
     // create an empty file with write_limiter
     // each time `ofile.write` is called, the write speed will be controlled by the write_limiter.
@@ -1187,54 +1227,35 @@ void downloadToLocal(
         return;
 
     GET_METRIC(tiflash_storage_remote_cache_bytes, type_dtfile_download_bytes).Increment(content_length);
-    if (read_limiter == nullptr)
+    constexpr Int64 max_buffer_size = 128 * 1024; // 128 KiB
+    auto buffer_size = std::min<Int64>(content_length, max_buffer_size);
+    if (s3_read_limiter == nullptr)
     {
-        static const Int64 MAX_BUFFER_SIZE = 128 * 1024; // 128k
-        ReadBufferFromIStream rbuf(istr, std::min(content_length, MAX_BUFFER_SIZE));
-        WriteBufferFromWritableFile wbuf(ofile, std::min(content_length, MAX_BUFFER_SIZE));
+        ReadBufferFromIStream rbuf(istr, buffer_size);
+        WriteBufferFromWritableFile wbuf(ofile, buffer_size);
         copyData(rbuf, wbuf, content_length);
         wbuf.sync();
         return;
     }
 
-    std::array<char, s3_download_limiter_buffer_size> buffer{};
-    Int64 remaining = content_length;
-    while (remaining > 0)
-    {
-        // Avoid `ReadBufferFromIStream` here so FileCache downloads can charge the shared S3 byte limiter per chunk
-        // without introducing extra heap allocation on the hot path.
-        auto to_read = std::min<Int64>(remaining, static_cast<Int64>(buffer.size()));
-        read_limiter->requestBytes(to_read, S3::S3ReadSource::FileCacheDownload);
-        istr.read(buffer.data(), to_read);
-        auto gcount = istr.gcount();
-        RUNTIME_CHECK_MSG(gcount >= 0, "negative gcount for remote download");
-        if (gcount == 0)
-            break;
-        auto written = ofile->write(buffer.data(), gcount);
-        RUNTIME_CHECK(written == gcount, fname, written, gcount);
-        remaining -= gcount;
-        if (gcount < to_read)
-            break;
-    }
-    RUNTIME_CHECK_MSG(
-        remaining == 0,
-        "download {} incomplete, remaining={} content_length={}",
-        fname,
-        remaining,
-        content_length);
-    ofile->fsync();
+    // The limiter-aware buffer preserves the old copyData/write-buffer path while charging the shared
+    // S3 budget before each refill from the remote body stream.
+    ReadBufferFromIStreamWithLimiter rbuf(istr, buffer_size, s3_read_limiter, S3::S3ReadSource::FileCacheDownload);
+    WriteBufferFromWritableFile wbuf(ofile, buffer_size);
+    copyData(rbuf, wbuf, content_length);
+    wbuf.sync();
 }
 
 void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg, const WriteLimiterPtr & write_limiter)
 {
     Stopwatch sw;
     auto client = S3::ClientFactory::instance().sharedTiFlashClient();
-    auto read_limiter = client->getS3ReadLimiter();
+    auto s3_read_limiter = client->getS3ReadLimiter();
     Aws::S3::Model::GetObjectRequest req;
     client->setBucketAndKeyWithRoot(req, s3_key);
     ProfileEvents::increment(ProfileEvents::S3GetObject);
     // Limit live background-download streams with the same token used by direct readers.
-    auto stream_token = read_limiter != nullptr ? read_limiter->acquireStream() : nullptr;
+    auto stream_token = s3_read_limiter != nullptr ? s3_read_limiter->acquireStream() : nullptr;
     auto outcome = client->GetObject(req);
     if (!outcome.IsSuccess())
     {
@@ -1264,7 +1285,7 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg, c
     auto temp_fname = toTemporaryFilename(local_fname);
     SYNC_FOR("before_FileCache::downloadImpl_download_to_local");
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::file_cache_bg_download_fail);
-    downloadToLocal(result.GetBody(), temp_fname, content_length, write_limiter, read_limiter);
+    downloadToLocal(result.GetBody(), temp_fname, content_length, write_limiter, s3_read_limiter);
     std::filesystem::rename(temp_fname, local_fname);
 
 #ifndef NDEBUG
