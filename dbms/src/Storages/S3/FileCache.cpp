@@ -47,7 +47,6 @@
 #include <filesystem>
 #include <magic_enum.hpp>
 #include <queue>
-#include <ranges>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -639,7 +638,7 @@ FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname, const std::op
                 file_type);
             table.set(s3_key, file_seg);
         }
-    } // Release the lock before submiting bg download task. Because bgDownload may be blocked when the queue is full.
+    } // Release the lock before submitting bg download task. Because bgDownload may be blocked when the queue is full.
 
     if (wait_ms != 0)
     {
