@@ -501,25 +501,27 @@ FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname, const std::op
             f->setLastAccessTime(std::chrono::system_clock::now());
             if (f->isReadyToRead())
             {
+                // Hot-cache fast path: the file is already materialized locally, so return the existing segment
+                // immediately without touching any download scheduling or bounded-wait logic.
                 GET_METRIC(tiflash_storage_remote_cache, type_dtfile_hit).Increment();
                 return f;
             }
-            else
+
+            // Another thread is already downloading the same object. Optionally wait for a bounded time and
+            // reuse that result instead of opening one more `GetObject` stream for the same key.
+            wait_ms = wait_on_downloading_ms.load(std::memory_order_relaxed);
+            if (wait_ms == 0)
             {
-                // Another thread is already downloading the same object. Optionally wait for a bounded time and
-                // reuse that result instead of opening one more `GetObject` stream for the same key.
-                wait_ms = wait_on_downloading_ms.load(std::memory_order_relaxed);
-                if (wait_ms == 0)
-                {
-                    GET_METRIC(tiflash_storage_remote_cache, type_dtfile_miss).Increment();
-                    return nullptr;
-                }
-                file_seg = f;
+                GET_METRIC(tiflash_storage_remote_cache, type_dtfile_miss).Increment();
+                return nullptr;
             }
+            file_seg = f;
         }
         else
         {
             GET_METRIC(tiflash_storage_remote_cache, type_dtfile_miss).Increment();
+            // Admission control before any reservation work: skip file types that should never enter FileCache,
+            // and stop creating new `Empty` placeholders once background downloading is already saturated.
             switch (canCache(file_type))
             {
             case ShouldCacheRes::RejectTypeNotMatch:
@@ -562,6 +564,9 @@ FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname, const std::op
 
     if (wait_ms != 0)
     {
+        // Follower path: another thread already inserted the `Empty` segment and is downloading this key.
+        // Wait only for the configured bounded budget, then either reuse the completed file or return miss
+        // so the caller can fall back without opening a duplicate download stream for the same object.
         Stopwatch wait_watch;
         auto status = file_seg->waitForNotEmptyFor(std::chrono::milliseconds(wait_ms));
         const auto waited_bytes = filesize.value_or(file_seg->getSize());
@@ -577,6 +582,8 @@ FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname, const std::op
             status == FileSegment::Status::Failed ? WaitResult::Failed : WaitResult::Timeout,
             waited_bytes,
             wait_watch.elapsedSeconds());
+        // Timeout is intentionally surfaced as a cache miss here. The caller can fall back to another read path,
+        // while the original downloader keeps making progress in background instead of being duplicated by followers.
         GET_METRIC(tiflash_storage_remote_cache, type_dtfile_miss).Increment();
         return nullptr;
     }
