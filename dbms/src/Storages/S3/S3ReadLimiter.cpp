@@ -20,11 +20,6 @@
 #include <algorithm>
 #include <ext/scope_guard.h>
 
-namespace CurrentMetrics
-{
-extern const Metric S3ActiveGetObjectStreams;
-} // namespace CurrentMetrics
-
 namespace DB::S3
 {
 namespace
@@ -121,7 +116,6 @@ std::unique_ptr<S3ReadLimiter::StreamToken> S3ReadLimiter::acquireStream()
         return nullptr;
 
     auto cur = active_streams.fetch_add(1, std::memory_order_relaxed) + 1;
-    CurrentMetrics::add(CurrentMetrics::S3ActiveGetObjectStreams);
     GET_METRIC(tiflash_storage_s3_read_limiter_status, type_active_get_object_streams).Set(cur);
     return std::make_unique<StreamToken>(this);
 }
@@ -207,7 +201,6 @@ void S3ReadLimiter::setStop()
 void S3ReadLimiter::releaseStream()
 {
     auto cur = active_streams.fetch_sub(1, std::memory_order_relaxed) - 1;
-    CurrentMetrics::sub(CurrentMetrics::S3ActiveGetObjectStreams);
     GET_METRIC(tiflash_storage_s3_read_limiter_status, type_active_get_object_streams).Set(cur);
     stream_cv.notify_one();
 }
