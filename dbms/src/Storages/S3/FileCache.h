@@ -36,6 +36,7 @@
 #include <filesystem>
 #include <magic_enum.hpp>
 #include <mutex>
+#include <optional>
 #include <unordered_map>
 
 namespace DB
@@ -149,6 +150,8 @@ public:
     }
 
 private:
+    Status waitForNotEmptyImpl(std::optional<std::chrono::milliseconds> timeout, bool log_progress, bool throw_on_timeout);
+
     mutable std::mutex mtx;
     const String local_fname;
     Status status;

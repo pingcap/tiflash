@@ -207,34 +207,57 @@ std::unique_ptr<FileCache> FileCache::global_file_cache_instance;
 
 FileSegment::Status FileSegment::waitForNotEmpty()
 {
+    // Foreground callers expect the file to become readable eventually. This path keeps logging
+    // slow waits and fails hard after the built-in timeout instead of silently returning `Empty`.
+    return waitForNotEmptyImpl(std::nullopt, /*log_progress*/ true, /*throw_on_timeout*/ true);
+}
+
+FileSegment::Status FileSegment::waitForNotEmptyFor(std::chrono::milliseconds timeout)
+{
+    // Bounded-wait callers treat timeout as a normal outcome and will fall back to another path,
+    // so this variant waits only once for the specified budget and returns the current status.
+    return waitForNotEmptyImpl(timeout, /*log_progress*/ false, /*throw_on_timeout*/ false);
+}
+
+FileSegment::Status FileSegment::waitForNotEmptyImpl(
+    std::optional<std::chrono::milliseconds> timeout,
+    bool log_progress,
+    bool throw_on_timeout)
+{
     std::unique_lock lock(mtx);
 
     if (status != Status::Empty)
         return status;
 
-    PerfContext::file_cache.fg_wait_download_from_s3++;
+    if (log_progress)
+        PerfContext::file_cache.fg_wait_download_from_s3++;
 
     Stopwatch watch;
 
     while (true)
     {
+        auto wait_interval = timeout.value_or(std::chrono::seconds(default_wait_log_interval_seconds));
         SYNC_FOR("before_FileSegment::waitForNotEmpty_wait"); // just before actual waiting...
 
-        auto is_done = cv_ready.wait_for(lock, std::chrono::seconds(default_wait_log_interval_seconds), [&] {
-            return status != Status::Empty;
-        });
+        auto is_done = cv_ready.wait_for(lock, wait_interval, [&] { return status != Status::Empty; });
         if (is_done)
             break;
 
+        if (timeout.has_value())
+            break;
+
         double elapsed_secs = watch.elapsedSeconds();
-        LOG_WARNING(
-            Logger::get(),
-            "FileCache is still waiting FileSegment ready, file={} elapsed={}s",
-            local_fname,
-            elapsed_secs);
+        if (log_progress)
+        {
+            LOG_WARNING(
+                Logger::get(),
+                "FileCache is still waiting FileSegment ready, file={} elapsed={}s",
+                local_fname,
+                elapsed_secs);
+        }
 
         // Snapshot time is 300s
-        if (elapsed_secs > wait_ready_timeout_seconds)
+        if (throw_on_timeout && elapsed_secs > wait_ready_timeout_seconds)
         {
             throw Exception(
                 ErrorCodes::S3_ERROR,
@@ -244,15 +267,6 @@ FileSegment::Status FileSegment::waitForNotEmpty()
         }
     }
 
-    return status;
-}
-
-FileSegment::Status FileSegment::waitForNotEmptyFor(std::chrono::milliseconds timeout)
-{
-    std::unique_lock lock(mtx);
-    if (status != Status::Empty)
-        return status;
-    cv_ready.wait_for(lock, timeout, [&] { return status != Status::Empty; });
     return status;
 }
 
