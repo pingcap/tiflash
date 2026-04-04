@@ -395,6 +395,24 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_fg_write_bytes, {"type", "fg_write_bytes"}),                                                                           \
       F(type_bg_write_bytes, {"type", "bg_write_bytes"}),                                                                           \
       F(type_s3_read_bytes, {"type", "s3_read_bytes"}))                                                                             \
+    M(tiflash_storage_io_limiter_pending_seconds,                                                                                   \
+      "I/O limiter pending duration in seconds",                                                                                    \
+      Histogram,                                                                                                                    \
+      F(type_fg_read, {{"type", "fg_read"}}, ExpBuckets{0.001, 2, 20}),                                                             \
+      F(type_bg_read, {{"type", "bg_read"}}, ExpBuckets{0.001, 2, 20}),                                                             \
+      F(type_fg_write, {{"type", "fg_write"}}, ExpBuckets{0.001, 2, 20}),                                                           \
+      F(type_bg_write, {{"type", "bg_write"}}, ExpBuckets{0.001, 2, 20}),                                                           \
+      F(type_s3_read_stream, {{"type", "s3_read_stream"}}, ExpBuckets{0.001, 2, 20}),                                               \
+      F(type_s3_read_byte, {{"type", "s3_read_byte"}}, ExpBuckets{0.001, 2, 20}))                                                   \
+    M(tiflash_storage_io_limiter_pending_count,                                                                                     \
+      "I/O limiter pending count",                                                                                                  \
+      Counter,                                                                                                                      \
+      F(type_fg_read, {"type", "fg_read"}),                                                                                         \
+      F(type_bg_read, {"type", "bg_read"}),                                                                                         \
+      F(type_fg_write, {"type", "fg_write"}),                                                                                       \
+      F(type_bg_write, {"type", "bg_write"}),                                                                                       \
+      F(type_s3_read_byte, {"type", "s3_read_byte"}),                                                                               \
+      F(type_s3_read_stream, {"type", "s3_read_stream"}))                                                                           \
     M(tiflash_storage_rough_set_filter_rate,                                                                                        \
       "Bucketed histogram of rough set filter rate",                                                                                \
       Histogram,                                                                                                                    \
@@ -914,24 +932,6 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       "Remote cache status",                                                                                                        \
       Gauge,                                                                                                                        \
       F(type_bg_downloading_count, {{"type", "bg_downloading_count"}}))                                                             \
-    M(tiflash_storage_io_limiter_pending_seconds,                                                                                   \
-      "I/O limiter pending duration in seconds",                                                                                    \
-      Histogram,                                                                                                                    \
-      F(type_fg_read, {{"type", "fg_read"}}, ExpBuckets{0.001, 2, 20}),                                                             \
-      F(type_bg_read, {{"type", "bg_read"}}, ExpBuckets{0.001, 2, 20}),                                                             \
-      F(type_fg_write, {{"type", "fg_write"}}, ExpBuckets{0.001, 2, 20}),                                                           \
-      F(type_bg_write, {{"type", "bg_write"}}, ExpBuckets{0.001, 2, 20}),                                                           \
-      F(type_s3_read_stream, {{"type", "s3_read_stream"}}, ExpBuckets{0.001, 2, 20}),                                               \
-      F(type_s3_read_byte, {{"type", "s3_read_byte"}}, ExpBuckets{0.001, 2, 20}))                                                   \
-    M(tiflash_storage_io_limiter_pending_count,                                                                                     \
-      "I/O limiter pending count",                                                                                                  \
-      Counter,                                                                                                                      \
-      F(type_fg_read, {"type", "fg_read"}),                                                                                         \
-      F(type_bg_read, {"type", "bg_read"}),                                                                                         \
-      F(type_fg_write, {"type", "fg_write"}),                                                                                       \
-      F(type_bg_write, {"type", "bg_write"}),                                                                                       \
-      F(type_s3_read_byte, {"type", "s3_read_byte"}),                                                                               \
-      F(type_s3_read_stream, {"type", "s3_read_stream"}))                                                                           \
     M(tiflash_system_seconds,                                                                                                       \
       "system calls duration in seconds",                                                                                           \
       Histogram,                                                                                                                    \
