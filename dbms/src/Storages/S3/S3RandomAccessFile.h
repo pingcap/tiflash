@@ -16,6 +16,7 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Common/Stopwatch.h>
 #include <IO/BaseFile/RandomAccessFile.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <Storages/S3/S3ReadLimiter.h>
@@ -23,6 +24,8 @@
 #include <common/types.h>
 
 #include <ext/scope_guard.h>
+
+#include <istream>
 
 /// Remove the population of thread_local from Poco
 #ifdef thread_local
@@ -96,6 +99,8 @@ private:
     ssize_t readImpl(char * buf, size_t size);
     String readRangeOfObject();
     ssize_t readChunked(char * buf, size_t size);
+    ssize_t finalizeRead(size_t requested_size, size_t actual_size, const Stopwatch & sw, std::istream & istr);
+    off_t finalizeSeek(off_t target_offset, size_t requested_size, size_t actual_size, const Stopwatch & sw, std::istream & istr);
     off_t seekChunked(off_t offset);
     void resetReadStreamToken();
 
