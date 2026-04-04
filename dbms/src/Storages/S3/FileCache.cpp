@@ -96,12 +96,74 @@ enum class WaitResult
     Failed,
 };
 
+enum class BgDownloadStage
+{
+    QueueWait,
+    Download,
+};
+
+TiFlashMetrics::RemoteCacheFileTypeMetric toMetricFileType(FileType file_type)
+{
+    switch (file_type)
+    {
+    case FileType::Merged:
+        return TiFlashMetrics::RemoteCacheFileTypeMetric::Merged;
+    case FileType::DeleteMarkColData:
+    case FileType::VersionColData:
+    case FileType::HandleColData:
+    case FileType::ColData:
+        return TiFlashMetrics::RemoteCacheFileTypeMetric::ColData;
+    default:
+        return TiFlashMetrics::RemoteCacheFileTypeMetric::Other;
+    }
+}
+
 void observeWaitOnDownloadingMetrics(FileType file_type, WaitResult result, UInt64 bytes, double wait_seconds)
 {
-    UNUSED(file_type);
-    UNUSED(bytes);
-    UNUSED(wait_seconds);
     GET_METRIC(tiflash_storage_remote_cache, type_wait_on_downloading).Increment();
+    auto & metrics = TiFlashMetrics::instance();
+    auto metric_file_type = toMetricFileType(file_type);
+    switch (result)
+    {
+    case WaitResult::Hit:
+        metrics
+            .getRemoteCacheWaitOnDownloadingResultCounter(
+                metric_file_type,
+                TiFlashMetrics::RemoteCacheWaitResultMetric::Hit)
+            .Increment();
+        metrics
+            .getRemoteCacheWaitOnDownloadingBytesCounter(
+                metric_file_type,
+                TiFlashMetrics::RemoteCacheWaitResultMetric::Hit)
+            .Increment(bytes);
+        break;
+    case WaitResult::Timeout:
+        metrics
+            .getRemoteCacheWaitOnDownloadingResultCounter(
+                metric_file_type,
+                TiFlashMetrics::RemoteCacheWaitResultMetric::Timeout)
+            .Increment();
+        metrics
+            .getRemoteCacheWaitOnDownloadingBytesCounter(
+                metric_file_type,
+                TiFlashMetrics::RemoteCacheWaitResultMetric::Timeout)
+            .Increment(bytes);
+        break;
+    case WaitResult::Failed:
+        metrics
+            .getRemoteCacheWaitOnDownloadingResultCounter(
+                metric_file_type,
+                TiFlashMetrics::RemoteCacheWaitResultMetric::Failed)
+            .Increment();
+        metrics
+            .getRemoteCacheWaitOnDownloadingBytesCounter(
+                metric_file_type,
+                TiFlashMetrics::RemoteCacheWaitResultMetric::Failed)
+            .Increment(bytes);
+        break;
+    }
+
+    UNUSED(wait_seconds);
     switch (result)
     {
     case WaitResult::Hit:
@@ -112,6 +174,29 @@ void observeWaitOnDownloadingMetrics(FileType file_type, WaitResult result, UInt
         break;
     case WaitResult::Failed:
         GET_METRIC(tiflash_storage_remote_cache, type_wait_on_downloading_failed).Increment();
+        break;
+    }
+}
+
+void observeBgDownloadStageMetrics(FileType file_type, BgDownloadStage stage, double seconds)
+{
+    auto & metrics = TiFlashMetrics::instance();
+    auto metric_file_type = toMetricFileType(file_type);
+    switch (stage)
+    {
+    case BgDownloadStage::QueueWait:
+        metrics
+            .getRemoteCacheBgDownloadStageSecondsHistogram(
+                metric_file_type,
+                TiFlashMetrics::RemoteCacheDownloadStageMetric::QueueWait)
+            .Observe(seconds);
+        break;
+    case BgDownloadStage::Download:
+        metrics
+            .getRemoteCacheBgDownloadStageSecondsHistogram(
+                metric_file_type,
+                TiFlashMetrics::RemoteCacheDownloadStageMetric::Download)
+            .Observe(seconds);
         break;
     }
 }
@@ -746,10 +831,10 @@ std::vector<FileType> FileCache::getEvictFileTypes(FileType evict_for, bool evic
         std::vector<FileType> evict_types;
         evict_types.push_back(evict_for); // First, try evict with the same file type.
         // Second, try evict from the lower priority file type.
-        for (auto file_type : all_file_types | std::views::reverse)
+        for (auto itr = std::rbegin(all_file_types); itr != std::rend(all_file_types); ++itr)
         {
-            if (file_type != evict_for)
-                evict_types.push_back(file_type);
+            if (*itr != evict_for)
+                evict_types.push_back(*itr);
         }
         return evict_types;
     }
@@ -757,10 +842,10 @@ std::vector<FileType> FileCache::getEvictFileTypes(FileType evict_for, bool evic
     {
         std::vector<FileType> evict_types;
         // Evict from the lower priority file type first.
-        for (auto file_type : all_file_types | std::views::reverse)
+        for (auto itr = std::rbegin(all_file_types); itr != std::rend(all_file_types); ++itr)
         {
-            evict_types.push_back(file_type);
-            if (file_type == evict_for)
+            evict_types.push_back(*itr);
+            if (*itr == evict_for)
             {
                 // Do not evict higher priority file type
                 break;
@@ -1188,7 +1273,12 @@ void FileCache::bgDownloadExecutor(
     const WriteLimiterPtr & write_limiter,
     std::chrono::steady_clock::time_point enqueue_time)
 {
-    UNUSED(enqueue_time);
+    observeBgDownloadStageMetrics(
+        file_seg->getFileType(),
+        BgDownloadStage::QueueWait,
+        std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - enqueue_time)
+            .count());
+    Stopwatch download_watch;
     try
     {
         GET_METRIC(tiflash_storage_remote_cache, type_dtfile_download).Increment();
@@ -1199,6 +1289,7 @@ void FileCache::bgDownloadExecutor(
         // ignore the exception here, and log as warning.
         tryLogCurrentWarningException(log, fmt::format("Download s3_key={} failed", s3_key));
     }
+    observeBgDownloadStageMetrics(file_seg->getFileType(), BgDownloadStage::Download, download_watch.elapsedSeconds());
     if (!file_seg->isReadyToRead())
     {
         file_seg->setStatus(FileSegment::Status::Failed);

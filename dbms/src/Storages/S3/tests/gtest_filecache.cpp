@@ -1230,6 +1230,83 @@ TEST_F(FileCacheTest, BgDownloadRespectsS3StreamLimiter)
     ASSERT_EQ(limiter->activeStreams(), 0);
 }
 
+TEST_F(FileCacheTest, GetWaitOnDownloadingSupportsColDataAndOther)
+{
+    auto cache_dir = fmt::format("{}/wait_on_downloading_non_merged", tmp_dir);
+    StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = 100};
+
+    UInt16 vcores = 2;
+    IORateLimiter rate_limiter;
+    FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
+
+    Settings settings;
+    settings.dt_filecache_downloading_count_scale = 2.0;
+    settings.dt_filecache_max_downloading_count_scale = 2.0;
+    settings.dt_filecache_wait_on_downloading_ms = 200;
+    file_cache.updateConfig(settings);
+
+    auto objects = genObjects(/*store_count*/ 1, /*table_count*/ 1, /*file_count*/ 1, {"1.dat", "meta"});
+    auto sp_download = SyncPointCtl::enableInScope("before_FileCache::downloadImpl_download_to_local");
+
+    auto run_wait_hit_case = [&](const ObjectInfo & obj, FileType expected_file_type) {
+        auto key = S3FilenameView::fromKey(obj.key);
+        ASSERT_EQ(file_cache.get(key, obj.size), nullptr);
+        sp_download.waitAndPause();
+
+        auto wait_hit = std::async(std::launch::async, [&]() { return file_cache.get(key, obj.size); });
+        std::this_thread::sleep_for(20ms);
+        sp_download.next();
+
+        auto file_seg = wait_hit.get();
+        ASSERT_NE(file_seg, nullptr);
+        ASSERT_TRUE(file_seg->isReadyToRead());
+        ASSERT_EQ(file_seg->getSize(), obj.size);
+        ASSERT_EQ(file_seg->getFileType(), expected_file_type);
+    };
+
+    run_wait_hit_case(objects[0], FileType::ColData);
+    run_wait_hit_case(objects[1], FileType::Meta);
+
+    sp_download.disable();
+    waitForBgDownload(file_cache);
+}
+
+TEST_F(FileCacheTest, BgDownloadSupportsColDataAndOther)
+{
+    auto cache_dir = fmt::format("{}/bg_download_non_merged", tmp_dir);
+    StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = 100};
+
+    UInt16 vcores = 2;
+    IORateLimiter rate_limiter;
+    FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
+    Settings settings;
+    settings.dt_filecache_downloading_count_scale = 2.0;
+    settings.dt_filecache_max_downloading_count_scale = 2.0;
+    file_cache.updateConfig(settings);
+
+    auto objects = genObjects(/*store_count*/ 1, /*table_count*/ 1, /*file_count*/ 1, {"2.dat", "meta"});
+
+    for (const auto & obj : objects)
+    {
+        auto key = S3FilenameView::fromKey(obj.key);
+        ASSERT_EQ(file_cache.get(key, obj.size), nullptr);
+    }
+
+    waitForBgDownload(file_cache);
+
+    std::array<FileType, 2> expected_file_types = {FileType::ColData, FileType::Meta};
+    size_t index = 0;
+    for (const auto & obj : objects)
+    {
+        auto file_seg = file_cache.get(S3FilenameView::fromKey(obj.key), obj.size);
+        ASSERT_NE(file_seg, nullptr);
+        ASSERT_TRUE(file_seg->isReadyToRead());
+        ASSERT_EQ(file_seg->getSize(), obj.size);
+        ASSERT_EQ(file_seg->getFileType(), expected_file_types[index]);
+        ++index;
+    }
+}
+
 TEST_F(FileCacheTest, GetBeingBlock)
 {
     auto cache_dir = fmt::format("{}/update_config", tmp_dir);

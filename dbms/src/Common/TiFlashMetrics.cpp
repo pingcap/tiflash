@@ -22,6 +22,14 @@
 
 namespace DB
 {
+namespace
+{
+constexpr std::array remote_cache_file_type_labels = {"merged", "coldata", "other"};
+constexpr std::array remote_cache_wait_result_labels = {"hit", "timeout", "failed"};
+constexpr std::array remote_cache_download_stage_labels = {"queue_wait", "download"};
+constexpr auto remote_cache_bg_download_stage_buckets = ExpBuckets{0.0001, 2, 20};
+} // namespace
+
 TiFlashMetrics & TiFlashMetrics::instance()
 {
     static TiFlashMetrics inst; // Instantiated on first use.
@@ -78,6 +86,49 @@ TiFlashMetrics::TiFlashMetrics()
                                                     .Name("tiflash_storage_s3_store_summary_bytes")
                                                     .Help("S3 storage summary bytes by store and file type")
                                                     .Register(*registry);
+
+    registered_remote_cache_wait_on_downloading_result_family
+        = &prometheus::BuildCounter()
+               .Name("tiflash_storage_remote_cache_wait_on_downloading_result")
+               .Help("Bounded wait result of remote cache downloading")
+               .Register(*registry);
+    registered_remote_cache_wait_on_downloading_bytes_family
+        = &prometheus::BuildCounter()
+               .Name("tiflash_storage_remote_cache_wait_on_downloading_bytes")
+               .Help("Bytes covered by remote cache bounded wait")
+               .Register(*registry);
+    registered_remote_cache_bg_download_stage_seconds_family
+        = &prometheus::BuildHistogram()
+               .Name("tiflash_storage_remote_cache_bg_download_stage_seconds")
+               .Help("Remote cache background download stage duration")
+               .Register(*registry);
+
+    for (size_t file_type_idx = 0; file_type_idx < remote_cache_file_type_labels.size(); ++file_type_idx)
+    {
+        for (size_t result_idx = 0; result_idx < remote_cache_wait_result_labels.size(); ++result_idx)
+        {
+            auto labels = prometheus::Labels{
+                {"result", std::string(remote_cache_wait_result_labels[result_idx])},
+                {"file_type", std::string(remote_cache_file_type_labels[file_type_idx])},
+            };
+            remote_cache_wait_on_downloading_result_metrics[file_type_idx][result_idx]
+                = &registered_remote_cache_wait_on_downloading_result_family->Add(labels);
+            remote_cache_wait_on_downloading_bytes_metrics[file_type_idx][result_idx]
+                = &registered_remote_cache_wait_on_downloading_bytes_family->Add(labels);
+        }
+        for (size_t stage_idx = 0; stage_idx < remote_cache_download_stage_labels.size(); ++stage_idx)
+        {
+            prometheus::Histogram::BucketBoundaries buckets = ExpBuckets{
+                remote_cache_bg_download_stage_buckets.start,
+                remote_cache_bg_download_stage_buckets.base,
+                remote_cache_bg_download_stage_buckets.size};
+            remote_cache_bg_download_stage_seconds_metrics[file_type_idx][stage_idx]
+                = &registered_remote_cache_bg_download_stage_seconds_family->Add(
+                    {{"stage", std::string(remote_cache_download_stage_labels[stage_idx])},
+                     {"file_type", std::string(remote_cache_file_type_labels[file_type_idx])}},
+                    buckets);
+        }
+    }
 }
 
 void TiFlashMetrics::addReplicaSyncRU(UInt32 keyspace_id, UInt64 ru)
@@ -286,5 +337,27 @@ void TiFlashMetrics::setS3StoreSummaryBytes(UInt64 store_id, UInt64 data_file_by
 
     it->second.data_file_bytes->Set(data_file_bytes);
     it->second.dt_file_bytes->Set(dt_file_bytes);
+}
+
+prometheus::Counter & TiFlashMetrics::getRemoteCacheWaitOnDownloadingResultCounter(
+    TiFlashMetrics::RemoteCacheFileTypeMetric file_type,
+    TiFlashMetrics::RemoteCacheWaitResultMetric result)
+{
+    return *remote_cache_wait_on_downloading_result_metrics[static_cast<size_t>(file_type)]
+                                                           [static_cast<size_t>(result)];
+}
+
+prometheus::Counter & TiFlashMetrics::getRemoteCacheWaitOnDownloadingBytesCounter(
+    TiFlashMetrics::RemoteCacheFileTypeMetric file_type,
+    TiFlashMetrics::RemoteCacheWaitResultMetric result)
+{
+    return *remote_cache_wait_on_downloading_bytes_metrics[static_cast<size_t>(file_type)][static_cast<size_t>(result)];
+}
+
+prometheus::Histogram & TiFlashMetrics::getRemoteCacheBgDownloadStageSecondsHistogram(
+    TiFlashMetrics::RemoteCacheFileTypeMetric file_type,
+    TiFlashMetrics::RemoteCacheDownloadStageMetric stage)
+{
+    return *remote_cache_bg_download_stage_seconds_metrics[static_cast<size_t>(file_type)][static_cast<size_t>(stage)];
 }
 } // namespace DB
