@@ -530,7 +530,11 @@ void IORateLimiter::updateLimiterByConfig(const IORateLimitConfig & cfg)
     if (s3_read_limiter == nullptr)
     {
         if (cfg.s3_max_read_bytes_per_sec != 0)
+        {
             s3_read_limiter = std::make_shared<S3::S3ReadLimiter>(cfg.s3_max_read_bytes_per_sec);
+            if (stop.load(std::memory_order_relaxed))
+                s3_read_limiter->setStop();
+        }
     }
     else
     {
@@ -703,6 +707,8 @@ void IORateLimiter::setStop()
         auto sz = fg_read_limiter->setStop();
         LOG_DEBUG(log, "fg_read_limiter setStop request size {}", sz);
     }
+    if (s3_read_limiter != nullptr)
+        s3_read_limiter->setStop();
 }
 
 void IORateLimiter::runAutoTune()

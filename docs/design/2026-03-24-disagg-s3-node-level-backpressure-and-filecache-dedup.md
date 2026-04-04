@@ -596,7 +596,7 @@ Before expanding phase 2, all of the following are recommended:
 - split results between `Merged` and `ColData` match workload expectations
   - if `merged` hit is high but `coldata` is low, phase 2 mainly absorbs MetaV2 small-file fallback; this still has value, but network relief is usually smaller than the count ratio suggests
   - if the goal is to further reduce main data traffic, focus on `coldata` hit/timeout/bytes rather than only total hit ratio
-- `bg_download_stage_seconds{stage="queue_wait"}` should not stay significantly above `stage="download"}` for a long time
+- `bg_download_stage_seconds{stage="queue_wait"}` should not stay significantly above `bg_download_stage_seconds{stage="download"}` for a long time
   - if queue wait dominates timeout, first inspect download queue size, concurrent-download config, and `RejectTooManyDownloading` pressure instead of increasing `dt_filecache_wait_on_downloading_ms`
   - if actual download dominates timeout and timeout is concentrated on `coldata`, the benefit ceiling of phase 2 is inherently limited and the wait window should not keep growing in order to force more benefit
 

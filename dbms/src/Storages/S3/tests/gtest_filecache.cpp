@@ -34,6 +34,8 @@
 #include <fmt/compile.h>
 #include <gtest/gtest.h>
 
+#include <ext/scope_guard.h>
+
 #include <atomic>
 #include <chrono>
 #include <filesystem>
@@ -1230,12 +1232,14 @@ TEST_F(FileCacheTest, GetWaitOnDownloadingReturnsMissWhenDownloaderFails)
 
     // The follower reaches `get()` while the same key is still being downloaded. Inject a failure right before
     // the downloader starts copying the body so the follower wakes up with `Status::Failed` and returns miss.
-    FailPointHelper::enableFailPoint(FailPoints::file_cache_bg_download_fail);
-    auto wait_failed = std::async(std::launch::async, [&]() { return file_cache.get(key, objects[0].size); });
-    std::this_thread::sleep_for(20ms);
-    sp_download.next();
-    ASSERT_EQ(wait_failed.get(), nullptr);
-    FailPointHelper::disableFailPoint(FailPoints::file_cache_bg_download_fail);
+    {
+        FailPointHelper::enableFailPoint(FailPoints::file_cache_bg_download_fail);
+        SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::file_cache_bg_download_fail); });
+        auto wait_failed = std::async(std::launch::async, [&]() { return file_cache.get(key, objects[0].size); });
+        std::this_thread::sleep_for(20ms);
+        sp_download.next();
+        ASSERT_EQ(wait_failed.get(), nullptr);
+    }
     sp_download.disable();
 
     waitForBgDownload(file_cache);

@@ -256,6 +256,9 @@ CATCH
 
 TEST_F(S3ClientTest, PublishS3ReadLimiter)
 {
+    auto prev_limiter = ClientFactory::instance().sharedTiFlashClient()->getS3ReadLimiter();
+    SCOPE_EXIT({ ClientFactory::instance().setS3ReadLimiter(prev_limiter); });
+
     auto limiter = std::make_shared<S3ReadLimiter>(4096, 7);
     ClientFactory::instance().setS3ReadLimiter(limiter);
     ASSERT_EQ(client->getS3ReadLimiter(), limiter);
