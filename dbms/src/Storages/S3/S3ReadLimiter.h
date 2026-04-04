@@ -60,9 +60,19 @@ public:
     void updateConfig(UInt64 max_read_bytes_per_sec_);
 
     /// Charge remote-read bytes. The call blocks when the current node-level budget is exhausted.
+    ///
+    /// Requests that fit within one refill-period burst keep strict token-bucket semantics. If one
+    /// caller asks for more than a single burst can ever accumulate, the limiter allows that request
+    /// to borrow against future refills once some positive budget is available so the caller does not
+    /// wait forever.
     void requestBytes(UInt64 bytes, S3ReadSource source);
 
-    /// Suggest a chunk size that keeps limiter-enabled readers from creating large bursts.
+    /// Suggest a chunk size for limiter-aware loops in upper layers.
+    ///
+    /// Callers should prefer this value before each `read()` / `ignore()` / buffer refill so large
+    /// remote reads are naturally split into refill-period-sized steps. Keeping chunks near one burst
+    /// preserves smooth throttling and makes the large-request borrowing path in `requestBytes()` a
+    /// rare fallback instead of the common case.
     UInt64 getSuggestedChunkSize(UInt64 preferred_chunk_size) const;
 
     UInt64 maxReadBytesPerSec() const { return max_read_bytes_per_sec.load(std::memory_order_relaxed); }
