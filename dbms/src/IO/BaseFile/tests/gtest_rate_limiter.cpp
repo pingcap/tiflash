@@ -376,28 +376,9 @@ TEST(ReadLimiterTest, ReadMany)
     ASSERT_EQ(read_limiter.alloc_bytes, 100);
 }
 
-TEST(S3ReadLimiterTest, StreamTokenBlocksUntilRelease)
-{
-    auto limiter = std::make_shared<S3::S3ReadLimiter>(0, 1);
-    auto token1 = limiter->acquireStream();
-    ASSERT_NE(token1, nullptr);
-    ASSERT_EQ(limiter->activeStreams(), 1);
-
-    // The second reader should block until the first stream token is released.
-    auto future = std::async(std::launch::async, [&]() { return limiter->acquireStream(); });
-    ASSERT_EQ(future.wait_for(50ms), std::future_status::timeout);
-
-    token1.reset();
-    auto token2 = future.get();
-    ASSERT_NE(token2, nullptr);
-    ASSERT_EQ(limiter->activeStreams(), 1);
-    token2.reset();
-    ASSERT_EQ(limiter->activeStreams(), 0);
-}
-
 TEST(S3ReadLimiterTest, ByteRequestsWaitForRefill)
 {
-    S3::S3ReadLimiter limiter(1000, 0, 100);
+    S3::S3ReadLimiter limiter(1000, 100);
     // Consume the initial 100-byte burst, then verify the next request waits for at least one refill period.
     limiter.requestBytes(100, S3::S3ReadSource::DirectRead);
     AtomicStopwatch watch;
@@ -405,27 +386,9 @@ TEST(S3ReadLimiterTest, ByteRequestsWaitForRefill)
     ASSERT_GE(watch.elapsedMilliseconds(), 80);
 }
 
-TEST(S3ReadLimiterTest, UpdateConfigDisablesWaitingStream)
-{
-    auto limiter = std::make_shared<S3::S3ReadLimiter>(0, 1);
-    auto token1 = limiter->acquireStream();
-    ASSERT_NE(token1, nullptr);
-
-    // Once config reload disables stream limiting, a waiter should wake up and observe `nullptr` instead of hanging.
-    auto future = std::async(std::launch::async, [&]() { return limiter->acquireStream(); });
-    ASSERT_EQ(future.wait_for(50ms), std::future_status::timeout);
-
-    limiter->updateConfig(/*max_read_bytes_per_sec*/ 0, /*max_streams*/ 0);
-    auto token2 = future.get();
-    ASSERT_EQ(token2, nullptr);
-
-    token1.reset();
-    ASSERT_EQ(limiter->activeStreams(), 0);
-}
-
 TEST(S3ReadLimiterTest, UpdateConfigDisablesWaitingBytes)
 {
-    S3::S3ReadLimiter limiter(1000, 0, 100);
+    S3::S3ReadLimiter limiter(1000, 100);
     // Exhaust the initial burst, then make sure disabling the byte limit wakes a waiting requester promptly.
     limiter.requestBytes(100, S3::S3ReadSource::DirectRead);
 
@@ -436,38 +399,21 @@ TEST(S3ReadLimiterTest, UpdateConfigDisablesWaitingBytes)
     });
     ASSERT_EQ(future.wait_for(50ms), std::future_status::timeout);
 
-    limiter.updateConfig(/*max_read_bytes_per_sec*/ 0, /*max_streams*/ 0);
+    limiter.updateConfig(/*max_read_bytes_per_sec*/ 0);
     ASSERT_LT(future.get(), 100);
 }
 
 TEST(S3ReadLimiterTest, SuggestedChunkSizeTracksBurstLimit)
 {
     // The suggested chunk size should never exceed one refill-period burst when byte limiting is enabled.
-    S3::S3ReadLimiter limiter(/*max_read_bytes_per_sec*/ 1000, /*max_streams*/ 0, /*refill_period_ms*/ 100);
+    S3::S3ReadLimiter limiter(/*max_read_bytes_per_sec*/ 1000, /*refill_period_ms*/ 100);
     ASSERT_EQ(limiter.getSuggestedChunkSize(128 * 1024), 100);
 
-    limiter.updateConfig(/*max_read_bytes_per_sec*/ 5000, /*max_streams*/ 0);
+    limiter.updateConfig(/*max_read_bytes_per_sec*/ 5000);
     ASSERT_EQ(limiter.getSuggestedChunkSize(128 * 1024), 500);
 
-    limiter.updateConfig(/*max_read_bytes_per_sec*/ 0, /*max_streams*/ 0);
+    limiter.updateConfig(/*max_read_bytes_per_sec*/ 0);
     ASSERT_EQ(limiter.getSuggestedChunkSize(4096), 4096);
-}
-
-TEST(S3ReadLimiterTest, StreamTokenMoveDoesNotDoubleRelease)
-{
-    auto limiter = std::make_shared<S3::S3ReadLimiter>(0, 1);
-    auto token = limiter->acquireStream();
-    ASSERT_NE(token, nullptr);
-    ASSERT_EQ(limiter->activeStreams(), 1);
-
-    // Moving the token transfers ownership without releasing the stream slot.
-    auto moved = std::move(token);
-    ASSERT_EQ(token, nullptr);
-    ASSERT_EQ(limiter->activeStreams(), 1);
-
-    // Releasing the moved token should drop the slot exactly once.
-    moved.reset();
-    ASSERT_EQ(limiter->activeStreams(), 0);
 }
 
 #ifdef __linux__

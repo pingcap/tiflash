@@ -24,7 +24,6 @@
 #include <common/types.h>
 
 #include <ext/scope_guard.h>
-
 #include <istream>
 
 /// Remove the population of thread_local from Poco
@@ -100,9 +99,13 @@ private:
     String readRangeOfObject();
     ssize_t readChunked(char * buf, size_t size);
     ssize_t finalizeRead(size_t requested_size, size_t actual_size, const Stopwatch & sw, std::istream & istr);
-    off_t finalizeSeek(off_t target_offset, size_t requested_size, size_t actual_size, const Stopwatch & sw, std::istream & istr);
+    off_t finalizeSeek(
+        off_t target_offset,
+        size_t requested_size,
+        size_t actual_size,
+        const Stopwatch & sw,
+        std::istream & istr);
     off_t seekChunked(off_t offset);
-    void resetReadStreamToken();
 
     // When reading, it is necessary to pass the extra information of file, such file size, to S3RandomAccessFile::create.
     // It is troublesome to pass parameters layer by layer. So currently, use thread_local global variable to pass parameters.
@@ -116,7 +119,6 @@ private:
     Aws::S3::Model::GetObjectResult read_result;
     Int64 content_length = 0;
     std::shared_ptr<S3ReadLimiter> read_limiter;
-    std::unique_ptr<S3ReadLimiter::StreamToken> read_stream_token;
 
     DB::LoggerPtr log;
     bool is_close = false;

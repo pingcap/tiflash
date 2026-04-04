@@ -121,11 +121,10 @@ TiFlashMetrics::TiFlashMetrics()
                .Name("tiflash_storage_remote_cache_wait_on_downloading_seconds")
                .Help("Bounded wait duration of remote cache downloading")
                .Register(*registry);
-    registered_remote_cache_reject_family
-        = &prometheus::BuildCounter()
-               .Name("tiflash_storage_remote_cache_reject")
-               .Help("Remote cache admission rejection by reason and file type")
-               .Register(*registry);
+    registered_remote_cache_reject_family = &prometheus::BuildCounter()
+                                                 .Name("tiflash_storage_remote_cache_reject")
+                                                 .Help("Remote cache admission rejection by reason and file type")
+                                                 .Register(*registry);
 
     for (size_t file_type_idx = 0; file_type_idx < remote_cache_file_type_labels.size(); ++file_type_idx)
     {
@@ -148,10 +147,9 @@ TiFlashMetrics::TiFlashMetrics()
         }
         for (size_t reason_idx = 0; reason_idx < remote_cache_reject_reason_labels.size(); ++reason_idx)
         {
-            remote_cache_reject_metrics[file_type_idx][reason_idx]
-                = &registered_remote_cache_reject_family->Add(
-                    {{"reason", std::string(remote_cache_reject_reason_labels[reason_idx])},
-                     {"file_type", std::string(remote_cache_file_type_labels[file_type_idx])}});
+            remote_cache_reject_metrics[file_type_idx][reason_idx] = &registered_remote_cache_reject_family->Add(
+                {{"reason", std::string(remote_cache_reject_reason_labels[reason_idx])},
+                 {"file_type", std::string(remote_cache_file_type_labels[file_type_idx])}});
         }
         for (size_t stage_idx = 0; stage_idx < remote_cache_download_stage_labels.size(); ++stage_idx)
         {
@@ -396,7 +394,7 @@ prometheus::Histogram & TiFlashMetrics::getRemoteCacheWaitOnDownloadingSecondsHi
     TiFlashMetrics::RemoteCacheWaitResultMetric result)
 {
     return *remote_cache_wait_on_downloading_seconds_metrics[static_cast<size_t>(file_type)]
-                                                           [static_cast<size_t>(result)];
+                                                            [static_cast<size_t>(result)];
 }
 
 prometheus::Histogram & TiFlashMetrics::getRemoteCacheBgDownloadStageSecondsHistogram(

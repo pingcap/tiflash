@@ -527,18 +527,17 @@ void IORateLimiter::updateLimiterByConfig(const IORateLimitConfig & cfg)
     updateWriteLimiter(cfg.getBgWriteMaxBytesPerSec(), cfg.getFgWriteMaxBytesPerSec());
 
     // updateS3ReadLimiter
-    if (cfg.s3_max_read_bytes_per_sec == 0 && cfg.s3_max_get_object_streams == 0)
+    if (cfg.s3_max_read_bytes_per_sec == 0)
     {
         s3_read_limiter = nullptr;
     }
     else if (s3_read_limiter == nullptr)
     {
-        s3_read_limiter
-            = std::make_shared<S3::S3ReadLimiter>(cfg.s3_max_read_bytes_per_sec, cfg.s3_max_get_object_streams);
+        s3_read_limiter = std::make_shared<S3::S3ReadLimiter>(cfg.s3_max_read_bytes_per_sec);
     }
     else
     {
-        s3_read_limiter->updateConfig(cfg.s3_max_read_bytes_per_sec, cfg.s3_max_get_object_streams);
+        s3_read_limiter->updateConfig(cfg.s3_max_read_bytes_per_sec);
     }
 }
 

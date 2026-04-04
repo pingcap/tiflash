@@ -1292,8 +1292,6 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg, c
     Aws::S3::Model::GetObjectRequest req;
     client->setBucketAndKeyWithRoot(req, s3_key);
     ProfileEvents::increment(ProfileEvents::S3GetObject);
-    // Limit live background-download streams with the same token used by direct readers.
-    auto stream_token = s3_read_limiter != nullptr ? s3_read_limiter->acquireStream() : nullptr;
     auto outcome = client->GetObject(req);
     if (!outcome.IsSuccess())
     {

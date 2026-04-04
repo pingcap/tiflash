@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Common/Stopwatch.h>
 #include <Common/SyncPoint/SyncPoint.h>
-#include <Common/FailPoint.h>
 #include <Debug/TiFlashTestEnv.h>
 #include <IO/BaseFile/RateLimiter.h>
 #include <IO/IOThreadPools.h>
@@ -1278,16 +1278,13 @@ TEST_F(FileCacheTest, BgDownloadRespectsS3StreamLimiter)
 
     ASSERT_EQ(file_cache.get(S3FilenameView::fromKey(objects[0].key), objects[0].size), nullptr);
     sp_download.waitAndPause();
-    ASSERT_EQ(limiter->activeStreams(), 1);
 
     ASSERT_EQ(file_cache.get(S3FilenameView::fromKey(objects[1].key), objects[1].size), nullptr);
     std::this_thread::sleep_for(50ms);
-    ASSERT_EQ(limiter->activeStreams(), 1);
 
     sp_download.next();
     sp_download.disable();
     waitForBgDownload(file_cache);
-    ASSERT_EQ(limiter->activeStreams(), 0);
 }
 
 TEST_F(FileCacheTest, GetWaitOnDownloadingSupportsColDataAndOther)

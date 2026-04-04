@@ -30,8 +30,6 @@ public:
     UInt64 max_write_bytes_per_sec;
     // Node-level byte budget shared by all S3 direct reads and FileCache downloads. `0` disables byte throttling.
     UInt64 s3_max_read_bytes_per_sec;
-    // Node-level cap for concurrently active `GetObject` response bodies. `0` disables stream throttling.
-    UInt64 s3_max_get_object_streams;
 
     // only true when both max_read_bytes_per_sec and max_write_bytes_per_sec are 0
     bool use_max_bytes_per_sec;
@@ -59,7 +57,6 @@ public:
         , max_read_bytes_per_sec(0)
         , max_write_bytes_per_sec(0)
         , s3_max_read_bytes_per_sec(0)
-        , s3_max_get_object_streams(0)
         , use_max_bytes_per_sec(true)
         // only limit background write by default
         , fg_write_weight(0)
