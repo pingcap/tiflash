@@ -270,6 +270,12 @@ TEST_F(S3ClientTest, PublishS3ReadLimiter)
     ClientFactory::instance().setS3ReadLimiter(published);
     ASSERT_EQ(ClientFactory::instance().sharedTiFlashClient()->getS3ReadLimiter(), published);
     ASSERT_EQ(published->maxReadBytesPerSec(), 8192);
+
+    cfg.s3_max_read_bytes_per_sec = 0;
+    io_rate_limiter.updateLimiterByConfig(cfg);
+    auto disabled = io_rate_limiter.getS3ReadLimiter();
+    ASSERT_EQ(disabled, published);
+    ASSERT_EQ(disabled->maxReadBytesPerSec(), 0);
 }
 
 TEST_F(S3ClientTest, ListPrefixEarlyStopOnTruncatedResult)
