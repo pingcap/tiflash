@@ -200,7 +200,9 @@ ssize_t S3RandomAccessFile::readChunked(char * buf, size_t size)
     while (total_gcount < size)
     {
         // The limiter charges requested bytes before the actual stream read so direct reads and FileCache downloads
-        // compete for the same node-level remote-read budget.
+        // compete for the same node-level remote-read budget. This is intentionally conservative: a short read still
+        // spends the full requested budget for this chunk. If we need tighter accounting later, we can add a
+        // compensation path based on the actual bytes read back from S3.
         auto to_read = std::min(size - total_gcount, static_cast<size_t>(chunk_size));
         read_limiter->requestBytes(to_read, S3ReadSource::DirectRead);
         istr.read(buf + total_gcount, to_read);
