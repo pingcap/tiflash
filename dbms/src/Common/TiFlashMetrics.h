@@ -27,6 +27,7 @@
 #include <prometheus/histogram.h>
 #include <prometheus/registry.h>
 
+#include <array>
 #include <cassert>
 #include <ext/scope_guard.h>
 #include <mutex>
@@ -1335,6 +1336,29 @@ class TiFlashMetrics
 public:
     static TiFlashMetrics & instance();
 
+    enum class RemoteCacheFileTypeMetric : size_t
+    {
+        Merged = 0,
+        ColData,
+        Other,
+        Count,
+    };
+
+    enum class RemoteCacheWaitResultMetric : size_t
+    {
+        Hit = 0,
+        Timeout,
+        Failed,
+        Count,
+    };
+
+    enum class RemoteCacheDownloadStageMetric : size_t
+    {
+        QueueWait = 0,
+        Download,
+        Count,
+    };
+
     void addReplicaSyncRU(UInt32 keyspace_id, UInt64 ru);
     UInt64 debugQueryReplicaSyncRU(UInt32 keyspace_id);
     enum class MemoryAllocType
@@ -1356,6 +1380,15 @@ public:
         const DM::ReadRUType type);
 
     void setS3StoreSummaryBytes(UInt64 store_id, UInt64 data_file_bytes, UInt64 dt_file_bytes);
+    prometheus::Counter & getRemoteCacheWaitOnDownloadingResultCounter(
+        RemoteCacheFileTypeMetric file_type,
+        RemoteCacheWaitResultMetric result);
+    prometheus::Counter & getRemoteCacheWaitOnDownloadingBytesCounter(
+        RemoteCacheFileTypeMetric file_type,
+        RemoteCacheWaitResultMetric result);
+    prometheus::Histogram & getRemoteCacheBgDownloadStageSecondsHistogram(
+        RemoteCacheFileTypeMetric file_type,
+        RemoteCacheDownloadStageMetric stage);
 
 private:
     TiFlashMetrics();
@@ -1406,6 +1439,22 @@ private:
     prometheus::Family<prometheus::Gauge> * registered_s3_store_summary_bytes_family;
     std::shared_mutex s3_store_summary_bytes_mtx;
     std::unordered_map<UInt64, S3StoreSummaryBytesMetrics> registered_s3_store_summary_bytes_metrics;
+
+    prometheus::Family<prometheus::Counter> * registered_remote_cache_wait_on_downloading_result_family;
+    std::array<
+        std::array<prometheus::Counter *, static_cast<size_t>(RemoteCacheWaitResultMetric::Count)>,
+        static_cast<size_t>(RemoteCacheFileTypeMetric::Count)>
+        remote_cache_wait_on_downloading_result_metrics{};
+    prometheus::Family<prometheus::Counter> * registered_remote_cache_wait_on_downloading_bytes_family;
+    std::array<
+        std::array<prometheus::Counter *, static_cast<size_t>(RemoteCacheWaitResultMetric::Count)>,
+        static_cast<size_t>(RemoteCacheFileTypeMetric::Count)>
+        remote_cache_wait_on_downloading_bytes_metrics{};
+    prometheus::Family<prometheus::Histogram> * registered_remote_cache_bg_download_stage_seconds_family;
+    std::array<
+        std::array<prometheus::Histogram *, static_cast<size_t>(RemoteCacheDownloadStageMetric::Count)>,
+        static_cast<size_t>(RemoteCacheFileTypeMetric::Count)>
+        remote_cache_bg_download_stage_seconds_metrics{};
 
 public:
 #define MAKE_METRIC_MEMBER_M(family_name, help, type, ...) \
