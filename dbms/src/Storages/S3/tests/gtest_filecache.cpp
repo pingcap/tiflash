@@ -34,10 +34,9 @@
 #include <fmt/compile.h>
 #include <gtest/gtest.h>
 
-#include <ext/scope_guard.h>
-
 #include <atomic>
 #include <chrono>
+#include <ext/scope_guard.h>
 #include <filesystem>
 #include <fstream>
 #include <memory>
