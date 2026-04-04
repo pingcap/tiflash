@@ -99,9 +99,21 @@ void DB::S3::S3ReadLimiter::requestBytes(UInt64 bytes, S3ReadSource source)
 
         const auto now = Clock::now();
         refillBytesLocked(now);
-        if (available_bytes >= static_cast<double>(bytes))
+        const auto requested_bytes = static_cast<double>(bytes);
+        const auto burst_bytes = static_cast<double>(burstBytesPerPeriod(current_limit));
+        if (available_bytes >= requested_bytes)
         {
-            available_bytes -= static_cast<double>(bytes);
+            available_bytes -= requested_bytes;
+            return;
+        }
+
+        // Preserve the strict token-bucket behavior for requests that fit into one burst. When one
+        // caller asks for more than the bucket can ever accumulate, allow it to borrow once some
+        // budget is available so the request still makes forward progress. Upper layers are expected
+        // to call getSuggestedChunkSize() and keep this branch rare.
+        if (requested_bytes > burst_bytes && available_bytes > 0)
+        {
+            available_bytes -= requested_bytes;
             return;
         }
 
@@ -113,7 +125,7 @@ void DB::S3::S3ReadLimiter::requestBytes(UInt64 bytes, S3ReadSource source)
 
         // Sleep only for the missing budget instead of a fixed interval so large readers converge quickly
         // after budget becomes available again.
-        const auto missing = static_cast<double>(bytes) - available_bytes;
+        const auto missing = requested_bytes - available_bytes;
         const auto wait_us
             = std::max<UInt64>(1, static_cast<UInt64>(missing * 1000000.0 / static_cast<double>(current_limit)));
         bytes_cv.wait_for(lock, std::chrono::microseconds(wait_us));

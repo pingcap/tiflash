@@ -145,6 +145,9 @@ ssize_t S3RandomAccessFile::readChunked(char * buf, size_t size)
     ProfileEvents::increment(ProfileEvents::S3IORead, 1);
 
     auto & istr = read_result.GetBody();
+    // Use the limiter-suggested step so one large logical read is split into smoother refill-period-
+    // sized chunks. That keeps `requestBytes()` on its strict path for normal reads and only falls
+    // back to borrowing semantics for requests that are unavoidably larger than one burst.
     const auto chunk_size = read_limiter->getSuggestedChunkSize(s3_read_limiter_preferred_chunk_size);
     size_t total_gcount = 0;
     while (total_gcount < size)
@@ -282,6 +285,8 @@ off_t S3RandomAccessFile::seekChunked(off_t offset)
     Stopwatch sw;
     ProfileEvents::increment(ProfileEvents::S3IOSeek, 1);
     auto & istr = read_result.GetBody();
+    // Use the same chunk heuristic as readChunked() so forward seeks do not turn into one oversized
+    // limiter request when skipping a large remote range.
     const auto chunk_size = read_limiter->getSuggestedChunkSize(s3_read_limiter_preferred_chunk_size);
     size_t total_ignored = 0;
     const auto bytes_to_ignore = static_cast<size_t>(offset - cur_offset);

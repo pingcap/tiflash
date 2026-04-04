@@ -421,6 +421,17 @@ TEST(S3ReadLimiterTest, SuggestedChunkSizeTracksBurstLimit)
     ASSERT_EQ(limiter.getSuggestedChunkSize(4096), 4096);
 }
 
+TEST(S3ReadLimiterTest, LargeRequestDoesNotWaitForever)
+{
+    S3::S3ReadLimiter limiter(/*max_read_bytes_per_sec*/ 1000, /*refill_period_ms*/ 100);
+
+    // The initial burst is only 100 bytes, but callers that request a larger chunk should still make
+    // forward progress instead of waiting forever for a budget that can never accumulate.
+    AtomicStopwatch watch;
+    limiter.requestBytes(128 * 1024, S3::S3ReadSource::DirectRead);
+    ASSERT_LT(watch.elapsedMilliseconds(), 200);
+}
+
 #ifdef __linux__
 TEST(IORateLimiterTest, IOStat)
 {
