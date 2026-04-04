@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/CurrentMetrics.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Storages/S3/S3ReadLimiter.h>
@@ -34,40 +33,23 @@ void recordWaitIfNeeded(bool waited, const Stopwatch & sw, F && observe)
 }
 } // namespace
 
-S3ReadLimiter::StreamToken::~StreamToken()
-{
-    reset();
-}
-
-void S3ReadLimiter::StreamToken::reset()
-{
-    if (owner == nullptr)
-        return;
-    owner->releaseStream();
-    owner = nullptr;
-}
-
-S3ReadLimiter::S3ReadLimiter(UInt64 max_read_bytes_per_sec_, UInt64 max_streams_, UInt64 refill_period_ms_)
+DB::S3::S3ReadLimiter::S3ReadLimiter(UInt64 max_read_bytes_per_sec_, UInt64 refill_period_ms_)
     : refill_period_ms(refill_period_ms_)
     , max_read_bytes_per_sec(max_read_bytes_per_sec_)
-    , max_streams(max_streams_)
-    , active_streams(0)
     , available_bytes(static_cast<double>(burstBytesPerPeriod(max_read_bytes_per_sec_)))
     , last_refill_time(Clock::now())
     , stop(false)
     , log(Logger::get("S3ReadLimiter"))
 {
     GET_METRIC(tiflash_storage_io_limiter_curr, type_s3_read_bytes).Set(max_read_bytes_per_sec_);
-    GET_METRIC(tiflash_storage_s3_read_limiter_status, type_max_get_object_streams).Set(max_streams_);
-    GET_METRIC(tiflash_storage_s3_read_limiter_status, type_active_get_object_streams).Set(0);
 }
 
-S3ReadLimiter::~S3ReadLimiter()
+DB::S3::S3ReadLimiter::~S3ReadLimiter()
 {
     setStop();
 }
 
-void S3ReadLimiter::updateConfig(UInt64 max_read_bytes_per_sec_, UInt64 max_streams_)
+void DB::S3::S3ReadLimiter::updateConfig(UInt64 max_read_bytes_per_sec_)
 {
     {
         std::lock_guard lock(bytes_mutex);
@@ -77,50 +59,11 @@ void S3ReadLimiter::updateConfig(UInt64 max_read_bytes_per_sec_, UInt64 max_stre
             available_bytes = 0;
         last_refill_time = Clock::now();
     }
-    {
-        std::lock_guard lock(stream_mutex);
-        max_streams.store(max_streams_, std::memory_order_relaxed);
-    }
     GET_METRIC(tiflash_storage_io_limiter_curr, type_s3_read_bytes).Set(max_read_bytes_per_sec_);
-    GET_METRIC(tiflash_storage_s3_read_limiter_status, type_max_get_object_streams).Set(max_streams_);
     bytes_cv.notify_all();
-    stream_cv.notify_all();
 }
 
-std::unique_ptr<S3ReadLimiter::StreamToken> S3ReadLimiter::acquireStream()
-{
-    const auto limit = max_streams.load(std::memory_order_relaxed);
-    if (limit == 0)
-        return nullptr;
-
-    Stopwatch sw;
-    bool waited = false;
-    std::unique_lock lock(stream_mutex);
-    // A token is held for the whole lifetime of one `GetObject` body, not just the initial request.
-    while (!stop && max_streams.load(std::memory_order_relaxed) != 0
-           && active_streams.load(std::memory_order_relaxed) >= max_streams.load(std::memory_order_relaxed))
-    {
-        if (!waited)
-        {
-            GET_METRIC(tiflash_storage_io_limiter_pending_count, type_s3_read_stream).Increment();
-            waited = true;
-        }
-        stream_cv.wait(lock);
-    }
-
-    recordWaitIfNeeded(waited, sw, [](double seconds) {
-        GET_METRIC(tiflash_storage_io_limiter_pending_seconds, type_s3_read_stream).Observe(seconds);
-    });
-
-    if (stop || max_streams.load(std::memory_order_relaxed) == 0)
-        return nullptr;
-
-    auto cur = active_streams.fetch_add(1, std::memory_order_relaxed) + 1;
-    GET_METRIC(tiflash_storage_s3_read_limiter_status, type_active_get_object_streams).Set(cur);
-    return std::make_unique<StreamToken>(this);
-}
-
-void S3ReadLimiter::requestBytes(UInt64 bytes, S3ReadSource source)
+void DB::S3::S3ReadLimiter::requestBytes(UInt64 bytes, S3ReadSource source)
 {
     if (bytes == 0)
         return;
@@ -177,7 +120,7 @@ void S3ReadLimiter::requestBytes(UInt64 bytes, S3ReadSource source)
     }
 }
 
-UInt64 S3ReadLimiter::getSuggestedChunkSize(UInt64 preferred_chunk_size) const
+UInt64 DB::S3::S3ReadLimiter::getSuggestedChunkSize(UInt64 preferred_chunk_size) const
 {
     const auto limit = max_read_bytes_per_sec.load(std::memory_order_relaxed);
     if (limit == 0)
@@ -185,27 +128,18 @@ UInt64 S3ReadLimiter::getSuggestedChunkSize(UInt64 preferred_chunk_size) const
     return std::max<UInt64>(1, std::min(preferred_chunk_size, burstBytesPerPeriod(limit)));
 }
 
-void S3ReadLimiter::setStop()
+void DB::S3::S3ReadLimiter::setStop()
 {
     {
-        std::lock_guard lock_stream(stream_mutex);
         std::lock_guard lock_bytes(bytes_mutex);
         if (stop)
             return;
         stop = true;
     }
-    stream_cv.notify_all();
     bytes_cv.notify_all();
 }
 
-void S3ReadLimiter::releaseStream()
-{
-    auto cur = active_streams.fetch_sub(1, std::memory_order_relaxed) - 1;
-    GET_METRIC(tiflash_storage_s3_read_limiter_status, type_active_get_object_streams).Set(cur);
-    stream_cv.notify_one();
-}
-
-void S3ReadLimiter::refillBytesLocked(Clock::time_point now)
+void DB::S3::S3ReadLimiter::refillBytesLocked(Clock::time_point now)
 {
     const auto current_limit = max_read_bytes_per_sec.load(std::memory_order_relaxed);
     if (current_limit == 0)
@@ -227,7 +161,7 @@ void S3ReadLimiter::refillBytesLocked(Clock::time_point now)
     last_refill_time = now;
 }
 
-UInt64 S3ReadLimiter::burstBytesPerPeriod(UInt64 max_read_bytes_per_sec_) const
+UInt64 DB::S3::S3ReadLimiter::burstBytesPerPeriod(UInt64 max_read_bytes_per_sec_) const
 {
     if (max_read_bytes_per_sec_ == 0)
         return 0;

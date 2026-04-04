@@ -596,7 +596,6 @@ max_bytes_per_sec=0
 max_read_bytes_per_sec=0
 max_write_bytes_per_sec=0
 s3_max_read_bytes_per_sec=0
-s3_max_get_object_streams=0
 foreground_write_weight=1
 background_write_weight=2
 foreground_read_weight=5
@@ -609,7 +608,6 @@ max_bytes_per_sec=1024000
 max_read_bytes_per_sec=0
 max_write_bytes_per_sec=0
 s3_max_read_bytes_per_sec=2048000
-s3_max_get_object_streams=256
 foreground_write_weight=1
 background_write_weight=2
 foreground_read_weight=5
@@ -622,7 +620,6 @@ max_bytes_per_sec=0
 max_read_bytes_per_sec=1024000
 max_write_bytes_per_sec=1024000
 s3_max_read_bytes_per_sec=1024
-s3_max_get_object_streams=8
 foreground_write_weight=1
 background_write_weight=2
 foreground_read_weight=5
@@ -635,7 +632,6 @@ max_bytes_per_sec=1024000
 max_read_bytes_per_sec=1024000
 max_write_bytes_per_sec=1024000
 s3_max_read_bytes_per_sec=4096
-s3_max_get_object_streams=16
 foreground_write_weight=1
 background_write_weight=2
 foreground_read_weight=5
@@ -647,7 +643,6 @@ background_read_weight=2
             [storage.io_rate_limit]
             max_bytes_per_sec=1024000
             s3_max_read_bytes_per_sec=8192
-            s3_max_get_object_streams=32
             foreground_write_weight=80
             background_write_weight=20
             foreground_read_weight=0
@@ -662,7 +657,6 @@ background_read_weight=2
         ASSERT_EQ(io_config.max_read_bytes_per_sec, 0);
         ASSERT_EQ(io_config.max_write_bytes_per_sec, 0);
         ASSERT_EQ(io_config.s3_max_read_bytes_per_sec, 0);
-        ASSERT_EQ(io_config.s3_max_get_object_streams, 0);
         ASSERT_TRUE(io_config.use_max_bytes_per_sec);
         ASSERT_EQ(io_config.fg_write_weight, 0);
         ASSERT_EQ(io_config.bg_write_weight, 100);
@@ -682,7 +676,6 @@ background_read_weight=2
         ASSERT_EQ(io_config.max_read_bytes_per_sec, 0);
         ASSERT_EQ(io_config.max_write_bytes_per_sec, 0);
         ASSERT_EQ(io_config.s3_max_read_bytes_per_sec, 0);
-        ASSERT_EQ(io_config.s3_max_get_object_streams, 0);
         ASSERT_TRUE(io_config.use_max_bytes_per_sec);
         ASSERT_EQ(io_config.fg_write_weight, 1);
         ASSERT_EQ(io_config.bg_write_weight, 2);
@@ -702,7 +695,6 @@ background_read_weight=2
         ASSERT_EQ(io_config.max_read_bytes_per_sec, 0);
         ASSERT_EQ(io_config.max_write_bytes_per_sec, 0);
         ASSERT_EQ(io_config.s3_max_read_bytes_per_sec, 2048000);
-        ASSERT_EQ(io_config.s3_max_get_object_streams, 256);
         ASSERT_TRUE(io_config.use_max_bytes_per_sec);
         ASSERT_EQ(io_config.fg_write_weight, 1);
         ASSERT_EQ(io_config.bg_write_weight, 2);
@@ -722,7 +714,6 @@ background_read_weight=2
         ASSERT_EQ(io_config.max_read_bytes_per_sec, 1024000);
         ASSERT_EQ(io_config.max_write_bytes_per_sec, 1024000);
         ASSERT_EQ(io_config.s3_max_read_bytes_per_sec, 1024);
-        ASSERT_EQ(io_config.s3_max_get_object_streams, 8);
         ASSERT_FALSE(io_config.use_max_bytes_per_sec); // use max_read_bytes_per_sec and max_write_bytes_per_sec
         ASSERT_EQ(io_config.fg_write_weight, 1);
         ASSERT_EQ(io_config.bg_write_weight, 2);
@@ -744,7 +735,6 @@ background_read_weight=2
         ASSERT_EQ(io_config.max_read_bytes_per_sec, 1024000);
         ASSERT_EQ(io_config.max_write_bytes_per_sec, 1024000);
         ASSERT_EQ(io_config.s3_max_read_bytes_per_sec, 4096);
-        ASSERT_EQ(io_config.s3_max_get_object_streams, 16);
         ASSERT_FALSE(io_config.use_max_bytes_per_sec); // use max_read_bytes_per_sec and max_write_bytes_per_sec
         ASSERT_EQ(io_config.fg_write_weight, 1);
         ASSERT_EQ(io_config.bg_write_weight, 2);
@@ -766,7 +756,6 @@ background_read_weight=2
         ASSERT_EQ(io_config.max_read_bytes_per_sec, 0);
         ASSERT_EQ(io_config.max_write_bytes_per_sec, 0);
         ASSERT_EQ(io_config.s3_max_read_bytes_per_sec, 8192);
-        ASSERT_EQ(io_config.s3_max_get_object_streams, 32);
         ASSERT_TRUE(io_config.use_max_bytes_per_sec);
         ASSERT_EQ(io_config.fg_write_weight, 80);
         ASSERT_EQ(io_config.bg_write_weight, 20);

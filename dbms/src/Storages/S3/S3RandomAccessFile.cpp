@@ -86,7 +86,6 @@ S3RandomAccessFile::S3RandomAccessFile(
 
 S3RandomAccessFile::~S3RandomAccessFile()
 {
-    resetReadStreamToken();
     CurrentMetrics::sub(CurrentMetrics::S3RandomAccessFile);
 }
 
@@ -165,7 +164,11 @@ ssize_t S3RandomAccessFile::readChunked(char * buf, size_t size)
     return finalizeRead(size, total_gcount, sw, istr);
 }
 
-ssize_t S3RandomAccessFile::finalizeRead(size_t requested_size, size_t actual_size, const Stopwatch & sw, std::istream & istr)
+ssize_t S3RandomAccessFile::finalizeRead(
+    size_t requested_size,
+    size_t actual_size,
+    const Stopwatch & sw,
+    std::istream & istr)
 {
     // Keep the post-read handling shared so limiter and non-limiter paths emit identical retries, logging and
     // observability signals.
@@ -176,7 +179,8 @@ ssize_t S3RandomAccessFile::finalizeRead(size_t requested_size, size_t actual_si
 
     // Theoretically, `istr.eof()` is equivalent to `cur_offset + actual_size != static_cast<size_t>(content_length)`.
     // It's just a double check for more safety.
-    if (actual_size < requested_size && (!istr.eof() || cur_offset + actual_size != static_cast<size_t>(content_length)))
+    if (actual_size < requested_size
+        && (!istr.eof() || cur_offset + actual_size != static_cast<size_t>(content_length)))
     {
         ProfileEvents::increment(ProfileEvents::S3IOReadError);
         auto state = istr.rdstate();
@@ -253,8 +257,7 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
     if (offset_ < cur_offset)
     {
         ProfileEvents::increment(ProfileEvents::S3IOSeekBackward, 1);
-        // The current body stream is forward-only. Re-open from the target offset and release the old stream slot first.
-        resetReadStreamToken();
+        // The current body stream is forward-only. Re-open from the target offset.
         cur_offset = offset_;
         cur_retry = 0;
         initialize("seek backward");
@@ -365,9 +368,6 @@ void S3RandomAccessFile::initialize(std::string_view action)
 {
     while (cur_retry < max_retry)
     {
-        // Hold the token for the whole body lifetime so the stream cap reflects live `GetObject` responses,
-        // including callers that read slowly or perform forward seeks.
-        auto next_stream_token = read_limiter != nullptr ? read_limiter->acquireStream() : nullptr;
         Stopwatch sw_get_object;
         SCOPE_EXIT({
             auto elapsed_secs = sw_get_object.elapsedSeconds();
@@ -398,7 +398,6 @@ void S3RandomAccessFile::initialize(std::string_view action)
         });
         if (!outcome.IsSuccess())
         {
-            next_stream_token.reset();
             Int64 delay_ms = details::calculateDelayForNextRetry(cur_retry);
             cur_retry += 1;
             auto el = sw_get_object.elapsedSeconds();
@@ -424,7 +423,6 @@ void S3RandomAccessFile::initialize(std::string_view action)
         }
         read_result = outcome.GetResultWithOwnership();
         RUNTIME_CHECK(read_result.GetBody(), remote_fname, strerror(errno));
-        read_stream_token = std::move(next_stream_token);
         return; // init successfully
     }
     // exceed max retry times
@@ -433,12 +431,6 @@ void S3RandomAccessFile::initialize(std::string_view action)
         "Open S3 file for read fail after retries when {}, key={}",
         action,
         remote_fname);
-}
-
-void S3RandomAccessFile::resetReadStreamToken()
-{
-    if (read_stream_token != nullptr)
-        read_stream_token.reset();
 }
 
 inline static RandomAccessFilePtr tryOpenCachedFile(const String & remote_fname, std::optional<UInt64> filesize)

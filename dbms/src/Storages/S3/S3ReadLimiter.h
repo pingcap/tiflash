@@ -20,7 +20,6 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
-#include <memory>
 #include <mutex>
 
 namespace DB::S3
@@ -31,77 +30,34 @@ enum class S3ReadSource
     FileCacheDownload,
 };
 
-class S3ReadLimiter : public std::enable_shared_from_this<S3ReadLimiter>
+class S3ReadLimiter
 {
 public:
-    /// RAII handle for one live `GetObject` body stream.
+    /// Stream-based limiting looks attractive because a token could track one live `GetObject`
+    /// body stream.
     ///
-    /// The token is acquired before the request body starts being consumed and released when the
-    /// response stream is destroyed or re-opened. This keeps the stream limiter aligned with the
-    /// actual number of concurrent remote-read streams instead of just the number of requests sent.
-    ///
-    /// Important: the token must not be interpreted as a safe upper bound for the number of
+    /// Important: such a token must not be interpreted as a safe upper bound for the number of
     /// `S3RandomAccessFile` objects. One reader can hold a response body open while being idle in a
     /// pipeline stage, so limiting tokens too aggressively can stall unrelated readers even when
     /// there is little ongoing S3 network I/O.
-    class StreamToken
-    {
-    public:
-        explicit StreamToken(S3ReadLimiter * owner_)
-            : owner(owner_)
-        {}
-
-        ~StreamToken();
-
-        StreamToken(const StreamToken &) = delete;
-        StreamToken & operator=(const StreamToken &) = delete;
-
-        StreamToken(StreamToken && other) noexcept
-            : owner(other.owner)
-        {
-            other.owner = nullptr;
-        }
-
-        StreamToken & operator=(StreamToken && other) noexcept
-        {
-            if (this == &other)
-                return *this;
-            reset();
-            owner = other.owner;
-            other.owner = nullptr;
-            return *this;
-        }
-
-        /// Releases one active stream slot early. Destruction does the same automatically.
-        void reset();
-
-    private:
-        S3ReadLimiter * owner;
-    };
+    ///
+    /// Stream-based limiting is therefore removed for now. Keep this note here so future changes do
+    /// not accidentally re-introduce the same unsafe hard cap on `S3RandomAccessFile` concurrency.
 
     /// A lightweight node-level limiter for S3 remote reads.
     ///
-    /// It limits two dimensions together:
-    /// - concurrently active `GetObject` body streams
+    /// It currently limits one dimension:
     /// - total remote-read bytes consumed by direct reads and FileCache downloads
     ///
     /// The stream dimension is best-effort protection against too many live response bodies, not a
     /// replacement for byte throttling and not a safe cap on reader object count. In TiFlash a
     /// `S3RandomAccessFile` may keep its body stream open across scheduling gaps, so a low stream
     /// limit can block forward progress even when the node is no longer transferring many bytes.
-    explicit S3ReadLimiter(UInt64 max_read_bytes_per_sec_ = 0, UInt64 max_streams_ = 0, UInt64 refill_period_ms_ = 100);
+    explicit S3ReadLimiter(UInt64 max_read_bytes_per_sec_ = 0, UInt64 refill_period_ms_ = 100);
 
     ~S3ReadLimiter();
 
-    /// Update both byte-rate and stream limits. `0` disables the corresponding limit.
-    void updateConfig(UInt64 max_read_bytes_per_sec_, UInt64 max_streams_);
-
-    /// Acquire a token that must live as long as the `GetObject` body stream remains active.
-    /// Returns `nullptr` when the stream limit is disabled.
-    ///
-    /// Callers should use this to bound live response bodies, but should not assume it models only
-    /// the time spent actively reading bytes from S3.
-    [[nodiscard]] std::unique_ptr<StreamToken> acquireStream();
+    void updateConfig(UInt64 max_read_bytes_per_sec_);
 
     /// Charge remote-read bytes. The call blocks when the current node-level budget is exhausted.
     void requestBytes(UInt64 bytes, S3ReadSource source);
@@ -110,16 +66,12 @@ public:
     UInt64 getSuggestedChunkSize(UInt64 preferred_chunk_size) const;
 
     UInt64 maxReadBytesPerSec() const { return max_read_bytes_per_sec.load(std::memory_order_relaxed); }
-    UInt64 maxStreams() const { return max_streams.load(std::memory_order_relaxed); }
-    UInt64 activeStreams() const { return active_streams.load(std::memory_order_relaxed); }
 
     void setStop();
 
 private:
     using Clock = std::chrono::steady_clock;
 
-    /// Return one `GetObject` stream slot back to the limiter and wake one waiter.
-    void releaseStream();
     /// Refill the token bucket according to elapsed wall time. Caller must hold `bytes_mutex`.
     void refillBytesLocked(Clock::time_point now);
     /// Limit the instantaneous burst so long reads are naturally split into small limiter-aware chunks.
@@ -127,11 +79,6 @@ private:
 
     const UInt64 refill_period_ms;
     std::atomic<UInt64> max_read_bytes_per_sec;
-    std::atomic<UInt64> max_streams;
-    std::atomic<UInt64> active_streams;
-
-    mutable std::mutex stream_mutex;
-    std::condition_variable stream_cv;
 
     mutable std::mutex bytes_mutex;
     std::condition_variable bytes_cv;

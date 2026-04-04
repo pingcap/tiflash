@@ -355,35 +355,6 @@ try
 }
 CATCH
 
-TEST_P(S3FileTest, StreamLimiterBlocksSecondDirectReader)
-try
-{
-    const String key1 = "/a/b/c/stream_limit_1";
-    const String key2 = "/a/b/c/stream_limit_2";
-    writeFile(key1, 4096, WriteSettings{});
-    writeFile(key2, 4096, WriteSettings{});
-
-    auto limiter = std::make_shared<S3ReadLimiter>(0, 1);
-    s3_client->setS3ReadLimiter(limiter);
-    SCOPE_EXIT({ s3_client->setS3ReadLimiter(nullptr); });
-
-    auto file1 = std::make_shared<S3RandomAccessFile>(s3_client, key1, nullptr);
-    ASSERT_EQ(limiter->activeStreams(), 1);
-
-    auto future = std::async(std::launch::async, [&]() {
-        return std::make_shared<S3RandomAccessFile>(s3_client, key2, nullptr);
-    });
-    ASSERT_EQ(future.wait_for(50ms), std::future_status::timeout);
-
-    file1.reset();
-    auto file2 = future.get();
-    ASSERT_NE(file2, nullptr);
-    ASSERT_EQ(limiter->activeStreams(), 1);
-    file2.reset();
-    ASSERT_EQ(limiter->activeStreams(), 0);
-}
-CATCH
-
 TEST_P(S3FileTest, WriteRead)
 try
 {

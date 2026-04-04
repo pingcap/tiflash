@@ -402,7 +402,6 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_bg_read, {{"type", "bg_read"}}, ExpBuckets{0.001, 2, 20}),                                                             \
       F(type_fg_write, {{"type", "fg_write"}}, ExpBuckets{0.001, 2, 20}),                                                           \
       F(type_bg_write, {{"type", "bg_write"}}, ExpBuckets{0.001, 2, 20}),                                                           \
-      F(type_s3_read_stream, {{"type", "s3_read_stream"}}, ExpBuckets{0.001, 2, 20}),                                               \
       F(type_s3_read_byte, {{"type", "s3_read_byte"}}, ExpBuckets{0.001, 2, 20}))                                                   \
     M(tiflash_storage_io_limiter_pending_count,                                                                                     \
       "I/O limiter pending count",                                                                                                  \
@@ -411,8 +410,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_bg_read, {"type", "bg_read"}),                                                                                         \
       F(type_fg_write, {"type", "fg_write"}),                                                                                       \
       F(type_bg_write, {"type", "bg_write"}),                                                                                       \
-      F(type_s3_read_byte, {"type", "s3_read_byte"}),                                                                               \
-      F(type_s3_read_stream, {"type", "s3_read_stream"}))                                                                           \
+      F(type_s3_read_byte, {"type", "s3_read_byte"}))                                                                               \
     M(tiflash_storage_rough_set_filter_rate,                                                                                        \
       "Bucketed histogram of rough set filter rate",                                                                                \
       Histogram,                                                                                                                    \
@@ -813,11 +811,6 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_head_object, {{"type", "head_object"}}, ExpBuckets{0.001, 2, 20}),                                                     \
       F(type_read_stream, {{"type", "read_stream"}}, ExpBuckets{0.0001, 2, 20}),                                                    \
       F(type_read_stream_err, {{"type", "read_stream_err"}}, ExpBuckets{0.0001, 2, 20}))                                            \
-    M(tiflash_storage_s3_read_limiter_status,                                                                                       \
-      "S3 read limiter status",                                                                                                     \
-      Gauge,                                                                                                                        \
-      F(type_active_get_object_streams, {{"type", "active_get_object_streams"}}),                                                   \
-      F(type_max_get_object_streams, {{"type", "max_get_object_streams"}}))                                                         \
     M(tiflash_storage_s3_http_request_seconds,                                                                                      \
       "S3 request duration breakdown in seconds",                                                                                   \
       Histogram,                                                                                                                    \
@@ -931,8 +924,8 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
     M(tiflash_storage_remote_cache_status,                                                                                          \
       "Remote cache status",                                                                                                        \
       Gauge,                                                                                                                        \
-      F(type_bg_downloading_count, {{"type", "bg_downloading_count"}}),                                                            \
-      F(type_bg_download_queue_count, {{"type", "bg_download_queue_count"}}))                                                      \
+      F(type_bg_downloading_count, {{"type", "bg_downloading_count"}}),                                                             \
+      F(type_bg_download_queue_count, {{"type", "bg_download_queue_count"}}))                                                       \
     M(tiflash_system_seconds,                                                                                                       \
       "system calls duration in seconds",                                                                                           \
       Histogram,                                                                                                                    \

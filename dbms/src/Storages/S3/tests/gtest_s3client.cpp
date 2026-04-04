@@ -263,7 +263,6 @@ TEST_F(S3ClientTest, PublishS3ReadLimiter)
     IORateLimiter io_rate_limiter;
     IORateLimitConfig cfg;
     cfg.s3_max_read_bytes_per_sec = 8192;
-    cfg.s3_max_get_object_streams = 9;
     io_rate_limiter.updateLimiterByConfig(cfg);
 
     auto published = io_rate_limiter.getS3ReadLimiter();
@@ -271,7 +270,6 @@ TEST_F(S3ClientTest, PublishS3ReadLimiter)
     ClientFactory::instance().setS3ReadLimiter(published);
     ASSERT_EQ(ClientFactory::instance().sharedTiFlashClient()->getS3ReadLimiter(), published);
     ASSERT_EQ(published->maxReadBytesPerSec(), 8192);
-    ASSERT_EQ(published->maxStreams(), 9);
 }
 
 TEST_F(S3ClientTest, ListPrefixEarlyStopOnTruncatedResult)

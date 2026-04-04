@@ -150,7 +150,10 @@ public:
     }
 
 private:
-    Status waitForNotEmptyImpl(std::optional<std::chrono::milliseconds> timeout, bool log_progress, bool throw_on_timeout);
+    Status waitForNotEmptyImpl(
+        std::optional<std::chrono::milliseconds> timeout,
+        bool log_progress,
+        bool throw_on_timeout);
 
     mutable std::mutex mtx;
     const String local_fname;
