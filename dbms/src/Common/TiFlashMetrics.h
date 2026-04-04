@@ -931,7 +931,8 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
     M(tiflash_storage_remote_cache_status,                                                                                          \
       "Remote cache status",                                                                                                        \
       Gauge,                                                                                                                        \
-      F(type_bg_downloading_count, {{"type", "bg_downloading_count"}}))                                                             \
+      F(type_bg_downloading_count, {{"type", "bg_downloading_count"}}),                                                            \
+      F(type_bg_download_queue_count, {{"type", "bg_download_queue_count"}}))                                                      \
     M(tiflash_system_seconds,                                                                                                       \
       "system calls duration in seconds",                                                                                           \
       Histogram,                                                                                                                    \
@@ -1352,6 +1353,12 @@ public:
         Count,
     };
 
+    enum class RemoteCacheRejectReasonMetric : size_t
+    {
+        TooManyDownload = 0,
+        Count,
+    };
+
     enum class RemoteCacheDownloadStageMetric : size_t
     {
         QueueWait = 0,
@@ -1386,9 +1393,15 @@ public:
     prometheus::Counter & getRemoteCacheWaitOnDownloadingBytesCounter(
         RemoteCacheFileTypeMetric file_type,
         RemoteCacheWaitResultMetric result);
+    prometheus::Histogram & getRemoteCacheWaitOnDownloadingSecondsHistogram(
+        RemoteCacheFileTypeMetric file_type,
+        RemoteCacheWaitResultMetric result);
     prometheus::Histogram & getRemoteCacheBgDownloadStageSecondsHistogram(
         RemoteCacheFileTypeMetric file_type,
         RemoteCacheDownloadStageMetric stage);
+    prometheus::Counter & getRemoteCacheRejectCounter(
+        RemoteCacheFileTypeMetric file_type,
+        RemoteCacheRejectReasonMetric reason);
 
 private:
     TiFlashMetrics();
@@ -1450,11 +1463,21 @@ private:
         std::array<prometheus::Counter *, static_cast<size_t>(RemoteCacheWaitResultMetric::Count)>,
         static_cast<size_t>(RemoteCacheFileTypeMetric::Count)>
         remote_cache_wait_on_downloading_bytes_metrics{};
+    prometheus::Family<prometheus::Histogram> * registered_remote_cache_wait_on_downloading_seconds_family;
+    std::array<
+        std::array<prometheus::Histogram *, static_cast<size_t>(RemoteCacheWaitResultMetric::Count)>,
+        static_cast<size_t>(RemoteCacheFileTypeMetric::Count)>
+        remote_cache_wait_on_downloading_seconds_metrics{};
     prometheus::Family<prometheus::Histogram> * registered_remote_cache_bg_download_stage_seconds_family;
     std::array<
         std::array<prometheus::Histogram *, static_cast<size_t>(RemoteCacheDownloadStageMetric::Count)>,
         static_cast<size_t>(RemoteCacheFileTypeMetric::Count)>
         remote_cache_bg_download_stage_seconds_metrics{};
+    prometheus::Family<prometheus::Counter> * registered_remote_cache_reject_family;
+    std::array<
+        std::array<prometheus::Counter *, static_cast<size_t>(RemoteCacheRejectReasonMetric::Count)>,
+        static_cast<size_t>(RemoteCacheFileTypeMetric::Count)>
+        remote_cache_reject_metrics{};
 
 public:
 #define MAKE_METRIC_MEMBER_M(family_name, help, type, ...) \

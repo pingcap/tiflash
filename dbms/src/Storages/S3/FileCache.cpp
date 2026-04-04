@@ -175,6 +175,11 @@ void observeWaitOnDownloadingMetrics(FileType file_type, WaitResult result, UInt
                 TiFlashMetrics::RemoteCacheWaitResultMetric::Hit)
             .Increment();
         metrics
+            .getRemoteCacheWaitOnDownloadingSecondsHistogram(
+                metric_file_type,
+                TiFlashMetrics::RemoteCacheWaitResultMetric::Hit)
+            .Observe(wait_seconds);
+        metrics
             .getRemoteCacheWaitOnDownloadingBytesCounter(
                 metric_file_type,
                 TiFlashMetrics::RemoteCacheWaitResultMetric::Hit)
@@ -187,6 +192,11 @@ void observeWaitOnDownloadingMetrics(FileType file_type, WaitResult result, UInt
                 TiFlashMetrics::RemoteCacheWaitResultMetric::Timeout)
             .Increment();
         metrics
+            .getRemoteCacheWaitOnDownloadingSecondsHistogram(
+                metric_file_type,
+                TiFlashMetrics::RemoteCacheWaitResultMetric::Timeout)
+            .Observe(wait_seconds);
+        metrics
             .getRemoteCacheWaitOnDownloadingBytesCounter(
                 metric_file_type,
                 TiFlashMetrics::RemoteCacheWaitResultMetric::Timeout)
@@ -199,6 +209,11 @@ void observeWaitOnDownloadingMetrics(FileType file_type, WaitResult result, UInt
                 TiFlashMetrics::RemoteCacheWaitResultMetric::Failed)
             .Increment();
         metrics
+            .getRemoteCacheWaitOnDownloadingSecondsHistogram(
+                metric_file_type,
+                TiFlashMetrics::RemoteCacheWaitResultMetric::Failed)
+            .Observe(wait_seconds);
+        metrics
             .getRemoteCacheWaitOnDownloadingBytesCounter(
                 metric_file_type,
                 TiFlashMetrics::RemoteCacheWaitResultMetric::Failed)
@@ -206,7 +221,6 @@ void observeWaitOnDownloadingMetrics(FileType file_type, WaitResult result, UInt
         break;
     }
 
-    UNUSED(wait_seconds);
     switch (result)
     {
     case WaitResult::Hit:
@@ -219,6 +233,23 @@ void observeWaitOnDownloadingMetrics(FileType file_type, WaitResult result, UInt
         GET_METRIC(tiflash_storage_remote_cache, type_wait_on_downloading_failed).Increment();
         break;
     }
+}
+
+void observeRemoteCacheRejectMetrics(FileType file_type)
+{
+    TiFlashMetrics::instance()
+        .getRemoteCacheRejectCounter(
+            toMetricFileType(file_type),
+            TiFlashMetrics::RemoteCacheRejectReasonMetric::TooManyDownload)
+        .Increment();
+}
+
+void updateBgDownloadStatusMetrics(Int64 bg_downloading_count)
+{
+    GET_METRIC(tiflash_storage_remote_cache_status, type_bg_downloading_count).Set(bg_downloading_count);
+    const auto running_limit = static_cast<Int64>(S3FileCachePool::get().getMaxThreads());
+    GET_METRIC(tiflash_storage_remote_cache_status, type_bg_download_queue_count)
+        .Set(std::max<Int64>(0, bg_downloading_count - running_limit));
 }
 
 void observeBgDownloadStageMetrics(FileType file_type, BgDownloadStage stage, double seconds)
@@ -438,6 +469,7 @@ FileCache::FileCache(
     , log(Logger::get("FileCache"))
 {
     CurrentMetrics::set(CurrentMetrics::DTFileCacheCapacity, cache_capacity);
+    updateBgDownloadStatusMetrics(0);
     prepareDir(cache_dir);
     restore();
 }
@@ -575,6 +607,7 @@ FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname, const std::op
                 return nullptr;
             case ShouldCacheRes::RejectTooManyDownloading:
                 GET_METRIC(tiflash_storage_remote_cache, type_dtfile_too_many_download).Increment();
+                observeRemoteCacheRejectMetrics(file_type);
                 return nullptr;
             case ShouldCacheRes::Cache:
                 break;
@@ -1354,8 +1387,7 @@ void FileCache::bgDownloadExecutor(
         bg_download_succ_count.fetch_add(1, std::memory_order_relaxed);
     }
     bg_downloading_count.fetch_sub(1, std::memory_order_relaxed);
-    GET_METRIC(tiflash_storage_remote_cache_status, type_bg_downloading_count)
-        .Set(bg_downloading_count.load(std::memory_order_relaxed));
+    updateBgDownloadStatusMetrics(bg_downloading_count.load(std::memory_order_relaxed));
     LOG_DEBUG(
         log,
         "downloading count {} => s3_key {} finished",
@@ -1366,8 +1398,7 @@ void FileCache::bgDownloadExecutor(
 void FileCache::bgDownload(const String & s3_key, FileSegmentPtr & file_seg)
 {
     bg_downloading_count.fetch_add(1, std::memory_order_relaxed);
-    GET_METRIC(tiflash_storage_remote_cache_status, type_bg_downloading_count)
-        .Set(bg_downloading_count.load(std::memory_order_relaxed));
+    updateBgDownloadStatusMetrics(bg_downloading_count.load(std::memory_order_relaxed));
     LOG_DEBUG(
         log,
         "downloading count {} => s3_key {} start",

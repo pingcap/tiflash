@@ -39,6 +39,11 @@ public:
     /// The token is acquired before the request body starts being consumed and released when the
     /// response stream is destroyed or re-opened. This keeps the stream limiter aligned with the
     /// actual number of concurrent remote-read streams instead of just the number of requests sent.
+    ///
+    /// Important: the token must not be interpreted as a safe upper bound for the number of
+    /// `S3RandomAccessFile` objects. One reader can hold a response body open while being idle in a
+    /// pipeline stage, so limiting tokens too aggressively can stall unrelated readers even when
+    /// there is little ongoing S3 network I/O.
     class StreamToken
     {
     public:
@@ -79,6 +84,11 @@ public:
     /// It limits two dimensions together:
     /// - concurrently active `GetObject` body streams
     /// - total remote-read bytes consumed by direct reads and FileCache downloads
+    ///
+    /// The stream dimension is best-effort protection against too many live response bodies, not a
+    /// replacement for byte throttling and not a safe cap on reader object count. In TiFlash a
+    /// `S3RandomAccessFile` may keep its body stream open across scheduling gaps, so a low stream
+    /// limit can block forward progress even when the node is no longer transferring many bytes.
     explicit S3ReadLimiter(UInt64 max_read_bytes_per_sec_ = 0, UInt64 max_streams_ = 0, UInt64 refill_period_ms_ = 100);
 
     ~S3ReadLimiter();
@@ -88,6 +98,9 @@ public:
 
     /// Acquire a token that must live as long as the `GetObject` body stream remains active.
     /// Returns `nullptr` when the stream limit is disabled.
+    ///
+    /// Callers should use this to bound live response bodies, but should not assume it models only
+    /// the time spent actively reading bytes from S3.
     [[nodiscard]] std::unique_ptr<StreamToken> acquireStream();
 
     /// Charge remote-read bytes. The call blocks when the current node-level budget is exhausted.
