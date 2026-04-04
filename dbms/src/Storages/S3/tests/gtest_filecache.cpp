@@ -15,6 +15,7 @@
 #include <Common/Logger.h>
 #include <Common/Stopwatch.h>
 #include <Common/SyncPoint/SyncPoint.h>
+#include <Common/FailPoint.h>
 #include <Debug/TiFlashTestEnv.h>
 #include <IO/BaseFile/RateLimiter.h>
 #include <IO/IOThreadPools.h>
@@ -51,6 +52,11 @@ using FileType = ::DB::FileSegment::FileType;
 namespace DB::ErrorCodes
 {
 extern const int FILE_DOESNT_EXIST;
+}
+
+namespace DB::FailPoints
+{
+extern const char file_cache_bg_download_fail[];
 }
 
 namespace DB::tests::S3
@@ -1173,9 +1179,11 @@ TEST_F(FileCacheTest, GetWaitOnDownloadingHitAndTimeout)
     auto sp_download = SyncPointCtl::enableInScope("before_FileCache::downloadImpl_download_to_local");
 
     auto first_key = S3FilenameView::fromKey(objects[0].key);
+    // First request publishes the `Empty` placeholder and starts the background download.
     ASSERT_EQ(file_cache.get(first_key, objects[0].size), nullptr);
     sp_download.waitAndPause();
 
+    // With a generous bounded-wait budget, the follower should reuse the downloader result instead of returning miss.
     auto wait_hit = std::async(std::launch::async, [&]() { return file_cache.get(first_key, objects[0].size); });
     std::this_thread::sleep_for(20ms);
     sp_download.next();
@@ -1186,6 +1194,7 @@ TEST_F(FileCacheTest, GetWaitOnDownloadingHitAndTimeout)
     settings.dt_filecache_wait_on_downloading_ms = 30;
     file_cache.updateConfig(settings);
     auto second_key = S3FilenameView::fromKey(objects[1].key);
+    // Re-run the same pattern with a much smaller budget so the follower times out and returns miss.
     ASSERT_EQ(file_cache.get(second_key, objects[1].size), nullptr);
     sp_download.waitAndPause();
     auto wait_timeout = std::async(std::launch::async, [&]() { return file_cache.get(second_key, objects[1].size); });
@@ -1194,6 +1203,57 @@ TEST_F(FileCacheTest, GetWaitOnDownloadingHitAndTimeout)
     sp_download.disable();
 
     waitForBgDownload(file_cache);
+}
+
+TEST_F(FileCacheTest, GetWaitOnDownloadingReturnsMissWhenDownloaderFails)
+{
+    auto cache_dir = fmt::format("{}/wait_on_downloading_failed", tmp_dir);
+    StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = 100};
+
+    UInt16 vcores = 2;
+    IORateLimiter rate_limiter;
+    FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
+
+    Settings settings;
+    settings.dt_filecache_downloading_count_scale = 2.0;
+    settings.dt_filecache_max_downloading_count_scale = 2.0;
+    settings.dt_filecache_wait_on_downloading_ms = 200;
+    file_cache.updateConfig(settings);
+
+    auto objects = genObjects(/*store_count*/ 1, /*table_count*/ 1, /*file_count*/ 1, {"1.merged"});
+    auto sp_download = SyncPointCtl::enableInScope("before_FileCache::downloadImpl_download_to_local");
+
+    auto key = S3FilenameView::fromKey(objects[0].key);
+    // First caller creates the `Empty` placeholder and starts the background download.
+    ASSERT_EQ(file_cache.get(key, objects[0].size), nullptr);
+    sp_download.waitAndPause();
+
+    // The follower reaches `get()` while the same key is still being downloaded. Inject a failure right before
+    // the downloader starts copying the body so the follower wakes up with `Status::Failed` and returns miss.
+    FailPointHelper::enableFailPoint(FailPoints::file_cache_bg_download_fail);
+    auto wait_failed = std::async(std::launch::async, [&]() { return file_cache.get(key, objects[0].size); });
+    std::this_thread::sleep_for(20ms);
+    sp_download.next();
+    ASSERT_EQ(wait_failed.get(), nullptr);
+    FailPointHelper::disableFailPoint(FailPoints::file_cache_bg_download_fail);
+    sp_download.disable();
+
+    waitForBgDownload(file_cache);
+    ASSERT_EQ(file_cache.bg_download_fail_count.load(std::memory_order_relaxed), 1);
+
+    // The failed placeholder must be removed from the cache table. Otherwise later requests would keep observing
+    // the stale failed entry instead of creating a fresh download task.
+    {
+        std::lock_guard lock(file_cache.mtx);
+        auto & table = file_cache.tables[static_cast<UInt64>(FileType::Merged)];
+        ASSERT_EQ(table.get(objects[0].key), nullptr);
+    }
+
+    // A later foreground retry should succeed, proving the failed follower path does not leave the cache stuck.
+    auto file_seg = file_cache.getOrWait(key, objects[0].size);
+    ASSERT_NE(file_seg, nullptr);
+    ASSERT_TRUE(file_seg->isReadyToRead());
+    ASSERT_EQ(file_seg->getSize(), objects[0].size);
 }
 
 TEST_F(FileCacheTest, BgDownloadRespectsS3StreamLimiter)
@@ -1250,6 +1310,8 @@ TEST_F(FileCacheTest, GetWaitOnDownloadingSupportsColDataAndOther)
 
     auto run_wait_hit_case = [&](const ObjectInfo & obj, FileType expected_file_type) {
         auto key = S3FilenameView::fromKey(obj.key);
+        // The first request creates the placeholder, and the second request should hit the same bounded-wait path
+        // regardless of whether the file is classified as coldata or other.
         ASSERT_EQ(file_cache.get(key, obj.size), nullptr);
         sp_download.waitAndPause();
 

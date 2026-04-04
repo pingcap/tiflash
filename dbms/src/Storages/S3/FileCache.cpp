@@ -77,6 +77,7 @@ extern const int FILE_DOESNT_EXIST;
 namespace DB::FailPoints
 {
 extern const char file_cache_fg_download_fail[];
+extern const char file_cache_bg_download_fail[];
 } // namespace DB::FailPoints
 
 namespace DB
@@ -1262,6 +1263,7 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg, c
     prepareParentDir(local_fname);
     auto temp_fname = toTemporaryFilename(local_fname);
     SYNC_FOR("before_FileCache::downloadImpl_download_to_local");
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::file_cache_bg_download_fail);
     downloadToLocal(result.GetBody(), temp_fname, content_length, write_limiter, read_limiter);
     std::filesystem::rename(temp_fname, local_fname);
 
@@ -1317,7 +1319,9 @@ void FileCache::bgDownloadExecutor(
         GET_METRIC(tiflash_storage_remote_cache, type_dtfile_download_failed).Increment();
         bg_download_fail_count.fetch_add(1, std::memory_order_relaxed);
         file_seg.reset();
-        remove(s3_key);
+        // Followers may still hold the failed segment while waking up from bounded wait. Force removal so
+        // the failed placeholder does not stay published in the cache table and block later retries.
+        remove(s3_key, /*force*/ true);
     }
     else
     {
@@ -1372,7 +1376,7 @@ void FileCache::fgDownload(const String & s3_key, FileSegmentPtr & file_seg)
         file_seg->setStatus(FileSegment::Status::Failed);
         GET_METRIC(tiflash_storage_remote_cache, type_dtfile_download_failed).Increment();
         file_seg.reset();
-        remove(s3_key);
+        remove(s3_key, /*force*/ true);
     }
 
     LOG_DEBUG(log, "foreground downloading => s3_key {} finished", s3_key);
