@@ -86,9 +86,6 @@ using FileType = FileSegment::FileType;
 
 namespace
 {
-constexpr UInt64 default_wait_log_interval_seconds = 30;
-constexpr UInt64 wait_ready_timeout_seconds = 300;
-
 // A tiny FileCache-only ReadBuffer variant that charges the shared S3 limiter before each refill.
 // This lets downloadToLocal keep using the existing copyData/write-buffer path instead of maintaining
 // a separate hand-written read/write loop for limiter-enabled downloads.
@@ -110,7 +107,12 @@ private:
     bool nextImpl() override
     {
         if (limiter != nullptr)
+        {
+            // Charge the requested refill size before the actual `istream.read()`. This is intentionally
+            // conservative: short reads still spend the full reserved budget for this refill. If we need tighter
+            // accounting later, we can extend this path to compensate with the actual bytes read back from S3.
             limiter->requestBytes(internal_buffer.size(), source);
+        }
 
         istr.read(internal_buffer.begin(), internal_buffer.size());
         auto gcount = istr.gcount();
@@ -265,6 +267,9 @@ FileSegment::Status FileSegment::waitForNotEmptyImpl(
     bool log_progress,
     bool throw_on_timeout)
 {
+    constexpr UInt64 default_wait_log_interval_seconds = 30;
+    constexpr UInt64 wait_ready_timeout_seconds = 300;
+
     std::unique_lock lock(mtx);
 
     if (status != Status::Empty)
