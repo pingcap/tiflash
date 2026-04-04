@@ -392,11 +392,16 @@ TEST(S3ReadLimiterTest, UpdateConfigDisablesWaitingBytes)
     // Exhaust the initial burst, then make sure disabling the byte limit wakes a waiting requester promptly.
     limiter.requestBytes(100, S3::S3ReadSource::DirectRead);
 
+    std::promise<void> waiter_started;
+    auto waiter_started_future = waiter_started.get_future();
     auto future = std::async(std::launch::async, [&]() {
         AtomicStopwatch watch;
+        waiter_started.set_value();
         limiter.requestBytes(100, S3::S3ReadSource::DirectRead);
         return watch.elapsedMilliseconds();
     });
+
+    ASSERT_EQ(waiter_started_future.wait_for(1s), std::future_status::ready);
     ASSERT_EQ(future.wait_for(50ms), std::future_status::timeout);
 
     limiter.updateConfig(/*max_read_bytes_per_sec*/ 0);

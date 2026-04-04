@@ -75,11 +75,12 @@ S3RandomAccessFile::S3RandomAccessFile(
     : client_ptr(std::move(client_ptr_))
     , remote_fname(remote_fname_)
     , cur_offset(0)
-    , read_limiter(client_ptr->getS3ReadLimiter())
+    , read_limiter(nullptr)
     , log(Logger::get(remote_fname))
     , scan_context(scan_context_)
 {
     RUNTIME_CHECK(client_ptr != nullptr);
+    read_limiter = client_ptr->getS3ReadLimiter();
     initialize("init file");
     CurrentMetrics::add(CurrentMetrics::S3RandomAccessFile);
 }

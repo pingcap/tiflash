@@ -30,6 +30,17 @@ constexpr std::array remote_cache_reject_reason_labels = {"too_many_download"};
 constexpr std::array remote_cache_download_stage_labels = {"queue_wait", "download"};
 constexpr auto remote_cache_wait_on_downloading_buckets = ExpBuckets{0.0001, 2, 20};
 constexpr auto remote_cache_bg_download_stage_buckets = ExpBuckets{0.0001, 2, 20};
+
+static_assert(
+    remote_cache_file_type_labels.size() == static_cast<size_t>(TiFlashMetrics::RemoteCacheFileTypeMetric::Count));
+static_assert(
+    remote_cache_wait_result_labels.size() == static_cast<size_t>(TiFlashMetrics::RemoteCacheWaitResultMetric::Count));
+static_assert(
+    remote_cache_reject_reason_labels.size()
+    == static_cast<size_t>(TiFlashMetrics::RemoteCacheRejectReasonMetric::Count));
+static_assert(
+    remote_cache_download_stage_labels.size()
+    == static_cast<size_t>(TiFlashMetrics::RemoteCacheDownloadStageMetric::Count));
 } // namespace
 
 TiFlashMetrics & TiFlashMetrics::instance()
