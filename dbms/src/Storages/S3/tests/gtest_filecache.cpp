@@ -1301,6 +1301,13 @@ TEST_F(FileCacheTest, BgDownloadWorksWithSharedS3ReadLimiter)
     sp_download.next();
     sp_download.disable();
     waitForBgDownload(file_cache);
+
+    auto file_seg1 = file_cache.get(S3FilenameView::fromKey(objects[0].key), objects[0].size);
+    auto file_seg2 = file_cache.get(S3FilenameView::fromKey(objects[1].key), objects[1].size);
+    ASSERT_NE(file_seg1, nullptr);
+    ASSERT_NE(file_seg2, nullptr);
+    ASSERT_TRUE(file_seg1->isReadyToRead());
+    ASSERT_TRUE(file_seg2->isReadyToRead());
 }
 
 TEST_F(FileCacheTest, BgDownloadUsesLimiterSuggestedChunkSize)

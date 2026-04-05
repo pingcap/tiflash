@@ -779,7 +779,8 @@ std::pair<Int64, std::list<String>::iterator> FileCache::removeImpl(
     LRUFileTable & table,
     const String & s3_key,
     FileSegmentPtr & f,
-    bool force)
+    bool force,
+    bool count_as_evict)
 {
     // Except current thread and the FileTable,
     // there are other threads hold this FileSegment object.
@@ -794,8 +795,11 @@ std::pair<Int64, std::list<String>::iterator> FileCache::removeImpl(
     removeDiskFile(temp_fname, /*update_fsize_metrics*/ false);
 
     auto release_size = f->getSize();
-    GET_METRIC(tiflash_storage_remote_cache, type_dtfile_evict).Increment();
-    GET_METRIC(tiflash_storage_remote_cache_bytes, type_dtfile_evict_bytes).Increment(release_size);
+    if (count_as_evict)
+    {
+        GET_METRIC(tiflash_storage_remote_cache, type_dtfile_evict).Increment();
+        GET_METRIC(tiflash_storage_remote_cache_bytes, type_dtfile_evict_bytes).Increment(release_size);
+    }
     releaseSpaceImpl(release_size);
     return {release_size, table.remove(s3_key)};
 }
@@ -1271,9 +1275,11 @@ void downloadToLocal(
     {
         ReadBufferFromIStream rbuf(istr, buffer_size);
         WriteBufferFromWritableFile wbuf(ofile, buffer_size);
+        SCOPE_EXIT({
+            if (s3_read_metrics_recorder != nullptr)
+                s3_read_metrics_recorder->recordBytes(rbuf.count(), S3::S3ReadSource::FileCacheDownload);
+        });
         copyData(rbuf, wbuf, content_length);
-        if (s3_read_metrics_recorder != nullptr)
-            s3_read_metrics_recorder->recordBytes(rbuf.count(), S3::S3ReadSource::FileCacheDownload);
         wbuf.sync();
         return;
     }
@@ -1288,9 +1294,11 @@ void downloadToLocal(
     // S3 budget before each refill from the remote body stream.
     ReadBufferFromIStreamWithLimiter rbuf(istr, buffer_size, s3_read_limiter, S3::S3ReadSource::FileCacheDownload);
     WriteBufferFromWritableFile wbuf(ofile, buffer_size);
+    SCOPE_EXIT({
+        if (s3_read_metrics_recorder != nullptr)
+            s3_read_metrics_recorder->recordBytes(rbuf.count(), S3::S3ReadSource::FileCacheDownload);
+    });
     copyData(rbuf, wbuf, content_length);
-    if (s3_read_metrics_recorder != nullptr)
-        s3_read_metrics_recorder->recordBytes(rbuf.count(), S3::S3ReadSource::FileCacheDownload);
     wbuf.sync();
 }
 
@@ -1399,7 +1407,13 @@ void FileCache::bgDownloadExecutor(
         file_seg.reset();
         // Followers may still hold the failed segment while waking up from bounded wait. Force removal so
         // the failed placeholder does not stay published in the cache table and block later retries.
-        remove(s3_key, /*force*/ true);
+        // This is failed-download cleanup rather than cache eviction, so do not count eviction metrics.
+        auto file_type = getFileType(s3_key);
+        auto & table = tables[static_cast<UInt64>(file_type)];
+        std::unique_lock lock(mtx);
+        auto f = table.get(s3_key, /*update_lru*/ false);
+        if (f != nullptr)
+            std::ignore = removeImpl(table, s3_key, f, /*force*/ true, /*count_as_evict*/ false);
     }
     else
     {
@@ -1452,7 +1466,12 @@ void FileCache::fgDownload(const String & s3_key, FileSegmentPtr & file_seg)
         file_seg->setStatus(FileSegment::Status::Failed);
         GET_METRIC(tiflash_storage_remote_cache, type_dtfile_download_failed).Increment();
         file_seg.reset();
-        remove(s3_key, /*force*/ true);
+        auto file_type = getFileType(s3_key);
+        auto & table = tables[static_cast<UInt64>(file_type)];
+        std::unique_lock lock(mtx);
+        auto f = table.get(s3_key, /*update_lru*/ false);
+        if (f != nullptr)
+            std::ignore = removeImpl(table, s3_key, f, /*force*/ true, /*count_as_evict*/ false);
     }
 
     LOG_DEBUG(log, "foreground downloading => s3_key {} finished", s3_key);
