@@ -58,6 +58,7 @@ extern const int FILE_DOESNT_EXIST;
 namespace DB::FailPoints
 {
 extern const char file_cache_bg_download_fail[];
+extern const char file_cache_bg_download_schedule_fail[];
 }
 
 namespace DB::tests::S3
@@ -1504,6 +1505,37 @@ TEST_F(FileCacheTest, FailedDownloadReleasesFinalizedReservedSize)
 
     // A caller-provided wrong size should also not corrupt cache_used after finalizeReservedSize rebases it.
     assert_failed_download_releases_space(objects[0].size - 1024);
+}
+
+TEST_F(FileCacheTest, ScheduleBgDownloadFailureCleansUpPlaceholder)
+{
+    auto cache_dir = fmt::format("{}/schedule_bg_download_failure", tmp_dir);
+    StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = 100};
+
+    UInt16 vcores = 2;
+    IORateLimiter rate_limiter;
+    FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
+    Settings settings;
+    settings.dt_filecache_wait_on_downloading_ms = 200;
+    file_cache.updateConfig(settings);
+
+    auto objects = genObjects(/*store_count*/ 1, /*table_count*/ 1, /*file_count*/ 1, {"1.merged"});
+    auto key = S3FilenameView::fromKey(objects[0].key);
+    auto file_type = FileCache::getFileType(objects[0].key);
+
+    FailPointHelper::enableFailPoint(FailPoints::file_cache_bg_download_schedule_fail);
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::file_cache_bg_download_schedule_fail); });
+
+    ASSERT_EQ(file_cache.get(key, objects[0].size), nullptr);
+    ASSERT_EQ(file_cache.bg_downloading_count.load(std::memory_order_relaxed), 0);
+    ASSERT_EQ(file_cache.bg_download_fail_count.load(std::memory_order_relaxed), 1);
+    ASSERT_EQ(file_cache.tables[static_cast<UInt64>(file_type)].get(objects[0].key, /*update_lru*/ false), nullptr);
+
+    FailPointHelper::disableFailPoint(FailPoints::file_cache_bg_download_schedule_fail);
+    ASSERT_EQ(file_cache.get(key, objects[0].size), nullptr);
+    waitForBgDownload(file_cache);
+    ASSERT_EQ(file_cache.bg_download_succ_count.load(std::memory_order_relaxed), 1);
+    ASSERT_NE(file_cache.tables[static_cast<UInt64>(file_type)].get(objects[0].key, /*update_lru*/ false), nullptr);
 }
 
 } // namespace DB::tests::S3

@@ -77,6 +77,7 @@ namespace DB::FailPoints
 {
 extern const char file_cache_fg_download_fail[];
 extern const char file_cache_bg_download_fail[];
+extern const char file_cache_bg_download_schedule_fail[];
 } // namespace DB::FailPoints
 
 namespace DB
@@ -1402,31 +1403,15 @@ void FileCache::bgDownloadExecutor(
     observeBgDownloadStageMetrics(file_seg->getFileType(), BgDownloadStage::Download, download_watch.elapsedSeconds());
     if (!file_seg->isReadyToRead())
     {
-        file_seg->setStatus(FileSegment::Status::Failed);
         GET_METRIC(tiflash_storage_remote_cache, type_dtfile_download_failed).Increment();
         bg_download_fail_count.fetch_add(1, std::memory_order_relaxed);
-        file_seg.reset();
-        // Followers may still hold the failed segment while waking up from bounded wait. Force removal so
-        // the failed placeholder does not stay published in the cache table and block later retries.
-        // This is failed-download cleanup rather than cache eviction, so do not count eviction metrics.
-        auto file_type = getFileType(s3_key);
-        auto & table = tables[static_cast<UInt64>(file_type)];
-        std::unique_lock lock(mtx);
-        auto f = table.get(s3_key, /*update_lru*/ false);
-        if (f != nullptr)
-            std::ignore = removeImpl(table, s3_key, f, /*force*/ true, /*count_as_evict*/ false);
+        cleanupFailedDownload(s3_key, file_seg);
     }
     else
     {
         bg_download_succ_count.fetch_add(1, std::memory_order_relaxed);
     }
-    bg_downloading_count.fetch_sub(1, std::memory_order_relaxed);
-    updateBgDownloadStatusMetrics(bg_downloading_count.load(std::memory_order_relaxed));
-    LOG_DEBUG(
-        log,
-        "downloading count {} => s3_key {} finished",
-        bg_downloading_count.load(std::memory_order_relaxed),
-        s3_key);
+    finishBgDownload(s3_key);
 }
 
 void FileCache::bgDownload(const String & s3_key, FileSegmentPtr & file_seg)
@@ -1440,10 +1425,44 @@ void FileCache::bgDownload(const String & s3_key, FileSegmentPtr & file_seg)
         s3_key);
     auto write_limiter = rate_limiter.getBgWriteLimiter();
     auto enqueue_time = std::chrono::steady_clock::now();
-    S3FileCachePool::get().scheduleOrThrowOnError(
-        [this, s3_key = s3_key, file_seg = file_seg, limiter = std::move(write_limiter), enqueue_time]() mutable {
-            bgDownloadExecutor(s3_key, file_seg, limiter, enqueue_time);
-        });
+    try
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::file_cache_bg_download_schedule_fail);
+        S3FileCachePool::get().scheduleOrThrowOnError(
+            [this, s3_key = s3_key, file_seg = file_seg, limiter = std::move(write_limiter), enqueue_time]() mutable {
+                bgDownloadExecutor(s3_key, file_seg, limiter, enqueue_time);
+            });
+    }
+    catch (...)
+    {
+        tryLogCurrentWarningException(log, fmt::format("Schedule background download s3_key={} failed", s3_key));
+        GET_METRIC(tiflash_storage_remote_cache, type_dtfile_download_failed).Increment();
+        bg_download_fail_count.fetch_add(1, std::memory_order_relaxed);
+        cleanupFailedDownload(s3_key, file_seg);
+        finishBgDownload(s3_key);
+    }
+}
+
+void FileCache::finishBgDownload(const String & s3_key)
+{
+    const auto count_after_finish = bg_downloading_count.fetch_sub(1, std::memory_order_relaxed) - 1;
+    updateBgDownloadStatusMetrics(count_after_finish);
+    LOG_DEBUG(log, "downloading count {} => s3_key {} finished", count_after_finish, s3_key);
+}
+
+void FileCache::cleanupFailedDownload(const String & s3_key, FileSegmentPtr & file_seg)
+{
+    file_seg->setStatus(FileSegment::Status::Failed);
+    file_seg.reset();
+    // Followers may still hold the failed segment while waking up from bounded wait. Force removal so
+    // the failed placeholder does not stay published in the cache table and block later retries.
+    // This is failed-download cleanup rather than cache eviction, so do not count eviction metrics.
+    auto file_type = getFileType(s3_key);
+    auto & table = tables[static_cast<UInt64>(file_type)];
+    std::unique_lock lock(mtx);
+    auto f = table.get(s3_key, /*update_lru*/ false);
+    if (f != nullptr)
+        std::ignore = removeImpl(table, s3_key, f, /*force*/ true, /*count_as_evict*/ false);
 }
 
 void FileCache::fgDownload(const String & s3_key, FileSegmentPtr & file_seg)
