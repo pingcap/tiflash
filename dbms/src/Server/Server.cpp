@@ -776,6 +776,10 @@ try
             config,
             server_info.cpu_info.logical_cores,
             global_context->getIORateLimiter());
+        // FileCache::initialize() only constructs the global instance. Push the current settings once
+        // here so startup-time values like dt_filecache_wait_on_downloading_ms take effect immediately
+        // instead of waiting for a later config reload.
+        FileCache::instance()->updateConfig(global_context->getSettingsRef());
     }
 
     /// Determining PageStorage run mode based on current files on disk and storage config.

@@ -1303,6 +1303,38 @@ TEST_F(FileCacheTest, BgDownloadWorksWithSharedS3ReadLimiter)
     waitForBgDownload(file_cache);
 }
 
+TEST_F(FileCacheTest, BgDownloadUsesLimiterSuggestedChunkSize)
+{
+    auto cache_dir = fmt::format("{}/bg_download_low_limit", tmp_dir);
+    StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = 100};
+
+    UInt16 vcores = 2;
+    IORateLimiter rate_limiter;
+    FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
+    Settings settings;
+    settings.dt_filecache_downloading_count_scale = 2.0;
+    settings.dt_filecache_max_downloading_count_scale = 2.0;
+    file_cache.updateConfig(settings);
+
+    auto object_key = fmt::format("s{}/data/t_{}/dmf_{}/small_merged.merged", nextId(), nextId(), nextId());
+    constexpr size_t object_size = 8 * 1024;
+    writeFile(object_key, '7', object_size, WriteSettings{});
+
+    auto limiter = std::make_shared<S3ReadLimiter>(32 * 1024, /*refill_period_ms*/ 100);
+    s3_client->setS3ReadLimiter(limiter);
+    SCOPE_EXIT({ s3_client->setS3ReadLimiter(nullptr); });
+
+    AtomicStopwatch watch;
+    ASSERT_EQ(file_cache.get(S3FilenameView::fromKey(object_key), object_size), nullptr);
+    waitForBgDownload(file_cache);
+    ASSERT_GE(watch.elapsedMilliseconds(), 200);
+
+    auto file_seg = file_cache.get(S3FilenameView::fromKey(object_key), object_size);
+    ASSERT_NE(file_seg, nullptr);
+    ASSERT_TRUE(file_seg->isReadyToRead());
+    ASSERT_EQ(file_seg->getSize(), object_size);
+}
+
 TEST_F(FileCacheTest, GetWaitOnDownloadingSupportsColDataAndOther)
 {
     auto cache_dir = fmt::format("{}/wait_on_downloading_non_merged", tmp_dir);
