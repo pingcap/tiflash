@@ -9486,7 +9486,7 @@
               "hide": true,
               "interval": "",
               "intervalFactor": 2,
-              "legendFormat": "max-{{type}} {{additional_groupby}}",
+              "legendFormat": "max-{{type}} {{$additional_groupby}}",
               "refId": "A"
             },
             {
@@ -9494,7 +9494,7 @@
               "expr": "histogram_quantile(0.9999, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\", type!~\"(delta_merge|seg_merge|seg_split).*\"}[$__rate_interval])) by (le, type, $additional_groupby))",
               "hide": false,
               "interval": "",
-              "legendFormat": "9999-{{type}} {{additional_groupby}}",
+              "legendFormat": "9999-{{type}} {{$additional_groupby}}",
               "refId": "B"
             },
             {
@@ -9502,7 +9502,7 @@
               "expr": "histogram_quantile(0.99, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\", type!~\"(delta_merge|seg_merge|seg_split).*\"}[$__rate_interval])) by (le, type, $additional_groupby))",
               "hide": false,
               "interval": "",
-              "legendFormat": "99-{{type}} {{additional_groupby}}",
+              "legendFormat": "99-{{type}} {{$additional_groupby}}",
               "refId": "C"
             }
           ],
@@ -9709,7 +9709,7 @@
               "hide": true,
               "interval": "",
               "intervalFactor": 2,
-              "legendFormat": "max-{{type}} {{additional_groupby}}",
+              "legendFormat": "max-{{type}} {{$additional_groupby}}",
               "refId": "A"
             },
             {
@@ -9717,7 +9717,7 @@
               "expr": "histogram_quantile(0.9999, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\", type=~\"(delta_merge|seg_merge|seg_split).*\"}[$__rate_interval])) by (le, type, $additional_groupby))",
               "hide": false,
               "interval": "",
-              "legendFormat": "9999-{{type}} {{additional_groupby}}",
+              "legendFormat": "9999-{{type}} {{$additional_groupby}}",
               "refId": "B"
             },
             {
@@ -9725,7 +9725,7 @@
               "expr": "histogram_quantile(0.99, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\", type=~\"(delta_merge|seg_merge|seg_split).*\"}[$__rate_interval])) by (le, type, $additional_groupby))",
               "hide": false,
               "interval": "",
-              "legendFormat": "99-{{type}} {{additional_groupby}}",
+              "legendFormat": "99-{{type}} {{$additional_groupby}}",
               "refId": "C"
             }
           ],
@@ -21111,7 +21111,7 @@
               "instant": false,
               "interval": "",
               "intervalFactor": 2,
-              "legendFormat": "{{reason}}-{{file_type}} {{additional_groupby}}",
+              "legendFormat": "{{reason}}-{{file_type}} {{$additional_groupby}}",
               "refId": "A"
             }
           ],
