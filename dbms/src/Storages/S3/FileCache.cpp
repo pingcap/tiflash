@@ -1254,7 +1254,8 @@ void downloadToLocal(
     const String & fname,
     Int64 content_length,
     const WriteLimiterPtr & write_limiter,
-    const std::shared_ptr<S3::S3ReadLimiter> & s3_read_limiter)
+    const std::shared_ptr<S3::S3ReadLimiter> & s3_read_limiter,
+    const std::shared_ptr<S3::S3ReadMetricsRecorder> & s3_read_metrics_recorder)
 {
     // create an empty file with write_limiter
     // each time `ofile.write` is called, the write speed will be controlled by the write_limiter.
@@ -1271,6 +1272,8 @@ void downloadToLocal(
         ReadBufferFromIStream rbuf(istr, buffer_size);
         WriteBufferFromWritableFile wbuf(ofile, buffer_size);
         copyData(rbuf, wbuf, content_length);
+        if (s3_read_metrics_recorder != nullptr)
+            s3_read_metrics_recorder->recordBytes(rbuf.count(), S3::S3ReadSource::FileCacheDownload);
         wbuf.sync();
         return;
     }
@@ -1280,6 +1283,8 @@ void downloadToLocal(
     ReadBufferFromIStreamWithLimiter rbuf(istr, buffer_size, s3_read_limiter, S3::S3ReadSource::FileCacheDownload);
     WriteBufferFromWritableFile wbuf(ofile, buffer_size);
     copyData(rbuf, wbuf, content_length);
+    if (s3_read_metrics_recorder != nullptr)
+        s3_read_metrics_recorder->recordBytes(rbuf.count(), S3::S3ReadSource::FileCacheDownload);
     wbuf.sync();
 }
 
@@ -1288,6 +1293,7 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg, c
     Stopwatch sw;
     auto client = S3::ClientFactory::instance().sharedTiFlashClient();
     auto s3_read_limiter = client->getS3ReadLimiter();
+    auto s3_read_metrics_recorder = client->getS3ReadMetricsRecorder();
     Aws::S3::Model::GetObjectRequest req;
     client->setBucketAndKeyWithRoot(req, s3_key);
     ProfileEvents::increment(ProfileEvents::S3GetObject);
@@ -1320,7 +1326,13 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg, c
     auto temp_fname = toTemporaryFilename(local_fname);
     SYNC_FOR("before_FileCache::downloadImpl_download_to_local");
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::file_cache_bg_download_fail);
-    downloadToLocal(result.GetBody(), temp_fname, content_length, write_limiter, s3_read_limiter);
+    downloadToLocal(
+        result.GetBody(),
+        temp_fname,
+        content_length,
+        write_limiter,
+        s3_read_limiter,
+        s3_read_metrics_recorder);
     std::filesystem::rename(temp_fname, local_fname);
 
 #ifndef NDEBUG

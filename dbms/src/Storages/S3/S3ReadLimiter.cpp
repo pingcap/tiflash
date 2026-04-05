@@ -33,6 +33,22 @@ void recordWaitIfNeeded(bool waited, const Stopwatch & sw, F && observe)
 }
 } // namespace
 
+void DB::S3::S3ReadMetricsRecorder::recordBytes(UInt64 bytes, S3ReadSource source) const
+{
+    if (bytes == 0)
+        return;
+
+    switch (source)
+    {
+    case S3ReadSource::DirectRead:
+        GET_METRIC(tiflash_storage_io_limiter, type_s3_direct_read_bytes).Increment(bytes);
+        break;
+    case S3ReadSource::FileCacheDownload:
+        GET_METRIC(tiflash_storage_io_limiter, type_s3_filecache_download_bytes).Increment(bytes);
+        break;
+    }
+}
+
 DB::S3::S3ReadLimiter::S3ReadLimiter(UInt64 max_read_bytes_per_sec_, UInt64 refill_period_ms_)
     : refill_period_ms(refill_period_ms_)
     , max_read_bytes_per_sec(max_read_bytes_per_sec_)
@@ -63,20 +79,10 @@ void DB::S3::S3ReadLimiter::updateConfig(UInt64 max_read_bytes_per_sec_)
     bytes_cv.notify_all();
 }
 
-void DB::S3::S3ReadLimiter::requestBytes(UInt64 bytes, S3ReadSource source)
+void DB::S3::S3ReadLimiter::requestBytes(UInt64 bytes, S3ReadSource /*source*/)
 {
     if (bytes == 0)
         return;
-
-    switch (source)
-    {
-    case S3ReadSource::DirectRead:
-        GET_METRIC(tiflash_storage_io_limiter, type_s3_direct_read_bytes).Increment(bytes);
-        break;
-    case S3ReadSource::FileCacheDownload:
-        GET_METRIC(tiflash_storage_io_limiter, type_s3_filecache_download_bytes).Increment(bytes);
-        break;
-    }
 
     const auto limit = max_read_bytes_per_sec.load(std::memory_order_relaxed);
     if (limit == 0)
