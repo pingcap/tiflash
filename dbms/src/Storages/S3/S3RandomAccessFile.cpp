@@ -54,6 +54,7 @@ namespace DB::FailPoints
 {
 extern const char force_s3_random_access_file_init_fail[];
 extern const char force_s3_random_access_file_read_fail[];
+extern const char force_s3_random_access_file_seek_chunked[];
 } // namespace DB::FailPoints
 
 namespace DB::S3
@@ -272,7 +273,7 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
         return cur_offset;
     }
 
-    if (read_limiter != nullptr)
+    if (read_limiter != nullptr && read_limiter->maxReadBytesPerSec() > 0)
         return seekChunked(offset_);
 
     // Forward seek
@@ -288,6 +289,7 @@ off_t S3RandomAccessFile::seekChunked(off_t offset)
 {
     Stopwatch sw;
     ProfileEvents::increment(ProfileEvents::S3IOSeek, 1);
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::force_s3_random_access_file_seek_chunked);
     auto & istr = read_result.GetBody();
     // Use the same chunk heuristic as readChunked() so forward seeks do not turn into one oversized
     // limiter request when skipping a large remote range.
