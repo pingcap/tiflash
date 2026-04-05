@@ -326,10 +326,16 @@ off_t S3RandomAccessFile::finalizeSeek(
         GET_METRIC(tiflash_storage_s3_request_seconds, type_read_stream_err).Observe(elapsed_secs);
         LOG_WARNING(
             log,
-            "Cannot ignore from istream, state=0x{:02X}, ignored={} expected={} errno={} errmsg={} cost={:.6f}s",
+            "Cannot ignore from istream, state=0x{:02X}, ignored={} expected={} target_offset={} cur_offset={} "
+            "content_length={} limiter_enabled={} max_read_bytes_per_sec={} errno={} errmsg={} cost={:.6f}s",
             state,
             actual_size,
             requested_size,
+            target_offset,
+            cur_offset,
+            content_length,
+            read_limiter != nullptr,
+            read_limiter != nullptr ? read_limiter->maxReadBytesPerSec() : 0,
             errno,
             strerror(errno),
             elapsed_secs);

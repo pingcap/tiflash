@@ -16,6 +16,8 @@
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashMetrics.h>
+#include <IO/Buffer/WriteBufferFromString.h>
+#include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <RaftStoreProxyFFI/ProxyFFI.h>
@@ -36,6 +38,7 @@
 #include <boost/algorithm/string.hpp>
 #include <charconv>
 #include <magic_enum.hpp>
+#include <sstream>
 #include <string>
 
 namespace DB
@@ -579,10 +582,7 @@ RemoteCacheEvictRequest parseEvictRequest(
     return req;
 }
 
-std::optional<CacheEvictType> parseCacheEvictType(
-    std::string_view path,
-    std::string_view api_name,
-    String & err_msg)
+std::optional<CacheEvictType> parseCacheEvictType(std::string_view path, std::string_view api_name, String & err_msg)
 {
     auto trim_path = path.substr(api_name.size());
     if (trim_path == "/mark")
@@ -603,16 +603,21 @@ String buildCacheEvictOkBody(std::string_view cache_name, std::optional<std::str
     return fmt::format(R"json({{"status":"ok","cache":"{}"}})json", cache_name);
 }
 
-void evictLocalCacheOrThrow(Context & global_ctx, CacheEvictType cache_type)
+String buildJsonErrorBody(const String & err_msg)
+{
+    WriteBufferFromOwnString msg_buf;
+    writeJSONString(err_msg, msg_buf);
+    return fmt::format(R"json({{"status":"error","message":{}}})json", msg_buf.releaseStr());
+}
+
+bool evictLocalCacheAndReport(Context & global_ctx, CacheEvictType cache_type)
 {
     switch (cache_type)
     {
     case CacheEvictType::Mark:
-        global_ctx.dropMarkCache();
-        return;
+        return global_ctx.dropMarkCacheAndReport();
     case CacheEvictType::MinMax:
-        global_ctx.dropMinMaxIndexCache();
-        return;
+        return global_ctx.dropMinMaxIndexCacheAndReport();
     }
     __builtin_unreachable();
 }
@@ -644,26 +649,15 @@ HttpRequestRes HandleHttpRequestLocalCacheEvict(
     auto cache_type = parseCacheEvictType(path, api_name, err_msg);
     if (!cache_type.has_value())
     {
-        auto body = fmt::format(R"json({{"status":"error","message":"{}"}})json", err_msg);
+        auto body = buildJsonErrorBody(err_msg);
         LOG_WARNING(log, "invalid local cache evict request, path={} api_name={}", path, api_name);
         return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, std::move(body));
     }
 
     const auto cache_name = cacheTypeName(*cache_type);
-    const bool cache_enabled = [&] {
-        switch (*cache_type)
-        {
-        case CacheEvictType::Mark:
-            return global_ctx.getMarkCache() != nullptr;
-        case CacheEvictType::MinMax:
-            return global_ctx.getMinMaxIndexCache() != nullptr;
-        }
-        __builtin_unreachable();
-    }();
-
     // `drop*Cache()` eventually calls `LRUCache::reset()`, which clears the registry under the
     // cache mutex while leaving already-held `shared_ptr` values valid for in-flight readers.
-    evictLocalCacheOrThrow(global_ctx, *cache_type);
+    const bool cache_enabled = evictLocalCacheAndReport(global_ctx, *cache_type);
     LOG_INFO(log, "manual cache eviction, action=evict cache={} result={}", cache_name, cache_enabled ? "ok" : "noop");
     return buildOkResp(
         api_name,

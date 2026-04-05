@@ -50,10 +50,7 @@ RemoteCacheEvictRequest parseEvictRequest(std::string_view path, std::string_vie
 
 /// Parse `/tiflash/cache/evict/<type>` and resolve the target node-local cache type.
 /// Returns `std::nullopt` and sets `err_msg` when the path suffix is invalid.
-std::optional<CacheEvictType> parseCacheEvictType(
-    std::string_view path,
-    std::string_view api_name,
-    String & err_msg);
+std::optional<CacheEvictType> parseCacheEvictType(std::string_view path, std::string_view api_name, String & err_msg);
 
 std::tuple<std::vector<StoreID>, String> parseStoreIds(std::string_view path);
 
