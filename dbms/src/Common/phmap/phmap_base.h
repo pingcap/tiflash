@@ -5542,14 +5542,27 @@ public:
 // --------------------------------------------------------------------------
 #ifdef ABSL_SYNCHRONIZATION_MUTEX_H_
 
-struct AbslMutex : protected absl::Mutex
+// struct AbslMutex : protected absl::Mutex
+// {
+//     void lock() { this->Lock(); }
+//     void unlock() { this->Unlock(); }
+//     void try_lock() { this->TryLock(); }
+//     void lock_shared() { this->ReaderLock(); }
+//     void unlock_shared() { this->ReaderUnlock(); }
+//     void try_lock_shared() { this->ReaderTryLock(); }
+// };
+
+struct __attribute__((capability("mutex"))) AbslMutex : protected absl::Mutex
 {
-    void lock() { this->Lock(); }
-    void unlock() { this->Unlock(); }
-    void try_lock() { this->TryLock(); }
-    void lock_shared() { this->ReaderLock(); }
-    void unlock_shared() { this->ReaderUnlock(); }
-    void try_lock_shared() { this->ReaderTryLock(); }
+    void lock() __attribute__((acquire_capability())) { this->Lock(); }
+    void unlock() __attribute__((release_capability())) { this->Unlock(); }
+
+    bool try_lock() __attribute__((try_acquire_capability(true))) { return this->TryLock(); }
+
+    void lock_shared() __attribute__((acquire_shared_capability())) { this->ReaderLock(); }
+    void unlock_shared() __attribute__((release_shared_capability())) { this->ReaderUnlock(); }
+
+    bool try_lock_shared() __attribute__((try_acquire_shared_capability(true))) { return this->ReaderTryLock(); }
 };
 
 template <>
