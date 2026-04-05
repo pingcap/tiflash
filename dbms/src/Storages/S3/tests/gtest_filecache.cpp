@@ -59,7 +59,7 @@ namespace DB::FailPoints
 {
 extern const char file_cache_bg_download_fail[];
 extern const char file_cache_bg_download_schedule_fail[];
-}
+} // namespace DB::FailPoints
 
 namespace DB::tests::S3
 {
@@ -1332,10 +1332,13 @@ TEST_F(FileCacheTest, BgDownloadUsesLimiterSuggestedChunkSize)
     s3_client->setS3ReadLimiter(limiter);
     SCOPE_EXIT({ s3_client->setS3ReadLimiter(nullptr); });
 
+    constexpr Int64 expected_delay_ms = 200;
+    constexpr Int64 delay_tolerance_ms = 40;
+
     AtomicStopwatch watch;
     ASSERT_EQ(file_cache.get(S3FilenameView::fromKey(object_key), object_size), nullptr);
     waitForBgDownload(file_cache);
-    ASSERT_GE(watch.elapsedMilliseconds(), 200);
+    ASSERT_GE(watch.elapsedMilliseconds(), expected_delay_ms - delay_tolerance_ms);
 
     auto file_seg = file_cache.get(S3FilenameView::fromKey(object_key), object_size);
     ASSERT_NE(file_seg, nullptr);

@@ -527,6 +527,13 @@ void IORateLimiter::updateLimiterByConfig(const IORateLimitConfig & cfg)
     updateWriteLimiter(cfg.getBgWriteMaxBytesPerSec(), cfg.getFgWriteMaxBytesPerSec());
 
     // updateS3ReadLimiter
+    // Keep an existing S3 limiter object alive across reloads so readers that already snapped the
+    // shared_ptr can observe `nonzero -> 0` disable updates via `updateConfig(0)` instead of being
+    // stuck with a stale throttling state. Today we intentionally accept a narrower semantic on the
+    // first `0 -> nonzero` transition: if startup published no limiter object, only newly created
+    // readers will see the limiter after it is first created here.
+    // TODO: Consider publishing a no-op S3ReadLimiter even when the configured rate is 0, so a later
+    // `0 -> nonzero` reload can also reach readers that previously snapped a nullptr.
     if (s3_read_limiter == nullptr)
     {
         if (cfg.s3_max_read_bytes_per_sec != 0)
