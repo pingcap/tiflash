@@ -52,7 +52,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1775388239670,
+  "iteration": 1775402037950,
   "links": [],
   "panels": [
     {
@@ -13959,12 +13959,7 @@
           "pointradius": 2,
           "points": false,
           "renderer": "flot",
-          "seriesOverrides": [
-            {
-              "alias": "/pending/",
-              "yaxis": 2
-            }
-          ],
+          "seriesOverrides": [],
           "spaceLength": 10,
           "stack": false,
           "steppedLine": false,
@@ -14015,7 +14010,7 @@
           "yaxes": [
             {
               "decimals": 0,
-              "format": "short",
+              "format": "s",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -18285,7 +18280,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 65
+            "y": 33
           },
           "hiddenSeries": false,
           "id": 187,
@@ -18405,7 +18400,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 65
+            "y": 33
           },
           "height": "",
           "hiddenSeries": false,
@@ -18524,7 +18519,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 73
+            "y": 41
           },
           "height": "",
           "hiddenSeries": false,
@@ -18634,7 +18629,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 73
+            "y": 41
           },
           "height": "",
           "hiddenSeries": false,
@@ -18747,7 +18742,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 81
+            "y": 49
           },
           "hiddenSeries": false,
           "id": 176,
@@ -18855,7 +18850,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 81
+            "y": 49
           },
           "hiddenSeries": false,
           "id": 175,
@@ -18982,7 +18977,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 89
+            "y": 57
           },
           "hiddenSeries": false,
           "id": 189,
@@ -19084,7 +19079,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 89
+            "y": 57
           },
           "hiddenSeries": false,
           "id": 191,
@@ -19189,7 +19184,7 @@
             "h": 8,
             "w": 8,
             "x": 0,
-            "y": 97
+            "y": 65
           },
           "hiddenSeries": false,
           "id": 365,
@@ -19295,7 +19290,7 @@
             "h": 8,
             "w": 9,
             "x": 8,
-            "y": 97
+            "y": 65
           },
           "hiddenSeries": false,
           "id": 193,
@@ -19422,7 +19417,7 @@
             "h": 8,
             "w": 7,
             "x": 17,
-            "y": 97
+            "y": 65
           },
           "hiddenSeries": false,
           "id": 195,
@@ -19533,7 +19528,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 105
+            "y": 73
           },
           "hiddenSeries": false,
           "id": 363,
@@ -19639,7 +19634,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 105
+            "y": 73
           },
           "hiddenSeries": false,
           "id": 364,
@@ -19742,7 +19737,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 113
+            "y": 81
           },
           "hiddenSeries": false,
           "id": 251,
@@ -19849,7 +19844,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 113
+            "y": 81
           },
           "hiddenSeries": false,
           "id": 252,
@@ -19956,7 +19951,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 121
+            "y": 89
           },
           "hiddenSeries": false,
           "id": 254,
@@ -20063,7 +20058,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 121
+            "y": 89
           },
           "hiddenSeries": false,
           "id": 253,
@@ -20184,7 +20179,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 18
+            "y": 34
           },
           "hiddenSeries": false,
           "id": 173,
@@ -20285,7 +20280,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 26
+            "y": 42
           },
           "hiddenSeries": false,
           "id": 185,
@@ -20415,7 +20410,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 26
+            "y": 42
           },
           "hiddenSeries": false,
           "id": 186,
@@ -20519,7 +20514,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 34
+            "y": 50
           },
           "hiddenSeries": false,
           "id": 373,
@@ -20564,7 +20559,7 @@
             },
             {
               "exemplar": true,
-              "expr": "histogram_quantile(0.999, sum(rate(tiflash_storage_remote_cache_bg_download_stage_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (le, stage, file_type, $additional_groupby))",
+              "expr": "histogram_quantile(0.99, sum(rate(tiflash_storage_remote_cache_bg_download_stage_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (le, stage, file_type, $additional_groupby))",
               "hide": false,
               "interval": "",
               "legendFormat": "99%-{{stage}}-{{file_type}} {{$additional_groupby}}",
@@ -20637,7 +20632,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 34
+            "y": 50
           },
           "hiddenSeries": false,
           "id": 375,
@@ -20748,7 +20743,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 42
+            "y": 58
           },
           "hiddenSeries": false,
           "id": 371,
@@ -20795,7 +20790,7 @@
               "instant": false,
               "interval": "",
               "intervalFactor": 2,
-              "legendFormat": "{{result}}-{{file_type}} {{additional_groupby}}",
+              "legendFormat": "{{result}}-{{file_type}} {{$additional_groupby}}",
               "refId": "A"
             }
           ],
@@ -20858,7 +20853,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 42
+            "y": 58
           },
           "hiddenSeries": false,
           "id": 372,
@@ -20963,7 +20958,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 50
+            "y": 66
           },
           "hiddenSeries": false,
           "id": 370,
@@ -21069,7 +21064,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 50
+            "y": 66
           },
           "hiddenSeries": false,
           "id": 374,
@@ -21179,7 +21174,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 58
+            "y": 74
           },
           "hiddenSeries": false,
           "id": 188,
@@ -21307,7 +21302,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 58
+            "y": 74
           },
           "hiddenSeries": false,
           "id": 233,
@@ -21432,7 +21427,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 66
+            "y": 82
           },
           "hiddenSeries": false,
           "id": 236,
@@ -21548,7 +21543,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 66
+            "y": 82
           },
           "hiddenSeries": false,
           "id": 356,
@@ -21668,7 +21663,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 73
+            "y": 89
           },
           "hiddenSeries": false,
           "id": 353,
@@ -21778,7 +21773,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 73
+            "y": 89
           },
           "hiddenSeries": false,
           "id": 358,
