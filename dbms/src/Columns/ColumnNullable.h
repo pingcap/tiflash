@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Columns/ColumnNullable.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -80,21 +82,24 @@ public:
         String &) const override;
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
 
+    size_t serializeByteSize() const override;
+
+    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override;
     void countSerializeByteSizeForCmp(
         PaddedPODArray<size_t> & byte_size,
         const NullMap * nullmap,
         const TiDB::TiDBCollatorPtr & collator) const override;
-    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override;
 
+    void countSerializeByteSizeForColumnArray(
+        PaddedPODArray<size_t> & byte_size,
+        const IColumn::Offsets & array_offsets) const override;
     void countSerializeByteSizeForCmpColumnArray(
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets,
         const NullMap * nullmap,
         const TiDB::TiDBCollatorPtr & collator) const override;
-    void countSerializeByteSizeForColumnArray(
-        PaddedPODArray<size_t> & byte_size,
-        const IColumn::Offsets & array_offsets) const override;
 
+    void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override;
     void serializeToPosForCmp(
         PaddedPODArray<char *> & pos,
         size_t start,
@@ -103,8 +108,13 @@ public:
         const NullMap * nullmap,
         const TiDB::TiDBCollatorPtr & collator,
         String * sort_key_container) const override;
-    void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override;
 
+    void serializeToPosForColumnArray(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        bool has_null,
+        const IColumn::Offsets & array_offsets) const override;
     void serializeToPosForCmpColumnArray(
         PaddedPODArray<char *> & pos,
         size_t start,
@@ -114,20 +124,9 @@ public:
         const IColumn::Offsets & array_offsets,
         const TiDB::TiDBCollatorPtr & collator,
         String * sort_key_container) const override;
-    void serializeToPosForColumnArray(
-        PaddedPODArray<char *> & pos,
-        size_t start,
-        size_t length,
-        bool has_null,
-        const IColumn::Offsets & array_offsets) const override;
 
-    void deserializeForCmpAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override;
     void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override;
 
-    void deserializeForCmpAndInsertFromPosColumnArray(
-        PaddedPODArray<char *> & pos,
-        const IColumn::Offsets & array_offsets,
-        bool use_nt_align_buffer) override;
     void deserializeAndInsertFromPosForColumnArray(
         PaddedPODArray<char *> & pos,
         const IColumn::Offsets & array_offsets,
@@ -135,12 +134,18 @@ public:
 
     void flushNTAlignBuffer() override;
 
+    void deserializeAndAdvancePos(PaddedPODArray<char *> & pos) const override;
+
+    void deserializeAndAdvancePosForColumnArray(PaddedPODArray<char *> & pos, const IColumn::Offsets & array_offsets)
+        const override;
+
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
 
     void insert(const Field & x) override;
     void insertFrom(const IColumn & src, size_t n) override;
     void insertManyFrom(const IColumn & src, size_t n, size_t length) override;
-    void insertSelectiveFrom(const IColumn & src, const Offsets & selective_offsets) override;
+    void insertSelectiveRangeFrom(const IColumn & src, const Offsets & selective_offsets, size_t start, size_t length)
+        override;
 
     void insertDefault() override
     {

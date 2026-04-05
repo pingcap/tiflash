@@ -116,7 +116,8 @@ std::tuple<UInt64, UInt64, UInt64> WNFetchPagesStreamWriter::sendPages()
     return std::make_tuple(read_page_ids.size(), total_pages_size, packet_count);
 }
 
-void WNFetchPagesStreamWriter::syncWrite()
+
+WNFetchPagesStreamWriter::WriteSummary WNFetchPagesStreamWriter::syncWrite()
 {
     Stopwatch sw;
     UInt64 mem_cf_count = 0;
@@ -131,19 +132,17 @@ void WNFetchPagesStreamWriter::syncWrite()
     auto [page_count, page_size, page_packet_count] = sendPages();
     auto send_pages_ns = sw.elapsedFromLastTime();
 
-    LOG_DEBUG(
-        seg_task->read_snapshot->log,
-        "enable_fetch_memtableset={} mem_cf_count={} mem_cf_size={} mem_packet_count={} send_mem_ms={} page_count={} "
-        "page_size={} page_packet_count={} send_pages_ms={}",
-        enable_fetch_memtableset,
-        mem_cf_count,
-        mem_cf_size,
-        mem_packet_count,
-        send_mem_ns / 1000000,
-        page_count,
-        page_size,
-        page_packet_count,
-        send_pages_ns / 1000000);
+    return WriteSummary{
+        .fetch_memtableset = enable_fetch_memtableset,
+        .mem_cf_count = mem_cf_count,
+        .mem_cf_size = mem_cf_size,
+        .mem_packet_count = mem_packet_count,
+        .mem_send_ms = send_mem_ns / 1'000'000.0,
+        .page_count = page_count,
+        .page_size = page_size,
+        .page_packet_count = page_packet_count,
+        .page_send_ms = send_pages_ns / 1'000'000.0,
+    };
 }
 
 WNFetchPagesStreamWriter::WNFetchPagesStreamWriter(

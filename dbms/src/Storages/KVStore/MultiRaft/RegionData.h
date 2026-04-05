@@ -30,7 +30,6 @@ using DecodedLockCFValuePtr = std::shared_ptr<const RecordKVFormat::DecodedLockC
 enum class ColumnFamilyType : uint8_t;
 
 struct RegionLockReadQuery;
-class Region;
 
 class RegionData
 {

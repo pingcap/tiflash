@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <Interpreters/Context.h>
 #include <Poco/Logger.h>
 #include <Poco/Util/LayeredConfiguration.h>
@@ -29,7 +30,6 @@
 #include <Storages/DeltaMerge/workload/TableGenerator.h>
 #include <Storages/DeltaMerge/workload/TimestampGenerator.h>
 #include <Storages/DeltaMerge/workload/Utils.h>
-#include <TestUtils/TiFlashTestEnv.h>
 
 namespace DB::DM::tests
 {
@@ -200,8 +200,10 @@ void DTWorkload::read(const ColumnDefines & columns, int stream_count, T func)
         std::vector<RuntimeFilterPtr>(),
         0,
         "DTWorkload",
-        false,
-        opts->is_fast_scan,
+        DMReadOptions{
+            .keep_order = false,
+            .is_fast_scan = opts->is_fast_scan,
+        },
         excepted_block_size);
     std::vector<std::thread> threads;
     threads.reserve(streams.size());

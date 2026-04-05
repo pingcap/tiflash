@@ -370,18 +370,17 @@ void deltaFORDecoding<UInt32>(const char * src, UInt32 source_size, char * dest,
     auto round_size = BitpackingPrimitives::roundUpToAlgorithmGroupSize(deltas_count);
     // Reserve enough space for the temporary buffer.
     const auto required_size = round_size * TYPE_BYTE_SIZE + TYPE_BYTE_SIZE;
-    char tmp_buffer[required_size];
-    memset(tmp_buffer, 0, required_size);
+    std::vector<char> tmp_buffer(required_size, 0);
     // copy the first value to the temporary buffer
-    memcpy(tmp_buffer, src, TYPE_BYTE_SIZE);
+    memcpy(tmp_buffer.data(), src, TYPE_BYTE_SIZE);
     FORDecoding<UInt32>(
         src + TYPE_BYTE_SIZE,
         source_size - TYPE_BYTE_SIZE,
-        tmp_buffer + TYPE_BYTE_SIZE,
+        tmp_buffer.data() + TYPE_BYTE_SIZE,
         required_size - TYPE_BYTE_SIZE);
-    auto * deltas = reinterpret_cast<UInt32 *>(tmp_buffer + TYPE_BYTE_SIZE);
+    auto * deltas = reinterpret_cast<UInt32 *>(tmp_buffer.data() + TYPE_BYTE_SIZE);
     zigZagDecoding<UInt32>(deltas, deltas_count, deltas);
-    deltaDecoding<Int32>(tmp_buffer, dest_size, dest);
+    deltaDecoding<Int32>(tmp_buffer.data(), dest_size, dest);
 }
 
 template <>
@@ -400,18 +399,17 @@ void deltaFORDecoding<UInt64>(const char * src, UInt32 source_size, char * dest,
     const auto round_size = BitpackingPrimitives::roundUpToAlgorithmGroupSize(deltas_count);
     // Reserve enough space for the temporary buffer.
     const auto required_size = round_size * TYPE_BYTE_SIZE + TYPE_BYTE_SIZE;
-    char tmp_buffer[required_size];
-    memset(tmp_buffer, 0, required_size);
+    std::vector<char> tmp_buffer(required_size, 0);
     // copy the first value to the temporary buffer
-    memcpy(tmp_buffer, src, TYPE_BYTE_SIZE);
+    memcpy(tmp_buffer.data(), src, TYPE_BYTE_SIZE);
     FORDecoding<UInt64>(
         src + TYPE_BYTE_SIZE,
         source_size - TYPE_BYTE_SIZE,
-        tmp_buffer + TYPE_BYTE_SIZE,
+        tmp_buffer.data() + TYPE_BYTE_SIZE,
         required_size - TYPE_BYTE_SIZE);
-    auto * deltas = reinterpret_cast<UInt64 *>(tmp_buffer + TYPE_BYTE_SIZE);
+    auto * deltas = reinterpret_cast<UInt64 *>(tmp_buffer.data() + TYPE_BYTE_SIZE);
     zigZagDecoding<UInt64>(deltas, deltas_count, deltas);
-    deltaDecoding<Int64>(tmp_buffer, dest_size, dest);
+    deltaDecoding<Int64>(tmp_buffer.data(), dest_size, dest);
 }
 
 /// Run-length encoding

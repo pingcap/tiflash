@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Storages/System/StorageSystemTables.cpp
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -279,31 +281,6 @@ BlockInputStreams StorageSystemTables::read(
                     res_columns[j++]->insert(engine_full);
                 }
             }
-        }
-    }
-
-    if (context.hasSessionContext())
-    {
-        Tables external_tables = context.getSessionContext().getExternalTables();
-
-        for (const auto & table : external_tables)
-        {
-            size_t j = 0;
-            res_columns[j++]->insertDefault();
-            res_columns[j++]->insert(table.first);
-            res_columns[j++]->insert(table.second->getName());
-            res_columns[j++]->insert(static_cast<UInt64>(1));
-            res_columns[j++]->insertDefault();
-            res_columns[j++]->insertDefault();
-
-            if (has_metadata_modification_time)
-                res_columns[j++]->insertDefault();
-
-            if (has_create_table_query)
-                res_columns[j++]->insertDefault();
-
-            if (has_engine_full)
-                res_columns[j++]->insert(table.second->getName());
         }
     }
 

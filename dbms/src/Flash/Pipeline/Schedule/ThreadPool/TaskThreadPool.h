@@ -65,7 +65,7 @@ public:
 
     void submit(std::vector<TaskPtr> & tasks);
 
-    void cancel(const String & query_id, const String & resource_group_name);
+    void cancel(const TaskCancelInfo & cancel_info);
 
 private:
     void loop(size_t thread_no);

@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
 
 namespace DB

@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Server/Server.cpp
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,11 +18,13 @@
 #include <Common/CPUAffinityManager.h>
 #include <Common/Config/ConfigReloader.h>
 #include <Common/CurrentMetrics.h>
+#include <Common/DiskSize.h>
 #include <Common/DynamicThreadPool.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/MemoryAllocTrace.h>
 #include <Common/RedactHelpers.h>
+#include <Common/SpillLimiter.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/ThreadManager.h>
 #include <Common/TiFlashBuildInfo.h>
@@ -28,6 +32,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Common/UniThreadPool.h>
 #include <Common/assert_cast.h>
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Common/config.h>
 #include <Common/escapeForFileName.h>
 #include <Common/formatReadable.h>
@@ -65,6 +70,7 @@
 #include <Server/BgStorageInit.h>
 #include <Server/Bootstrap.h>
 #include <Server/CertificateReloader.h>
+#include <Server/FlashGrpcServerHolder.h>
 #include <Server/MetricsPrometheus.h>
 #include <Server/RaftConfigParser.h>
 #include <Server/Server.h>
@@ -91,7 +97,6 @@
 #include <Storages/S3/S3Common.h>
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/registerStorages.h>
-#include <TableFunctions/registerTableFunctions.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <WindowFunctions/registerWindowFunctions.h>
@@ -238,7 +243,7 @@ void printGRPCLog(gpr_log_func_args * args)
 // Later we will adjust it by `adjustThreadPoolSize`
 void initThreadPool(DisaggregatedMode disaggregated_mode)
 {
-    size_t default_num_threads = std::max(4UL, 2 * std::thread::hardware_concurrency());
+    size_t default_num_threads = std::max(4UL, 6 * std::thread::hardware_concurrency());
 
     // Note: Global Thread Pool must be larger than sub thread pools.
     GlobalThreadPool::initialize(
@@ -325,9 +330,11 @@ void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
     }
     if (S3FileCachePool::instance)
     {
-        S3FileCachePool::instance->setMaxThreads(max_io_thread_count);
-        S3FileCachePool::instance->setMaxFreeThreads(max_io_thread_count / 2);
-        S3FileCachePool::instance->setQueueSize(max_io_thread_count * 2);
+        auto concurrency = logical_cores * settings.dt_filecache_downloading_count_scale;
+        auto queue_size = logical_cores * settings.dt_filecache_max_downloading_count_scale;
+        S3FileCachePool::instance->setMaxThreads(concurrency);
+        S3FileCachePool::instance->setMaxFreeThreads(concurrency / 2);
+        S3FileCachePool::instance->setQueueSize(queue_size);
     }
     if (RNWritePageCachePool::instance)
     {
@@ -376,7 +383,7 @@ void syncSchemaWithTiDB(
             }
             catch (DB::Exception & e)
             {
-                LOG_ERROR(
+                LOG_WARNING(
                     log,
                     "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
                     " seconds and try again.",
@@ -386,7 +393,7 @@ void syncSchemaWithTiDB(
             }
             catch (Poco::Exception & e)
             {
-                LOG_ERROR(
+                LOG_WARNING(
                     log,
                     "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
                     " seconds and try again.",
@@ -416,67 +423,165 @@ void loadBlockList(
     Context & global_context,
     [[maybe_unused]] const LoggerPtr & log)
 {
-#if SERVERLESS_PROXY != 1
+#if ENABLE_NEXT_GEN == 0
     // We do not support blocking store by id in OP mode currently.
     global_context.initializeStoreIdBlockList("");
 #else
     global_context.initializeStoreIdBlockList(global_context.getSettingsRef().disagg_blocklist_wn_store_id);
 
-    /// Load keyspace blacklist json file
-    LOG_INFO(log, "Loading blacklist file.");
-    auto blacklist_file_path = config.getString("blacklist_file", "");
-    if (blacklist_file_path.length() == 0)
+    /// Load keyspace blocklist json file
+    LOG_INFO(log, "Loading blocklist file.");
+    auto blocklist_file_path = config.getString("blacklist_file", "");
+    if (blocklist_file_path.length() == 0)
     {
         LOG_INFO(log, "blocklist file not enabled, ignore it.");
+        return;
+    }
+    auto blacklist_file = Poco::File(blocklist_file_path);
+    if (!(blacklist_file.exists() && blacklist_file.isFile() && blacklist_file.canRead()))
+    {
+        LOG_INFO(log, "blocklist file not exists or non-readble, ignore it, path={}", blocklist_file_path);
+        return;
+    }
+
+    // Read the json file
+    std::ifstream ifs(blocklist_file_path);
+    std::string json_content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+    Poco::JSON::Parser parser;
+    Poco::Dynamic::Var json_var = parser.parse(json_content);
+    const auto & json_obj = json_var.extract<Poco::JSON::Object::Ptr>();
+
+    // load keyspace list
+    auto keyspace_arr = json_obj->getArray("keyspace_ids");
+    if (!keyspace_arr.isNull())
+    {
+        std::unordered_set<KeyspaceID> keyspace_blocklist;
+        for (size_t i = 0; i < keyspace_arr->size(); i++)
+        {
+            keyspace_blocklist.emplace(keyspace_arr->getElement<KeyspaceID>(i));
+        }
+        global_context.initKeyspaceBlocklist(keyspace_blocklist);
+    }
+
+    // load region list
+    auto region_arr = json_obj->getArray("region_ids");
+    if (!region_arr.isNull())
+    {
+        std::unordered_set<RegionID> region_blocklist;
+        for (size_t i = 0; i < region_arr->size(); i++)
+        {
+            region_blocklist.emplace(region_arr->getElement<RegionID>(i));
+        }
+        global_context.initRegionBlocklist(region_blocklist);
+    }
+
+    LOG_INFO(
+        log,
+        "Load blocklist file done, total {} keyspaces and {} regions in blocklist.",
+        keyspace_arr.isNull() ? 0 : keyspace_arr->size(),
+        region_arr.isNull() ? 0 : region_arr->size());
+#endif
+}
+
+// Returns whether encryption is enabled and the KeyManagerPtr
+std::tuple<bool, KeyManagerPtr> getKeyManager(
+    ProxyStateMachine & proxy_machine,
+    bool is_s3_enabled,
+    const LoggerPtr & log)
+{
+    if (!proxy_machine.isProxyRunnable())
+    {
+        // Proxy is not runnable, tiflash is run for mock tests
+        LOG_INFO(log, "encryption is using a mock key manager for mock tests");
+        return {false, std::make_shared<MockKeyManager>(false)};
+    }
+
+    const bool enable_encryption = proxy_machine.getProxyHelper()->checkEncryptionEnabled();
+    if (!enable_encryption)
+    {
+        LOG_INFO(log, "encryption is disabled");
+        return {false, std::make_shared<DataKeyManager>(proxy_machine.getEngineStoreServerWrap())};
+    }
+
+    if (!is_s3_enabled)
+    {
+        const auto method = proxy_machine.getProxyHelper()->getEncryptionMethod();
+        LOG_INFO(log, "encryption is enabled, method is {}", magic_enum::enum_name(method));
+        KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(proxy_machine.getEngineStoreServerWrap());
+        return {method != EncryptionMethod::Plaintext, key_manager};
+    }
+
+    // When s3 is enabled, we could enable keyspace-level encryption. Currently only Aes256Ctr is supported
+    // for keyspace-level encryption.
+    LOG_INFO(log, "encryption can be enabled at keyspace-level, method is Aes256Ctr");
+    // The UniversalPageStorage has not been init yet, the UniversalPageStoragePtr in KeyspacesKeyManager is nullptr.
+    KeyManagerPtr key_manager
+        = std::make_shared<KeyspacesKeyManager<TiFlashRaftProxyHelper>>(proxy_machine.getProxyHelper());
+    return {true, key_manager};
+}
+
+void Server::initCaches(bool is_disagg_compute_mode, bool is_disagg_storage_mode, const LoggerPtr & log) const
+{
+    /// Size of cache for marks (index of MergeTree family of tables). It is necessary.
+    size_t mark_cache_size = config().getUInt64("mark_cache_size", DEFAULT_MARK_CACHE_SIZE);
+    if (mark_cache_size)
+        global_context->setMarkCache(mark_cache_size);
+
+    /// Size of cache for minmax index, used by DeltaMerge engine.
+    size_t minmax_index_cache_size = config().getUInt64("minmax_index_cache_size", mark_cache_size);
+    if (minmax_index_cache_size)
+        global_context->setMinMaxIndexCache(minmax_index_cache_size);
+
+    /// The vector index cache by number instead of bytes. Because it use `mmap` and let the operating system decide the memory usage.
+    size_t light_local_index_cache_entities = config().getUInt64("light_local_index_cache_entities", 10000);
+    size_t heavy_local_index_cache_entities = config().getUInt64("heavy_local_index_cache_entities", 500);
+    if (light_local_index_cache_entities && heavy_local_index_cache_entities)
+        global_context->setLocalIndexCache(light_local_index_cache_entities, heavy_local_index_cache_entities);
+
+    size_t column_cache_long_term_size
+        = config().getUInt64("column_cache_long_term_size", 512 * 1024 * 1024 /* 512MB */);
+    if (column_cache_long_term_size)
+        global_context->setColumnCacheLongTerm(column_cache_long_term_size);
+
+    /// Size of max memory usage of DeltaIndex, used by DeltaMerge engine.
+    /// - In non-disaggregated mode, its default value is 0, means unlimited, and it
+    ///   controls the number of total bytes keep in the memory.
+    /// - In disaggregated compute node, its default value is memory_capacity_of_host * 0.02.
+    ///   0 means cache is disabled.
+    ///   We cannot support unlimited delta index cache in disaggregated mode for now,
+    ///   because cache items will be never explicitly removed.
+    /// - In disaggregated write node, its default value is 1GiB. Because write node manage
+    ///   much more data than non-disaggregated mode, and the delta index cache is less useful.
+    if (is_disagg_compute_mode)
+    {
+        constexpr auto delta_index_cache_ratio = 0.02;
+        constexpr auto backup_delta_index_cache_size = 1024 * 1024 * 1024; // 1GiB
+        const auto default_delta_index_cache_size = server_info.memory_info.capacity > 0
+            ? server_info.memory_info.capacity * delta_index_cache_ratio
+            : backup_delta_index_cache_size;
+        size_t n = config().getUInt64("delta_index_cache_size", default_delta_index_cache_size);
+        LOG_INFO(log, "delta_index_cache_size={}", n);
+        // In disaggregated compute node, we will not use DeltaIndexManager to cache the delta index.
+        // Instead, we use RNMVCCIndexCache.
+        global_context->getSharedContextDisagg()->initReadNodeMVCCIndexCache(n);
+    }
+    else if (is_disagg_storage_mode)
+    {
+        constexpr auto default_delta_index_cache_size = 1024 * 1024 * 1024; // 1GiB
+        size_t n = config().getUInt64("delta_index_cache_size", default_delta_index_cache_size);
+        global_context->setDeltaIndexManager(n);
     }
     else
     {
-        auto blacklist_file = Poco::File(blacklist_file_path);
-        if (blacklist_file.exists() && blacklist_file.isFile() && blacklist_file.canRead())
-        {
-            // Read the json file
-            std::ifstream ifs(blacklist_file_path);
-            std::string json_content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
-            Poco::JSON::Parser parser;
-            Poco::Dynamic::Var json_var = parser.parse(json_content);
-            const auto & json_obj = json_var.extract<Poco::JSON::Object::Ptr>();
-
-            // load keyspace list
-            auto keyspace_arr = json_obj->getArray("keyspace_ids");
-            if (!keyspace_arr.isNull())
-            {
-                std::unordered_set<KeyspaceID> keyspace_blocklist;
-                for (size_t i = 0; i < keyspace_arr->size(); i++)
-                {
-                    keyspace_blocklist.emplace(keyspace_arr->getElement<KeyspaceID>(i));
-                }
-                global_context.initKeyspaceBlocklist(keyspace_blocklist);
-            }
-
-            // load region list
-            auto region_arr = json_obj->getArray("region_ids");
-            if (!region_arr.isNull())
-            {
-                std::unordered_set<RegionID> region_blocklist;
-                for (size_t i = 0; i < region_arr->size(); i++)
-                {
-                    region_blocklist.emplace(region_arr->getElement<RegionID>(i));
-                }
-                global_context.initRegionBlocklist(region_blocklist);
-            }
-
-            LOG_INFO(
-                log,
-                "Load blocklist file done, total {} keyspaces and {} regions in blacklist.",
-                keyspace_arr.isNull() ? 0 : keyspace_arr->size(),
-                region_arr.isNull() ? 0 : region_arr->size());
-        }
-        else
-        {
-            LOG_INFO(log, "blocklist file not exists or non-readble, ignore it.");
-        }
+        size_t n = config().getUInt64("delta_index_cache_size", 0);
+        global_context->setDeltaIndexManager(n);
     }
-#endif
+
+    // Size of schema cache for blockschemas of tables.
+    // Note that the cache must be initialized before `loadMetadata` is called, because
+    // `StorageDeltaMerge` requires the cache when loading table metadata.
+    size_t schema_cache_size = config().getUInt64("schema_cache_size", 10000);
+    global_context->initializeSharedBlockSchemas(schema_cache_size);
 }
 
 int Server::main(const std::vector<std::string> & /*args*/)
@@ -501,7 +606,6 @@ try
     registerFunctions();
     registerAggregateFunctions();
     registerWindowFunctions();
-    registerTableFunctions();
     registerStorages();
 
     const auto disagg_opt = DisaggOptions::parseFromConfig(config());
@@ -571,8 +675,8 @@ try
         }
     }
 
-    // Set whether to use safe point v2.
-    PDClientHelper::enable_safepoint_v2 = config().getBool("enable_safe_point_v2", false);
+    // Safe point v2 is deprecated and replaced by keyspace-based safe point.
+    // config().getBool("enable_safe_point_v2", false);
 
     /** Context contains all that query execution is dependent:
       *  settings, available functions, data types, aggregate functions, databases...
@@ -618,35 +722,10 @@ try
     global_context->initializeJointThreadInfoJeallocMap();
 
     /// Init File Provider
-    if (proxy_machine.isProxyRunnable())
     {
-        const bool enable_encryption = proxy_machine.getProxyHelper()->checkEncryptionEnabled();
-        if (enable_encryption && storage_config.s3_config.isS3Enabled())
-        {
-            LOG_INFO(log, "encryption can be enabled, method is Aes256Ctr");
-            // The UniversalPageStorage has not been init yet, the UniversalPageStoragePtr in KeyspacesKeyManager is nullptr.
-            KeyManagerPtr key_manager
-                = std::make_shared<KeyspacesKeyManager<TiFlashRaftProxyHelper>>(proxy_machine.getProxyHelper());
-            global_context->initializeFileProvider(key_manager, true);
-        }
-        else if (enable_encryption)
-        {
-            const auto method = proxy_machine.getProxyHelper()->getEncryptionMethod();
-            LOG_INFO(log, "encryption is enabled, method is {}", magic_enum::enum_name(method));
-            KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(proxy_machine.getEngineStoreServerWrap());
-            global_context->initializeFileProvider(key_manager, method != EncryptionMethod::Plaintext);
-        }
-        else
-        {
-            LOG_INFO(log, "encryption is disabled");
-            KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(proxy_machine.getEngineStoreServerWrap());
-            global_context->initializeFileProvider(key_manager, false);
-        }
-    }
-    else
-    {
-        KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
-        global_context->initializeFileProvider(key_manager, false);
+        auto [enable_encryption, key_manager]
+            = getKeyManager(proxy_machine, storage_config.s3_config.isS3Enabled(), log);
+        global_context->initializeFileProvider(key_manager, enable_encryption);
     }
 
     /// ===== Paths related configuration initialized start ===== ///
@@ -692,7 +771,11 @@ try
     if (const auto & config = storage_config.remote_cache_config; config.isCacheEnabled() && is_disagg_compute_mode)
     {
         config.initCacheDir();
-        FileCache::initialize(global_context->getPathCapacity(), config);
+        FileCache::initialize(
+            global_context->getPathCapacity(),
+            config,
+            server_info.cpu_info.logical_cores,
+            global_context->getIORateLimiter());
     }
 
     /// Determining PageStorage run mode based on current files on disk and storage config.
@@ -742,20 +825,21 @@ try
 
     /// Directory with temporary data for processing of heavy queries.
     {
-        std::string tmp_path = config().getString("tmp_path", path + "tmp/");
-        global_context->setTemporaryPath(tmp_path);
-        Poco::File(tmp_path).createDirectories();
+        const std::string & temp_path = storage_config.temp_path;
+        RUNTIME_CHECK(!temp_path.empty());
+        Poco::File(temp_path).createDirectories();
 
-        /// Clearing old temporary files.
         Poco::DirectoryIterator dir_end;
-        for (Poco::DirectoryIterator it(tmp_path); it != dir_end; ++it)
+        for (Poco::DirectoryIterator it(temp_path); it != dir_end; ++it)
         {
             if (it->isFile() && startsWith(it.name(), "tmp"))
-            {
-                LOG_DEBUG(log, "Removing old temporary file {}", it->path());
                 global_context->getFileProvider()->deleteRegularFile(it->path(), EncryptionPath(it->path(), ""));
-            }
         }
+        LOG_INFO(log, "temp files in temp directory({}) removed", temp_path);
+
+        storage_config.checkTempCapacity(global_capacity_quota, log);
+        global_context->setTemporaryPath(temp_path);
+        SpillLimiter::instance->setMaxSpilledBytes(storage_config.temp_capacity);
     }
 
     /** Directory with 'flags': files indicating temporary settings for the server set by system administrator.
@@ -917,52 +1001,9 @@ try
             users_config_reloader->reload();
     });
 
-    /// Size of cache for marks (index of MergeTree family of tables). It is necessary.
-    size_t mark_cache_size = config().getUInt64("mark_cache_size", DEFAULT_MARK_CACHE_SIZE);
-    if (mark_cache_size)
-        global_context->setMarkCache(mark_cache_size);
-
-    /// Size of cache for minmax index, used by DeltaMerge engine.
-    size_t minmax_index_cache_size = config().getUInt64("minmax_index_cache_size", mark_cache_size);
-    if (minmax_index_cache_size)
-        global_context->setMinMaxIndexCache(minmax_index_cache_size);
-
-    /// The vector index cache by number instead of bytes. Because it use `mmap` and let the operator system decide the memory usage.
-    size_t light_local_index_cache_entities = config().getUInt64("light_local_index_cache_entities", 10000);
-    size_t heavy_local_index_cache_entities = config().getUInt64("heavy_local_index_cache_entities", 500);
-    if (light_local_index_cache_entities && heavy_local_index_cache_entities)
-        global_context->setLocalIndexCache(light_local_index_cache_entities, heavy_local_index_cache_entities);
-
-    size_t column_cache_long_term_size
-        = config().getUInt64("column_cache_long_term_size", 512 * 1024 * 1024 /* 512MB */);
-    if (column_cache_long_term_size)
-        global_context->setColumnCacheLongTerm(column_cache_long_term_size);
-
-    /// Size of max memory usage of DeltaIndex, used by DeltaMerge engine.
-    /// - In non-disaggregated mode, its default value is 0, means unlimited, and it
-    ///   controls the number of total bytes keep in the memory.
-    /// - In disaggregated mode, its default value is memory_capacity_of_host * 0.02.
-    ///   0 means cache is disabled.
-    ///   We cannot support unlimited delta index cache in disaggregated mode for now,
-    ///   because cache items will be never explicitly removed.
-    if (is_disagg_compute_mode)
-    {
-        constexpr auto delta_index_cache_ratio = 0.02;
-        constexpr auto backup_delta_index_cache_size = 1024 * 1024 * 1024; // 1GiB
-        const auto default_delta_index_cache_size = server_info.memory_info.capacity > 0
-            ? server_info.memory_info.capacity * delta_index_cache_ratio
-            : backup_delta_index_cache_size;
-        size_t n = config().getUInt64("delta_index_cache_size", default_delta_index_cache_size);
-        LOG_INFO(log, "delta_index_cache_size={}", n);
-        // In disaggregated compute node, we will not use DeltaIndexManager to cache the delta index.
-        // Instead, we use RNDeltaIndexCache.
-        global_context->getSharedContextDisagg()->initReadNodeDeltaIndexCache(n);
-    }
-    else
-    {
-        size_t n = config().getUInt64("delta_index_cache_size", 0);
-        global_context->setDeltaIndexManager(n);
-    }
+    // Note that `initCaches` should be done before `loadMetadataSystem` and `loadMetadata`
+    // otherwise some caches may not be initialized when loading metadata of some tables.
+    initCaches(is_disagg_compute_mode, is_disagg_storage_mode, log);
 
     loadBlockList(config(), *global_context, log);
 
@@ -980,9 +1021,8 @@ try
 
         // Must be executed before restore data.
         // Get the memory usage of tranquil time.
-        auto [resident_set, cur_proc_num_threads, cur_virt_size] = process_mem_usage();
-        UNUSED(cur_proc_num_threads);
-        tranquil_time_rss = static_cast<Int64>(resident_set);
+        auto mem_res = get_process_mem_usage();
+        tranquil_time_rss = static_cast<Int64>(mem_res.resident_bytes);
 
         auto kvs_watermark = settings.max_memory_usage_for_all_queries.getActualBytes(server_info.memory_info.capacity);
         if (kvs_watermark == 0)
@@ -992,7 +1032,7 @@ try
             "Global memory status: kvstore_high_watermark={} tranquil_time_rss={} cur_virt_size={} capacity={}",
             kvs_watermark,
             tranquil_time_rss,
-            cur_virt_size,
+            mem_res.cur_virt_bytes,
             server_info.memory_info.capacity);
 
         proxy_machine.initKVStore(global_context->getTMTContext(), store_ident, kvs_watermark);
@@ -1008,16 +1048,19 @@ try
     LOG_INFO(log, "Init S3 GC Manager");
     global_context->getTMTContext().initS3GCManager(proxy_machine.getProxyHelper());
     // Initialize the thread pool of storage before the storage engine is initialized.
-    LOG_INFO(log, "dt_enable_read_thread {}", global_context->getSettingsRef().dt_enable_read_thread);
-    // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
-    DM::DMFileReaderPool::instance();
-    DM::SegmentReaderPoolManager::instance().init(
-        server_info.cpu_info.logical_cores,
-        settings.dt_read_thread_count_scale);
-    DM::SegmentReadTaskScheduler::instance().updateConfig(global_context->getSettingsRef());
-
-    auto schema_cache_size = config().getInt("schema_cache_size", 10000);
-    global_context->initializeSharedBlockSchemas(schema_cache_size);
+    {
+        LOG_INFO(log, "dt_enable_read_thread {}", global_context->getSettingsRef().dt_enable_read_thread);
+        // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
+        DM::DMFileReaderPool::instance();
+        double read_thread_final_scale = settings.dt_read_thread_count_scale;
+        if (is_disagg_compute_mode)
+        {
+            // disagg compute node needs more read threads to handle blocking IO from S3.
+            read_thread_final_scale *= 10;
+        }
+        DM::SegmentReaderPoolManager::instance().init(server_info.cpu_info.logical_cores, read_thread_final_scale);
+        DM::SegmentReadTaskScheduler::instance().updateConfig(global_context->getSettingsRef());
+    }
 
     // Load remaining databases
     loadMetadata(*global_context);
@@ -1055,8 +1098,9 @@ try
         if (storage_config.s3_config.isS3Enabled())
         {
             S3::ClientFactory::instance().shutdown();
+            LOG_INFO(log, "S3 Client Factory shutdown done.");
         }
-        LOG_DEBUG(log, "Shutted down storages.");
+        LOG_INFO(log, "Shutted down storages.");
     });
 
     proxy_machine.restoreKVStore(global_context->getTMTContext(), global_context->getPathPool());
@@ -1139,6 +1183,7 @@ try
         SessionCleaner session_cleaner(*global_context);
         auto & tmt_context = global_context->getTMTContext();
 
+        // Start the proxy service, including the grpc service for raft and http status service
         proxy_machine.startProxyService(tmt_context, store_ident);
         if (proxy_machine.isProxyRunnable())
         {
@@ -1163,6 +1208,8 @@ try
                     syncSchemaWithTiDB(storage_config, bg_init_stores, terminate_signals_counter, global_context, log);
                     bg_init_stores.waitUntilFinish();
                 }
+
+                // Start read index workers and wait region apply index catch up with TiKV before serving requests.
                 proxy_machine.waitProxyServiceReady(tmt_context, terminate_signals_counter);
             }
         }
@@ -1183,8 +1230,11 @@ try
 #ifdef DBMS_PUBLIC_GTEST
             LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
 #else
-            LocalAdmissionController::global_instance
-                = std::make_unique<LocalAdmissionController>(tmt_context.getKVCluster(), tmt_context.getEtcdClient());
+            const bool with_keyspace = (storage_config.api_version == 2);
+            LocalAdmissionController::global_instance = std::make_unique<LocalAdmissionController>(
+                tmt_context.getKVCluster(),
+                tmt_context.getEtcdClient(),
+                with_keyspace);
 #endif
 
             auto get_pool_size = [](const auto & setting) {
@@ -1218,17 +1268,17 @@ try
         {
             auto size = settings.grpc_completion_queue_pool_size;
             if (size == 0)
-                size = std::thread::hardware_concurrency();
+                size = getNumberOfLogicalCPUCores();
             GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
         }
 
-        /// startup grpc server to serve raft and/or flash services.
+        /// startup flash service for handling coprocessor and MPP requests.
         FlashGrpcServerHolder flash_grpc_server_holder(this->context(), this->config(), raft_config, log);
 
         SCOPE_EXIT({
             // Stop LAC for AutoScaler managed CN before FlashGrpcServerHolder is destructed.
             // Because AutoScaler it will kill tiflash process when port of flash_server_addr is down.
-            // And we want to make sure LAC is cleanedup.
+            // And we want to make sure LAC is cleaned up.
             // The effects are there will be no resource control during [lac.safeStop(), FlashGrpcServer destruct done],
             // but it's basically ok, that duration is small(normally 100-200ms).
             if (is_disagg_compute_mode && disagg_opt.use_autoscaler && LocalAdmissionController::global_instance)
@@ -1249,6 +1299,12 @@ try
 
         LOG_INFO(log, "Start to wait for terminal signal");
         waitForTerminationRequest();
+
+        // Note: `waitAllMPPTasksFinish` must be called before stopping the proxy.
+        // Otherwise, read index requests may fail, which can prevent TiFlash from shutting down gracefully.
+        LOG_INFO(log, "Set unavailable for MPPTask");
+        tmt_context.getMPPTaskManager()->setUnavailable();
+        tmt_context.getMPPTaskManager()->getMPPTaskMonitor()->waitAllMPPTasksFinish(global_context);
 
         {
             // Set limiters stopping and wakeup threads in waitting queue.

@@ -16,6 +16,7 @@
 
 #include <Storages/DeltaMerge/Index/InvertedIndex/CommonUtil.h>
 #include <Storages/DeltaMerge/Index/LocalIndexWriter.h>
+#include <TiDB/Schema/InvertedIndex.h>
 
 namespace DB::DM
 {
@@ -77,7 +78,7 @@ public:
         , writer()
     {}
 
-    void saveToFile() const override;
+    void saveToFile() override;
 
     void addBlock(const IColumn & column, const ColumnVector<UInt8> * del_mark, ProceedCheckFn should_proceed) override
     {

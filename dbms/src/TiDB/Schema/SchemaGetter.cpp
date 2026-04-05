@@ -302,7 +302,7 @@ std::pair<TiDB::TableInfoPtr, bool> SchemaGetter::getTableInfoImpl(DatabaseID db
         get_by_mvcc = true;
         if (table_info_json.empty())
         {
-            LOG_ERROR(
+            LOG_WARNING(
                 log,
                 "The table is dropped in TiKV, and the latest table_info is still empty, it should be GCed, "
                 "table_id={}",
@@ -339,7 +339,7 @@ std::vector<TiDB::TableInfoPtr> SchemaGetter::listTables(DatabaseID db_id)
     auto db_key = getDBKey(db_id);
     if (!checkDBExists(db_key))
     {
-        LOG_ERROR(log, "The database does not exist, database_id={}", db_id);
+        LOG_WARNING(log, "The database does not exist, database_id={}", db_id);
         return {};
     }
 

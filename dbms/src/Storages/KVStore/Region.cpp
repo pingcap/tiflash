@@ -335,16 +335,6 @@ Region::~Region()
     GET_METRIC(tiflash_raft_classes_count, type_region).Decrement();
 }
 
-TableID Region::getMappedTableID() const
-{
-    return mapped_table_id;
-}
-
-KeyspaceID Region::getKeyspaceID() const
-{
-    return keyspace_id;
-}
-
 void Region::setPeerState(raft_serverpb::PeerState state)
 {
     meta.setPeerState(state);
@@ -372,7 +362,8 @@ std::pair<size_t, size_t> Region::getApproxMemCacheInfo() const
 {
     return {
         approx_mem_cache_rows.load(std::memory_order_relaxed),
-        approx_mem_cache_bytes.load(std::memory_order_relaxed)};
+        approx_mem_cache_bytes.load(std::memory_order_relaxed),
+    };
 }
 
 void Region::cleanApproxMemCacheInfo() const
@@ -409,7 +400,7 @@ void Region::setRegionTableCtx(RegionTableCtxPtr ctx) const
 
 void Region::maybeWarnMemoryLimitByTable(TMTContext & tmt, const char * from)
 {
-    // If there are data flow in, we will check if the memory is exhaused.
+    // If there are data flow in, we will check if the memory is exhausted.
     auto limit = tmt.getKVStore()->getKVStoreMemoryLimit();
     size_t current = real_rss.load() > 0 ? real_rss.load() : 0;
     if unlikely (limit == 0 || current == 0)

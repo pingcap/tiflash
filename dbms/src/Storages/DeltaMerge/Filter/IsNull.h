@@ -34,10 +34,23 @@ public:
 
     String toDebugString() override { return fmt::format(R"({{"op":"{}","col":"{}"}})", name(), attr.col_name); }
 
+    Poco::JSON::Object::Ptr toJSONObject() override
+    {
+        Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+        obj->set("op", name());
+        obj->set("col", attr.col_name);
+        return obj;
+    }
+
     RSResults roughCheck(size_t start_pack, size_t pack_count, const RSCheckParam & param) override
     {
         auto rs_index = getRSIndex(param, attr);
         return rs_index ? rs_index->minmax->checkIsNull(start_pack, pack_count) : RSResults(pack_count, RSResult::Some);
+    }
+
+    ColumnRangePtr buildSets(const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> &) override
+    {
+        return UnsupportedColumnRange::create();
     }
 };
 

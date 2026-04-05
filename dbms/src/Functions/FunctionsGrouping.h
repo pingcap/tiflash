@@ -210,7 +210,7 @@ private:
     // so it's appropriate to use std::set as it is faster than unordered_set in
     // small amount of elements.
     // one more dimension for multi grouping function args like: grouping(x,y,z...)
-    std::vector<std::set<UInt64>> meta_grouping_marks = {};
+    std::vector<std::set<UInt64>> meta_grouping_marks;
 };
 
 class FunctionBuilderGrouping : public IFunctionBuilder

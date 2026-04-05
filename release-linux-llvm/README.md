@@ -2,7 +2,7 @@
 
 Scripts to build TiFlash binaries under Rocky Linux 8
 
-Usage: 
+Usage:
 
 ```bash
 > make build_tiflash_release
@@ -18,9 +18,9 @@ Update the script
 
 ```bash
 # Build the base docker with suffix.
-> SUFFIX=-llvm-17.0.6 make image_tiflash_llvm_base
+> SUFFIX=-llvm-17.0.6-v2 make image_tiflash_llvm_base
 # Use the new base docker to build TiFlash binary
-> SUFFIX=-llvm-17.0.6 make build_tiflash_release
+> SUFFIX=-llvm-17.0.6-v2 make build_tiflash_release
 # The binaries is built under directory `tiflash`, check its information
 > ./tiflash/tiflash version
 TiFlash
@@ -34,7 +34,7 @@ Raft Proxy
 
 # Push the new base docker to the dockerhub, usually it is "hub.pingcap.net"
 > docker login -u <your-username> -p <your-password> <dockerhub-url>
-> docker image push <dockerhub-url>/tiflash/tiflash-llvm-base:rocky8-llvm-17.0.6
+> docker image push <dockerhub-url>/tiflash/tiflash-llvm-base:rocky8${SUFFIX}
 ```
 
 At last, change the suffix in `${REPO_DIR}/.toolchain.yml` and check the built target in the CI.
@@ -43,7 +43,7 @@ At last, change the suffix in `${REPO_DIR}/.toolchain.yml` and check the built t
 How to get into a build container:
 
 ```
-SUFFIX=-llvm-17.0.6
+SUFFIX=-llvm-17.0.6-v2
 docker run -it --rm -v /your/path/to/tiflash:/build/tics hub.pingcap.net/tiflash/tiflash-llvm-base:rocky8${SUFFIX} /bin/bash
 ```
 

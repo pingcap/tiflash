@@ -19,6 +19,8 @@
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Debug/MockKVStore/MockRaftStoreProxy.h>
 #include <Debug/MockKVStore/MockSSTReader.h>
+#include <Debug/MockKVStore/MockUtils.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <Debug/dbgKVStore/dbgKVStore.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
@@ -32,12 +34,10 @@
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/StorageEngineType.h>
 #include <Storages/KVStore/TMTContext.h>
-#include <Storages/KVStore/tests/region_helper.h>
 #include <Storages/PathPool.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/registerStorages.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <TestUtils/TiFlashTestEnv.h>
 
 #include <memory>
 
@@ -60,12 +60,6 @@ extern const char proactive_flush_force_set_type[];
 extern const char pause_passive_flush_before_persist_region[];
 extern const char force_set_parallel_prehandle_threshold[];
 } // namespace FailPoints
-
-namespace RegionBench
-{
-extern void setupPutRequest(raft_cmdpb::Request *, const std::string &, const TiKVKey &, const TiKVValue &);
-extern void setupDelRequest(raft_cmdpb::Request *, const std::string &, const TiKVKey &);
-} // namespace RegionBench
 
 extern void CheckRegionForMergeCmd(const raft_cmdpb::AdminResponse & response, const RegionState & region_state);
 extern void ChangeRegionStateRange(

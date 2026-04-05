@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <Server/DTTool/DTTool.h>
+#include <boost_wrapper/program_options.h>
 
-#include <boost/program_options.hpp>
 #include <iostream>
 
 namespace bpo = boost::program_options;

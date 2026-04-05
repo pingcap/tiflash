@@ -15,8 +15,76 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 
+
 namespace DB
 {
+
+namespace
+{
+
+tipb::ANNQueryInfo extractAnnQuery(const tipb::Executor * table_scan)
+{
+    bool is_partition_table_scan = table_scan->tp() == tipb::TypePartitionTableScan;
+    // Try to compatible with old protocol.
+    if (is_partition_table_scan)
+    {
+        if (table_scan->partition_table_scan().has_deprecated_ann_query())
+            return table_scan->partition_table_scan().deprecated_ann_query();
+    }
+    else
+    {
+        if (table_scan->tbl_scan().has_deprecated_ann_query())
+            return table_scan->tbl_scan().deprecated_ann_query();
+    }
+
+    // Deal with new protocol.
+    const auto & used_columnar_indexes = is_partition_table_scan
+        ? table_scan->partition_table_scan().used_columnar_indexes()
+        : table_scan->tbl_scan().used_columnar_indexes();
+    if (used_columnar_indexes.size() != 1)
+        return {};
+    if (used_columnar_indexes[0].index_type() != tipb::ColumnarIndexType::TypeVector)
+        return {};
+    RUNTIME_CHECK(used_columnar_indexes[0].has_ann_query_info());
+    return used_columnar_indexes[0].ann_query_info();
+}
+
+tipb::FTSQueryInfo extractFtsQuery(const tipb::Executor * table_scan)
+{
+    bool is_partition_table_scan = table_scan->tp() == tipb::TypePartitionTableScan;
+    const auto & used_columnar_indexes = is_partition_table_scan
+        ? table_scan->partition_table_scan().used_columnar_indexes()
+        : table_scan->tbl_scan().used_columnar_indexes();
+    if (used_columnar_indexes.size() != 1)
+        return {};
+    if (used_columnar_indexes[0].index_type() != tipb::ColumnarIndexType::TypeFulltext)
+        return {};
+    RUNTIME_CHECK(used_columnar_indexes[0].has_fts_query_info());
+    return used_columnar_indexes[0].fts_query_info();
+}
+
+void copyUsedColumnarIndexesFromPartitionTableScan(
+    const tipb::PartitionTableScan & partition_table_scan,
+    tipb::TableScan * tipb_table_scan)
+{
+    if (partition_table_scan.has_deprecated_ann_query())
+    {
+        tipb::ColumnarIndexInfo columnar_index_info;
+        columnar_index_info.set_index_type(tipb::ColumnarIndexType::TypeVector);
+        columnar_index_info.mutable_ann_query_info()->CopyFrom(partition_table_scan.deprecated_ann_query());
+        *tipb_table_scan->add_used_columnar_indexes() = columnar_index_info;
+    }
+    else
+    {
+        for (const auto & used_columnar_index : partition_table_scan.used_columnar_indexes())
+        {
+            *tipb_table_scan->add_used_columnar_indexes() = used_columnar_index;
+        }
+    }
+}
+
+} // namespace
+
 TiDBTableScan::TiDBTableScan(
     const tipb::Executor * table_scan_,
     const String & executor_id_,
@@ -30,8 +98,11 @@ TiDBTableScan::TiDBTableScan(
     , pushed_down_filters(
           is_partition_table_scan ? table_scan->partition_table_scan().pushed_down_filter_conditions()
                                   : table_scan->tbl_scan().pushed_down_filter_conditions())
-    , ann_query_info(
-          is_partition_table_scan ? table_scan->partition_table_scan().ann_query() : table_scan->tbl_scan().ann_query())
+    , used_indexes(
+          is_partition_table_scan ? table_scan->partition_table_scan().used_columnar_indexes()
+                                  : table_scan->tbl_scan().used_columnar_indexes())
+    , ann_query_info(extractAnnQuery(table_scan))
+    , fts_query_info(extractFtsQuery(table_scan))
     // Only No-partition table need keep order when tablescan executor required keep order.
     // If keep_order is not set, keep order for safety.
     , keep_order(
@@ -99,6 +170,8 @@ void TiDBTableScan::constructTableScanForRemoteRead(tipb::TableScan * tipb_table
             *tipb_table_scan->add_columns() = column;
         for (const auto & filter : partition_table_scan.pushed_down_filter_conditions())
             *tipb_table_scan->add_pushed_down_filter_conditions() = filter;
+        for (const auto & index : partition_table_scan.used_columnar_indexes())
+            *tipb_table_scan->add_used_columnar_indexes() = index;
         tipb_table_scan->set_desc(partition_table_scan.desc());
         for (auto id : partition_table_scan.primary_column_ids())
             tipb_table_scan->add_primary_column_ids(id);
@@ -107,8 +180,7 @@ void TiDBTableScan::constructTableScanForRemoteRead(tipb::TableScan * tipb_table
             tipb_table_scan->add_primary_prefix_column_ids(id);
         tipb_table_scan->set_is_fast_scan(partition_table_scan.is_fast_scan());
         tipb_table_scan->set_keep_order(false);
-        if (partition_table_scan.has_ann_query())
-            tipb_table_scan->mutable_ann_query()->CopyFrom(partition_table_scan.ann_query());
+        copyUsedColumnarIndexesFromPartitionTableScan(partition_table_scan, tipb_table_scan);
     }
     else
     {

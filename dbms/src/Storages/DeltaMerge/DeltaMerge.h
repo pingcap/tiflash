@@ -23,8 +23,8 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
+#include <Storages/DeltaMerge/DeltaIndex/DeltaTree.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/RowKeyFilter.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 

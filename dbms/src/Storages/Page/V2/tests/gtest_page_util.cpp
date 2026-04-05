@@ -36,7 +36,7 @@ try
     ::remove(FileName.c_str());
 
     size_t buff_size = 1024;
-    char buff_write[buff_size];
+    std::vector<char> buff_write(buff_size);
 
     for (size_t i = 0; i < buff_size; i++)
     {
@@ -46,7 +46,7 @@ try
     PageUtil::writeFile(
         file_for_write,
         0,
-        buff_write,
+        buff_write.data(),
         buff_size,
         /*write_limiter*/ nullptr,
         /*background*/ false,
@@ -55,10 +55,10 @@ try
     PageUtil::syncFile(file_for_write);
     file_for_write->close();
 
-    char buff_read[buff_size];
+    std::vector<char> buff_read(buff_size);
     RandomAccessFilePtr file_for_read = std::make_shared<PosixRandomAccessFile>(FileName, -1, nullptr);
-    PageUtil::readFile(file_for_read, 0, buff_read, buff_size, nullptr);
-    ASSERT_EQ(strcmp(buff_write, buff_read), 0);
+    PageUtil::readFile(file_for_read, 0, buff_read.data(), buff_size, nullptr);
+    ASSERT_EQ(strcmp(buff_write.data(), buff_read.data()), 0);
 
     ::remove(FileName.c_str());
 }
@@ -81,8 +81,8 @@ TEST(PageUtilsTest, BigReadWriteFile)
     {
         WritableFilePtr file_for_write = std::make_shared<PosixWritableFile>(FileName, true, -1, 0666);
         size_t buff_size = 13 * 1024 + 123;
-        char buff_write[buff_size];
-        char buff_read[buff_size];
+        std::vector<char> buff_write(buff_size);
+        std::vector<char> buff_read(buff_size);
 
         for (size_t i = 0; i < buff_size; i++)
         {
@@ -92,7 +92,7 @@ TEST(PageUtilsTest, BigReadWriteFile)
         PageUtil::writeFile(
             file_for_write,
             0,
-            buff_write,
+            buff_write.data(),
             buff_size,
             nullptr,
             /*background*/ false,
@@ -102,8 +102,8 @@ TEST(PageUtilsTest, BigReadWriteFile)
         file_for_write->close();
 
         RandomAccessFilePtr file_for_read = std::make_shared<PosixRandomAccessFile>(FileName, -1, nullptr);
-        PageUtil::readFile(file_for_read, 0, buff_read, buff_size, nullptr);
-        ASSERT_EQ(strcmp(buff_write, buff_read), 0);
+        PageUtil::readFile(file_for_read, 0, buff_read.data(), buff_size, nullptr);
+        ASSERT_EQ(strcmp(buff_write.data(), buff_read.data()), 0);
 
         ::remove(FileName.c_str());
         FailPointHelper::disableFailPoint(FailPoints::force_split_io_size_4k);

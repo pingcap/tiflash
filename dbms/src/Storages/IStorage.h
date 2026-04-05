@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Storages/IStorage.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -63,6 +65,10 @@ class IStorage
     , public ITableDeclaration
 {
 public:
+    IStorage();
+
+    explicit IStorage(ColumnsDescription columns_);
+
     /// The main name of the table type (for example, StorageDeltaMerge).
     virtual std::string getName() const = 0;
 
@@ -70,25 +76,16 @@ public:
       */
     virtual std::string getTableName() const = 0;
 
-    /** Returns true if the storage receives data from a remote server or servers. */
-    virtual bool isRemote() const { return false; }
-
     /** Returns true if the storage supports queries with the SAMPLE section. */
     virtual bool supportsSampling() const { return false; }
 
     /** Returns true if the storage supports queries with the FINAL section. */
     virtual bool supportsFinal() const { return false; }
 
-    /** Returns true if the storage supports queries with the PREWHERE section. */
-    virtual bool supportsPrewhere() const { return false; }
-
-    /** Returns true if the storage replicates SELECT, INSERT and ALTER commands among replicas. */
-    virtual bool supportsReplication() const { return false; }
-
     /** Returns true if the storage supports UPSERT, DELETE or UPDATE. */
     virtual bool supportsModification() const { return false; }
 
-    /// Lock table for share. This lock must be acuqired if you want to be sure,
+    /// Lock table for share. This lock must be acquired if you want to be sure,
     /// that table will be not dropped while you holding this lock. It's used in
     /// variety of cases starting from SELECT queries to background merges in
     /// MergeTree.
@@ -96,7 +93,7 @@ public:
         const String & query_id,
         const std::chrono::milliseconds & acquire_timeout = std::chrono::milliseconds(0));
 
-    /// Lock table for alter. This lock must be acuqired in ALTER queries to be
+    /// Lock table for alter. This lock must be acquired in ALTER queries to be
     /// sure, that we execute only one simultaneous alter. Doesn't affect share lock.
     TableLockHolder lockForAlter(
         const String & query_id,
@@ -301,12 +298,6 @@ public:
 
     bool is_dropped{false};
 
-    /// Does table support index for IN sections
-    virtual bool supportsIndexForIn() const { return false; }
-
-    /// Provides a hint that the storage engine may evaluate the IN-condition by using an index.
-    virtual bool mayBenefitFromIndexForIn(const ASTPtr & /* left_in_operand */) const { return false; }
-
     /// Checks validity of the data
     virtual bool checkData() const
     {
@@ -344,6 +335,8 @@ private:
     /// DROP-like queries take this lock for write (lockExclusively), to be sure
     /// that all table threads finished.
     mutable RWLockPtr drop_lock = RWLock::create();
+
+    CurrentMetrics::Increment holder_counter;
 };
 
 /// table name -> table

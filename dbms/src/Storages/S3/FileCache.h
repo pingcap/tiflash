@@ -25,6 +25,11 @@
 #include <Storages/S3/S3Filename.h>
 #include <common/types.h>
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <Poco/JSON/Object.h>
+#pragma GCC diagnostic pop
+
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -35,6 +40,8 @@
 
 namespace DB
 {
+class IORateLimiter;
+
 class FileSegment
 {
 public:
@@ -48,12 +55,13 @@ public:
     // The smaller the enum value, the higher the cache priority.
     enum class FileType : UInt64
     {
-        Unknow = 0,
+        Unknown = 0,
         Meta,
         // Vector index is always stored as a separate file and requires to be read through `mmap`
         // which must be downloaded to the local disk.
         // So the priority of caching is relatively high
         VectorIndex,
+        FullTextIndex,
         InvertedIndex,
         Merged,
         Index,
@@ -81,10 +89,12 @@ public:
 
     Status waitForNotEmpty();
 
-    void setSize(UInt64 size_)
+    void setComplete(UInt64 size_)
     {
         std::lock_guard lock(mtx);
         size = size_;
+        status = FileSegment::Status::Complete;
+        cv_ready.notify_all();
     }
 
     void setStatus(Status s)
@@ -93,6 +103,12 @@ public:
         status = s;
         if (status != Status::Empty)
             cv_ready.notify_all();
+    }
+
+    Status getStatus() const
+    {
+        std::lock_guard lock(mtx);
+        return status;
     }
 
     UInt64 getSize() const
@@ -125,12 +141,6 @@ public:
         return (std::chrono::system_clock::now() - last_access_time) < sec;
     }
 
-    Status getStatus() const
-    {
-        std::lock_guard lock(mtx);
-        return status;
-    }
-
     auto getLastAccessTime() const
     {
         std::unique_lock lock(mtx);
@@ -148,6 +158,41 @@ private:
 };
 
 using FileSegmentPtr = std::shared_ptr<FileSegment>;
+
+struct CacheSizeHistogram
+{
+    struct Stat
+    {
+        UInt64 count = 0;
+        UInt64 bytes = 0;
+
+        Poco::JSON::Object::Ptr toJson() const;
+    };
+
+    // [0, 30) minutes
+    Stat in30min;
+    // [30, 60) minutes
+    Stat in60min;
+    // [60, 360) minutes
+    Stat in360min;
+    // [360, 720) minutes; 6 hours to 12 hours
+    Stat in720min;
+    // [720, 1440) minutes; 12 hours to 1 day
+    Stat in1440min;
+    // [1440, 2880) minutes; 1 day to 2 days
+    Stat in2880min;
+    // [2880, 10080) minutes; 2 days to 7 days
+    Stat in10080min;
+    // more than 7 day
+    Stat over10080min;
+
+    std::optional<std::chrono::time_point<std::chrono::system_clock>> oldest_access_time;
+    UInt64 oldest_file_size = 0;
+
+    void addFileSegment(const FileSegmentPtr & file_seg);
+
+    Poco::JSON::Object::Ptr toJson() const;
+};
 
 class LRUFileTable
 {
@@ -208,6 +253,16 @@ public:
         return files;
     }
 
+    CacheSizeHistogram getCacheSizeHistogram() const
+    {
+        CacheSizeHistogram histogram;
+        for (const auto & pa : table)
+        {
+            histogram.addFileSegment(pa.second.first);
+        }
+        return histogram;
+    }
+
     size_t size() const { return table.size(); }
 
 private:
@@ -218,9 +273,14 @@ private:
 class FileCache
 {
 public:
-    static void initialize(PathCapacityMetricsPtr capacity_metrics_, const StorageRemoteCacheConfig & config_)
+    static void initialize(
+        PathCapacityMetricsPtr capacity_metrics_,
+        const StorageRemoteCacheConfig & config_,
+        UInt16 logical_cores,
+        IORateLimiter & rate_limiter)
     {
-        global_file_cache_instance = std::make_unique<FileCache>(capacity_metrics_, config_);
+        global_file_cache_instance
+            = std::make_unique<FileCache>(capacity_metrics_, config_, logical_cores, rate_limiter);
         global_file_cache_initialized.store(true, std::memory_order_release);
     }
 
@@ -237,7 +297,11 @@ public:
         global_file_cache_instance = nullptr;
     }
 
-    FileCache(PathCapacityMetricsPtr capacity_metrics_, const StorageRemoteCacheConfig & config_);
+    FileCache(
+        PathCapacityMetricsPtr capacity_metrics_,
+        const StorageRemoteCacheConfig & config_,
+        UInt16 logical_cores_,
+        IORateLimiter & rate_limiter_);
 
     RandomAccessFilePtr getRandomAccessFile(
         const S3::S3FilenameView & s3_fname,
@@ -250,7 +314,22 @@ public:
         const S3::S3FilenameView & s3_fname,
         const std::optional<UInt64> & filesize);
 
+    /// The same as downloadFileForLocalRead, but it supports retry.
+    /// Returns the file guard of the local cache file and whether the file is downloaded from S3.
+    /// If the file is not downloaded, an exception will be thrown.
+    std::tuple<FileSegmentPtr, bool> downloadFileForLocalReadWithRetry(
+        const S3::S3FilenameView & s3_fname,
+        const std::optional<UInt64> & filesize,
+        Int32 retry_count);
+
     void updateConfig(const Settings & settings);
+
+
+    UInt64 evictByFileType(FileSegment::FileType file_type);
+
+    UInt64 evictBySize(UInt64 size_to_reserve, UInt64 min_age_seconds, bool force_evict);
+
+    std::vector<std::tuple<FileSegment::FileType, CacheSizeHistogram>> getCacheSizeHistogram() const;
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -272,8 +351,8 @@ public:
 
     void bgDownload(const String & s3_key, FileSegmentPtr & file_seg);
     void fgDownload(const String & s3_key, FileSegmentPtr & file_seg);
-    void download(const String & s3_key, FileSegmentPtr & file_seg);
-    void downloadImpl(const String & s3_key, FileSegmentPtr & file_seg);
+    void bgDownloadExecutor(const String & s3_key, FileSegmentPtr & file_seg, const WriteLimiterPtr & write_limiter);
+    void downloadImpl(const String & s3_key, FileSegmentPtr & file_seg, const WriteLimiterPtr & write_limiter);
 
     static String toTemporaryFilename(const String & fname);
     static bool isTemporaryFilename(const String & fname);
@@ -306,6 +385,7 @@ public:
         0, // Unknow type, currently never cache it.
         8 * 1024, // Estimated size of meta.
         12 * 1024 * 1024, // Estimated size of vector index
+        12 * 1024 * 1024, // Estimated size of fulltext index
         128 * 1024, // Estimated size of inverted index.
         1 * 1024 * 1024, // Estimated size of merged.
         8 * 1024, // Estimated size of index.
@@ -322,7 +402,14 @@ public:
     static UInt64 getEstimatedSizeOfFileType(FileSegment::FileType file_type);
     static FileSegment::FileType getFileType(const String & fname);
     static FileSegment::FileType getFileTypeOfColData(const std::filesystem::path & p);
-    bool canCache(FileSegment::FileType file_type) const;
+
+    enum class ShouldCacheRes
+    {
+        Cache,
+        RejectTypeNotMatch,
+        RejectTooManyDownloading,
+    };
+    ShouldCacheRes canCache(FileSegment::FileType file_type) const;
 
     enum class EvictMode
     {
@@ -331,31 +418,60 @@ public:
         ForceEvict,
     };
 
-    bool reserveSpaceImpl(FileSegment::FileType reserve_for, UInt64 size, EvictMode evict);
+    bool reserveSpaceImpl(
+        FileSegment::FileType reserve_for,
+        UInt64 size,
+        EvictMode mode,
+        std::unique_lock<std::mutex> & guard);
     void releaseSpaceImpl(UInt64 size);
     void releaseSpace(UInt64 size);
-    bool reserveSpace(FileSegment::FileType reserve_for, UInt64 size, EvictMode evict);
+    bool reserveSpace(FileSegment::FileType reserve_for, UInt64 size, EvictMode mode);
     bool finalizeReservedSize(FileSegment::FileType reserve_for, UInt64 reserved_size, UInt64 content_length);
-    static std::vector<FileSegment::FileType> getEvictFileTypes(FileSegment::FileType evict_for);
-    void tryEvictFile(FileSegment::FileType evict_for, UInt64 size, EvictMode evict);
-    UInt64 tryEvictFrom(FileSegment::FileType evict_for, UInt64 size, FileSegment::FileType evict_from);
-    UInt64 forceEvict(UInt64 size);
+
+    // == evict cached files ==
+
+    static std::vector<FileSegment::FileType> getEvictFileTypes(
+        FileSegment::FileType evict_for,
+        bool evict_same_type_first);
+    UInt64 evictBySizeImpl(
+        FileSegment::FileType evict_for,
+        UInt64 size_to_reserve,
+        UInt64 min_age_seconds,
+        EvictMode mode,
+        std::unique_lock<std::mutex> & guard);
+    UInt64 tryEvictFile(
+        FileSegment::FileType evict_for,
+        UInt64 min_evict_size,
+        UInt64 min_age_seconds,
+        EvictMode mode,
+        std::unique_lock<std::mutex> & guard);
+    UInt64 tryEvictFileFrom(
+        FileSegment::FileType evict_for,
+        UInt64 min_evict_size,
+        UInt64 min_age_seconds,
+        FileSegment::FileType evict_from,
+        std::unique_lock<std::mutex> & guard);
+    UInt64 forceEvict(UInt64 size, std::unique_lock<std::mutex> & guard);
 
     // This function is used for test.
     std::vector<FileSegmentPtr> getAll();
 
-    std::mutex mtx;
+    mutable std::mutex mtx;
     PathCapacityMetricsPtr capacity_metrics;
     String cache_dir;
     UInt64 cache_capacity;
     UInt64 cache_level;
     UInt64 cache_used;
+    const UInt16 logical_cores;
+    IORateLimiter & rate_limiter;
     std::atomic<UInt64> cache_min_age_seconds = 1800;
-    std::atomic<double> max_downloading_count_scale = 1.0;
+    std::atomic<double> download_count_scale = 2.0;
+    std::atomic<double> max_downloading_count_scale = 10.0;
+    // the on-going background download count
+    std::atomic<UInt64> bg_downloading_count = 0;
     std::array<LRUFileTable, magic_enum::enum_count<FileSegment::FileType>()> tables;
 
     // Currently, these variables are just use for testing.
-    std::atomic<UInt64> bg_downloading_count = 0;
     std::atomic<UInt64> bg_download_succ_count = 0;
     std::atomic<UInt64> bg_download_fail_count = 0;
 

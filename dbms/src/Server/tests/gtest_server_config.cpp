@@ -87,6 +87,8 @@ ip = "::/0"
 [profiles.default]
 load_balancing = "random"
 max_memory_usage = 0
+# deprecated and removed settings since v8.0. Log an error if set.
+use_uncompressed_cache = true
 [profiles.readonly]
 readonly = 1
 

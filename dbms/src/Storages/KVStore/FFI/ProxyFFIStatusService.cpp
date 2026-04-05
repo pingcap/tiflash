@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashMetrics.h>
@@ -21,8 +22,10 @@
 #include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/FFI/ProxyFFICommon.h>
+#include <Storages/KVStore/FFI/ProxyFFIStatusService.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/S3/FileCache.h>
 #include <Storages/S3/S3GCManager.h>
 #include <TiDB/OwnerManager.h>
 #include <TiDB/Schema/SchemaSyncService.h>
@@ -31,7 +34,9 @@
 #include <fmt/core.h>
 
 #include <boost/algorithm/string.hpp>
+#include <charconv>
 #include <magic_enum.hpp>
+#include <string>
 
 namespace DB
 {
@@ -40,6 +45,23 @@ namespace FailPoints
 extern const char sync_schema_request_failure[];
 } // namespace FailPoints
 
+template <typename T>
+HttpRequestRes buildRespWithCode(HttpRequestStatus status_code, const std::string & api_name, T && body)
+{
+    return HttpRequestRes{
+        .status = status_code,
+        .api_name = GenCppStrWithView(std::string(api_name)),
+        // response body
+        .res = GenCppStrWithView(std::forward<T>(body)),
+    };
+}
+
+template <typename T>
+HttpRequestRes buildOkResp(const std::string & api_name, T && body)
+{
+    return buildRespWithCode(HttpRequestStatus::Ok, api_name, std::forward<T>(body));
+}
+
 HttpRequestRes HandleHttpRequestSyncStatus(
     EngineStoreServerWrap * server,
     std::string_view path,
@@ -47,7 +69,6 @@ HttpRequestRes HandleHttpRequestSyncStatus(
     std::string_view,
     std::string_view)
 {
-    HttpRequestStatus status = HttpRequestStatus::Ok;
     TableID table_id = 0;
     pingcap::pd::KeyspaceID keyspace_id = NullspaceID;
     {
@@ -64,11 +85,7 @@ HttpRequestRes HandleHttpRequestSyncStatus(
             && (query_parts.size() != 4 || query_parts[0] != "keyspace" || query_parts[2] != "table"))
         {
             LOG_ERROR(log, "invalid SyncStatus request: {}", query);
-            status = HttpRequestStatus::ErrorParam;
-            return HttpRequestRes{
-                .status = status,
-                .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}},
-            };
+            return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, "");
         }
 
 
@@ -86,14 +103,8 @@ HttpRequestRes HandleHttpRequestSyncStatus(
         }
         catch (...)
         {
-            status = HttpRequestStatus::ErrorParam;
+            return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, "");
         }
-
-        if (status != HttpRequestStatus::Ok)
-            return HttpRequestRes{
-                .status = status,
-                .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}},
-            };
     }
 
     auto & tmt = *server->tmt;
@@ -152,118 +163,185 @@ HttpRequestRes HandleHttpRequestSyncStatus(
         " ");
     buf.append("\n");
 
-    auto * s = RawCppString::New(buf.toString());
-    return HttpRequestRes{
-        .status = status,
-        .res = CppStrWithView{
-            .inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String), .view = BaseBuffView{s->data(), s->size()},
-        },
-    };
+    return buildOkResp(api_name, buf.toString());
 }
 
 // Return store status of this tiflash node
+// TiUP/tidb-operator rely on this API to check whether the tiflash node is ready
 HttpRequestRes HandleHttpRequestStoreStatus(
     EngineStoreServerWrap * server,
     std::string_view,
-    const std::string &,
+    const std::string & api_name,
     std::string_view,
     std::string_view)
 {
-    auto * name = RawCppString::New(IntoStoreStatusName(server->tmt->getStoreStatus(std::memory_order_relaxed)));
-    return HttpRequestRes{
-        .status = HttpRequestStatus::Ok,
-        .res= CppStrWithView{
-            .inner = GenRawCppPtr(name, RawCppPtrTypeImpl::String), .view = BaseBuffView{name->data(), name->size()},
-        },
-    };
+    return buildOkResp(api_name, IntoStoreStatusName(server->tmt->getStoreStatus(std::memory_order_relaxed)));
+}
+
+// Return health status of this tiflash node
+HttpRequestRes HandleHttpRequestLivez(
+    EngineStoreServerWrap *,
+    std::string_view,
+    const std::string & api_name,
+    std::string_view,
+    std::string_view)
+{
+    // Simply return ok for liveness probe
+    std::string response_lines;
+    response_lines += "ok\n";
+    return buildOkResp(api_name, std::move(response_lines));
+}
+
+// Return "readiness" status of this tiflash node
+HttpRequestRes HandleHttpRequestReadyz(
+    EngineStoreServerWrap * server,
+    std::string_view /*path*/,
+    const std::string & api_name,
+    std::string_view query,
+    std::string_view /*body*/)
+{
+    bool verbose = false;
+    if (query.find("verbose") != std::string_view::npos)
+        verbose = true;
+
+    bool is_ready = true;
+    std::string response_lines;
+
+    // Check whether store_status == "running",
+    auto store_status = server->tmt->getStoreStatus(std::memory_order_relaxed);
+    switch (store_status)
+    {
+    case TMTContext::StoreStatus::Running:
+        if (verbose)
+        {
+            response_lines += fmt::format("[+]store_status ok\n");
+        }
+        break;
+    default:
+        if (verbose)
+        {
+            response_lines
+                += fmt::format("[-]store_status fail: store_status={}\n", magic_enum::enum_name(store_status));
+        }
+        is_ready = false;
+        break;
+    }
+
+    if (is_ready)
+    {
+        // Return "ok" and 200 status code
+        response_lines += "ok\n";
+        return buildOkResp(api_name, std::move(response_lines));
+    }
+    else
+    {
+        // Not ready for servering requests, return error and 500 status code
+        response_lines += "fail\n";
+        return buildRespWithCode(HttpRequestStatus::InternalError, api_name, std::move(response_lines));
+    }
+}
+
+// A guard function to allow disaggregated API calls only in expected disaggregated mode.
+// If tiflash running with disaggregated mode that is equal to `expect_mode`, then return nullopt.
+// If not, return a HttpRequestRes with error message.
+std::optional<HttpRequestRes> allowDisaggAPI(
+    Context & global_ctx,
+    const std::string & api_name,
+    DisaggregatedMode expect_mode,
+    std::string_view message)
+{
+    if (global_ctx.getSharedContextDisagg()->disaggregated_mode != expect_mode)
+    {
+        auto body = fmt::format(
+            R"json({{"message":"{}, disagg_mode={}"}})json",
+            message,
+            magic_enum::enum_name(global_ctx.getSharedContextDisagg()->disaggregated_mode));
+        return buildOkResp(api_name, std::move(body));
+    }
+    return std::nullopt;
 }
 
 /// set a flag for upload all PageData to remote store from local UniPS
 HttpRequestRes HandleHttpRequestRemoteReUpload(
     EngineStoreServerWrap * server,
     std::string_view,
-    const std::string &,
+    const std::string & api_name,
     std::string_view,
     std::string_view)
 {
     auto & global_ctx = server->tmt->getContext();
-    if (!global_ctx.getSharedContextDisagg()->isDisaggregatedStorageMode())
+    if (auto err_resp = allowDisaggAPI(global_ctx, api_name, DisaggregatedMode::Storage, "can not sync remote store");
+        err_resp)
     {
-        auto * body = RawCppString::New(fmt::format(
-            R"json({{"message":"can not sync remote store on a node with disagg_mode={}"}})json",
-            magic_enum::enum_name(global_ctx.getSharedContextDisagg()->disaggregated_mode)));
-        return HttpRequestRes{
-            .status = HttpRequestStatus::ErrorParam,
-            .res = CppStrWithView{
-                .inner = GenRawCppPtr(body, RawCppPtrTypeImpl::String),
-                .view = BaseBuffView{body->data(), body->size()},
-            },
-        };
+        return err_resp.value();
     }
 
     bool flag_set = global_ctx.tryUploadAllDataToRemoteStore();
-    auto * body = RawCppString::New(fmt::format(R"json({{"message":"flag_set={}"}})json", flag_set));
-    return HttpRequestRes{
-        .status = flag_set ? HttpRequestStatus::Ok : HttpRequestStatus::ErrorParam,
-        .res = CppStrWithView{
-            .inner = GenRawCppPtr(body, RawCppPtrTypeImpl::String),
-            .view = BaseBuffView{body->data(), body->size()},
-        },
-    };
+    return buildOkResp(api_name, fmt::format(R"json({{"message":"flag_set={}"}})json", flag_set));
 }
 
 // get the remote gc owner info
 HttpRequestRes HandleHttpRequestRemoteOwnerInfo(
     EngineStoreServerWrap * server,
     std::string_view,
-    const std::string &,
+    const std::string & api_name,
     std::string_view,
     std::string_view)
 {
+    auto & global_ctx = server->tmt->getContext();
+    if (auto err_resp = allowDisaggAPI(global_ctx, api_name, DisaggregatedMode::Storage, "can not get gc owner");
+        err_resp)
+    {
+        return err_resp.value();
+    }
+
     const auto & owner = server->tmt->getS3GCOwnerManager();
     const auto owner_info = owner->getOwnerID();
-    auto * body = RawCppString::New(fmt::format(
-        R"json({{"status":"{}","owner_id":"{}"}})json",
-        magic_enum::enum_name(owner_info.status),
-        owner_info.owner_id));
-    return HttpRequestRes{
-        .status = HttpRequestStatus::Ok,
-        .res = CppStrWithView{
-            .inner = GenRawCppPtr(body, RawCppPtrTypeImpl::String),
-            .view = BaseBuffView{body->data(), body->size()},
-        },
-    };
+    return buildOkResp(
+        api_name,
+        fmt::format(
+            R"json({{"status":"{}","owner_id":"{}"}})json",
+            magic_enum::enum_name(owner_info.status),
+            owner_info.owner_id));
 }
 
 // resign if this node is the remote gc owner
 HttpRequestRes HandleHttpRequestRemoteOwnerResign(
     EngineStoreServerWrap * server,
     std::string_view,
-    const std::string &,
+    const std::string & api_name,
     std::string_view,
     std::string_view)
 {
+    auto & global_ctx = server->tmt->getContext();
+    if (auto err_resp = allowDisaggAPI(global_ctx, api_name, DisaggregatedMode::Storage, "can not resign gc owner");
+        err_resp)
+    {
+        return err_resp.value();
+    }
+
     const auto & owner = server->tmt->getS3GCOwnerManager();
     bool has_resign = owner->resignOwner();
     String msg = has_resign ? "Done" : "This node is not the remote gc owner, can't be resigned.";
-    auto * body = RawCppString::New(fmt::format(R"json({{"message":"{}"}})json", msg));
-    return HttpRequestRes{
-        .status = HttpRequestStatus::Ok,
-        .res = CppStrWithView{
-            .inner = GenRawCppPtr(body, RawCppPtrTypeImpl::String),
-            .view = BaseBuffView{body->data(), body->size()},
-        },
-    };
+    auto body = fmt::format(R"json({{"message":"{}"}})json", msg);
+    return buildOkResp(api_name, std::move(body));
 }
 
 // execute remote gc if this node is the remote gc owner
 HttpRequestRes HandleHttpRequestRemoteGC(
     EngineStoreServerWrap * server,
     std::string_view,
-    const std::string &,
+    const std::string & api_name,
     std::string_view,
     std::string_view)
 {
+    auto & global_ctx = server->tmt->getContext();
+    if (auto err_resp = allowDisaggAPI(global_ctx, api_name, DisaggregatedMode::Storage, "can not trigger gc");
+        err_resp)
+    {
+        return err_resp.value();
+    }
+
     const auto & owner = server->tmt->getS3GCOwnerManager();
     const auto owner_info = owner->getOwnerID();
     bool gc_is_executed = false;
@@ -272,18 +350,333 @@ HttpRequestRes HandleHttpRequestRemoteGC(
         server->tmt->getS3GCManager()->wake();
         gc_is_executed = true;
     }
-    auto * body = RawCppString::New(fmt::format(
+    auto body = fmt::format(
         R"json({{"status":"{}","owner_id":"{}","execute":"{}"}})json",
         magic_enum::enum_name(owner_info.status),
         owner_info.owner_id,
-        gc_is_executed));
-    return HttpRequestRes{
-        .status = HttpRequestStatus::Ok,
-        .res = CppStrWithView{
-            .inner = GenRawCppPtr(body, RawCppPtrTypeImpl::String),
-            .view = BaseBuffView{body->data(), body->size()},
-        },
+        gc_is_executed);
+    return buildOkResp(api_name, std::move(body));
+}
+
+std::tuple<std::vector<StoreID>, String> parseStoreIds(std::string_view path)
+{
+    std::vector<StoreID> store_ids;
+    String err_msg;
+
+    if (path.empty() || path == "/")
+    {
+        // empty store_ids means all store ids
+        return {store_ids, err_msg};
+    }
+
+    if (path[0] == '/')
+        path.remove_prefix(1); // remove leading '/'
+
+    std::vector<std::string> parts;
+    boost::split(parts, path, boost::is_any_of(","));
+    for (const auto & part : parts)
+    {
+        try
+        {
+            StoreID store_id = std::stoull(part);
+            store_ids.push_back(store_id);
+        }
+        catch (...)
+        {
+            err_msg = fmt::format("invalid store_id in request: {}", path);
+            return {std::vector<StoreID>{}, err_msg};
+        }
+    }
+    return {store_ids, err_msg};
+}
+
+HttpRequestRes HandleHttpRequestRemoteInfo(
+    EngineStoreServerWrap * server,
+    std::string_view path,
+    const std::string & api_name,
+    std::string_view,
+    std::string_view)
+{
+    auto & global_ctx = server->tmt->getContext();
+    if (auto err_resp = allowDisaggAPI(global_ctx, api_name, DisaggregatedMode::Storage, "can not get remote info");
+        err_resp)
+    {
+        return err_resp.value();
+    }
+
+    auto [store_ids, err_msg] = parseStoreIds(path.substr(api_name.size()));
+    if (!err_msg.empty())
+    {
+        auto body = fmt::format(R"json({{"message":"{}"}})json", err_msg);
+        return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, std::move(body));
+    }
+
+    const auto & gc_mgr = server->tmt->getS3GCManager();
+    if (!gc_mgr)
+    {
+        auto body = fmt::format(R"json({{"message":"S3 GC Manager is not enabled"}})json");
+        return buildRespWithCode(HttpRequestStatus::InternalError, api_name, std::move(body));
+    }
+
+    auto log = Logger::get("HandleHttpRequestRemoteInfo");
+    try
+    {
+        auto details = gc_mgr->getS3StorageSummary(store_ids);
+        std::stringstream ss;
+        details.toJson()->stringify(ss);
+        auto json_str = ss.str();
+        return buildOkResp(api_name, std::move(json_str));
+    }
+    catch (...)
+    {
+        auto body = fmt::format(R"json({{"message":"Exception occurred when getting remote info"}})json");
+        tryLogCurrentWarningException(log);
+        return buildRespWithCode(HttpRequestStatus::InternalError, api_name, std::move(body));
+    }
+}
+
+// Parse Http query string_view into a map
+HttpQueryMap parseHttpQueryMap(std::string_view query)
+{
+    HttpQueryMap query_map;
+
+    if (query.empty())
+    {
+        return query_map;
+    }
+
+    size_t start = 0;
+    while (start < query.size())
+    {
+        // Find the next '&' to separate key-value pairs
+        size_t end = query.find('&', start);
+        if (end == std::string_view::npos)
+        {
+            end = query.size();
+        }
+
+        std::string_view pair = query.substr(start, end - start);
+        if (!pair.empty())
+        {
+            // Find '=' to separate key and value
+            size_t eq_pos = pair.find('=');
+            if (eq_pos != std::string_view::npos)
+            {
+                std::string_view key = pair.substr(0, eq_pos);
+                std::string_view value = pair.substr(eq_pos + 1);
+                query_map[key] = value;
+            }
+            else
+            {
+                // Handle case where there's a key without a value
+                query_map[pair] = std::string_view{};
+            }
+        }
+
+        start = end + 1;
+    }
+    return query_map;
+}
+
+RemoteCacheEvictRequest parseEvictRequest(
+    const std::string_view path,
+    const std::string_view api_name,
+    const std::string_view query)
+{
+    RemoteCacheEvictRequest req{
+        .evict_method = EvictMethod::ByFileType,
+        .evict_type = FileSegment::FileType::Unknown,
+        .reserve_size = 0,
+        .min_age = 0,
+        .force_evict = false,
+        .err_msg = "",
     };
+    // schema:
+    // - /tiflash/remote/cache/evict/{file_type_int}
+    // - /tiflash/remote/cache/evict/type/{file_type_int}
+    // - /tiflash/remote/cache/evict/size/{size_in_bytes}
+    auto trim_path = path.substr(api_name.size());
+    if (trim_path.empty() || trim_path[0] != '/')
+    {
+        req.err_msg = fmt::format("invalid remote cache evict request: {}", path);
+        return req;
+    }
+    trim_path.remove_prefix(1); // remove leading '/'
+
+    try
+    {
+        if (trim_path.starts_with("size/"))
+        {
+            trim_path.remove_prefix(5); // remove leading 'size/'
+            // reject negative size
+            if (trim_path.empty() || trim_path[0] == '-')
+            {
+                req.err_msg = fmt::format("invalid negative size in request: {}", path);
+                return req;
+            }
+            if (auto res = std::from_chars(trim_path.data(), trim_path.data() + trim_path.size(), req.reserve_size);
+                res.ec != std::errc())
+            {
+                req.err_msg = fmt::format("invalid size in request: {}", path);
+                return req;
+            }
+
+            req.evict_method = EvictMethod::ByEvictSize;
+
+            // parse query as map
+            auto query_map = parseHttpQueryMap(query);
+            // "age"
+            if (auto age_it = query_map.find("age"); age_it != query_map.end())
+            {
+                UInt64 min_age = 0;
+                if (auto res
+                    = std::from_chars(age_it->second.data(), age_it->second.data() + age_it->second.size(), min_age);
+                    res.ec == std::errc())
+                {
+                    req.min_age = min_age;
+                }
+                // else just keep min_age as default
+            }
+            // "force"
+            if (auto force_it = query_map.find("force"); force_it != query_map.end())
+            {
+                // any value other than "0" or "false" is considered as true
+                // if no value is provided, e.g. "xxx=yyy&force", then consider it as true
+                req.force_evict = !(force_it->second == "0" || force_it->second == "false");
+            }
+            return req;
+        }
+        else
+        {
+            if (trim_path.starts_with("type/"))
+            {
+                trim_path.remove_prefix(5); // remove leading 'type/'
+            }
+            UInt32 itype = 0;
+            if (auto res = std::from_chars(trim_path.data(), trim_path.data() + trim_path.size(), itype);
+                res.ec != std::errc())
+            {
+                req.err_msg = fmt::format("invalid file type in request: {}", path);
+                return req;
+            }
+            std::optional<FileSegment::FileType> opt_evict_until_type
+                = magic_enum::enum_cast<FileSegment::FileType>(itype);
+            if (!opt_evict_until_type.has_value())
+            {
+                req.err_msg = fmt::format("invalid file type enum value in request: {}", path);
+                return req;
+            }
+            // successfully parse the file type
+            req.evict_type = opt_evict_until_type.value();
+            req.evict_method = EvictMethod::ByFileType;
+            return req;
+        }
+    }
+    catch (...)
+    {
+        req.err_msg = fmt::format("invalid remote cache evict request: {}", path);
+    }
+    return req;
+}
+
+HttpRequestRes HandleHttpRequestRemoteCacheEvict(
+    EngineStoreServerWrap * server,
+    std::string_view path,
+    const std::string & api_name,
+    std::string_view query,
+    std::string_view)
+{
+    auto & global_ctx = server->tmt->getContext();
+    if (auto err_resp
+        = allowDisaggAPI(global_ctx, api_name, DisaggregatedMode::Compute, "can not trigger remote cache evict");
+        err_resp)
+    {
+        return err_resp.value();
+    }
+
+    auto log = Logger::get("HandleHttpRequestRemoteCacheEvict");
+    LOG_INFO(log, "handling remote cache evict request, path={} api_name={} query={}", path, api_name, query);
+    RemoteCacheEvictRequest req = parseEvictRequest(path, api_name, query);
+    if (!req.err_msg.empty())
+    {
+        auto body = fmt::format(R"json({{"message":"{}"}})json", req.err_msg);
+        LOG_INFO(log, "invalid remote cache evict request, req={}", req);
+        return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, std::move(body));
+    }
+
+    LOG_INFO(log, "handling remote cache evict request, req={}", req);
+    auto * file_cache = DB::FileCache::instance();
+    if (!file_cache)
+    {
+        auto body = fmt::format(R"json({{"message":"file cache is not enabled"}})json");
+        return buildRespWithCode(HttpRequestStatus::InternalError, api_name, std::move(body));
+    }
+
+    switch (req.evict_method)
+    {
+    case EvictMethod::ByFileType:
+    {
+        auto released_size = file_cache->evictByFileType(req.evict_type);
+        auto body = fmt::format(R"json({{"req":"{}","released_size":"{}"}})json", req, released_size);
+        return buildOkResp(api_name, std::move(body));
+    }
+    case EvictMethod::ByEvictSize:
+    {
+        size_t released_size = file_cache->evictBySize(req.reserve_size, req.min_age, req.force_evict);
+        auto body = fmt::format(R"json({{"req":"{}","released_size":"{}"}})json", req, released_size);
+        return buildOkResp(api_name, std::move(body));
+    }
+    }
+    __builtin_unreachable();
+}
+
+HttpRequestRes HandleHttpRequestRemoteCacheInfo(
+    EngineStoreServerWrap * server,
+    std::string_view /*path*/,
+    const std::string & api_name,
+    std::string_view,
+    std::string_view)
+{
+    auto & global_ctx = server->tmt->getContext();
+    if (auto err_resp
+        = allowDisaggAPI(global_ctx, api_name, DisaggregatedMode::Compute, "can not get remote cache info");
+        err_resp)
+    {
+        return err_resp.value();
+    }
+
+    auto * file_cache = DB::FileCache::instance();
+    if (!file_cache)
+    {
+        auto body = fmt::format(R"json({{"message":"file cache is not enabled"}})json");
+        return buildRespWithCode(HttpRequestStatus::InternalError, api_name, std::move(body));
+    }
+
+    auto log = Logger::get("HandleHttpRequestRemoteCacheInfo");
+    try
+    {
+        Poco::JSON::Array::Ptr list = new Poco::JSON::Array();
+        for (const auto & [file_type, histogram] : file_cache->getCacheSizeHistogram())
+        {
+            Poco::JSON::Object::Ptr type_info = new Poco::JSON::Object();
+            type_info->set("file_type", std::string(magic_enum::enum_name(file_type)));
+            type_info->set("file_type_int", static_cast<UInt64>(file_type));
+            type_info->set("histogram", histogram.toJson());
+            list->add(type_info);
+        }
+
+        std::stringstream ss;
+        list->stringify(ss);
+        auto json_str = ss.str();
+        LOG_INFO(log, "remote cache info: {}", json_str);
+        return buildOkResp(api_name, json_str);
+    }
+    catch (...)
+    {
+        tryLogCurrentWarningException(log, "failed to get remote cache info");
+        auto body = fmt::format(R"json({{"message":"failed to get remote cache info"}})json");
+        return buildRespWithCode(HttpRequestStatus::InternalError, api_name, std::move(body));
+    }
 }
 
 // Acquiring the all the region ids created in this TiFlash node with given keyspace id.
@@ -294,7 +687,6 @@ HttpRequestRes HandleHttpRequestSyncRegion(
     std::string_view,
     std::string_view)
 {
-    HttpRequestStatus status = HttpRequestStatus::Ok;
     pingcap::pd::KeyspaceID keyspace_id = NullspaceID;
     {
         auto log = Logger::get("HandleHttpRequestSyncRegion");
@@ -305,11 +697,8 @@ HttpRequestRes HandleHttpRequestSyncRegion(
         boost::split(query_parts, query, boost::is_any_of("/"));
         if (query_parts.size() != 2 || query_parts[0] != "keyspace")
         {
-            LOG_ERROR(log, "invalid SyncRegion request: {}", query);
-            status = HttpRequestStatus::ErrorParam;
-            return HttpRequestRes{
-                .status = status,
-                .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}}};
+            LOG_WARNING(log, "invalid SyncRegion request: {}", query);
+            return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, "");
         }
         try
         {
@@ -317,13 +706,9 @@ HttpRequestRes HandleHttpRequestSyncRegion(
         }
         catch (...)
         {
-            status = HttpRequestStatus::ErrorParam;
+            LOG_WARNING(log, "fail to parse keyspace_id, path={}", path);
+            return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, "");
         }
-        if (status != HttpRequestStatus::Ok)
-            return HttpRequestRes{
-                .status = status,
-                .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}},
-            };
     }
 
     auto & tmt = *server->tmt;
@@ -344,14 +729,7 @@ HttpRequestRes HandleHttpRequestSyncRegion(
     json->set("count", list->size());
     json->set("regions", list);
     json->stringify(ss);
-    auto * s = RawCppString::New(ss.str());
-    return HttpRequestRes{
-        .status = status,
-        .res = CppStrWithView{
-            .inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String),
-            .view = BaseBuffView{s->data(), s->size()},
-        },
-    };
+    return buildOkResp(api_name, ss.str());
 }
 
 // Acquiring load schema to sync schema from TiKV in this TiFlash node with given keyspace id.
@@ -362,21 +740,17 @@ HttpRequestRes HandleHttpRequestSyncSchema(
     std::string_view,
     std::string_view)
 {
-    pingcap::pd::KeyspaceID keyspace_id = NullspaceID;
-    TableID table_id = InvalidTableID;
-    HttpRequestStatus status = HttpRequestStatus::Ok;
     auto log = Logger::get("HandleHttpRequestSyncSchema");
 
     auto & global_context = server->tmt->getContext();
     // For compute node, simply return OK
     if (global_context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
-        return HttpRequestRes{
-            .status = status,
-            .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}},
-        };
+        return buildRespWithCode(HttpRequestStatus::Ok, api_name, "");
     }
 
+    pingcap::pd::KeyspaceID keyspace_id = NullspaceID;
+    TableID table_id = InvalidTableID;
     {
         LOG_TRACE(log, "handling sync schema request, path: {}, api_name: {}", path, api_name);
 
@@ -386,12 +760,8 @@ HttpRequestRes HandleHttpRequestSyncSchema(
         boost::split(query_parts, query, boost::is_any_of("/"));
         if (query_parts.size() != 4 || query_parts[0] != "keyspace" || query_parts[2] != "table")
         {
-            LOG_ERROR(log, "invalid SyncSchema request: {}", query);
-            status = HttpRequestStatus::ErrorParam;
-            return HttpRequestRes{
-                .status = HttpRequestStatus::ErrorParam,
-                .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}},
-            };
+            LOG_WARNING(log, "invalid SyncSchema request: {}", query);
+            return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, "");
         }
 
         try
@@ -401,15 +771,9 @@ HttpRequestRes HandleHttpRequestSyncSchema(
         }
         catch (...)
         {
-            status = HttpRequestStatus::ErrorParam;
+            LOG_WARNING(log, "fail to parse keyspace_id or table_id, path={}", path);
+            return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, "");
         }
-
-        if (status != HttpRequestStatus::Ok)
-            return HttpRequestRes{
-                .status = status,
-                .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0},
-                },
-            };
     }
 
     std::string err_msg;
@@ -439,20 +803,10 @@ HttpRequestRes HandleHttpRequestSyncSchema(
         std::stringstream ss;
         json->stringify(ss);
 
-        auto * s = RawCppString::New(ss.str());
-        return HttpRequestRes{
-            .status = HttpRequestStatus::ErrorParam,
-            .res = CppStrWithView{
-                .inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String),
-                .view = BaseBuffView{s->data(), s->size()},
-            },
-        };
+        return buildRespWithCode(HttpRequestStatus::InternalError, api_name, ss.str());
     }
 
-    return HttpRequestRes{
-        .status = status,
-        .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}},
-    };
+    return buildOkResp(api_name, "");
 }
 
 using HANDLE_HTTP_URI_METHOD = HttpRequestRes (*)(
@@ -462,24 +816,37 @@ using HANDLE_HTTP_URI_METHOD = HttpRequestRes (*)(
     std::string_view,
     std::string_view);
 
+// A registry of available HTTP URI prefix (API name) and their handler methods.
 static const std::map<std::string, HANDLE_HTTP_URI_METHOD> AVAILABLE_HTTP_URI = {
     {"/tiflash/sync-status/", HandleHttpRequestSyncStatus},
     {"/tiflash/sync-region/", HandleHttpRequestSyncRegion},
     {"/tiflash/sync-schema/", HandleHttpRequestSyncSchema},
+
+    // ==== liveness, readiness APIs ==== //
+    // ==== TiUP/tidb-operator rely on following APIs ==== //
+    // Old API kept for compatibility
     {"/tiflash/store-status", HandleHttpRequestStoreStatus},
+    // liveness. Check whether the tiflash node is alive
+    {"/tiflash/livez", HandleHttpRequestLivez},
+    // readiness. Check whether the tiflash node is ready for serving requests
+    {"/tiflash/readyz", HandleHttpRequestReadyz},
+
     {"/tiflash/remote/owner/info", HandleHttpRequestRemoteOwnerInfo},
     {"/tiflash/remote/owner/resign", HandleHttpRequestRemoteOwnerResign},
     {"/tiflash/remote/gc", HandleHttpRequestRemoteGC},
     {"/tiflash/remote/upload", HandleHttpRequestRemoteReUpload},
+    {"/tiflash/remote/info", HandleHttpRequestRemoteInfo},
+    {"/tiflash/remote/cache/evict", HandleHttpRequestRemoteCacheEvict},
+    {"/tiflash/remote/cache/info", HandleHttpRequestRemoteCacheInfo},
 };
 
 uint8_t CheckHttpUriAvailable(BaseBuffView path_)
 {
     std::string_view path(path_.data, path_.len);
-    for (const auto & [str, method] : AVAILABLE_HTTP_URI)
+    for (const auto & [api_name, method] : AVAILABLE_HTTP_URI)
     {
         std::ignore = method;
-        if (path.size() >= str.size() && path.substr(0, str.size()) == str)
+        if (path.size() >= api_name.size() && path.substr(0, api_name.size()) == api_name)
             return true;
     }
     return false;
@@ -499,15 +866,13 @@ HttpRequestRes HandleHttpRequest(
             return method(
                 server,
                 path,
-                str,
-                std::string_view(query.data, query.len),
-                std::string_view(body.data, body.len));
+                /*api_name=*/str,
+                /*query=*/std::string_view(query.data, query.len),
+                /*body=*/std::string_view(body.data, body.len));
         }
     }
-    return HttpRequestRes{
-        .status = HttpRequestStatus::ErrorParam,
-        .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}},
-    };
+    // Not found handler for this URI
+    return buildRespWithCode(HttpRequestStatus::NotFound, "", "");
 }
 
 } // namespace DB

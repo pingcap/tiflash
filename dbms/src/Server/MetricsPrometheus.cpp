@@ -19,6 +19,7 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/TiFlashSecurity.h>
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
@@ -62,16 +63,18 @@ std::string getInstanceValue(const Poco::Util::AbstractConfiguration & conf)
         if (service_addr.empty())
             return getHostName();
         // "0.0.0.0", "127.x.x.x", "localhost", "0:0:0:0:0:0:0:0", "0:0:0:0:0:0:0:1", "::", "::1", ":${port}"
-        static const std::vector<std::string> blacklist{// ivp4
-                                                        "0.0.0.0",
-                                                        "127.",
-                                                        "localhost",
-                                                        // ipv6
-                                                        "0:0:0:0:0:0:0",
-                                                        "[0:0:0:0:0:0:0",
-                                                        ":",
-                                                        "[:"};
-        for (const auto & prefix : blacklist)
+        static const std::vector<std::string> blocklist{
+            // ipv4
+            "0.0.0.0",
+            "127.",
+            "localhost",
+            // ipv6
+            "0:0:0:0:0:0:0",
+            "[0:0:0:0:0:0:0",
+            ":",
+            "[:",
+        };
+        for (const auto & prefix : blocklist)
         {
             if (startsWith(service_addr, prefix))
                 return getHostName();
@@ -164,11 +167,11 @@ std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
         key_path,
         cert_path,
         ca_path,
-#if SERVERLESS_PROXY == 0
-        Poco::Net::Context::VerificationMode::VERIFY_STRICT
-#else
+#if ENABLE_NEXT_GEN
         // mtls: metrics server allows anonymous pullers @iosmanthus
         Poco::Net::Context::VerificationMode::VERIFY_RELAXED
+#else
+        Poco::Net::Context::VerificationMode::VERIFY_STRICT
 #endif
     );
 

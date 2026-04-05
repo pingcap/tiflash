@@ -49,7 +49,7 @@ try
     context.context->getSettingsRef().enable_hash_join_v2 = false;
     context.addMockDeltaMerge(
         {"test_db", "left_table"},
-        {{"col0", TiDB::TP::TypeLongLong}, {"k1", TiDB::TP::TypeLong}, {"k2", TiDB::TP::TypeLong}},
+        {{"col0", TiDB::TP::TypeLongLong, false}, {"k1", TiDB::TP::TypeLong}, {"k2", TiDB::TP::TypeLong}},
         {toVec<Int64>("col0", {0, 1, 2}), toNullableVec<Int32>("k1", {1, 2, 3}), toNullableVec<Int32>("k2", {1, 2, 3})},
         concurrency);
 

@@ -1,0 +1,58 @@
+# Copyright 2025 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+tcp_port = 9000
+
+[flash]
+disaggregated_mode = "tiflash_write"
+service_addr = "0.0.0.0:3930"
+[flash.proxy]
+addr = "0.0.0.0:20170"
+advertise-addr = "tiflash-wn0:20170"
+engine-addr = "tiflash-wn0:3930"
+status-addr = "0.0.0.0:20292"
+advertise-status-addr = "tiflash-wn0:20292"
+data-dir = "/data/tiflash/flash"
+config = "/tiflash_tikv.toml"
+
+[storage]
+# Enable keyspace for next-gen
+api_version = 2
+
+[storage.main]
+dir = ["/data/tiflash"]
+capacity = [5368709120]
+
+# object storage for next-gen
+[storage.s3]
+endpoint = "http://minio0:9000"
+access_key_id = "minioadmin"
+secret_access_key = "minioadmin"
+bucket = "tiflash-test"
+root = "/tiflash"
+
+[raft]
+pd_addr = "pd0:2379"
+
+[logger]
+level = "debug"
+size = "1000M"
+log = "/log/tiflash.log"
+errorlog = "/log/tiflash_error.log"
+count = 10
+
+[profiles]
+[profiles.default]
+remote_gc_interval_seconds = 60
+remote_gc_method = 2

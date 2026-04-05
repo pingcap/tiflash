@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/7f4043a3ed631d17213e92f832622bf5587696ed/src/Common/ThreadPool.cpp
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -350,7 +352,9 @@ void ThreadPoolImpl<Thread>::worker(typename std::list<Thread>::iterator thread_
             std::lock_guard lock(mutex);
             --scheduled_jobs;
 
-            if (threads.size() > scheduled_jobs + max_free_threads)
+            // If shutdown is called, let the `finalize` clear all threads
+            // Otherwise reduce the allocated threads number according to the running jobs and `max_free_threads`
+            if (!shutdown && threads.size() > scheduled_jobs + max_free_threads)
             {
                 thread_it->detach();
                 threads.erase(thread_it);

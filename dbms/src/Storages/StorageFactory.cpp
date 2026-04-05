@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Storages/StorageFactory.cpp
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -51,7 +53,7 @@ void StorageFactory::registerStorage(const std::string & name, Creator creator)
 {
     RUNTIME_CHECK_MSG(
         storages.emplace(name, std::move(creator)).second,
-        "TableFunctionFactory: the table function name '{}' is not unique",
+        "StorageFactory: the Storage name '{}' is not unique",
         name);
 }
 

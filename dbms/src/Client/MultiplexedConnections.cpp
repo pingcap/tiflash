@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Client/MultiplexedConnections.cpp
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -71,34 +73,11 @@ MultiplexedConnections::MultiplexedConnections(
         block_extra_info = std::make_unique<BlockExtraInfo>();
 }
 
-void MultiplexedConnections::sendExternalTablesData(std::vector<ExternalTablesData> & data)
-{
-    std::lock_guard lock(cancel_mutex);
-
-    if (!sent_query)
-        throw Exception("Cannot send external tables data: query not yet sent.", ErrorCodes::LOGICAL_ERROR);
-
-    if (data.size() != active_connection_count)
-        throw Exception("Mismatch between replicas and data sources", ErrorCodes::MISMATCH_REPLICAS_DATA_SOURCES);
-
-    auto it = data.begin();
-    for (ReplicaState & state : replica_states)
-    {
-        Connection * connection = state.connection;
-        if (connection != nullptr)
-        {
-            connection->sendExternalTablesData(*it);
-            ++it;
-        }
-    }
-}
-
 void MultiplexedConnections::sendQuery(
     const String & query,
     const String & query_id,
     UInt64 stage,
-    const ClientInfo * client_info,
-    bool with_pending_data)
+    const ClientInfo * client_info)
 {
     std::lock_guard lock(cancel_mutex);
 
@@ -115,7 +94,7 @@ void MultiplexedConnections::sendQuery(
             if (connection == nullptr)
                 throw Exception("MultiplexedConnections: Internal error", ErrorCodes::LOGICAL_ERROR);
 
-            connection->sendQuery(query, query_id, stage, &query_settings, client_info, with_pending_data);
+            connection->sendQuery(query, query_id, stage, &query_settings, client_info);
         }
     }
     else
@@ -124,7 +103,7 @@ void MultiplexedConnections::sendQuery(
         if (connection == nullptr)
             throw Exception("MultiplexedConnections: Internal error", ErrorCodes::LOGICAL_ERROR);
 
-        connection->sendQuery(query, query_id, stage, &settings, client_info, with_pending_data);
+        connection->sendQuery(query, query_id, stage, &settings, client_info);
     }
 
     sent_query = true;

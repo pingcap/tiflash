@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Storages/KVStore/Read/RegionException.h>
+#include <Storages/KVStore/Region_fwd.h>
 #include <Storages/KVStore/Types.h>
 
 #include <boost/noncopyable.hpp>
@@ -28,8 +28,6 @@ class LockInfo;
 namespace DB
 {
 
-class Region;
-using RegionPtr = std::shared_ptr<Region>;
 
 class RegionRangeKeys;
 using ImutRegionRangePtr = std::shared_ptr<const RegionRangeKeys>;
@@ -48,7 +46,7 @@ struct RaftCommandResult : private boost::noncopyable
     bool sync_log;
 
     Type type = Type::Default;
-    std::vector<RegionPtr> split_regions{};
+    Regions split_regions{};
     ImutRegionRangePtr ori_region_range;
     RegionID source_region_id;
 };

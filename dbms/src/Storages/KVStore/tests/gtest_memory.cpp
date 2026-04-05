@@ -15,10 +15,12 @@
 #include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
 #include <Debug/MockKVStore/MockSSTGenerator.h>
+#include <Debug/MockKVStore/MockUtils.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgTools.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
 #include <Storages/KVStore/Decode/RegionDataRead.h>
+#include <Storages/KVStore/MultiRaft/ApplySnapshot.h>
 #include <Storages/KVStore/Read/LearnerRead.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
@@ -110,7 +112,7 @@ try
         ASSERT_EQ(kvs.debug_memory_limit_warning_count, 1);
     }
     {
-        // lock with largetxn
+        // lock with large txn
         root_of_kvstore_mem_trackers->reset();
         RegionID region_id = 4300;
         auto [start, end] = getStartEnd(region_id);
@@ -122,7 +124,7 @@ try
         auto kvr2 = kvs.getRegion(4200);
         auto kvr3 = kvs.getRegion(region_id);
         ASSERT_NE(kvr3, nullptr);
-        std::string shor_value = "value";
+        std::string short_value = "value";
         auto lock_for_update_ts = 7777, txn_size = 1;
         const std::vector<std::string> & async_commit = {"s1", "s2"};
         const std::vector<uint64_t> & rollback = {3, 4};
@@ -131,7 +133,7 @@ try
             "primary key",
             421321,
             std::numeric_limits<UInt64>::max(),
-            &shor_value,
+            &short_value,
             66666,
             lock_for_update_ts,
             txn_size,
@@ -155,7 +157,7 @@ try
         // insert & remove
         root_of_kvstore_mem_trackers->reset();
         RegionID region_id = 5000;
-        auto originTableSize = region_table.getTableRegionSize(NullspaceID, table_id);
+        auto origin_table_size = region_table.getTableRegionSize(NullspaceID, table_id);
         auto [start, end] = getStartEnd(region_id);
         auto str_key = pickKey(region_id, 1);
         auto [str_val_write, str_val_default] = pickWriteDefault(region_id, 1);
@@ -165,12 +167,12 @@ try
         region->insertFromSnap(tmt, "default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
         auto delta = str_key.dataSize() + str_val_default.size();
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), delta);
-        ASSERT_EQ(region_table.getTableRegionSize(NullspaceID, table_id), originTableSize + delta);
+        ASSERT_EQ(region_table.getTableRegionSize(NullspaceID, table_id), origin_table_size + delta);
         region->removeDebug("default", TiKVKey::copyFrom(str_key));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
         ASSERT_EQ(region->dataSize(), root_of_kvstore_mem_trackers->get());
         ASSERT_EQ(region->dataSize(), region->getData().totalSize());
-        ASSERT_EQ(region_table.getTableRegionSize(NullspaceID, table_id), originTableSize);
+        ASSERT_EQ(region_table.getTableRegionSize(NullspaceID, table_id), origin_table_size);
         ASSERT_EQ(kvs.debug_memory_limit_warning_count, 1);
     }
     ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
@@ -278,11 +280,8 @@ try
         auto new_region = splitRegion(
             region,
             RegionMeta(
-                createPeer(region_id + 1, true),
-                createRegionInfo(
-                    region_id2,
-                    RecordKVFormat::genKey(table_id, 12050),
-                    RecordKVFormat::genKey(table_id, 12099)),
+                RegionBench::createPeer(region_id + 1, true),
+                RegionBench::createMetaRegion(region_id2, table_id, 12050, 12099),
                 initialApplyState()));
         ASSERT_EQ(original_size, region_table.getTableRegionSize(NullspaceID, table_id));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
@@ -325,11 +324,8 @@ try
         auto new_region = splitRegion(
             region,
             RegionMeta(
-                createPeer(region_id + 1, true),
-                createRegionInfo(
-                    region_id2,
-                    RecordKVFormat::genKey(table_id, 13150),
-                    RecordKVFormat::genKey(table_id, 13199)),
+                RegionBench::createPeer(region_id + 1, true),
+                RegionBench::createMetaRegion(region_id2, table_id, 13150, 13199),
                 initialApplyState()));
         ASSERT_EQ(original_size, region_table.getTableRegionSize(NullspaceID, table_id));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
@@ -550,7 +546,13 @@ std::tuple<RegionPtr, PrehandleResult> genPreHandlingRegion(
     TMTContext & tmt)
 {
     UInt64 peer_id = 100000 + region_id; // gen a fake peer_id
-    auto meta = RegionBench::createMetaRegion(table_id, region_id, start, end, peer_id);
+    auto meta = RegionBench::createMetaRegion(
+        region_id,
+        table_id,
+        start,
+        end,
+        /*maybe_epoch=*/std::nullopt,
+        /*maybe_peers=*/std::vector<metapb::Peer>{RegionBench::createPeer(peer_id, true)});
     auto new_region = kvs.genRegionPtr(
         std::move(meta),
         peer_id,

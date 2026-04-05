@@ -20,7 +20,6 @@
 #include <Storages/RegionQueryInfo_fwd.h>
 
 #include <unordered_map>
-#include <vector>
 
 
 namespace DB

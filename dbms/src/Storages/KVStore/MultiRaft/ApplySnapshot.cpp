@@ -20,6 +20,7 @@
 #include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/MultiRaft/ApplySnapshot.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointIngestInfo.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerContext.h>
 #include <Storages/KVStore/Region.h>
@@ -42,6 +43,18 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 extern const int TABLE_IS_DROPPED;
 } // namespace ErrorCodes
+
+RegionPtrWithSnapshotFiles::RegionPtrWithSnapshotFiles(
+    const Base & base_,
+    std::vector<DM::ExternalDTFileInfo> && external_files_)
+    : base(base_)
+    , external_files(std::move(external_files_))
+{}
+
+RegionPtrWithCheckpointInfo::RegionPtrWithCheckpointInfo(const Base & base_, CheckpointIngestInfoPtr checkpoint_info_)
+    : base(base_)
+    , checkpoint_info(std::move(checkpoint_info_))
+{}
 
 template <typename RegionPtrWrap>
 void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, TMTContext & tmt)
@@ -89,7 +102,7 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
 
     {
         const auto & new_range = new_region->getRange();
-        auto task_lock = genTaskLock();
+        auto task_lock = genTaskLock(); // m1
         auto region_map = getRegionsByRangeOverlap(new_range->comparableKeys());
         for (const auto & overlapped_region : region_map)
         {
@@ -217,14 +230,16 @@ void KVStore::onSnapshot(
                     new_region_wrap->getRange(),
                     table_id,
                     storage->isCommonHandle(),
-                    storage->getRowKeyColumnSize());
+                    storage->getRowKeyColumnSize(),
+                    fmt::format("new_region_id={} KVStore::onSnapshot", region_id));
                 if (old_region)
                 {
                     auto old_key_range = DM::RowKeyRange::fromRegionRange(
                         old_region->getRange(),
                         table_id,
                         storage->isCommonHandle(),
-                        storage->getRowKeyColumnSize());
+                        storage->getRowKeyColumnSize(),
+                        fmt::format("old_region_id={} KVStore::onSnapshot", region_id));
                     if (old_key_range != new_key_range)
                     {
                         LOG_INFO(

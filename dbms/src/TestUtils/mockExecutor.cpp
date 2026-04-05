@@ -851,7 +851,10 @@ void MockDAGRequestContext::assertMockInput(
 {
     assert(columnInfos.size() == columns.size());
     for (size_t i = 0; i < columns.size(); ++i)
+    {
         assert(columnInfos[i].name == columns[i].name);
+        assert(columnInfos[i].nullable == columns[i].type->isNullable());
+    }
 }
 
 } // namespace DB::tests

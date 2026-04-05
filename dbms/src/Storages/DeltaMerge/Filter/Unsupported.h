@@ -34,9 +34,22 @@ public:
 
     String toDebugString() override { return fmt::format(R"({{"op":"{}","reason":"{}"}})", name(), reason); }
 
+    Poco::JSON::Object::Ptr toJSONObject() override
+    {
+        Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+        obj->set("op", name());
+        obj->set("reason", reason);
+        return obj;
+    }
+
     RSResults roughCheck(size_t /*start_pack*/, size_t pack_count, const RSCheckParam & /*param*/) override
     {
         return RSResults(pack_count, RSResult::Some);
+    }
+
+    ColumnRangePtr buildSets(const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> &) override
+    {
+        return UnsupportedColumnRange::create();
     }
 };
 

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #pragma once
+#include <Core/TiFlashDisaggregatedMode.h>
 #include <Core/Types.h>
 #include <Storages/KVStore/Types.h>
 #include <common/logger_useful.h>
@@ -59,7 +60,7 @@ public:
 
     std::unordered_map<KeyspaceID, UInt64> getKeyspaceUsedSizes();
 
-    FsStats getFsStats(bool finalize_capacity = true);
+    FsStats getFsStats(DisaggregatedMode disagg_mode, bool finalize_capacity = true);
 
     virtual std::map<FSID, DiskCapacity> getDiskStats();
 

@@ -25,6 +25,7 @@
 #include <Storages/KVStore/MultiRaft/PreHandlingTrace.h>
 #include <Storages/KVStore/MultiRaft/RegionManager.h>
 #include <Storages/KVStore/MultiRaft/RegionRangeKeys.h>
+#include <Storages/KVStore/Region_fwd.h>
 #include <Storages/KVStore/StorageEngineType.h>
 
 #include <magic_enum.hpp>
@@ -54,8 +55,6 @@ class KVStore;
 using KVStorePtr = std::shared_ptr<KVStore>;
 
 class RegionTable;
-class Region;
-using RegionPtr = std::shared_ptr<Region>;
 struct RaftCommandResult;
 class KVStoreTaskLock;
 
@@ -77,8 +76,6 @@ class ReadIndexStressTest;
 struct FileUsageStatistics;
 class PathPool;
 class RegionPersister;
-struct CheckpointInfo;
-using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
 struct CheckpointIngestInfo;
 using CheckpointIngestInfoPtr = std::shared_ptr<CheckpointIngestInfo>;
 class UniversalPageStorage;
@@ -114,7 +111,10 @@ static_assert(magic_enum::enum_count<PersistRegionReason>() == sizeof(PersistReg
 struct ProxyConfigSummary
 {
     bool valid = false;
+    // The max concurrency of PreHandleSnapshot tasks in proxy.
     size_t snap_handle_pool_size = 0;
+    // The max concurrency of IngestSST tasks in proxy.
+    size_t apply_low_priority_pool_size = 0;
     std::string engine_addr;
 };
 
@@ -145,7 +145,7 @@ public:
     metapb::Store & debugMutStoreMeta();
     FileUsageStatistics getFileUsageStatistics() const;
     // Proxy will validate and refit the config items from the toml file.
-    const ProxyConfigSummary & getProxyConfigSummay() const { return proxy_config_summary; }
+    const ProxyConfigSummary & getProxyConfigSummary() const { return proxy_config_summary; }
     void reportThreadAllocInfo(std::string_view, ReportThreadAllocateInfoType type, uint64_t value) const;
     static void reportThreadAllocBatch(std::string_view, ReportThreadAllocateInfoBatch data);
     JointThreadInfoJeallocMapPtr getJointThreadInfoJeallocMap() const { return joint_memory_allocation_map; }
@@ -247,8 +247,8 @@ public: // Raft Snapshot
     size_t getOngoingPrehandleTaskCount() const;
     size_t getOngoingPrehandleSubtaskCount() const;
     EngineStoreApplyRes handleIngestSST(UInt64 region_id, SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
-    size_t getMaxParallelPrehandleSize() const;
-    size_t getMaxPrehandleSubtaskSize() const;
+    size_t getMaxParallelPrehandleSize(DM::FileConvertJobType job_type) const;
+    size_t getMaxPrehandleSubtaskSize(DM::FileConvertJobType job_type) const;
 
 public: // Raft Read
     void addReadIndexEvent(Int64 f) { read_index_event_flag += f; }

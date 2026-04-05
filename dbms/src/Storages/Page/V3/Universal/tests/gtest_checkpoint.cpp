@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/SyncPoint/SyncPoint.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <Flash/Disaggregated/MockS3LockClient.h>
 #include <IO/BaseFile/PosixRandomAccessFile.h>
 #include <IO/Buffer/ReadBufferFromFile.h>
@@ -31,7 +32,6 @@
 #include <Storages/S3/S3RandomAccessFile.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/CreateBucketRequest.h>
 
@@ -87,7 +87,7 @@ public:
         // Currently there is no compression, so reading data is rather easy.
 
         auto buf = ReadBufferFromFile(dir + *location.data_file_id);
-        buf.seek(location.offset_in_file);
+        RUNTIME_CHECK(buf.seek(location.offset_in_file) >= 0);
         auto n = buf.readBig(ret.data(), location.size_in_file);
         RUNTIME_CHECK(n == location.size_in_file);
 
@@ -1002,7 +1002,7 @@ protected:
 
         auto data_file = S3::S3RandomAccessFile::create(data_file_key);
         ReadBufferFromRandomAccessFile buf(data_file);
-        buf.seek(location.offset_in_file);
+        RUNTIME_CHECK(buf.seek(location.offset_in_file) >= 0);
         auto n = buf.readBig(ret.data(), location.size_in_file);
         RUNTIME_CHECK(n == location.size_in_file);
 
@@ -1210,7 +1210,7 @@ try
     // Check that data_location are restored from S3 latest manifest
     {
         auto & restored_page_directory = new_service->uni_page_storage->page_directory;
-        auto snap = restored_page_directory->createSnapshot("");
+        auto snap = restored_page_directory->createSnapshot(SnapshotType::General, "");
         // page_id "2" is deleted
         EXPECT_EQ(restored_page_directory->numPages(), 8)
             << fmt::format("{}", restored_page_directory->getAllPageIds());

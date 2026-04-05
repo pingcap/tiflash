@@ -75,7 +75,7 @@ public:
     void submitToIOTaskThreadPool(TaskPtr && task);
     void submitToIOTaskThreadPool(std::vector<TaskPtr> & tasks);
 
-    void cancel(const String & query_id, const String & resource_group_name);
+    void cancel(const TaskCancelInfo & cancel_info);
 
     static std::unique_ptr<TaskScheduler> instance;
 

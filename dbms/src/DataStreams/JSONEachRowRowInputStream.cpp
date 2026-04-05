@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/DataStreams/JSONEachRowRowInputStream.cpp
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,6 +16,8 @@
 
 #include <DataStreams/JSONEachRowRowInputStream.h>
 #include <IO/ReadHelpers.h>
+
+#include <vector>
 
 
 namespace DB
@@ -98,8 +102,7 @@ bool JSONEachRowRowInputStream::read(MutableColumns & columns)
 
     /// Set of columns for which the values were read. The rest will be filled with default values.
     /// TODO Ability to provide your DEFAULTs.
-    bool read_columns[num_columns];
-    memset(read_columns, 0, num_columns);
+    BoolVec read_columns(num_columns, false);
 
     bool first = true;
     while (true)

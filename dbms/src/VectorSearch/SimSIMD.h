@@ -25,18 +25,15 @@
 #define SIMSIMD_DYNAMIC_DISPATCH 0
 
 // Force enable all target features. We will do our own dynamic dispatch.
-#if defined(__APPLE__)
-#define SIMSIMD_TARGET_NEON 0
-#define SIMSIMD_TARGET_SVE 0
-#else
-#define SIMSIMD_TARGET_NEON 1
 #define SIMSIMD_TARGET_SVE 1
-#endif
+#define SIMSIMD_TARGET_NEON 1
 #define SIMSIMD_TARGET_HASWELL 1
 #define SIMSIMD_TARGET_SKYLAKE 1
 #define SIMSIMD_TARGET_ICE 1
 #define SIMSIMD_TARGET_GENOA 0
 #define SIMSIMD_TARGET_SAPPHIRE 0
+#define SIMSIMD_TARGET_TURIN 0
+#define SIMSIMD_TARGET_SIERRA 0
 #include <simsimd/simsimd.h>
 
 namespace simsimd_details

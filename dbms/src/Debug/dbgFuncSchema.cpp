@@ -23,6 +23,7 @@
 #include <Parsers/ParserCreateQuery.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/TiKVHelpers/PDTiKVClient.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <TiDB/Schema/SchemaSyncer.h>

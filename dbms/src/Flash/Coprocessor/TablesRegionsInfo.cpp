@@ -18,7 +18,9 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/TiKVHelpers/PDTiKVClient.h>
 
 namespace DB
 {

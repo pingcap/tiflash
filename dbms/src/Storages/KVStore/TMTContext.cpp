@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Disaggregated/S3LockClient.h>
+#include <Flash/Mpp/CTEManager.h>
 #include <Flash/Mpp/MPPHandler.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Mpp/MinTSOScheduler.h>
@@ -22,6 +23,7 @@
 #include <Storages/KVStore/BackgroundService.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/MultiRaft/RegionExecutionResult.h>
+#include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3GCManager.h>
@@ -35,8 +37,11 @@
 #include <pingcap/pd/MockPDClient.h>
 
 #include <magic_enum.hpp>
-#include <memory>
 
+namespace DB::FailPoints
+{
+extern const char force_return_store_status[];
+} // namespace DB::FailPoints
 namespace DB
 {
 
@@ -150,6 +155,7 @@ TMTContext::TMTContext(
           context.getSettingsRef().task_scheduler_thread_soft_limit,
           context.getSettingsRef().task_scheduler_thread_hard_limit,
           context.getSettingsRef().task_scheduler_active_set_soft_limit)))
+    , cte_manager(std::make_unique<CTEManager>())
     , raftproxy_config(raft_config)
 {
     startMonitorMPPTaskThread(mpp_task_manager);
@@ -161,15 +167,13 @@ void TMTContext::initS3GCManager(const TiFlashRaftProxyHelper * proxy_helper)
     if (S3::ClientFactory::instance().isEnabled() && !context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
         kvstore->fetchProxyConfig(proxy_helper);
-        if (kvstore->getProxyConfigSummay().valid)
+        if (kvstore->getProxyConfigSummary().valid)
         {
-            LOG_INFO(
-                Logger::get(),
-                "Build s3gc manager from proxy's conf engine_addr={}",
-                kvstore->getProxyConfigSummay().engine_addr);
+            auto engine_addr = kvstore->getProxyConfigSummary().engine_addr;
+            LOG_INFO(Logger::get(), "Build s3gc manager from proxy's conf engine_addr={}", engine_addr);
             s3gc_owner = OwnerManager::createS3GCOwner(
                 context,
-                /*id*/ kvstore->getProxyConfigSummay().engine_addr,
+                /*id*/ engine_addr,
                 etcd_client);
         }
         else if (!raftproxy_config.pd_addrs.empty())
@@ -218,6 +222,7 @@ void TMTContext::initS3GCManager(const TiFlashRaftProxyHelper * proxy_helper)
         }
         // TODO: make it reloadable
         remote_gc_config.interval_seconds = context.getSettingsRef().remote_gc_interval_seconds;
+        remote_gc_config.summary_interval_seconds = context.getSettingsRef().remote_summary_interval_seconds;
         remote_gc_config.verify_locks = context.getSettingsRef().remote_gc_verify_consistency > 0;
         // set the gc_method so that S3LockService can set tagging when create delmark
         S3::ClientFactory::instance().gc_method = remote_gc_config.method;
@@ -268,6 +273,7 @@ void TMTContext::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * pr
 
 void TMTContext::shutdown()
 {
+    LOG_INFO(Logger::get(), "TMTContext shutting down");
     if (mpp_task_manager)
     {
         // notify end to the thread "MPPTask-Moniter"
@@ -280,24 +286,40 @@ void TMTContext::shutdown()
         // let client retry
         s3gc_owner->cancel();
         s3gc_owner = nullptr;
+        LOG_INFO(Logger::get(), "S3GCOwnerManager shutdown complete");
     }
 
     if (s3gc_manager)
     {
         s3gc_manager->shutdown();
         s3gc_manager = nullptr;
+        LOG_INFO(Logger::get(), "S3GCManager shutdown complete");
     }
 
     if (s3lock_client)
     {
         s3lock_client = nullptr;
+        LOG_INFO(Logger::get(), "S3LockClient shutdown complete");
     }
 
     if (background_service)
     {
         background_service->shutdown();
+        // background_service = nullptr;
+        LOG_INFO(Logger::get(), "BackgroundService shutdown complete");
+    }
+    LOG_INFO(Logger::get(), "TMTContext shutdown complete");
+}
+
+void TMTContext::shutdownStorageGc()
+{
+    LOG_INFO(Logger::get(), "TMTContext shutting down storage gc");
+    if (background_service)
+    {
+        background_service->shutdownStorageGc();
         background_service = nullptr;
     }
+    LOG_INFO(Logger::get(), "TMTContext shutdown storage gc complete");
 }
 
 KVStorePtr & TMTContext::getKVStore()
@@ -367,6 +389,13 @@ void TMTContext::setStatusRunning()
 
 TMTContext::StoreStatus TMTContext::getStoreStatus(std::memory_order memory_order) const
 {
+    fiu_do_on(FailPoints::force_return_store_status, {
+        if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_return_store_status); v)
+        {
+            auto hack_status = std::any_cast<StoreStatus>(*v);
+            return hack_status;
+        }
+    });
     return store_status.load(memory_order);
 }
 
@@ -389,6 +418,11 @@ const OwnerManagerPtr & TMTContext::getS3GCOwnerManager() const
 MPPTaskManagerPtr TMTContext::getMPPTaskManager()
 {
     return mpp_task_manager;
+}
+
+CTEManager * TMTContext::getCTEManager()
+{
+    return this->cte_manager.get();
 }
 
 const std::unordered_set<std::string> & TMTContext::getIgnoreDatabases() const

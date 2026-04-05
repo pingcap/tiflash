@@ -14,6 +14,7 @@
 
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Storages/KVStore/TiKVHelpers/PDTiKVClient.h>
 #include <TiDB/Schema/SchemaBuilder.h>
 #include <TiDB/Schema/SchemaGetter.h>
@@ -30,9 +31,11 @@ namespace FailPoints
 {
 extern const char force_schema_sync_diff_fail[];
 }
+// Create a SchemaGetter for the given keyspace_id. This will acquire a tso from PD
+// as a snapshot for reading schema info from TiKV.
 template <bool mock_getter, bool mock_mapper>
-typename TiDBSchemaSyncer<mock_getter, mock_mapper>::Getter TiDBSchemaSyncer<mock_getter, mock_mapper>::
-    createSchemaGetter(KeyspaceID keyspace_id)
+typename TiDBSchemaSyncer<mock_getter, mock_mapper>::Getter //
+TiDBSchemaSyncer<mock_getter, mock_mapper>::createSchemaGetter(KeyspaceID keyspace_id)
 {
     if constexpr (mock_getter)
     {
@@ -65,10 +68,11 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemasByGetter(Context & c
         GET_METRIC(tiflash_sync_schema_applying).Decrement();
     });
 
-    const Int64 version = getter.getVersion();
-    if (version == SchemaGetter::SchemaVersionNotExist)
+    // The latest schema version fetch from TiKV
+    const Int64 latest_version = getter.getVersion();
+    if (latest_version == SchemaGetter::SchemaVersionNotExist)
     {
-        // Tables and databases are already tombstoned and waiting for GC.
+        // Tables and databases are already tombstone and waiting for GC.
         if (cur_version == SchemaGetter::SchemaVersionNotExist)
         {
             return false;
@@ -84,13 +88,13 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemasByGetter(Context & c
     }
     else
     {
-#if SERVERLESS_PROXY == 0
-        if (version <= cur_version)
+#if ENABLE_NEXT_GEN == 0
+        if (latest_version <= cur_version)
         {
             return false;
         }
 #else
-        if (version == cur_version)
+        if (latest_version == cur_version)
         {
             return false;
         }
@@ -100,24 +104,25 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemasByGetter(Context & c
             log,
             "Start to sync schemas. current version is: {} and try to sync schema version to: {}",
             cur_version,
-            version);
+            latest_version);
 
         if (cur_version <= 0)
         {
             // first load all db and tables
-            cur_version = syncAllSchemas(context, getter, version);
+            cur_version = syncAllSchemas(context, getter, latest_version);
         }
-#if SERVERLESS_PROXY == 1
+#if ENABLE_NEXT_GEN
         // if the `version` is less than `cur_version`, it means that the schema version in TiKV has been rolled back by restore.
         // We should sync the schema again.
-        else if (version < cur_version)
+        else if (latest_version < cur_version)
         {
             LOG_INFO(
                 log,
-                "The latest schema version is less than current version, sync all schema, version={} cur_version={}",
-                version,
+                "The latest schema version is less than current version, sync all schema, "
+                "latest_version={} cur_version={}",
+                latest_version,
                 cur_version);
-            cur_version = syncAllSchemas(context, getter, version);
+            cur_version = syncAllSchemas(context, getter, latest_version);
         }
 #endif
         else
@@ -129,7 +134,7 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemasByGetter(Context & c
             // X-1 is aborted and we can safely ignore it.
             // Since TiDB can not make sure the schema diff of the latest schema version X is not empty, under this situation we should set the `cur_version`
             // to X-1 and try to fetch the schema diff X next time.
-            const Int64 version_after_load_diff = syncSchemaDiffs(context, getter, version);
+            const Int64 version_after_load_diff = syncSchemaDiffs(context, getter, cur_version, latest_version);
             if (likely(version_after_load_diff != SchemaGetter::SchemaVersionNotExist))
             {
                 cur_version = version_after_load_diff;
@@ -137,7 +142,7 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemasByGetter(Context & c
             else
             {
                 // when diff->regenerate_schema_map == true, we use syncAllSchemas to reload all schemas
-                cur_version = syncAllSchemas(context, getter, version);
+                cur_version = syncAllSchemas(context, getter, latest_version);
             }
         }
     }
@@ -146,55 +151,65 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemasByGetter(Context & c
         log,
         "End sync schema, version has been updated to {}{}",
         cur_version,
-        cur_version == version ? "" : "(latest diff is empty)");
+        cur_version == latest_version ? "" : "(latest diff is empty)");
     return true;
 }
 
+/**
+ * Sync the schema diffs between `before_sync_diff_version` and `latest_version`.
+ * Returns
+ * - The latest applied schema version if the latest schema version is empty, then
+ *   return the latest non-empty schema version.
+ * - `SchemaGetter::SchemaVersionNotExist` if meets a schema diff with `regenerate_schema_map` flag,
+ *   indicating that the caller should reload all schemas.
+ */
 template <bool mock_getter, bool mock_mapper>
 Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffs(
     Context & context,
     Getter & getter,
-    Int64 latest_version)
+    const Int64 before_sync_diff_version,
+    const Int64 latest_version)
 {
     fiu_do_on(FailPoints::force_schema_sync_diff_fail, { return SchemaGetter::SchemaVersionNotExist; });
 
-    Int64 cur_apply_version = cur_version;
+    // The schema version of fetching SchemaDiff from TiKV to apply to TiFlash
+    Int64 schema_diff_version = before_sync_diff_version;
 
     // If `schema diff` got empty `schema diff`, we should handle it these ways:
     //
     // example:
-    //  - `cur_version` is 1, `latest_version` is 10
+    //  - `before_sync_diff_version` is 1, `latest_version` is 10
     //  - The schema diff of schema version [2,4,6] is empty, Then we just skip it.
     //  - The schema diff of schema version 10 is empty, Then we should just apply version to 9
-    while (cur_apply_version < latest_version)
+    while (schema_diff_version < latest_version)
     {
-        cur_apply_version++;
-        std::optional<SchemaDiff> diff = getter.getSchemaDiff(cur_apply_version);
+        schema_diff_version++;
+        std::optional<SchemaDiff> diff = getter.getSchemaDiff(schema_diff_version);
         if (!diff)
         {
-            if (cur_apply_version != latest_version)
+            if (schema_diff_version != latest_version)
             {
-                // The DDL may meets conflict and the SchemaDiff of `cur_apply_version` is
+                // The DDL may meets conflict and the SchemaDiff of `schema_diff_version` is
                 // not used. Skip it.
                 LOG_WARNING(
                     log,
-                    "Skip an empty schema diff, schema_version={} cur_version={} latest_version={}",
-                    cur_apply_version,
-                    cur_version,
+                    "Skip an empty schema diff, before_sync_diff_version={} schema_diff_version={} latest_version={}",
+                    before_sync_diff_version,
+                    schema_diff_version,
                     latest_version);
                 continue;
             }
 
-            assert(cur_apply_version == latest_version);
-            // The latest version is empty, the SchemaDiff may not been committed to TiKV,
-            // skip succeeding the apply version
+            assert(schema_diff_version == latest_version);
+            // The latest version is empty, the SchemaDiff may not been committed to TiKV
             LOG_INFO(
                 log,
-                "Meets an empty schema diff in the latest_version, will not succeed, cur_version={} "
-                "schema_version={}",
-                cur_version,
+                "Meets an empty schema diff in the latest_version, will not succeed version,"
+                " before_sync_diff_version={} latest_version={}",
+                before_sync_diff_version,
                 latest_version);
-            --cur_apply_version;
+            // skip succeeding the apply version
+            --schema_diff_version;
             break;
         }
 
@@ -204,8 +219,8 @@ Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffs(
             // The caller should let TiFlash reload schema info from TiKV.
             LOG_INFO(
                 log,
-                "Meets a schema diff with regenerate_schema_map flag, schema_version={} diff_type={}",
-                cur_apply_version,
+                "Meets a schema diff with regenerate_schema_map flag, schema_diff_version={} diff_type={}",
+                schema_diff_version,
                 static_cast<Int32>(diff->type));
             return SchemaGetter::SchemaVersionNotExist;
         }
@@ -213,7 +228,7 @@ Int64 TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemaDiffs(
         SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, table_id_map);
         builder.applyDiff(*diff);
     }
-    return cur_apply_version;
+    return schema_diff_version;
 }
 
 template <bool mock_getter, bool mock_mapper>
@@ -293,7 +308,7 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncTableSchema(Context & conte
 
     LOG_WARNING(log, message);
     GET_METRIC(tiflash_schema_trigger_count, type_sync_table_schema).Increment();
-    // Notice: must use the same getter
+    // Notice: must use the same getter to use the exact same tso for reading TableInfo
     syncSchemasByGetter(context, getter);
     // Try to sync the table schema with `force==true`. Even the table is tombstone (but not physically
     // dropped in TiKV), it will sync the table schema to handle snapshot or raft commands that come after

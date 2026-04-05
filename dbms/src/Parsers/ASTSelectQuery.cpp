@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Parsers/ASTSelectQuery.cpp
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -58,7 +60,6 @@ ASTPtr ASTSelectQuery::clone() const
     CLONE(with_expression_list)
     CLONE(select_expression_list)
     CLONE(tables)
-    CLONE(prewhere_expression)
     CLONE(where_expression)
     CLONE(group_expression_list)
     CLONE(having_expression)
@@ -116,13 +117,6 @@ void ASTSelectQuery::formatImpl(const FormatSettings & s, FormatState & state, F
         s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "SEGMENT "
                << (s.hilite ? hilite_none : "");
         segment_expression_list->formatImpl(s, state, frame);
-    }
-
-    if (prewhere_expression)
-    {
-        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "PREWHERE "
-               << (s.hilite ? hilite_none : "");
-        prewhere_expression->formatImpl(s, state, frame);
     }
 
     if (where_expression)

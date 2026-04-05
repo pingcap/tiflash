@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Columns/IColumn.h>
 #include <Core/Block.h>
 #include <Interpreters/WindowDescription.h>
 #include <WindowFunctions/WindowUtils.h>
@@ -51,6 +52,7 @@ public:
     void advanceRangeFrameEndCurrentRowShortcut();
 
     void writeOutCurrentRow();
+    RowNumber writeBatchResult();
 
     Block tryGetOutputBlock();
     void releaseAlreadyOutputWindowBlock();
@@ -146,6 +148,7 @@ private:
     template <typename AuxColType, typename OrderByColType, bool is_begin, bool is_desc>
     RowNumber moveCursorAndFindRangeFrame(RowNumber cursor, AuxColType current_row_aux_value);
 
+    template <bool need_decrease, bool support_batch_calculate>
     void tryCalculate();
 
     template <
@@ -202,7 +205,19 @@ private:
             if (ws.cached_block_number != block_number)
             {
                 for (size_t i = 0; i < ws.arguments.size(); ++i)
-                    ws.argument_columns[i] = block.input_columns[ws.arguments[i]].get();
+                {
+                    const IColumn * col = block.input_columns[ws.arguments[i]].get();
+                    if unlikely (col->isColumnConst())
+                    {
+                        ColumnPtr converted = col->convertToFullColumnIfConst();
+
+                        // Put column pointer into materialized_columns to avoid the release of pointer
+                        ws.materialized_columns[i] = converted;
+                        col = converted.get();
+                    }
+
+                    ws.argument_columns[i] = col;
+                }
                 ws.cached_block_number = block_number;
             }
 
@@ -318,6 +333,9 @@ public:
     RowNumber prev_frame_end;
 
     bool has_rank_or_dense_rank = false;
+
+    // When all rows in same partition share one result, we set this var to true
+    bool support_batch_calculate = false;
 
     std::unique_ptr<Arena> arena;
 };

@@ -20,26 +20,26 @@
 
 namespace DB::DM
 {
-// `ColumnView` is a class that provides unified access to both Int64 handles and String handles.
+// `ColumnView` is a class that provides unified access to both integer and string types.
 template <typename T>
 class ColumnView
 {
-    static_assert(false, "Only support Int64 and String");
+    static_assert(false, "Only support integer and string");
 };
 
-template <>
-class ColumnView<Int64>
+template <std::integral T>
+class ColumnView<T>
 {
 public:
-    ColumnView(const IColumn & col)
-        : data(toColumnVectorData<Int64>(col))
+    explicit ColumnView(const IColumn & col)
+        : data(toColumnVectorData<T>(col))
     {}
 
     auto begin() const { return data.begin(); }
 
     auto end() const { return data.end(); }
 
-    Int64 operator[](size_t index) const
+    auto operator[](size_t index) const
     {
         assert(index < data.size());
         return data[index];
@@ -48,14 +48,14 @@ public:
     size_t size() const { return data.size(); }
 
 private:
-    const PaddedPODArray<Int64> & data;
+    const PaddedPODArray<T> & data;
 };
 
 template <>
 class ColumnView<String>
 {
 public:
-    ColumnView(const IColumn & col)
+    explicit ColumnView(const IColumn & col)
         : offsets(typeid_cast<const ColumnString &>(col).getOffsets())
         , chars(typeid_cast<const ColumnString &>(col).getChars())
     {}
@@ -99,14 +99,16 @@ public:
             return *this;
         }
 
-        Iterator operator++(int)
+        Iterator operator++(int) & // NOLINT(cert-dcl21-cpp)
         {
+            // https://stackoverflow.com/questions/66465402/clang-tidy-is-ambiguous-what-should-operatorint-return
+            // https://stackoverflow.com/questions/52871026/overloaded-operator-returns-a-non-const-and-clang-tidy-complains
             Iterator tmp = *this;
             ++pos;
             return tmp;
         }
 
-        Iterator operator--(int)
+        Iterator operator--(int) & // NOLINT(cert-dcl21-cpp)
         {
             Iterator tmp = *this;
             --pos;

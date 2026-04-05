@@ -219,6 +219,9 @@ public:
 
     size_t size() const { return writes.size(); }
 
+    /* always true */
+    static bool needFSync() { return true; }
+
     SequenceID getSequence() const { return sequence; }
 
     size_t getTotalDataSize() const { return total_data_size; }

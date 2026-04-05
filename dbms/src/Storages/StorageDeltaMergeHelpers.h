@@ -20,8 +20,6 @@
 #include <Storages/KVStore/Decode/TiKVHandle.h>
 #include <Storages/RegionQueryInfo.h>
 
-#include <algorithm>
-#include <numeric>
 #include <vector>
 
 namespace DB
@@ -51,7 +49,8 @@ inline DM::RowKeyRanges getQueryRanges(
                     table_id,
                     table_id,
                     is_common_handle,
-                    rowkey_column_size));
+                    rowkey_column_size,
+                    fmt::format("region_id={} getQueryRanges", region_info.region_id)));
         }
         else
         {
@@ -61,7 +60,8 @@ inline DM::RowKeyRanges getQueryRanges(
                 table_id,
                 table_id,
                 is_common_handle,
-                rowkey_column_size));
+                rowkey_column_size,
+                fmt::format("region_id={} getQueryRanges", region_info.region_id)));
         }
     }
     if (ranges.empty())

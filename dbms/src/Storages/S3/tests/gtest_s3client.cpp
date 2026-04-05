@@ -14,10 +14,14 @@
 
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
+#include <Debug/TiFlashTestEnv.h>
+#include <Storages/S3/Lifecycle.h>
 #include <Storages/S3/S3Common.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <TestUtils/TiFlashTestEnv.h>
+#include <aws/core/AmazonWebServiceRequest.h>
+#include <aws/core/utils/xml/XmlSerializer.h>
 #include <aws/s3/model/ListObjectsV2Request.h>
+#include <aws/s3/model/PutBucketLifecycleConfigurationRequest.h>
 #include <gtest/gtest.h>
 
 #include <ext/scope_guard.h>
@@ -26,6 +30,14 @@ namespace DB::FailPoints
 {
 extern const char force_set_lifecycle_resp[];
 } // namespace DB::FailPoints
+
+namespace DB::S3
+{
+Aws::S3::Model::BucketLifecycleConfiguration genNewLifecycleConfig(
+    const Aws::Vector<Aws::S3::Model::LifecycleRule> & existing_rules,
+    Int32 expire_days,
+    bool use_ali_oss_format);
+}
 
 namespace DB::S3::tests
 {
@@ -42,6 +54,76 @@ public:
 
     std::shared_ptr<TiFlashS3Client> client;
 };
+
+TEST_F(S3ClientTest, LifecycleSerialize)
+{
+    {
+        // aws default format
+        // serialize
+        auto cfg = genNewLifecycleConfig({}, 1, false);
+        Aws::S3::Model::PutBucketLifecycleConfigurationRequest req;
+        req.WithLifecycleConfiguration(cfg);
+        auto text = req.SerializePayload();
+        LOG_INFO(Logger::get(), "lifecycle config: {}", text);
+        ASSERT_EQ(
+            text,
+            "<?xml version=\"1.0\"?>\n<LifecycleConfiguration xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">\n    "
+            "<Rule>\n        <Expiration>\n            <Days>1</Days>\n        </Expiration>\n        "
+            "<ID>tiflashgc</ID>\n        <Filter>\n            <And>\n                <Prefix></Prefix>\n              "
+            "  <Tag>\n                    <Key>tiflash_deleted</Key>\n                    <Value>true</Value>\n        "
+            "        </Tag>\n            </And>\n        </Filter>\n        <Status>Enabled</Status>\n    "
+            "</Rule>\n</LifecycleConfiguration>\n");
+
+        // deserialize
+        Aws::Utils::Xml::XmlDocument doc = Aws::Utils::Xml::XmlDocument::CreateFromXmlString(text);
+        Aws::S3::Model::GetBucketLifecycleConfigurationResult result(
+            Aws::AmazonWebServiceResult<Aws::Utils::Xml::XmlDocument>(std::move(doc), {}));
+        const auto & rules = result.GetRules();
+        ASSERT_EQ(rules.size(), 1);
+        const auto & rule = rules[0];
+        ASSERT_EQ(rule.GetAliOssFormat(), false);
+        ASSERT_EQ(rule.GetExpiration().GetDays(), 1);
+        ASSERT_EQ(rule.GetStatus(), Aws::S3::Model::ExpirationStatus::Enabled);
+        ASSERT_EQ(rule.GetID(), "tiflashgc");
+        const auto & tags = rule.GetFilter().GetAnd().GetTags();
+        ASSERT_EQ(tags.size(), 1);
+        const auto & tag = tags[0];
+        ASSERT_EQ(tag.GetKey(), "tiflash_deleted");
+        ASSERT_EQ(tag.GetValue(), "true");
+    }
+
+    {
+        // alibaba cloud oss format
+        // serialize
+        auto cfg = genNewLifecycleConfig({}, 1, true);
+        Aws::S3::Model::PutBucketLifecycleConfigurationRequest req;
+        req.WithLifecycleConfiguration(cfg);
+        auto text = req.SerializePayload();
+        LOG_INFO(Logger::get(), "lifecycle config: {}", text);
+        ASSERT_EQ(
+            text,
+            "<?xml version=\"1.0\"?>\n<LifecycleConfiguration xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">\n    "
+            "<Rule>\n        <Expiration>\n            <Days>1</Days>\n        </Expiration>\n        "
+            "<ID>tiflashgc</ID>\n        <Prefix></Prefix>\n        <Tag>\n            <Key>tiflash_deleted</Key>\n    "
+            "        <Value>true</Value>\n        </Tag>\n        <Status>Enabled</Status>\n    "
+            "</Rule>\n</LifecycleConfiguration>\n");
+
+        // deserialize
+        Aws::Utils::Xml::XmlDocument doc = Aws::Utils::Xml::XmlDocument::CreateFromXmlString(text);
+        Aws::S3::Model::GetBucketLifecycleConfigurationResult result(
+            Aws::AmazonWebServiceResult<Aws::Utils::Xml::XmlDocument>(std::move(doc), {}));
+        const auto & rules = result.GetRules();
+        ASSERT_EQ(rules.size(), 1);
+        const auto & rule = rules[0];
+        ASSERT_EQ(rule.GetAliOssFormat(), true);
+        ASSERT_EQ(rule.GetExpiration().GetDays(), 1);
+        ASSERT_EQ(rule.GetStatus(), Aws::S3::Model::ExpirationStatus::Enabled);
+        ASSERT_EQ(rule.GetID(), "tiflashgc");
+        const auto & tag = rule.GetFilter().GetTag();
+        ASSERT_EQ(tag.GetKey(), "tiflash_deleted");
+        ASSERT_EQ(tag.GetValue(), "true");
+    }
+}
 
 TEST_F(S3ClientTest, LifecycleRule)
 try
@@ -167,6 +249,80 @@ try
         EXPECT_EQ(prefixes[0], client->root() + "s999/data/");
         EXPECT_EQ(prefixes[1], client->root() + "s999/manifest/");
     }
+}
+CATCH
+
+TEST_F(S3ClientTest, ListPrefixEarlyStopOnTruncatedResult)
+try
+{
+    // Keep key count above S3's default one-page listing size so listing is truncated.
+    constexpr size_t key_count = 1001;
+    SCOPE_EXIT({
+        for (size_t i = 0; i < key_count; ++i)
+            deleteObject(*client, fmt::format("s999/list_prefix_early_stop/key_{}", i));
+    });
+    for (size_t i = 0; i < key_count; ++i)
+    {
+        uploadEmptyFile(*client, fmt::format("s999/list_prefix_early_stop/key_{}", i));
+    }
+
+    Aws::S3::Model::ListObjectsV2Request req;
+    req.WithBucket(client->bucket()).WithPrefix(client->root() + "s999/list_prefix_early_stop/");
+    auto outcome = client->ListObjectsV2(req);
+    ASSERT_TRUE(outcome.IsSuccess());
+    const auto & result = outcome.GetResult();
+    ASSERT_TRUE(result.GetIsTruncated());
+    ASSERT_EQ(result.GetContents().size(), 1000);
+    ASSERT_FALSE(result.GetNextContinuationToken().empty());
+
+    size_t visited = 0;
+    listPrefix(*client, "s999/list_prefix_early_stop/", [&](const Aws::S3::Model::Object & object) {
+        UNUSED(object);
+        ++visited;
+        return PageResult{.num_keys = 1, .more = false};
+    });
+
+    ASSERT_EQ(visited, 1);
+}
+CATCH
+
+TEST_F(S3ClientTest, ListPrefixWithDelimiterEarlyStopOnTruncatedResult)
+try
+{
+    // Keep common prefix count above S3's default one-page listing size so listing is truncated.
+    constexpr size_t prefix_count = 1001;
+    SCOPE_EXIT({
+        for (size_t i = 0; i < prefix_count; ++i)
+            deleteObject(*client, fmt::format("s999/list_prefix_with_delimiter_early_stop/dir_{}/key", i));
+    });
+    for (size_t i = 0; i < prefix_count; ++i)
+    {
+        uploadEmptyFile(*client, fmt::format("s999/list_prefix_with_delimiter_early_stop/dir_{}/key", i));
+    }
+
+    Aws::S3::Model::ListObjectsV2Request req;
+    req.WithBucket(client->bucket())
+        .WithPrefix(client->root() + "s999/list_prefix_with_delimiter_early_stop/")
+        .WithDelimiter("/");
+    auto outcome = client->ListObjectsV2(req);
+    ASSERT_TRUE(outcome.IsSuccess());
+    const auto & result = outcome.GetResult();
+    ASSERT_TRUE(result.GetIsTruncated());
+    ASSERT_EQ(result.GetCommonPrefixes().size(), 1000);
+    ASSERT_FALSE(result.GetNextContinuationToken().empty());
+
+    size_t visited = 0;
+    listPrefixWithDelimiter(
+        *client,
+        "s999/list_prefix_with_delimiter_early_stop/",
+        "/",
+        [&](const Aws::S3::Model::CommonPrefix & prefix) {
+            UNUSED(prefix);
+            ++visited;
+            return PageResult{.num_keys = 1, .more = false};
+        });
+
+    ASSERT_EQ(visited, 1);
 }
 CATCH
 

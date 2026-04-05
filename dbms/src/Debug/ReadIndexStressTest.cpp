@@ -22,6 +22,7 @@
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/Read/ReadIndexWorker.h>
+#include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <fmt/chrono.h>
 
@@ -38,6 +39,7 @@ static const std::map<std::string, ReadIndexStressTest::TestType> TestName2Type
 
 ReadIndexStressTest::ReadIndexStressTest(const TMTContext & tmt_)
     : tmt(tmt_)
+    , logger(Logger::get("ReadIndexStressTest"))
 {
     MockStressTestCfg::enable = true;
     LOG_WARNING(logger, "enable MockStressTest");

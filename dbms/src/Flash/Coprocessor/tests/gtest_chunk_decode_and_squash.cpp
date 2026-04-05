@@ -20,7 +20,6 @@
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <TiDB/Schema/TiDB.h>
 #include <gtest/gtest.h>
 
@@ -34,7 +33,7 @@ protected:
     void SetUp() override {}
 
 public:
-    TestChunkDecodeAndSquash() {}
+    TestChunkDecodeAndSquash() = default;
 
     static Block squashBlocks(std::vector<Block> & blocks)
     {
@@ -85,7 +84,7 @@ public:
         return block;
     }
 
-    void doTestWork(bool flush_something)
+    static void doTestWork(bool flush_something)
     {
         const size_t block_rows = 256;
         const size_t block_num = 64;

@@ -92,3 +92,5 @@ release-linux-llvm/build-release
 
 
 gtest_10x_workdir/
+
+license-eye

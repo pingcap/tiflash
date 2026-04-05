@@ -28,17 +28,38 @@
 namespace DB
 {
 
+/// returns a vector function entry according to the distance metric
+template <typename RetType>
+FunctionPtr getVecDistanceFnFromMetric(tipb::VectorDistanceMetric metric, const Context & ctx)
+{
+    switch (metric)
+    {
+    case tipb::VectorDistanceMetric::L1:
+        return FunctionsVecL1Distance<RetType>::create(ctx);
+    case tipb::VectorDistanceMetric::L2:
+        return FunctionsVecL2Distance<RetType>::create(ctx);
+    case tipb::VectorDistanceMetric::COSINE:
+        return FunctionsVecCosineDistance<RetType>::create(ctx);
+    case tipb::VectorDistanceMetric::INNER_PRODUCT:
+        return FunctionsVecNegativeInnerProduct<RetType>::create(ctx);
+    default:
+        throw Exception("Unsupported distance metric: {}", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
+}
+template FunctionPtr getVecDistanceFnFromMetric<Float32>(tipb::VectorDistanceMetric metric, const Context & ctx);
+template FunctionPtr getVecDistanceFnFromMetric<Float64>(tipb::VectorDistanceMetric metric, const Context & ctx);
+
 void registerFunctionsVector(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionsCastVectorFloat32AsString>();
     factory.registerFunction<FunctionsCastVectorFloat32AsVectorFloat32>();
     factory.registerFunction<FunctionsVecAsText>();
     factory.registerFunction<FunctionsVecDims>();
-    factory.registerFunction<FunctionsVecL1Distance>();
-    factory.registerFunction<FunctionsVecL2Distance>();
+    factory.registerFunction<FunctionsVecL1Distance<Float64>>();
+    factory.registerFunction<FunctionsVecL2Distance<Float64>>();
     factory.registerFunction<FunctionsVecL2Norm>();
-    factory.registerFunction<FunctionsVecCosineDistance>();
-    factory.registerFunction<FunctionsVecNegativeInnerProduct>();
+    factory.registerFunction<FunctionsVecCosineDistance<Float64>>();
+    factory.registerFunction<FunctionsVecNegativeInnerProduct<Float64>>();
 }
 
 } // namespace DB

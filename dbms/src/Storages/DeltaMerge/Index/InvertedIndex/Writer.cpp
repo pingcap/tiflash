@@ -17,6 +17,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Functions/FunctionHelpers.h>
 #include <IO/Buffer/WriteBufferFromFile.h>
+#include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/Index/InvertedIndex/Writer.h>
 
 #include <ext/scope_guard.h>
@@ -125,6 +126,8 @@ void InvertedIndexWriterInternal<T>::saveToBuffer(WriteBuffer & write_buf) const
 
     // 5. record uncompressed size
     uncompressed_size = write_buf.count();
+
+    write_buf.next();
 }
 
 template <typename T>
@@ -142,7 +145,7 @@ InvertedIndexWriterInternal<T>::~InvertedIndexWriterInternal()
 }
 
 template <typename T>
-void InvertedIndexWriterOnDisk<T>::saveToFile() const
+void InvertedIndexWriterOnDisk<T>::saveToFile()
 {
     Stopwatch w;
     SCOPE_EXIT({ writer.total_duration += w.elapsedSeconds(); });

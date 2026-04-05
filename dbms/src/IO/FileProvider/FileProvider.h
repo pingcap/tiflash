@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/SpillLimiter.h>
 #include <IO/BaseFile/fwd.h>
 #include <IO/Encryption/BlockAccessCipherStream.h>
 #include <IO/FileProvider/FileProvider_fwd.h>
@@ -53,7 +54,8 @@ public:
         bool create_new_encryption_info_ = true,
         const WriteLimiterPtr & write_limiter_ = nullptr,
         int flags = -1,
-        mode_t mode = 0666) const;
+        mode_t mode = 0666,
+        const SpillLimiterPtr & spill_limiter_ = nullptr) const;
 
     WriteReadableFilePtr newWriteReadableFile(
         const String & file_path_,

@@ -195,11 +195,14 @@ try
         "split_test",
         "t1",
         {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
-        {toVec<Int32>("a", {1, 2, 3, 4, 5, 6, 7, 8, 9, 0}), toVec<Int32>("b", {2, 2, 2, 2, 2, 2, 2, 2, 2, 2})});
-    context.addMockTable("split_test", "t2", {{"a", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 1, 1, 2, 2, 2, 3, 3,
-                                                                                              3, 4, 4, 4, 5, 5, 5, 6,
-                                                                                              6, 6, 7, 7, 7, 8, 8, 8,
-                                                                                              9, 9, 9, 0, 0, 0})});
+        {toNullableVec<Int32>("a", {1, 2, 3, 4, 5, 6, 7, 8, 9, 0}),
+         toNullableVec<Int32>("b", {2, 2, 2, 2, 2, 2, 2, 2, 2, 2})});
+    context.addMockTable(
+        "split_test",
+        "t2",
+        {{"a", TiDB::TP::TypeLong}},
+        {toNullableVec<Int32>("a", {1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5,
+                                    6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9, 0, 0, 0})});
 
     auto request = context.scan("split_test", "t1")
                        .join(context.scan("split_test", "t2"), tipb::JoinType::TypeInnerJoin, {col("a")})

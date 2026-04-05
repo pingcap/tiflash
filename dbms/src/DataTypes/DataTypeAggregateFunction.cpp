@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/DataTypes/DataTypeAggregateFunction.cpp
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -90,7 +92,7 @@ void DataTypeAggregateFunction::deserializeBinary(IColumn & column, ReadBuffer &
 
     Arena & arena = column_concrete.createOrGetArena();
     size_t size_of_state = function->sizeOfData();
-    AggregateDataPtr place = arena.alloc(size_of_state);
+    AggregateDataPtr place = arena.alignedAlloc(size_of_state, function->alignOfData());
 
     function->create(place);
     try
@@ -144,8 +146,7 @@ void DataTypeAggregateFunction::deserializeBinaryBulk(
     {
         if (istr.eof())
             break;
-
-        AggregateDataPtr place = arena.alloc(size_of_state);
+        AggregateDataPtr place = arena.alignedAlloc(size_of_state, function->alignOfData());
 
         function->create(place);
 
@@ -176,7 +177,7 @@ static void deserializeFromString(const AggregateFunctionPtr & function, IColumn
 
     Arena & arena = column_concrete.createOrGetArena();
     size_t size_of_state = function->sizeOfData();
-    AggregateDataPtr place = arena.alloc(size_of_state);
+    AggregateDataPtr place = arena.alignedAlloc(size_of_state, function->alignOfData());
 
     function->create(place);
 

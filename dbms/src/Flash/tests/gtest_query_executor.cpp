@@ -47,7 +47,7 @@ public:
         auto date_col = ColumnWithTypeAndName(date_col_ptr, date_type_ptr, "col_2");
         context.addMockTable(
             {"default", "test4"},
-            {{"col_1", TiDB::TP::TypeString}, {"col_2", TiDB::TP::TypeDate}},
+            {{"col_1", TiDB::TP::TypeString}, {"col_2", TiDB::TP::TypeDate, false}},
             {toNullableVec<String>("col_1", {"test1", "test2"}), date_col});
 
         context.addMockTable(

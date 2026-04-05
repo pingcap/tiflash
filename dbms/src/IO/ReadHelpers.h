@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/IO/ReadHelpers.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,7 +36,11 @@
 #include <iterator>
 #include <type_traits>
 
-#define DEFAULT_MAX_STRING_SIZE 0x00FFFFFFULL
+static constexpr UInt64 DEFAULT_MAX_STRING_SIZE = 0x00FFFFFFULL; // 16777215, 16MiB-1
+
+// According to `txn-entry-size-limit` in TiDB, the max size of a TiKV key/value is 120MB.
+// https://docs.pingcap.com/tidb/stable/tidb-configuration-file/#txn-entry-size-limit-new-in-v4010-and-v500
+static constexpr UInt64 TIKV_MAX_VALUE_SIZE = 125829120;
 
 namespace DB
 {

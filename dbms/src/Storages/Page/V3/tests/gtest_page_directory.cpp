@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/FmtUtils.h>
 #include <Common/SyncPoint/Ctl.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <IO/FileProvider/FileProvider.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/Page.h>
@@ -34,7 +35,6 @@
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <common/UInt128.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
@@ -47,9 +47,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-namespace DB
-{
-namespace PS::V3::tests
+namespace DB::PS::V3::tests
 {
 using u128::PageEntriesEdit;
 
@@ -577,7 +575,7 @@ TEST_F(PageDirectoryTest, BatchWriteSuccess)
     PageEntryV3 entry3{.file_id = 3, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
 
     auto sp_before_leader_apply = SyncPointCtl::enableInScope("before_PageDirectory::leader_apply");
-    auto th_write1 = std::async([&]() {
+    auto th_write1 = std::async(std::launch::async, [&]() {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry1);
         dir->apply(std::move(edit));
@@ -586,12 +584,12 @@ TEST_F(PageDirectoryTest, BatchWriteSuccess)
 
     // form a write group
     auto sp_after_enter_write_group = SyncPointCtl::enableInScope("after_PageDirectory::enter_write_group");
-    auto th_write2 = std::async([&]() {
+    auto th_write2 = std::async(std::launch::async, [&]() {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 2), entry2);
         dir->apply(std::move(edit));
     });
-    auto th_write3 = std::async([&]() {
+    auto th_write3 = std::async(std::launch::async, [&]() {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 3), entry3);
         dir->apply(std::move(edit));
@@ -619,7 +617,7 @@ TEST_F(PageDirectoryTest, BatchWriteException)
     PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
 
     auto sp_before_leader_apply = SyncPointCtl::enableInScope("before_PageDirectory::leader_apply");
-    auto th_write1 = std::async([&]() {
+    auto th_write1 = std::async(std::launch::async, [&]() {
         PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry1);
         dir->apply(std::move(edit));
@@ -628,12 +626,12 @@ TEST_F(PageDirectoryTest, BatchWriteException)
 
     // form a write group
     auto sp_after_enter_write_group = SyncPointCtl::enableInScope("after_PageDirectory::enter_write_group");
-    auto th_write2 = std::async([&]() {
+    auto th_write2 = std::async(std::launch::async, [&]() {
         PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 2), buildV3Id(TEST_NAMESPACE_ID, 100));
         ASSERT_ANY_THROW(dir->apply(std::move(edit)));
     });
-    auto th_write3 = std::async([&]() {
+    auto th_write3 = std::async(std::launch::async, [&]() {
         PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 3), buildV3Id(TEST_NAMESPACE_ID, 100));
         ASSERT_ANY_THROW(dir->apply(std::move(edit)));
@@ -652,6 +650,151 @@ TEST_F(PageDirectoryTest, BatchWriteException)
 
     auto snap = dir->createSnapshot();
     EXPECT_ENTRY_EQ(entry1, dir, 1, snap);
+}
+
+TEST_F(PageDirectoryTest, BatchWriteRemoteCheckpointEachWriterReturnsAppliedDataFiles)
+{
+    // Purpose: verify each writer in a write group returns its own remote lock key set,
+    // instead of inheriting merged results from the write-group owner.
+    auto make_remote_entry = [](String data_file_id) {
+        return PageEntryV3{
+            .file_id = 0,
+            .size = 1024,
+            .padded_size = 0,
+            .tag = 0,
+            .offset = 0,
+            .checksum = 0,
+            .checkpoint_info = OptionalCheckpointInfo(
+                CheckpointLocation{
+                    .data_file_id = std::make_shared<const String>(std::move(data_file_id)),
+                    .offset_in_file = 0,
+                    .size_in_file = 1024},
+                true,
+                true),
+        };
+    };
+
+    const String key1 = "lock/s272/ks_1_t_169/dmf_1.lock_s272_1";
+    const String key2 = "lock/s272/ks_1_t_169/dmf_2.lock_s272_1";
+    const String key3 = "lock/s272/ks_1_t_169/dmf_3.lock_s272_1";
+
+    // Step 1: pause leader apply so 3 concurrent writers form one write group.
+    auto sp_before_leader_apply = SyncPointCtl::enableInScope("before_PageDirectory::leader_apply");
+    auto th_write1 = std::async(std::launch::async, [&]() {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 101), make_remote_entry(key1));
+        return dir->apply(std::move(edit));
+    });
+    sp_before_leader_apply.waitAndPause();
+
+    // Let write2/write3 join write pipeline behind write1.
+    auto sp_after_enter_write_group = SyncPointCtl::enableInScope("after_PageDirectory::enter_write_group");
+    auto th_write2 = std::async(std::launch::async, [&]() {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 102), make_remote_entry(key2));
+        return dir->apply(std::move(edit));
+    });
+    auto th_write3 = std::async(std::launch::async, [&]() {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 103), make_remote_entry(key3));
+        return dir->apply(std::move(edit));
+    });
+    sp_after_enter_write_group.waitAndNext();
+    sp_after_enter_write_group.waitAndNext();
+    ASSERT_EQ(dir->getWritersQueueSizeForTest(), 3);
+
+    // Step 2: release apply and collect returned applied_data_files from each writer.
+    sp_before_leader_apply.next();
+
+    auto applied1 = th_write1.get();
+    sp_before_leader_apply.waitAndNext();
+    auto applied2 = th_write2.get();
+    auto applied3 = th_write3.get();
+
+    // Step 3: each writer should only get its own lock key.
+    ASSERT_EQ(applied1.size(), 1);
+    ASSERT_EQ(applied1.count(key1), 1);
+    ASSERT_EQ(applied2.size(), 1);
+    ASSERT_EQ(applied2.count(key2), 1);
+    ASSERT_EQ(applied3.size(), 1);
+    ASSERT_EQ(applied3.count(key3), 1);
+
+    // Step 4: union of all per-writer results should cover all keys.
+    std::unordered_set<String> union_keys;
+    union_keys.insert(applied1.begin(), applied1.end());
+    union_keys.insert(applied2.begin(), applied2.end());
+    union_keys.insert(applied3.begin(), applied3.end());
+    ASSERT_EQ(union_keys.size(), 3);
+    ASSERT_EQ(union_keys.count(key1), 1);
+    ASSERT_EQ(union_keys.count(key2), 1);
+    ASSERT_EQ(union_keys.count(key3), 1);
+}
+
+TEST_F(PageDirectoryTest, BatchWriteRemoteCheckpointEachWriterShouldGetAppliedDataFiles)
+{
+    // Purpose: regression guard for write-group remote checkpoint apply.
+    // Every writer should receive non-empty applied_data_files for upper-layer cleanup.
+    auto make_remote_entry = [](String data_file_id) {
+        return PageEntryV3{
+            .file_id = 0,
+            .size = 1024,
+            .padded_size = 0,
+            .tag = 0,
+            .offset = 0,
+            .checksum = 0,
+            .checkpoint_info = OptionalCheckpointInfo(
+                CheckpointLocation{
+                    .data_file_id = std::make_shared<const String>(std::move(data_file_id)),
+                    .offset_in_file = 0,
+                    .size_in_file = 1024},
+                true,
+                true),
+        };
+    };
+
+    const String key1 = "lock/s272/ks_1_t_169/dmf_fix_1.lock_s272_1";
+    const String key2 = "lock/s272/ks_1_t_169/dmf_fix_2.lock_s272_1";
+    const String key3 = "lock/s272/ks_1_t_169/dmf_fix_3.lock_s272_1";
+
+    // Step 1: force concurrent writes into one write group.
+    auto sp_before_leader_apply = SyncPointCtl::enableInScope("before_PageDirectory::leader_apply");
+    auto th_write1 = std::async(std::launch::async, [&]() {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 201), make_remote_entry(key1));
+        return dir->apply(std::move(edit));
+    });
+    sp_before_leader_apply.waitAndPause();
+
+    auto sp_after_enter_write_group = SyncPointCtl::enableInScope("after_PageDirectory::enter_write_group");
+    auto th_write2 = std::async(std::launch::async, [&]() {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 202), make_remote_entry(key2));
+        return dir->apply(std::move(edit));
+    });
+    auto th_write3 = std::async(std::launch::async, [&]() {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 203), make_remote_entry(key3));
+        return dir->apply(std::move(edit));
+    });
+    sp_after_enter_write_group.waitAndNext();
+    sp_after_enter_write_group.waitAndNext();
+    ASSERT_EQ(dir->getWritersQueueSizeForTest(), 3);
+
+    // Step 2: resume apply and get per-writer results.
+    sp_before_leader_apply.next();
+
+    auto applied1 = th_write1.get();
+    sp_before_leader_apply.waitAndNext();
+    auto applied2 = th_write2.get();
+    auto applied3 = th_write3.get();
+
+    // Step 3: assert each writer gets its own lock-cleaning signal.
+    ASSERT_FALSE(applied1.empty());
+    ASSERT_FALSE(applied2.empty());
+    ASSERT_FALSE(applied3.empty());
+    ASSERT_EQ(applied1.count(key1), 1);
+    ASSERT_EQ(applied2.count(key2), 1);
+    ASSERT_EQ(applied3.count(key3), 1);
 }
 
 TEST_F(PageDirectoryTest, IdempotentNewExtPageAfterAllCleaned)
@@ -1492,7 +1635,7 @@ try
     }
 
     // create a snap for dump
-    auto snap = dir->createSnapshot("");
+    auto snap = dir->createSnapshot(SnapshotType::General, "");
 
     // add a ref during dump snapshot
     {
@@ -1632,7 +1775,7 @@ try
     dir = restoreFromDisk();
     {
         ASSERT_EQ(dir->numPages(), 1);
-        auto snap = dir->createSnapshot("");
+        auto snap = dir->createSnapshot(SnapshotType::General, "");
         EXPECT_ENTRY_EQ(entry_1_v1, dir, 5, snap);
     }
 }
@@ -1748,7 +1891,7 @@ try
     dir = restoreFromDisk();
     {
         EXPECT_EQ(dir->numPages(), 1);
-        auto snap = dir->createSnapshot("");
+        auto snap = dir->createSnapshot(SnapshotType::General, "");
         EXPECT_ENTRY_EQ(entry_1_v1, dir, 1, snap);
     }
 
@@ -1763,7 +1906,7 @@ try
     dir = restoreFromDisk();
     {
         EXPECT_EQ(dir->numPages(), 3);
-        auto snap = dir->createSnapshot("");
+        auto snap = dir->createSnapshot(SnapshotType::General, "");
         EXPECT_ENTRY_EQ(entry_1_v1, dir, 1, snap);
         auto normal_id = getNormalPageIdU64(dir, 11, snap);
         EXPECT_EQ(normal_id, 10);
@@ -2222,7 +2365,7 @@ try
     }
 
     // A.2 Full GC execute apply, upsert `another_page_id`, but we still don't
-    // support Full GC and gcInMem run conncurrently
+    // support Full GC and gcInMem run concurrently
     dir->gcApply(std::move(gc_migrate_entries));
 
     auto snap = dir->createSnapshot();
@@ -3084,5 +3227,4 @@ CATCH
 #undef INSERT_ENTRY_ACQ_SNAP
 #undef INSERT_DELETE
 
-} // namespace PS::V3::tests
-} // namespace DB
+} // namespace DB::PS::V3::tests

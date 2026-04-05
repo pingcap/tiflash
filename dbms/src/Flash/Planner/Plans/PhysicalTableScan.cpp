@@ -101,6 +101,7 @@ void PhysicalTableScan::buildBlockInputStreamImpl(DAGPipeline & pipeline, Contex
 
     if (context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
+        // Interact between compute node and write node.
         StorageDisaggregatedInterpreter disaggregated_tiflash_interpreter(
             context,
             tidb_table_scan,
@@ -124,6 +125,7 @@ void PhysicalTableScan::buildPipeline(
     // For building PipelineExec in compile time.
     if (context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
+        // Interact between compute node and write node.
         StorageDisaggregatedInterpreter disaggregated_tiflash_interpreter(
             context,
             tidb_table_scan,

@@ -23,6 +23,7 @@
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 
 #include <memory>
+#include <vector>
 
 
 namespace DB::DM
@@ -58,6 +59,9 @@ inline void integrityCheckIndexInfoV2(const dtpb::ColumnFileIndexInfo & index_in
     {
     case dtpb::IndexFileKind::VECTOR_INDEX:
         RUNTIME_CHECK(index_info.index_props().has_vector_index());
+        break;
+    case dtpb::IndexFileKind::INVERTED_INDEX:
+        RUNTIME_CHECK(index_info.index_props().has_inverted_index());
         break;
     default:
         RUNTIME_CHECK_MSG(false, "Unsupported index kind: {}", magic_enum::enum_name(index_info.index_props().kind()));
@@ -377,12 +381,12 @@ PageIdU64 ColumnFileTiny::writeColumnFileData(
             file_provider->createEncryptionInfo(ep);
         }
 
-        char page_data[data_size];
-        buf->readStrict(page_data, data_size);
+        std::vector<char> page_data(data_size);
+        buf->readStrict(page_data.data(), data_size);
         // encrypt the page data in place
-        file_provider->encryptPage(dm_context.keyspace_id, page_data, data_size, page_id);
+        file_provider->encryptPage(dm_context.keyspace_id, page_data.data(), data_size, page_id);
         // ReadBufferFromOwnString will copy the data, and own the data.
-        buf = std::make_shared<ReadBufferFromOwnString>(std::string_view(page_data, data_size));
+        buf = std::make_shared<ReadBufferFromOwnString>(std::string_view(page_data.data(), data_size));
     }
     wbs.log.putPage(page_id, 0, buf, data_size, col_data_sizes);
 

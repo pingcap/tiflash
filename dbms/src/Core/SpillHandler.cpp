@@ -36,10 +36,14 @@ SpillHandler::SpillWriter::SpillWriter(
         file_provider,
         file_name,
         EncryptionPath(file_name, ""),
-        true,
-        nullptr,
-        DBMS_DEFAULT_BUFFER_SIZE,
-        append_write ? O_APPEND | O_WRONLY : -1))
+        /*create_new_encryption_info=*/true,
+        /*write_limiter=*/nullptr,
+        /*buf_size=*/DBMS_DEFAULT_BUFFER_SIZE,
+        /*flags=*/append_write ? O_APPEND | O_WRONLY : -1,
+        /*mode=*/0666,
+        /*existing_memory=*/nullptr,
+        /*alignment=*/0,
+        SpillLimiter::instance))
     , compressed_buf(file_buf)
 {
     if (!append_write)
@@ -99,7 +103,6 @@ bool SpillHandler::isSpilledFileFull(UInt64 spilled_rows, UInt64 spilled_bytes)
 
 void SpillHandler::spillBlocks(Blocks && blocks)
 {
-    ///  todo check the disk usage
     if (unlikely(blocks.empty()))
         return;
 
@@ -142,13 +145,12 @@ void SpillHandler::spillBlocks(Blocks && blocks)
             {
                 if (unlikely(!block || block.rows() == 0))
                     continue;
+
                 /// erase constant column
                 spiller->removeConstantColumns(block);
                 RUNTIME_CHECK(block.columns() > 0);
                 if (unlikely(writer == nullptr))
-                {
                     std::tie(rows_in_file, bytes_in_file) = setUpNextSpilledFile();
-                }
                 auto rows = block.rows();
                 total_rows += rows;
                 rows_in_file += rows;
@@ -183,14 +185,7 @@ void SpillHandler::spillBlocks(Blocks && blocks)
     }
     catch (...)
     {
-        /// mark the spill handler invalid
-        writer = nullptr;
-        spilled_files.clear();
-        current_spilled_file_index = INVALID_CURRENT_SPILLED_FILE_INDEX;
-        throw Exception(fmt::format(
-            "Failed to spill blocks to disk for file {}, error: {}",
-            current_spill_file_name,
-            getCurrentExceptionMessage(false, false)));
+        markAsInvalidAndRethrow();
     }
 }
 
@@ -201,7 +196,15 @@ void SpillHandler::finish()
     {
         if (writer != nullptr)
         {
-            spilled_files[current_spilled_file_index]->updateSpillDetails(writer->finishWrite());
+            try
+            {
+                spilled_files[current_spilled_file_index]->updateSpillDetails(writer->finishWrite());
+            }
+            catch (...)
+            {
+                markAsInvalidAndRethrow();
+            }
+
             auto current_spill_details = spilled_files[current_spilled_file_index]->getSpillDetails();
             if (!spiller->enable_append_write
                 || isSpilledFileFull(current_spill_details.rows, current_spill_details.data_bytes_uncompressed))

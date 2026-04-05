@@ -19,7 +19,9 @@
 #include <Common/Stopwatch.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/MPPTaskId.h>
+#include <grpcpp/alarm.h>
 #include <kvproto/tikvpb.grpc.pb.h>
+#include <prometheus/gauge.h>
 
 namespace DB
 {
@@ -54,6 +56,17 @@ public:
         grpc::ServerCompletionQueue * notify_cq,
         const std::shared_ptr<std::atomic<bool>> & is_shutdown);
 
+    // Let's implement a state machine with the following states.
+    enum CallStatus
+    {
+        NEW_REQUEST,
+        WAIT_TUNNEL,
+        WAIT_WRITE,
+        WAIT_IN_QUEUE,
+        WAIT_WRITE_ERR,
+        FINISH
+    };
+
     /// for test
     EstablishCallData();
 
@@ -63,8 +76,10 @@ public:
 
     void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> &) override;
     void startEstablishConnection();
-    void setToWaitingTunnelState() { state = WAIT_TUNNEL; }
+    void setCallStateAndUpdateMetrics(CallStatus new_state, prometheus::Gauge & new_metric);
     bool isWaitingTunnelState() { return state == WAIT_TUNNEL; }
+
+    static void decreaseStateMetrics(CallStatus status);
 
     // Spawn a new EstablishCallData instance to serve new clients while we process the one for this EstablishCallData.
     // The instance will deallocate itself as part of its FINISH state.
@@ -81,6 +96,8 @@ public:
     grpc::ServerContext * getGrpcContext() { return &ctx; }
 
     String getResourceGroupName() const { return resource_group_name; }
+    grpc::Alarm & getAlarm();
+
 
 private:
     /// WARNING: Since a event from one grpc completion queue may be handled by different
@@ -119,16 +136,6 @@ private:
     // The means to get back to the client.
     grpc::ServerAsyncWriter<mpp::MPPDataPacket> responder;
 
-    // Let's implement a state machine with the following states.
-    enum CallStatus
-    {
-        NEW_REQUEST,
-        WAIT_TUNNEL,
-        WAIT_WRITE,
-        WAIT_POP_FROM_QUEUE,
-        WAIT_WRITE_ERR,
-        FINISH
-    };
     // The current serving state.
     CallStatus state;
 
@@ -138,5 +145,6 @@ private:
     String resource_group_name;
     String connection_id;
     double waiting_task_time_ms = 0;
+    grpc::Alarm alarm{};
 };
 } // namespace DB

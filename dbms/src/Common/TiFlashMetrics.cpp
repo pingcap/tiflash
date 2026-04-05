@@ -18,6 +18,8 @@
 #include <Common/TiFlashMetrics.h>
 #include <common/defines.h>
 
+#include <magic_enum.hpp>
+
 namespace DB
 {
 TiFlashMetrics & TiFlashMetrics::instance()
@@ -66,6 +68,16 @@ TiFlashMetrics::TiFlashMetrics()
 
     registered_storage_thread_memory_usage_family
         = &prometheus::BuildGauge().Name(storages_thread_memory_usage).Help("").Register(*registry);
+
+    registered_storage_ru_read_bytes_family = &prometheus::BuildCounter()
+                                                   .Name("tiflash_storage_ru_read_bytes")
+                                                   .Help("Read bytes for storage RU calculation")
+                                                   .Register(*registry);
+
+    registered_s3_store_summary_bytes_family = &prometheus::BuildGauge()
+                                                    .Name("tiflash_storage_s3_store_summary_bytes")
+                                                    .Help("S3 storage summary bytes by store and file type")
+                                                    .Register(*registry);
 }
 
 void TiFlashMetrics::addReplicaSyncRU(UInt32 keyspace_id, UInt64 ru)
@@ -210,4 +222,69 @@ void TiFlashMetrics::setProvideProxyProcessMetrics(bool v)
     process_collector->include_proxy_metrics = v;
 }
 
+prometheus::Counter & TiFlashMetrics::getStorageRUReadBytesCounter(
+    KeyspaceID keyspace,
+    const String & resource_group,
+    DM::ReadRUType type)
+{
+    auto key = fmt::format("{}_{}_{}", keyspace, resource_group, magic_enum::enum_name(type));
+
+    // Fast path
+    {
+        std::shared_lock lock(storage_ru_read_bytes_mtx);
+        auto it = registered_storage_ru_read_bytes_metrics.find(key);
+        if (it != registered_storage_ru_read_bytes_metrics.end())
+            return *(it->second);
+    }
+
+    // Create counter for new keyspace/resource_group/type.
+    {
+        std::unique_lock lock(storage_ru_read_bytes_mtx);
+        // double-check: other threads may create the same counter
+        auto it = registered_storage_ru_read_bytes_metrics.find(key);
+        if (it != registered_storage_ru_read_bytes_metrics.end())
+            return *(it->second);
+
+        prometheus::Labels labels
+            = {{"keyspace", std::to_string(keyspace)},
+               {"resource_group", resource_group},
+               {"type", std::string(magic_enum::enum_name(type))}};
+        auto & counter = registered_storage_ru_read_bytes_family->Add(labels);
+        registered_storage_ru_read_bytes_metrics[key] = &counter;
+        return counter;
+    }
+}
+
+void TiFlashMetrics::setS3StoreSummaryBytes(UInt64 store_id, UInt64 data_file_bytes, UInt64 dt_file_bytes)
+{
+    // Fast path.
+    {
+        std::shared_lock lock(s3_store_summary_bytes_mtx);
+        auto it = registered_s3_store_summary_bytes_metrics.find(store_id);
+        if (it != registered_s3_store_summary_bytes_metrics.end())
+        {
+            it->second.data_file_bytes->Set(data_file_bytes);
+            it->second.dt_file_bytes->Set(dt_file_bytes);
+            return;
+        }
+    }
+
+    std::unique_lock lock(s3_store_summary_bytes_mtx);
+    auto [it, inserted] = registered_s3_store_summary_bytes_metrics.try_emplace(store_id);
+    if (inserted)
+    {
+        auto store_id_str = std::to_string(store_id);
+        auto & data_file_bytes_metric
+            = registered_s3_store_summary_bytes_family->Add({{"store_id", store_id_str}, {"type", "data_file_bytes"}});
+        auto & dt_file_bytes_metric
+            = registered_s3_store_summary_bytes_family->Add({{"store_id", store_id_str}, {"type", "dt_file_bytes"}});
+        it->second = S3StoreSummaryBytesMetrics{
+            .data_file_bytes = &data_file_bytes_metric,
+            .dt_file_bytes = &dt_file_bytes_metric,
+        };
+    }
+
+    it->second.data_file_bytes->Set(data_file_bytes);
+    it->second.dt_file_bytes->Set(dt_file_bytes);
+}
 } // namespace DB

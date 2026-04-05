@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
+#include <Common/config.h> // For ENABLE_CLARA
 #include <DataStreams/GeneratedColumnPlaceholderBlockInputStream.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
@@ -21,39 +23,48 @@
 #include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
 #include <Storages/SelectQueryInfo.h>
 #include <TiDB/Decode/TypeMapping.h>
+#include <tipb/executor.pb.h>
 
 namespace DB::DM
 {
 PushDownExecutorPtr PushDownExecutor::build(
     const RSOperatorPtr & rs_operator,
     const ANNQueryInfoPtr & ann_query_info,
+#if ENABLE_CLARA
+    const FTSQueryInfoPtr & fts_query_info,
+#endif
     const TiDB::ColumnInfos & table_scan_column_info,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters,
     const ColumnDefines & columns_to_read,
+    const ColumnRangePtr & column_range,
     const Context & context,
     const LoggerPtr & tracing_logger)
 {
     // check if the ann_query_info is valid
-    auto valid_ann_query_info = ann_query_info;
     if (ann_query_info)
     {
-        bool is_valid_ann_query = ann_query_info->top_k() != std::numeric_limits<UInt32>::max();
-        bool is_matching_ann_query = std::any_of(
-            columns_to_read.begin(),
-            columns_to_read.end(),
-            [cid = ann_query_info->column_id()](const ColumnDefine & cd) -> bool { return cd.id == cid; });
-        if (!is_valid_ann_query || !is_matching_ann_query)
-            valid_ann_query_info = nullptr;
+        RUNTIME_CHECK(ann_query_info->top_k() != std::numeric_limits<UInt32>::max());
     }
 
     if (pushed_down_filters.empty())
     {
         LOG_DEBUG(tracing_logger, "Push down filter is empty");
-        return std::make_shared<PushDownExecutor>(rs_operator, valid_ann_query_info);
+        return std::make_shared<PushDownExecutor>(
+            rs_operator,
+            ann_query_info,
+#if ENABLE_CLARA
+            fts_query_info,
+#endif
+            column_range);
     }
     std::unordered_map<ColumnID, ColumnDefine> columns_to_read_map;
     for (const auto & column : columns_to_read)
         columns_to_read_map.emplace(column.id, column);
+
+    // TiDB may request a hidden commit_ts column in TableScan with a special ColumnID.
+    // In TiFlash it is stored in `_INTERNAL_VERSION` (VersionColumnID), so create an alias mapping.
+    if (const auto it = columns_to_read_map.find(MutSup::version_col_id); it != columns_to_read_map.end())
+        columns_to_read_map.try_emplace(MutSup::extra_commit_ts_col_id, it->second);
 
     // Get the columns of the filter, is a subset of columns_to_read
     std::unordered_set<ColumnID> filter_col_id_set;
@@ -164,19 +175,24 @@ PushDownExecutorPtr PushDownExecutor::build(
 
     return std::make_shared<PushDownExecutor>(
         rs_operator,
-        valid_ann_query_info,
+        ann_query_info,
+#if ENABLE_CLARA
+        fts_query_info,
+#endif
         before_where,
         project_after_where,
         filter_columns,
         filter_column_name,
         extra_cast,
-        columns_after_cast);
+        columns_after_cast,
+        column_range);
 }
 
 PushDownExecutorPtr PushDownExecutor::build(
     const SelectQueryInfo & query_info,
     const ColumnDefines & columns_to_read,
     const ColumnDefines & table_column_defines,
+    const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> & used_indexes,
     const Context & context,
     const LoggerPtr & tracing_logger)
 {
@@ -192,10 +208,20 @@ PushDownExecutorPtr PushDownExecutor::build(
         table_column_defines,
         context.getSettingsRef().dt_enable_rough_set_filter,
         tracing_logger);
+    // build column_range
+    const auto column_range = rs_operator && !used_indexes.empty() ? rs_operator->buildSets(used_indexes) : nullptr;
     // build ann_query_info
     ANNQueryInfoPtr ann_query_info = nullptr;
     if (dag_query->ann_query_info.query_type() != tipb::ANNQueryType::InvalidQueryType)
         ann_query_info = std::make_shared<tipb::ANNQueryInfo>(dag_query->ann_query_info);
+#if ENABLE_CLARA
+    FTSQueryInfoPtr fts_query_info = nullptr;
+    if (dag_query->fts_query_info.query_type() != tipb::FTSQueryType::FTSQueryTypeInvalid)
+        fts_query_info = std::make_shared<tipb::FTSQueryInfo>(dag_query->fts_query_info);
+#else
+    if (dag_query->fts_query_info.query_type() != tipb::FTSQueryType::FTSQueryTypeInvalid)
+        throw Exception("FTS query is not supported", ErrorCodes::NOT_IMPLEMENTED);
+#endif
     // build push down filter
     const auto & pushed_down_filters = dag_query->pushed_down_filters;
     if (unlikely(context.getSettingsRef().force_push_down_all_filters_to_scan) && !dag_query->filters.empty())
@@ -207,19 +233,43 @@ PushDownExecutorPtr PushDownExecutor::build(
         return PushDownExecutor::build(
             rs_operator,
             ann_query_info,
+#if ENABLE_CLARA
+            fts_query_info,
+#endif
             columns_to_read_info,
             merged_filters,
             columns_to_read,
+            column_range,
             context,
             tracing_logger);
     }
     return PushDownExecutor::build(
         rs_operator,
         ann_query_info,
+#if ENABLE_CLARA
+        fts_query_info,
+#endif
         columns_to_read_info,
         pushed_down_filters,
         columns_to_read,
+        column_range,
         context,
         tracing_logger);
 }
+
+Poco::JSON::Object::Ptr PushDownExecutor::toJSONObject() const
+{
+    Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
+    if (rs_operator)
+    {
+        json->set("rs_operator", rs_operator->toJSONObject());
+    }
+    // ann_query_info usually print too large body, do not print it by default
+    // if (ann_query_info)
+    // {
+    //     json->set("ann_query_info", ann_query_info->ShortDebugString());
+    // }
+    return json;
+}
+
 } // namespace DB::DM

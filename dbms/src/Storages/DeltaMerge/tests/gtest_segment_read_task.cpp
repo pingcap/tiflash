@@ -84,12 +84,13 @@ protected:
         auto broken_delta_index = std::make_shared<DeltaIndex>(
             second_snap->delta->getSharedDeltaIndex()->getDeltaTree(),
             placed_rows,
-            placed_deletes,
-            first_snap->delta->getSharedDeltaIndex()->getRNCacheKey());
+            placed_deletes);
 
         // hack to change the "immutable" delta-index on delta-snapshot for testing
         (*const_cast<DeltaIndexPtr *>(&first_snap->delta->getSharedDeltaIndex())) = broken_delta_index;
 
+        // Always use delta index in this case.
+        auto guard = disableVersionChainTemporary(db_context->getGlobalContext().getSettingsRef());
         // read the left segment after split
         auto task = std::make_shared<DM::SegmentReadTask>(
             first,
@@ -207,7 +208,9 @@ public:
             /*store_address*/ "127.0.0.1",
             store->keyspace_id,
             store->physical_table_id,
-            /*pk_col_id*/ 0);
+            /*pk_col_id*/ 0,
+            /*is_same_zone*/ false,
+            /*establish_disagg_task_resp_size*/ 0);
     }
 
     void initReadNodePageCacheIfUninitialized()
@@ -719,7 +722,9 @@ try
             /*store_address*/ "127.0.0.1",
             store->keyspace_id,
             store->physical_table_id,
-            /*pk_col_id*/ 0);
+            /*pk_col_id*/ 0,
+            /*is_same_zone*/ false,
+            /*establish_disagg_task_resp_size*/ 0);
 
         auto seg_id = seg_task->segment->segmentId();
 
@@ -860,7 +865,9 @@ try
         /*store_address*/ "127.0.0.1",
         store->keyspace_id,
         store->physical_table_id,
-        /*pk_col_id*/ 0);
+        /*pk_col_id*/ 0,
+        /*is_same_zone*/ false,
+        /*establish_disagg_task_resp_size*/ 0);
     const auto & cfs = seg_task->read_snapshot->delta->getMemTableSetSnapshot()->getColumnFiles();
     ASSERT_EQ(cfs.size(), 1);
     const auto & cf = cfs.front();

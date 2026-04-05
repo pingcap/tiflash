@@ -17,6 +17,7 @@
 #include <Common/Logger.h>
 #include <IO/Buffer/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context_fwd.h>
+#include <Storages/KVStore/Region_fwd.h>
 #include <Storages/KVStore/Types.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/PageStorage.h>
@@ -25,9 +26,6 @@
 namespace DB
 {
 class PathPool;
-class Region;
-using RegionPtr = std::shared_ptr<Region>;
-using RegionMap = std::unordered_map<RegionID, RegionPtr>;
 
 class RegionTaskLock;
 struct RegionManager;

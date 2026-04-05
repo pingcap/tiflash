@@ -15,13 +15,14 @@
 #pragma once
 #include <Common/MemoryTrackerSetter.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Flash/ResourceControl/LocalAdmissionController.h>
+#include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
 #include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/ReadThread/WorkQueue.h>
 #include <Storages/DeltaMerge/SegmentReadTask.h>
-
 
 namespace DB::DM
 {
@@ -82,7 +83,7 @@ private:
 
 // If `enable_read_thread_` is true, `SegmentReadTasksWrapper` use `std::unordered_map` to index `SegmentReadTask` by segment id,
 // else it is the same as `SegmentReadTasks`, a `std::list` of `SegmentReadTask`.
-// `SegmeneReadTasksWrapper` is not thread-safe.
+// `SegmentReadTasksWrapper` is not thread-safe.
 class SegmentReadTasksWrapper
 {
 public:
@@ -111,7 +112,7 @@ public:
     SegmentReadTaskPool(
         int extra_table_id_index_,
         const ColumnDefines & columns_to_read_,
-        const PushDownExecutorPtr & filter_,
+        const PushDownExecutorPtr & executor_,
         uint64_t start_ts_,
         size_t expected_block_size_,
         ReadMode read_mode_,
@@ -120,38 +121,14 @@ public:
         const String & tracing_id,
         bool enable_read_thread_,
         Int64 num_streams_,
+        Int64 active_segment_limit_,
+        const KeyspaceID & keyspace_id_,
         const String & res_group_name_);
 
-    ~SegmentReadTaskPool() override
-    {
-        auto [pop_times, pop_empty_times, max_queue_size] = q.getStat();
-        auto pop_empty_ratio = pop_times > 0 ? pop_empty_times * 1.0 / pop_times : 0.0;
-        auto total_count = blk_stat.totalCount();
-        auto total_bytes = blk_stat.totalBytes();
-        auto blk_avg_bytes = total_count > 0 ? total_bytes / total_count : 0;
-        auto approx_max_pending_block_bytes = blk_avg_bytes * max_queue_size;
-        auto total_rows = blk_stat.totalRows();
-        LOG_INFO(
-            log,
-            "Done. pool_id={} pop={} pop_empty={} pop_empty_ratio={} "
-            "max_queue_size={} blk_avg_bytes={} approx_max_pending_block_bytes={:.2f}MB "
-            "total_count={} total_bytes={:.2f}MB total_rows={} avg_block_rows={} avg_rows_bytes={}B",
-            pool_id,
-            pop_times,
-            pop_empty_times,
-            pop_empty_ratio,
-            max_queue_size,
-            blk_avg_bytes,
-            approx_max_pending_block_bytes / 1024.0 / 1024.0,
-            total_count,
-            total_bytes / 1024.0 / 1024.0,
-            total_rows,
-            total_count > 0 ? total_rows / total_count : 0,
-            total_rows > 0 ? total_bytes / total_rows : 0);
-    }
+    ~SegmentReadTaskPool() override;
 
     SegmentReadTaskPtr nextTask();
-    const std::unordered_map<GlobalSegmentID, SegmentReadTaskPtr> & getTasks();
+    const std::unordered_map<GlobalSegmentID, SegmentReadTaskPtr> & getTasks() const;
     SegmentReadTaskPtr getTask(const GlobalSegmentID & seg_id);
 
     BlockInputStreamPtr buildInputStream(SegmentReadTaskPtr & t);
@@ -175,7 +152,22 @@ public:
 
     std::once_flag & addToSchedulerFlag() { return add_to_scheduler; }
 
-    void registerTask(TaskPtr && task) override { q.registerPipeTask(std::move(task)); }
+    void registerTask(TaskPtr && task) override
+    {
+        q.registerPipeTask(std::move(task), NotifyType::WAIT_ON_TABLE_SCAN_READ);
+    }
+
+    std::once_flag & getRemoteConnectionInfoFlag() { return get_remote_connection_flag; }
+    std::optional<std::pair<ConnectionProfileInfo, ConnectionProfileInfo>> getRemoteConnectionInfo() const;
+    void recordRemoteConnectionInfoIfNecessary(const SegmentReadTaskPtr & task)
+    {
+        if (task->extra_remote_info)
+        {
+            std::lock_guard lock(connection_info_mu);
+            remote_connection_infos.push_back(task->extra_remote_info->connection_profile_info);
+        }
+    }
+    size_t getTotalReadTasks() const { return total_read_tasks; }
 
 public:
     const uint64_t pool_id;
@@ -187,16 +179,16 @@ public:
 
     void appendRSOperator(RSOperatorPtr & new_filter) const
     {
-        if (filter->rs_operator == DM::EMPTY_RS_OPERATOR)
+        if (executor->rs_operator == DM::EMPTY_RS_OPERATOR)
         {
-            filter->rs_operator = new_filter;
+            executor->rs_operator = new_filter;
         }
         else
         {
             RSOperators children;
-            children.push_back(filter->rs_operator);
+            children.push_back(executor->rs_operator);
             children.push_back(new_filter);
-            filter->rs_operator = createAnd(children);
+            executor->rs_operator = createAnd(children);
         }
     }
 
@@ -214,13 +206,15 @@ private:
 
     const int extra_table_id_index;
     ColumnDefines columns_to_read;
-    PushDownExecutorPtr filter;
+    PushDownExecutorPtr executor;
     const uint64_t start_ts;
     const size_t expected_block_size;
     const ReadMode read_mode;
+    const size_t total_read_tasks;
     SegmentReadTasksWrapper tasks_wrapper;
     AfterSegmentRead after_segment_read;
     mutable std::mutex mutex;
+    size_t peak_active_segments;
     std::unordered_set<GlobalSegmentID> active_segment_ids;
     WorkQueue<Block> q;
     BlockStat blk_stat;
@@ -231,7 +225,7 @@ private:
     std::atomic<bool> exception_happened;
     DB::Exception exception;
 
-    // SegmentReadTaskPool will be holded by several UnorderedBlockInputStreams.
+    // SegmentReadTaskPool will be held by several UnorderedBlockInputStreams.
     // It will be added to SegmentReadTaskScheduler when one of the UnorderedBlockInputStreams being read.
     // Since several UnorderedBlockInputStreams can be read by several threads concurrently, we use
     // std::once_flag and std::call_once to prevent duplicated add.
@@ -240,6 +234,7 @@ private:
     const Int64 block_slot_limit;
     const Int64 active_segment_limit;
 
+    const KeyspaceID keyspace_id;
     const String res_group_name;
     std::mutex ru_mu;
     std::atomic<Int64> last_time_check_ru = 0;
@@ -250,6 +245,12 @@ private:
     inline static BlockStat global_blk_stat;
     static uint64_t nextPoolId() { return pool_id_gen.fetch_add(1, std::memory_order_relaxed); }
     inline static constexpr Int64 check_ru_interval_ms = 100;
+
+    mutable std::mutex connection_info_mu;
+    std::once_flag get_remote_connection_flag;
+    // Each remote segment task have a connection info to record network bytes,
+    // and it will be collected by TableScan as runtime statistics.
+    std::vector<ConnectionProfileInfo> remote_connection_infos;
 
     friend class tests::SegmentReadTasksPoolTest;
 };

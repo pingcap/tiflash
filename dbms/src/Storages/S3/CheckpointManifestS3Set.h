@@ -40,6 +40,7 @@ public:
 
     static CheckpointManifestS3Set create(const std::vector<CheckpointManifestS3Object> & manifest_keys);
 
+    ALWAYS_INLINE size_t size() const { return manifests.size(); }
     ALWAYS_INLINE bool empty() const { return manifests.empty(); }
 
     UInt64 latestUploadSequence() const

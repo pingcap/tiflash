@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <DataTypes/IDataType.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <TestUtils/AggregationTestUtils.h>
 
 namespace DB::tests

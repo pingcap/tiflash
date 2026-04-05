@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Columns/FilterDescription.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +21,7 @@
 
 namespace DB
 {
-/// Support methods for implementation of WHERE, PREWHERE and HAVING.
+/// Support methods for implementation of WHERE and HAVING.
 
 
 /// Analyze if the column for filter is constant thus filter is always false or always true.

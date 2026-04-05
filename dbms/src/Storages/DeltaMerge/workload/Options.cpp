@@ -15,9 +15,8 @@
 #include <Common/FailPoint.h>
 #include <Storages/DeltaMerge/workload/Options.h>
 #include <Storages/DeltaMerge/workload/Utils.h>
+#include <boost_wrapper/program_options.h>
 #include <fmt/ranges.h>
-
-#include <boost/program_options.hpp>
 
 namespace DB::DM::tests
 {

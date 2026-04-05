@@ -57,6 +57,19 @@ private:
         std::unique_ptr<IBlockOutputStream> out;
         size_t written_rows = 0;
     };
+
+    // Expect to be called in catch statement.
+    void markAsInvalidAndRethrow()
+    {
+        writer = nullptr;
+        spilled_files.clear();
+        current_spilled_file_index = INVALID_CURRENT_SPILLED_FILE_INDEX;
+        throw Exception(fmt::format(
+            "Failed to spill blocks to disk for file {}, error: {}",
+            current_spill_file_name,
+            getCurrentExceptionMessage(false, false)));
+    }
+
     Spiller * spiller;
     std::vector<std::unique_ptr<SpilledFile>> spilled_files;
     UInt64 all_constant_block_rows = 0;

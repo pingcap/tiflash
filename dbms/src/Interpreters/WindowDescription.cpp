@@ -15,6 +15,7 @@
 #include <Core/Field.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/WindowDescription.h>
+#include <tipb/executor.pb.h>
 #include <tipb/expression.pb.h>
 
 #include <magic_enum.hpp>
@@ -52,18 +53,37 @@ WindowFrame::FrameType getFrameTypeFromTipb(const tipb::WindowFrameType & type)
     }
 }
 
-void WindowDescription::setWindowFrame(const tipb::WindowFrame & frame_)
+void setWindowFrameImpl(WindowFrame & frame, const tipb::WindowFrame & tipb_frame)
 {
-    frame.type = getFrameTypeFromTipb(frame_.type());
-    frame.begin_offset = frame_.start().offset();
-    frame.begin_type = getBoundaryTypeFromTipb(frame_.start());
-    frame.begin_preceding = (frame_.start().type() == tipb::WindowBoundType::Preceding);
-    frame.begin_cmp_data_type = frame_.start().cmp_data_type();
-    frame.end_offset = frame_.end().offset();
-    frame.end_type = getBoundaryTypeFromTipb(frame_.end());
-    frame.end_preceding = (frame_.end().type() == tipb::WindowBoundType::Preceding);
-    frame.end_cmp_data_type = frame_.end().cmp_data_type();
+    frame.type = getFrameTypeFromTipb(tipb_frame.type());
+    frame.begin_offset = tipb_frame.start().offset();
+    frame.begin_type = getBoundaryTypeFromTipb(tipb_frame.start());
+    frame.begin_preceding = (tipb_frame.start().type() == tipb::WindowBoundType::Preceding);
+    frame.begin_cmp_data_type = tipb_frame.start().cmp_data_type();
+    frame.end_offset = tipb_frame.end().offset();
+    frame.end_type = getBoundaryTypeFromTipb(tipb_frame.end());
+    frame.end_preceding = (tipb_frame.end().type() == tipb::WindowBoundType::Preceding);
+    frame.end_cmp_data_type = tipb_frame.end().cmp_data_type();
     frame.is_default = false;
+
+    if (frame.type == WindowFrame::FrameType::Rows)
+    {
+        if (frame.begin_type == WindowFrame::BoundaryType::Offset && frame.begin_offset == 0)
+        {
+            frame.begin_type = WindowFrame::BoundaryType::Current;
+            frame.begin_preceding = false;
+        }
+        if (frame.end_type == WindowFrame::BoundaryType::Offset && frame.end_offset == 0)
+        {
+            frame.end_type = WindowFrame::BoundaryType::Current;
+            frame.end_preceding = false;
+        }
+    }
+}
+
+void WindowDescription::setWindowFrame(const tipb::WindowFrame & tipb_frame)
+{
+    setWindowFrameImpl(this->frame, tipb_frame);
 }
 
 void WindowDescription::fillArgColumnNumbers()
@@ -97,9 +117,11 @@ void WindowDescription::initNeedDecrease(bool has_agg)
         return;
     }
 
-    if (frame.type == WindowFrame::FrameType::Rows)
+    if (frame.type == WindowFrame::FrameType::Rows && frame.begin_type == frame.end_type)
     {
-        if ((frame.begin_offset == 0 && frame.end_offset == 0)
+        // During the construction of frame with tipb, we will convert the boundary type from offset to current
+        // when the frame type is rows and offset is 0. So it's needless to judge offset = 0.
+        if ((frame.begin_type == WindowFrame::BoundaryType::Current)
             || (frame.begin_preceding == frame.end_preceding && frame.begin_offset == frame.end_offset))
             need_decrease = false;
     }

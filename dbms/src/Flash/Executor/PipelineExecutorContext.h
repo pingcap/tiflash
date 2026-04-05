@@ -17,10 +17,12 @@
 #include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
 #include <Core/AutoSpillTrigger.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Executor/ExecutionResult.h>
 #include <Flash/Executor/ResultHandler.h>
 #include <Flash/Executor/ResultQueue_fwd.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskProfileInfo.h>
+#include <Storages/KVStore/Types.h>
 
 #include <atomic>
 #include <exception>
@@ -49,6 +51,7 @@ public:
         , mem_tracker(nullptr)
         , auto_spill_trigger(nullptr)
         , register_operator_spill_context(nullptr)
+        , keyspace_id(NullspaceID)
     {}
 
     PipelineExecutorContext(
@@ -58,6 +61,7 @@ public:
         DAGContext * dag_context_ = nullptr,
         AutoSpillTrigger * auto_spill_trigger_ = nullptr,
         const RegisterOperatorSpillContext & register_operator_spill_context_ = nullptr,
+        const KeyspaceID & keyspace_id_ = NullspaceID,
         const String & resource_group_name_ = "")
         : query_id(query_id_)
         , log(Logger::get(req_id))
@@ -65,6 +69,7 @@ public:
         , dag_context(dag_context_)
         , auto_spill_trigger(auto_spill_trigger_)
         , register_operator_spill_context(register_operator_spill_context_)
+        , keyspace_id(keyspace_id_)
         , resource_group_name(resource_group_name_)
     {}
 
@@ -135,6 +140,8 @@ public:
 
     const String & getResourceGroupName() const { return resource_group_name; }
 
+    const KeyspaceID & getKeyspaceID() const { return keyspace_id; }
+
     void addSharedQueue(const SharedQueuePtr & shared_queue);
 
     void addOneTimeFuture(const OneTimeNotifyFuturePtr & future);
@@ -181,6 +188,8 @@ private:
     AutoSpillTrigger * auto_spill_trigger;
 
     RegisterOperatorSpillContext register_operator_spill_context;
+
+    const KeyspaceID keyspace_id;
 
     const String resource_group_name;
 

@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Interpreters/Aggregator.cpp
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -707,9 +709,9 @@ std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::Res
     try
     {
         if constexpr (only_lookup)
-            return state.template findKey(method.data, key_holder, hashval);
+            return state.findKey(method.data, key_holder, hashval);
         else
-            return state.template emplaceKey(method.data, key_holder, hashval);
+            return state.emplaceKey(method.data, key_holder, hashval);
     }
     catch (ResizeException &)
     {
@@ -726,9 +728,9 @@ std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::Res
     try
     {
         if constexpr (only_lookup)
-            return state.template findKey(method.data, key_holder);
+            return state.findKey(method.data, key_holder);
         else
-            return state.template emplaceKey(method.data, key_holder);
+            return state.emplaceKey(method.data, key_holder);
     }
     catch (ResizeException &)
     {
@@ -1836,7 +1838,7 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
 
     size_t data_index = 0;
     const auto rows = data.size();
-    std::unique_ptr<AggregateDataPtr[]> places(new AggregateDataPtr[rows]);
+    std::unique_ptr<AggregateDataPtr *[]> places(new AggregateDataPtr *[rows]);
 
     PaddedPODArray<char *> key_places;
     if constexpr (batch_deserialize_key)
@@ -1860,7 +1862,7 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
                     .insertKeyIntoColumns(key, key_columns_vec[key_columns_vec_index], key_sizes_ref, params.collators);
             }
         }
-        places[data_index] = mapped;
+        places[data_index] = &mapped;
         ++data_index;
 
         if unlikely (data_index == current_bound)
@@ -1888,9 +1890,9 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
     while (data_index < rows)
     {
         if likely (data_index + agg_prefetch_step < rows)
-            __builtin_prefetch(places[data_index + agg_prefetch_step]);
+            __builtin_prefetch(*places[data_index + agg_prefetch_step]);
 
-        insertAggregatesIntoColumns(places[data_index], final_aggregate_columns_vec[key_columns_vec_index], arena);
+        insertAggregatesIntoColumns(*places[data_index], final_aggregate_columns_vec[key_columns_vec_index], arena);
         ++data_index;
 
         if unlikely (data_index == current_bound)

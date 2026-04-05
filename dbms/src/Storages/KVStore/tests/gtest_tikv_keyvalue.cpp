@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/config.h> // for ENABLE_NEXT_GEN
+#include <Debug/MockKVStore/MockUtils.h>
 #include <IO/VarInt.h>
 #include <Storages/KVStore/Decode/TiKVHelper.h>
 #include <Storages/KVStore/Decode/TiKVRange.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
 #include <Storages/KVStore/Types.h>
-#include <Storages/KVStore/tests/region_helper.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Schema/TiDB.h>
 
@@ -64,7 +65,7 @@ TEST(TiKVKeyValueTest, KeyFormat)
         ASSERT_NE(decoded->short_value, nullptr);
         ASSERT_EQ(*decoded->short_value, short_value);
     }
-#if SERVERLESS_PROXY != 0
+#if ENABLE_NEXT_GEN
     {
         // For serverless branch, the short_value length use varUInt
         std::string short_value(1025, 'F');

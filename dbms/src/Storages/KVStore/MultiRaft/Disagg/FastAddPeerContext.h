@@ -18,6 +18,7 @@
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointIngestInfo.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerCache.h>
+#include <Storages/KVStore/Region_fwd.h>
 #include <Storages/KVStore/Utils/AsyncTasks.h>
 
 namespace DB
@@ -26,8 +27,6 @@ class FastAddPeerContext;
 using FAPAsyncTasks = AsyncTasks<uint64_t, std::function<FastAddPeerRes()>, FastAddPeerRes>;
 struct CheckpointInfo;
 using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
-class Region;
-using RegionPtr = std::shared_ptr<Region>;
 using CheckpointRegionInfoAndData
     = std::tuple<CheckpointInfoPtr, RegionPtr, raft_serverpb::RaftApplyState, raft_serverpb::RegionLocalState>;
 

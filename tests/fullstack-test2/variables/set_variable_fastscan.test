@@ -71,7 +71,7 @@ mysql> set session tiflash_fastscan=ON; set session tidb_isolation_read_engines=
 |    5 |    7|
 +------+-----+
 
-## verfiy set global session tiflash_fastscan will not make other current session take effect.
+## verify set global session tiflash_fastscan will not make other current session take effect.
 mysql> set global tiflash_fastscan=ON; set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 +------+-----+
 | a    | b   |
@@ -80,7 +80,7 @@ mysql> set global tiflash_fastscan=ON; set session tidb_isolation_read_engines='
 |    5 |    7|
 +------+-----+
 
-## verfiy set global session tiflash_fastscan will make other new session take effect.
+## verify set global session tiflash_fastscan will make other new session take effect.
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 +------+-----+
 | a    | b   |

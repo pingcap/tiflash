@@ -65,13 +65,16 @@ void VectorIndexInputStream::initSearchResults()
 
     // 2. Keep the top k minimum distances rows.
     // [0, top_k) will be the top k minimum distances rows. (However it is not sorted)
-    const auto top_k = std::min(search_results->size(), ctx->ann_query_info->top_k());
-    std::nth_element( //
-        search_results->begin(),
-        search_results->begin() + top_k,
-        search_results->end(),
-        [](const auto & lhs, const auto & rhs) { return lhs.distance < rhs.distance; });
-    search_results->resize(top_k);
+    const auto top_k = ctx->ann_query_info->top_k();
+    if (top_k < search_results->size())
+    {
+        std::nth_element( //
+            search_results->begin(),
+            search_results->begin() + top_k,
+            search_results->end(),
+            [](const auto & lhs, const auto & rhs) { return lhs.distance < rhs.distance; });
+        search_results->resize(top_k);
+    }
 
     // 3. Sort by rowid for the first K rows.
     std::sort( //
@@ -114,14 +117,13 @@ void VectorIndexInputStream::initSearchResults()
     if (ctx->dm_context != nullptr && ctx->dm_context->scan_context != nullptr)
     {
         auto scan_context = ctx->dm_context->scan_context;
-        scan_context->total_vector_idx_load_from_s3 += ctx->perf->load_from_stable_s3;
-        scan_context->total_vector_idx_load_from_disk
-            += ctx->perf->load_from_stable_disk + ctx->perf->load_from_column_file;
-        scan_context->total_vector_idx_load_from_cache += ctx->perf->load_from_cache;
-        scan_context->total_vector_idx_load_time_ms += ctx->perf->total_load_ms;
-        scan_context->total_vector_idx_search_time_ms += ctx->perf->total_search_ms;
-        scan_context->total_vector_idx_search_visited_nodes += ctx->perf->visited_nodes;
-        scan_context->total_vector_idx_search_discarded_nodes += ctx->perf->discarded_nodes;
+        scan_context->vector_idx_load_from_s3 += ctx->perf->load_from_stable_s3;
+        scan_context->vector_idx_load_from_disk += ctx->perf->load_from_stable_disk + ctx->perf->load_from_column_file;
+        scan_context->vector_idx_load_from_cache += ctx->perf->load_from_cache;
+        scan_context->vector_idx_load_time_ms += ctx->perf->total_load_ms;
+        scan_context->vector_idx_search_time_ms += ctx->perf->total_search_ms;
+        scan_context->vector_idx_search_visited_nodes += ctx->perf->visited_nodes;
+        scan_context->vector_idx_search_discarded_nodes += ctx->perf->discarded_nodes;
     }
 
     searchResultsInited = true;
@@ -198,9 +200,8 @@ void VectorIndexInputStream::onReadFinished()
     if (ctx->dm_context != nullptr && ctx->dm_context->scan_context != nullptr)
     {
         auto scan_context = ctx->dm_context->scan_context;
-        scan_context->total_vector_idx_read_vec_time_ms
-            += ctx->perf->total_cf_read_vec_ms + ctx->perf->total_dm_read_vec_ms;
-        scan_context->total_vector_idx_read_others_time_ms
+        scan_context->vector_idx_read_vec_time_ms += ctx->perf->total_cf_read_vec_ms + ctx->perf->total_dm_read_vec_ms;
+        scan_context->vector_idx_read_others_time_ms
             += ctx->perf->total_cf_read_others_ms + ctx->perf->total_dm_read_others_ms;
     }
 }

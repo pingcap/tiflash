@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <DataStreams/ConcatBlockInputStream.h>
-#include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
@@ -74,19 +73,19 @@ public:
 
         context.addMockTable(
             {"multi_test", "t1"},
-            {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}},
+            {{"a", TiDB::TP::TypeLong, false}, {"b", TiDB::TP::TypeLong, false}, {"c", TiDB::TP::TypeLong, false}},
             {toVec<Int32>("a", {1, 3, 0}), toVec<Int32>("b", {2, 2, 0}), toVec<Int32>("c", {3, 2, 0})});
         context.addMockTable(
             {"multi_test", "t2"},
-            {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}},
+            {{"a", TiDB::TP::TypeLong, false}, {"b", TiDB::TP::TypeLong, false}, {"c", TiDB::TP::TypeLong, false}},
             {toVec<Int32>("a", {3, 3, 0}), toVec<Int32>("b", {4, 2, 0}), toVec<Int32>("c", {5, 3, 0})});
         context.addMockTable(
             {"multi_test", "t3"},
-            {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
+            {{"a", TiDB::TP::TypeLong, false}, {"b", TiDB::TP::TypeLong, false}},
             {toVec<Int32>("a", {1, 2, 0}), toVec<Int32>("b", {2, 2, 0})});
         context.addMockTable(
             {"multi_test", "t4"},
-            {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
+            {{"a", TiDB::TP::TypeLong, false}, {"b", TiDB::TP::TypeLong, false}},
             {toVec<Int32>("a", {3, 2, 0}), toVec<Int32>("b", {4, 2, 0})});
     }
 
@@ -475,7 +474,7 @@ CreatingSets
         execute(
             request,
             /*expected_physical_plan=*/replaceStringName(R"(
-<Projection, Join_6> | is_tidb_operator: false, schema: <Join_6_Join_6_l_Join_4_l_a, Nullable(Int32)>, <Join_6_Join_6_l_Join_4_l_b, Nullable(Int32)>, <Join_6_Join_6_l_Join_4_l_c, Nullable(Int32)>, <Join_6_CAST(Join_6_l_Join_4_r_a, Nullable(Int32)_{StringName})_collator_0 , Nullable(Int32)>, <Join_6_CAST(Join_6_l_Join_4_r_b, Nullable(Int32)_{StringName})_collator_0 , Nullable(Int32)>, <Join_6_CAST(Join_6_l_Join_4_r_c, Nullable(Int32)_{StringName})_collator_0 , Nullable(Int32)>, <Join_6_Join_6_r_Join_5_l_a, Nullable(Int32)>, <Join_6_Join_6_r_Join_5_l_b, Nullable(Int32)>, <Join_6_CAST(Join_6_r_Join_5_r_a, Nullable(Int32)_{StringName})_collator_0 , Nullable(Int32)>, <Join_6_CAST(Join_6_r_Join_5_r_b, Nullable(Int32)_{StringName})_collator_0 , Nullable(Int32)>
+<Projection, Join_6> | is_tidb_operator: false, schema: <Join_6_Join_6_l_Join_4_l_a, Nullable(Int32)>, <Join_6_Join_6_l_Join_4_l_b, Nullable(Int32)>, <Join_6_Join_6_l_Join_4_l_c, Nullable(Int32)>, <Join_6_Join_6_l_Join_4_r_a, Int32>, <Join_6_Join_6_l_Join_4_r_b, Int32>, <Join_6_Join_6_l_Join_4_r_c, Int32>, <Join_6_Join_6_r_Join_5_l_a, Nullable(Int32)>, <Join_6_Join_6_r_Join_5_l_b, Nullable(Int32)>, <Join_6_Join_6_r_Join_5_r_a, Int32>, <Join_6_Join_6_r_Join_5_r_b, Int32>
  <Join, Join_6> | is_tidb_operator: true, schema: <Join_6_l_Join_4_l_a, Nullable(Int32)>, <Join_6_l_Join_4_l_b, Nullable(Int32)>, <Join_6_l_Join_4_l_c, Nullable(Int32)>, <Join_6_l_Join_4_r_a, Int32>, <Join_6_l_Join_4_r_b, Int32>, <Join_6_l_Join_4_r_c, Int32>, <Join_6_r_Join_5_l_a, Nullable(Int32)>, <Join_6_r_Join_5_l_b, Nullable(Int32)>, <Join_6_r_Join_5_r_a, Int32>, <Join_6_r_Join_5_r_b, Int32>
   <Projection, Join_4> | is_tidb_operator: false, schema: <Join_6_l_Join_4_l_a, Nullable(Int32)>, <Join_6_l_Join_4_l_b, Nullable(Int32)>, <Join_6_l_Join_4_l_c, Nullable(Int32)>, <Join_6_l_Join_4_r_a, Int32>, <Join_6_l_Join_4_r_b, Int32>, <Join_6_l_Join_4_r_c, Int32>
    <Join, Join_4> | is_tidb_operator: true, schema: <Join_4_l_a, Nullable(Int32)>, <Join_4_l_b, Nullable(Int32)>, <Join_4_l_c, Nullable(Int32)>, <Join_4_r_a, Int32>, <Join_4_r_b, Int32>, <Join_4_r_c, Int32>
@@ -508,13 +507,13 @@ CreatingSets
             {toNullableVec<Int32>({3, 3, 0}),
              toNullableVec<Int32>({2, 2, 0}),
              toNullableVec<Int32>({2, 2, 0}),
-             toNullableVec<Int32>({3, 3, 0}),
-             toNullableVec<Int32>({4, 2, 0}),
-             toNullableVec<Int32>({5, 3, 0}),
+             toVec<Int32>({3, 3, 0}),
+             toVec<Int32>({4, 2, 0}),
+             toVec<Int32>({5, 3, 0}),
              toNullableVec<Int32>({2, 2, 0}),
              toNullableVec<Int32>({2, 2, 0}),
-             toNullableVec<Int32>({2, 2, 0}),
-             toNullableVec<Int32>({2, 2, 0})});
+             toVec<Int32>({2, 2, 0}),
+             toVec<Int32>({2, 2, 0})});
     }
 
     // MultiRightLeftJoin
@@ -529,7 +528,7 @@ CreatingSets
         execute(
             request,
             /*expected_physical_plan=*/replaceStringName(R"(
-<Projection, Join_6> | is_tidb_operator: false, schema: <Join_6_Join_6_l_Join_4_l_a, Nullable(Int32)>, <Join_6_Join_6_l_Join_4_l_b, Nullable(Int32)>, <Join_6_Join_6_l_Join_4_l_c, Nullable(Int32)>, <Join_6_CAST(Join_6_l_Join_4_r_a, Nullable(Int32)_{StringName})_collator_0 , Nullable(Int32)>, <Join_6_CAST(Join_6_l_Join_4_r_b, Nullable(Int32)_{StringName})_collator_0 , Nullable(Int32)>, <Join_6_CAST(Join_6_l_Join_4_r_c, Nullable(Int32)_{StringName})_collator_0 , Nullable(Int32)>, <Join_6_Join_6_r_Join_5_l_a, Nullable(Int32)>, <Join_6_Join_6_r_Join_5_l_b, Nullable(Int32)>, <Join_6_Join_6_r_Join_5_r_a, Nullable(Int32)>, <Join_6_Join_6_r_Join_5_r_b, Nullable(Int32)>
+<Projection, Join_6> | is_tidb_operator: false, schema: <Join_6_Join_6_l_Join_4_l_a, Nullable(Int32)>, <Join_6_Join_6_l_Join_4_l_b, Nullable(Int32)>, <Join_6_Join_6_l_Join_4_l_c, Nullable(Int32)>, <Join_6_Join_6_l_Join_4_r_a, Int32>, <Join_6_Join_6_l_Join_4_r_b, Int32>, <Join_6_Join_6_l_Join_4_r_c, Int32>, <Join_6_Join_6_r_Join_5_l_a, Nullable(Int32)>, <Join_6_Join_6_r_Join_5_l_b, Nullable(Int32)>, <Join_6_Join_6_r_Join_5_r_a, Nullable(Int32)>, <Join_6_Join_6_r_Join_5_r_b, Nullable(Int32)>
  <Join, Join_6> | is_tidb_operator: true, schema: <Join_6_l_Join_4_l_a, Nullable(Int32)>, <Join_6_l_Join_4_l_b, Nullable(Int32)>, <Join_6_l_Join_4_l_c, Nullable(Int32)>, <Join_6_l_Join_4_r_a, Int32>, <Join_6_l_Join_4_r_b, Int32>, <Join_6_l_Join_4_r_c, Int32>, <Join_6_r_Join_5_l_a, Nullable(Int32)>, <Join_6_r_Join_5_l_b, Nullable(Int32)>, <Join_6_r_Join_5_r_a, Nullable(Int32)>, <Join_6_r_Join_5_r_b, Nullable(Int32)>
   <Projection, Join_4> | is_tidb_operator: false, schema: <Join_6_l_Join_4_l_a, Nullable(Int32)>, <Join_6_l_Join_4_l_b, Nullable(Int32)>, <Join_6_l_Join_4_l_c, Nullable(Int32)>, <Join_6_l_Join_4_r_a, Int32>, <Join_6_l_Join_4_r_b, Int32>, <Join_6_l_Join_4_r_c, Int32>
    <Join, Join_4> | is_tidb_operator: true, schema: <Join_4_l_a, Nullable(Int32)>, <Join_4_l_b, Nullable(Int32)>, <Join_4_l_c, Nullable(Int32)>, <Join_4_r_a, Int32>, <Join_4_r_b, Int32>, <Join_4_r_c, Int32>
@@ -562,9 +561,9 @@ CreatingSets
             {toNullableVec<Int32>({3, 3, 0}),
              toNullableVec<Int32>({2, 2, 0}),
              toNullableVec<Int32>({2, 2, 0}),
-             toNullableVec<Int32>({3, 3, 0}),
-             toNullableVec<Int32>({4, 2, 0}),
-             toNullableVec<Int32>({5, 3, 0}),
+             toVec<Int32>({3, 3, 0}),
+             toVec<Int32>({4, 2, 0}),
+             toVec<Int32>({5, 3, 0}),
              toNullableVec<Int32>({2, 2, 0}),
              toNullableVec<Int32>({2, 2, 0}),
              toNullableVec<Int32>({2, 2, 0}),

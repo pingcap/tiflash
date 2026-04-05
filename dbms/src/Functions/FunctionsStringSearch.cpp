@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Functions/FunctionsStringSearch.cpp
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -166,6 +168,10 @@ struct MatchImpl
             {
                 auto matcher = collator->pattern();
                 matcher->compile(orig_pattern, escape_char);
+                if (collator->isCI())
+                {
+                    matcher->tryCompileAsciiCi(orig_pattern, escape_char);
+                }
                 LoopOneColumn(data, offsets, offsets.size(), [&](const std::string_view & view, size_t i) {
                     res[i] = revert ^ matcher->match(view.data(), view.size());
                 });

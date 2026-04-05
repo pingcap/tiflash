@@ -203,6 +203,8 @@ inline Block getNewBlockByHeader(const Block & header, const Block & block)
     Block new_block;
     for (const auto & c : header)
         new_block.insert(block.getByName(c.name));
+    new_block.setSegmentRowIdCol(block.segmentRowIdCol());
+    new_block.setStartOffset(block.startOffset());
     return new_block;
 }
 

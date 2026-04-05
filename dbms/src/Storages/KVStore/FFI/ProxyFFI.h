@@ -67,6 +67,9 @@ enum class RawCppPtrTypeImpl : RawCppPtrType
 
 RawCppPtr GenRawCppPtr(RawVoidPtr ptr_ = nullptr, RawCppPtrTypeImpl type_ = RawCppPtrTypeImpl::None);
 
+CppStrWithView GenCppStrWithView(std::string && str);
+CppStrWithView GenCppStrWithView(const std::string & str);
+
 struct ReadIndexTask;
 struct RawRustPtrWrap;
 
@@ -204,7 +207,7 @@ FapSnapshotState QueryFapSnapshotState(
     uint64_t peer_id,
     uint64_t index,
     uint64_t term);
-void ClearFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id);
+void ClearFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id, uint64_t state);
 bool KvstoreRegionExists(EngineStoreServerWrap * server, uint64_t region_id);
 void ReportThreadAllocateInfo(
     EngineStoreServerWrap *,

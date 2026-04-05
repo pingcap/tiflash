@@ -20,6 +20,7 @@ enum IndexFileKind {
     INVALID = 0;
     VECTOR_INDEX = 1;
     INVERTED_INDEX = 2;
+    FULLTEXT_INDEX = 3;
 }
 
 message IndexFilePropsV2 {
@@ -30,6 +31,7 @@ message IndexFilePropsV2 {
     oneof prop {
         IndexFilePropsV2Vector vector_index = 31;
         IndexFilePropsInverted inverted_index = 32;
+        IndexFilePropsV2Fulltext fulltext_index = 33;
     }
 }
 
@@ -43,6 +45,10 @@ message IndexFilePropsV2Vector {
     optional uint32 format_version = 1; // Currently it must be 0.
     optional string distance_metric = 2;  // The value is tipb.VectorDistanceMetric
     optional uint64 dimensions = 3;
+}
+
+message IndexFilePropsV2Fulltext {
+    optional uint32 format_version = 1; // Currently it must be 0.
 }
 
 message IndexFilePropsInverted {

@@ -49,10 +49,17 @@ public:
 
     virtual ~DAGResponseWriter() = default;
 
+    bool needFlush() const { return buffered_bytes >= max_buffered_bytes || buffered_rows >= max_buffered_rows; }
+
 protected:
     Int64 records_per_chunk;
     DAGContext & dag_context;
     bool has_pending_flush = false;
+
+    UInt64 max_buffered_bytes = 0;
+    UInt64 max_buffered_rows = 0;
+    UInt64 buffered_bytes = 0;
+    UInt64 buffered_rows = 0;
 };
 
 } // namespace DB

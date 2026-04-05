@@ -86,7 +86,7 @@ public:
              {col_name[1], TiDB::TP::TypeString},
              {col_name[2], TiDB::TP::TypeString},
              {col_name[3], TiDB::TP::TypeDouble},
-             {col_name[4], TiDB::TP::TypeLong}},
+             {col_name[4], TiDB::TP::TypeLong, false}},
             /* columns= */
             {toNullableVec<Int32>(col_name[0], col_age),
              toNullableVec<String>(col_name[1], col_gender),
@@ -102,17 +102,17 @@ public:
 
         context.addMockTable(
             {"test_db", "test_table"},
-            {{"s1", TiDB::TP::TypeLongLong}, {"s2", TiDB::TP::TypeLongLong}},
+            {{"s1", TiDB::TP::TypeLongLong, false}, {"s2", TiDB::TP::TypeLongLong, false}},
             {toVec<Int64>("s1", {1, 2, 3}), toVec<Int64>("s2", {1, 2, 3})});
 
         context.addMockTable(
             {"test_db", "test_table_not_null"},
             {
-                {"c1_i64", TiDB::TP::TypeLongLong},
-                {"c2_f64", TiDB::TP::TypeDouble},
-                {"c3_str", TiDB::TP::TypeString},
-                {"c4_str", TiDB::TP::TypeString},
-                {"c5_date_time", TiDB::TP::TypeDatetime},
+                {"c1_i64", TiDB::TP::TypeLongLong, false},
+                {"c2_f64", TiDB::TP::TypeDouble, false},
+                {"c3_str", TiDB::TP::TypeString, false},
+                {"c4_str", TiDB::TP::TypeString, false},
+                {"c5_date_time", TiDB::TP::TypeDatetime, false},
             },
             {
                 toVec<Int64>("c1_i64", {1, 2, 2}),
@@ -827,6 +827,29 @@ try
 }
 CATCH
 
+TEST_F(AggExecutorTestRunner, AggEmptyStringKeyUniqRawRes)
+try
+{
+    // Keep empty-string keys to hit StringHashMap::m0 (regression for double-destroy in final output).
+    context.addMockTable(
+        {"test_db", "agg_empty_string_key"},
+        {{"k", TiDB::TP::TypeString, false}, {"v", TiDB::TP::TypeString, false}},
+        {toVec<String>("k", {"", "", "", ""}), toVec<String>("v", {"a", "b", "b", "c"})});
+
+    context.setCollation(0);
+
+    auto agg_func = makeASTFunction("uniqRawRes", col("v"));
+    const auto agg_name = agg_func->getColumnName();
+    auto request
+        = buildDAGRequest(std::make_pair("test_db", "agg_empty_string_key"), {agg_func}, {col("k")}, {agg_name, "k"});
+
+    WRAP_FOR_AGG_FAILPOINTS_START
+    // Raw serialized state can vary by insertion order, so only check row count.
+    executeAndAssertRowsEqual(request, 1);
+    WRAP_FOR_AGG_FAILPOINTS_END
+}
+CATCH
+
 TEST_F(AggExecutorTestRunner, SplitAggOutput)
 try
 {
@@ -993,14 +1016,14 @@ try
 {
     context.addMockTable(
         {"test_db", "empty_table"},
-        {{"s1", TiDB::TP::TypeLongLong}, {"s2", TiDB::TP::TypeLongLong}},
+        {{"s1", TiDB::TP::TypeLongLong, false}, {"s2", TiDB::TP::TypeLongLong, false}},
         {toVec<Int64>("s1", {}), toVec<Int64>("s2", {})});
     context.addExchangeReceiver(
         "empty_recv",
-        {{"s1", TiDB::TP::TypeLongLong}, {"s2", TiDB::TP::TypeLongLong}},
+        {{"s1", TiDB::TP::TypeLongLong, false}, {"s2", TiDB::TP::TypeLongLong, false}},
         {toVec<Int64>("s1", {}), toVec<Int64>("s2", {})},
         5,
-        {{"s2", TiDB::TP::TypeLongLong}});
+        {{"s2", TiDB::TP::TypeLongLong, false}});
 
     auto request = context.scan("test_db", "empty_table").aggregation({Max(col("s1"))}, {col("s2")}).build(context);
     executeAndAssertColumnsEqual(request, {});
@@ -1346,6 +1369,59 @@ try
             }
         }
     }
+}
+CATCH
+
+TEST_F(AggExecutorTestRunner, TestZeroBlock)
+try
+{
+    auto c1 = toNullableVec<Int64>("c1", {1, 2});
+    auto c2 = toNullableVec<Int64>("c2", {1, 2});
+    auto c3 = toNullableVec<Int64>("c3", {2, 3});
+    auto col_str = toNullableVec<String>("col_str", {"a", "b"});
+    auto col_str_1 = toNullableVec<String>("col_str_1", {"a", "b"});
+
+    context.addMockTable(
+        "zeroblock",
+        "t1",
+        {{"c1", TiDB::TP::TypeLong},
+         {"c2", TiDB::TP::TypeLong},
+         {"col_str", TiDB::TP::TypeString},
+         {"col_str_1", TiDB::TP::TypeString}},
+        {c1, c2, col_str, col_str_1});
+    context.addMockTable(
+        "zeroblock",
+        "t2",
+        {{"c1", TiDB::TP::TypeLong},
+         {"c3", TiDB::TP::TypeLong},
+         {"col_str", TiDB::TP::TypeString},
+         {"col_str_1", TiDB::TP::TypeString}},
+        {c1, c3, col_str, col_str_1});
+
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(1)));
+    auto req = context.scan("zeroblock", "t1")
+                   .join(
+                       context.scan("zeroblock", "t2"),
+                       tipb::JoinType::TypeSemiJoin,
+                       /*join_col_exprs=*/{col("c1")},
+                       /*left_conds=*/{},
+                       /*right_conds=*/{},
+                       /*other_conds=*/{},
+                       /*other_eq_conds_from_in=*/{},
+                       /*fine_grained_shuffle_stream_count=*/0,
+                       /*is_null_aware_semi_join=*/false,
+                       /*inner_index=*/0) // Set inner index as zero to make it right semi join.
+                   .aggregation({Count(col("c1"))}, {col("c1"), col("col_str"), col("col_str_1")})
+                   .build(context);
+
+    const auto expected
+        = {toVec<UInt64>({1, 1}),
+           toNullableVec<Int32>({1, 2}),
+           toNullableVec<String>({"a", "b"}),
+           toNullableVec<String>({"a", "b"})};
+    WRAP_FOR_TEST_BEGIN
+    ASSERT_COLUMNS_EQ_R(executeStreams(req), expected);
+    WRAP_FOR_TEST_END
 }
 CATCH
 

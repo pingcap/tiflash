@@ -14,12 +14,15 @@
 
 #pragma once
 
+#include <Common/config.h> // For ENABLE_CLARA
 #include <Core/Field.h>
 #include <Core/Types.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/KVStore/StorageEngineType.h>
 #include <Storages/KVStore/Types.h>
+#include <TiDB/Schema/FullTextIndex.h>
+#include <TiDB/Schema/InvertedIndex.h>
 #include <TiDB/Schema/TiDBTypes.h>
 #include <TiDB/Schema/TiDB_fwd.h>
 #include <TiDB/Schema/VectorIndex.h>
@@ -138,6 +141,7 @@ struct ColumnInfo
     COLUMN_FLAGS(M)
 #undef M
 
+    bool hasOriginDefaultValue() const;
     DB::Field defaultValueToField() const;
     CodecFlag getCodecFlag() const;
     DB::Field getDecimalValue(const String &) const;
@@ -247,9 +251,10 @@ struct IndexColumnInfo
 // - From TiFlash's perspective, it is a local index.
 enum class ColumnarIndexKind
 {
-    // Leave 0 intentionally for InvalidValues
+    Invalid = 0,
     Vector = 1,
     Inverted = 2,
+    FullText = 3,
 };
 
 struct IndexInfo
@@ -273,16 +278,32 @@ struct IndexInfo
     bool is_global = false;
 
     VectorIndexDefinitionPtr vector_index = nullptr;
+    InvertedIndexDefinitionPtr inverted_index = nullptr;
+#if ENABLE_CLARA
+    FullTextIndexDefinitionPtr full_text_index = nullptr;
+#endif
 
     ColumnarIndexKind columnarIndexKind() const
     {
-        RUNTIME_CHECK(hasColumnarIndex());
         if (vector_index)
             return ColumnarIndexKind::Vector;
+        if (inverted_index)
+            return ColumnarIndexKind::Inverted;
+#if ENABLE_CLARA
+        if (full_text_index)
+            return ColumnarIndexKind::FullText;
+#endif
         RUNTIME_CHECK(false);
     }
 
-    bool hasColumnarIndex() const { return (vector_index != nullptr); }
+    bool isColumnarIndex() const
+    {
+        return vector_index || inverted_index
+#if ENABLE_CLARA
+            || full_text_index
+#endif
+            ;
+    }
 };
 
 struct TableInfo

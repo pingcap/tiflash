@@ -15,14 +15,14 @@
 #pragma once
 
 #include <Storages/KVStore/FFI/ProxyFFI.h>
+#include <Storages/KVStore/Region_fwd.h>
 #include <Storages/KVStore/Utils/AsyncTasks.h>
+#include <common/types.h>
 
 namespace DB
 {
 struct CheckpointInfo;
 using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
-class Region;
-using RegionPtr = std::shared_ptr<Region>;
 using CheckpointRegionInfoAndData
     = std::tuple<CheckpointInfoPtr, RegionPtr, raft_serverpb::RaftApplyState, raft_serverpb::RegionLocalState>;
 FastAddPeerRes genFastAddPeerRes(

@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Client/Connection.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -36,11 +38,6 @@
 namespace DB
 {
 class ClientInfo;
-
-/// The stream of blocks reading from the table and its name
-using ExternalTableData = std::pair<BlockInputStreamPtr, std::string>;
-/// Vector of pairs describing tables
-using ExternalTablesData = std::vector<ExternalTableData>;
 
 class Connection;
 
@@ -166,14 +163,11 @@ public:
         const String & query_id_ = "",
         UInt64 stage = QueryProcessingStage::Complete,
         const Settings * settings = nullptr,
-        const ClientInfo * client_info = nullptr,
-        bool with_pending_data = false);
+        const ClientInfo * client_info = nullptr);
 
     void sendCancel();
     /// Send block of data; if name is specified, server will write it to external (temporary) table of that name.
     void sendData(const Block & block, const String & name = "");
-    /// Send all contents of external (temporary) tables.
-    void sendExternalTablesData(ExternalTablesData & data);
 
     /// Send prepared block of data (serialized and, if need, compressed), that will be read from 'input'.
     /// You could pass size of serialized/compressed block.

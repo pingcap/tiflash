@@ -54,13 +54,13 @@ public:
         context.addMockTable(
             join_table,
             "t1",
-            {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
+            {{"a", TiDB::TP::TypeLong, false}, {"b", TiDB::TP::TypeLong, false}},
             {toVec<Int32>("a", {1, 1, 3, 4}), toVec<Int32>("b", {1, 1, 4, 1})});
 
         context.addMockTable(
             join_table,
             "t2",
-            {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
+            {{"a", TiDB::TP::TypeLong, false}, {"b", TiDB::TP::TypeLong, false}},
             {toVec<Int32>("a", {1, 4, 2}), toVec<Int32>("b", {2, 6, 2})});
 
         /// For topn

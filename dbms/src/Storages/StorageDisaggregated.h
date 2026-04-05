@@ -24,6 +24,7 @@
 #include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers_fwd.h>
+#include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <Storages/DeltaMerge/SegmentReadTask.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/IStorage.h>
@@ -76,7 +77,7 @@ private:
         const Context & db_context,
         unsigned num_streams);
 
-    DM::SegmentReadTasks buildReadTaskWithBackoff(const Context & db_context);
+    DM::SegmentReadTasks buildReadTaskWithBackoff(const Context & db_context, const DM::ScanContextPtr & scan_context);
 
     DM::SegmentReadTasks buildReadTask(const Context & db_context, const DM::ScanContextPtr & scan_context);
 
@@ -94,30 +95,39 @@ private:
         StoreID store_id,
         const String & store_address,
         const String & serialized_physical_table,
+        bool is_same_zone,
+        bool is_first_table,
+        size_t resp_size,
         std::mutex & output_lock,
         DM::SegmentReadTasks & output_seg_tasks);
+    bool isSameZone(const pingcap::coprocessor::BatchCopTask & batch_cop_task) const;
 
     std::shared_ptr<disaggregated::EstablishDisaggTaskRequest> buildEstablishDisaggTaskReq(
         const Context & db_context,
         const pingcap::coprocessor::BatchCopTask & batch_cop_task);
-    DM::RSOperatorPtr buildRSOperator(const Context & db_context, const DM::ColumnDefinesPtr & columns_to_read);
-    std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> packSegmentReadTasks(
+    std::tuple<DM::RSOperatorPtr, DM::ColumnRangePtr> buildRSOperatorAndColumnRange(
+        const Context & db_context,
+        const DM::ColumnDefinesPtr & columns_to_read);
+    std::tuple<std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr>, DM::ColumnDefinesPtr> packSegmentReadTasks(
         const Context & db_context,
         DM::SegmentReadTasks && read_tasks,
         const DM::ColumnDefinesPtr & column_defines,
+        const DM::ScanContextPtr & scan_context,
         size_t num_streams,
         int extra_table_id_index);
     void buildRemoteSegmentInputStreams(
         const Context & db_context,
         DM::SegmentReadTasks && read_tasks,
         size_t num_streams,
-        DAGPipeline & pipeline);
+        DAGPipeline & pipeline,
+        const DM::ScanContextPtr & scan_context);
     void buildRemoteSegmentSourceOps(
         PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         const Context & db_context,
         DM::SegmentReadTasks && read_tasks,
-        size_t num_streams);
+        size_t num_streams,
+        const DM::ScanContextPtr & scan_context);
 
     using RemoteTableRange = std::pair<TableID, pingcap::coprocessor::KeyRanges>;
     std::tuple<std::vector<RemoteTableRange>, UInt64> buildRemoteTableRanges();
@@ -149,5 +159,9 @@ private:
     const FilterConditions & filter_conditions;
 
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
+    static constexpr auto ZONE_LABEL_KEY = "zone";
+    std::optional<String> zone_label;
+    // For generated column, just need a placeholder, and TiDB will fill this column.
+    std::vector<std::tuple<UInt64, String, DataTypePtr>> generated_column_infos;
 };
 } // namespace DB

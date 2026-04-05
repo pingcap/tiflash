@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Server/Server.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,7 +16,6 @@
 
 #pragma once
 
-#include <Server/FlashGrpcServerHolder.h>
 #include <Server/IServer.h>
 #include <Server/ServerInfo.h>
 #include <daemon/BaseDaemon.h>
@@ -57,6 +58,8 @@ protected:
     int main(const std::vector<std::string> & args) override;
 
     std::string getDefaultCorePath() const override;
+
+    void initCaches(bool is_disagg_compute_mode, bool is_disagg_storage_mode, const LoggerPtr & log) const;
 
 private:
     std::unique_ptr<Context> global_context;

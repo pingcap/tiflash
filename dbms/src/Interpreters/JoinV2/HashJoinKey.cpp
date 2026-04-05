@@ -79,8 +79,7 @@ std::unique_ptr<void, std::function<void(void *)>> createHashJoinKeyGetter(
         using KeyGetterType##METHOD = typename HashJoinKeyGetterForType<HashJoinKeyMethod::METHOD>::Type; \
         return std::unique_ptr<void, std::function<void(void *)>>(                                        \
             static_cast<void *>(new KeyGetterType##METHOD(collators)),                                    \
-            [](void * ptr) { delete reinterpret_cast<KeyGetterType##METHOD *>(ptr); });                   \
-        break;
+            [](void * ptr) { delete reinterpret_cast<KeyGetterType##METHOD *>(ptr); });
         APPLY_FOR_HASH_JOIN_VARIANTS(M)
 #undef M
 
@@ -103,7 +102,7 @@ void resetHashJoinKeyGetter(
     case HashJoinKeyMethod::METHOD:                                                                   \
         using KeyGetter##METHOD = typename HashJoinKeyGetterForType<HashJoinKeyMethod::METHOD>::Type; \
         static_cast<KeyGetter##METHOD *>(key_getter.get())                                            \
-            ->reset(key_columns, row_layout.raw_required_key_column_indexes.size());                  \
+            ->reset(key_columns, row_layout.raw_key_column_indexes.size());                           \
         break;
         APPLY_FOR_HASH_JOIN_VARIANTS(M)
 #undef M

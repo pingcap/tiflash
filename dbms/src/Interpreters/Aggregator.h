@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Interpreters/Aggregator.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -429,7 +431,7 @@ struct AggregationMethodSerialized
     static void insertKeyIntoColumnsBatch(PaddedPODArray<char *> & key_places, std::vector<IColumn *> & key_columns)
     {
         for (auto * key_column : key_columns)
-            key_column->deserializeForCmpAndInsertFromPos(key_places, false);
+            key_column->deserializeAndInsertFromPos(key_places, false);
     }
 };
 

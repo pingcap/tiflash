@@ -21,6 +21,8 @@
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
 #include <Flash/Planner/Plans/PhysicalAggregation.h>
+#include <Flash/Planner/Plans/PhysicalCTESink.h>
+#include <Flash/Planner/Plans/PhysicalCTESource.h>
 #include <Flash/Planner/Plans/PhysicalExchangeReceiver.h>
 #include <Flash/Planner/Plans/PhysicalExchangeSender.h>
 #include <Flash/Planner/Plans/PhysicalExpand.h>
@@ -239,6 +241,19 @@ void PhysicalPlan::build(const tipb::Executor * executor)
         pushBack(PhysicalExpand2::build(context, executor_id, log, executor->expand2(), popBack()));
         break;
     }
+    case tipb::ExecType::TypeCTESource:
+    {
+        GET_METRIC(tiflash_coprocessor_executor_count, type_cte_source).Increment();
+        pushBack(PhysicalCTESource::build(context, executor_id, log, executor->cte_source()));
+        break;
+    }
+    case tipb::ExecType::TypeCTESink:
+    {
+        buildFinalProjectionForCTE(executor->cte_sink());
+        GET_METRIC(tiflash_coprocessor_executor_count, type_cte_sink).Increment();
+        pushBack(PhysicalCTESink::build(executor_id, log, popBack()));
+        break;
+    }
     default:
         throw TiFlashException(
             fmt::format("{} executor is not supported", fmt::underlying(executor->tp())),
@@ -258,6 +273,31 @@ void PhysicalPlan::buildFinalProjection(const String & column_prefix, bool is_ro
             dagContext().keep_session_timezone_info,
             popBack())
         : PhysicalProjection::buildNonRootFinal(context, log, column_prefix, popBack());
+    pushBack(final_projection);
+}
+
+void PhysicalPlan::buildFinalProjectionForCTE(const tipb::CTESink & sink)
+{
+    auto required_schema_size = sink.field_types_size();
+    std::vector<tipb::FieldType> required_schema;
+    required_schema.reserve(required_schema_size);
+    std::vector<Int32> output_offsets;
+    output_offsets.reserve(required_schema_size);
+    for (int i = 0; i < required_schema_size; i++)
+    {
+        required_schema.push_back(sink.field_types(i));
+        output_offsets.push_back(i);
+    }
+
+    const auto & final_projection = PhysicalProjection::buildRootFinal(
+        context,
+        log,
+        required_schema,
+        output_offsets,
+        "",
+        dagContext().keep_session_timezone_info,
+        popBack(),
+        sink.cte_id());
     pushBack(final_projection);
 }
 
@@ -286,7 +326,8 @@ PhysicalPlanNodePtr PhysicalPlan::popBack()
 void PhysicalPlan::addRootFinalProjectionIfNeed()
 {
     RUNTIME_CHECK(root_node);
-    if (root_node->tp() != PlanType::ExchangeSender && root_node->tp() != PlanType::MockExchangeSender)
+    if (root_node->tp() != PlanType::ExchangeSender && root_node->tp() != PlanType::MockExchangeSender
+        && root_node->tp() != PlanType::CTESink)
     {
         pushBack(root_node);
         buildFinalProjection(fmt::format("{}_", root_node->execId()), true);

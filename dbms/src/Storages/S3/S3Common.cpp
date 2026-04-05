@@ -19,6 +19,7 @@
 #include <Common/RemoteHostFilter.h>
 #include <Common/Stopwatch.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <IO/BaseFile/PosixRandomAccessFile.h>
 #include <IO/Buffer/ReadBufferFromRandomAccessFile.h>
@@ -33,8 +34,9 @@
 #include <Storages/S3/PocoHTTPClientFactory.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
+#include <Storages/S3/S3RandomAccessFile.h>
+#include <aws/core/Region.h>
 #include <aws/core/auth/AWSCredentials.h>
-#include <aws/core/auth/STSCredentialsProvider.h>
 #include <aws/core/auth/signer/AWSAuthV4Signer.h>
 #include <aws/core/http/HttpClientFactory.h>
 #include <aws/core/http/Scheme.h>
@@ -45,26 +47,15 @@
 #include <aws/s3/model/CopyObjectRequest.h>
 #include <aws/s3/model/DeleteObjectRequest.h>
 #include <aws/s3/model/ExpirationStatus.h>
-#include <aws/s3/model/GetBucketLifecycleConfigurationRequest.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/HeadObjectRequest.h>
-#include <aws/s3/model/LifecycleConfiguration.h>
-#include <aws/s3/model/LifecycleExpiration.h>
-#include <aws/s3/model/LifecycleRule.h>
-#include <aws/s3/model/LifecycleRuleAndOperator.h>
 #include <aws/s3/model/ListObjectsRequest.h>
 #include <aws/s3/model/ListObjectsV2Request.h>
 #include <aws/s3/model/ListObjectsV2Result.h>
 #include <aws/s3/model/MetadataDirective.h>
-#include <aws/s3/model/PutBucketLifecycleConfigurationRequest.h>
 #include <aws/s3/model/PutObjectRequest.h>
-#include <aws/s3/model/Rule.h>
 #include <aws/s3/model/Tag.h>
 #include <aws/s3/model/TaggingDirective.h>
-#include <aws/sts/STSClient.h>
-#include <aws/sts/STSServiceClientModel.h>
-#include <aws/sts/model/GetCallerIdentityRequest.h>
-#include <aws/sts/model/GetCallerIdentityResult.h>
 #include <common/logger_useful.h>
 #include <kvproto/disaggregated.pb.h>
 #include <pingcap/kv/Cluster.h>
@@ -109,8 +100,10 @@ Poco::Message::Priority convertLogLevel(Aws::Utils::Logging::LogLevel log_level)
     {
     case Aws::Utils::Logging::LogLevel::Off:
     case Aws::Utils::Logging::LogLevel::Fatal:
-    case Aws::Utils::Logging::LogLevel::Error:
         return Poco::Message::PRIO_ERROR;
+    case Aws::Utils::Logging::LogLevel::Error:
+        // treat AWS error log as warning level
+        return Poco::Message::PRIO_WARNING;
     case Aws::Utils::Logging::LogLevel::Warn:
         return Poco::Message::PRIO_WARNING;
     case Aws::Utils::Logging::LogLevel::Info:
@@ -164,7 +157,7 @@ private:
 namespace DB::FailPoints
 {
 extern const char force_set_mocked_s3_object_mtime[];
-extern const char force_set_lifecycle_resp[];
+extern const char force_syncpoint_on_s3_upload[];
 } // namespace DB::FailPoints
 namespace DB::S3
 {
@@ -182,12 +175,6 @@ String normalizedRoot(String ori_root) // a copy for changing
     }
     return ori_root;
 }
-
-TiFlashS3Client::TiFlashS3Client(const String & bucket_name_, const String & root_)
-    : bucket_name(bucket_name_)
-    , key_root(normalizedRoot(root_))
-    , log(Logger::get(fmt::format("bucket={} root={}", bucket_name, key_root)))
-{}
 
 TiFlashS3Client::TiFlashS3Client(
     const String & bucket_name_,
@@ -256,7 +243,10 @@ disaggregated::GetDisaggConfigResponse getDisaggConfigFromDisaggWriteNodes(
                 disaggregated::GetDisaggConfigResponse resp;
                 auto status = rpc.call(&client_context, req, &resp);
                 if (!status.ok())
-                    throw Exception(rpc.errMsg(status));
+                {
+                    std::string extra_msg = "addr: " + send_address;
+                    throw Exception(rpc.errMsg(status, extra_msg));
+                }
 
                 RUNTIME_CHECK(resp.has_s3_config(), resp.ShortDebugString());
 
@@ -290,6 +280,27 @@ disaggregated::GetDisaggConfigResponse getDisaggConfigFromDisaggWriteNodes(
         LOG_WARNING(log, "failed to get disagg config from all tiflash stores, retry");
         std::this_thread::sleep_for(2s);
     }
+}
+
+// Returns <aws_client_config, use_virtual_addressing>
+std::pair<Aws::Client::ClientConfiguration, CloudVendor> ClientFactory::initAwsClientConfig(
+    const StorageS3Config & storage_config,
+    const LoggerPtr & log)
+{
+    // disable IMDS when creating ClientConfig, the region will be updated by endpoint later if possible
+    Aws::Client::ClientConfiguration cfg(
+        /*useSmartDefaults*/ true,
+        /*defaultMode*/ "standard",
+        /*shouldDisableIMDS*/ true);
+    cfg.maxConnections = storage_config.max_connections;
+    cfg.requestTimeoutMs = storage_config.request_timeout_ms;
+    cfg.connectTimeoutMs = storage_config.connection_timeout_ms;
+    if (!storage_config.endpoint.empty())
+    {
+        cfg.endpointOverride = storage_config.endpoint;
+    }
+    auto vendor = updateRegionByEndpoint(cfg, log);
+    return {cfg, vendor};
 }
 
 void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
@@ -332,13 +343,17 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
 
     if (!mock_s3_)
     {
-        LOG_DEBUG(log, "Create TiFlashS3Client start");
-        shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, config.root, create());
-        LOG_DEBUG(log, "Create TiFlashS3Client end");
+        auto [s3_client, vendor] = create(config, log);
+        cloud_vendor = vendor;
+        shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, config.root, std::move(s3_client));
     }
     else
     {
-        shared_tiflash_client = std::make_unique<tests::MockS3Client>(config.bucket, config.root);
+        // Create a cfg for suppressing verbose but useless logging. For example, disable IMDS, use "standard" retry
+        Aws::Client::ClientConfiguration cfg(true, /*defaultMode=*/"standard", /*shouldDisableIMDS=*/true);
+        cfg.region = Aws::Region::US_EAST_1; // default region
+        Aws::Auth::AWSCredentials cred("mock_access_key", "mock_secret_key");
+        shared_tiflash_client = std::make_unique<tests::MockS3Client>(config.bucket, config.root, cred, cfg);
     }
     client_is_inited = true; // init finish
 }
@@ -366,7 +381,9 @@ std::shared_ptr<TiFlashS3Client> ClientFactory::initClientFromWriteNode()
     config.bucket = disagg_config.s3_config().bucket();
     LOG_INFO(log, "S3 config updated, {}", config.toString());
 
-    shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, config.root, create());
+    auto [s3_client, vendor] = create(config, log);
+    cloud_vendor = vendor;
+    shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, config.root, std::move(s3_client));
     client_is_inited = true; // init finish
     return shared_tiflash_client;
 }
@@ -390,11 +407,6 @@ ClientFactory & ClientFactory::instance()
     return ret;
 }
 
-std::unique_ptr<Aws::S3::S3Client> ClientFactory::create() const
-{
-    return create(config, log);
-}
-
 std::shared_ptr<TiFlashS3Client> ClientFactory::sharedTiFlashClient()
 {
     if (client_is_inited)
@@ -403,110 +415,129 @@ std::shared_ptr<TiFlashS3Client> ClientFactory::sharedTiFlashClient()
     return initClientFromWriteNode();
 }
 
-namespace
-{
-bool updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const LoggerPtr & log)
+CloudVendor updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const LoggerPtr & log)
 {
     if (cfg.endpointOverride.empty())
     {
-        return true;
+        return CloudVendor::Unknown;
     }
 
     const Poco::URI uri(cfg.endpointOverride);
     String matched_region;
-    static const RE2 region_pattern(R"(^s3[.\-]([a-z0-9\-]+)\.amazonaws\.)");
+    // AWS endpoint format:
+    //   - Standard: s3.<region>.amazonaws.com
+    //   - Dualstack: s3.dualstack.<region>.amazonaws.com
+    //   - FIPS: s3-fips.<region>.amazonaws.com
+    //   - FIPS && Dualstack: s3-fips.dualstack.<region>.amazonaws.com
+    // Reference: https://docs.aws.amazon.com/general/latest/gr/s3.html
+    // Alibaba Cloud endpoint format:
+    //   - Internal: oss-<region>-internal.aliyuncs.com
+    //   - External: oss-<region>.aliyuncs.com
+    // Reference: https://www.alibabacloud.com/help/en/oss/regions-and-endpoints
+    // Kingsoft Cloud endpoint format:
+    //   - Internal: ks3-<region>-internal.ksyuncs.com
+    //   - External: ks3-<region>.ksyuncs.com
+    // Reference: https://endocs.ksyun.com/documents/37088
+    CloudVendor vendor = CloudVendor::UnknownFixAddress;
+    static const RE2 region_pattern(
+        R"((?:^s3\.|^s3-fips\.|^oss-|^ks3-)(?:dualstack.)?([a-z0-9\-]+)\.(?:amazonaws|aliyuncs|ksyuncs)\.)");
     if (re2::RE2::PartialMatch(uri.getHost(), region_pattern, &matched_region))
     {
         boost::algorithm::to_lower(matched_region);
+        if (matched_region.ends_with("-internal"))
+            matched_region = matched_region.substr(0, matched_region.size() - strlen("-internal"));
         cfg.region = matched_region;
+        if (uri.getHost().find("amazonaws") != String::npos)
+        {
+            vendor = CloudVendor::AWS;
+        }
+        else if (uri.getHost().find("aliyuncs") != String::npos)
+        {
+            vendor = CloudVendor::AlibabaCloud;
+        }
+        else if (uri.getHost().find("ksyuncs") != String::npos)
+        {
+            vendor = CloudVendor::KingsoftCloud;
+        }
     }
     else
     {
         /// In global mode AWS C++ SDK send `us-east-1` but accept switching to another one if being suggested.
-        cfg.region = Aws::Region::AWS_GLOBAL;
+        if (cfg.region.empty())
+            cfg.region = Aws::Region::AWS_GLOBAL;
     }
 
     if (uri.getScheme() == "https")
     {
         cfg.scheme = Aws::Http::Scheme::HTTPS;
+        if (vendor == CloudVendor::UnknownFixAddress && uri.getPort() == 443)
+        {
+            // For unknown vendor, we assume it's AWS-compatible service if using default HTTPS port
+            vendor = CloudVendor::Unknown;
+        }
     }
     else
     {
         cfg.scheme = Aws::Http::Scheme::HTTP;
+        if (vendor == CloudVendor::UnknownFixAddress)
+        {
+            // If the vendor is unknown, check the endpoint format when
+            // - using http and default port 80
+            // - without scheme and port 0 (means default port)
+            // we assume it's AWS-compatible service that need virtual addressing
+            if ((uri.getScheme() == "http" && uri.getPort() == 80) || (uri.getScheme().empty() && uri.getPort() == 0))
+            {
+                vendor = CloudVendor::Unknown;
+            }
+        }
     }
     cfg.verifySSL = cfg.scheme == Aws::Http::Scheme::HTTPS;
 
-    bool use_virtual_address = true;
-    {
-        std::string_view view(cfg.endpointOverride);
-        if (auto pos = view.find("://"); pos != std::string_view::npos)
-        {
-            view.remove_prefix(pos + 3); // remove the "<Scheme>://" prefix
-        }
-        // For deployed with AWS S3 service (or other S3-like service), the address use default port and port is not included,
-        // the service need virtual addressing to do load balancing.
-        // For deployed with local minio, the address contains fix port, we should disable virtual addressing
-        use_virtual_address = (view.find(':') == std::string_view::npos);
-    }
-
     LOG_INFO(
         log,
-        "AwsClientConfig{{endpoint={} region={} scheme={} verifySSL={} useVirtualAddressing={}}}",
+        "AwsClientConfig{{endpoint={} region={} scheme={} verifySSL={} vendor={}}}",
         cfg.endpointOverride,
         cfg.region,
         magic_enum::enum_name(cfg.scheme),
         cfg.verifySSL,
-        use_virtual_address);
-    return use_virtual_address;
+        magic_enum::enum_name(vendor));
+    return vendor;
 }
-} // namespace
 
-std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config & config_, const LoggerPtr & log)
+std::pair<std::unique_ptr<Aws::S3::S3Client>, CloudVendor> //
+ClientFactory::create(const StorageS3Config & storage_config, const LoggerPtr & log)
 {
-    LOG_DEBUG(log, "Create ClientConfiguration start");
-    Aws::Client::ClientConfiguration cfg(/*profileName*/ "", /*shouldDisableIMDS*/ true);
-    LOG_DEBUG(log, "Create ClientConfiguration end");
-    cfg.maxConnections = config_.max_connections;
-    cfg.requestTimeoutMs = config_.request_timeout_ms;
-    cfg.connectTimeoutMs = config_.connection_timeout_ms;
-    if (!config_.endpoint.empty())
+    auto [client_config, vendor] = initAwsClientConfig(storage_config, log);
+    std::shared_ptr<Aws::Auth::AWSCredentialsProvider> cred_provider;
+    if (storage_config.access_key_id.empty() && storage_config.secret_access_key.empty())
     {
-        cfg.endpointOverride = config_.endpoint;
-    }
-    bool use_virtual_addressing = updateRegionByEndpoint(cfg, log);
-    if (config_.access_key_id.empty() && config_.secret_access_key.empty())
-    {
-        // Request that does not require authentication.
-        // Such as the EC2 access permission to the S3 bucket is configured.
-        // If the empty access_key_id and secret_access_key are passed to S3Client,
-        // an authentication error will be reported.
-        LOG_DEBUG(log, "Create S3Client start");
-        auto provider = std::make_shared<S3CredentialsProviderChain>();
-        auto cli = std::make_unique<Aws::S3::S3Client>(
-            provider,
-            cfg,
-            Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
-            /*userVirtualAddressing*/ use_virtual_addressing);
-        LOG_INFO(log, "Create S3Client end");
-        return cli;
+        // authentication by the S3CredentialsProviderChain
+        LOG_INFO(log, "Create S3Client with S3CredentialsProviderChain, vendor={}", magic_enum::enum_name(vendor));
+        // Some cred provider rely on the client_config
+        cred_provider = std::make_shared<S3CredentialsProviderChain>(client_config, vendor);
     }
     else
     {
-        Aws::Auth::AWSCredentials cred(config_.access_key_id, config_.secret_access_key);
-        if (!config_.session_token.empty())
-            cred.SetSessionToken(config_.session_token);
-        LOG_DEBUG(
+        LOG_INFO(
             log,
-            "Create S3Client with given credentials start, has_session_token={}",
-            !config_.session_token.empty());
-        auto cli = std::make_unique<Aws::S3::S3Client>(
-            cred,
-            cfg,
-            Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
-            /*useVirtualAddressing*/ use_virtual_addressing);
-        LOG_INFO(log, "Create S3Client with given credentials end");
-        return cli;
+            "Create S3Client with static credentials, has_session_token={}",
+            !storage_config.session_token.empty());
+        cred_provider = std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
+            storage_config.access_key_id,
+            storage_config.secret_access_key,
+            storage_config.session_token);
     }
+    // For deployed with AWS S3 service (or other S3-like service), the address use default port and port is not included,
+    // the service need virtual addressing to do load balancing.
+    // For deployed with local minio, the address contains fix port, we should disable virtual addressing
+    bool use_virtual_addressing = vendor != CloudVendor::UnknownFixAddress;
+    auto cli = std::make_unique<Aws::S3::S3Client>(
+        cred_provider,
+        client_config,
+        Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
+        use_virtual_addressing);
+    LOG_INFO(log, "Create S3Client end");
+    return {std::move(cli), vendor};
 }
 
 
@@ -633,6 +664,14 @@ static bool doUploadFile(
     {
         ProfileEvents::increment(is_dmfile ? ProfileEvents::S3PutDMFileRetry : ProfileEvents::S3PutObjectRetry);
     }
+#ifdef FIU_ENABLE
+    if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_syncpoint_on_s3_upload); v)
+    {
+        const auto & prefix = std::any_cast<String>(v.value());
+        if (!prefix.empty() && startsWith(remote_fname, prefix))
+            SYNC_FOR("before_S3Common::uploadFile");
+    }
+#endif
     auto result = client.PutObject(req);
     if (!result.IsSuccess())
     {
@@ -723,22 +762,37 @@ void downloadFileByS3RandomAccessFile(
     const String & remote_fname)
 {
     Stopwatch sw;
-    S3RandomAccessFile file(client, remote_fname);
+    S3RandomAccessFile file(client, remote_fname, nullptr);
     Aws::OFStream ostr(local_fname, std::ios_base::out | std::ios_base::binary);
-    RUNTIME_CHECK_MSG(ostr.is_open(), "Open {} fail: {}", local_fname, strerror(errno));
+    RUNTIME_CHECK_MSG(
+        ostr.is_open(),
+        "Failed to open local file while downloading file from S3, remote_fname={} local_fname={} err={}",
+        remote_fname,
+        local_fname,
+        strerror(errno));
 
     char buf[8192];
     while (true)
     {
         auto n = file.read(buf, sizeof(buf));
-        RUNTIME_CHECK(n >= 0, remote_fname);
+        RUNTIME_CHECK_MSG(
+            n >= 0,
+            "Failed to read from S3 while downloading file, n={} remote_fname={} local_fname={}",
+            n,
+            remote_fname,
+            local_fname);
         if (n == 0)
         {
             break;
         }
 
         ostr.write(buf, n);
-        RUNTIME_CHECK_MSG(ostr.good(), "Write {} fail: {}", local_fname, strerror(errno));
+        RUNTIME_CHECK_MSG(
+            ostr.good(),
+            "Failed to write to local file while downloading file from S3, remote_fname={} local_fname={} err={}",
+            remote_fname,
+            local_fname,
+            strerror(errno));
     }
 }
 
@@ -771,148 +825,6 @@ void rewriteObjectWithTagging(const TiFlashS3Client & client, const String & key
     LOG_DEBUG(client.log, "rewrite object key={} cost={:.2f}s", key, elapsed_seconds);
 }
 
-bool ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
-{
-    bool lifecycle_rule_has_been_set = false;
-    Aws::Vector<Aws::S3::Model::LifecycleRule> old_rules;
-    do
-    {
-        Aws::S3::Model::GetBucketLifecycleConfigurationRequest req;
-        req.SetBucket(client.bucket());
-        auto outcome = client.GetBucketLifecycleConfiguration(req);
-        if (!outcome.IsSuccess())
-        {
-            const auto & error = outcome.GetError();
-            // The life cycle is not added at all
-            if (error.GetErrorType() == Aws::S3::S3Errors::RESOURCE_NOT_FOUND
-                || error.GetExceptionName() == "NoSuchLifecycleConfiguration")
-            {
-                break;
-            }
-
-            LOG_WARNING(
-                client.log,
-                "GetBucketLifecycle fail, please check the bucket lifecycle configuration or create the lifecycle rule"
-                " manually, bucket={} {}",
-                client.bucket(),
-                S3ErrorMessage(error));
-            return false;
-        }
-
-        auto res = outcome.GetResultWithOwnership();
-        old_rules = res.GetRules();
-        fiu_do_on(FailPoints::force_set_lifecycle_resp, {
-            if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_set_lifecycle_resp); v)
-            {
-                auto rules = std::any_cast<std::vector<Aws::S3::Model::LifecycleRule>>(*v);
-                old_rules = rules;
-            }
-        });
-
-        static_assert(TaggingObjectIsDeleted == "tiflash_deleted=true");
-        for (const auto & rule : old_rules)
-        {
-            const auto & filt = rule.GetFilter();
-
-            std::optional<Aws::S3::Model::Tag> tag;
-            if (!filt.AndHasBeenSet())
-            {
-                // For AWS S3, filt.AndHasBeenSet() == false
-                tag = filt.GetTag();
-            }
-            else
-            {
-                // For minio filt.AndHasBeenSet() == true
-                const auto & and_op = filt.GetAnd();
-                const auto & tags = and_op.GetTags();
-                if (tags.size() != 1 || !and_op.PrefixHasBeenSet() || !and_op.GetPrefix().empty())
-                {
-                    continue;
-                }
-                tag = tags[0];
-            }
-            if (!tag)
-                continue;
-            if (tag->GetKey() == "tiflash_deleted" && tag->GetValue() == "true")
-            {
-                if (rule.GetStatus() == Aws::S3::Model::ExpirationStatus::Enabled)
-                {
-                    lifecycle_rule_has_been_set = true;
-                }
-                else
-                {
-                    LOG_WARNING(
-                        client.log,
-                        "The lifecycle rule is added but not enabled, please check the bucket lifecycle "
-                        "configuration or create the lifecycle rule manually, "
-                        "rule_id={} rule_status={} tag.key={} tag.value={}",
-                        rule.GetID(),
-                        Aws::S3::Model::ExpirationStatusMapper::GetNameForExpirationStatus(rule.GetStatus()),
-                        tag->GetKey(),
-                        tag->GetValue());
-                }
-                break;
-            }
-        }
-    } while (false);
-
-    if (lifecycle_rule_has_been_set)
-    {
-        LOG_INFO(
-            client.log,
-            "The lifecycle rule has been set, n_rules={} filter={}",
-            old_rules.size(),
-            TaggingObjectIsDeleted);
-        return true;
-    }
-
-    // Reference: https://docs.aws.amazon.com/AmazonS3/latest/userguide/S3OutpostsLifecycleCLIJava.html
-    LOG_INFO(
-        client.log,
-        "The lifecycle rule with filter \"{}\" has not been added, n_rules={}",
-        TaggingObjectIsDeleted,
-        old_rules.size());
-    static_assert(TaggingObjectIsDeleted == "tiflash_deleted=true");
-    std::vector<Aws::S3::Model::Tag> filter_tags{
-        Aws::S3::Model::Tag().WithKey("tiflash_deleted").WithValue("true"),
-    };
-
-    Aws::S3::Model::LifecycleRule rule;
-    rule.WithStatus(Aws::S3::Model::ExpirationStatus::Enabled)
-        .WithFilter(Aws::S3::Model::LifecycleRuleFilter().WithAnd(
-            Aws::S3::Model::LifecycleRuleAndOperator().WithPrefix("").WithTags(filter_tags)))
-        .WithExpiration(Aws::S3::Model::LifecycleExpiration().WithDays(expire_days))
-        .WithID("tiflashgc");
-
-    old_rules.emplace_back(rule); // existing rules + new rule
-    Aws::S3::Model::BucketLifecycleConfiguration lifecycle_config;
-    lifecycle_config.WithRules(old_rules);
-
-    Aws::S3::Model::PutBucketLifecycleConfigurationRequest request;
-    request.WithBucket(client.bucket()).WithLifecycleConfiguration(lifecycle_config);
-
-    auto outcome = client.PutBucketLifecycleConfiguration(request);
-    if (!outcome.IsSuccess())
-    {
-        const auto & error = outcome.GetError();
-        LOG_WARNING(
-            client.log,
-            "Create lifecycle rule with tag filter \"{}\" failed, please check the bucket lifecycle configuration or "
-            "create the lifecycle rule manually"
-            ", bucket={} {}",
-            TaggingObjectIsDeleted,
-            client.bucket(),
-            S3ErrorMessage(error));
-        return false;
-    }
-    LOG_INFO(
-        client.log,
-        "The lifecycle rule has been added, new_n_rules={} tag={}",
-        old_rules.size(),
-        TaggingObjectIsDeleted);
-    return true;
-}
-
 void listPrefix(
     const TiFlashS3Client & client,
     const String & prefix,
@@ -940,50 +852,61 @@ void listPrefix(
         {
             throw fromS3Error(
                 outcome.GetError(),
-                "S3 ListObjectV2s failed, bucket={} root={} prefix={}",
+                "S3 ListObjectsV2 failed, bucket={} root={} prefix={}",
                 client.bucket(),
                 client.root(),
                 prefix);
         }
         GET_METRIC(tiflash_storage_s3_request_seconds, type_list_objects).Observe(sw_list.elapsedSeconds());
 
-        PageResult page_res{};
+        bool should_continue = true;
         const auto & result = outcome.GetResult();
         auto page_keys = result.GetContents().size();
         num_keys += page_keys;
+        LOG_DEBUG(client.log, "listPrefix page result, prefix={} keys={} total_keys={}", prefix, page_keys, num_keys);
         for (const auto & object : result.GetContents())
         {
             if (!need_cut)
             {
-                page_res = pager(object);
+                should_continue = pager(object).more;
             }
             else
             {
                 // Copy the `Object` to cut off the `root` from key, the cost should be acceptable :(
                 auto object_without_root = object;
                 object_without_root.SetKey(object.GetKey().substr(cut_size, object.GetKey().size()));
-                page_res = pager(object_without_root);
+                should_continue = pager(object_without_root).more;
             }
-            if (!page_res.more)
+            if (!should_continue)
                 break;
+        }
+
+        if (!should_continue)
+        {
+            break;
         }
 
         // handle the result size over max size
         done = !result.GetIsTruncated();
-        if (!done && page_res.more)
+        if (!done)
         {
             const auto & next_token = result.GetNextContinuationToken();
             req.SetContinuationToken(next_token);
             LOG_DEBUG(
                 client.log,
-                "listPrefix prefix={}, keys={}, total_keys={}, next_token={}",
+                "listPrefix next page, prefix={} keys={} total_keys={} next_token={}",
                 prefix,
                 page_keys,
                 num_keys,
                 next_token);
         }
     }
-    LOG_DEBUG(client.log, "listPrefix prefix={}, total_keys={}, cost={:.2f}s", prefix, num_keys, sw.elapsedSeconds());
+    LOG_DEBUG(
+        client.log,
+        "listPrefix done, prefix={} total_keys={} cost={:.2f}s",
+        prefix,
+        num_keys,
+        sw.elapsedSeconds());
 }
 
 // Check the docs here for Delimiter && CommonPrefixes when you really need it.
@@ -1028,7 +951,7 @@ void listPrefixWithDelimiter(
         }
         GET_METRIC(tiflash_storage_s3_request_seconds, type_list_objects).Observe(sw_list.elapsedSeconds());
 
-        PageResult page_res{};
+        bool should_continue = true;
         const auto & result = outcome.GetResult();
         auto page_keys = result.GetCommonPrefixes().size();
         num_keys += page_keys;
@@ -1036,22 +959,27 @@ void listPrefixWithDelimiter(
         {
             if (!need_cut)
             {
-                page_res = pager(prefix);
+                should_continue = pager(prefix).more;
             }
             else
             {
                 // Copy the `CommonPrefix` to cut off the `root`, the cost should be acceptable :(
                 auto prefix_without_root = prefix;
                 prefix_without_root.SetPrefix(prefix.GetPrefix().substr(cut_size, prefix.GetPrefix().size()));
-                page_res = pager(prefix_without_root);
+                should_continue = pager(prefix_without_root).more;
             }
-            if (!page_res.more)
+            if (!should_continue)
                 break;
+        }
+
+        if (!should_continue)
+        {
+            break;
         }
 
         // handle the result size over max size
         done = !result.GetIsTruncated();
-        if (!done && page_res.more)
+        if (!done)
         {
             const auto & next_token = result.GetNextContinuationToken();
             req.SetContinuationToken(next_token);

@@ -27,13 +27,15 @@ namespace DB
 NamesAndTypes genNamesAndTypesForExchangeReceiver(const TiDBTableScan & table_scan);
 NamesAndTypes genNamesAndTypesForTableScan(const TiDBTableScan & table_scan);
 String genNameForExchangeReceiver(Int32 col_index);
+String genNameForCTESource(Int32 cte_id, Int32 col_index);
 
 NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan, const StringRef & column_prefix);
 NamesAndTypes genNamesAndTypes(const TiDB::ColumnInfos & column_infos, const StringRef & column_prefix);
 ColumnsWithTypeAndName getColumnWithTypeAndName(const NamesAndTypes & names_and_types);
 NamesAndTypes toNamesAndTypes(const DAGSchema & dag_schema);
 
-// The column defines and `extra table id index`
-std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedRead(const TiDBTableScan & table_scan);
+// The column defines, `extra table id index` and `generated columns info` for disaggregated read.
+std::tuple<DM::ColumnDefinesPtr, int, std::vector<std::tuple<UInt64, String, DataTypePtr>>> genColumnDefinesForDisaggregatedRead(
+    const TiDBTableScan & table_scan);
 
 } // namespace DB

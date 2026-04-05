@@ -21,6 +21,7 @@
 #include <Storages/IStorage.h>
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
 #include <Storages/KVStore/Decode/TiKVHandle.h>
+#include <Storages/KVStore/Region_fwd.h>
 #include <Storages/KVStore/StorageEngineType.h>
 #include <Storages/KVStore/Types.h>
 
@@ -34,7 +35,6 @@ namespace DB
 {
 struct SchemaNameMapper;
 class ASTStorage;
-class Region;
 
 namespace DM
 {

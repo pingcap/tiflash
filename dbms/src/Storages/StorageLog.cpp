@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Storages/StorageLog.cpp
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -78,7 +80,7 @@ public:
             res.insert({name_type.type->createColumn(), name_type.type, name_type.name});
 
         return Nested::flatten(res);
-    };
+    }
 
 protected:
     Block readImpl() override;
@@ -101,7 +103,10 @@ private:
             , compressed(plain)
         {
             if (offset)
-                plain.seek(offset);
+            {
+                auto ret = plain.seek(offset);
+                RUNTIME_CHECK_MSG(ret >= 0, "Failed to seek in file, ret={} path={}", ret, data_path);
+            }
         }
 
         ReadBufferFromFile plain;
@@ -405,7 +410,7 @@ StorageLog::StorageLog(
     , file_checker(path + escapeForFileName(name) + '/' + "sizes.json")
 {
     if (path.empty())
-        throw Exception("Storage " + getName() + " requires data path", ErrorCodes::INCORRECT_FILE_NAME);
+        throw Exception("Storage Log requires data path", ErrorCodes::INCORRECT_FILE_NAME);
 
     /// create files if they do not exist
     Poco::File(path + escapeForFileName(name) + '/').createDirectories();

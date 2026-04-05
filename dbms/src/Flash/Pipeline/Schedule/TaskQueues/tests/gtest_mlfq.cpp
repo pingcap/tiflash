@@ -251,7 +251,7 @@ try
         CPUMultiLevelFeedbackQueue queue;
         queue.submit(std::make_unique<PlainTask>(context1));
         queue.submit(std::make_unique<PlainTask>(context2));
-        queue.cancel("id2", "");
+        queue.cancel(TaskCancelInfo{.query_id = "id2"});
         TaskPtr task;
         ASSERT_TRUE(!queue.empty());
         queue.take(task);
@@ -266,7 +266,7 @@ try
     // case2 cancel first.
     {
         CPUMultiLevelFeedbackQueue queue;
-        queue.cancel("id2", "");
+        queue.cancel(TaskCancelInfo{.query_id = "id2"});
         queue.submit(std::make_unique<PlainTask>(context1));
         queue.submit(std::make_unique<PlainTask>(context2));
         TaskPtr task;

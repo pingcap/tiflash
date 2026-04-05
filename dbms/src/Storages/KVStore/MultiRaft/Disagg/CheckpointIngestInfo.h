@@ -17,14 +17,13 @@
 #include <Common/Logger.h>
 #include <Storages/DeltaMerge/Segment_fwd.h>
 #include <Storages/KVStore/MultiRaft/Disagg/fast_add_peer.pb.h>
+#include <Storages/KVStore/Region_fwd.h>
 #include <common/types.h>
 
 #include <memory>
 
 namespace DB
 {
-class Region;
-using RegionPtr = std::shared_ptr<Region>;
 class TMTContext;
 class UniversalPageStorage;
 using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
@@ -83,7 +82,7 @@ struct CheckpointIngestInfo
         UInt64 region_id,
         bool in_memory,
         CleanReason reason);
-    static bool cleanOnSuccess(TMTContext & tmt, UInt64 region_id);
+    bool cleanOnSuccess(TMTContext & tmt, UInt64 region_id);
 
     FastAddPeerProto::CheckpointIngestInfoPersisted serializeMeta() const;
 

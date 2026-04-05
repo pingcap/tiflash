@@ -48,7 +48,8 @@ public:
         size_t offset,
         size_t size,
         const WriteLimiterPtr & write_limiter,
-        bool background = false);
+        bool background,
+        bool do_fsync);
 
     void truncate(size_t size);
 

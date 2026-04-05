@@ -17,6 +17,7 @@
 #include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/MultiRaft/RegionSerde.h>
+#include <Storages/KVStore/Region_fwd.h>
 
 namespace DB::RegionBench
 {

@@ -17,7 +17,6 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <gtest/gtest.h>
 
 namespace DB::tests
@@ -26,7 +25,7 @@ namespace DB::tests
 class AggregationTest : public ::testing::Test
 {
 public:
-    ::testing::AssertionResult checkAggReturnType(
+    static ::testing::AssertionResult checkAggReturnType(
         const String & agg_name,
         const DataTypes & data_types,
         const DataTypePtr & expect_type);

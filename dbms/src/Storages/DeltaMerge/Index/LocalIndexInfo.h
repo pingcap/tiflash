@@ -18,6 +18,7 @@
 #include <Storages/DeltaMerge/Index/LocalIndexInfo_fwd.h>
 #include <Storages/DeltaMerge/dtpb/index_file.pb.h>
 #include <Storages/KVStore/Types.h>
+#include <TiDB/Schema/FullTextIndex.h>
 #include <TiDB/Schema/InvertedIndex.h>
 #include <TiDB/Schema/TiDB.h>
 #include <TiDB/Schema/VectorIndex.h>
@@ -46,6 +47,7 @@ struct LocalIndexInfo
     ColumnID column_id = DB::EmptyColumnID;
 
     TiDB::VectorIndexDefinitionPtr def_vector_index = nullptr;
+    TiDB::FullTextIndexDefinitionPtr def_fulltext_index = nullptr;
     TiDB::InvertedIndexDefinitionPtr def_inverted_index = nullptr;
 
     LocalIndexInfo(IndexID index_id_, ColumnID column_id_, const TiDB::VectorIndexDefinitionPtr & def)
@@ -62,22 +64,15 @@ struct LocalIndexInfo
         , def_inverted_index(def)
     {}
 
-    dtpb::IndexFileKind getKindAsDtpb() const
-    {
-        switch (kind)
-        {
-        case TiDB::ColumnarIndexKind::Vector:
-            return dtpb::IndexFileKind::VECTOR_INDEX;
-        case TiDB::ColumnarIndexKind::Inverted:
-            return dtpb::IndexFileKind::INVERTED_INDEX;
-        default:
-            RUNTIME_CHECK_MSG(false, "Unsupported index kind: {}", magic_enum::enum_name(kind));
-        }
-    }
+    LocalIndexInfo(IndexID index_id_, ColumnID column_id_, const TiDB::FullTextIndexDefinitionPtr & def)
+        : kind(TiDB::ColumnarIndexKind::FullText)
+        , index_id(index_id_)
+        , column_id(column_id_)
+        , def_fulltext_index(def)
+    {}
 };
 
 LocalIndexInfosPtr initLocalIndexInfos(const TiDB::TableInfo & table_info, const LoggerPtr & logger);
-
 class LocalIndexInfosChangeset
 {
 public:

@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Interpreters/InterpreterExistsQuery.cpp
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -43,7 +45,8 @@ Block InterpreterExistsQuery::getSampleBlock()
 BlockInputStreamPtr InterpreterExistsQuery::executeImpl()
 {
     const ASTExistsQuery & ast = typeid_cast<const ASTExistsQuery &>(*query_ptr);
-    bool res = ast.temporary ? context.isExternalTableExist(ast.table) : context.isTableExist(ast.database, ast.table);
+    RUNTIME_CHECK_MSG(!ast.temporary, "external table is not supported");
+    bool res = context.isTableExist(ast.database, ast.table);
 
     return std::make_shared<OneBlockInputStream>(
         Block{{ColumnUInt8::create(1, res), std::make_shared<DataTypeUInt8>(), "result"}});

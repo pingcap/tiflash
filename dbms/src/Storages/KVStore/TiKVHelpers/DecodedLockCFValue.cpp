@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Storages/KVStore/MultiRaft/RegionCFDataBase.h>
 #include <Storages/KVStore/MultiRaft/RegionCFDataTrait.h>
 #include <Storages/KVStore/TiKVHelpers/DecodedLockCFValue.h>
@@ -47,6 +48,10 @@ namespace RecordKVFormat
     case LockType::Pessimistic:
         lock_type = kvrpcpb::Op::PessimisticLock;
         break;
+    case LockType::Shared:
+        // Skip parsing shared locks as they do not block any read requests.
+        res.lock_type = kvrpcpb::Op::SharedLock;
+        return inner;
     }
     res.lock_type = lock_type;
     res.primary_lock = readVarString<std::string_view>(data, len);
@@ -62,7 +67,7 @@ namespace RecordKVFormat
             {
             case SHORT_VALUE_PREFIX:
             {
-#if SERVERLESS_PROXY != 0
+#if ENABLE_NEXT_GEN
                 size_t str_len = readVarUInt(data, len);
 #else
                 size_t str_len = readUInt8(data, len);
@@ -88,7 +93,7 @@ namespace RecordKVFormat
                 res.txn_size = readUInt64(data, len);
                 break;
             }
-#if SERVERLESS_PROXY != 0
+#if ENABLE_NEXT_GEN
             case IS_TXN_FILE_PREFIX:
             {
                 res.is_txn_file = true;
@@ -164,6 +169,10 @@ DecodedLockCFValue::DecodedLockCFValue(std::shared_ptr<const TiKVKey> key_, std:
     if (parsed->lock_type == kvrpcpb::Op::PessimisticLock)
     {
         GET_METRIC(tiflash_raft_process_keys, type_pessimistic_lock_put).Increment(1);
+    }
+    else if (parsed->lock_type == kvrpcpb::Op::SharedLock)
+    {
+        GET_METRIC(tiflash_raft_process_keys, type_shared_lock_put).Increment(1);
     }
     if (parsed->generation == 0)
     {
@@ -243,7 +252,8 @@ void DecodedLockCFValue::Inner::getLockInfoPtr(
     LockInfoPtr & res) const
 {
     res = nullptr;
-    if (lock_version > query.read_tso || lock_type == kvrpcpb::Op::Lock || lock_type == kvrpcpb::Op::PessimisticLock)
+    if (lock_version > query.read_tso || lock_type == kvrpcpb::Op::Lock || lock_type == kvrpcpb::Op::PessimisticLock
+        || lock_type == kvrpcpb::Op::SharedLock)
         return;
     if (min_commit_ts > query.read_tso)
         return;

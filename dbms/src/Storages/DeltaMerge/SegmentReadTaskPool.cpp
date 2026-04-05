@@ -25,6 +25,10 @@ namespace DB::FailPoints
 extern const char pause_when_reading_from_dt_stream[];
 } // namespace DB::FailPoints
 
+namespace CurrentMetrics
+{
+extern const Metric DT_SegmentReadTasks;
+} // namespace CurrentMetrics
 namespace DB::DM
 {
 SegmentReadTasksWrapper::SegmentReadTasksWrapper(bool enable_read_thread_, SegmentReadTasks && ordered_tasks_)
@@ -88,16 +92,12 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
     MemoryTrackerSetter setter(true, mem_tracker.get());
 
     t->fetchPages();
+    recordRemoteConnectionInfoIfNecessary(t);
 
-    if (likely(read_mode == ReadMode::Bitmap && !res_group_name.empty()))
-    {
-        auto bytes = t->read_snapshot->estimatedBytesOfInternalColumns();
-        LocalAdmissionController::global_instance->consumeBytesResource(res_group_name, bytesToRU(bytes));
-    }
     t->initInputStream(
         columns_to_read,
         start_ts,
-        filter,
+        executor,
         read_mode,
         expected_block_size,
         t->dm_context->global_context.getSettingsRef().dt_enable_delta_index_error_fallback);
@@ -117,7 +117,7 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
 SegmentReadTaskPool::SegmentReadTaskPool(
     int extra_table_id_index_,
     const ColumnDefines & columns_to_read_,
-    const PushDownExecutorPtr & filter_,
+    const PushDownExecutorPtr & executor_,
     uint64_t start_ts_,
     size_t expected_block_size_,
     ReadMode read_mode_,
@@ -126,17 +126,21 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     const String & tracing_id,
     bool enable_read_thread_,
     Int64 num_streams_,
+    Int64 active_segment_limit_,
+    const KeyspaceID & keyspace_id_,
     const String & res_group_name_)
     : pool_id(nextPoolId())
     , mem_tracker(current_memory_tracker == nullptr ? nullptr : current_memory_tracker->shared_from_this())
     , extra_table_id_index(extra_table_id_index_)
     , columns_to_read(columns_to_read_)
-    , filter(filter_)
+    , executor(executor_)
     , start_ts(start_ts_)
     , expected_block_size(expected_block_size_)
     , read_mode(read_mode_)
+    , total_read_tasks(tasks_.size())
     , tasks_wrapper(enable_read_thread_, std::move(tasks_))
     , after_segment_read(after_segment_read_)
+    , peak_active_segments(0)
     , log(Logger::get(tracing_id))
     , unordered_input_stream_ref_count(0)
     , exception_happened(false)
@@ -147,13 +151,48 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     , block_slot_limit(std::ceil(num_streams_ * 1.5))
     // Limiting the minimum number of reading segments to 2 is to avoid, as much as possible,
     // situations where the computation may be faster and the storage layer may not be able to keep up.
-    , active_segment_limit(std::max(num_streams_, 2))
+    , active_segment_limit(std::max(active_segment_limit_, 2))
+    , keyspace_id(keyspace_id_)
     , res_group_name(res_group_name_)
 {
+    GET_METRIC(tiflash_storage_read_thread_gauge, type_read_task_pool).Increment();
     if (tasks_wrapper.empty())
     {
         q.finish();
     }
+}
+
+SegmentReadTaskPool::~SegmentReadTaskPool()
+{
+    GET_METRIC(tiflash_storage_read_thread_gauge, type_read_task_pool).Decrement();
+    auto [pop_times, pop_empty_times, peak_blocks_in_queue] = q.getStat();
+    auto pop_empty_ratio = pop_times > 0 ? pop_empty_times * 1.0 / pop_times : 0.0;
+    auto total_count = blk_stat.totalCount();
+    auto total_bytes = blk_stat.totalBytes();
+    auto blk_avg_bytes = total_count > 0 ? total_bytes / total_count : 0;
+    auto approx_max_pending_block_bytes = blk_avg_bytes * peak_blocks_in_queue;
+    auto total_rows = blk_stat.totalRows();
+    LOG_INFO(
+        log,
+        "Done. pool_id={} pop={} pop_empty={} pop_empty_ratio={:.3f} "
+        "active_segment_limit={} peak_active_segments={} "
+        "block_slot_limit={} peak_blocks_in_queue={} blk_avg_bytes={} approx_max_pending_block_bytes={:.2f}MB "
+        "total_count={} total_bytes={:.2f}MB total_rows={} avg_block_rows={} avg_rows_bytes={}B",
+        pool_id,
+        pop_times,
+        pop_empty_times,
+        pop_empty_ratio,
+        active_segment_limit,
+        peak_active_segments,
+        block_slot_limit,
+        peak_blocks_in_queue,
+        blk_avg_bytes,
+        approx_max_pending_block_bytes / 1024.0 / 1024.0,
+        total_count,
+        total_bytes / 1024.0 / 1024.0,
+        total_rows,
+        total_count > 0 ? total_rows / total_count : 0,
+        total_rows > 0 ? total_bytes / total_rows : 0);
 }
 
 void SegmentReadTaskPool::finishSegment(const SegmentReadTaskPtr & seg)
@@ -165,7 +204,8 @@ void SegmentReadTaskPool::finishSegment(const SegmentReadTaskPtr & seg)
         active_segment_ids.erase(seg->getGlobalSegmentID());
         pool_finished = active_segment_ids.empty() && tasks_wrapper.empty();
     }
-    LOG_DEBUG(log, "finishSegment pool_id={} segment={} pool_finished={}", pool_id, seg, pool_finished);
+    GET_METRIC(tiflash_storage_read_thread_gauge, type_read_task_active).Decrement();
+    LOG_INFO(log, "finishSegment pool_id={} segment={} pool_finished={}", pool_id, seg, pool_finished);
     if (pool_finished)
     {
         q.finish();
@@ -184,14 +224,46 @@ SegmentReadTaskPtr SegmentReadTaskPool::getTask(const GlobalSegmentID & seg_id)
     std::lock_guard lock(mutex);
     auto t = tasks_wrapper.getTask(seg_id);
     RUNTIME_CHECK(t != nullptr, pool_id, seg_id);
+    auto no_task_left = tasks_wrapper.empty();
     active_segment_ids.insert(seg_id);
+    GET_METRIC(tiflash_storage_read_thread_gauge, type_read_task_active).Increment();
+    peak_active_segments = std::max(peak_active_segments, active_segment_ids.size());
+    if (no_task_left)
+    {
+        LOG_INFO(log, "pool_id={} all tasks scheduled, active_segment_size={}", pool_id, active_segment_ids.size());
+    }
     return t;
 }
 
-const std::unordered_map<GlobalSegmentID, SegmentReadTaskPtr> & SegmentReadTaskPool::getTasks()
+const std::unordered_map<GlobalSegmentID, SegmentReadTaskPtr> & SegmentReadTaskPool::getTasks() const
 {
     std::lock_guard lock(mutex);
     return tasks_wrapper.getTasks();
+}
+
+std::optional<std::pair<ConnectionProfileInfo, ConnectionProfileInfo>> SegmentReadTaskPool::getRemoteConnectionInfo()
+    const
+{
+    std::lock_guard lock(connection_info_mu);
+    if (remote_connection_infos.empty())
+        return {};
+
+    static constexpr auto inter_type = ConnectionProfileInfo::ConnectionType::InterZoneRemote;
+    static constexpr auto inner_type = ConnectionProfileInfo::ConnectionType::InnerZoneRemote;
+    ConnectionProfileInfo inter_zone_info(inter_type);
+    ConnectionProfileInfo inner_zone_info(inner_type);
+
+    for (const auto & connection_info : remote_connection_infos)
+    {
+        RUNTIME_CHECK(
+            connection_info.type == inter_type || connection_info.type == inner_type,
+            connection_info.getTypeString());
+        if (connection_info.type == inter_type)
+            inter_zone_info.merge(connection_info);
+        else if (connection_info.type == inner_type)
+            inner_zone_info.merge(connection_info);
+    }
+    return {{inter_zone_info, inner_zone_info}};
 }
 
 // Choose a segment to read.
@@ -343,9 +415,9 @@ static Int64 currentMS()
         .count();
 }
 
-static bool checkIsRUExhausted(const String & res_group_name)
+static bool checkIsRUExhausted(const KeyspaceID & keyspace_id, const String & res_group_name)
 {
-    auto priority = LocalAdmissionController::global_instance->getPriority(res_group_name);
+    auto priority = LocalAdmissionController::global_instance->getPriority(keyspace_id, res_group_name);
     if (unlikely(!priority.has_value()))
     {
         return false;
@@ -371,7 +443,7 @@ bool SegmentReadTaskPool::isRUExhaustedImpl()
     }
 
     // To reduce lock contention in resource control,
-    // check if RU is exhuasted every `bytes_of_one_hundred_ru` or every `100ms`.
+    // check if RU is exhausted every `bytes_of_one_hundred_ru` or every `100ms`.
 
     // Fast path.
     Int64 ms = currentMS();
@@ -391,7 +463,7 @@ bool SegmentReadTaskPool::isRUExhaustedImpl()
 
     // Check and reset everything.
     read_bytes_after_last_check = 0;
-    ru_is_exhausted = checkIsRUExhausted(res_group_name);
+    ru_is_exhausted = checkIsRUExhausted(keyspace_id, res_group_name);
     last_time_check_ru = ms;
     return ru_is_exhausted;
 }

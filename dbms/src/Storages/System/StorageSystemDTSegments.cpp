@@ -21,10 +21,12 @@
 #include <Databases/IDatabase.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/DeltaMergeStore_Statistics.h>
 #include <Storages/KVStore/Types.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/System/StorageSystemDTSegments.h>
+#include <Storages/System/utils.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 
 namespace DB
@@ -60,6 +62,7 @@ StorageSystemDTSegments::StorageSystemDTSegments(const std::string & name_)
         {"delta_persisted_column_files", std::make_shared<DataTypeUInt64>()},
         {"delta_persisted_delete_ranges", std::make_shared<DataTypeUInt64>()},
         {"delta_cache_size", std::make_shared<DataTypeUInt64>()},
+        {"delta_cache_alloc_size", std::make_shared<DataTypeUInt64>()},
         {"delta_index_size", std::make_shared<DataTypeUInt64>()},
 
         {"stable_page_id", std::make_shared<DataTypeUInt64>()},
@@ -76,7 +79,7 @@ StorageSystemDTSegments::StorageSystemDTSegments(const std::string & name_)
 
 BlockInputStreams StorageSystemDTSegments::read(
     const Names & column_names,
-    const SelectQueryInfo &,
+    const SelectQueryInfo & query_info,
     const Context & context,
     QueryProcessingStage::Enum & processed_stage,
     const size_t /*max_block_size*/,
@@ -90,11 +93,18 @@ BlockInputStreams StorageSystemDTSegments::read(
     SchemaNameMapper mapper;
 
     auto databases = context.getDatabases();
+    const auto parsed_keyspace_id = parseKeyspaceIDFromSelectQueryInfo(query_info);
     for (const auto & d : databases)
     {
         String database_name = d.first;
         const auto & database = d.second;
         const DatabaseTiFlash * db_tiflash = typeid_cast<DatabaseTiFlash *>(database.get());
+        if (!db_tiflash)
+            continue;
+
+        const auto keyspace_id = db_tiflash->getDatabaseInfo().keyspace_id;
+        if (parsed_keyspace_id != NullspaceID && keyspace_id != parsed_keyspace_id)
+            continue;
 
         auto it = database->getIterator(context);
         for (; it->isValid(); it->next())
@@ -117,13 +127,7 @@ BlockInputStreams StorageSystemDTSegments::read(
                 res_columns[j++]->insert(database_name);
                 res_columns[j++]->insert(table_name);
 
-                String tidb_db_name;
-                KeyspaceID keyspace_id = NullspaceID;
-                if (db_tiflash)
-                {
-                    tidb_db_name = db_tiflash->getDatabaseInfo().name;
-                    keyspace_id = db_tiflash->getDatabaseInfo().keyspace_id;
-                }
+                String tidb_db_name = db_tiflash->getDatabaseInfo().name;
                 res_columns[j++]->insert(tidb_db_name);
                 String tidb_table_name = table_info.name;
                 res_columns[j++]->insert(tidb_table_name);
@@ -152,6 +156,7 @@ BlockInputStreams StorageSystemDTSegments::read(
                 res_columns[j++]->insert(stat.delta_persisted_column_files);
                 res_columns[j++]->insert(stat.delta_persisted_delete_ranges);
                 res_columns[j++]->insert(stat.delta_cache_size);
+                res_columns[j++]->insert(stat.delta_cache_alloc_size);
                 res_columns[j++]->insert(stat.delta_index_size);
 
                 res_columns[j++]->insert(stat.stable_page_id);

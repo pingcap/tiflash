@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/AggregateFunctions/AggregateFunctionNothing.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -55,6 +57,11 @@ public:
     void deserialize(AggregateDataPtr, ReadBuffer &, Arena *) const override {}
 
     void insertResultInto(ConstAggregateDataPtr, IColumn & to, Arena *) const override { to.insertDefault(); }
+
+    void batchInsertSameResultInto(ConstAggregateDataPtr __restrict, IColumn & to, size_t num) const override
+    {
+        to.insertManyDefaults(num);
+    }
 
     const char * getHeaderFilePath() const override { return __FILE__; }
 };

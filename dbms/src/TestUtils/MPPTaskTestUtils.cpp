@@ -14,7 +14,6 @@
 #include <Debug/MockComputeServerManager.h>
 #include <Debug/MockStorage.h>
 #include <Debug/dbgQueryExecutor.h>
-#include <Server/FlashGrpcServerHolder.h>
 #include <Server/MockComputeClient.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/Types.h>
@@ -98,21 +97,31 @@ void MPPTaskTestUtils::setCancelTest()
         TiFlashTestEnv::getGlobalContext(i).setCancelTest();
 }
 
-BlockInputStreamPtr MPPTaskTestUtils::prepareMPPStreams(DAGRequestBuilder builder, const DAGProperties & properties)
+BlockInputStreamPtr MPPTaskTestUtils::prepareMPPStreams(
+    DAGRequestBuilder builder,
+    const DAGProperties & properties,
+    bool is_cancel_test)
 {
-    auto tasks = prepareMPPTasks(builder, properties);
+    auto tasks = prepareMPPTasks(builder, properties, is_cancel_test);
     return executeMPPQueryWithMultipleContext(
         properties,
         tasks,
         MockComputeServerManager::instance().getServerConfigMap());
 }
 
-std::vector<QueryTask> MPPTaskTestUtils::prepareMPPTasks(DAGRequestBuilder builder, const DAGProperties & properties)
+std::vector<QueryTask> MPPTaskTestUtils::prepareMPPTasks(
+    DAGRequestBuilder builder,
+    const DAGProperties & properties,
+    bool is_cancel_test)
 {
     std::lock_guard lock(mu);
     auto tasks = builder.buildMPPTasks(context, properties);
-    for (int i = test_meta.context_idx; i < TiFlashTestEnv::globalContextSize(); ++i)
-        TiFlashTestEnv::getGlobalContext(i).setCancelTest();
+    if (is_cancel_test)
+        for (int i = test_meta.context_idx; i < TiFlashTestEnv::globalContextSize(); ++i)
+            TiFlashTestEnv::getGlobalContext(i).setCancelTest();
+    else
+        for (int i = test_meta.context_idx; i < TiFlashTestEnv::globalContextSize(); ++i)
+            TiFlashTestEnv::getGlobalContext(i).setMPPTest();
     return tasks;
 }
 

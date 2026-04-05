@@ -18,7 +18,7 @@ ARCH = $(shell uname -m)
 
 # Base docker files with prerequisites build tools
 image_tiflash_llvm_base:
-	$(DOCKER) build dockerfiles -f dockerfiles/Dockerfile-tiflash-llvm-base --build-arg arch="$(ARCH)" -t hub.pingcap.net/tiflash/tiflash-llvm-base:rocky8$(SUFFIX)
+	$(DOCKER) buildx build dockerfiles -f dockerfiles/Dockerfile-tiflash-llvm-base --progress plain --build-arg arch="$(ARCH)" -t hub.pingcap.net/tiflash/tiflash-llvm-base:rocky8$(SUFFIX)
 
 # Build tiflash binaries under directory "tiflash"
 build_tiflash_release:
@@ -28,7 +28,7 @@ build_tiflash_release:
 image_tiflash_release:
 	$(DOCKER) build -f dockerfiles/Dockerfile-tiflash-rocky8 -t hub.pingcap.net/tiflash/tiflash-server-rocky8 .
 
-# Add build_tiflash_debug target to enable FailPoints. Since outputs are the same as release version, no new package targets added. 
+# Add build_tiflash_debug target to enable FailPoints. Since outputs are the same as release version, no new package targets added.
 build_tiflash_debug:
 	$(DOCKER) run --rm -v $(realpath ..):/build/tics hub.pingcap.net/tiflash/tiflash-llvm-base:rocky8$(SUFFIX) /build/tics/release-linux-llvm/scripts/build-debug.sh
 
@@ -38,9 +38,9 @@ build_tiflash_tsan:
 build_tiflash_asan:
 	$(DOCKER) run --rm -v $(realpath ..):/build/tics hub.pingcap.net/tiflash/tiflash-llvm-base:rocky8$(SUFFIX) /build/tics/release-linux-llvm/scripts/build-asan.sh
 
-# Base docker with prerequisites running CI
+# Base docker with prerequisites running integration tests
 image_tiflash_ci_base:
-	$(DOCKER) build -f dockerfiles/Dockerfile-tiflash-ci-base -t hub.pingcap.net/tiflash/tiflash-ci-base .
+	$(DOCKER) build -f dockerfiles/Dockerfile-tiflash-ci-base -t hub.pingcap.net/tiflash/tiflash-ci-base:rocky9-20250529 .
 
 # Package tiflash CI docker image using the binaries under directory "tiflash"
 image_tiflash_ci:

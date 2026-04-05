@@ -40,5 +40,9 @@ export tidb_db="test"
 # TiDB default table
 export tidb_table="t"
 
+# Whether run scripts with verbose output
+# "true" or "false"
+export verbose=${verbose:-"false"}
+
 export LANG=en_US.utf-8
 export LC_ALL=en_US.utf-8

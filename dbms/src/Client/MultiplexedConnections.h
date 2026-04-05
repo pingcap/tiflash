@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Client/MultiplexedConnections.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -45,16 +47,12 @@ public:
         const ThrottlerPtr & throttler_,
         bool append_extra_info);
 
-    /// Send all content of external tables to replicas.
-    void sendExternalTablesData(std::vector<ExternalTablesData> & data);
-
     /// Send request to replicas.
     void sendQuery(
         const String & query,
         const String & query_id = "",
         UInt64 stage = QueryProcessingStage::Complete,
-        const ClientInfo * client_info = nullptr,
-        bool with_pending_data = false);
+        const ClientInfo * client_info = nullptr);
 
     /// Get packet from any replica.
     Connection::Packet receivePacket();

@@ -18,7 +18,6 @@
 #include <Server/RaftConfigParser.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <gtest/gtest.h>
 
 namespace DB

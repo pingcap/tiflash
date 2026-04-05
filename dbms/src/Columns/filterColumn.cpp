@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Columns/ColumnsCommon.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -287,7 +289,7 @@ INSTANTIATE(Float64)
 #undef INSTANTIATE
 
 template <typename T, typename Container>
-void filterImpl(const UInt8 * filt_pos, const UInt8 * filt_end, const T * data_pos, Container & res_data)
+void filterImpl(const UInt8 * filt_pos, const UInt8 * filt_end, T const * data_pos, Container & res_data)
 {
     const UInt8 * filt_end_aligned = filt_pos + (filt_end - filt_pos) / FILTER_SIMD_BYTES * FILTER_SIMD_BYTES;
     filterImplAligned<T, Container>(filt_pos, filt_end_aligned, data_pos, res_data);
@@ -307,7 +309,7 @@ void filterImpl(const UInt8 * filt_pos, const UInt8 * filt_end, const T * data_p
     template void filterImpl<T, Container>( \
         const UInt8 * filt_pos,             \
         const UInt8 * filt_end,             \
-        const T * data_pos,                 \
+        T const * data_pos,                 \
         Container & res_data); // NOLINT
 
 INSTANTIATE(UInt8, PaddedPODArray<UInt8>)
@@ -322,6 +324,7 @@ INSTANTIATE(Int64, PaddedPODArray<Int64>)
 INSTANTIATE(Int128, PaddedPODArray<Int128>)
 INSTANTIATE(Float32, PaddedPODArray<Float32>)
 INSTANTIATE(Float64, PaddedPODArray<Float64>)
+INSTANTIATE(char *, PaddedPODArray<char *>)
 INSTANTIATE(Decimal32, DecimalPaddedPODArray<Decimal32>)
 INSTANTIATE(Decimal64, DecimalPaddedPODArray<Decimal64>)
 INSTANTIATE(Decimal128, DecimalPaddedPODArray<Decimal128>)

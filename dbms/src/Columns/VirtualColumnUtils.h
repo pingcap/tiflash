@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Storages/VirtualColumnUtils.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +24,7 @@
 namespace DB::VirtualColumnUtils
 {
 
-/// Leave in the block only the rows that fit under the WHERE clause and the PREWHERE clause of the query.
+/// Leave in the block only the rows that fit under the WHERE clause of the query.
 /// Only elements of the outer conjunction are considered, depending only on the columns present in the block.
 /// Returns true if at least one row is discarded.
 void filterBlockWithQuery(const ASTPtr & query, Block & block, const Context & context);

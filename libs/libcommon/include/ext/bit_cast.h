@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/libs/libcommon/include/ext/bit_cast.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -36,7 +38,7 @@ std::decay_t<To> bit_cast(const From & from)
 #endif
     memcpy(&res, &from, std::min(sizeof(res), sizeof(from)));
     return res;
-};
+}
 
 /** \brief Returns value `from` converted to type `To` while retaining bit representation.
   *    `To` and `From` must satisfy `CopyConstructible`.
@@ -46,5 +48,5 @@ std::decay_t<To> safe_bit_cast(const From & from)
 {
     static_assert(sizeof(To) == sizeof(From), "bit cast on types of different width");
     return ext::bit_cast<To, From>(from);
-};
+}
 } // namespace ext

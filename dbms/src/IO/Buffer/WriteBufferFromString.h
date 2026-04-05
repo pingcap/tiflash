@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/IO/WriteBufferFromString.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -36,7 +38,7 @@ class StringHolder
 {
 public:
     StringHolder() = default;
-    StringHolder(size_t init_size) { value.resize(init_size); }
+    explicit StringHolder(size_t init_size) { value.resize(init_size); }
 
 protected:
     std::string value;
@@ -53,7 +55,7 @@ public:
         : WriteBufferFromString(value)
     {}
 
-    WriteBufferFromOwnString(size_t init_size)
+    explicit WriteBufferFromOwnString(size_t init_size)
         : detail::StringHolder(init_size)
         , WriteBufferFromString(value)
     {}

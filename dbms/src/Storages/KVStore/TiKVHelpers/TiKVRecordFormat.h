@@ -20,6 +20,7 @@
 #include <IO/Endian.h>
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
 #include <Storages/KVStore/Decode/TiKVHandle.h>
+#include <Storages/KVStore/TiKVHelpers/TiKVKeyValue.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVVarInt.h>
 #include <Storages/KVStore/Types.h>
 #include <TiDB/Decode/Datum.h>
@@ -153,6 +154,27 @@ inline TiKVKey genKey(const TableID tableId, const HandleID handleId)
 }
 
 TiKVKey genKey(const TiDB::TableInfo & table_info, std::vector<Field> keys);
+
+inline TiKVKey genTableRecordStartKey(const TableID tableId)
+{
+    // The key format is "t${tableId}_r"
+    std::string key(RecordKVFormat::RAW_KEY_NO_HANDLE_SIZE, 0);
+    memcpy(key.data(), &RecordKVFormat::TABLE_PREFIX, 1);
+    auto big_endian_table_id = encodeInt64(tableId);
+    memcpy(key.data() + 1, reinterpret_cast<const char *>(&big_endian_table_id), 8);
+    memcpy(key.data() + 1 + 8, RecordKVFormat::RECORD_PREFIX_SEP, 2);
+    return encodeAsTiKVKey(key);
+}
+
+inline TiKVKey genTableRecordEndKey(const TableID tableId)
+{
+    // The key format is "t${tableId+1}"
+    std::string key(1 + 8, 0);
+    memcpy(key.data(), &RecordKVFormat::TABLE_PREFIX, 1);
+    auto big_endian_table_id = encodeInt64(tableId + 1);
+    memcpy(key.data() + 1, reinterpret_cast<const char *>(&big_endian_table_id), 8);
+    return encodeAsTiKVKey(key);
+}
 
 inline bool checkKeyPaddingValid(const char * ptr, const UInt8 pad_size)
 {
@@ -329,6 +351,7 @@ enum LockType : UInt8
     Delete = 'D',
     Lock = 'L',
     Pessimistic = 'S',
+    Shared = 'H',
 };
 
 struct InnerDecodedWriteCFValue

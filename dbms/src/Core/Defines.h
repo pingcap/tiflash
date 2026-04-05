@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Core/Defines.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -48,9 +50,9 @@
 // Including read index / wait index / generate segments snapshots.
 static constexpr UInt64 DEFAULT_DISAGG_TASK_BUILD_TIMEOUT_SEC = 60;
 // Timeout for how long one disagg task is valid in the TiFlash write node.
-// It is now a short period to avoid long stale snapshots causing system
-// instable.
-static constexpr UInt64 DEFAULT_DISAGG_TASK_TIMEOUT_SEC = 5 * 60;
+static constexpr UInt64 DEFAULT_DISAGG_TASK_TIMEOUT_SEC = 30 * 60;
+// Each time duration to refresh the expiration time of the disagg task snapshot
+static constexpr UInt64 DEFAULT_DISAGG_TASK_REFRESH_SEC = 5 * 60;
 // Timeout for FetchDisaggPages in the TiFlash compute node.
 static constexpr UInt64 DEFAULT_DISAGG_FETCH_PAGES_TIMEOUT_SEC = 30;
 

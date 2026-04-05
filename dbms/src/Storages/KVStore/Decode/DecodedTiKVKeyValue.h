@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Storages/KVStore/TiKVHelpers/TiKVKeyValue.h>
+#include <Common/RedactHelpers.h>
 #include <Storages/KVStore/Types.h>
 
 namespace DB
@@ -32,14 +32,14 @@ struct DecodedTiKVKey
     {}
     DecodedTiKVKey() = default;
     DecodedTiKVKey(DecodedTiKVKey && obj)
-        : Base((Base &&) obj)
+        : Base((Base &&)obj)
     {}
     DecodedTiKVKey & operator=(DecodedTiKVKey && obj)
     {
         if (this == &obj)
             return *this;
 
-        (Base &)* this = (Base &&) obj;
+        (Base &)* this = (Base &&)obj;
         return *this;
     }
 

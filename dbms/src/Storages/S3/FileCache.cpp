@@ -21,7 +21,12 @@
 #include <Common/TiFlashMetrics.h>
 #include <Common/escapeForFileName.h>
 #include <IO/BaseFile/PosixRandomAccessFile.h>
+#include <IO/BaseFile/PosixWritableFile.h>
+#include <IO/BaseFile/RateLimiter.h>
+#include <IO/Buffer/ReadBufferFromIStream.h>
+#include <IO/Buffer/WriteBufferFromWritableFile.h>
 #include <IO/IOThreadPools.h>
+#include <IO/copyData.h>
 #include <Interpreters/Settings.h>
 #include <Server/StorageConfigParser.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
@@ -29,7 +34,11 @@
 #include <Storages/S3/FileCache.h>
 #include <Storages/S3/FileCachePerf.h>
 #include <Storages/S3/S3Common.h>
+#include <aws/core/utils/memory/stl/AWSStreamFwd.h>
 #include <aws/s3/model/GetObjectRequest.h>
+#include <common/logger_useful.h>
+#include <fcntl.h>
+#include <fmt/chrono.h>
 
 #include <atomic>
 #include <chrono>
@@ -37,6 +46,13 @@
 #include <filesystem>
 #include <magic_enum.hpp>
 #include <queue>
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <Poco/JSON/Array.h>
+#include <Poco/JSON/Object.h>
+#pragma GCC diagnostic pop
+
 
 namespace ProfileEvents
 {
@@ -107,12 +123,125 @@ FileSegment::Status FileSegment::waitForNotEmpty()
     return status;
 }
 
-FileCache::FileCache(PathCapacityMetricsPtr capacity_metrics_, const StorageRemoteCacheConfig & config_)
+void CacheSizeHistogram::addFileSegment(const FileSegmentPtr & file_seg)
+{
+    if (!file_seg)
+        return;
+
+    auto age = std::chrono::duration_cast<std::chrono::minutes>(
+                   std::chrono::system_clock::now() - file_seg->getLastAccessTime())
+                   .count();
+    UInt64 fsize = file_seg->getSize();
+    if (age < 30)
+    {
+        in30min.count++;
+        in30min.bytes += fsize;
+    }
+    else if (age < 60)
+    {
+        in60min.count++;
+        in60min.bytes += fsize;
+    }
+    else if (age < 360)
+    {
+        in360min.count++;
+        in360min.bytes += fsize;
+    }
+    else if (age < 720)
+    {
+        in720min.count++;
+        in720min.bytes += fsize;
+    }
+    else if (age < 1440)
+    {
+        in1440min.count++;
+        in1440min.bytes += fsize;
+    }
+    else if (age < 2880)
+    {
+        in2880min.count++;
+        in2880min.bytes += fsize;
+    }
+    else if (age < 10080)
+    {
+        in10080min.count++;
+        in10080min.bytes += fsize;
+    }
+    else
+    {
+        over10080min.count++;
+        over10080min.bytes += fsize;
+    }
+    if (!oldest_access_time || file_seg->getLastAccessTime() < *oldest_access_time)
+    {
+        oldest_access_time = file_seg->getLastAccessTime();
+        oldest_file_size = fsize;
+    }
+}
+
+Poco::JSON::Object::Ptr CacheSizeHistogram::Stat::toJson() const
+{
+    if (count == 0)
+        return nullptr;
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    obj->set("count", count);
+    obj->set("bytes", bytes);
+    return obj;
+}
+
+Poco::JSON::Object::Ptr CacheSizeHistogram::toJson() const
+{
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    {
+        Poco::JSON::Object::Ptr total = new Poco::JSON::Object();
+        total->set(
+            "count",
+            in30min.count + in60min.count + in360min.count + in720min.count + in1440min.count + in2880min.count
+                + in10080min.count + over10080min.count);
+        total->set(
+            "bytes",
+            in30min.bytes + in60min.bytes + in360min.bytes + in720min.bytes + in1440min.bytes + in2880min.bytes
+                + in10080min.bytes + over10080min.bytes);
+        obj->set("total", total);
+    }
+    if (auto sub = in30min.toJson(); sub)
+        obj->set("in30min", sub);
+    if (auto sub = in60min.toJson(); sub)
+        obj->set("in60min", sub);
+    if (auto sub = in360min.toJson(); sub)
+        obj->set("in360min", sub);
+    if (auto sub = in720min.toJson(); sub)
+        obj->set("in720min", sub);
+    if (auto sub = in1440min.toJson(); sub)
+        obj->set("in1440min", sub);
+    if (auto sub = in2880min.toJson(); sub)
+        obj->set("in2880min", sub);
+    if (auto sub = in10080min.toJson(); sub)
+        obj->set("in10080min", sub);
+    if (auto sub = over10080min.toJson(); sub)
+        obj->set("over10080min", sub);
+    if (oldest_access_time)
+    {
+        Poco::JSON::Object::Ptr oldest = new Poco::JSON::Object();
+        oldest->set("access_time", fmt::format("{:%Y-%m-%d %H:%M:%S}", oldest_access_time.value()));
+        oldest->set("size", oldest_file_size);
+        obj->set("oldest", oldest);
+    }
+    return obj;
+}
+
+FileCache::FileCache(
+    PathCapacityMetricsPtr capacity_metrics_,
+    const StorageRemoteCacheConfig & config_,
+    UInt16 logical_cores_,
+    IORateLimiter & rate_limiter_)
     : capacity_metrics(capacity_metrics_)
     , cache_dir(config_.getDTFileCacheDir())
     , cache_capacity(config_.getDTFileCapacity())
     , cache_level(config_.dtfile_level)
     , cache_used(0)
+    , logical_cores(logical_cores_)
+    , rate_limiter(rate_limiter_)
     , log(Logger::get("FileCache"))
 {
     CurrentMetrics::set(CurrentMetrics::DTFileCacheCapacity, cache_capacity);
@@ -176,59 +305,104 @@ FileSegmentPtr FileCache::downloadFileForLocalRead(
     return nullptr;
 }
 
+std::tuple<FileSegmentPtr, bool> FileCache::downloadFileForLocalReadWithRetry(
+    const S3::S3FilenameView & s3_fname,
+    const std::optional<UInt64> & filesize,
+    Int32 retry_count)
+{
+    auto perf_begin = PerfContext::file_cache;
+    bool has_s3_download = false;
+    for (Int32 i = retry_count; i > 0; --i)
+    {
+        try
+        {
+            if (auto seg = downloadFileForLocalRead(s3_fname, filesize); seg)
+            {
+                if (PerfContext::file_cache.fg_download_from_s3 > perf_begin.fg_download_from_s3 || //
+                    PerfContext::file_cache.fg_wait_download_from_s3 > perf_begin.fg_wait_download_from_s3)
+                    has_s3_download = true;
+
+                return {seg, has_s3_download};
+            }
+        }
+        catch (...)
+        {
+            if (i <= 1)
+                throw;
+        }
+    }
+
+    throw Exception(
+        ErrorCodes::S3_ERROR,
+        "Failed to download S3 file {} after {} retries",
+        s3_fname.toFullKey(),
+        retry_count);
+}
+
 FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname, const std::optional<UInt64> & filesize)
 {
     auto s3_key = s3_fname.toFullKey();
     auto file_type = getFileType(s3_key);
     auto & table = tables[static_cast<UInt64>(file_type)];
 
-    std::lock_guard lock(mtx);
-
-    auto f = table.get(s3_key);
-    if (f != nullptr)
+    FileSegmentPtr file_seg;
     {
-        f->setLastAccessTime(std::chrono::system_clock::now());
-        if (f->isReadyToRead())
+        std::unique_lock lock(mtx);
+        if (auto f = table.get(s3_key); f != nullptr)
         {
-            GET_METRIC(tiflash_storage_remote_cache, type_dtfile_hit).Increment();
-            return f;
+            f->setLastAccessTime(std::chrono::system_clock::now());
+            if (f->isReadyToRead())
+            {
+                GET_METRIC(tiflash_storage_remote_cache, type_dtfile_hit).Increment();
+                return f;
+            }
+            else
+            {
+                GET_METRIC(tiflash_storage_remote_cache, type_dtfile_miss).Increment();
+                return nullptr;
+            }
         }
-        else
+
+        GET_METRIC(tiflash_storage_remote_cache, type_dtfile_miss).Increment();
+        switch (canCache(file_type))
         {
-            GET_METRIC(tiflash_storage_remote_cache, type_dtfile_miss).Increment();
+        case ShouldCacheRes::RejectTypeNotMatch:
+            GET_METRIC(tiflash_storage_remote_cache, type_dtfile_not_cache_type).Increment();
+            return nullptr;
+        case ShouldCacheRes::RejectTooManyDownloading:
+            GET_METRIC(tiflash_storage_remote_cache, type_dtfile_too_many_download).Increment();
+            return nullptr;
+        case ShouldCacheRes::Cache:
+            break;
+        }
+
+        // File not exists, try to download and cache it in background.
+
+        // We don't know the exact size of a object/file, but we need reserve space to save the object/file.
+        // A certain amount of space is reserved for each file type.
+        auto estimated_size = filesize ? *filesize : getEstimatedSizeOfFileType(file_type);
+        if (!reserveSpaceImpl(file_type, estimated_size, EvictMode::TryEvict, lock))
+        {
+            // Space still not enough after eviction.
+            GET_METRIC(tiflash_storage_remote_cache, type_dtfile_full).Increment();
+            LOG_DEBUG(
+                log,
+                "s3_key={} space not enough(capacity={} used={} estimated_size={}), skip cache",
+                s3_key,
+                cache_capacity,
+                cache_used,
+                estimated_size);
             return nullptr;
         }
-    }
 
-    GET_METRIC(tiflash_storage_remote_cache, type_dtfile_miss).Increment();
-    if (!canCache(file_type))
-    {
-        // Don't cache this file type or too many downloading task.
-        return nullptr;
-    }
+        file_seg = std::make_shared<FileSegment>(
+            toLocalFilename(s3_key),
+            FileSegment::Status::Empty,
+            estimated_size,
+            file_type);
+        table.set(s3_key, file_seg);
+    } // Release the lock before submiting bg download task. Because bgDownload may be blocked when the queue is full.
 
-    // File not exists, try to download and cache it in backgroud.
-
-    // We don't know the exact size of a object/file, but we need reserve space to save the object/file.
-    // A certain amount of space is reserved for each file type.
-    auto estimzted_size = filesize ? *filesize : getEstimatedSizeOfFileType(file_type);
-    if (!reserveSpaceImpl(file_type, estimzted_size, EvictMode::TryEvict))
-    {
-        // Space not enough.
-        GET_METRIC(tiflash_storage_remote_cache, type_dtfile_full).Increment();
-        LOG_DEBUG(
-            log,
-            "s3_key={} space not enough(capacity={} used={} estimzted_size={}), skip cache",
-            s3_key,
-            cache_capacity,
-            cache_used,
-            estimzted_size);
-        return nullptr;
-    }
-
-    auto file_seg
-        = std::make_shared<FileSegment>(toLocalFilename(s3_key), FileSegment::Status::Empty, estimzted_size, file_type);
-    table.set(s3_key, file_seg);
     bgDownload(s3_key, file_seg);
 
     return nullptr;
@@ -260,13 +434,13 @@ FileSegmentPtr FileCache::getOrWait(const S3::S3FilenameView & s3_fname, const s
     GET_METRIC(tiflash_storage_remote_cache, type_dtfile_miss).Increment();
 
     auto estimated_size = filesize ? *filesize : getEstimatedSizeOfFileType(file_type);
-    if (!reserveSpaceImpl(file_type, estimated_size, EvictMode::ForceEvict))
+    if (!reserveSpaceImpl(file_type, estimated_size, EvictMode::ForceEvict, lock))
     {
-        // Space not enough.
+        // Space still not enough after eviction.
         GET_METRIC(tiflash_storage_remote_cache, type_dtfile_full).Increment();
         LOG_INFO(
             log,
-            "s3_key={} space not enough(capacity={} used={} estimzted_size={}), skip cache",
+            "s3_key={} space not enough(capacity={} used={} estimated_size={}), skip cache",
             s3_key,
             cache_capacity,
             cache_used,
@@ -344,7 +518,7 @@ std::pair<Int64, std::list<String>::iterator> FileCache::removeImpl(
     FileSegmentPtr & f,
     bool force)
 {
-    // Except currenly thread and the FileTable,
+    // Except current thread and the FileTable,
     // there are other threads hold this FileSegment object.
     if (f.use_count() > 2 && !force)
     {
@@ -363,88 +537,201 @@ std::pair<Int64, std::list<String>::iterator> FileCache::removeImpl(
     return {release_size, table.remove(s3_key)};
 }
 
-bool FileCache::reserveSpaceImpl(FileType reserve_for, UInt64 size, EvictMode evict)
+// Try best to reserve space for new coming file.
+// return true if reservation success.
+// `size` is the amount of space to reserve (cache_used will increase by this amount on success).
+bool FileCache::reserveSpaceImpl(
+    FileType reserve_for,
+    UInt64 size,
+    EvictMode mode,
+    std::unique_lock<std::mutex> & guard)
 {
     if (cache_used + size <= cache_capacity)
     {
+        // If cache_capacity is enough, just reserve it.
+        // reserve means that `cache_used` increase `size`.
         cache_used += size;
         CurrentMetrics::set(CurrentMetrics::DTFileCacheUsed, cache_used);
         return true;
     }
-    if (evict == EvictMode::TryEvict || evict == EvictMode::ForceEvict)
+
+    evictBySizeImpl(reserve_for, size, cache_min_age_seconds.load(std::memory_order_relaxed), mode, guard);
+    // try update `cache_used` after eviction
+    if (cache_used + size <= cache_capacity)
     {
-        UInt64 min_evict_size = size - (cache_capacity - cache_used);
-        LOG_DEBUG(
-            log,
-            "tryEvictFile for {} min_evict_size={} evict_mode={}",
-            magic_enum::enum_name(reserve_for),
-            min_evict_size,
-            magic_enum::enum_name(evict));
-        tryEvictFile(reserve_for, min_evict_size, evict);
-        return reserveSpaceImpl(reserve_for, size, EvictMode::NoEvict);
+        // cache_capacity is enough after eviction. Mark reservation success.
+        cache_used += size;
+        CurrentMetrics::set(CurrentMetrics::DTFileCacheUsed, cache_used);
+        return true;
     }
     return false;
 }
 
+// Evict files to free space for new coming file.
+// `size_to_reserve` is the required space to reserve.
+// `min_age_seconds` is the minimum age of files to be evicted.
+// Return the total evicted size.
+// Caller should ensure that `size_to_reserve` is larger than available space.
+UInt64 FileCache::evictBySizeImpl(
+    FileType evict_for,
+    UInt64 size_to_reserve,
+    UInt64 min_age_seconds,
+    EvictMode mode,
+    std::unique_lock<std::mutex> & guard)
+{
+    UInt64 min_evict_size = 0;
+    if (cache_capacity < cache_used)
+    {
+        min_evict_size = cache_used - cache_capacity + size_to_reserve;
+        LOG_WARNING(
+            log,
+            "evictBySizeImpl cache overused, capacity={} used={} reserve_size={} min_evict_size={} evict_mode={}",
+            cache_capacity,
+            cache_used,
+            size_to_reserve,
+            min_evict_size,
+            magic_enum::enum_name(mode));
+    }
+    else
+    {
+        assert(cache_capacity >= cache_used); // not underflow
+        assert(size_to_reserve > cache_capacity - cache_used); // not underflow, ensure by the caller
+        min_evict_size = size_to_reserve - (cache_capacity - cache_used);
+    }
+
+    switch (mode)
+    {
+    case EvictMode::NoEvict:
+        return 0;
+    case EvictMode::ForceEvict:
+        [[fallthrough]]; // share initial try-eviction logic with "TryEvict" mode; ForceEvict may do additional eviction later
+    case EvictMode::TryEvict:
+    {
+        LOG_DEBUG(
+            log,
+            "tryEvictFile for {} min_evict_size={} evict_mode={}",
+            magic_enum::enum_name(evict_for),
+            min_evict_size,
+            magic_enum::enum_name(mode));
+        const UInt64 size_evicted_during_try = tryEvictFile(evict_for, min_evict_size, min_age_seconds, mode, guard);
+        if (likely(min_evict_size <= size_evicted_during_try))
+        {
+            // has enough space after eviction, break
+            return size_evicted_during_try;
+        }
+
+        assert(min_evict_size > size_evicted_during_try);
+        auto min_evict_size_after_try = min_evict_size - size_evicted_during_try;
+        if (mode == EvictMode::ForceEvict)
+        {
+            // After tryEvictFile, the space is still not sufficient,
+            // so we do a force eviction.
+            auto size_force_evicted = forceEvict(min_evict_size_after_try, guard);
+            LOG_INFO(
+                log,
+                "forceEvict min_evict_size={} min_evict_size_after_try={} force_evicted_size={}",
+                min_evict_size,
+                min_evict_size_after_try,
+                size_force_evicted);
+            return size_evicted_during_try + size_force_evicted;
+        }
+        else
+        {
+            LOG_INFO(
+                log,
+                "tryEvictFile failed to evict enough space, "
+                "min_evict_size={} min_evict_size_after_try={} evict_mode={}",
+                min_evict_size,
+                min_evict_size_after_try,
+                magic_enum::enum_name(mode));
+            return size_evicted_during_try;
+        }
+    }
+    }
+    __builtin_unreachable();
+}
+
 // The basic evict logic:
 // Distinguish cache priority according to file type. The larger the file type, the lower the priority.
+// If evict_same_type_first is true,
 // First, try to evict files which not be used recently with the same type. => Try to evict old files.
 // Second, try to evict files with lower priority. => Try to evict lower priority files.
 // Finally, evict files with higher priority, if space is still not sufficient. Higher priority files
 // are usually smaller. If we don't evict them, it is very possible that cache is full of these higher
 // priority small files and we can't effectively cache any lower-priority large files.
-std::vector<FileType> FileCache::getEvictFileTypes(FileType evict_for)
+std::vector<FileType> FileCache::getEvictFileTypes(FileType evict_for, bool evict_same_type_first)
 {
-    std::vector<FileType> evict_types;
-    evict_types.push_back(evict_for); // First, try evict with the same file type.
     constexpr auto all_file_types = magic_enum::enum_values<FileType>(); // all_file_types are sorted by enum value.
-    // Second, try evict from the lower proirity file type.
-    for (auto itr = std::rbegin(all_file_types); itr != std::rend(all_file_types); ++itr)
+    if (evict_same_type_first)
     {
-        if (*itr != evict_for)
-            evict_types.push_back(*itr);
+        std::vector<FileType> evict_types;
+        evict_types.push_back(evict_for); // First, try evict with the same file type.
+        // Second, try evict from the lower priority file type.
+        for (auto itr = std::rbegin(all_file_types); itr != std::rend(all_file_types); ++itr)
+        {
+            if (*itr != evict_for)
+                evict_types.push_back(*itr);
+        }
+        return evict_types;
     }
-    return evict_types;
+    else
+    {
+        std::vector<FileType> evict_types;
+        // Evict from the lower priority file type first.
+        for (auto itr = std::rbegin(all_file_types); itr != std::rend(all_file_types); ++itr)
+        {
+            evict_types.push_back(*itr);
+            if (*itr == evict_for)
+            {
+                // Do not evict higher priority file type
+                break;
+            }
+        }
+        return evict_types;
+    }
 }
 
-void FileCache::tryEvictFile(FileType evict_for, UInt64 size, EvictMode evict)
+// Try best to evict files to free space.
+// `min_evict_size` is the required space to reserve.
+// Return the total evicted size.
+UInt64 FileCache::tryEvictFile(
+    FileType evict_for,
+    const UInt64 min_evict_size,
+    const UInt64 min_age_seconds,
+    EvictMode mode,
+    std::unique_lock<std::mutex> & guard)
 {
-    RUNTIME_CHECK(evict != EvictMode::NoEvict);
+    RUNTIME_CHECK(mode != EvictMode::NoEvict);
+    // shortcut
+    if (min_evict_size == 0)
+        return 0;
 
-    auto file_types = getEvictFileTypes(evict_for);
+    UInt64 total_size_evicted = 0;
+    auto file_types = getEvictFileTypes(evict_for, /*evict_same_type_first*/ true);
     for (auto evict_from : file_types)
     {
-        auto evicted_size = tryEvictFrom(evict_for, size, evict_from);
-        LOG_DEBUG(
-            log,
-            "tryEvictFrom {} required_size={} evicted_size={}",
-            magic_enum::enum_name(evict_from),
-            size,
-            evicted_size);
-        if (size > evicted_size)
+        // try to evict from `evict_from` file type.
+        auto evicted_size = tryEvictFileFrom(evict_for, min_evict_size, min_age_seconds, evict_from, guard);
+        total_size_evicted += evicted_size;
+        if (total_size_evicted >= min_evict_size)
         {
-            size -= evicted_size;
-        }
-        else
-        {
-            size = 0;
+            // has enough space after eviction, break
             break;
         }
     }
-
-    if (size > 0 && evict == EvictMode::ForceEvict)
-    {
-        // After a series of tryEvict, the space is still not sufficient,
-        // so we do a force eviction.
-        auto evicted_size = forceEvict(size);
-        LOG_DEBUG(log, "forceEvict required_size={} evicted_size={}", size, evicted_size);
-    }
+    return total_size_evicted;
 }
 
-UInt64 FileCache::tryEvictFrom(FileType evict_for, UInt64 size, FileType evict_from)
+UInt64 FileCache::tryEvictFileFrom(
+    FileType evict_for,
+    UInt64 min_evict_size,
+    UInt64 min_age_seconds,
+    FileType evict_from,
+    std::unique_lock<std::mutex> & /*guard*/)
 {
     auto & table = tables[static_cast<UInt64>(evict_from)];
     UInt64 total_released_size = 0;
+    // max try evict times to prevent long time lock the FileCache
     constexpr UInt32 max_try_evict_count = 10;
     // File type that we evict for does not have higher priority,
     // so we need check last access time to prevent recently used files from evicting.
@@ -454,9 +741,9 @@ UInt64 FileCache::tryEvictFrom(FileType evict_for, UInt64 size, FileType evict_f
     for (UInt32 try_evict_count = 0; try_evict_count < max_try_evict_count && itr != end; ++try_evict_count)
     {
         auto s3_key = *itr;
+        // protected under guard
         auto f = table.get(s3_key, /*update_lru*/ false);
-        if (!check_last_access_time
-            || !f->isRecentlyAccess(std::chrono::seconds(cache_min_age_seconds.load(std::memory_order_relaxed))))
+        if (!check_last_access_time || !f->isRecentlyAccess(std::chrono::seconds(min_age_seconds)))
         {
             auto [released_size, next_itr] = removeImpl(table, s3_key, f);
             LOG_DEBUG(log, "tryRemoveFile {} size={}", s3_key, released_size);
@@ -474,11 +761,19 @@ UInt64 FileCache::tryEvictFrom(FileType evict_for, UInt64 size, FileType evict_f
         {
             ++itr;
         }
-        if (total_released_size >= size || try_evict_count >= max_try_evict_count)
+        // has released enough space or tried enough times, break
+        if (total_released_size >= min_evict_size)
         {
             break;
         }
     }
+
+    LOG_DEBUG(
+        log,
+        "tryEvictFrom {} min_evict_size={} evicted_size={}",
+        magic_enum::enum_name(evict_from),
+        min_evict_size,
+        total_released_size);
     return total_released_size;
 }
 
@@ -495,9 +790,9 @@ struct ForceEvictCandidateComparer
     bool operator()(ForceEvictCandidate a, ForceEvictCandidate b) { return a.last_access_time > b.last_access_time; }
 };
 
-UInt64 FileCache::forceEvict(UInt64 size_to_evict)
+UInt64 FileCache::forceEvict(UInt64 size_to_reserve, std::unique_lock<std::mutex> & /*guard*/)
 {
-    if (size_to_evict == 0)
+    if (unlikely(size_to_reserve == 0))
         return 0;
 
     // For a force evict, we simply evict from the oldest to the newest, until
@@ -507,11 +802,11 @@ UInt64 FileCache::forceEvict(UInt64 size_to_evict)
         evict_candidates;
 
     // First, pick an item from all levels.
-
+    // Note that access to `tables` is protected under `guard`
     size_t total_released_size = 0;
 
     constexpr auto all_file_types = magic_enum::enum_values<FileType>();
-    std::vector<std::list<String>::iterator> each_type_lru_iters; // Stores the iterator of next candicate to add
+    std::vector<std::list<String>::iterator> each_type_lru_iters; // Stores the iterator of next candidate to add
     each_type_lru_iters.reserve(all_file_types.size());
     for (const auto file_type : all_file_types)
     {
@@ -554,21 +849,27 @@ UInt64 FileCache::forceEvict(UInt64 size_to_evict)
         }
 
         auto [released_size, next_itr] = removeImpl(tables[file_type_slot], to_evict.s3_key, to_evict.file_segment);
-        LOG_DEBUG(log, "ForceEvict {} size={}", to_evict.s3_key, released_size);
+        LOG_INFO(
+            log,
+            "ForceEvict {} size={} size_to_reserve={} total_released={}",
+            to_evict.s3_key,
+            released_size,
+            size_to_reserve,
+            total_released_size);
         if (released_size >= 0) // removed
         {
             total_released_size += released_size;
-            if (total_released_size >= size_to_evict)
+            if (total_released_size >= size_to_reserve)
                 break;
         }
     }
     return total_released_size;
 }
 
-bool FileCache::reserveSpace(FileType reserve_for, UInt64 size, EvictMode evict)
+bool FileCache::reserveSpace(FileType reserve_for, UInt64 size, EvictMode mode)
 {
-    std::lock_guard lock(mtx);
-    return reserveSpaceImpl(reserve_for, size, evict);
+    std::unique_lock lock(mtx);
+    return reserveSpaceImpl(reserve_for, size, mode, lock);
 }
 
 void FileCache::releaseSpaceImpl(UInt64 size)
@@ -583,11 +884,18 @@ void FileCache::releaseSpace(UInt64 size)
     releaseSpaceImpl(size);
 }
 
-bool FileCache::canCache(FileType file_type) const
+FileCache::ShouldCacheRes FileCache::canCache(FileType file_type) const
 {
-    return file_type != FileType::Unknow && static_cast<UInt64>(file_type) <= cache_level
-        && bg_downloading_count.load(std::memory_order_relaxed)
-        < S3FileCachePool::get().getMaxThreads() * max_downloading_count_scale.load(std::memory_order_relaxed);
+    if (file_type == FileType::Unknown || static_cast<UInt64>(file_type) > cache_level)
+    {
+        return ShouldCacheRes::RejectTypeNotMatch;
+    }
+    auto max_bg_download_queue_size = logical_cores * max_downloading_count_scale.load(std::memory_order_relaxed);
+    if (bg_downloading_count.load(std::memory_order_relaxed) >= max_bg_download_queue_size)
+    {
+        return ShouldCacheRes::RejectTooManyDownloading;
+    }
+    return ShouldCacheRes::Cache;
 }
 
 FileType FileCache::getFileTypeOfColData(const std::filesystem::path & p)
@@ -642,6 +950,10 @@ FileType FileCache::getFileType(const String & fname)
     {
         return FileType::VectorIndex;
     }
+    else if (ext == ".fulltext")
+    {
+        return FileType::FullTextIndex;
+    }
     else if (ext == ".inverted")
     {
         return FileType::InvertedIndex;
@@ -656,7 +968,7 @@ FileType FileCache::getFileType(const String & fname)
         return FileType::Meta;
     }
 
-    return FileType::Unknow;
+    return FileType::Unknown;
 }
 
 bool FileCache::finalizeReservedSize(FileType reserve_for, UInt64 reserved_size, UInt64 content_length)
@@ -674,7 +986,28 @@ bool FileCache::finalizeReservedSize(FileType reserve_for, UInt64 reserved_size,
     return true;
 }
 
-void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg)
+void downloadToLocal(
+    Aws::IOStream & istr,
+    const String & fname,
+    Int64 content_length,
+    const WriteLimiterPtr & write_limiter)
+{
+    // create an empty file with write_limiter
+    // each time `ofile.write` is called, the write speed will be controlled by the write_limiter.
+    auto ofile = std::make_shared<PosixWritableFile>(fname, true, O_CREAT | O_WRONLY, 0666, write_limiter);
+    // simply create an empty file
+    if (unlikely(content_length <= 0))
+        return;
+
+    GET_METRIC(tiflash_storage_remote_cache_bytes, type_dtfile_download_bytes).Increment(content_length);
+    static const Int64 MAX_BUFFER_SIZE = 128 * 1024; // 128k
+    ReadBufferFromIStream rbuf(istr, std::min(content_length, MAX_BUFFER_SIZE));
+    WriteBufferFromWritableFile wbuf(ofile, std::min(content_length, MAX_BUFFER_SIZE));
+    copyData(rbuf, wbuf, content_length);
+    wbuf.sync();
+}
+
+void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg, const WriteLimiterPtr & write_limiter)
 {
     Stopwatch sw;
     auto client = S3::ClientFactory::instance().sharedTiFlashClient();
@@ -691,62 +1024,63 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg)
     RUNTIME_CHECK(content_length >= 0, s3_key, content_length);
     ProfileEvents::increment(ProfileEvents::S3ReadBytes, content_length);
     GET_METRIC(tiflash_storage_s3_request_seconds, type_get_object).Observe(sw.elapsedSeconds());
+    SYNC_FOR("before_FileCache::downloadImpl_reserve_size");
     if (!finalizeReservedSize(file_seg->getFileType(), file_seg->getSize(), content_length))
     {
-        LOG_DEBUG(log, "s3_key={} finalizeReservedSize {}=>{} failed.", s3_key, file_seg->getSize(), content_length);
+        LOG_INFO(
+            log,
+            "Download finalizeReservedSize failed, s3_key={} seg_size={} size={}",
+            s3_key,
+            file_seg->getSize(),
+            content_length);
+        file_seg->setStatus(FileSegment::Status::Failed);
         return;
     }
-    file_seg->setSize(content_length);
 
     const auto & local_fname = file_seg->getLocalFileName();
+    // download as a temp file then rename to a formal file
     prepareParentDir(local_fname);
     auto temp_fname = toTemporaryFilename(local_fname);
-    {
-        Aws::OFStream ostr(temp_fname, std::ios_base::out | std::ios_base::binary);
-        RUNTIME_CHECK_MSG(ostr.is_open(), "Open {} failed: {}", temp_fname, strerror(errno));
-        if (content_length > 0)
-        {
-            GET_METRIC(tiflash_storage_remote_cache_bytes, type_dtfile_download_bytes).Increment(content_length);
-            ostr << result.GetBody().rdbuf();
-            // If content_length == 0, ostr.good() is false. Does not know the reason.
-            RUNTIME_CHECK_MSG(
-                ostr.good(),
-                "Write {} content_length {} failed: {}",
-                temp_fname,
-                content_length,
-                strerror(errno));
-            ostr.flush();
-        }
-    }
+    downloadToLocal(result.GetBody(), temp_fname, content_length, write_limiter);
     std::filesystem::rename(temp_fname, local_fname);
+
+#ifndef NDEBUG
+    // sanity check under debug mode
     auto fsize = std::filesystem::file_size(local_fname);
-    capacity_metrics->addUsedSize(local_fname, fsize);
     RUNTIME_CHECK_MSG(
         fsize == static_cast<UInt64>(content_length),
         "local_fname={}, file_size={}, content_length={}",
         local_fname,
         fsize,
         content_length);
-    file_seg->setStatus(FileSegment::Status::Complete);
-    LOG_DEBUG(
+#endif
+
+    capacity_metrics->addUsedSize(local_fname, content_length);
+    // update the file segment size and set as complete
+    file_seg->setComplete(content_length);
+    LOG_INFO(
         log,
-        "Download s3_key={} to local={} size={} cost={}ms",
+        "Download success, s3_key={} local={} size={} cost={}ms",
         s3_key,
         local_fname,
         content_length,
         sw.elapsedMilliseconds());
 }
 
-void FileCache::download(const String & s3_key, FileSegmentPtr & file_seg)
+void FileCache::bgDownloadExecutor(
+    const String & s3_key,
+    FileSegmentPtr & file_seg,
+    const WriteLimiterPtr & write_limiter)
 {
     try
     {
         GET_METRIC(tiflash_storage_remote_cache, type_dtfile_download).Increment();
-        downloadImpl(s3_key, file_seg);
+        downloadImpl(s3_key, file_seg, write_limiter);
     }
     catch (...)
     {
-        tryLogCurrentException(log, fmt::format("Download s3_key={} failed", s3_key));
+        // ignore the exception here, and log as warning.
+        tryLogCurrentWarningException(log, fmt::format("Download s3_key={} failed", s3_key));
     }
 
     if (!file_seg->isReadyToRead())
@@ -777,8 +1111,11 @@ void FileCache::bgDownload(const String & s3_key, FileSegmentPtr & file_seg)
         "downloading count {} => s3_key {} start",
         bg_downloading_count.load(std::memory_order_relaxed),
         s3_key);
+    auto write_limiter = rate_limiter.getBgWriteLimiter();
     S3FileCachePool::get().scheduleOrThrowOnError(
-        [this, s3_key = s3_key, file_seg = file_seg]() mutable { download(s3_key, file_seg); });
+        [this, s3_key = s3_key, file_seg = file_seg, limiter = std::move(write_limiter)]() mutable {
+            bgDownloadExecutor(s3_key, file_seg, limiter);
+        });
 }
 
 void FileCache::fgDownload(const String & s3_key, FileSegmentPtr & file_seg)
@@ -789,7 +1126,8 @@ void FileCache::fgDownload(const String & s3_key, FileSegmentPtr & file_seg)
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::file_cache_fg_download_fail);
         GET_METRIC(tiflash_storage_remote_cache, type_dtfile_download).Increment();
-        downloadImpl(s3_key, file_seg);
+        // not limit write speed for foreground download now
+        downloadImpl(s3_key, file_seg, nullptr);
     }
     catch (...)
     {
@@ -922,7 +1260,7 @@ void FileCache::restoreDMFile(const std::filesystem::directory_entry & dmfile_en
             auto file_type = getFileType(fname);
             auto & table = tables[static_cast<UInt64>(file_type)];
             auto size = file_entry.file_size();
-            if (canCache(file_type) && cache_capacity - cache_used >= size)
+            if (canCache(file_type) == FileCache::ShouldCacheRes::Cache && cache_capacity - cache_used >= size)
             {
                 table.set(
                     toS3Key(fname),
@@ -954,15 +1292,76 @@ std::vector<FileSegmentPtr> FileCache::getAll()
 
 void FileCache::updateConfig(const Settings & settings)
 {
-    double max_downloading_scale = settings.dt_filecache_max_downloading_count_scale;
-    if (std::fabs(max_downloading_scale - max_downloading_count_scale.load(std::memory_order_relaxed)) > 0.001)
+    bool has_changed = false;
+
+    double new_download_scale = settings.dt_filecache_downloading_count_scale;
+    auto old_download_scale = download_count_scale.load(std::memory_order_relaxed);
+    size_t new_concurrency = logical_cores * old_download_scale;
+    if (std::fabs(new_download_scale - old_download_scale) > 0.001)
+    {
+        if (likely(new_download_scale > 0.0))
+        {
+            download_count_scale.store(new_download_scale, std::memory_order_relaxed);
+            new_concurrency = logical_cores * new_download_scale;
+            has_changed = true;
+        }
+        else
+        {
+            LOG_WARNING(
+                log,
+                "dt_filecache_downloading_count_scale is set to non-positive value, ignore it, value={}",
+                new_download_scale);
+        }
+    }
+    new_concurrency = std::max(new_concurrency, 1); // at least 1
+
+    double new_queue_scale = settings.dt_filecache_max_downloading_count_scale;
+    auto old_queue_scale = max_downloading_count_scale.load(std::memory_order_relaxed);
+    size_t new_queue_size = logical_cores * old_queue_scale;
+    if (std::fabs(new_queue_scale - old_queue_scale) > 0.001)
+    {
+        if (likely(new_queue_scale > 0.0))
+        {
+            max_downloading_count_scale.store(new_queue_scale, std::memory_order_relaxed);
+            new_queue_size = logical_cores * new_queue_scale;
+            has_changed = true;
+        }
+        else if (std::fabs(new_queue_scale) < 0.0001)
+        {
+            max_downloading_count_scale.store(0.0, std::memory_order_relaxed);
+            has_changed = true;
+            LOG_WARNING(
+                log,
+                "dt_filecache_max_downloading_count_scale is set to zero, disable download file from S3, value={}",
+                new_queue_scale);
+        }
+        else
+        {
+            LOG_WARNING(
+                log,
+                "dt_filecache_max_downloading_count_scale is set to non-positive value, ignore it, value={}",
+                new_queue_scale);
+        }
+    }
+    new_queue_size = std::max(new_queue_size, new_concurrency); // at least the same as concurrency
+
+    if (has_changed)
     {
         LOG_INFO(
             log,
-            "max_downloading_count_scale {} => {}",
+            "Update S3FileCachePool config: "
+            "logical_cores={} "
+            "old_download_scale={} download_scale={} download_concurrency={} "
+            "old_queue_scale={} queue_scale={} queue_size={}",
+            logical_cores,
+            old_download_scale,
+            download_count_scale.load(std::memory_order_relaxed),
+            new_concurrency,
+            old_queue_scale,
             max_downloading_count_scale.load(std::memory_order_relaxed),
-            max_downloading_scale);
-        max_downloading_count_scale.store(max_downloading_scale, std::memory_order_relaxed);
+            new_queue_size);
+        S3FileCachePool::get().setQueueSize(new_queue_size);
+        S3FileCachePool::get().setMaxThreads(new_concurrency);
     }
 
     UInt64 cache_min_age = settings.dt_filecache_min_age_seconds;
@@ -970,11 +1369,109 @@ void FileCache::updateConfig(const Settings & settings)
     {
         LOG_INFO(
             log,
-            "cache_min_age_seconds {} => {}",
+            "Update S3FileCachePool config: cache_min_age_seconds {} => {}",
             cache_min_age_seconds.load(std::memory_order_relaxed),
             cache_min_age);
         cache_min_age_seconds.store(cache_min_age, std::memory_order_relaxed);
     }
 }
 
+// Evict the cached files until no file of >= `file_type` is in cache.
+UInt64 FileCache::evictByFileType(FileSegment::FileType file_type)
+{
+    // getEvictFileTypes is a static method that is not related to the current object state,
+    // so it is safe to call it before acquiring the lock.
+    auto file_types = getEvictFileTypes(file_type, /*evict_same_type_first*/ false);
+    std::lock_guard lock(mtx);
+    UInt64 total_released_size = 0;
+    for (auto evict_from : file_types)
+    {
+        UInt64 curr_released_size = 0;
+        auto & table = tables[static_cast<UInt64>(evict_from)];
+        for (auto itr = table.begin(); itr != table.end();)
+        {
+            auto s3_key = *itr;
+            auto f = table.get(s3_key, /*update_lru*/ false);
+            auto [released_size, next_itr] = removeImpl(table, s3_key, f, /*force*/ true);
+            if (released_size < 0) // not remove
+            {
+                ++itr;
+            }
+            else // removed
+            {
+                itr = next_itr;
+                curr_released_size += released_size;
+            }
+        }
+        total_released_size += curr_released_size;
+        LOG_INFO(
+            log,
+            "evictByFileType layer evict finish, evict_from={} file_type={} released_size={} tot_release_size={}",
+            magic_enum::enum_name(evict_from),
+            magic_enum::enum_name(file_type),
+            curr_released_size,
+            total_released_size);
+    }
+    LOG_INFO(
+        log,
+        "evictByFileType finish, file_type={} total_released_size={}",
+        magic_enum::enum_name(file_type),
+        total_released_size);
+    return total_released_size;
+}
+
+// Evict the cached files until at least `size_to_reserve` bytes are freed.
+// Return the actual evicted size.
+// When `min_age_seconds == 0`, this function uses the current `cache_min_age_seconds`; otherwise it uses the given value.
+// If `force_evict` is true, it will evict files even if they are being used recently.
+UInt64 FileCache::evictBySize(UInt64 size_to_reserve, UInt64 min_age_seconds, bool force_evict)
+{
+    std::unique_lock lock(mtx);
+    if (size_to_reserve + cache_used <= cache_capacity)
+    {
+        // shortcut for no need evict
+        LOG_INFO(
+            log,
+            "evictBySize no need evict, size_to_reserve={} force_evict={} cache_capacity={} cache_used={}",
+            size_to_reserve,
+            force_evict,
+            cache_capacity,
+            cache_used);
+        return 0;
+    }
+
+    UInt64 min_age = min_age_seconds == 0 ? cache_min_age_seconds.load(std::memory_order_relaxed) : min_age_seconds;
+    EvictMode mode = force_evict ? EvictMode::ForceEvict : EvictMode::TryEvict;
+    // Should always use the last file type(lowest priority) to evict,
+    // in order to respect the priority of file types and avoid evicting high priority files
+    // by last_access_time in non-force evict.
+    constexpr FileType max_file_type = magic_enum::enum_values<FileType>()[magic_enum::enum_count<FileType>() - 1];
+    auto total_released_size = evictBySizeImpl(max_file_type, size_to_reserve, min_age, mode, lock);
+    LOG_INFO(
+        log,
+        "evictBySize finish, size_to_reserve={} min_age={} force_evict={} total_released_size={} cache_capacity={} "
+        "cache_used={}",
+        size_to_reserve,
+        min_age,
+        force_evict,
+        total_released_size,
+        cache_capacity,
+        cache_used);
+    return total_released_size;
+}
+
+std::vector<std::tuple<FileSegment::FileType, CacheSizeHistogram>> FileCache::getCacheSizeHistogram() const
+{
+    std::lock_guard lock(mtx);
+    std::vector<std::tuple<FileSegment::FileType, CacheSizeHistogram>> result;
+    for (const auto & file_type : magic_enum::enum_values<FileSegment::FileType>())
+    {
+        const auto & table = tables[static_cast<UInt64>(file_type)];
+        if (table.size() == 0)
+            continue;
+        CacheSizeHistogram histogram = table.getCacheSizeHistogram();
+        result.emplace_back(file_type, histogram);
+    }
+    return result;
+}
 } // namespace DB

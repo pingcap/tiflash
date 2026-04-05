@@ -1,0 +1,13 @@
+[package]
+name = "clara"
+version = "0.0.1"
+license = "Apache-2.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+clara_fts = { version = "0.0.1", path = "../clara_fts" }
+
+[lib]
+name = "clara"
+crate-type = ["staticlib"]

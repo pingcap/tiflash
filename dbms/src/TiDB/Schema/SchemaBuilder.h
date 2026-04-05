@@ -31,12 +31,14 @@ struct SchemaBuilder
 private:
     NameMapper name_mapper;
 
+    // Snapshot reader of schema info from TiKV
     Getter & getter;
 
     Context & context;
 
+    // Cache of DatabaseID -> DatabaseInfo in this keyspace
     DatabaseInfoCache & databases;
-
+    // Cache of TableIDMap in this keyspace
     TableIDMap & table_id_map;
 
     const KeyspaceID keyspace_id;
