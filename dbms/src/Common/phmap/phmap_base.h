@@ -269,7 +269,7 @@ struct negation : std::integral_constant<bool, !T::value>
 
 template <typename T>
 struct is_trivially_destructible
-    : std::integral_constant<bool, __has_trivial_destructor(T) && std::is_destructible<T>::value>
+    : std::integral_constant<bool, __is_trivially_destructible(T) && std::is_destructible<T>::value>
 {
 };
 
@@ -277,7 +277,7 @@ template <typename T>
 struct is_trivially_default_constructible
     : std::integral_constant<
           bool,
-          __has_trivial_constructor(T) && std::is_default_constructible<T>::value
+          __is_trivially_constructible(T) && std::is_default_constructible<T>::value
               && is_trivially_destructible<T>::value>
 {
 };
@@ -286,7 +286,7 @@ template <typename T>
 struct is_trivially_copy_constructible
     : std::integral_constant<
           bool,
-          __has_trivial_copy(T) && std::is_copy_constructible<T>::value && is_trivially_destructible<T>::value>
+          __is_trivially_copyable(T) && std::is_copy_constructible<T>::value && is_trivially_destructible<T>::value>
 {
 };
 
@@ -294,7 +294,10 @@ template <typename T>
 struct is_trivially_copy_assignable
     : std::integral_constant<
           bool,
-          __has_trivial_assign(typename std::remove_reference<T>::type) && phmap::is_copy_assignable<T>::value>
+          __is_trivially_assignable(
+              typename std::remove_reference<T>::type&,
+              const typename std::remove_reference<T>::type&) &&
+          phmap::is_copy_assignable<T>::value>
 {
 };
 
