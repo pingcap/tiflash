@@ -579,6 +579,97 @@ RemoteCacheEvictRequest parseEvictRequest(
     return req;
 }
 
+std::optional<CacheEvictType> parseCacheEvictType(
+    std::string_view path,
+    std::string_view api_name,
+    String & err_msg)
+{
+    auto trim_path = path.substr(api_name.size());
+    if (trim_path == "/mark")
+        return CacheEvictType::Mark;
+    if (trim_path == "/minmax")
+        return CacheEvictType::MinMax;
+
+    err_msg = fmt::format("invalid cache evict request: {}", path);
+    return std::nullopt;
+}
+
+namespace
+{
+String buildCacheEvictOkBody(std::string_view cache_name, std::optional<std::string_view> message = std::nullopt)
+{
+    if (message.has_value())
+        return fmt::format(R"json({{"status":"ok","cache":"{}","message":"{}"}})json", cache_name, *message);
+    return fmt::format(R"json({{"status":"ok","cache":"{}"}})json", cache_name);
+}
+
+void evictLocalCacheOrThrow(Context & global_ctx, CacheEvictType cache_type)
+{
+    switch (cache_type)
+    {
+    case CacheEvictType::Mark:
+        global_ctx.dropMarkCache();
+        return;
+    case CacheEvictType::MinMax:
+        global_ctx.dropMinMaxIndexCache();
+        return;
+    }
+    __builtin_unreachable();
+}
+
+std::string_view cacheTypeName(CacheEvictType cache_type)
+{
+    switch (cache_type)
+    {
+    case CacheEvictType::Mark:
+        return "mark";
+    case CacheEvictType::MinMax:
+        return "minmax";
+    }
+    __builtin_unreachable();
+}
+} // namespace
+
+HttpRequestRes HandleHttpRequestLocalCacheEvict(
+    EngineStoreServerWrap * server,
+    std::string_view path,
+    const std::string & api_name,
+    std::string_view,
+    std::string_view)
+{
+    auto & global_ctx = server->tmt->getContext();
+    auto log = Logger::get("HandleHttpRequestLocalCacheEvict");
+
+    String err_msg;
+    auto cache_type = parseCacheEvictType(path, api_name, err_msg);
+    if (!cache_type.has_value())
+    {
+        auto body = fmt::format(R"json({{"status":"error","message":"{}"}})json", err_msg);
+        LOG_WARNING(log, "invalid local cache evict request, path={} api_name={}", path, api_name);
+        return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, std::move(body));
+    }
+
+    const auto cache_name = cacheTypeName(*cache_type);
+    const bool cache_enabled = [&] {
+        switch (*cache_type)
+        {
+        case CacheEvictType::Mark:
+            return global_ctx.getMarkCache() != nullptr;
+        case CacheEvictType::MinMax:
+            return global_ctx.getMinMaxIndexCache() != nullptr;
+        }
+        __builtin_unreachable();
+    }();
+
+    // `drop*Cache()` eventually calls `LRUCache::reset()`, which clears the registry under the
+    // cache mutex while leaving already-held `shared_ptr` values valid for in-flight readers.
+    evictLocalCacheOrThrow(global_ctx, *cache_type);
+    LOG_INFO(log, "manual cache eviction, action=evict cache={} result={}", cache_name, cache_enabled ? "ok" : "noop");
+    return buildOkResp(
+        api_name,
+        cache_enabled ? buildCacheEvictOkBody(cache_name) : buildCacheEvictOkBody(cache_name, "cache not enabled"));
+}
+
 HttpRequestRes HandleHttpRequestRemoteCacheEvict(
     EngineStoreServerWrap * server,
     std::string_view path,
@@ -817,6 +908,7 @@ using HANDLE_HTTP_URI_METHOD = HttpRequestRes (*)(
     std::string_view);
 
 // A registry of available HTTP URI prefix (API name) and their handler methods.
+// Keep `docs/tiflash_http_api.md` in sync whenever adding or changing a public HTTP API here.
 static const std::map<std::string, HANDLE_HTTP_URI_METHOD> AVAILABLE_HTTP_URI = {
     {"/tiflash/sync-status/", HandleHttpRequestSyncStatus},
     {"/tiflash/sync-region/", HandleHttpRequestSyncRegion},
@@ -836,6 +928,7 @@ static const std::map<std::string, HANDLE_HTTP_URI_METHOD> AVAILABLE_HTTP_URI = 
     {"/tiflash/remote/gc", HandleHttpRequestRemoteGC},
     {"/tiflash/remote/upload", HandleHttpRequestRemoteReUpload},
     {"/tiflash/remote/info", HandleHttpRequestRemoteInfo},
+    {"/tiflash/cache/evict", HandleHttpRequestLocalCacheEvict},
     {"/tiflash/remote/cache/evict", HandleHttpRequestRemoteCacheEvict},
     {"/tiflash/remote/cache/info", HandleHttpRequestRemoteCacheInfo},
 };
