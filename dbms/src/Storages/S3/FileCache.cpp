@@ -1271,7 +1271,7 @@ void downloadToLocal(
     GET_METRIC(tiflash_storage_remote_cache_bytes, type_dtfile_download_bytes).Increment(content_length);
     constexpr Int64 max_buffer_size = 128 * 1024; // 128 KiB
     auto buffer_size = std::min<Int64>(content_length, max_buffer_size);
-    if (s3_read_limiter == nullptr)
+    if (s3_read_limiter == nullptr || s3_read_limiter->maxReadBytesPerSec() == 0)
     {
         ReadBufferFromIStream rbuf(istr, buffer_size);
         WriteBufferFromWritableFile wbuf(ofile, buffer_size);
@@ -1343,7 +1343,6 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg, c
     prepareParentDir(local_fname);
     auto temp_fname = toTemporaryFilename(local_fname);
     SYNC_FOR("before_FileCache::downloadImpl_download_to_local");
-    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::file_cache_bg_download_fail);
     downloadToLocal(
         result.GetBody(),
         temp_fname,
@@ -1390,6 +1389,8 @@ void FileCache::bgDownloadExecutor(
     Stopwatch download_watch;
     try
     {
+        SYNC_FOR("before_FileCache::bgDownloadExecutor_fail_point");
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::file_cache_bg_download_fail);
         GET_METRIC(tiflash_storage_remote_cache, type_dtfile_download).Increment();
         downloadImpl(s3_key, file_seg, write_limiter);
     }

@@ -130,7 +130,7 @@ ssize_t S3RandomAccessFile::read(char * buf, size_t size)
 
 ssize_t S3RandomAccessFile::readImpl(char * buf, size_t size)
 {
-    if (read_limiter != nullptr)
+    if (read_limiter != nullptr && read_limiter->maxReadBytesPerSec() > 0)
         // Charge the shared node-level budget in small chunks instead of allowing a single large `read()` to burst.
         return readChunked(buf, size);
 
