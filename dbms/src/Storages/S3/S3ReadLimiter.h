@@ -53,13 +53,12 @@ public:
 
     /// A lightweight node-level limiter for S3 remote reads.
     ///
-    /// It currently limits one dimension:
+    /// It currently enforces byte-rate limiting only:
     /// - total remote-read bytes consumed by direct reads and FileCache downloads
     ///
-    /// The stream dimension is best-effort protection against too many live response bodies, not a
-    /// replacement for byte throttling and not a safe cap on reader object count. In TiFlash a
-    /// `S3RandomAccessFile` may keep its body stream open across scheduling gaps, so a low stream
-    /// limit can block forward progress even when the node is no longer transferring many bytes.
+    /// Concurrent/open-stream limiting is not provided here. TiFlash readers may keep response
+    /// bodies open across scheduling gaps, so treating open streams as a hard cap can block forward
+    /// progress even when the node is no longer transferring many bytes.
     explicit S3ReadLimiter(UInt64 max_read_bytes_per_sec_ = 0, UInt64 refill_period_ms_ = 100);
 
     ~S3ReadLimiter();

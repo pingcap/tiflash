@@ -427,9 +427,14 @@ TEST(S3ReadLimiterTest, LargeRequestDoesNotWaitForever)
 
     // The initial burst is only 100 bytes, but callers that request a larger chunk should still make
     // forward progress instead of waiting forever for a budget that can never accumulate.
-    AtomicStopwatch watch;
-    limiter.requestBytes(128 * 1024, S3::S3ReadSource::DirectRead);
-    ASSERT_LT(watch.elapsedMilliseconds(), 200);
+    auto future = std::async(std::launch::async, [&] {
+        AtomicStopwatch watch;
+        limiter.requestBytes(128 * 1024, S3::S3ReadSource::DirectRead);
+        return watch.elapsedMilliseconds();
+    });
+
+    ASSERT_EQ(future.wait_for(1s), std::future_status::ready);
+    ASSERT_LT(future.get(), 200);
 }
 
 #ifdef __linux__
