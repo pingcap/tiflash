@@ -14,10 +14,10 @@
 
 #include <Common/FailPoint.h>
 #include <Common/StringUtils/StringRefUtils.h>
-#include <Databases/DatabaseTiFlash.h>
-#include <Debug/MockKVStore/MockUtils.h>
 #include <DataStreams/MarkInCompressedFile.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Databases/DatabaseTiFlash.h>
+#include <Debug/MockKVStore/MockUtils.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterDropQuery.h>
@@ -25,6 +25,7 @@
 #include <Parsers/ASTDropQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
+#include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/FFI/ProxyFFICommon.h>
@@ -34,7 +35,6 @@
 #include <Storages/KVStore/Types.h>
 #include <Storages/KVStore/tests/region_kvstore_test.h>
 #include <Storages/StorageDeltaMerge.h>
-#include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 #include <Storages/registerStorages.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
@@ -627,6 +627,7 @@ TEST_F(StatusServerTest, TestLocalCacheEvict)
     {
         auto mark_cache = ctx->getMarkCache();
         ASSERT_NE(mark_cache, nullptr);
+        mark_cache->reset();
         auto marks = std::make_shared<MarksInCompressedFile>();
         marks->push_back(MarkInCompressedFile{1, 2});
         mark_cache->set("mark-key", marks);
@@ -647,6 +648,7 @@ TEST_F(StatusServerTest, TestLocalCacheEvict)
     {
         auto minmax_cache = ctx->getMinMaxIndexCache();
         ASSERT_NE(minmax_cache, nullptr);
+        minmax_cache->reset();
         auto index = std::make_shared<DM::MinMaxIndex>(DataTypeInt64());
         minmax_cache->set("minmax-key", index);
         ASSERT_EQ(minmax_cache->count(), 1);
@@ -658,9 +660,7 @@ TEST_F(StatusServerTest, TestLocalCacheEvict)
             BaseBuffView{"", 0},
             BaseBuffView{"", 0});
         EXPECT_EQ(res.status, HttpRequestStatus::Ok);
-        EXPECT_EQ(
-            std::string_view(res.res.view.data, res.res.view.len),
-            R"json({"status":"ok","cache":"minmax"})json");
+        EXPECT_EQ(std::string_view(res.res.view.data, res.res.view.len), R"json({"status":"ok","cache":"minmax"})json");
         EXPECT_EQ(minmax_cache->count(), 0);
         releaseResp(helper, std::move(res));
     }

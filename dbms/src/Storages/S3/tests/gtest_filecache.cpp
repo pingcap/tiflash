@@ -1178,6 +1178,7 @@ TEST_F(FileCacheTest, GetWaitOnDownloadingHitAndTimeout)
 
     auto objects = genObjects(/*store_count*/ 1, /*table_count*/ 1, /*file_count*/ 1, {"1.merged", "2.merged"});
     auto sp_download = SyncPointCtl::enableInScope("before_FileCache::downloadImpl_download_to_local");
+    auto sp_wait = SyncPointCtl::enableInScope("before_FileSegment::waitForNotEmpty_wait");
 
     auto first_key = S3FilenameView::fromKey(objects[0].key);
     // First request publishes the `Empty` placeholder and starts the background download.
@@ -1186,8 +1187,9 @@ TEST_F(FileCacheTest, GetWaitOnDownloadingHitAndTimeout)
 
     // With a generous bounded-wait budget, the follower should reuse the downloader result instead of returning miss.
     auto wait_hit = std::async(std::launch::async, [&]() { return file_cache.get(first_key, objects[0].size); });
-    std::this_thread::sleep_for(20ms);
+    sp_wait.waitAndPause();
     sp_download.next();
+    sp_wait.next();
     auto hit_seg = wait_hit.get();
     ASSERT_NE(hit_seg, nullptr);
     ASSERT_TRUE(hit_seg->isReadyToRead());
@@ -1199,6 +1201,8 @@ TEST_F(FileCacheTest, GetWaitOnDownloadingHitAndTimeout)
     ASSERT_EQ(file_cache.get(second_key, objects[1].size), nullptr);
     sp_download.waitAndPause();
     auto wait_timeout = std::async(std::launch::async, [&]() { return file_cache.get(second_key, objects[1].size); });
+    sp_wait.waitAndPause();
+    sp_wait.next();
     ASSERT_EQ(wait_timeout.get(), nullptr);
     sp_download.next();
     sp_download.disable();
@@ -1223,6 +1227,7 @@ TEST_F(FileCacheTest, GetWaitOnDownloadingReturnsMissWhenDownloaderFails)
 
     auto objects = genObjects(/*store_count*/ 1, /*table_count*/ 1, /*file_count*/ 1, {"1.merged"});
     auto sp_download = SyncPointCtl::enableInScope("before_FileCache::downloadImpl_download_to_local");
+    auto sp_wait = SyncPointCtl::enableInScope("before_FileSegment::waitForNotEmpty_wait");
 
     auto key = S3FilenameView::fromKey(objects[0].key);
     // First caller creates the `Empty` placeholder and starts the background download.
@@ -1235,8 +1240,9 @@ TEST_F(FileCacheTest, GetWaitOnDownloadingReturnsMissWhenDownloaderFails)
         FailPointHelper::enableFailPoint(FailPoints::file_cache_bg_download_fail);
         SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::file_cache_bg_download_fail); });
         auto wait_failed = std::async(std::launch::async, [&]() { return file_cache.get(key, objects[0].size); });
-        std::this_thread::sleep_for(20ms);
+        sp_wait.waitAndPause();
         sp_download.next();
+        sp_wait.next();
         ASSERT_EQ(wait_failed.get(), nullptr);
     }
     sp_download.disable();
@@ -1314,6 +1320,7 @@ TEST_F(FileCacheTest, GetWaitOnDownloadingSupportsColDataAndOther)
 
     auto objects = genObjects(/*store_count*/ 1, /*table_count*/ 1, /*file_count*/ 1, {"1.dat", "meta"});
     auto sp_download = SyncPointCtl::enableInScope("before_FileCache::downloadImpl_download_to_local");
+    auto sp_wait = SyncPointCtl::enableInScope("before_FileSegment::waitForNotEmpty_wait");
 
     auto run_wait_hit_case = [&](const ObjectInfo & obj, FileType expected_file_type) {
         auto key = S3FilenameView::fromKey(obj.key);
@@ -1323,8 +1330,9 @@ TEST_F(FileCacheTest, GetWaitOnDownloadingSupportsColDataAndOther)
         sp_download.waitAndPause();
 
         auto wait_hit = std::async(std::launch::async, [&]() { return file_cache.get(key, obj.size); });
-        std::this_thread::sleep_for(20ms);
+        sp_wait.waitAndPause();
         sp_download.next();
+        sp_wait.next();
 
         auto file_seg = wait_hit.get();
         ASSERT_NE(file_seg, nullptr);

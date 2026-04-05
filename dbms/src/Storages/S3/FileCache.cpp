@@ -119,7 +119,7 @@ private:
         {
             if (istr.eof())
                 return false;
-            throw Exception("Cannot read from istream", ErrorCodes::CANNOT_READ_FROM_ISTREAM);
+            throw Exception(ErrorCodes::CANNOT_READ_FROM_ISTREAM, "Cannot read from istream");
         }
 
         working_buffer.resize(gcount);
