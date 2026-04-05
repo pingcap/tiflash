@@ -391,7 +391,8 @@ public:
         LRUFileTable & table,
         const String & s3_key,
         FileSegmentPtr & f,
-        bool force = false);
+        bool force = false,
+        bool count_as_evict = true);
     void removeDiskFile(const String & local_fname, bool update_fsize_metrics) const;
 
     // Estimated size is an empirical value.
