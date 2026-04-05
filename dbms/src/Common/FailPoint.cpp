@@ -116,6 +116,7 @@ namespace DB
     M(cop_send_failure)                                      \
     M(file_cache_fg_download_fail)                           \
     M(file_cache_bg_download_fail)                           \
+    M(file_cache_bg_download_schedule_fail)                  \
     M(force_set_parallel_prehandle_threshold)                \
     M(force_raise_prehandle_exception)                       \
     M(force_agg_on_partial_block)                            \

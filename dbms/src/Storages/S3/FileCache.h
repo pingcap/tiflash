@@ -371,6 +371,8 @@ public:
         FileSegmentPtr & file_seg,
         const WriteLimiterPtr & write_limiter,
         std::chrono::steady_clock::time_point enqueue_time);
+    void finishBgDownload(const String & s3_key);
+    void cleanupFailedDownload(const String & s3_key, FileSegmentPtr & file_seg);
     void downloadImpl(const String & s3_key, FileSegmentPtr & file_seg, const WriteLimiterPtr & write_limiter);
 
     static String toTemporaryFilename(const String & fname);
