@@ -1325,6 +1325,10 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg, c
         file_seg->setStatus(FileSegment::Status::Failed);
         return;
     }
+    // finalizeReservedSize() has already adjusted cache_used to the actual object size. Keep the
+    // segment size in sync before any later throw point so failed downloads release the correct
+    // reservation instead of the old estimated size.
+    file_seg->setSize(content_length);
 
     const auto & local_fname = file_seg->getLocalFileName();
     // download as a temp file then rename to a formal file
