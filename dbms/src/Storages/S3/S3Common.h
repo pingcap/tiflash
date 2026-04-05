@@ -21,6 +21,7 @@
 #include <IO/FileProvider/FileProvider_fwd.h>
 #include <Interpreters/Context_fwd.h>
 #include <Server/StorageConfigParser.h>
+#include <Storages/S3/S3ReadLimiter_fwd.h>
 #include <aws/core/Aws.h>
 #include <aws/core/http/Scheme.h>
 #include <aws/s3/S3Client.h>
@@ -43,8 +44,6 @@ extern const int S3_ERROR;
 
 namespace DB::S3
 {
-class S3ReadLimiter;
-
 inline String S3ErrorMessage(const Aws::S3::S3Error & e)
 {
     return fmt::format(
@@ -74,13 +73,15 @@ public:
         const Aws::Client::ClientConfiguration & clientConfiguration,
         Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy signPayloads,
         bool useVirtualAddressing,
-        std::shared_ptr<S3ReadLimiter> s3_read_limiter_ = nullptr);
+        std::shared_ptr<S3ReadLimiter> s3_read_limiter_ = nullptr,
+        std::shared_ptr<S3ReadMetricsRecorder> s3_read_metrics_recorder_ = nullptr);
 
     TiFlashS3Client(
         const String & bucket_name_,
         const String & root_,
         std::unique_ptr<Aws::S3::S3Client> && raw_client,
-        std::shared_ptr<S3ReadLimiter> s3_read_limiter_ = nullptr);
+        std::shared_ptr<S3ReadLimiter> s3_read_limiter_ = nullptr,
+        std::shared_ptr<S3ReadMetricsRecorder> s3_read_metrics_recorder_ = nullptr);
 
     const String & bucket() const { return bucket_name; }
 
@@ -108,11 +109,25 @@ public:
         s3_read_limiter = std::move(limiter);
     }
 
+    std::shared_ptr<S3ReadMetricsRecorder> getS3ReadMetricsRecorder() const
+    {
+        std::lock_guard lock(s3_read_metrics_recorder_mutex);
+        return s3_read_metrics_recorder;
+    }
+
+    void setS3ReadMetricsRecorder(std::shared_ptr<S3ReadMetricsRecorder> recorder)
+    {
+        std::lock_guard lock(s3_read_metrics_recorder_mutex);
+        s3_read_metrics_recorder = std::move(recorder);
+    }
+
 private:
     const String bucket_name;
     String key_root;
     mutable std::mutex s3_read_limiter_mutex;
     std::shared_ptr<S3ReadLimiter> s3_read_limiter;
+    mutable std::mutex s3_read_metrics_recorder_mutex;
+    std::shared_ptr<S3ReadMetricsRecorder> s3_read_metrics_recorder;
 
 public:
     LoggerPtr log;
@@ -175,6 +190,14 @@ public:
             shared_tiflash_client->setS3ReadLimiter(shared_s3_read_limiter);
     }
 
+    void setS3ReadMetricsRecorder(const std::shared_ptr<S3ReadMetricsRecorder> & recorder)
+    {
+        std::unique_lock lock_init(mtx_init);
+        shared_s3_read_metrics_recorder = recorder;
+        if (shared_tiflash_client != nullptr)
+            shared_tiflash_client->setS3ReadMetricsRecorder(shared_s3_read_metrics_recorder);
+    }
+
     S3GCMethod gc_method = S3GCMethod::Lifecycle;
 
     CloudVendor cloud_vendor = CloudVendor::Unknown;
@@ -201,6 +224,7 @@ private:
     StorageS3Config config;
     std::shared_ptr<TiFlashS3Client> shared_tiflash_client;
     std::shared_ptr<S3ReadLimiter> shared_s3_read_limiter;
+    std::shared_ptr<S3ReadMetricsRecorder> shared_s3_read_metrics_recorder;
     pingcap::kv::Cluster * kv_cluster = nullptr;
 
     LoggerPtr log;

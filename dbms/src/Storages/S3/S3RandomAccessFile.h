@@ -19,7 +19,7 @@
 #include <Common/Stopwatch.h>
 #include <IO/BaseFile/RandomAccessFile.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
-#include <Storages/S3/S3ReadLimiter.h>
+#include <Storages/S3/S3ReadLimiter_fwd.h>
 #include <aws/s3/model/GetObjectResult.h>
 #include <common/types.h>
 
@@ -34,7 +34,6 @@
 namespace DB::S3
 {
 class TiFlashS3Client;
-class S3ReadLimiter;
 } // namespace DB::S3
 
 namespace DB::ErrorCodes
@@ -119,6 +118,7 @@ private:
     Aws::S3::Model::GetObjectResult read_result;
     Int64 content_length = 0;
     std::shared_ptr<S3ReadLimiter> read_limiter;
+    std::shared_ptr<S3ReadMetricsRecorder> read_metrics_recorder;
 
     DB::LoggerPtr log;
     bool is_close = false;

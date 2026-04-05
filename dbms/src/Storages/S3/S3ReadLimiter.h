@@ -24,10 +24,17 @@
 
 namespace DB::S3
 {
-enum class S3ReadSource
+enum class S3ReadSource : UInt8
 {
     DirectRead,
     FileCacheDownload,
+};
+
+class S3ReadMetricsRecorder
+{
+public:
+    /// Record remote-read bytes regardless of whether byte throttling is enabled.
+    void recordBytes(UInt64 bytes, S3ReadSource source) const;
 };
 
 class S3ReadLimiter

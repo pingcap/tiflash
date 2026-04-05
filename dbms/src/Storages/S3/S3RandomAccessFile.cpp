@@ -76,11 +76,13 @@ S3RandomAccessFile::S3RandomAccessFile(
     , remote_fname(remote_fname_)
     , cur_offset(0)
     , read_limiter(nullptr)
+    , read_metrics_recorder(nullptr)
     , log(Logger::get(remote_fname))
     , scan_context(scan_context_)
 {
     RUNTIME_CHECK(client_ptr != nullptr);
     read_limiter = client_ptr->getS3ReadLimiter();
+    read_metrics_recorder = client_ptr->getS3ReadMetricsRecorder();
     initialize("init file");
     CurrentMetrics::add(CurrentMetrics::S3RandomAccessFile);
 }
@@ -225,6 +227,8 @@ ssize_t S3RandomAccessFile::finalizeRead(
     }
     cur_offset += actual_size;
     ProfileEvents::increment(ProfileEvents::S3ReadBytes, actual_size);
+    if (read_metrics_recorder != nullptr)
+        read_metrics_recorder->recordBytes(actual_size, S3ReadSource::DirectRead);
     return actual_size;
 }
 
@@ -351,6 +355,8 @@ off_t S3RandomAccessFile::finalizeSeek(
             elapsed_secs);
     }
     ProfileEvents::increment(ProfileEvents::S3ReadBytes, actual_size);
+    if (read_metrics_recorder != nullptr)
+        read_metrics_recorder->recordBytes(actual_size, S3ReadSource::DirectRead);
     cur_offset = target_offset;
     return cur_offset;
 }
