@@ -1278,6 +1278,12 @@ void downloadToLocal(
         return;
     }
 
+    // Keep each refill within the limiter-suggested chunk size. Otherwise a low byte limit would
+    // turn every 128 KiB refill into an oversized borrowing request and let downloads run ahead
+    // of the configured node-level budget.
+    buffer_size = std::min<Int64>(
+        buffer_size,
+        static_cast<Int64>(s3_read_limiter->getSuggestedChunkSize(static_cast<UInt64>(buffer_size))));
     // The limiter-aware buffer preserves the old copyData/write-buffer path while charging the shared
     // S3 budget before each refill from the remote body stream.
     ReadBufferFromIStreamWithLimiter rbuf(istr, buffer_size, s3_read_limiter, S3::S3ReadSource::FileCacheDownload);

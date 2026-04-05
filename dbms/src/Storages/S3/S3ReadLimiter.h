@@ -34,7 +34,7 @@ class S3ReadMetricsRecorder
 {
 public:
     /// Record remote-read bytes regardless of whether byte throttling is enabled.
-    void recordBytes(UInt64 bytes, S3ReadSource source) const;
+    static void recordBytes(UInt64 bytes, S3ReadSource source);
 };
 
 class S3ReadLimiter

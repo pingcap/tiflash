@@ -33,7 +33,7 @@ void recordWaitIfNeeded(bool waited, const Stopwatch & sw, F && observe)
 }
 } // namespace
 
-void DB::S3::S3ReadMetricsRecorder::recordBytes(UInt64 bytes, S3ReadSource source) const
+void DB::S3::S3ReadMetricsRecorder::recordBytes(UInt64 bytes, S3ReadSource source)
 {
     if (bytes == 0)
         return;
