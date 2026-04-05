@@ -107,6 +107,14 @@ public:
             cv_ready.notify_all();
     }
 
+    /// Update the reserved size without changing readiness state. This is used after reservation has
+    /// been rebased to the real object size but before the download finishes.
+    void setSize(UInt64 size_)
+    {
+        std::lock_guard lock(mtx);
+        size = size_;
+    }
+
     Status getStatus() const
     {
         std::lock_guard lock(mtx);

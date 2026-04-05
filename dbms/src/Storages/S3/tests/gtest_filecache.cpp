@@ -1461,4 +1461,42 @@ TEST_F(FileCacheTest, GetBeingBlock)
     waitForBgDownload(file_cache);
 }
 
+TEST_F(FileCacheTest, FailedDownloadReleasesFinalizedReservedSize)
+{
+    auto cache_dir = fmt::format("{}/failed_download_reserved_size", tmp_dir);
+    StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = 100};
+
+    UInt16 vcores = 2;
+    IORateLimiter rate_limiter;
+    FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
+    Settings settings;
+    settings.dt_filecache_downloading_count_scale = 2.0;
+    settings.dt_filecache_max_downloading_count_scale = 2.0;
+    file_cache.updateConfig(settings);
+
+    auto objects = genObjects(/*store_count*/ 1, /*table_count*/ 1, /*file_count*/ 1, {"1.merged"});
+    auto key = S3FilenameView::fromKey(objects[0].key);
+
+    auto assert_failed_download_releases_space = [&](std::optional<UInt64> requested_size) {
+        FailPointHelper::enableFailPoint(FailPoints::file_cache_bg_download_fail);
+        SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::file_cache_bg_download_fail); });
+
+        ASSERT_EQ(file_cache.cache_used, 0);
+        ASSERT_EQ(file_cache.get(key, requested_size), nullptr);
+        waitForBgDownload(file_cache);
+
+        ASSERT_EQ(file_cache.cache_used, 0);
+        ASSERT_EQ(file_cache.bg_download_fail_count.load(std::memory_order_relaxed), 1);
+        ASSERT_EQ(file_cache.bg_download_succ_count.load(std::memory_order_relaxed), 0);
+    };
+
+    // std::nullopt uses the file-type estimate and must still release the finalized reservation correctly.
+    assert_failed_download_releases_space(std::nullopt);
+
+    file_cache.bg_download_fail_count.store(0, std::memory_order_relaxed);
+
+    // A caller-provided wrong size should also not corrupt cache_used after finalizeReservedSize rebases it.
+    assert_failed_download_releases_space(objects[0].size - 1024);
+}
+
 } // namespace DB::tests::S3
