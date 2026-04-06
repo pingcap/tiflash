@@ -244,10 +244,9 @@ void observeRemoteCacheRejectMetrics(FileType file_type)
         .Increment();
 }
 
-void updateBgDownloadStatusMetrics(Int64 bg_downloading_count)
+void updateBgDownloadStatusMetrics(Int64 bg_downloading_count, Int64 running_limit)
 {
     GET_METRIC(tiflash_storage_remote_cache_status, type_bg_downloading_count).Set(bg_downloading_count);
-    const auto running_limit = static_cast<Int64>(S3FileCachePool::get().getMaxThreads());
     GET_METRIC(tiflash_storage_remote_cache_status, type_bg_download_queue_count)
         .Set(std::max<Int64>(0, bg_downloading_count - running_limit));
 }
@@ -469,7 +468,7 @@ FileCache::FileCache(
     , log(Logger::get("FileCache"))
 {
     CurrentMetrics::set(CurrentMetrics::DTFileCacheCapacity, cache_capacity);
-    updateBgDownloadStatusMetrics(0);
+    updateBgDownloadStatusMetrics(0, /*running_limit*/ 0);
     prepareDir(cache_dir);
     restore();
 }
@@ -1380,7 +1379,8 @@ void FileCache::bgDownloadExecutor(
     const String & s3_key,
     FileSegmentPtr & file_seg,
     const WriteLimiterPtr & write_limiter,
-    std::chrono::steady_clock::time_point enqueue_time)
+    std::chrono::steady_clock::time_point enqueue_time,
+    Int64 running_limit)
 {
     observeBgDownloadStageMetrics(
         file_seg->getFileType(),
@@ -1411,13 +1411,17 @@ void FileCache::bgDownloadExecutor(
     {
         bg_download_succ_count.fetch_add(1, std::memory_order_relaxed);
     }
-    finishBgDownload(s3_key);
+    finishBgDownload(s3_key, running_limit);
 }
 
 void FileCache::bgDownload(const String & s3_key, FileSegmentPtr & file_seg)
 {
     bg_downloading_count.fetch_add(1, std::memory_order_relaxed);
-    updateBgDownloadStatusMetrics(bg_downloading_count.load(std::memory_order_relaxed));
+    // Capture the pool concurrency limit before scheduling. Background workers still update
+    // queue gauges while finishing, but tests may shut the global S3FileCachePool down at the
+    // same time. Re-reading the singleton from the worker tail would race with shutdown.
+    const auto running_limit = static_cast<Int64>(S3FileCachePool::get().getMaxThreads());
+    updateBgDownloadStatusMetrics(bg_downloading_count.load(std::memory_order_relaxed), running_limit);
     LOG_DEBUG(
         log,
         "downloading count {} => s3_key {} start",
@@ -1429,9 +1433,12 @@ void FileCache::bgDownload(const String & s3_key, FileSegmentPtr & file_seg)
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::file_cache_bg_download_schedule_fail);
         S3FileCachePool::get().scheduleOrThrowOnError(
-            [this, s3_key = s3_key, file_seg = file_seg, limiter = std::move(write_limiter), enqueue_time]() mutable {
-                bgDownloadExecutor(s3_key, file_seg, limiter, enqueue_time);
-            });
+            [this,
+             s3_key = s3_key,
+             file_seg = file_seg,
+             limiter = std::move(write_limiter),
+             enqueue_time,
+             running_limit]() mutable { bgDownloadExecutor(s3_key, file_seg, limiter, enqueue_time, running_limit); });
     }
     catch (...)
     {
@@ -1439,14 +1446,14 @@ void FileCache::bgDownload(const String & s3_key, FileSegmentPtr & file_seg)
         GET_METRIC(tiflash_storage_remote_cache, type_dtfile_download_failed).Increment();
         bg_download_fail_count.fetch_add(1, std::memory_order_relaxed);
         cleanupFailedDownload(s3_key, file_seg);
-        finishBgDownload(s3_key);
+        finishBgDownload(s3_key, running_limit);
     }
 }
 
-void FileCache::finishBgDownload(const String & s3_key)
+void FileCache::finishBgDownload(const String & s3_key, Int64 running_limit)
 {
     const auto count_after_finish = bg_downloading_count.fetch_sub(1, std::memory_order_relaxed) - 1;
-    updateBgDownloadStatusMetrics(count_after_finish);
+    updateBgDownloadStatusMetrics(count_after_finish, running_limit);
     LOG_DEBUG(log, "downloading count {} => s3_key {} finished", count_after_finish, s3_key);
 }
 

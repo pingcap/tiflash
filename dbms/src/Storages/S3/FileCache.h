@@ -370,8 +370,9 @@ public:
         const String & s3_key,
         FileSegmentPtr & file_seg,
         const WriteLimiterPtr & write_limiter,
-        std::chrono::steady_clock::time_point enqueue_time);
-    void finishBgDownload(const String & s3_key);
+        std::chrono::steady_clock::time_point enqueue_time,
+        Int64 running_limit);
+    void finishBgDownload(const String & s3_key, Int64 running_limit);
     void cleanupFailedDownload(const String & s3_key, FileSegmentPtr & file_seg);
     void downloadImpl(const String & s3_key, FileSegmentPtr & file_seg, const WriteLimiterPtr & write_limiter);
 
