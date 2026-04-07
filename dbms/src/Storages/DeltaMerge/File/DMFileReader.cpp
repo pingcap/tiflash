@@ -544,9 +544,31 @@ ColumnPtr DMFileReader::readFromDisk(
         [&](const IDataType::SubstreamPath & substream_path) {
             const auto substream_name = DMFile::getFileNameBase(cd.id, substream_path);
             auto & sub_stream = column_streams.at(substream_name);
-            sub_stream->buf->seek(
-                sub_stream->getOffsetInFile(start_pack_id),
-                sub_stream->getOffsetInDecompressedBlock(start_pack_id));
+            const auto offset_in_file = sub_stream->getOffsetInFile(start_pack_id);
+            const auto offset_in_decompressed_block = sub_stream->getOffsetInDecompressedBlock(start_pack_id);
+            try
+            {
+                sub_stream->buf->seek(offset_in_file, offset_in_decompressed_block);
+            }
+            catch (...)
+            {
+                tryLogCurrentWarningException(
+                    log,
+                    fmt::format(
+                        "DMFile substream seek failed, dmfile={} column_id={} type_on_disk={} stream_name={} "
+                        "substream_name={} start_pack_id={} read_rows={} offset_in_file={} "
+                        "offset_in_decompressed_block={}",
+                        path(),
+                        cd.id,
+                        type_on_disk->getName(),
+                        stream_name,
+                        substream_name,
+                        start_pack_id,
+                        read_rows,
+                        offset_in_file,
+                        offset_in_decompressed_block));
+                throw;
+            }
             return sub_stream->buf.get();
         },
         read_rows,

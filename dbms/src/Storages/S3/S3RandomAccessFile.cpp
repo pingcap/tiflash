@@ -24,6 +24,7 @@
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 #include <Storages/S3/S3RandomAccessFile.h>
+#include <Storages/S3/S3ReadLimiter.h>
 #include <aws/core/utils/Outcome.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <common/likely.h>
@@ -53,10 +54,16 @@ namespace DB::FailPoints
 {
 extern const char force_s3_random_access_file_init_fail[];
 extern const char force_s3_random_access_file_read_fail[];
+extern const char force_s3_random_access_file_seek_chunked[];
 } // namespace DB::FailPoints
 
 namespace DB::S3
 {
+namespace
+{
+constexpr size_t s3_read_limiter_preferred_chunk_size = 128 * 1024;
+}
+
 String S3RandomAccessFile::summary() const
 {
     return fmt::format("remote_fname={} cur_offset={} cur_retry={}", remote_fname, cur_offset, cur_retry);
@@ -69,10 +76,14 @@ S3RandomAccessFile::S3RandomAccessFile(
     : client_ptr(std::move(client_ptr_))
     , remote_fname(remote_fname_)
     , cur_offset(0)
+    , read_limiter(nullptr)
+    , read_metrics_recorder(nullptr)
     , log(Logger::get(remote_fname))
     , scan_context(scan_context_)
 {
     RUNTIME_CHECK(client_ptr != nullptr);
+    read_limiter = client_ptr->getS3ReadLimiter();
+    read_metrics_recorder = client_ptr->getS3ReadMetricsRecorder();
     initialize("init file");
     CurrentMetrics::add(CurrentMetrics::S3RandomAccessFile);
 }
@@ -120,20 +131,63 @@ ssize_t S3RandomAccessFile::read(char * buf, size_t size)
 
 ssize_t S3RandomAccessFile::readImpl(char * buf, size_t size)
 {
+    if (read_limiter != nullptr && read_limiter->maxReadBytesPerSec() > 0)
+        // Charge the shared node-level budget in small chunks instead of allowing a single large `read()` to burst.
+        return readChunked(buf, size);
+
     Stopwatch sw;
     ProfileEvents::increment(ProfileEvents::S3IORead, 1);
     auto & istr = read_result.GetBody();
     istr.read(buf, size);
-    size_t gcount = istr.gcount();
+    return finalizeRead(size, istr.gcount(), sw, istr);
+}
 
+ssize_t S3RandomAccessFile::readChunked(char * buf, size_t size)
+{
+    Stopwatch sw;
+    ProfileEvents::increment(ProfileEvents::S3IORead, 1);
+
+    auto & istr = read_result.GetBody();
+    // Use the limiter-suggested step so one large logical read is split into smoother refill-period-
+    // sized chunks. That keeps `requestBytes()` on its strict path for normal reads and only falls
+    // back to borrowing semantics for requests that are unavoidably larger than one burst.
+    const auto chunk_size = read_limiter->getSuggestedChunkSize(s3_read_limiter_preferred_chunk_size);
+    size_t total_gcount = 0;
+    while (total_gcount < size)
+    {
+        // The limiter charges requested bytes before the actual stream read so direct reads and FileCache downloads
+        // compete for the same node-level remote-read budget. This is intentionally conservative: a short read still
+        // spends the full requested budget for this chunk. If we need tighter accounting later, we can add a
+        // compensation path based on the actual bytes read back from S3.
+        auto to_read = std::min(size - total_gcount, static_cast<size_t>(chunk_size));
+        read_limiter->requestBytes(to_read, S3ReadSource::DirectRead);
+        istr.read(buf + total_gcount, to_read);
+        auto gcount = istr.gcount();
+        total_gcount += gcount;
+        if (static_cast<size_t>(gcount) < to_read)
+            break;
+    }
+
+    return finalizeRead(size, total_gcount, sw, istr);
+}
+
+ssize_t S3RandomAccessFile::finalizeRead(
+    size_t requested_size,
+    size_t actual_size,
+    const Stopwatch & sw,
+    std::istream & istr)
+{
+    // Keep the post-read handling shared so limiter and non-limiter paths emit identical retries, logging and
+    // observability signals.
     fiu_do_on(FailPoints::force_s3_random_access_file_read_fail, {
         LOG_WARNING(log, "failpoint force_s3_random_access_file_read_fail is triggered, return S3StreamError");
         return S3StreamError;
     });
 
-    // Theoretically, `istr.eof()` is equivalent to `cur_offset + gcount != static_cast<size_t>(content_length)`.
+    // Theoretically, `istr.eof()` is equivalent to `cur_offset + actual_size != static_cast<size_t>(content_length)`.
     // It's just a double check for more safety.
-    if (gcount < size && (!istr.eof() || cur_offset + gcount != static_cast<size_t>(content_length)))
+    if (actual_size < requested_size
+        && (!istr.eof() || cur_offset + actual_size != static_cast<size_t>(content_length)))
     {
         ProfileEvents::increment(ProfileEvents::S3IOReadError);
         auto state = istr.rdstate();
@@ -143,8 +197,8 @@ ssize_t S3RandomAccessFile::readImpl(char * buf, size_t size)
             log,
             "Cannot read from istream, size={} gcount={} state=0x{:02X} cur_offset={} content_length={} "
             "errno={} errmsg={} cost={:.6f}s",
-            size,
-            gcount,
+            requested_size,
+            actual_size,
             state,
             cur_offset,
             content_length,
@@ -159,22 +213,24 @@ ssize_t S3RandomAccessFile::readImpl(char * buf, size_t size)
     {
         scan_context->disagg_s3file_read_time_ms += elapsed_secs * 1000;
         scan_context->disagg_s3file_read_count += 1;
-        scan_context->disagg_s3file_read_bytes += gcount;
+        scan_context->disagg_s3file_read_bytes += actual_size;
     }
     GET_METRIC(tiflash_storage_s3_request_seconds, type_read_stream).Observe(elapsed_secs);
-    if (elapsed_secs > 0.01) // 10ms
+    if (elapsed_secs > 0.01)
     {
         LOG_DEBUG(
             log,
             "gcount={} cur_offset={} content_length={} cost={:.3f}s",
-            gcount,
+            actual_size,
             cur_offset,
             content_length,
             elapsed_secs);
     }
-    cur_offset += gcount;
-    ProfileEvents::increment(ProfileEvents::S3ReadBytes, gcount);
-    return gcount;
+    cur_offset += actual_size;
+    ProfileEvents::increment(ProfileEvents::S3ReadBytes, actual_size);
+    if (read_metrics_recorder != nullptr)
+        read_metrics_recorder->recordBytes(actual_size, S3ReadSource::DirectRead);
+    return actual_size;
 }
 
 off_t S3RandomAccessFile::seek(off_t offset_, int whence)
@@ -210,18 +266,61 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
     if (offset_ < cur_offset)
     {
         ProfileEvents::increment(ProfileEvents::S3IOSeekBackward, 1);
-        // Backward seek, need to reset the retry count and re-initialize
+        // The current body stream is forward-only. Re-open from the target offset.
         cur_offset = offset_;
         cur_retry = 0;
         initialize("seek backward");
         return cur_offset;
     }
 
+    if (read_limiter != nullptr && read_limiter->maxReadBytesPerSec() > 0)
+        return seekChunked(offset_);
+
     // Forward seek
     Stopwatch sw;
     ProfileEvents::increment(ProfileEvents::S3IOSeek, 1);
     auto & istr = read_result.GetBody();
-    if (!istr.ignore(offset_ - cur_offset))
+    auto bytes_to_ignore = static_cast<size_t>(offset_ - cur_offset);
+    istr.ignore(bytes_to_ignore);
+    return finalizeSeek(offset_, bytes_to_ignore, istr.gcount(), sw, istr);
+}
+
+off_t S3RandomAccessFile::seekChunked(off_t offset)
+{
+    Stopwatch sw;
+    ProfileEvents::increment(ProfileEvents::S3IOSeek, 1);
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::force_s3_random_access_file_seek_chunked);
+    auto & istr = read_result.GetBody();
+    // Use the same chunk heuristic as readChunked() so forward seeks do not turn into one oversized
+    // limiter request when skipping a large remote range.
+    const auto chunk_size = read_limiter->getSuggestedChunkSize(s3_read_limiter_preferred_chunk_size);
+    size_t total_ignored = 0;
+    const auto bytes_to_ignore = static_cast<size_t>(offset - cur_offset);
+    while (total_ignored < bytes_to_ignore)
+    {
+        // `ignore()` still drains the response body from S3, so it must be accounted against the same byte budget.
+        auto to_ignore = std::min(bytes_to_ignore - total_ignored, static_cast<size_t>(chunk_size));
+        read_limiter->requestBytes(to_ignore, S3ReadSource::DirectRead);
+        istr.ignore(to_ignore);
+        auto ignored = istr.gcount();
+        total_ignored += ignored;
+        if (static_cast<size_t>(ignored) < to_ignore)
+            break;
+    }
+
+    return finalizeSeek(offset, bytes_to_ignore, total_ignored, sw, istr);
+}
+
+off_t S3RandomAccessFile::finalizeSeek(
+    off_t target_offset,
+    size_t requested_size,
+    size_t actual_size,
+    const Stopwatch & sw,
+    std::istream & istr)
+{
+    // Keep post-seek handling shared so limiter and non-limiter paths emit identical retries, logging and
+    // observability signals.
+    if (actual_size < requested_size)
     {
         ProfileEvents::increment(ProfileEvents::S3IOSeekError);
         auto state = istr.rdstate();
@@ -229,8 +328,16 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
         GET_METRIC(tiflash_storage_s3_request_seconds, type_read_stream_err).Observe(elapsed_secs);
         LOG_WARNING(
             log,
-            "Cannot ignore from istream, state=0x{:02X}, errno={} errmsg={} cost={:.6f}s",
+            "Cannot ignore from istream, state=0x{:02X}, ignored={} expected={} target_offset={} cur_offset={} "
+            "content_length={} limiter_enabled={} max_read_bytes_per_sec={} errno={} errmsg={} cost={:.6f}s",
             state,
+            actual_size,
+            requested_size,
+            target_offset,
+            cur_offset,
+            content_length,
+            read_limiter != nullptr,
+            read_limiter != nullptr ? read_limiter->maxReadBytesPerSec() : 0,
             errno,
             strerror(errno),
             elapsed_secs);
@@ -242,21 +349,23 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
     {
         scan_context->disagg_s3file_seek_time_ms += elapsed_secs * 1000;
         scan_context->disagg_s3file_seek_count += 1;
-        scan_context->disagg_s3file_seek_bytes += offset_ - cur_offset;
+        scan_context->disagg_s3file_seek_bytes += actual_size;
     }
     GET_METRIC(tiflash_storage_s3_request_seconds, type_read_stream).Observe(elapsed_secs);
-    if (elapsed_secs > 0.01) // 10ms
+    if (elapsed_secs > 0.01)
     {
         LOG_DEBUG(
             log,
             "ignore_count={} cur_offset={} content_length={} cost={:.3f}s",
-            offset_ - cur_offset,
+            actual_size,
             cur_offset,
             content_length,
             elapsed_secs);
     }
-    ProfileEvents::increment(ProfileEvents::S3ReadBytes, offset_ - cur_offset);
-    cur_offset = offset_;
+    ProfileEvents::increment(ProfileEvents::S3ReadBytes, actual_size);
+    if (read_metrics_recorder != nullptr)
+        read_metrics_recorder->recordBytes(actual_size, S3ReadSource::DirectRead);
+    cur_offset = target_offset;
     return cur_offset;
 }
 String S3RandomAccessFile::readRangeOfObject()

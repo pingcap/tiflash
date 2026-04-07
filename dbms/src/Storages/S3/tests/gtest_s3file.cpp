@@ -36,6 +36,7 @@
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 #include <Storages/S3/S3RandomAccessFile.h>
+#include <Storages/S3/S3ReadLimiter.h>
 #include <Storages/S3/S3WritableFile.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
@@ -67,6 +68,7 @@ extern const char force_set_mocked_s3_object_mtime[];
 extern const char force_syncpoint_on_s3_upload[];
 extern const char force_s3_random_access_file_init_fail[];
 extern const char force_s3_random_access_file_read_fail[];
+extern const char force_s3_random_access_file_seek_chunked[];
 } // namespace DB::FailPoints
 
 namespace DB::tests
@@ -275,6 +277,37 @@ try
         std::iota(expected.begin(), expected.end(), 1);
         ASSERT_EQ(tmp_buf, expected);
     }
+}
+CATCH
+
+TEST_P(S3FileTest, SeekSkipsChunkedPathWhenLimiterDisabled)
+try
+{
+    const auto size = 1024 * 1024 * 10; // 10MB
+    const String key = "/a/b/c/seek_disabled_limiter";
+    writeFile(key, size, WriteSettings{});
+
+    auto prev_limiter = s3_client->getS3ReadLimiter();
+    auto disabled_limiter = std::make_shared<S3ReadLimiter>(0, 1);
+    s3_client->setS3ReadLimiter(disabled_limiter);
+    SCOPE_EXIT({ s3_client->setS3ReadLimiter(prev_limiter); });
+
+    S3RandomAccessFile file(s3_client, key, nullptr);
+    std::vector<char> tmp_buf(256);
+    ASSERT_EQ(file.read(tmp_buf.data(), tmp_buf.size()), tmp_buf.size());
+
+    FailPointHelper::enableFailPoint(FailPoints::force_s3_random_access_file_seek_chunked);
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_s3_random_access_file_seek_chunked); });
+
+    constexpr off_t target_offset = 1024 * 1024;
+    off_t seek_offset = -1;
+    ASSERT_NO_THROW(seek_offset = file.seek(target_offset, SEEK_SET));
+    ASSERT_EQ(seek_offset, target_offset);
+    ASSERT_EQ(file.read(tmp_buf.data(), tmp_buf.size()), tmp_buf.size());
+
+    std::vector<char> expected(256);
+    std::iota(expected.begin(), expected.end(), 0);
+    ASSERT_EQ(tmp_buf, expected);
 }
 CATCH
 

@@ -16,6 +16,8 @@
 
 #include <Storages/S3/FileCache.h>
 
+#include <optional>
+
 namespace DB
 {
 
@@ -26,6 +28,12 @@ enum class EvictMethod
 {
     ByFileType = 0,
     ByEvictSize,
+};
+
+enum class CacheEvictType
+{
+    Mark = 0,
+    MinMax,
 };
 
 struct RemoteCacheEvictRequest
@@ -39,6 +47,10 @@ struct RemoteCacheEvictRequest
 };
 
 RemoteCacheEvictRequest parseEvictRequest(std::string_view path, std::string_view api_name, std::string_view query);
+
+/// Parse `/tiflash/cache/evict/<type>` and resolve the target node-local cache type.
+/// Returns `std::nullopt` and sets `err_msg` when the path suffix is invalid.
+std::optional<CacheEvictType> parseCacheEvictType(std::string_view path, std::string_view api_name, String & err_msg);
 
 std::tuple<std::vector<StoreID>, String> parseStoreIds(std::string_view path);
 
