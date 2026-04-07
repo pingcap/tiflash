@@ -397,20 +397,38 @@ public:
 
         AdapterRunResult result;
         const size_t chunk_size = std::max<size_t>(1, (input.size() + partitions - 1) / partitions);
+        std::vector<Utf8BatchOwned> retained_batches;
+        if (ownership_mode == BATCH_OWNERSHIP_FOREIGN_RETAINABLE)
+        {
+            // Retainable ownership requires input buffers to stay alive until finish().
+            const size_t batch_count = input.empty() ? 0 : (input.size() + chunk_size - 1) / chunk_size;
+            retained_batches.reserve(batch_count);
+        }
 
         for (size_t start = 0; start < input.size(); start += chunk_size)
         {
             const size_t end = std::min(input.size(), start + chunk_size);
             std::vector<std::optional<String>> batch_rows(input.begin() + static_cast<ptrdiff_t>(start), input.begin() + static_cast<ptrdiff_t>(end));
-            Utf8BatchOwned batch(batch_rows, ownership_mode);
+            std::optional<Utf8BatchOwned> batch;
+            const TiforthBatchViewV2 * input_batch = nullptr;
+            if (ownership_mode == BATCH_OWNERSHIP_FOREIGN_RETAINABLE)
+            {
+                retained_batches.emplace_back(batch_rows, ownership_mode);
+                input_batch = &retained_batches.back().batch;
+            }
+            else
+            {
+                batch.emplace(batch_rows, ownership_mode);
+                input_batch = &batch->batch;
+            }
 
             TiforthBatchViewV2 output{};
             output.abi_version = EXECUTION_HOST_V2_ABI_VERSION;
-            api.drive_input_batch(instance, INPUT_ID_SCALAR, &batch.batch, &status, &output);
+            api.drive_input_batch(instance, INPUT_ID_SCALAR, input_batch, &status, &output);
 
             ASSERT_EQ(status.kind, STATUS_KIND_OK) << status.message;
             ASSERT_EQ(status.code, STATUS_CODE_NONE) << status.message;
-            result.warning_count = std::max(result.warning_count, status.warning_count);
+            result.warning_count += status.warning_count;
 
             ASSERT_EQ(output.column_count, 1u);
             const auto & output_column = output.columns[0];
