@@ -965,13 +965,24 @@ void Join::handleOtherConditions(Block & block, IColumn::Filter * anti_filter, I
     mergeNullAndFilterResult(block, filter, non_equal_conditions.other_eq_cond_from_in_name, isAntiJoin(kind));
     assert(block_rows == filter.size());
 
-    if (isInnerJoin(kind) || isNecessaryKindToUseRowFlaggedHashMap(kind))
+    if (isInnerJoin(kind) || (isNecessaryKindToUseRowFlaggedHashMap(kind) && kind != ASTTableJoin::Kind::Full))
     {
         erase_useless_column(block);
         /// inner | rightSemi | rightAnti | rightOuter join,  just use other_filter_column to filter result
         for (size_t i = 0; i < block.columns(); ++i)
             block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(filter, -1);
         return;
+    }
+
+    PointerHelper::ArrayType * full_join_mapped_entries = nullptr;
+    if (kind == ASTTableJoin::Kind::Full)
+    {
+        RUNTIME_CHECK(!flag_mapped_entry_helper_name.empty());
+        auto & mapped_column = block.getByName(flag_mapped_entry_helper_name).column;
+        auto mutable_mapped_column = (*std::move(mapped_column)).mutate();
+        auto & ptr_col = static_cast<PointerHelper::ColumnType &>(*mutable_mapped_column);
+        full_join_mapped_entries = &ptr_col.getData();
+        mapped_column = std::move(mutable_mapped_column);
     }
 
     bool is_semi_family = isSemiFamily(kind) || isLeftOuterSemiFamily(kind);
@@ -996,8 +1007,12 @@ void Join::handleOtherConditions(Block & block, IColumn::Filter * anti_filter, I
         if (prev_offset < current_offset)
         {
             /// for outer join, at least one row must be kept
-            if (isLeftOuterJoin(kind) && !has_row_kept)
+            if ((isLeftOuterJoin(kind) || kind == ASTTableJoin::Kind::Full) && !has_row_kept)
+            {
                 row_filter[prev_offset] = 1;
+                if (full_join_mapped_entries != nullptr)
+                    (*full_join_mapped_entries)[prev_offset] = 0;
+            }
             if (isAntiJoin(kind))
             {
                 if (has_row_kept && !(*anti_filter)[i])
@@ -1014,9 +1029,9 @@ void Join::handleOtherConditions(Block & block, IColumn::Filter * anti_filter, I
         prev_offset = current_offset;
     }
     erase_useless_column(block);
-    if (isLeftOuterJoin(kind))
+    if (isLeftOuterJoin(kind) || kind == ASTTableJoin::Kind::Full)
     {
-        /// for left join, convert right column to null if not joined
+        /// for left/full join, convert right column to null if not joined
         applyNullToNotMatchedRows(block, right_sample_block, *filter_column);
         for (size_t i = 0; i < block.columns(); ++i)
             block.getByPosition(i).column = block.getByPosition(i).column->filter(row_filter, -1);
@@ -1331,6 +1346,8 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info, const JoinBui
             for (size_t i = 0; i < block.rows(); ++i)
             {
                 auto ptr_value = container[i];
+                if (ptr_value == 0)
+                    continue;
                 auto * current = reinterpret_cast<RowRefListWithUsedFlag *>(ptr_value);
                 current->setUsed();
             }
@@ -1340,7 +1357,7 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info, const JoinBui
                 // Return build table header for right semi/anti join
                 block = right_sample_block;
             }
-            else if (kind == ASTTableJoin::Kind::RightOuter)
+            else if (kind == ASTTableJoin::Kind::RightOuter || kind == ASTTableJoin::Kind::Full)
             {
                 block.erase(flag_mapped_entry_helper_name);
             }

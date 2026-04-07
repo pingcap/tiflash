@@ -19,11 +19,63 @@
 #include <Debug/MockExecutor/ExecutorBinder.h>
 #include <Debug/MockExecutor/JoinBinder.h>
 #include <Flash/Coprocessor/DAGCodec.h>
+#include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 
 namespace DB::mock
 {
+namespace
+{
+void appendJoinSchema(DAGSchema & output_schema, const DAGSchema & input_schema, bool make_nullable)
+{
+    for (const auto & field : input_schema)
+    {
+        if (make_nullable && field.second.hasNotNullFlag())
+            output_schema.push_back(toNullableDAGColumnInfo(field));
+        else
+            output_schema.push_back(field);
+    }
+}
+
+void buildLeftSideJoinSchema(DAGSchema & schema, const DAGSchema & left_schema, tipb::JoinType tp)
+{
+    appendJoinSchema(schema, left_schema, JoinInterpreterHelper::makeLeftJoinSideNullable(tp));
+}
+
+void buildRightSideJoinSchema(DAGSchema & schema, const DAGSchema & right_schema, tipb::JoinType tp)
+{
+    /// Note: for semi join, the right table column is ignored
+    /// but for (anti) left outer semi join, a 1/0 (uint8) field is pushed back
+    /// indicating whether right table has matching row(s), see comment in ASTTableJoin::Kind for details.
+    if (tp == tipb::JoinType::TypeLeftOuterSemiJoin || tp == tipb::JoinType::TypeAntiLeftOuterSemiJoin)
+    {
+        tipb::FieldType field_type{};
+        field_type.set_tp(TiDB::TypeTiny);
+        field_type.set_charset("binary");
+        field_type.set_collate(TiDB::ITiDBCollator::BINARY);
+        field_type.set_flag(0);
+        field_type.set_flen(-1);
+        field_type.set_decimal(-1);
+        schema.push_back(std::make_pair("", TiDB::fieldTypeToColumnInfo(field_type)));
+    }
+    else if (tp != tipb::JoinType::TypeSemiJoin && tp != tipb::JoinType::TypeAntiSemiJoin)
+    {
+        appendJoinSchema(schema, right_schema, JoinInterpreterHelper::makeRightJoinSideNullable(tp));
+    }
+}
+
+DAGSchema buildOtherConditionSchema(
+    const DAGSchema & left_schema,
+    const DAGSchema & right_schema,
+    tipb::JoinType join_type)
+{
+    DAGSchema merged_children_schema;
+    appendJoinSchema(merged_children_schema, left_schema, JoinInterpreterHelper::makeLeftJoinSideNullable(join_type));
+    appendJoinSchema(merged_children_schema, right_schema, JoinInterpreterHelper::makeRightJoinSideNullable(join_type));
+    return merged_children_schema;
+}
+} // namespace
 
 void JoinBinder::addRuntimeFilter(MockRuntimeFilter & rf)
 {
@@ -95,22 +147,8 @@ void JoinBinder::columnPrune(std::unordered_set<String> & used_columns)
 
     /// update output schema
     output_schema.clear();
-
-    for (auto & field : children[0]->output_schema)
-    {
-        if (tp == tipb::TypeRightOuterJoin && field.second.hasNotNullFlag())
-            output_schema.push_back(toNullableDAGColumnInfo(field));
-        else
-            output_schema.push_back(field);
-    }
-
-    for (auto & field : children[1]->output_schema)
-    {
-        if (tp == tipb::TypeLeftOuterJoin && field.second.hasNotNullFlag())
-            output_schema.push_back(toNullableDAGColumnInfo(field));
-        else
-            output_schema.push_back(field);
-    }
+    buildLeftSideJoinSchema(output_schema, children[0]->output_schema, tp);
+    buildRightSideJoinSchema(output_schema, children[1]->output_schema, tp);
 }
 
 void JoinBinder::fillJoinKeyAndFieldType(
@@ -187,11 +225,8 @@ bool JoinBinder::toTiPBExecutor(
         astToPB(children[1]->output_schema, expr, cond, collator_id, context);
     }
 
-    DAGSchema merged_children_schema{children[0]->output_schema};
-    merged_children_schema.insert(
-        merged_children_schema.end(),
-        children[1]->output_schema.begin(),
-        children[1]->output_schema.end());
+    DAGSchema merged_children_schema
+        = buildOtherConditionSchema(children[0]->output_schema, children[1]->output_schema, tp);
 
     for (const auto & expr : other_conds)
     {
@@ -291,45 +326,6 @@ void JoinBinder::toMPPSubPlan(
 
     exchange_map[left_exchange_receiver->name] = std::make_pair(left_exchange_receiver, left_exchange_sender);
     exchange_map[right_exchange_receiver->name] = std::make_pair(right_exchange_receiver, right_exchange_sender);
-}
-
-static void buildLeftSideJoinSchema(DAGSchema & schema, const DAGSchema & left_schema, tipb::JoinType tp)
-{
-    for (const auto & field : left_schema)
-    {
-        if (tp == tipb::JoinType::TypeRightOuterJoin && field.second.hasNotNullFlag())
-            schema.push_back(toNullableDAGColumnInfo(field));
-        else
-            schema.push_back(field);
-    }
-}
-
-static void buildRightSideJoinSchema(DAGSchema & schema, const DAGSchema & right_schema, tipb::JoinType tp)
-{
-    /// Note: for semi join, the right table column is ignored
-    /// but for (anti) left outer semi join, a 1/0 (uint8) field is pushed back
-    /// indicating whether right table has matching row(s), see comment in ASTTableJoin::Kind for details.
-    if (tp == tipb::JoinType::TypeLeftOuterSemiJoin || tp == tipb::JoinType::TypeAntiLeftOuterSemiJoin)
-    {
-        tipb::FieldType field_type{};
-        field_type.set_tp(TiDB::TypeTiny);
-        field_type.set_charset("binary");
-        field_type.set_collate(TiDB::ITiDBCollator::BINARY);
-        field_type.set_flag(0);
-        field_type.set_flen(-1);
-        field_type.set_decimal(-1);
-        schema.push_back(std::make_pair("", TiDB::fieldTypeToColumnInfo(field_type)));
-    }
-    else if (tp != tipb::JoinType::TypeSemiJoin && tp != tipb::JoinType::TypeAntiSemiJoin)
-    {
-        for (const auto & field : right_schema)
-        {
-            if (tp == tipb::JoinType::TypeLeftOuterJoin && field.second.hasNotNullFlag())
-                schema.push_back(toNullableDAGColumnInfo(field));
-            else
-                schema.push_back(field);
-        }
-    }
 }
 
 // compileJoin constructs a mocked Join executor node, note that all conditional expression params can be default

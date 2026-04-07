@@ -847,6 +847,8 @@ String getJoinTypeName(const tipb::JoinType & tp)
         return "LeftOuterJoin";
     case tipb::JoinType::TypeRightOuterJoin:
         return "RightOuterJoin";
+    case tipb::JoinType::TypeFullOuterJoin:
+        return "FullOuterJoin";
     case tipb::JoinType::TypeLeftOuterSemiJoin:
         return "LeftOuterSemiJoin";
     case tipb::JoinType::TypeAntiSemiJoin:

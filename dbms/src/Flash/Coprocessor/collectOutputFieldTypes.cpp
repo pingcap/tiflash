@@ -14,6 +14,7 @@
 
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Flash/Coprocessor/collectOutputFieldTypes.h>
 #include <TiDB/Schema/TiDB.h>
 #include <common/types.h>
@@ -172,9 +173,9 @@ bool collectForJoin(std::vector<tipb::FieldType> & output_field_types, const tip
     // collect output_field_types for join self
     for (auto & field_type : children_output_field_types[0])
     {
-        if (executor.join().join_type() == tipb::JoinType::TypeRightOuterJoin)
+        if (JoinInterpreterHelper::makeLeftJoinSideNullable(executor.join().join_type()))
         {
-            /// the type of left column for right join is always nullable
+            /// the type of left column for right/full join is always nullable
             auto updated_field_type = field_type;
             updated_field_type.set_flag(
                 static_cast<UInt32>(updated_field_type.flag()) & (~static_cast<UInt32>(TiDB::ColumnFlagNotNull)));
@@ -210,9 +211,9 @@ bool collectForJoin(std::vector<tipb::FieldType> & output_field_types, const tip
         /// for semi/anti semi join, the right table column is ignored
         for (auto & field_type : children_output_field_types[1])
         {
-            if (executor.join().join_type() == tipb::JoinType::TypeLeftOuterJoin)
+            if (JoinInterpreterHelper::makeRightJoinSideNullable(executor.join().join_type()))
             {
-                /// the type of right column for left join is always nullable
+                /// the type of right column for left/full join is always nullable
                 auto updated_field_type = field_type;
                 updated_field_type.set_flag(
                     updated_field_type.flag() & (~static_cast<UInt32>(TiDB::ColumnFlagNotNull)));

@@ -575,6 +575,62 @@ try
 }
 CATCH
 
+TEST_F(SpillJoinTestRunner, FullOuterJoinWithOtherConditionSpill)
+try
+{
+    UInt64 max_block_size = 800;
+    size_t original_max_streams = 20;
+    UInt64 max_bytes_before_external_join = 20000;
+    String left_table_name = "left_table_10_concurrency";
+    String right_table_name = "right_table_10_concurrency";
+
+    WRAP_FOR_SPILL_TEST_BEGIN
+    auto request = context.scan("outer_join_test", left_table_name)
+                       .join(
+                           context.scan("outer_join_test", right_table_name),
+                           tipb::JoinType::TypeFullOuterJoin,
+                           {col("a")},
+                           {},
+                           {},
+                           {lt(col(left_table_name + ".b"), col(right_table_name + ".b"))},
+                           {},
+                           0,
+                           false,
+                           1)
+                       .project(
+                           {fmt::format("{}.a", left_table_name),
+                            fmt::format("{}.b", left_table_name),
+                            fmt::format("{}.a", right_table_name),
+                            fmt::format("{}.b", right_table_name)})
+                       .build(context);
+    auto request_column_prune = context.scan("outer_join_test", left_table_name)
+                                    .join(
+                                        context.scan("outer_join_test", right_table_name),
+                                        tipb::JoinType::TypeFullOuterJoin,
+                                        {col("a")},
+                                        {},
+                                        {},
+                                        {lt(col(left_table_name + ".b"), col(right_table_name + ".b"))},
+                                        {},
+                                        0,
+                                        false,
+                                        1)
+                                    .aggregation({Count(lit(static_cast<UInt64>(1)))}, {})
+                                    .build(context);
+
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
+    context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
+    auto ref_columns = executeStreams(request, original_max_streams);
+
+    context.context->setSetting(
+        "max_bytes_before_external_join",
+        Field(static_cast<UInt64>(max_bytes_before_external_join)));
+    ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
+    ASSERT_COLUMNS_EQ_UR(genScalarCountResults(ref_columns), executeStreams(request_column_prune, 2));
+    WRAP_FOR_SPILL_TEST_END
+}
+CATCH
+
 #undef WRAP_FOR_SPILL_TEST_BEGIN
 #undef WRAP_FOR_SPILL_TEST_END
 
