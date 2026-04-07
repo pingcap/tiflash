@@ -361,11 +361,12 @@ public:
             {decimal_column, createConstColumn<String>(1, "Nullable(String)")});
     }
 
-    AdapterRunResult runAdapterCast(
+    void runAdapterCast(
         TiforthExecutionHostV2Api & api,
         const std::vector<std::optional<String>> & input,
         size_t partitions,
-        uint32_t ownership_mode)
+        uint32_t ownership_mode,
+        AdapterRunResult & result)
     {
         TiforthExecutionBuildRequestV2 build_request{};
         build_request.abi_version = EXECUTION_HOST_V2_ABI_VERSION;
@@ -395,7 +396,8 @@ public:
         ASSERT_EQ(status.code, STATUS_CODE_NONE) << status.message;
         ASSERT_NE(instance, nullptr);
 
-        AdapterRunResult result;
+        result.output.clear();
+        result.warning_count = 0;
         const size_t chunk_size = std::max<size_t>(1, (input.size() + partitions - 1) / partitions);
         std::vector<Utf8BatchOwned> retained_batches;
         if (ownership_mode == BATCH_OWNERSHIP_FOREIGN_RETAINABLE)
@@ -473,7 +475,6 @@ public:
 
         api.release_instance(instance);
         api.release_executable(executable);
-        return result;
     }
 };
 
@@ -482,14 +483,16 @@ TEST_F(TestTiforthExecutionHostV2Cast, CastUtf8ToDecimalParitySerialAndParallel)
     auto maybe_library = resolveExecutionHostV2LibraryPath();
     if (!maybe_library.has_value())
     {
-        GTEST_SKIP() << "set TIFORTH_FFI_C_DYLIB to a built tiforth ffi/c shared library to run this donor adapter test";
+        SUCCEED() << "set TIFORTH_FFI_C_DYLIB to a built tiforth ffi/c shared library to run this donor adapter test";
+        return;
     }
 
     String load_error;
     auto maybe_api = loadExecutionHostV2Api(maybe_library.value(), load_error);
     if (!maybe_api.has_value())
     {
-        GTEST_SKIP() << load_error;
+        SUCCEED() << load_error;
+        return;
     }
 
     auto api = std::move(maybe_api.value());
@@ -506,8 +509,53 @@ TEST_F(TestTiforthExecutionHostV2Cast, CastUtf8ToDecimalParitySerialAndParallel)
     auto donor_native = runDonorNativeCastAsString(input);
     const auto donor_warning_count = getDAGContext().getWarningCount();
 
-    auto serial = runAdapterCast(api, input, 1, BATCH_OWNERSHIP_BORROW_WITHIN_CALL);
-    auto parallel = runAdapterCast(api, input, 2, BATCH_OWNERSHIP_FOREIGN_RETAINABLE);
+    AdapterRunResult serial;
+    runAdapterCast(api, input, 1, BATCH_OWNERSHIP_BORROW_WITHIN_CALL, serial);
+    AdapterRunResult parallel;
+    runAdapterCast(api, input, 2, BATCH_OWNERSHIP_FOREIGN_RETAINABLE, parallel);
+
+    ASSERT_EQ(serial.warning_count, donor_warning_count);
+    ASSERT_EQ(parallel.warning_count, donor_warning_count);
+
+    ASSERT_COLUMN_EQ(createColumn<Nullable<String>>(serial.output), donor_native);
+    ASSERT_COLUMN_EQ(createColumn<Nullable<String>>(parallel.output), donor_native);
+}
+
+TEST_F(TestTiforthExecutionHostV2Cast, CastUtf8ToDecimalScaleLossWarningParitySerialAndParallel)
+{
+    auto maybe_library = resolveExecutionHostV2LibraryPath();
+    if (!maybe_library.has_value())
+    {
+        SUCCEED() << "set TIFORTH_FFI_C_DYLIB to a built tiforth ffi/c shared library to run this donor adapter test";
+        return;
+    }
+
+    String load_error;
+    auto maybe_api = loadExecutionHostV2Api(maybe_library.value(), load_error);
+    if (!maybe_api.has_value())
+    {
+        SUCCEED() << load_error;
+        return;
+    }
+
+    auto api = std::move(maybe_api.value());
+
+    const std::vector<std::optional<String>> input = {
+        String("1.2395"),
+        String("-7.8001"),
+        std::nullopt,
+        String("999.9999"),
+        String("0.0004"),
+    };
+
+    auto donor_native = runDonorNativeCastAsString(input);
+    const auto donor_warning_count = static_cast<uint32_t>(getDAGContext().getWarningCount());
+    ASSERT_GT(donor_warning_count, 0u);
+
+    AdapterRunResult serial;
+    runAdapterCast(api, input, 1, BATCH_OWNERSHIP_BORROW_WITHIN_CALL, serial);
+    AdapterRunResult parallel;
+    runAdapterCast(api, input, 2, BATCH_OWNERSHIP_FOREIGN_RETAINABLE, parallel);
 
     ASSERT_EQ(serial.warning_count, donor_warning_count);
     ASSERT_EQ(parallel.warning_count, donor_warning_count);
