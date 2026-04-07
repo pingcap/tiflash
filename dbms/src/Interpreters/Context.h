@@ -392,10 +392,14 @@ public:
     void setMarkCache(size_t cache_size_in_bytes);
     std::shared_ptr<MarkCache> getMarkCache() const;
     void dropMarkCache() const;
+    /// Reset MarkCache and report whether it was enabled before the reset.
+    bool dropMarkCacheAndReport() const;
 
     void setMinMaxIndexCache(size_t cache_size_in_bytes);
     std::shared_ptr<DM::MinMaxIndexCache> getMinMaxIndexCache() const;
     void dropMinMaxIndexCache() const;
+    /// Reset MinMaxIndexCache and report whether it was enabled before the reset.
+    bool dropMinMaxIndexCacheAndReport() const;
 
     void setLocalIndexCache(size_t light_local_index_cache, size_t heavy_cache_entities);
     std::shared_ptr<DM::LocalIndexCache> getLightLocalIndexCache() const;

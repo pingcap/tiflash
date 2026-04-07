@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <IO/Checksum/ChecksumBuffer.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -53,10 +54,26 @@ off_t FramedChecksumReadBuffer<Backend>::doSeek(off_t offset, int whence)
     auto result = in->seek(static_cast<off_t>(header_offset), SEEK_SET);
     if (result < 0)
     {
+        LOG_WARNING(
+            Logger::get("FramedChecksumReadBuffer"),
+            "failed to seek underlying reader while loading checksum frame, file={} whence={} target_frame={} "
+            "target_offset={} header_offset={} underlying_seek_ret={}",
+            in->getFileName(),
+            whence,
+            target_frame,
+            target_offset,
+            header_offset,
+            result);
         throw TiFlashException(
             Errors::Checksum::IOFailure,
-            "checksum framed file {} is not seekable",
-            in->getFileName());
+            "failed to seek checksum framed file {} to frame boundary: underlying reader returned {} for "
+            "header_offset={} target_frame={} target_offset={} whence={}",
+            in->getFileName(),
+            result,
+            header_offset,
+            target_frame,
+            target_offset,
+            whence);
     }
     auto length = expectRead(
         working_buffer.begin() - sizeof(ChecksumFrame<Backend>),

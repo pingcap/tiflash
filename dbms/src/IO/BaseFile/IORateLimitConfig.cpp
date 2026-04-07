@@ -52,6 +52,7 @@ void IORateLimitConfig::parse(const String & storage_io_rate_limit, const Logger
     readConfig(config, "max_bytes_per_sec", max_bytes_per_sec);
     readConfig(config, "max_read_bytes_per_sec", max_read_bytes_per_sec);
     readConfig(config, "max_write_bytes_per_sec", max_write_bytes_per_sec);
+    readConfig(config, "s3_max_read_bytes_per_sec", s3_max_read_bytes_per_sec);
     readConfig(config, "foreground_write_weight", fg_write_weight);
     readConfig(config, "background_write_weight", bg_write_weight);
     readConfig(config, "foreground_read_weight", fg_read_weight);
@@ -72,6 +73,7 @@ std::string IORateLimitConfig::toString() const
 {
     return fmt::format(
         "IORateLimitConfig{{max_bytes_per_sec={} max_read_bytes_per_sec={} max_write_bytes_per_sec={} "
+        "s3_max_read_bytes_per_sec={} "
         "use_max_bytes_per_sec={} "
         "fg_write_weight={} bg_write_weight={} fg_read_weight={} bg_read_weight={} "
         "fg_write_max_bytes_per_sec={} bg_write_max_bytes_per_sec={} "
@@ -80,6 +82,7 @@ std::string IORateLimitConfig::toString() const
         max_bytes_per_sec,
         max_read_bytes_per_sec,
         max_write_bytes_per_sec,
+        s3_max_read_bytes_per_sec,
         use_max_bytes_per_sec,
         fg_write_weight,
         bg_write_weight,
@@ -165,11 +168,13 @@ UInt64 IORateLimitConfig::getReadMaxBytesPerSec() const
 bool IORateLimitConfig::operator==(const IORateLimitConfig & config) const
 {
     return config.max_bytes_per_sec == max_bytes_per_sec && config.max_read_bytes_per_sec == max_read_bytes_per_sec
-        && config.max_write_bytes_per_sec == max_write_bytes_per_sec && config.bg_write_weight == bg_write_weight
-        && config.fg_write_weight == fg_write_weight && config.bg_read_weight == bg_read_weight
-        && config.fg_read_weight == fg_read_weight && config.emergency_pct == emergency_pct
-        && config.high_pct == high_pct && config.medium_pct == medium_pct && config.tune_base == tune_base
-        && config.min_bytes_per_sec == min_bytes_per_sec && config.auto_tune_sec == auto_tune_sec;
+        && config.max_write_bytes_per_sec == max_write_bytes_per_sec
+        && config.s3_max_read_bytes_per_sec == s3_max_read_bytes_per_sec //
+        && config.bg_write_weight == bg_write_weight && config.fg_write_weight == fg_write_weight
+        && config.bg_read_weight == bg_read_weight && config.fg_read_weight == fg_read_weight
+        && config.emergency_pct == emergency_pct && config.high_pct == high_pct && config.medium_pct == medium_pct
+        && config.tune_base == tune_base && config.min_bytes_per_sec == min_bytes_per_sec
+        && config.auto_tune_sec == auto_tune_sec;
 }
 
 } // namespace DB

@@ -115,6 +115,8 @@ namespace DB
     M(exception_when_fetch_disagg_pages)                     \
     M(cop_send_failure)                                      \
     M(file_cache_fg_download_fail)                           \
+    M(file_cache_bg_download_fail)                           \
+    M(file_cache_bg_download_schedule_fail)                  \
     M(force_set_parallel_prehandle_threshold)                \
     M(force_raise_prehandle_exception)                       \
     M(force_agg_on_partial_block)                            \
@@ -135,6 +137,7 @@ namespace DB
     M(force_join_v2_probe_disable_lm)                        \
     M(force_s3_random_access_file_init_fail)                 \
     M(force_s3_random_access_file_read_fail)                 \
+    M(force_s3_random_access_file_seek_chunked)              \
     M(force_release_snap_meet_null_storage)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M)    \

@@ -1217,6 +1217,15 @@ void Context::dropMarkCache() const
         shared->mark_cache->reset();
 }
 
+bool Context::dropMarkCacheAndReport() const
+{
+    auto lock = getLock();
+    if (shared->mark_cache == nullptr)
+        return false;
+    shared->mark_cache->reset();
+    return true;
+}
+
 
 void Context::setMinMaxIndexCache(size_t cache_size_in_bytes)
 {
@@ -1239,6 +1248,15 @@ void Context::dropMinMaxIndexCache() const
     auto lock = getLock();
     if (shared->minmax_index_cache)
         shared->minmax_index_cache->reset();
+}
+
+bool Context::dropMinMaxIndexCacheAndReport() const
+{
+    auto lock = getLock();
+    if (shared->minmax_index_cache == nullptr)
+        return false;
+    shared->minmax_index_cache->reset();
+    return true;
 }
 
 void Context::setLocalIndexCache(size_t light_local_index_cache, size_t heavy_cache_entities)
