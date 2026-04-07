@@ -262,11 +262,6 @@ Block ScanHashMapAfterProbeBlockInputStream::readImpl()
                 fillColumnsUsingCurrentPartition<false, true>(columns_left, columns_right, row_counter_column);
             break;
         case ASTTableJoin::Kind::Full:
-            if (parent.has_other_condition)
-                fillColumnsUsingCurrentPartition<true, false>(columns_left, columns_right, row_counter_column);
-            else
-                fillColumnsUsingCurrentPartition<false, false>(columns_left, columns_right, row_counter_column);
-            break;
         case ASTTableJoin::Kind::RightAnti:
         case ASTTableJoin::Kind::RightOuter:
             if (parent.has_other_condition)

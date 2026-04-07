@@ -1409,8 +1409,9 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info, const JoinBui
                 // Return build table header for right semi/anti join
                 block = right_sample_block;
             }
-            else if (kind == ASTTableJoin::Kind::RightOuter || kind == ASTTableJoin::Kind::Full)
+            else
             {
+                // flag_mapped_entry_helper_name is only used inside join, so it will not be returned to outside, we can safely remove it after setting hash table used flag.
                 block.erase(flag_mapped_entry_helper_name);
             }
         }
