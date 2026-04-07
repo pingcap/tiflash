@@ -37,6 +37,7 @@ namespace
 
 constexpr uint32_t EXECUTION_HOST_V2_ABI_VERSION = 4;
 constexpr uint32_t PLAN_KIND_INNER_HASH_JOIN_UTF8_KEY_INT64_PAYLOAD = 2;
+constexpr uint32_t PLAN_KIND_PROBE_OUTER_HASH_JOIN_INT64_KEY_INT64_PAYLOAD = 6;
 constexpr uint32_t PLAN_KIND_BUILD_OUTER_HASH_JOIN_INT64_KEY_INT64_PAYLOAD = 10;
 constexpr uint32_t INPUT_ID_BUILD = 0;
 constexpr uint32_t INPUT_ID_PROBE = 1;
@@ -549,6 +550,20 @@ public:
             {{"join_key", TiDB::TP::TypeLongLong}, {"probe_payload", TiDB::TP::TypeLongLong}},
             {toNullableVec<Int64>("join_key", {1, 5}),
              toNullableVec<Int64>("probe_payload", {100, 500})});
+
+        context.addMockTable(
+            "tiforth_host_v2",
+            "probe_outer_build_input",
+            {{"join_key", TiDB::TP::TypeLongLong}, {"build_payload", TiDB::TP::TypeLongLong}},
+            {toNullableVec<Int64>("join_key", {1, 1, 5}),
+             toNullableVec<Int64>("build_payload", {10, 11, 50})});
+
+        context.addMockTable(
+            "tiforth_host_v2",
+            "probe_outer_probe_input",
+            {{"join_key", TiDB::TP::TypeLongLong}, {"probe_payload", TiDB::TP::TypeLongLong}},
+            {toNullableVec<Int64>("join_key", {1, 2, {}, 5}),
+             toNullableVec<Int64>("probe_payload", {100, 200, 300, 500})});
     }
 
     DonorRunResult runDonorNativeInnerJoin(size_t concurrency)
@@ -575,6 +590,23 @@ public:
                            .join(
                                context.scan("tiforth_host_v2", "build_outer_build_input"),
                                tipb::JoinType::TypeRightOuterJoin,
+                               {col("join_key")})
+                           .project({"build_payload", "probe_payload"})
+                           .build(context);
+
+        DonorRunResult result;
+        result.rows = canonicalizeRows(joinRowsFromColumns(executeStreams(request, concurrency)));
+        result.warning_count = getDAGContext().getWarningCount();
+        return result;
+    }
+
+    DonorRunResult runDonorNativeProbeOuterJoin(size_t concurrency)
+    {
+        getDAGContext().clearWarnings();
+        auto request = context.scan("tiforth_host_v2", "probe_outer_probe_input")
+                           .join(
+                               context.scan("tiforth_host_v2", "probe_outer_build_input"),
+                               tipb::JoinType::TypeLeftOuterJoin,
                                {col("join_key")})
                            .project({"build_payload", "probe_payload"})
                            .build(context);
@@ -827,6 +859,127 @@ public:
 
         result.rows = canonicalizeRows(std::move(result.rows));
     }
+
+    void runAdapterProbeOuterJoin(
+        TiforthExecutionHostV2Api & api,
+        size_t partitions,
+        uint32_t ownership_mode,
+        AdapterRunResult & result)
+    {
+        TiforthExecutionBuildRequestV2 build_request{};
+        build_request.abi_version = EXECUTION_HOST_V2_ABI_VERSION;
+        build_request.plan_kind = PLAN_KIND_PROBE_OUTER_HASH_JOIN_INT64_KEY_INT64_PAYLOAD;
+        build_request.ambient_requirement_mask = 0;
+        build_request.sql_mode = 0;
+        build_request.session_charset = 0;
+        build_request.default_collation = 0;
+        build_request.decimal_precision_is_set = false;
+        build_request.decimal_precision = 0;
+        build_request.decimal_scale_is_set = false;
+        build_request.decimal_scale = 0;
+        build_request.max_block_size = 1;
+
+        TiforthStatusV2 status{};
+        status.abi_version = EXECUTION_HOST_V2_ABI_VERSION;
+
+        TiforthExecutionExecutableHandleV2 * executable = nullptr;
+        api.build(&build_request, &status, &executable);
+        ASSERT_EQ(status.kind, STATUS_KIND_OK) << status.message;
+        ASSERT_EQ(status.code, STATUS_CODE_NONE) << status.message;
+        ASSERT_NE(executable, nullptr);
+
+        TiforthExecutionInstanceHandleV2 * instance = nullptr;
+        api.open(executable, &status, &instance);
+        ASSERT_EQ(status.kind, STATUS_KIND_OK) << status.message;
+        ASSERT_EQ(status.code, STATUS_CODE_NONE) << status.message;
+        ASSERT_NE(instance, nullptr);
+
+        result.rows.clear();
+        result.warning_count = 0;
+        std::vector<Int64JoinBatchOwned> retained_batches;
+        if (ownership_mode == BATCH_OWNERSHIP_FOREIGN_RETAINABLE)
+            retained_batches.reserve(8);
+
+        auto drain_output = [&]() {
+            while (status.code == STATUS_CODE_MORE_OUTPUT_AVAILABLE)
+            {
+                TiforthBatchViewV2 continued_output{};
+                continued_output.abi_version = EXECUTION_HOST_V2_ABI_VERSION;
+                api.continue_output(instance, &status, &continued_output);
+
+                ASSERT_EQ(status.kind, STATUS_KIND_OK) << status.message;
+                result.warning_count += status.warning_count;
+                appendJoinOutputRows(continued_output, result.rows);
+            }
+            ASSERT_EQ(status.code, STATUS_CODE_NONE) << status.message;
+        };
+
+        auto drive_input_rows = [&](const std::vector<Int64JoinInputRow> & rows, uint32_t input_id) {
+            const size_t chunk_size = std::max<size_t>(1, (rows.size() + partitions - 1) / partitions);
+            for (size_t start = 0; start < rows.size(); start += chunk_size)
+            {
+                const size_t end = std::min(rows.size(), start + chunk_size);
+                std::vector<Int64JoinInputRow> chunk(
+                    rows.begin() + static_cast<ptrdiff_t>(start),
+                    rows.begin() + static_cast<ptrdiff_t>(end));
+
+                const TiforthBatchViewV2 * input_batch = nullptr;
+                std::optional<Int64JoinBatchOwned> borrowed_batch;
+                if (ownership_mode == BATCH_OWNERSHIP_FOREIGN_RETAINABLE)
+                {
+                    retained_batches.emplace_back(chunk, ownership_mode);
+                    input_batch = &retained_batches.back().batch;
+                }
+                else
+                {
+                    borrowed_batch.emplace(chunk, ownership_mode);
+                    input_batch = &borrowed_batch->batch;
+                }
+
+                TiforthBatchViewV2 output{};
+                output.abi_version = EXECUTION_HOST_V2_ABI_VERSION;
+                api.drive_input_batch(instance, input_id, input_batch, &status, &output);
+
+                ASSERT_EQ(status.kind, STATUS_KIND_OK) << status.message;
+                result.warning_count += status.warning_count;
+                appendJoinOutputRows(output, result.rows);
+                drain_output();
+            }
+        };
+
+        const std::vector<Int64JoinInputRow> build_rows = {
+            {1, 10},
+            {1, 11},
+            {5, 50},
+        };
+        const std::vector<Int64JoinInputRow> probe_rows = {
+            {1, 100},
+            {2, 200},
+            {std::nullopt, 300},
+            {5, 500},
+        };
+
+        drive_input_rows(build_rows, INPUT_ID_BUILD);
+
+        api.drive_end_of_input(instance, INPUT_ID_BUILD, &status);
+        ASSERT_EQ(status.kind, STATUS_KIND_OK) << status.message;
+        drain_output();
+
+        drive_input_rows(probe_rows, INPUT_ID_PROBE);
+
+        api.drive_end_of_input(instance, INPUT_ID_PROBE, &status);
+        ASSERT_EQ(status.kind, STATUS_KIND_OK) << status.message;
+        drain_output();
+
+        api.finish(instance, &status);
+        ASSERT_EQ(status.kind, STATUS_KIND_OK) << status.message;
+        ASSERT_EQ(status.code, STATUS_CODE_NONE) << status.message;
+
+        api.release_instance(instance);
+        api.release_executable(executable);
+
+        result.rows = canonicalizeRows(std::move(result.rows));
+    }
 };
 
 TEST_F(TestTiforthExecutionHostV2InnerHashJoin, InnerHashJoinPayloadParitySerialAndParallel)
@@ -895,6 +1048,43 @@ TEST_F(TestTiforthExecutionHostV2InnerHashJoin, BuildOuterHashJoinPayloadParityS
     runAdapterBuildOuterJoin(api, 1, BATCH_OWNERSHIP_BORROW_WITHIN_CALL, adapter_serial);
     AdapterRunResult adapter_parallel;
     runAdapterBuildOuterJoin(api, 2, BATCH_OWNERSHIP_FOREIGN_RETAINABLE, adapter_parallel);
+
+    ASSERT_EQ(adapter_serial.warning_count, donor_serial.warning_count);
+    ASSERT_EQ(adapter_parallel.warning_count, donor_serial.warning_count);
+
+    ASSERT_EQ(adapter_serial.rows, donor_serial.rows);
+    ASSERT_EQ(adapter_parallel.rows, donor_serial.rows);
+}
+
+TEST_F(TestTiforthExecutionHostV2InnerHashJoin, ProbeOuterHashJoinPayloadParitySerialAndParallel)
+{
+    auto maybe_library = resolveExecutionHostV2LibraryPath();
+    if (!maybe_library.has_value())
+    {
+        SUCCEED() << "set TIFORTH_FFI_C_DYLIB to a built tiforth ffi/c shared library to run this donor adapter test";
+        return;
+    }
+
+    String load_error;
+    auto maybe_api = loadExecutionHostV2Api(maybe_library.value(), load_error);
+    if (!maybe_api.has_value())
+    {
+        SUCCEED() << load_error;
+        return;
+    }
+
+    auto api = std::move(maybe_api.value());
+
+    auto donor_serial = runDonorNativeProbeOuterJoin(1);
+    auto donor_parallel = runDonorNativeProbeOuterJoin(2);
+
+    ASSERT_EQ(donor_serial.warning_count, donor_parallel.warning_count);
+    ASSERT_EQ(donor_serial.rows, donor_parallel.rows);
+
+    AdapterRunResult adapter_serial;
+    runAdapterProbeOuterJoin(api, 1, BATCH_OWNERSHIP_BORROW_WITHIN_CALL, adapter_serial);
+    AdapterRunResult adapter_parallel;
+    runAdapterProbeOuterJoin(api, 2, BATCH_OWNERSHIP_FOREIGN_RETAINABLE, adapter_parallel);
 
     ASSERT_EQ(adapter_serial.warning_count, donor_serial.warning_count);
     ASSERT_EQ(adapter_parallel.warning_count, donor_serial.warning_count);
