@@ -605,14 +605,14 @@ TEST_F(TestTiforthExecutionHostV2InnerHashJoin, InnerHashJoinPayloadParitySerial
     auto maybe_library = resolveExecutionHostV2LibraryPath();
     if (!maybe_library.has_value())
     {
-        return;
+        GTEST_SKIP() << "set TIFORTH_FFI_C_DYLIB to a built tiforth ffi/c shared library to run this donor adapter test";
     }
 
     String load_error;
     auto maybe_api = loadExecutionHostV2Api(maybe_library.value(), load_error);
     if (!maybe_api.has_value())
     {
-        return;
+        GTEST_SKIP() << load_error;
     }
 
     auto api = std::move(maybe_api.value());
