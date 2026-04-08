@@ -56,22 +56,36 @@ extern const int TYPE_MISMATCH;
 
 namespace
 {
-ColumnRawPtrs getKeyColumns(const Names & key_names, const Block & block)
+ColumnRawPtrs getKeyColumns(const Names & key_names, const Block & block, const std::vector<UInt8> & is_null_eq = {})
 {
     size_t keys_size = key_names.size();
+    RUNTIME_CHECK(is_null_eq.empty() || is_null_eq.size() == keys_size);
     ColumnRawPtrs key_columns(keys_size);
 
     for (size_t i = 0; i < keys_size; ++i)
     {
         key_columns[i] = block.getByName(key_names[i]).column.get();
 
-        /// We will join only keys, where all components are not NULL.
-        if (key_columns[i]->isColumnNullable())
+        /// Ordinary '=' keys join only nested values where all components are not NULL.
+        /// NullEQ keys must keep their nullable wrapper so nullness can participate in key comparison.
+        if (key_columns[i]->isColumnNullable() && (is_null_eq.empty() || is_null_eq[i] == 0))
             key_columns[i] = &static_cast<const ColumnNullable &>(*key_columns[i]).getNestedColumn();
     }
 
     return key_columns;
 }
+
+bool hasNullableNullEqKey(const Names & key_names, const Block & block, const std::vector<UInt8> & is_null_eq)
+{
+    RUNTIME_CHECK(key_names.size() == is_null_eq.size());
+    for (size_t i = 0; i < key_names.size(); ++i)
+    {
+        if (is_null_eq[i] != 0 && block.getByName(key_names[i]).type->isNullable())
+            return true;
+    }
+    return false;
+}
+
 size_t getRestoreJoinBuildConcurrency(
     size_t total_partitions,
     size_t spilled_partitions,
@@ -101,6 +115,31 @@ size_t getRestoreJoinBuildConcurrency(
     }
 }
 
+String formatNullEqFlags(const std::vector<UInt8> & flags)
+{
+    String result;
+    result.reserve(flags.size() * 2 + 2);
+    result += "[";
+    for (size_t i = 0; i < flags.size(); ++i)
+    {
+        if (i != 0)
+            result += ",";
+        result += flags[i] == 0 ? "0" : "1";
+    }
+    result += "]";
+    return result;
+}
+
+bool hasNullEqKey(const std::vector<UInt8> & flags)
+{
+    for (auto flag : flags)
+    {
+        if (flag != 0)
+            return true;
+    }
+    return false;
+}
+
 } // namespace
 
 using PointerHelper = PointerTypeColumnHelper<sizeof(void *)>;
@@ -116,6 +155,7 @@ const size_t MAX_RESTORE_ROUND_IN_GTEST = 2;
 Join::Join(
     const Names & key_names_left_,
     const Names & key_names_right_,
+    const std::vector<UInt8> & is_null_eq_,
     ASTTableJoin::Kind kind_,
     const String & req_id,
     size_t fine_grained_shuffle_count_,
@@ -145,6 +185,7 @@ Join::Join(
     , may_probe_side_expanded_after_join(mayProbeSideExpandedAfterJoin(kind))
     , key_names_left(key_names_left_)
     , key_names_right(key_names_right_)
+    , is_null_eq(is_null_eq_)
     , build_concurrency(0)
     , active_build_threads(0)
     , probe_concurrency(0)
@@ -207,9 +248,11 @@ Join::Join(
 
     LOG_DEBUG(
         log,
-        "FineGrainedShuffle flag {}, stream count {}",
+        "FineGrainedShuffle flag {}, stream count {}, has_null_eq_key {}, is_null_eq {}",
         enable_fine_grained_shuffle,
-        fine_grained_shuffle_count);
+        fine_grained_shuffle_count,
+        hasNullEqKey(is_null_eq),
+        formatNullEqFlags(is_null_eq));
 }
 
 void Join::meetError(const String & error_message_)
@@ -362,6 +405,7 @@ std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_j
     auto ret = std::make_shared<Join>(
         key_names_left,
         key_names_right,
+        is_null_eq,
         kind,
         join_req_id,
         /// restore join never enable fine grained shuffle
@@ -400,7 +444,16 @@ void Join::initBuild(const Block & sample_block, size_t build_concurrency_)
     if (unlikely(initialized))
         throw Exception("Logical error: Join has been initialized", ErrorCodes::LOGICAL_ERROR);
     initialized = true;
-    join_map_method = chooseJoinMapMethod(getKeyColumns(key_names_right, sample_block), key_sizes, collators);
+    join_map_method = chooseJoinMapMethod(
+        getKeyColumns(key_names_right, sample_block, is_null_eq),
+        key_sizes,
+        collators,
+        is_null_eq);
+    if (hasNullableNullEqKey(key_names_right, sample_block, is_null_eq))
+    {
+        if (join_map_method == JoinMapMethod::serialized)
+            LOG_DEBUG(log, "Use serialized join map method because nullable NullEQ keys do not fit packed fixed keys");
+    }
     build_sample_block = sample_block;
     setBuildConcurrencyAndInitJoinPartition(build_concurrency_);
     hash_join_spill_context->init(build_concurrency);
@@ -680,13 +733,12 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
         }
     }
 
-    /// We will insert to the map only keys, where all components are not NULL.
-    ColumnPtr null_map_holder;
-    ConstNullMapPtr null_map{};
-    extractNestedColumnsAndNullMap(key_columns, null_map_holder, null_map);
-    /// Reuse null_map to record the filtered rows, the rows contains NULL or does not
-    /// match the join filter will not insert to the maps
-    recordFilteredRows(block, non_equal_conditions.right_filter_column, null_map_holder, null_map);
+    /// Build a unified row filter map: ordinary '=' key NULLs and side-condition failures skip insertion,
+    /// while NullEQ key NULLs remain eligible for matching.
+    ColumnPtr row_filter_map_holder;
+    ConstNullMapPtr row_filter_map{};
+    extractJoinKeyColumnsAndFilterNullMap(key_columns, is_null_eq, row_filter_map_holder, row_filter_map);
+    recordFilteredRows(block, non_equal_conditions.right_filter_column, row_filter_map_holder, row_filter_map);
 
     size_t size = stored_block->columns();
 
@@ -721,7 +773,7 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
             key_sizes,
             collators,
             stored_block,
-            null_map,
+            row_filter_map,
             stream_index,
             getBuildConcurrency(),
             enable_fine_grained_shuffle,
@@ -1235,7 +1287,7 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info, const JoinBui
         probe_process_info.hash_join_data->key_columns,
         key_sizes,
         added_columns,
-        probe_process_info.null_map,
+        probe_process_info.row_filter_map,
         current_offset,
         offsets_to_replicate,
         right_indexes,
@@ -1309,8 +1361,9 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info, const JoinBui
                 // Return build table header for right semi/anti join
                 block = right_sample_block;
             }
-            else if (kind == ASTTableJoin::Kind::RightOuter || kind == ASTTableJoin::Kind::Full)
+            else
             {
+                // flag_mapped_entry_helper_name is only used inside join, so it will not be returned to outside, we can safely remove it after setting hash table used flag.
                 block.erase(flag_mapped_entry_helper_name);
             }
         }
@@ -1348,6 +1401,7 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
         restore_config.restore_round};
     probe_process_info.prepareForHashProbe(
         key_names_left,
+        is_null_eq,
         non_equal_conditions.left_filter_column,
         kind,
         strictness,
@@ -1577,8 +1631,8 @@ Block Join::joinBlockNullAwareSemiImpl(ProbeProcessInfo & probe_process_info) co
             max_block_size,
             non_equal_conditions);
         NALeftSideInfo left_side_info(
-            probe_process_info.null_map,
-            probe_process_info.null_aware_join_data->filter_map,
+            probe_process_info.null_aware_join_data->key_null_map,
+            probe_process_info.row_filter_map,
             probe_process_info.null_aware_join_data->all_key_null_map);
         NARightSideInfo right_side_info(
             right_has_all_key_null_row.load(std::memory_order_relaxed),
@@ -1670,6 +1724,7 @@ Block Join::joinBlockSemiImpl(ProbeProcessInfo & probe_process_info) const
         // probe a new block
         probe_process_info.prepareForHashProbe(
             key_names_left,
+            is_null_eq,
             non_equal_conditions.left_filter_column,
             kind,
             strictness,

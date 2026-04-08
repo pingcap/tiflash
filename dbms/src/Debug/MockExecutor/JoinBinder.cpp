@@ -202,6 +202,7 @@ bool JoinBinder::toTiPBExecutor(
     join->set_join_exec_type(tipb::JoinExecType::TypeHashJoin);
     join->set_inner_idx(inner_index);
     join->set_is_null_aware_semi_join(is_null_aware_semi_join);
+    assert(is_null_eq.empty() || is_null_eq.size() == join_cols.size());
 
     for (const auto & key : join_cols)
     {
@@ -218,6 +219,9 @@ bool JoinBinder::toTiPBExecutor(
             join->add_build_types(),
             collator_id);
     }
+
+    for (const auto flag : is_null_eq)
+        join->add_is_null_eq(flag != 0);
 
     for (const auto & expr : left_conds)
     {
@@ -341,6 +345,7 @@ ExecutorBinderPtr compileJoin(
     ExecutorBinderPtr right,
     tipb::JoinType tp,
     const ASTs & join_cols,
+    const std::vector<UInt8> & is_null_eq,
     const ASTs & left_conds,
     const ASTs & right_conds,
     const ASTs & other_conds,
@@ -359,6 +364,7 @@ ExecutorBinderPtr compileJoin(
         output_schema,
         tp,
         join_cols,
+        is_null_eq,
         left_conds,
         right_conds,
         other_conds,
@@ -407,6 +413,6 @@ ExecutorBinderPtr compileJoin(size_t & executor_index, ExecutorBinderPtr left, E
             join_cols.push_back(key);
         }
     }
-    return compileJoin(executor_index, left, right, tp, join_cols);
+    return compileJoin(executor_index, left, right, tp, join_cols, {});
 }
 } // namespace DB::mock

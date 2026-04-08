@@ -143,6 +143,8 @@ struct WithUsedFlag<false, Base> : Base
     M(key_fixed_string)            \
     M(keys128)                     \
     M(keys256)                     \
+    M(nullable_keys128)            \
+    M(nullable_keys256)            \
     M(serialized)
 
 enum class JoinMapMethod
@@ -171,6 +173,8 @@ struct ConcurrentMapsTemplate
     using key_fixed_stringType = ConcurrentHashMapWithSavedHash<StringRef, Mapped>;
     using keys128Type = ConcurrentHashMap<UInt128, Mapped, HashCRC32<UInt128>>;
     using keys256Type = ConcurrentHashMap<UInt256, Mapped, HashCRC32<UInt256>>;
+    using nullable_keys128Type = ConcurrentHashMap<UInt128, Mapped, HashCRC32<UInt128>>;
+    using nullable_keys256Type = ConcurrentHashMap<UInt256, Mapped, HashCRC32<UInt256>>;
     using serializedType = ConcurrentHashMapWithSavedHash<StringRef, Mapped>;
 
     std::unique_ptr<key8Type> key8;
@@ -183,6 +187,8 @@ struct ConcurrentMapsTemplate
     std::unique_ptr<key_fixed_stringType> key_fixed_string;
     std::unique_ptr<keys128Type> keys128;
     std::unique_ptr<keys256Type> keys256;
+    std::unique_ptr<nullable_keys128Type> nullable_keys128;
+    std::unique_ptr<nullable_keys256Type> nullable_keys256;
     std::unique_ptr<serializedType> serialized;
     // TODO: add more cases like Aggregator
 };
@@ -201,6 +207,8 @@ struct MapsTemplate
     using key_fixed_stringType = HashMapWithSavedHash<StringRef, Mapped>;
     using keys128Type = HashMap<UInt128, Mapped, HashCRC32<UInt128>>;
     using keys256Type = HashMap<UInt256, Mapped, HashCRC32<UInt256>>;
+    using nullable_keys128Type = HashMap<UInt128, Mapped, HashCRC32<UInt128>>;
+    using nullable_keys256Type = HashMap<UInt256, Mapped, HashCRC32<UInt256>>;
     using serializedType = HashMapWithSavedHash<StringRef, Mapped>;
 
     std::unique_ptr<key8Type> key8;
@@ -213,6 +221,8 @@ struct MapsTemplate
     std::unique_ptr<key_fixed_stringType> key_fixed_string;
     std::unique_ptr<keys128Type> keys128;
     std::unique_ptr<keys256Type> keys256;
+    std::unique_ptr<nullable_keys128Type> nullable_keys128;
+    std::unique_ptr<nullable_keys256Type> nullable_keys256;
     std::unique_ptr<serializedType> serialized;
     // TODO: add more cases like Aggregator
 };
@@ -230,6 +240,8 @@ struct MapsAny
     using key_fixed_stringType = HashSetWithSavedHash<StringRef>;
     using keys128Type = HashSet<UInt128, HashCRC32<UInt128>>;
     using keys256Type = HashSet<UInt256, HashCRC32<UInt256>>;
+    using nullable_keys128Type = HashSet<UInt128, HashCRC32<UInt128>>;
+    using nullable_keys256Type = HashSet<UInt256, HashCRC32<UInt256>>;
     using serializedType = HashSetWithSavedHash<StringRef>;
 
     std::unique_ptr<key8Type> key8;
@@ -242,6 +254,8 @@ struct MapsAny
     std::unique_ptr<key_fixed_stringType> key_fixed_string;
     std::unique_ptr<keys128Type> keys128;
     std::unique_ptr<keys256Type> keys256;
+    std::unique_ptr<nullable_keys128Type> nullable_keys128;
+    std::unique_ptr<nullable_keys256Type> nullable_keys256;
     std::unique_ptr<serializedType> serialized;
     // TODO: add more cases like Aggregator
 };
@@ -257,5 +271,6 @@ using MapsAllFullWithRowFlag = MapsTemplate<RowRefListWithUsedFlag>; // With fla
 JoinMapMethod chooseJoinMapMethod(
     const ColumnRawPtrs & key_columns,
     Sizes & key_sizes,
-    const TiDB::TiDBCollators & collators);
+    const TiDB::TiDBCollators & collators,
+    const std::vector<UInt8> & is_null_eq = {});
 } // namespace DB
