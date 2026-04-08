@@ -13,9 +13,19 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Common/StringUtils/StringRefUtils.h>
+#include <DataStreams/MarkInCompressedFile.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Databases/DatabaseTiFlash.h>
 #include <Debug/MockKVStore/MockUtils.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/InterpreterCreateQuery.h>
+#include <Interpreters/InterpreterDropQuery.h>
+#include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ASTDropQuery.h>
+#include <Parsers/ParserCreateQuery.h>
+#include <Parsers/parseQuery.h>
+#include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/FFI/ProxyFFICommon.h>
@@ -77,6 +87,13 @@ public:
         TiFlashTestEnv::tryRemovePath(p, /*recreate=*/true);
         p = path + "/data/";
         TiFlashTestEnv::tryRemovePath(p, /*recreate=*/true);
+    }
+
+    static void releaseResp(const EngineStoreServerHelper & helper, HttpRequestRes && res)
+    {
+        // release all raw cpp ptr in HttpRequestRes
+        helper.fn_gc_raw_cpp_ptr(res.res.inner.ptr, res.res.inner.type);
+        helper.fn_gc_raw_cpp_ptr(res.api_name.inner.ptr, res.api_name.inner.type);
     }
 };
 
@@ -380,6 +397,81 @@ TEST_F(StatusServerTest, TestParseRemoteCacheEvictRequest)
         RemoteCacheEvictRequest req = parseEvictRequest(path, api_name, "");
         LOG_INFO(Logger::get(), "path={} err_msg={}", path, req.err_msg);
         EXPECT_FALSE(req.err_msg.empty()) << fmt::format("path={} req={}", path, req);
+    }
+}
+
+TEST_F(StatusServerTest, TestParseLocalCacheEvictType)
+{
+    String err_msg;
+
+    auto cache_type = parseCacheEvictType("/tiflash/cache/evict/mark", "/tiflash/cache/evict", err_msg);
+    ASSERT_TRUE(cache_type.has_value());
+    ASSERT_EQ(*cache_type, CacheEvictType::Mark);
+    ASSERT_TRUE(err_msg.empty());
+
+    err_msg.clear();
+    cache_type = parseCacheEvictType("/tiflash/cache/evict/minmax", "/tiflash/cache/evict", err_msg);
+    ASSERT_TRUE(cache_type.has_value());
+    ASSERT_EQ(*cache_type, CacheEvictType::MinMax);
+    ASSERT_TRUE(err_msg.empty());
+
+    err_msg.clear();
+    cache_type = parseCacheEvictType("/tiflash/cache/evict/unknown", "/tiflash/cache/evict", err_msg);
+    ASSERT_FALSE(cache_type.has_value());
+    ASSERT_FALSE(err_msg.empty());
+}
+
+TEST_F(StatusServerTest, TestLocalCacheEvict)
+{
+    auto ctx = TiFlashTestEnv::getContext();
+    EngineStoreServerWrap store_server_wrap{};
+    store_server_wrap.tmt = &ctx->getTMTContext();
+    auto helper = GetEngineStoreServerHelper(&store_server_wrap);
+
+    if (!ctx->getMarkCache())
+        ctx->setMarkCache(1024 * 1024);
+    if (!ctx->getMinMaxIndexCache())
+        ctx->setMinMaxIndexCache(1024 * 1024);
+
+    {
+        auto mark_cache = ctx->getMarkCache();
+        ASSERT_NE(mark_cache, nullptr);
+        mark_cache->reset();
+        auto marks = std::make_shared<MarksInCompressedFile>();
+        marks->push_back(MarkInCompressedFile{1, 2});
+        mark_cache->set("mark-key", marks);
+        ASSERT_EQ(mark_cache->count(), 1);
+
+        String path = "/tiflash/cache/evict/mark";
+        auto res = helper.fn_handle_http_request(
+            &store_server_wrap,
+            BaseBuffView{path.data(), path.length()},
+            BaseBuffView{"", 0},
+            BaseBuffView{"", 0});
+        EXPECT_EQ(res.status, HttpRequestStatus::Ok);
+        EXPECT_EQ(std::string_view(res.res.view.data, res.res.view.len), R"json({"status":"ok","cache":"mark"})json");
+        EXPECT_EQ(mark_cache->count(), 0);
+        releaseResp(helper, std::move(res));
+    }
+
+    {
+        auto minmax_cache = ctx->getMinMaxIndexCache();
+        ASSERT_NE(minmax_cache, nullptr);
+        minmax_cache->reset();
+        auto index = std::make_shared<DM::MinMaxIndex>(DataTypeInt64());
+        minmax_cache->set("minmax-key", index);
+        ASSERT_EQ(minmax_cache->count(), 1);
+
+        String path = "/tiflash/cache/evict/minmax";
+        auto res = helper.fn_handle_http_request(
+            &store_server_wrap,
+            BaseBuffView{path.data(), path.length()},
+            BaseBuffView{"", 0},
+            BaseBuffView{"", 0});
+        EXPECT_EQ(res.status, HttpRequestStatus::Ok);
+        EXPECT_EQ(std::string_view(res.res.view.data, res.res.view.len), R"json({"status":"ok","cache":"minmax"})json");
+        EXPECT_EQ(minmax_cache->count(), 0);
+        releaseResp(helper, std::move(res));
     }
 }
 

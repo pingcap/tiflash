@@ -33,6 +33,10 @@ namespace DB
 {
 class LimiterStat;
 class IOLimitTuner;
+namespace S3
+{
+class S3ReadLimiter;
+}
 
 enum class LimiterType
 {
@@ -216,6 +220,7 @@ public:
     WriteLimiterPtr getBgWriteLimiter();
 
     ReadLimiterPtr getReadLimiter();
+    std::shared_ptr<S3::S3ReadLimiter> getS3ReadLimiter();
     void init(Poco::Util::AbstractConfiguration & config_);
     void updateConfig(Poco::Util::AbstractConfiguration & config_);
 
@@ -250,6 +255,7 @@ private:
     // Background read and foreground read
     ReadLimiterPtr bg_read_limiter;
     ReadLimiterPtr fg_read_limiter;
+    std::shared_ptr<S3::S3ReadLimiter> s3_read_limiter;
 
     std::mutex bg_thread_ids_mtx;
     std::vector<pid_t> bg_thread_ids;
