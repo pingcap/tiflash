@@ -1054,6 +1054,14 @@ public:
         std::vector<const NullMap *> nullmaps;
         nullmaps.reserve(sources.size());
         bool is_input_nullable = false;
+        for (const auto & source : sources)
+        {
+            if (source == nullptr)
+            {
+                is_input_nullable = true;
+                break;
+            }
+        }
         for (auto column_number : arguments)
         {
             const auto & col = block.getByPosition(column_number).column;

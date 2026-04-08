@@ -81,12 +81,14 @@ JoinMapMethod chooseJoinMapMethod(
     {
         if (all_fixed)
         {
-            if (keys_bytes > (std::numeric_limits<size_t>::max() - std::tuple_size<KeysNullMap<UInt128>>::value))
-                throw Exception("Join: keys sizes overflow", ErrorCodes::LOGICAL_ERROR);
+            constexpr auto nullable_keys128_null_map_bytes = std::tuple_size<KeysNullMap<UInt128>>::value;
+            constexpr auto nullable_keys256_null_map_bytes = std::tuple_size<KeysNullMap<UInt256>>::value;
+            if (keys_bytes > (std::numeric_limits<size_t>::max() - nullable_keys256_null_map_bytes))
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Join: keys sizes overflow");
 
-            if (std::tuple_size<KeysNullMap<UInt128>>::value + keys_bytes <= sizeof(UInt128))
+            if (nullable_keys128_null_map_bytes + keys_bytes <= sizeof(UInt128))
                 return JoinMapMethod::nullable_keys128;
-            if (std::tuple_size<KeysNullMap<UInt256>>::value + keys_bytes <= sizeof(UInt256))
+            if (nullable_keys256_null_map_bytes + keys_bytes <= sizeof(UInt256))
                 return JoinMapMethod::nullable_keys256;
         }
 

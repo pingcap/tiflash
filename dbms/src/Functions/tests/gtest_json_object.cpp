@@ -79,6 +79,15 @@ try
         auto expect = createColumn<Nullable<String>>({R"({"dup": 2})", R"({"dup": 3})"});
         ASSERT_COLUMN_EQ(expect, res);
     }
+
+    {
+        ColumnsWithTypeAndName inputs{
+            createConstColumn<String>(rows_count, "a"),
+            createOnlyNullColumnConst(rows_count),
+        };
+        auto res = executeFunctionWithCast({0, 1}, inputs);
+        ASSERT_COLUMN_EQ(createConstColumn<Nullable<String>>(rows_count, R"({"a": null})"), res);
+    }
 }
 CATCH
 
@@ -89,6 +98,7 @@ try
 
     auto value = castStringToJson(createColumn<String>({"1"}));
     ASSERT_THROW(executeFunction("json_object", {createColumn<Nullable<String>>({{}}), value}), Exception);
+    ASSERT_THROW(executeFunction("json_object", {createOnlyNullColumnConst(1), value}), Exception);
 
     String too_long_key(std::numeric_limits<UInt16>::max() + 1, 'a');
     ASSERT_THROW(executeFunction("json_object", {createColumn<String>({too_long_key}), value}), Exception);
