@@ -292,3 +292,55 @@ curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tiflash/remote/cache/evict/typ
     "released_size":"21380742440"
 }
 ```
+
+## Evict the mark cache on one TiFlash node
+
+```bash
+curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tiflash/cache/evict/mark"
+```
+
+### Response
+
+```json
+{
+    "status": "ok",
+    "cache": "mark"
+}
+```
+
+If the mark cache is not enabled on the target node, the request is still
+treated as a successful no-op:
+
+```json
+{
+    "status": "ok",
+    "cache": "mark",
+    "message": "cache not enabled"
+}
+```
+
+## Evict the minmax index cache on one TiFlash node
+
+```bash
+curl "http://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/tiflash/cache/evict/minmax"
+```
+
+### Response
+
+```json
+{
+    "status": "ok",
+    "cache": "minmax"
+}
+```
+
+If the minmax index cache is not enabled on the target node, the request is
+still treated as a successful no-op:
+
+```json
+{
+    "status": "ok",
+    "cache": "minmax",
+    "message": "cache not enabled"
+}
+```

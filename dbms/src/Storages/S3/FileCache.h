@@ -36,6 +36,7 @@
 #include <filesystem>
 #include <magic_enum.hpp>
 #include <mutex>
+#include <optional>
 #include <unordered_map>
 
 namespace DB
@@ -88,6 +89,7 @@ public:
     }
 
     Status waitForNotEmpty();
+    Status waitForNotEmptyFor(std::chrono::milliseconds timeout);
 
     void setComplete(UInt64 size_)
     {
@@ -103,6 +105,14 @@ public:
         status = s;
         if (status != Status::Empty)
             cv_ready.notify_all();
+    }
+
+    /// Update the reserved size without changing readiness state. This is used after reservation has
+    /// been rebased to the real object size but before the download finishes.
+    void setSize(UInt64 size_)
+    {
+        std::lock_guard lock(mtx);
+        size = size_;
     }
 
     Status getStatus() const
@@ -148,6 +158,11 @@ public:
     }
 
 private:
+    Status waitForNotEmptyImpl(
+        std::optional<std::chrono::milliseconds> timeout,
+        bool log_progress,
+        bool throw_on_timeout);
+
     mutable std::mutex mtx;
     const String local_fname;
     Status status;
@@ -351,7 +366,14 @@ public:
 
     void bgDownload(const String & s3_key, FileSegmentPtr & file_seg);
     void fgDownload(const String & s3_key, FileSegmentPtr & file_seg);
-    void bgDownloadExecutor(const String & s3_key, FileSegmentPtr & file_seg, const WriteLimiterPtr & write_limiter);
+    void bgDownloadExecutor(
+        const String & s3_key,
+        FileSegmentPtr & file_seg,
+        const WriteLimiterPtr & write_limiter,
+        std::chrono::steady_clock::time_point enqueue_time,
+        Int64 running_limit);
+    void finishBgDownload(const String & s3_key, Int64 running_limit);
+    void cleanupFailedDownload(const String & s3_key, FileSegmentPtr & file_seg);
     void downloadImpl(const String & s3_key, FileSegmentPtr & file_seg, const WriteLimiterPtr & write_limiter);
 
     static String toTemporaryFilename(const String & fname);
@@ -372,7 +394,8 @@ public:
         LRUFileTable & table,
         const String & s3_key,
         FileSegmentPtr & f,
-        bool force = false);
+        bool force = false,
+        bool count_as_evict = true);
     void removeDiskFile(const String & local_fname, bool update_fsize_metrics) const;
 
     // Estimated size is an empirical value.
@@ -465,6 +488,7 @@ public:
     const UInt16 logical_cores;
     IORateLimiter & rate_limiter;
     std::atomic<UInt64> cache_min_age_seconds = 1800;
+    std::atomic<UInt64> wait_on_downloading_ms = 0;
     std::atomic<double> download_count_scale = 2.0;
     std::atomic<double> max_downloading_count_scale = 10.0;
     // the on-going background download count

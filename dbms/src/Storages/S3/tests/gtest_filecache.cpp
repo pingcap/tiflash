@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Common/Logger.h>
 #include <Common/Stopwatch.h>
 #include <Common/SyncPoint/SyncPoint.h>
@@ -26,6 +27,7 @@
 #include <Storages/S3/FileCache.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
+#include <Storages/S3/S3ReadLimiter.h>
 #include <Storages/S3/S3WritableFile.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <aws/s3/model/CreateBucketRequest.h>
@@ -34,6 +36,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <ext/scope_guard.h>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -51,6 +54,12 @@ namespace DB::ErrorCodes
 {
 extern const int FILE_DOESNT_EXIST;
 }
+
+namespace DB::FailPoints
+{
+extern const char file_cache_bg_download_fail[];
+extern const char file_cache_bg_download_schedule_fail[];
+} // namespace DB::FailPoints
 
 namespace DB::tests::S3
 {
@@ -1126,11 +1135,296 @@ TEST_F(FileCacheTest, UpdateConfig)
     // small dt_filecache_max_downloading_count_scale, the queue size should be at least vcores * concurrency
     settings.dt_filecache_downloading_count_scale = 2.0;
     settings.dt_filecache_max_downloading_count_scale = 0.1;
+    settings.dt_filecache_wait_on_downloading_ms = 7;
     file_cache.updateConfig(settings);
     ASSERT_DOUBLE_EQ(file_cache.download_count_scale, 2.0);
     ASSERT_DOUBLE_EQ(file_cache.max_downloading_count_scale, 0.1);
+    ASSERT_EQ(file_cache.wait_on_downloading_ms.load(std::memory_order_relaxed), 7);
     ASSERT_EQ(S3FileCachePool::get().getMaxThreads(), vcores * 2.0);
     ASSERT_EQ(S3FileCachePool::get().getQueueSize(), vcores * 2.0);
+}
+
+TEST_F(FileCacheTest, FileSegmentWaitForNotEmptyFor)
+{
+    auto file_seg = std::make_shared<FileSegment>("/tmp/test", FileSegment::Status::Empty, 128, FileType::Merged);
+    ASSERT_EQ(file_seg->waitForNotEmptyFor(10ms), FileSegment::Status::Empty);
+
+    auto complete_future = std::async(std::launch::async, [&]() { return file_seg->waitForNotEmptyFor(200ms); });
+    std::this_thread::sleep_for(20ms);
+    file_seg->setComplete(256);
+    ASSERT_EQ(complete_future.get(), FileSegment::Status::Complete);
+
+    auto failed_seg
+        = std::make_shared<FileSegment>("/tmp/test_failed", FileSegment::Status::Empty, 128, FileType::Meta);
+    auto failed_future = std::async(std::launch::async, [&]() { return failed_seg->waitForNotEmptyFor(200ms); });
+    std::this_thread::sleep_for(20ms);
+    failed_seg->setStatus(FileSegment::Status::Failed);
+    ASSERT_EQ(failed_future.get(), FileSegment::Status::Failed);
+}
+
+TEST_F(FileCacheTest, GetWaitOnDownloadingHitAndTimeout)
+{
+    auto cache_dir = fmt::format("{}/wait_on_downloading", tmp_dir);
+    StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = 100};
+
+    UInt16 vcores = 2;
+    IORateLimiter rate_limiter;
+    FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
+
+    Settings settings;
+    settings.dt_filecache_downloading_count_scale = 2.0;
+    settings.dt_filecache_max_downloading_count_scale = 2.0;
+    settings.dt_filecache_wait_on_downloading_ms = 200;
+    file_cache.updateConfig(settings);
+
+    auto objects = genObjects(/*store_count*/ 1, /*table_count*/ 1, /*file_count*/ 1, {"1.merged", "2.merged"});
+    auto sp_download = SyncPointCtl::enableInScope("before_FileCache::downloadImpl_download_to_local");
+    auto sp_wait = SyncPointCtl::enableInScope("before_FileSegment::waitForNotEmpty_wait");
+
+    auto first_key = S3FilenameView::fromKey(objects[0].key);
+    // First request publishes the `Empty` placeholder and starts the background download.
+    ASSERT_EQ(file_cache.get(first_key, objects[0].size), nullptr);
+    sp_download.waitAndPause();
+
+    // With a generous bounded-wait budget, the follower should reuse the downloader result instead of returning miss.
+    auto wait_hit = std::async(std::launch::async, [&]() { return file_cache.get(first_key, objects[0].size); });
+    sp_wait.waitAndPause();
+    sp_download.next();
+    sp_wait.next();
+    auto hit_seg = wait_hit.get();
+    ASSERT_NE(hit_seg, nullptr);
+    ASSERT_TRUE(hit_seg->isReadyToRead());
+
+    settings.dt_filecache_wait_on_downloading_ms = 30;
+    file_cache.updateConfig(settings);
+    auto second_key = S3FilenameView::fromKey(objects[1].key);
+    // Re-run the same pattern with a much smaller budget so the follower times out and returns miss.
+    ASSERT_EQ(file_cache.get(second_key, objects[1].size), nullptr);
+    sp_download.waitAndPause();
+    auto wait_timeout = std::async(std::launch::async, [&]() { return file_cache.get(second_key, objects[1].size); });
+    sp_wait.waitAndPause();
+    sp_wait.next();
+    ASSERT_EQ(wait_timeout.get(), nullptr);
+    sp_download.next();
+    sp_download.disable();
+
+    waitForBgDownload(file_cache);
+}
+
+TEST_F(FileCacheTest, GetWaitOnDownloadingReturnsMissWhenDownloaderFails)
+{
+    auto cache_dir = fmt::format("{}/wait_on_downloading_failed", tmp_dir);
+    StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = 100};
+
+    UInt16 vcores = 2;
+    IORateLimiter rate_limiter;
+    FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
+
+    Settings settings;
+    settings.dt_filecache_downloading_count_scale = 2.0;
+    settings.dt_filecache_max_downloading_count_scale = 2.0;
+    settings.dt_filecache_wait_on_downloading_ms = 200;
+    file_cache.updateConfig(settings);
+
+    auto objects = genObjects(/*store_count*/ 1, /*table_count*/ 1, /*file_count*/ 1, {"1.merged"});
+    auto sp_fail = SyncPointCtl::enableInScope("before_FileCache::bgDownloadExecutor_fail_point");
+    auto sp_wait = SyncPointCtl::enableInScope("before_FileSegment::waitForNotEmpty_wait");
+
+    auto key = S3FilenameView::fromKey(objects[0].key);
+    // First caller creates the `Empty` placeholder and starts the background download.
+    ASSERT_EQ(file_cache.get(key, objects[0].size), nullptr);
+    sp_fail.waitAndPause();
+
+    // The follower reaches `get()` while the same key is still being downloaded. Inject a failure right before
+    // the downloader starts copying the body so the follower wakes up with `Status::Failed` and returns miss.
+    {
+        FailPointHelper::enableFailPoint(FailPoints::file_cache_bg_download_fail);
+        SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::file_cache_bg_download_fail); });
+        auto wait_failed = std::async(std::launch::async, [&]() { return file_cache.get(key, objects[0].size); });
+        sp_wait.waitAndPause();
+        sp_fail.next();
+        sp_wait.next();
+        ASSERT_EQ(wait_failed.get(), nullptr);
+    }
+    sp_fail.disable();
+
+    waitForBgDownload(file_cache);
+    ASSERT_EQ(file_cache.bg_download_fail_count.load(std::memory_order_relaxed), 1);
+
+    // The failed placeholder must be removed from the cache table. Otherwise later requests would keep observing
+    // the stale failed entry instead of creating a fresh download task.
+    {
+        std::lock_guard lock(file_cache.mtx);
+        auto & table = file_cache.tables[static_cast<UInt64>(FileType::Merged)];
+        ASSERT_EQ(table.get(objects[0].key), nullptr);
+    }
+
+    // A later foreground retry should succeed, proving the failed follower path does not leave the cache stuck.
+    auto file_seg = file_cache.getOrWait(key, objects[0].size);
+    ASSERT_NE(file_seg, nullptr);
+    ASSERT_TRUE(file_seg->isReadyToRead());
+    ASSERT_EQ(file_seg->getSize(), objects[0].size);
+}
+
+TEST_F(FileCacheTest, BgDownloadWorksWithSharedS3ReadLimiter)
+{
+    auto cache_dir = fmt::format("{}/bg_download_limiter", tmp_dir);
+    StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = 100};
+
+    UInt16 vcores = 2;
+    IORateLimiter rate_limiter;
+    FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
+    Settings settings;
+    settings.dt_filecache_downloading_count_scale = 2.0;
+    settings.dt_filecache_max_downloading_count_scale = 2.0;
+    file_cache.updateConfig(settings);
+
+    // This test is kept as a regression check for the shared-limiter plumbing on the FileCache download
+    // path. Stream-based limiting has been removed, and the byte limit is intentionally disabled here,
+    // so the expectation is simply that background downloads still make progress and do not deadlock when
+    // a shared S3ReadLimiter object is attached to the client.
+    auto limiter = std::make_shared<S3ReadLimiter>(0, 1);
+    s3_client->setS3ReadLimiter(limiter);
+    SCOPE_EXIT({ s3_client->setS3ReadLimiter(nullptr); });
+
+    auto objects = genObjects(/*store_count*/ 1, /*table_count*/ 1, /*file_count*/ 1, {"3.merged", "4.merged"});
+    auto sp_download = SyncPointCtl::enableInScope("before_FileCache::downloadImpl_download_to_local");
+
+    // Start one background download and pause it at the download-to-local boundary.
+    ASSERT_EQ(file_cache.get(S3FilenameView::fromKey(objects[0].key), objects[0].size), nullptr);
+    sp_download.waitAndPause();
+
+    // Submit a second download while the first one is paused. The test passes as long as both downloads
+    // complete normally after the pause is released.
+    ASSERT_EQ(file_cache.get(S3FilenameView::fromKey(objects[1].key), objects[1].size), nullptr);
+    std::this_thread::sleep_for(50ms);
+
+    sp_download.next();
+    sp_download.disable();
+    waitForBgDownload(file_cache);
+
+    auto file_seg1 = file_cache.get(S3FilenameView::fromKey(objects[0].key), objects[0].size);
+    auto file_seg2 = file_cache.get(S3FilenameView::fromKey(objects[1].key), objects[1].size);
+    ASSERT_NE(file_seg1, nullptr);
+    ASSERT_NE(file_seg2, nullptr);
+    ASSERT_TRUE(file_seg1->isReadyToRead());
+    ASSERT_TRUE(file_seg2->isReadyToRead());
+}
+
+TEST_F(FileCacheTest, BgDownloadUsesLimiterSuggestedChunkSize)
+{
+    auto cache_dir = fmt::format("{}/bg_download_low_limit", tmp_dir);
+    StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = 100};
+
+    UInt16 vcores = 2;
+    IORateLimiter rate_limiter;
+    FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
+    Settings settings;
+    settings.dt_filecache_downloading_count_scale = 2.0;
+    settings.dt_filecache_max_downloading_count_scale = 2.0;
+    file_cache.updateConfig(settings);
+
+    auto object_key = fmt::format("s{}/data/t_{}/dmf_{}/small_merged.merged", nextId(), nextId(), nextId());
+    constexpr size_t object_size = 8 * 1024;
+    writeFile(object_key, '7', object_size, WriteSettings{});
+
+    auto limiter = std::make_shared<S3ReadLimiter>(32 * 1024, /*refill_period_ms*/ 100);
+    s3_client->setS3ReadLimiter(limiter);
+    SCOPE_EXIT({ s3_client->setS3ReadLimiter(nullptr); });
+
+    constexpr Int64 expected_delay_ms = 200;
+    constexpr Int64 delay_tolerance_ms = 40;
+
+    AtomicStopwatch watch;
+    ASSERT_EQ(file_cache.get(S3FilenameView::fromKey(object_key), object_size), nullptr);
+    waitForBgDownload(file_cache);
+    ASSERT_GE(watch.elapsedMilliseconds(), expected_delay_ms - delay_tolerance_ms);
+
+    auto file_seg = file_cache.get(S3FilenameView::fromKey(object_key), object_size);
+    ASSERT_NE(file_seg, nullptr);
+    ASSERT_TRUE(file_seg->isReadyToRead());
+    ASSERT_EQ(file_seg->getSize(), object_size);
+}
+
+TEST_F(FileCacheTest, GetWaitOnDownloadingSupportsColDataAndOther)
+{
+    auto cache_dir = fmt::format("{}/wait_on_downloading_non_merged", tmp_dir);
+    StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = 100};
+
+    UInt16 vcores = 2;
+    IORateLimiter rate_limiter;
+    FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
+
+    Settings settings;
+    settings.dt_filecache_downloading_count_scale = 2.0;
+    settings.dt_filecache_max_downloading_count_scale = 2.0;
+    settings.dt_filecache_wait_on_downloading_ms = 200;
+    file_cache.updateConfig(settings);
+
+    auto objects = genObjects(/*store_count*/ 1, /*table_count*/ 1, /*file_count*/ 1, {"1.dat", "meta"});
+    auto sp_download = SyncPointCtl::enableInScope("before_FileCache::downloadImpl_download_to_local");
+    auto sp_wait = SyncPointCtl::enableInScope("before_FileSegment::waitForNotEmpty_wait");
+
+    auto run_wait_hit_case = [&](const ObjectInfo & obj, FileType expected_file_type) {
+        auto key = S3FilenameView::fromKey(obj.key);
+        // The first request creates the placeholder, and the second request should hit the same bounded-wait path
+        // regardless of whether the file is classified as coldata or other.
+        ASSERT_EQ(file_cache.get(key, obj.size), nullptr);
+        sp_download.waitAndPause();
+
+        auto wait_hit = std::async(std::launch::async, [&]() { return file_cache.get(key, obj.size); });
+        sp_wait.waitAndPause();
+        sp_download.next();
+        sp_wait.next();
+
+        auto file_seg = wait_hit.get();
+        ASSERT_NE(file_seg, nullptr);
+        ASSERT_TRUE(file_seg->isReadyToRead());
+        ASSERT_EQ(file_seg->getSize(), obj.size);
+        ASSERT_EQ(file_seg->getFileType(), expected_file_type);
+    };
+
+    run_wait_hit_case(objects[0], FileType::ColData);
+    run_wait_hit_case(objects[1], FileType::Meta);
+
+    sp_download.disable();
+    waitForBgDownload(file_cache);
+}
+
+TEST_F(FileCacheTest, BgDownloadSupportsColDataAndOther)
+{
+    auto cache_dir = fmt::format("{}/bg_download_non_merged", tmp_dir);
+    StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = 100};
+
+    UInt16 vcores = 2;
+    IORateLimiter rate_limiter;
+    FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
+    Settings settings;
+    settings.dt_filecache_downloading_count_scale = 2.0;
+    settings.dt_filecache_max_downloading_count_scale = 2.0;
+    file_cache.updateConfig(settings);
+
+    auto objects = genObjects(/*store_count*/ 1, /*table_count*/ 1, /*file_count*/ 1, {"2.dat", "meta"});
+
+    for (const auto & obj : objects)
+    {
+        auto key = S3FilenameView::fromKey(obj.key);
+        ASSERT_EQ(file_cache.get(key, obj.size), nullptr);
+    }
+
+    waitForBgDownload(file_cache);
+
+    std::array<FileType, 2> expected_file_types = {FileType::ColData, FileType::Meta};
+    size_t index = 0;
+    for (const auto & obj : objects)
+    {
+        auto file_seg = file_cache.get(S3FilenameView::fromKey(obj.key), obj.size);
+        ASSERT_NE(file_seg, nullptr);
+        ASSERT_TRUE(file_seg->isReadyToRead());
+        ASSERT_EQ(file_seg->getSize(), obj.size);
+        ASSERT_EQ(file_seg->getFileType(), expected_file_types[index]);
+        ++index;
+    }
 }
 
 TEST_F(FileCacheTest, GetBeingBlock)
@@ -1176,6 +1470,75 @@ TEST_F(FileCacheTest, GetBeingBlock)
     sp_reserve_size.disable();
 
     waitForBgDownload(file_cache);
+}
+
+TEST_F(FileCacheTest, FailedDownloadReleasesFinalizedReservedSize)
+{
+    auto cache_dir = fmt::format("{}/failed_download_reserved_size", tmp_dir);
+    StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = 100};
+
+    UInt16 vcores = 2;
+    IORateLimiter rate_limiter;
+    FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
+    Settings settings;
+    settings.dt_filecache_downloading_count_scale = 2.0;
+    settings.dt_filecache_max_downloading_count_scale = 2.0;
+    file_cache.updateConfig(settings);
+
+    auto objects = genObjects(/*store_count*/ 1, /*table_count*/ 1, /*file_count*/ 1, {"1.merged"});
+    auto key = S3FilenameView::fromKey(objects[0].key);
+
+    auto assert_failed_download_releases_space = [&](std::optional<UInt64> requested_size) {
+        FailPointHelper::enableFailPoint(FailPoints::file_cache_bg_download_fail);
+        SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::file_cache_bg_download_fail); });
+
+        ASSERT_EQ(file_cache.cache_used, 0);
+        ASSERT_EQ(file_cache.get(key, requested_size), nullptr);
+        waitForBgDownload(file_cache);
+
+        ASSERT_EQ(file_cache.cache_used, 0);
+        ASSERT_EQ(file_cache.bg_download_fail_count.load(std::memory_order_relaxed), 1);
+        ASSERT_EQ(file_cache.bg_download_succ_count.load(std::memory_order_relaxed), 0);
+    };
+
+    // std::nullopt uses the file-type estimate and must still release the finalized reservation correctly.
+    assert_failed_download_releases_space(std::nullopt);
+
+    file_cache.bg_download_fail_count.store(0, std::memory_order_relaxed);
+
+    // A caller-provided wrong size should also not corrupt cache_used after finalizeReservedSize rebases it.
+    assert_failed_download_releases_space(objects[0].size - 1024);
+}
+
+TEST_F(FileCacheTest, ScheduleBgDownloadFailureCleansUpPlaceholder)
+{
+    auto cache_dir = fmt::format("{}/schedule_bg_download_failure", tmp_dir);
+    StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = 100};
+
+    UInt16 vcores = 2;
+    IORateLimiter rate_limiter;
+    FileCache file_cache(capacity_metrics, cache_config, vcores, rate_limiter);
+    Settings settings;
+    settings.dt_filecache_wait_on_downloading_ms = 200;
+    file_cache.updateConfig(settings);
+
+    auto objects = genObjects(/*store_count*/ 1, /*table_count*/ 1, /*file_count*/ 1, {"1.merged"});
+    auto key = S3FilenameView::fromKey(objects[0].key);
+    auto file_type = FileCache::getFileType(objects[0].key);
+
+    FailPointHelper::enableFailPoint(FailPoints::file_cache_bg_download_schedule_fail);
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::file_cache_bg_download_schedule_fail); });
+
+    ASSERT_EQ(file_cache.get(key, objects[0].size), nullptr);
+    ASSERT_EQ(file_cache.bg_downloading_count.load(std::memory_order_relaxed), 0);
+    ASSERT_EQ(file_cache.bg_download_fail_count.load(std::memory_order_relaxed), 1);
+    ASSERT_EQ(file_cache.tables[static_cast<UInt64>(file_type)].get(objects[0].key, /*update_lru*/ false), nullptr);
+
+    FailPointHelper::disableFailPoint(FailPoints::file_cache_bg_download_schedule_fail);
+    ASSERT_EQ(file_cache.get(key, objects[0].size), nullptr);
+    waitForBgDownload(file_cache);
+    ASSERT_EQ(file_cache.bg_download_succ_count.load(std::memory_order_relaxed), 1);
+    ASSERT_NE(file_cache.tables[static_cast<UInt64>(file_type)].get(objects[0].key, /*update_lru*/ false), nullptr);
 }
 
 } // namespace DB::tests::S3

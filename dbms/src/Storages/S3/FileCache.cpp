@@ -34,6 +34,7 @@
 #include <Storages/S3/FileCache.h>
 #include <Storages/S3/FileCachePerf.h>
 #include <Storages/S3/S3Common.h>
+#include <Storages/S3/S3ReadLimiter.h>
 #include <aws/core/utils/memory/stl/AWSStreamFwd.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <common/logger_useful.h>
@@ -75,42 +76,264 @@ extern const int FILE_DOESNT_EXIST;
 namespace DB::FailPoints
 {
 extern const char file_cache_fg_download_fail[];
+extern const char file_cache_bg_download_fail[];
+extern const char file_cache_bg_download_schedule_fail[];
 } // namespace DB::FailPoints
 
 namespace DB
 {
 using FileType = FileSegment::FileType;
 
+namespace
+{
+// A tiny FileCache-only ReadBuffer variant that charges the shared S3 limiter before each refill.
+// This lets downloadToLocal keep using the existing copyData/write-buffer path instead of maintaining
+// a separate hand-written read/write loop for limiter-enabled downloads.
+class ReadBufferFromIStreamWithLimiter : public BufferWithOwnMemory<ReadBuffer>
+{
+public:
+    ReadBufferFromIStreamWithLimiter(
+        std::istream & istr_,
+        size_t size,
+        const std::shared_ptr<S3::S3ReadLimiter> & limiter_,
+        S3::S3ReadSource source_)
+        : BufferWithOwnMemory<ReadBuffer>(size)
+        , istr(istr_)
+        , limiter(limiter_)
+        , source(source_)
+    {}
+
+private:
+    bool nextImpl() override
+    {
+        if (limiter != nullptr)
+        {
+            // Charge the requested refill size before the actual `istream.read()`. This is intentionally
+            // conservative: short reads still spend the full reserved budget for this refill. If we need tighter
+            // accounting later, we can extend this path to compensate with the actual bytes read back from S3.
+            limiter->requestBytes(internal_buffer.size(), source);
+        }
+
+        istr.read(internal_buffer.begin(), internal_buffer.size());
+        auto gcount = istr.gcount();
+        if (!gcount)
+        {
+            if (istr.eof())
+                return false;
+            throw Exception(ErrorCodes::CANNOT_READ_FROM_ISTREAM, "Cannot read from istream");
+        }
+
+        working_buffer.resize(gcount);
+        return true;
+    }
+
+    std::istream & istr;
+    std::shared_ptr<S3::S3ReadLimiter> limiter;
+    S3::S3ReadSource source;
+};
+
+enum class WaitResult
+{
+    Hit,
+    Timeout,
+    Failed,
+};
+
+enum class BgDownloadStage
+{
+    QueueWait,
+    Download,
+};
+
+TiFlashMetrics::RemoteCacheFileTypeMetric toMetricFileType(FileType file_type)
+{
+    switch (file_type)
+    {
+    case FileType::Merged:
+        return TiFlashMetrics::RemoteCacheFileTypeMetric::Merged;
+    case FileType::DeleteMarkColData:
+    case FileType::VersionColData:
+    case FileType::HandleColData:
+    case FileType::ColData:
+        return TiFlashMetrics::RemoteCacheFileTypeMetric::ColData;
+    default:
+        return TiFlashMetrics::RemoteCacheFileTypeMetric::Other;
+    }
+}
+
+void observeWaitOnDownloadingMetrics(FileType file_type, WaitResult result, UInt64 bytes, double wait_seconds)
+{
+    GET_METRIC(tiflash_storage_remote_cache, type_wait_on_downloading).Increment();
+    auto & metrics = TiFlashMetrics::instance();
+    auto metric_file_type = toMetricFileType(file_type);
+    switch (result)
+    {
+    case WaitResult::Hit:
+        metrics
+            .getRemoteCacheWaitOnDownloadingResultCounter(
+                metric_file_type,
+                TiFlashMetrics::RemoteCacheWaitResultMetric::Hit)
+            .Increment();
+        metrics
+            .getRemoteCacheWaitOnDownloadingSecondsHistogram(
+                metric_file_type,
+                TiFlashMetrics::RemoteCacheWaitResultMetric::Hit)
+            .Observe(wait_seconds);
+        metrics
+            .getRemoteCacheWaitOnDownloadingBytesCounter(
+                metric_file_type,
+                TiFlashMetrics::RemoteCacheWaitResultMetric::Hit)
+            .Increment(bytes);
+        break;
+    case WaitResult::Timeout:
+        metrics
+            .getRemoteCacheWaitOnDownloadingResultCounter(
+                metric_file_type,
+                TiFlashMetrics::RemoteCacheWaitResultMetric::Timeout)
+            .Increment();
+        metrics
+            .getRemoteCacheWaitOnDownloadingSecondsHistogram(
+                metric_file_type,
+                TiFlashMetrics::RemoteCacheWaitResultMetric::Timeout)
+            .Observe(wait_seconds);
+        metrics
+            .getRemoteCacheWaitOnDownloadingBytesCounter(
+                metric_file_type,
+                TiFlashMetrics::RemoteCacheWaitResultMetric::Timeout)
+            .Increment(bytes);
+        break;
+    case WaitResult::Failed:
+        metrics
+            .getRemoteCacheWaitOnDownloadingResultCounter(
+                metric_file_type,
+                TiFlashMetrics::RemoteCacheWaitResultMetric::Failed)
+            .Increment();
+        metrics
+            .getRemoteCacheWaitOnDownloadingSecondsHistogram(
+                metric_file_type,
+                TiFlashMetrics::RemoteCacheWaitResultMetric::Failed)
+            .Observe(wait_seconds);
+        metrics
+            .getRemoteCacheWaitOnDownloadingBytesCounter(
+                metric_file_type,
+                TiFlashMetrics::RemoteCacheWaitResultMetric::Failed)
+            .Increment(bytes);
+        break;
+    }
+
+    switch (result)
+    {
+    case WaitResult::Hit:
+        GET_METRIC(tiflash_storage_remote_cache, type_wait_on_downloading_hit).Increment();
+        break;
+    case WaitResult::Timeout:
+        GET_METRIC(tiflash_storage_remote_cache, type_wait_on_downloading_timeout).Increment();
+        break;
+    case WaitResult::Failed:
+        GET_METRIC(tiflash_storage_remote_cache, type_wait_on_downloading_failed).Increment();
+        break;
+    }
+}
+
+void observeRemoteCacheRejectMetrics(FileType file_type)
+{
+    TiFlashMetrics::instance()
+        .getRemoteCacheRejectCounter(
+            toMetricFileType(file_type),
+            TiFlashMetrics::RemoteCacheRejectReasonMetric::TooManyDownload)
+        .Increment();
+}
+
+void updateBgDownloadStatusMetrics(Int64 bg_downloading_count, Int64 running_limit)
+{
+    GET_METRIC(tiflash_storage_remote_cache_status, type_bg_downloading_count).Set(bg_downloading_count);
+    GET_METRIC(tiflash_storage_remote_cache_status, type_bg_download_queue_count)
+        .Set(std::max<Int64>(0, bg_downloading_count - running_limit));
+}
+
+void observeBgDownloadStageMetrics(FileType file_type, BgDownloadStage stage, double seconds)
+{
+    auto & metrics = TiFlashMetrics::instance();
+    auto metric_file_type = toMetricFileType(file_type);
+    switch (stage)
+    {
+    case BgDownloadStage::QueueWait:
+        metrics
+            .getRemoteCacheBgDownloadStageSecondsHistogram(
+                metric_file_type,
+                TiFlashMetrics::RemoteCacheDownloadStageMetric::QueueWait)
+            .Observe(seconds);
+        break;
+    case BgDownloadStage::Download:
+        metrics
+            .getRemoteCacheBgDownloadStageSecondsHistogram(
+                metric_file_type,
+                TiFlashMetrics::RemoteCacheDownloadStageMetric::Download)
+            .Observe(seconds);
+        break;
+    }
+}
+
+} // namespace
+
 std::unique_ptr<FileCache> FileCache::global_file_cache_instance;
 
 FileSegment::Status FileSegment::waitForNotEmpty()
 {
+    // Foreground callers expect the file to become readable eventually. This path keeps logging
+    // slow waits and fails hard after the built-in timeout instead of silently returning `Empty`.
+    return waitForNotEmptyImpl(std::nullopt, /*log_progress*/ true, /*throw_on_timeout*/ true);
+}
+
+FileSegment::Status FileSegment::waitForNotEmptyFor(std::chrono::milliseconds timeout)
+{
+    // Bounded-wait callers treat timeout as a normal outcome and will fall back to another path,
+    // so this variant waits only once for the specified budget and returns the current status.
+    return waitForNotEmptyImpl(timeout, /*log_progress*/ false, /*throw_on_timeout*/ false);
+}
+
+FileSegment::Status FileSegment::waitForNotEmptyImpl(
+    std::optional<std::chrono::milliseconds> timeout,
+    bool log_progress,
+    bool throw_on_timeout)
+{
+    constexpr UInt64 default_wait_log_interval_seconds = 30;
+    constexpr UInt64 wait_ready_timeout_seconds = 300;
+
     std::unique_lock lock(mtx);
 
     if (status != Status::Empty)
         return status;
 
-    PerfContext::file_cache.fg_wait_download_from_s3++;
+    if (log_progress)
+        PerfContext::file_cache.fg_wait_download_from_s3++;
 
     Stopwatch watch;
 
     while (true)
     {
+        auto wait_interval = timeout.value_or(std::chrono::seconds(default_wait_log_interval_seconds));
         SYNC_FOR("before_FileSegment::waitForNotEmpty_wait"); // just before actual waiting...
 
-        auto is_done = cv_ready.wait_for(lock, std::chrono::seconds(30), [&] { return status != Status::Empty; });
+        auto is_done = cv_ready.wait_for(lock, wait_interval, [&] { return status != Status::Empty; });
         if (is_done)
             break;
 
+        if (timeout.has_value())
+            break;
+
         double elapsed_secs = watch.elapsedSeconds();
-        LOG_WARNING(
-            Logger::get(),
-            "FileCache is still waiting FileSegment ready, file={} elapsed={}s",
-            local_fname,
-            elapsed_secs);
+        if (log_progress)
+        {
+            LOG_WARNING(
+                Logger::get(),
+                "FileCache is still waiting FileSegment ready, file={} elapsed={}s",
+                local_fname,
+                elapsed_secs);
+        }
 
         // Snapshot time is 300s
-        if (elapsed_secs > 300)
+        if (throw_on_timeout && elapsed_secs > wait_ready_timeout_seconds)
         {
             throw Exception(
                 ErrorCodes::S3_ERROR,
@@ -245,6 +468,7 @@ FileCache::FileCache(
     , log(Logger::get("FileCache"))
 {
     CurrentMetrics::set(CurrentMetrics::DTFileCacheCapacity, cache_capacity);
+    updateBgDownloadStatusMetrics(0, /*running_limit*/ 0);
     prepareDir(cache_dir);
     restore();
 }
@@ -346,6 +570,7 @@ FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname, const std::op
     auto & table = tables[static_cast<UInt64>(file_type)];
 
     FileSegmentPtr file_seg;
+    UInt64 wait_ms = 0;
     {
         std::unique_lock lock(mtx);
         if (auto f = table.get(s3_key); f != nullptr)
@@ -353,55 +578,93 @@ FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname, const std::op
             f->setLastAccessTime(std::chrono::system_clock::now());
             if (f->isReadyToRead())
             {
+                // Hot-cache fast path: the file is already materialized locally, so return the existing segment
+                // immediately without touching any download scheduling or bounded-wait logic.
                 GET_METRIC(tiflash_storage_remote_cache, type_dtfile_hit).Increment();
                 return f;
             }
-            else
+
+            // Another thread is already downloading the same object. Optionally wait for a bounded time and
+            // reuse that result instead of opening one more `GetObject` stream for the same key.
+            wait_ms = wait_on_downloading_ms.load(std::memory_order_relaxed);
+            if (wait_ms == 0)
             {
                 GET_METRIC(tiflash_storage_remote_cache, type_dtfile_miss).Increment();
                 return nullptr;
             }
+            file_seg = f;
+        }
+        else
+        {
+            GET_METRIC(tiflash_storage_remote_cache, type_dtfile_miss).Increment();
+            // Admission control before any reservation work: skip file types that should never enter FileCache,
+            // and stop creating new `Empty` placeholders once background downloading is already saturated.
+            switch (canCache(file_type))
+            {
+            case ShouldCacheRes::RejectTypeNotMatch:
+                GET_METRIC(tiflash_storage_remote_cache, type_dtfile_not_cache_type).Increment();
+                return nullptr;
+            case ShouldCacheRes::RejectTooManyDownloading:
+                GET_METRIC(tiflash_storage_remote_cache, type_dtfile_too_many_download).Increment();
+                observeRemoteCacheRejectMetrics(file_type);
+                return nullptr;
+            case ShouldCacheRes::Cache:
+                break;
+            }
+
+            // File not exists, try to download and cache it in background.
+
+            // We don't know the exact size of a object/file, but we need reserve space to save the object/file.
+            // A certain amount of space is reserved for each file type.
+            auto estimated_size = filesize ? *filesize : getEstimatedSizeOfFileType(file_type);
+            if (!reserveSpaceImpl(file_type, estimated_size, EvictMode::TryEvict, lock))
+            {
+                // Space still not enough after eviction.
+                GET_METRIC(tiflash_storage_remote_cache, type_dtfile_full).Increment();
+                LOG_DEBUG(
+                    log,
+                    "s3_key={} space not enough(capacity={} used={} estimated_size={}), skip cache",
+                    s3_key,
+                    cache_capacity,
+                    cache_used,
+                    estimated_size);
+                return nullptr;
+            }
+
+            file_seg = std::make_shared<FileSegment>(
+                toLocalFilename(s3_key),
+                FileSegment::Status::Empty,
+                estimated_size,
+                file_type);
+            table.set(s3_key, file_seg);
+        }
+    } // Release the lock before submitting bg download task. Because bgDownload may be blocked when the queue is full.
+
+    if (wait_ms != 0)
+    {
+        // Follower path: another thread already inserted the `Empty` segment and is downloading this key.
+        // Wait only for the configured bounded budget, then either reuse the completed file or return miss
+        // so the caller can fall back without opening a duplicate download stream for the same object.
+        Stopwatch wait_watch;
+        auto status = file_seg->waitForNotEmptyFor(std::chrono::milliseconds(wait_ms));
+        const auto waited_bytes = filesize.value_or(file_seg->getSize());
+        if (status == FileSegment::Status::Complete)
+        {
+            observeWaitOnDownloadingMetrics(file_type, WaitResult::Hit, waited_bytes, wait_watch.elapsedSeconds());
+            GET_METRIC(tiflash_storage_remote_cache, type_dtfile_hit).Increment();
+            return file_seg;
         }
 
+        observeWaitOnDownloadingMetrics(
+            file_type,
+            status == FileSegment::Status::Failed ? WaitResult::Failed : WaitResult::Timeout,
+            waited_bytes,
+            wait_watch.elapsedSeconds());
+        // Timeout is intentionally surfaced as a cache miss here. The caller can fall back to another read path,
+        // while the original downloader keeps making progress in background instead of being duplicated by followers.
         GET_METRIC(tiflash_storage_remote_cache, type_dtfile_miss).Increment();
-        switch (canCache(file_type))
-        {
-        case ShouldCacheRes::RejectTypeNotMatch:
-            GET_METRIC(tiflash_storage_remote_cache, type_dtfile_not_cache_type).Increment();
-            return nullptr;
-        case ShouldCacheRes::RejectTooManyDownloading:
-            GET_METRIC(tiflash_storage_remote_cache, type_dtfile_too_many_download).Increment();
-            return nullptr;
-        case ShouldCacheRes::Cache:
-            break;
-        }
-
-        // File not exists, try to download and cache it in background.
-
-        // We don't know the exact size of a object/file, but we need reserve space to save the object/file.
-        // A certain amount of space is reserved for each file type.
-        auto estimated_size = filesize ? *filesize : getEstimatedSizeOfFileType(file_type);
-        if (!reserveSpaceImpl(file_type, estimated_size, EvictMode::TryEvict, lock))
-        {
-            // Space still not enough after eviction.
-            GET_METRIC(tiflash_storage_remote_cache, type_dtfile_full).Increment();
-            LOG_DEBUG(
-                log,
-                "s3_key={} space not enough(capacity={} used={} estimated_size={}), skip cache",
-                s3_key,
-                cache_capacity,
-                cache_used,
-                estimated_size);
-            return nullptr;
-        }
-
-        file_seg = std::make_shared<FileSegment>(
-            toLocalFilename(s3_key),
-            FileSegment::Status::Empty,
-            estimated_size,
-            file_type);
-        table.set(s3_key, file_seg);
-    } // Release the lock before submiting bg download task. Because bgDownload may be blocked when the queue is full.
+        return nullptr;
+    }
 
     bgDownload(s3_key, file_seg);
 
@@ -516,7 +779,8 @@ std::pair<Int64, std::list<String>::iterator> FileCache::removeImpl(
     LRUFileTable & table,
     const String & s3_key,
     FileSegmentPtr & f,
-    bool force)
+    bool force,
+    bool count_as_evict)
 {
     // Except current thread and the FileTable,
     // there are other threads hold this FileSegment object.
@@ -531,8 +795,11 @@ std::pair<Int64, std::list<String>::iterator> FileCache::removeImpl(
     removeDiskFile(temp_fname, /*update_fsize_metrics*/ false);
 
     auto release_size = f->getSize();
-    GET_METRIC(tiflash_storage_remote_cache, type_dtfile_evict).Increment();
-    GET_METRIC(tiflash_storage_remote_cache_bytes, type_dtfile_evict_bytes).Increment(release_size);
+    if (count_as_evict)
+    {
+        GET_METRIC(tiflash_storage_remote_cache, type_dtfile_evict).Increment();
+        GET_METRIC(tiflash_storage_remote_cache_bytes, type_dtfile_evict_bytes).Increment(release_size);
+    }
     releaseSpaceImpl(release_size);
     return {release_size, table.remove(s3_key)};
 }
@@ -990,7 +1257,9 @@ void downloadToLocal(
     Aws::IOStream & istr,
     const String & fname,
     Int64 content_length,
-    const WriteLimiterPtr & write_limiter)
+    const WriteLimiterPtr & write_limiter,
+    const std::shared_ptr<S3::S3ReadLimiter> & s3_read_limiter,
+    const std::shared_ptr<S3::S3ReadMetricsRecorder> & s3_read_metrics_recorder)
 {
     // create an empty file with write_limiter
     // each time `ofile.write` is called, the write speed will be controlled by the write_limiter.
@@ -1000,9 +1269,35 @@ void downloadToLocal(
         return;
 
     GET_METRIC(tiflash_storage_remote_cache_bytes, type_dtfile_download_bytes).Increment(content_length);
-    static const Int64 MAX_BUFFER_SIZE = 128 * 1024; // 128k
-    ReadBufferFromIStream rbuf(istr, std::min(content_length, MAX_BUFFER_SIZE));
-    WriteBufferFromWritableFile wbuf(ofile, std::min(content_length, MAX_BUFFER_SIZE));
+    constexpr Int64 max_buffer_size = 128 * 1024; // 128 KiB
+    auto buffer_size = std::min<Int64>(content_length, max_buffer_size);
+    if (s3_read_limiter == nullptr || s3_read_limiter->maxReadBytesPerSec() == 0)
+    {
+        ReadBufferFromIStream rbuf(istr, buffer_size);
+        WriteBufferFromWritableFile wbuf(ofile, buffer_size);
+        SCOPE_EXIT({
+            if (s3_read_metrics_recorder != nullptr)
+                s3_read_metrics_recorder->recordBytes(rbuf.count(), S3::S3ReadSource::FileCacheDownload);
+        });
+        copyData(rbuf, wbuf, content_length);
+        wbuf.sync();
+        return;
+    }
+
+    // Keep each refill within the limiter-suggested chunk size. Otherwise a low byte limit would
+    // turn every 128 KiB refill into an oversized borrowing request and let downloads run ahead
+    // of the configured node-level budget.
+    buffer_size = std::min<Int64>(
+        buffer_size,
+        static_cast<Int64>(s3_read_limiter->getSuggestedChunkSize(static_cast<UInt64>(buffer_size))));
+    // The limiter-aware buffer preserves the old copyData/write-buffer path while charging the shared
+    // S3 budget before each refill from the remote body stream.
+    ReadBufferFromIStreamWithLimiter rbuf(istr, buffer_size, s3_read_limiter, S3::S3ReadSource::FileCacheDownload);
+    WriteBufferFromWritableFile wbuf(ofile, buffer_size);
+    SCOPE_EXIT({
+        if (s3_read_metrics_recorder != nullptr)
+            s3_read_metrics_recorder->recordBytes(rbuf.count(), S3::S3ReadSource::FileCacheDownload);
+    });
     copyData(rbuf, wbuf, content_length);
     wbuf.sync();
 }
@@ -1011,6 +1306,8 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg, c
 {
     Stopwatch sw;
     auto client = S3::ClientFactory::instance().sharedTiFlashClient();
+    auto s3_read_limiter = client->getS3ReadLimiter();
+    auto s3_read_metrics_recorder = client->getS3ReadMetricsRecorder();
     Aws::S3::Model::GetObjectRequest req;
     client->setBucketAndKeyWithRoot(req, s3_key);
     ProfileEvents::increment(ProfileEvents::S3GetObject);
@@ -1036,12 +1333,23 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg, c
         file_seg->setStatus(FileSegment::Status::Failed);
         return;
     }
+    // finalizeReservedSize() has already adjusted cache_used to the actual object size. Keep the
+    // segment size in sync before any later throw point so failed downloads release the correct
+    // reservation instead of the old estimated size.
+    file_seg->setSize(content_length);
 
     const auto & local_fname = file_seg->getLocalFileName();
     // download as a temp file then rename to a formal file
     prepareParentDir(local_fname);
     auto temp_fname = toTemporaryFilename(local_fname);
-    downloadToLocal(result.GetBody(), temp_fname, content_length, write_limiter);
+    SYNC_FOR("before_FileCache::downloadImpl_download_to_local");
+    downloadToLocal(
+        result.GetBody(),
+        temp_fname,
+        content_length,
+        write_limiter,
+        s3_read_limiter,
+        s3_read_metrics_recorder);
     std::filesystem::rename(temp_fname, local_fname);
 
 #ifndef NDEBUG
@@ -1070,10 +1378,20 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg, c
 void FileCache::bgDownloadExecutor(
     const String & s3_key,
     FileSegmentPtr & file_seg,
-    const WriteLimiterPtr & write_limiter)
+    const WriteLimiterPtr & write_limiter,
+    std::chrono::steady_clock::time_point enqueue_time,
+    Int64 running_limit)
 {
+    observeBgDownloadStageMetrics(
+        file_seg->getFileType(),
+        BgDownloadStage::QueueWait,
+        std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - enqueue_time)
+            .count());
+    Stopwatch download_watch;
     try
     {
+        SYNC_FOR("before_FileCache::bgDownloadExecutor_fail_point");
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::file_cache_bg_download_fail);
         GET_METRIC(tiflash_storage_remote_cache, type_dtfile_download).Increment();
         downloadImpl(s3_key, file_seg, write_limiter);
     }
@@ -1082,40 +1400,76 @@ void FileCache::bgDownloadExecutor(
         // ignore the exception here, and log as warning.
         tryLogCurrentWarningException(log, fmt::format("Download s3_key={} failed", s3_key));
     }
-
+    observeBgDownloadStageMetrics(file_seg->getFileType(), BgDownloadStage::Download, download_watch.elapsedSeconds());
     if (!file_seg->isReadyToRead())
     {
-        file_seg->setStatus(FileSegment::Status::Failed);
         GET_METRIC(tiflash_storage_remote_cache, type_dtfile_download_failed).Increment();
         bg_download_fail_count.fetch_add(1, std::memory_order_relaxed);
-        file_seg.reset();
-        remove(s3_key);
+        cleanupFailedDownload(s3_key, file_seg);
     }
     else
     {
         bg_download_succ_count.fetch_add(1, std::memory_order_relaxed);
     }
-    bg_downloading_count.fetch_sub(1, std::memory_order_relaxed);
-    LOG_DEBUG(
-        log,
-        "downloading count {} => s3_key {} finished",
-        bg_downloading_count.load(std::memory_order_relaxed),
-        s3_key);
+    finishBgDownload(s3_key, running_limit);
 }
 
 void FileCache::bgDownload(const String & s3_key, FileSegmentPtr & file_seg)
 {
     bg_downloading_count.fetch_add(1, std::memory_order_relaxed);
+    // Capture the pool concurrency limit before scheduling. Background workers still update
+    // queue gauges while finishing, but tests may shut the global S3FileCachePool down at the
+    // same time. Re-reading the singleton from the worker tail would race with shutdown.
+    const auto running_limit = static_cast<Int64>(S3FileCachePool::get().getMaxThreads());
+    updateBgDownloadStatusMetrics(bg_downloading_count.load(std::memory_order_relaxed), running_limit);
     LOG_DEBUG(
         log,
         "downloading count {} => s3_key {} start",
         bg_downloading_count.load(std::memory_order_relaxed),
         s3_key);
     auto write_limiter = rate_limiter.getBgWriteLimiter();
-    S3FileCachePool::get().scheduleOrThrowOnError(
-        [this, s3_key = s3_key, file_seg = file_seg, limiter = std::move(write_limiter)]() mutable {
-            bgDownloadExecutor(s3_key, file_seg, limiter);
-        });
+    auto enqueue_time = std::chrono::steady_clock::now();
+    try
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::file_cache_bg_download_schedule_fail);
+        S3FileCachePool::get().scheduleOrThrowOnError(
+            [this,
+             s3_key = s3_key,
+             file_seg = file_seg,
+             limiter = std::move(write_limiter),
+             enqueue_time,
+             running_limit]() mutable { bgDownloadExecutor(s3_key, file_seg, limiter, enqueue_time, running_limit); });
+    }
+    catch (...)
+    {
+        tryLogCurrentWarningException(log, fmt::format("Schedule background download s3_key={} failed", s3_key));
+        GET_METRIC(tiflash_storage_remote_cache, type_dtfile_download_failed).Increment();
+        bg_download_fail_count.fetch_add(1, std::memory_order_relaxed);
+        cleanupFailedDownload(s3_key, file_seg);
+        finishBgDownload(s3_key, running_limit);
+    }
+}
+
+void FileCache::finishBgDownload(const String & s3_key, Int64 running_limit)
+{
+    const auto count_after_finish = bg_downloading_count.fetch_sub(1, std::memory_order_relaxed) - 1;
+    updateBgDownloadStatusMetrics(count_after_finish, running_limit);
+    LOG_DEBUG(log, "downloading count {} => s3_key {} finished", count_after_finish, s3_key);
+}
+
+void FileCache::cleanupFailedDownload(const String & s3_key, FileSegmentPtr & file_seg)
+{
+    file_seg->setStatus(FileSegment::Status::Failed);
+    file_seg.reset();
+    // Followers may still hold the failed segment while waking up from bounded wait. Force removal so
+    // the failed placeholder does not stay published in the cache table and block later retries.
+    // This is failed-download cleanup rather than cache eviction, so do not count eviction metrics.
+    auto file_type = getFileType(s3_key);
+    auto & table = tables[static_cast<UInt64>(file_type)];
+    std::unique_lock lock(mtx);
+    auto f = table.get(s3_key, /*update_lru*/ false);
+    if (f != nullptr)
+        std::ignore = removeImpl(table, s3_key, f, /*force*/ true, /*count_as_evict*/ false);
 }
 
 void FileCache::fgDownload(const String & s3_key, FileSegmentPtr & file_seg)
@@ -1139,7 +1493,12 @@ void FileCache::fgDownload(const String & s3_key, FileSegmentPtr & file_seg)
         file_seg->setStatus(FileSegment::Status::Failed);
         GET_METRIC(tiflash_storage_remote_cache, type_dtfile_download_failed).Increment();
         file_seg.reset();
-        remove(s3_key);
+        auto file_type = getFileType(s3_key);
+        auto & table = tables[static_cast<UInt64>(file_type)];
+        std::unique_lock lock(mtx);
+        auto f = table.get(s3_key, /*update_lru*/ false);
+        if (f != nullptr)
+            std::ignore = removeImpl(table, s3_key, f, /*force*/ true, /*count_as_evict*/ false);
     }
 
     LOG_DEBUG(log, "foreground downloading => s3_key {} finished", s3_key);
@@ -1373,6 +1732,17 @@ void FileCache::updateConfig(const Settings & settings)
             cache_min_age_seconds.load(std::memory_order_relaxed),
             cache_min_age);
         cache_min_age_seconds.store(cache_min_age, std::memory_order_relaxed);
+    }
+
+    UInt64 new_wait_ms = settings.dt_filecache_wait_on_downloading_ms;
+    if (new_wait_ms != wait_on_downloading_ms.load(std::memory_order_relaxed))
+    {
+        LOG_INFO(
+            log,
+            "Update S3FileCache bounded wait config: wait_on_downloading_ms {} => {}",
+            wait_on_downloading_ms.load(std::memory_order_relaxed),
+            new_wait_ms);
+        wait_on_downloading_ms.store(new_wait_ms, std::memory_order_relaxed);
     }
 }
 
