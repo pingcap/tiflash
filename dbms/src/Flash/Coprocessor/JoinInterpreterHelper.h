@@ -140,6 +140,7 @@ struct TiFlashJoin
 
     JoinKeyTypes join_key_types;
     TiDB::TiDBCollators join_key_collators;
+    std::vector<UInt8> is_null_eq;
 
     /// (cartesian) (anti) left outer semi join.
     bool isLeftOuterSemiFamily() const
@@ -217,6 +218,9 @@ struct TiFlashJoin
         const NamesAndTypes & source_columns,
         const std::unordered_map<String, String> & key_names_map,
         const LoggerPtr & log);
+
+    bool shouldDisableRuntimeFilter(const ExpressionActionsPtr & build_prepare_actions, const Names & build_key_names)
+        const;
 };
 
 /// @join_prepare_expr_actions: generates join key columns and join filter column
@@ -229,6 +233,13 @@ std::tuple<ExpressionActionsPtr, Names, Names, String> prepareJoin(
     const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
     const JoinKeyTypes & join_key_types,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters);
+
+void alignNullEqKeyTypes(
+    const std::vector<UInt8> & is_null_eq,
+    const ExpressionActionsPtr & probe_prepare_actions,
+    Names & probe_key_names,
+    const ExpressionActionsPtr & build_prepare_actions,
+    Names & build_key_names);
 
 /// generate source_columns that is used to compile tipb::Expr, the rule is columns in `tidb_schema`
 /// must be the first part of the source_columns

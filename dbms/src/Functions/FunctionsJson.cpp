@@ -24,6 +24,7 @@ void registerFunctionsJson(FunctionFactory & factory)
     factory.registerFunction<FunctionCastJsonAsString>();
     factory.registerFunction<FunctionJsonLength>();
     factory.registerFunction<FunctionJsonArray>();
+    factory.registerFunction<FunctionJsonObject>();
     factory.registerFunction<FunctionCastJsonAsJson>();
     factory.registerFunction<FunctionCastRealAsJson>();
     factory.registerFunction<FunctionCastDecimalAsJson>();

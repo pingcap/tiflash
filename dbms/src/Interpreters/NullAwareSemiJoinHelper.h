@@ -63,15 +63,18 @@ struct NARightSideInfo
 struct NALeftSideInfo
 {
     NALeftSideInfo(
-        const ConstNullMapPtr & null_map_,
-        const ConstNullMapPtr & filter_map_,
+        const ConstNullMapPtr & key_null_map_,
+        const ConstNullMapPtr & row_filter_map_,
         const ConstNullMapPtr & all_key_null_map_)
-        : null_map(null_map_)
-        , filter_map(filter_map_)
+        : key_null_map(key_null_map_)
+        , row_filter_map(row_filter_map_)
         , all_key_null_map(all_key_null_map_)
     {}
-    const ConstNullMapPtr & null_map;
-    const ConstNullMapPtr & filter_map;
+    /// Rows whose null-aware join key contains at least one NULL.
+    const ConstNullMapPtr & key_null_map;
+    /// Rows filtered out by side conditions before null-aware probing.
+    const ConstNullMapPtr & row_filter_map;
+    /// Rows whose null-aware join keys are all NULL.
     const ConstNullMapPtr & all_key_null_map;
 };
 
