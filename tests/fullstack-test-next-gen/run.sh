@@ -42,7 +42,7 @@ if [[ -n "$ENABLE_NEXT_GEN" && "$ENABLE_NEXT_GEN" != "false" && "$ENABLE_NEXT_GE
     if [[ -z "${PD_BRANCH}" || "${PD_BRANCH}" == "master" ]]; then
         PD_BRANCH="master-next-gen"
     fi
-    if [[ -z "${TIKV_BRANCH}" || "${TIKV_BRANCH}" == "dedicated" ]]; then
+    if [[ -z "${TIKV_BRANCH}" || "${TIKV_BRANCH}" == "cloud-engine" ]]; then
         TIKV_BRANCH="cloud-engine-next-gen"
     fi
     if [[ -z "${TIDB_BRANCH}" || "${TIDB_BRANCH}" == "master" ]]; then
