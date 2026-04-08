@@ -13,11 +13,6 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
-<<<<<<< HEAD
-#include <Databases/DatabaseTiFlash.h>
-#include <Debug/MockKVStore/MockUtils.h>
-#include <Interpreters/Context.h>
-=======
 #include <Common/StringUtils/StringRefUtils.h>
 #include <DataStreams/MarkInCompressedFile.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -31,7 +26,6 @@
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
->>>>>>> a9010056f0 (disagg: limit S3 read amplification on compute nodes (#10771))
 #include <Storages/IManageableStorage.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/FFI/ProxyFFICommon.h>
