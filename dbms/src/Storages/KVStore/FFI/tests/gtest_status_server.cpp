@@ -88,6 +88,13 @@ public:
         p = path + "/data/";
         TiFlashTestEnv::tryRemovePath(p, /*recreate=*/true);
     }
+
+    static void releaseResp(const EngineStoreServerHelper & helper, HttpRequestRes && res)
+    {
+        // release all raw cpp ptr in HttpRequestRes
+        helper.fn_gc_raw_cpp_ptr(res.res.inner.ptr, res.res.inner.type);
+        helper.fn_gc_raw_cpp_ptr(res.api_name.inner.ptr, res.api_name.inner.type);
+    }
 };
 
 TEST_F(StatusServerTest, TestSyncSchema)
