@@ -67,6 +67,8 @@ String MockS3Client::normalizedKey(String ori_key)
 Model::GetObjectOutcome MockS3Client::GetObject(const Model::GetObjectRequest & request) const
 {
     std::lock_guard lock(mtx);
+    get_object_count += 1;
+    last_get_object_range = request.RangeHasBeenSet() ? request.GetRange() : String{};
     auto itr = storage.find(request.GetBucket());
     if (itr == storage.end())
     {
@@ -99,6 +101,25 @@ Model::GetObjectOutcome MockS3Client::GetObject(const Model::GetObjectRequest & 
     result.ReplaceBody(ss);
     result.SetContentLength(size);
     return result;
+}
+
+void MockS3Client::resetGetObjectObservations() const
+{
+    std::lock_guard lock(mtx);
+    get_object_count = 0;
+    last_get_object_range.clear();
+}
+
+UInt64 MockS3Client::getGetObjectCount() const
+{
+    std::lock_guard lock(mtx);
+    return get_object_count;
+}
+
+String MockS3Client::getLastGetObjectRange() const
+{
+    std::lock_guard lock(mtx);
+    return last_get_object_range;
 }
 
 Model::PutObjectOutcome MockS3Client::PutObject(const Model::PutObjectRequest & request) const
