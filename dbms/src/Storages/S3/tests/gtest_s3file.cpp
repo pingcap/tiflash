@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
+#include <Common/ProfileEvents.h>
 #include <Common/SyncPoint/Ctl.h>
 #include <IO/BaseFile/PosixWritableFile.h>
 #include <IO/Buffer/ReadBufferFromRandomAccessFile.h>
@@ -71,6 +72,11 @@ extern const char force_s3_random_access_file_read_fail[];
 extern const char force_s3_random_access_file_seek_fail[];
 extern const char force_s3_random_access_file_seek_chunked[];
 } // namespace DB::FailPoints
+
+namespace ProfileEvents
+{
+extern const Event S3ReadBytes;
+} // namespace ProfileEvents
 
 namespace DB::tests
 {
@@ -458,6 +464,70 @@ try
     ASSERT_EQ(
         std::vector<char>(buff.begin(), buff.begin() + buf_unit.size()),
         std::vector<char>(buf_unit.begin(), buf_unit.begin() + buf_unit.size()));
+}
+CATCH
+
+TEST_P(S3FileTest, SmallForwardSeekKeepsCurrentStream)
+try
+{
+    auto * mock_s3_client = dynamic_cast<DB::S3::tests::MockS3Client *>(s3_client.get());
+    if (mock_s3_client == nullptr)
+        return;
+
+    const String key = "/a/b/c/small_forward_seek";
+    const size_t size = 1024 * 1024;
+    writeFile(key, size, WriteSettings{});
+
+    S3RandomAccessFile file(s3_client, key, nullptr);
+    mock_s3_client->resetGetObjectObservations();
+
+    constexpr off_t target_offset = 128 * 1024;
+    ASSERT_EQ(file.seek(target_offset, SEEK_SET), target_offset);
+    ASSERT_EQ(mock_s3_client->getGetObjectCount(), 0);
+    ASSERT_TRUE(mock_s3_client->getLastGetObjectRange().empty());
+}
+CATCH
+
+TEST_P(S3FileTest, LargeForwardSeekReopensFromTargetOffset)
+try
+{
+    auto * mock_s3_client = dynamic_cast<DB::S3::tests::MockS3Client *>(s3_client.get());
+    if (mock_s3_client == nullptr)
+        return;
+
+    const String key = "/a/b/c/large_forward_seek";
+    const size_t size = 1024 * 1024;
+    writeFile(key, size, WriteSettings{});
+
+    S3RandomAccessFile file(s3_client, key, nullptr);
+    mock_s3_client->resetGetObjectObservations();
+
+    constexpr off_t target_offset = 128 * 1024 + 1;
+    ASSERT_EQ(file.seek(target_offset, SEEK_SET), target_offset);
+    ASSERT_EQ(mock_s3_client->getGetObjectCount(), 1);
+    ASSERT_EQ(mock_s3_client->getLastGetObjectRange(), fmt::format("bytes={}-", target_offset));
+}
+CATCH
+
+TEST_P(S3FileTest, LargeForwardSeekDoesNotChargeSkippedBytesAsRemoteRead)
+try
+{
+    const String key = "/a/b/c/large_forward_seek_read_bytes";
+    const size_t size = 1024 * 1024;
+    writeFile(key, size, WriteSettings{});
+
+    S3RandomAccessFile file(s3_client, key, nullptr);
+
+    constexpr off_t target_offset = 128 * 1024 + 1;
+    const auto read_bytes_before_seek = ProfileEvents::get(ProfileEvents::S3ReadBytes);
+    ASSERT_EQ(file.seek(target_offset, SEEK_SET), target_offset);
+    const auto read_bytes_after_seek = ProfileEvents::get(ProfileEvents::S3ReadBytes);
+    ASSERT_EQ(read_bytes_after_seek - read_bytes_before_seek, 0);
+
+    std::vector<char> buff(256, 0x00);
+    ASSERT_EQ(file.read(buff.data(), buff.size()), buff.size());
+    const auto read_bytes_after_read = ProfileEvents::get(ProfileEvents::S3ReadBytes);
+    ASSERT_EQ(read_bytes_after_read - read_bytes_after_seek, buff.size());
 }
 CATCH
 

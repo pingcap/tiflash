@@ -100,11 +100,18 @@ private:
     void initialize(std::string_view action);
     /// Reopen the object stream from `target_offset` and reset per-initialize retry state.
     void reopenAt(off_t target_offset, std::string_view action);
+    /// Return true when a forward seek should reopen instead of draining the current stream body.
+    bool shouldReopenForForwardSeek(size_t bytes_to_skip) const;
     off_t seekImpl(off_t offset, int whence);
     ssize_t readImpl(char * buf, size_t size);
     String readRangeOfObject();
     ssize_t readChunked(char * buf, size_t size);
     ssize_t finalizeRead(size_t requested_size, size_t actual_size, const Stopwatch & sw, std::istream & istr);
+    off_t recordSuccessfulSeek(
+        off_t target_offset,
+        size_t logical_seek_size,
+        size_t remote_read_bytes,
+        const Stopwatch & sw);
     off_t finalizeSeek(
         off_t target_offset,
         size_t requested_size,
