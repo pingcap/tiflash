@@ -68,6 +68,7 @@ extern const char force_set_mocked_s3_object_mtime[];
 extern const char force_syncpoint_on_s3_upload[];
 extern const char force_s3_random_access_file_init_fail[];
 extern const char force_s3_random_access_file_read_fail[];
+extern const char force_s3_random_access_file_seek_fail[];
 extern const char force_s3_random_access_file_seek_chunked[];
 } // namespace DB::FailPoints
 
@@ -384,6 +385,79 @@ try
             ASSERT_LT(nread, 0);
         },
         DB::Exception);
+}
+CATCH
+
+TEST_P(S3FileTest, ReadRetryIsBoundedOnStreamFailure)
+try
+{
+    const String key = "/a/b/c/read_retry_bounded";
+    const size_t size = 5 * 1024;
+    writeFile(key, size, WriteSettings{});
+
+    S3RandomAccessFile file(s3_client, key, nullptr);
+    std::vector<char> buff(256, 0x00);
+
+    FailPointHelper::enableFailPoint(FailPoints::force_s3_random_access_file_read_fail);
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_s3_random_access_file_read_fail); });
+
+    auto nread = file.read(buff.data(), buff.size());
+    ASSERT_LT(nread, 0);
+    ASSERT_NE(file.summary().find("cur_retry=0"), String::npos);
+}
+CATCH
+
+TEST_P(S3FileTest, SeekRetryIsBoundedOnStreamFailure)
+try
+{
+    const String key = "/a/b/c/seek_retry_bounded";
+    const size_t size = 5 * 1024;
+    writeFile(key, size, WriteSettings{});
+
+    S3RandomAccessFile file(s3_client, key, nullptr);
+    std::vector<char> buff(256, 0x00);
+    ASSERT_EQ(file.read(buff.data(), buff.size()), buff.size());
+
+    FailPointHelper::enableFailPoint(FailPoints::force_s3_random_access_file_seek_fail);
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_s3_random_access_file_seek_fail); });
+
+    auto offset = file.seek(1024, SEEK_SET);
+    ASSERT_LT(offset, 0);
+    ASSERT_NE(file.summary().find("cur_retry=0"), String::npos);
+}
+CATCH
+
+TEST_P(S3FileTest, InitializeRetryBudgetResetsAcrossReopenSessions)
+try
+{
+    const String key = "/a/b/c/reopen_reset_retry_budget";
+    const size_t size = 5 * 1024;
+    writeFile(key, size, WriteSettings{});
+
+    S3RandomAccessFile file(s3_client, key, nullptr);
+    std::vector<char> buff(256, 0x00);
+    ASSERT_EQ(file.read(buff.data(), buff.size()), buff.size());
+
+    {
+        FailPointHelper::enableFailPoint(FailPoints::force_s3_random_access_file_read_fail);
+        FailPointHelper::enableFailPoint(FailPoints::force_s3_random_access_file_init_fail);
+        SCOPE_EXIT({
+            FailPointHelper::disableFailPoint(FailPoints::force_s3_random_access_file_read_fail);
+            FailPointHelper::disableFailPoint(FailPoints::force_s3_random_access_file_init_fail);
+        });
+        ASSERT_THROW(
+            {
+                auto nread = file.read(buff.data(), buff.size());
+                ASSERT_LT(nread, 0);
+            },
+            DB::Exception);
+    }
+
+    ASSERT_EQ(file.seek(0, SEEK_SET), 0);
+    ASSERT_EQ(file.read(buff.data(), buff.size()), buff.size());
+    ASSERT_EQ(
+        std::vector<char>(buff.begin(), buff.begin() + buf_unit.size()),
+        std::vector<char>(buf_unit.begin(), buf_unit.begin() + buf_unit.size()));
 }
 CATCH
 
