@@ -139,6 +139,7 @@
     M(S3IORead)                                \
     M(S3IOReadError)                           \
     M(S3IOSeek)                                \
+    M(S3IOSeekReopen)                          \
     M(S3IOSeekError)                           \
     M(S3IOSeekBackward)                        \
     M(FileCacheHit)                            \

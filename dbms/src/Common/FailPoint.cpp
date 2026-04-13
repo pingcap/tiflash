@@ -137,6 +137,7 @@ namespace DB
     M(force_join_v2_probe_disable_lm)                        \
     M(force_s3_random_access_file_init_fail)                 \
     M(force_s3_random_access_file_read_fail)                 \
+    M(force_s3_random_access_file_seek_fail)                 \
     M(force_s3_random_access_file_seek_chunked)              \
     M(force_release_snap_meet_null_storage)
 
