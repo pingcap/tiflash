@@ -47,6 +47,7 @@ extern const Event S3GetObjectRetry;
 extern const Event S3IORead;
 extern const Event S3IOReadError;
 extern const Event S3IOSeek;
+extern const Event S3IOSeekReopen;
 extern const Event S3IOSeekError;
 extern const Event S3IOSeekBackward;
 } // namespace ProfileEvents
@@ -54,6 +55,7 @@ namespace DB::FailPoints
 {
 extern const char force_s3_random_access_file_init_fail[];
 extern const char force_s3_random_access_file_read_fail[];
+extern const char force_s3_random_access_file_seek_fail[];
 extern const char force_s3_random_access_file_seek_chunked[];
 } // namespace DB::FailPoints
 
@@ -62,7 +64,8 @@ namespace DB::S3
 namespace
 {
 constexpr size_t s3_read_limiter_preferred_chunk_size = 128 * 1024;
-}
+constexpr size_t s3_forward_seek_reopen_threshold = 128 * 1024;
+} // namespace
 
 String S3RandomAccessFile::summary() const
 {
@@ -112,17 +115,22 @@ bool isRetryableError(int ret, int err)
 {
     return ret == S3StreamError || err == ECONNRESET || err == EAGAIN || err == EINPROGRESS;
 }
+
+bool shouldRetryStreamError(Int32 retried_times, int ret, int err, Int32 max_retry_times)
+{
+    return retried_times + 1 < max_retry_times && isRetryableError(ret, err);
+}
 } // namespace
 
 ssize_t S3RandomAccessFile::read(char * buf, size_t size)
 {
-    while (true)
+    for (Int32 stream_retry_times = 0;; ++stream_retry_times)
     {
         auto n = readImpl(buf, size);
-        if (unlikely(n < 0 && isRetryableError(n, errno)))
+        if (unlikely(n < 0 && shouldRetryStreamError(stream_retry_times, n, errno, max_retry)))
         {
-            // If it is a retryable error, then initialize again and retry read
-            initialize("read meet retryable error");
+            // Stream-side retries reopen from the last committed offset instead of sharing initialize state.
+            reopenAt(cur_offset, "read meet retryable error");
             continue;
         }
         return n;
@@ -235,13 +243,13 @@ ssize_t S3RandomAccessFile::finalizeRead(
 
 off_t S3RandomAccessFile::seek(off_t offset_, int whence)
 {
-    while (true)
+    for (Int32 stream_retry_times = 0;; ++stream_retry_times)
     {
         auto off = seekImpl(offset_, whence);
-        if (unlikely(off < 0 && isRetryableError(off, errno)))
+        if (unlikely(off < 0 && shouldRetryStreamError(stream_retry_times, off, errno, max_retry)))
         {
-            // If it is a retryable error, then initialize again and retry seek
-            initialize("seek meet retryable error");
+            // Retry the seek from the last committed offset rather than from a partially drained stream.
+            reopenAt(cur_offset, "seek meet retryable error");
             continue;
         }
         return off;
@@ -267,10 +275,27 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
     {
         ProfileEvents::increment(ProfileEvents::S3IOSeekBackward, 1);
         // The current body stream is forward-only. Re-open from the target offset.
-        cur_offset = offset_;
-        cur_retry = 0;
-        initialize("seek backward");
+        reopenAt(offset_, "seek backward");
         return cur_offset;
+    }
+
+    auto bytes_to_ignore = static_cast<size_t>(offset_ - cur_offset);
+    // whether a forward seek should reopen instead of draining the current stream body
+    if (bytes_to_ignore > s3_forward_seek_reopen_threshold)
+    {
+        Stopwatch sw;
+        ProfileEvents::increment(ProfileEvents::S3IOSeek, 1);
+        ProfileEvents::increment(ProfileEvents::S3IOSeekReopen, 1);
+        LOG_DEBUG(
+            log,
+            "Forward seek reopens S3 stream: cur_offset={} target_offset={} bytes_to_ignore={} reopen_threshold={}",
+            cur_offset,
+            offset_,
+            bytes_to_ignore,
+            s3_forward_seek_reopen_threshold);
+        // Large forward seeks are treated as logical repositioning. Reopen avoids draining the old body stream.
+        reopenAt(offset_, "seek forward by reopen");
+        return recordSuccessfulSeek(offset_, bytes_to_ignore, /* remote_read_bytes */ 0, sw);
     }
 
     if (read_limiter != nullptr && read_limiter->maxReadBytesPerSec() > 0)
@@ -280,7 +305,6 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
     Stopwatch sw;
     ProfileEvents::increment(ProfileEvents::S3IOSeek, 1);
     auto & istr = read_result.GetBody();
-    auto bytes_to_ignore = static_cast<size_t>(offset_ - cur_offset);
     istr.ignore(bytes_to_ignore);
     return finalizeSeek(offset_, bytes_to_ignore, istr.gcount(), sw, istr);
 }
@@ -320,6 +344,11 @@ off_t S3RandomAccessFile::finalizeSeek(
 {
     // Keep post-seek handling shared so limiter and non-limiter paths emit identical retries, logging and
     // observability signals.
+    fiu_do_on(FailPoints::force_s3_random_access_file_seek_fail, {
+        LOG_WARNING(log, "failpoint force_s3_random_access_file_seek_fail is triggered, return S3StreamError");
+        return S3StreamError;
+    });
+
     if (actual_size < requested_size)
     {
         ProfileEvents::increment(ProfileEvents::S3IOSeekError);
@@ -344,30 +373,63 @@ off_t S3RandomAccessFile::finalizeSeek(
         return (state & std::ios_base::failbit || state & std::ios_base::badbit) ? S3StreamError : S3UnknownError;
     }
 
+    return recordSuccessfulSeek(target_offset, requested_size, actual_size, sw);
+}
+
+void S3RandomAccessFile::reopenAt(off_t target_offset, std::string_view action)
+{
+    const auto previous_offset = cur_offset;
+    const auto previous_retry = cur_retry;
+    try
+    {
+        cur_offset = target_offset;
+        initialize(action);
+    }
+    catch (...)
+    {
+        // Reopen either commits the new initialize session or keeps the previous committed state intact.
+        cur_offset = previous_offset;
+        cur_retry = previous_retry;
+        throw;
+    }
+}
+
+off_t S3RandomAccessFile::recordSuccessfulSeek(
+    off_t target_offset,
+    size_t logical_seek_size,
+    size_t remote_read_bytes,
+    const Stopwatch & sw)
+{
     auto elapsed_secs = sw.elapsedSeconds();
     if (scan_context)
     {
         scan_context->disagg_s3file_seek_time_ms += elapsed_secs * 1000;
         scan_context->disagg_s3file_seek_count += 1;
-        scan_context->disagg_s3file_seek_bytes += actual_size;
+        scan_context->disagg_s3file_seek_bytes += logical_seek_size;
     }
     GET_METRIC(tiflash_storage_s3_request_seconds, type_read_stream).Observe(elapsed_secs);
     if (elapsed_secs > 0.01)
     {
         LOG_DEBUG(
             log,
-            "ignore_count={} cur_offset={} content_length={} cost={:.3f}s",
-            actual_size,
+            "target_offset={} logical_seek_size={} remote_read_bytes={} cur_offset={} content_length={} cost={:.3f}s",
+            target_offset,
+            logical_seek_size,
+            remote_read_bytes,
             cur_offset,
             content_length,
             elapsed_secs);
     }
-    ProfileEvents::increment(ProfileEvents::S3ReadBytes, actual_size);
-    if (read_metrics_recorder != nullptr)
-        read_metrics_recorder->recordBytes(actual_size, S3ReadSource::DirectRead);
+    if (remote_read_bytes > 0)
+    {
+        ProfileEvents::increment(ProfileEvents::S3ReadBytes, remote_read_bytes);
+        if (read_metrics_recorder != nullptr)
+            read_metrics_recorder->recordBytes(remote_read_bytes, S3ReadSource::DirectRead);
+    }
     cur_offset = target_offset;
     return cur_offset;
 }
+
 String S3RandomAccessFile::readRangeOfObject()
 {
     return fmt::format("bytes={}-", cur_offset);
@@ -386,6 +448,8 @@ Int64 calculateDelayForNextRetry(Int64 attempted_retries)
 
 void S3RandomAccessFile::initialize(std::string_view action)
 {
+    // `cur_retry` is per-initialize state, so every new initialize action starts from a clean budget.
+    cur_retry = 0;
     while (cur_retry < max_retry)
     {
         Stopwatch sw_get_object;

@@ -71,6 +71,12 @@ public:
         FAILED,
     };
     static void setPutObjectStatus(S3Status status) { put_object_status = status; }
+    /// Reset the GetObject observation state used by unit tests.
+    void resetGetObjectObservations() const;
+    /// Return the number of GetObject requests observed since the last reset.
+    UInt64 getGetObjectCount() const;
+    /// Return the latest Range header observed by GetObject, or empty when unset.
+    String getLastGetObjectRange() const;
 
 private:
     inline static S3Status put_object_status = S3Status::NORMAL;
@@ -86,5 +92,7 @@ private:
     mutable std::unordered_map<String, BucketStorage> storage;
     mutable std::unordered_map<String, BucketStorageTagging> storage_tagging;
     mutable std::unordered_map<String, UploadParts> upload_parts;
+    mutable UInt64 get_object_count = 0;
+    mutable String last_get_object_range;
 };
 } // namespace DB::S3::tests
