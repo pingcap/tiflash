@@ -531,6 +531,39 @@ try
 }
 CATCH
 
+TEST_P(S3FileTest, ReopenFailureRestoresCommittedState)
+try
+{
+    const String key = "/a/b/c/reopen_failure_restore_state";
+    const size_t size = 1024 * 1024;
+    writeFile(key, size, WriteSettings{});
+
+    S3RandomAccessFile file(s3_client, key, nullptr);
+    std::vector<char> buff(buf_unit.size(), 0x00);
+    ASSERT_EQ(file.read(buff.data(), buff.size()), buff.size());
+
+    constexpr off_t committed_offset = 256;
+    constexpr off_t target_offset = committed_offset + 128 * 1024 + 1;
+    ASSERT_NE(file.summary().find(fmt::format("cur_offset={}", committed_offset)), String::npos);
+
+    FailPointHelper::enableFailPoint(FailPoints::force_s3_random_access_file_init_fail);
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_s3_random_access_file_init_fail); });
+    ASSERT_THROW(
+        {
+            const auto off = file.seek(target_offset, SEEK_SET);
+            static_cast<void>(off);
+        },
+        DB::Exception);
+
+    ASSERT_NE(file.summary().find(fmt::format("cur_offset={}", committed_offset)), String::npos);
+    ASSERT_NE(file.summary().find("cur_retry=0"), String::npos);
+
+    std::fill(buff.begin(), buff.end(), 0x00);
+    ASSERT_EQ(file.read(buff.data(), buff.size()), buff.size());
+    ASSERT_EQ(buff, buf_unit);
+}
+CATCH
+
 TEST_P(S3FileTest, WriteRead)
 try
 {

@@ -378,10 +378,20 @@ off_t S3RandomAccessFile::finalizeSeek(
 
 void S3RandomAccessFile::reopenAt(off_t target_offset, std::string_view action)
 {
-    cur_offset = target_offset;
-    // Each reopen starts a fresh initialize session. Stream-side retries must not inherit old GetObject debt.
-    cur_retry = 0;
-    initialize(action);
+    const auto previous_offset = cur_offset;
+    const auto previous_retry = cur_retry;
+    try
+    {
+        cur_offset = target_offset;
+        initialize(action);
+    }
+    catch (...)
+    {
+        // Reopen either commits the new initialize session or keeps the previous committed state intact.
+        cur_offset = previous_offset;
+        cur_retry = previous_retry;
+        throw;
+    }
 }
 
 off_t S3RandomAccessFile::recordSuccessfulSeek(
