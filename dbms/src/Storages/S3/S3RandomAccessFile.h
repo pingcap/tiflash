@@ -46,6 +46,7 @@ namespace DB::S3
 class S3RandomAccessFile final : public RandomAccessFile
 {
 public:
+    /// Create a random-access S3 file reader for the remote object key.
     static RandomAccessFilePtr create(const String & remote_fname);
 
     S3RandomAccessFile(
@@ -55,15 +56,17 @@ public:
 
     ~S3RandomAccessFile() override;
 
-    // Can only seek forward.
+    /// Seek to `offset` with `SEEK_SET`.
+    /// Forward seeks may reuse the current stream or reopen it depending on the implementation path.
     [[nodiscard]] off_t seek(off_t offset, int whence) override;
 
+    /// Read up to `size` bytes from the current offset and advance on success.
     [[nodiscard]] ssize_t read(char * buf, size_t size) override;
 
-    // Note that this will return "{S3Client.bucket_name}/{remote_fname}"
+    /// Return the fully qualified remote path as "{bucket}/{remote_fname}".
     std::string getFileName() const override;
 
-    // Return "remote_fname"
+    /// Return the object key without the bucket prefix.
     std::string getInitialFileName() const override;
 
     [[nodiscard]] ssize_t pread(char * /*buf*/, size_t /*size*/, off_t /*offset*/) const override
@@ -89,15 +92,24 @@ public:
         return ext::make_scope_guard([]() { read_file_info.reset(); });
     }
 
+    /// Return a short diagnostic string for logging and tests.
     String summary() const;
 
 private:
+    /// Open or reopen the body stream for the current `cur_offset`.
     void initialize(std::string_view action);
+    /// Reopen the object stream from `target_offset` and reset per-initialize retry state.
+    void reopenAt(off_t target_offset, std::string_view action);
     off_t seekImpl(off_t offset, int whence);
     ssize_t readImpl(char * buf, size_t size);
     String readRangeOfObject();
     ssize_t readChunked(char * buf, size_t size);
     ssize_t finalizeRead(size_t requested_size, size_t actual_size, const Stopwatch & sw, std::istream & istr);
+    off_t recordSuccessfulSeek(
+        off_t target_offset,
+        size_t logical_seek_size,
+        size_t remote_read_bytes,
+        const Stopwatch & sw);
     off_t finalizeSeek(
         off_t target_offset,
         size_t requested_size,
@@ -123,6 +135,7 @@ private:
     DB::LoggerPtr log;
     bool is_close = false;
 
+    /// Count GetObject failures within the current initialize session only.
     Int32 cur_retry = 0;
     static constexpr Int32 max_retry = 3;
     DM::ScanContextPtr scan_context;
