@@ -47,6 +47,7 @@ extern const Event S3GetObjectRetry;
 extern const Event S3IORead;
 extern const Event S3IOReadError;
 extern const Event S3IOSeek;
+extern const Event S3IOSeekReopen;
 extern const Event S3IOSeekError;
 extern const Event S3IOSeekBackward;
 } // namespace ProfileEvents
@@ -64,7 +65,7 @@ namespace
 {
 constexpr size_t s3_read_limiter_preferred_chunk_size = 128 * 1024;
 constexpr size_t s3_forward_seek_reopen_threshold = 128 * 1024;
-}
+} // namespace
 
 String S3RandomAccessFile::summary() const
 {
@@ -279,10 +280,19 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
     }
 
     auto bytes_to_ignore = static_cast<size_t>(offset_ - cur_offset);
-    if (shouldReopenForForwardSeek(bytes_to_ignore))
+    // whether a forward seek should reopen instead of draining the current stream body
+    if (bytes_to_ignore > s3_forward_seek_reopen_threshold)
     {
         Stopwatch sw;
         ProfileEvents::increment(ProfileEvents::S3IOSeek, 1);
+        ProfileEvents::increment(ProfileEvents::S3IOSeekReopen, 1);
+        LOG_DEBUG(
+            log,
+            "Forward seek reopens S3 stream: cur_offset={} target_offset={} bytes_to_ignore={} reopen_threshold={}",
+            cur_offset,
+            offset_,
+            bytes_to_ignore,
+            s3_forward_seek_reopen_threshold);
         // Large forward seeks are treated as logical repositioning. Reopen avoids draining the old body stream.
         reopenAt(offset_, "seek forward by reopen");
         return recordSuccessfulSeek(offset_, bytes_to_ignore, /* remote_read_bytes */ 0, sw);
@@ -372,11 +382,6 @@ void S3RandomAccessFile::reopenAt(off_t target_offset, std::string_view action)
     // Each reopen starts a fresh initialize session. Stream-side retries must not inherit old GetObject debt.
     cur_retry = 0;
     initialize(action);
-}
-
-bool S3RandomAccessFile::shouldReopenForForwardSeek(size_t bytes_to_skip) const
-{
-    return bytes_to_skip > s3_forward_seek_reopen_threshold;
 }
 
 off_t S3RandomAccessFile::recordSuccessfulSeek(
