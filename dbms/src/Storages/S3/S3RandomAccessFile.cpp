@@ -63,6 +63,7 @@ namespace DB::S3
 namespace
 {
 constexpr size_t s3_read_limiter_preferred_chunk_size = 128 * 1024;
+constexpr size_t s3_forward_seek_reopen_threshold = 128 * 1024;
 }
 
 String S3RandomAccessFile::summary() const
@@ -277,6 +278,16 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
         return cur_offset;
     }
 
+    auto bytes_to_ignore = static_cast<size_t>(offset_ - cur_offset);
+    if (shouldReopenForForwardSeek(bytes_to_ignore))
+    {
+        Stopwatch sw;
+        ProfileEvents::increment(ProfileEvents::S3IOSeek, 1);
+        // Large forward seeks are treated as logical repositioning. Reopen avoids draining the old body stream.
+        reopenAt(offset_, "seek forward by reopen");
+        return recordSuccessfulSeek(offset_, bytes_to_ignore, /* remote_read_bytes */ 0, sw);
+    }
+
     if (read_limiter != nullptr && read_limiter->maxReadBytesPerSec() > 0)
         return seekChunked(offset_);
 
@@ -284,7 +295,6 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
     Stopwatch sw;
     ProfileEvents::increment(ProfileEvents::S3IOSeek, 1);
     auto & istr = read_result.GetBody();
-    auto bytes_to_ignore = static_cast<size_t>(offset_ - cur_offset);
     istr.ignore(bytes_to_ignore);
     return finalizeSeek(offset_, bytes_to_ignore, istr.gcount(), sw, istr);
 }
@@ -353,29 +363,7 @@ off_t S3RandomAccessFile::finalizeSeek(
         return (state & std::ios_base::failbit || state & std::ios_base::badbit) ? S3StreamError : S3UnknownError;
     }
 
-    auto elapsed_secs = sw.elapsedSeconds();
-    if (scan_context)
-    {
-        scan_context->disagg_s3file_seek_time_ms += elapsed_secs * 1000;
-        scan_context->disagg_s3file_seek_count += 1;
-        scan_context->disagg_s3file_seek_bytes += actual_size;
-    }
-    GET_METRIC(tiflash_storage_s3_request_seconds, type_read_stream).Observe(elapsed_secs);
-    if (elapsed_secs > 0.01)
-    {
-        LOG_DEBUG(
-            log,
-            "ignore_count={} cur_offset={} content_length={} cost={:.3f}s",
-            actual_size,
-            cur_offset,
-            content_length,
-            elapsed_secs);
-    }
-    ProfileEvents::increment(ProfileEvents::S3ReadBytes, actual_size);
-    if (read_metrics_recorder != nullptr)
-        read_metrics_recorder->recordBytes(actual_size, S3ReadSource::DirectRead);
-    cur_offset = target_offset;
-    return cur_offset;
+    return recordSuccessfulSeek(target_offset, requested_size, actual_size, sw);
 }
 
 void S3RandomAccessFile::reopenAt(off_t target_offset, std::string_view action)
@@ -384,6 +372,47 @@ void S3RandomAccessFile::reopenAt(off_t target_offset, std::string_view action)
     // Each reopen starts a fresh initialize session. Stream-side retries must not inherit old GetObject debt.
     cur_retry = 0;
     initialize(action);
+}
+
+bool S3RandomAccessFile::shouldReopenForForwardSeek(size_t bytes_to_skip) const
+{
+    return bytes_to_skip > s3_forward_seek_reopen_threshold;
+}
+
+off_t S3RandomAccessFile::recordSuccessfulSeek(
+    off_t target_offset,
+    size_t logical_seek_size,
+    size_t remote_read_bytes,
+    const Stopwatch & sw)
+{
+    auto elapsed_secs = sw.elapsedSeconds();
+    if (scan_context)
+    {
+        scan_context->disagg_s3file_seek_time_ms += elapsed_secs * 1000;
+        scan_context->disagg_s3file_seek_count += 1;
+        scan_context->disagg_s3file_seek_bytes += logical_seek_size;
+    }
+    GET_METRIC(tiflash_storage_s3_request_seconds, type_read_stream).Observe(elapsed_secs);
+    if (elapsed_secs > 0.01)
+    {
+        LOG_DEBUG(
+            log,
+            "target_offset={} logical_seek_size={} remote_read_bytes={} cur_offset={} content_length={} cost={:.3f}s",
+            target_offset,
+            logical_seek_size,
+            remote_read_bytes,
+            cur_offset,
+            content_length,
+            elapsed_secs);
+    }
+    if (remote_read_bytes > 0)
+    {
+        ProfileEvents::increment(ProfileEvents::S3ReadBytes, remote_read_bytes);
+        if (read_metrics_recorder != nullptr)
+            read_metrics_recorder->recordBytes(remote_read_bytes, S3ReadSource::DirectRead);
+    }
+    cur_offset = target_offset;
+    return cur_offset;
 }
 
 String S3RandomAccessFile::readRangeOfObject()
