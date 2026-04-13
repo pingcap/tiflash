@@ -14,11 +14,19 @@
 
 #pragma once
 
+#include <Columns/ColumnNullable.h>
+#include <Columns/ColumnString.h>
+#include <Columns/ColumnsNumber.h>
 #include <Common/Logger.h>
+#include <Common/typeid_cast.h>
 #include <Core/Block.h>
 #include <Core/NamesAndTypes.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataTypes/DataTypeDate.h>
+#include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeMyDate.h>
+#include <DataTypes/DataTypeMyDateTime.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/DAGCodec.h>
@@ -29,7 +37,9 @@
 #include <common/types.h>
 #include <fcntl.h>
 #include <fmt/os.h>
+#include <stdexcept>
 #include <tici-search-lib/src/lib.rs.h>
+#include <unordered_map>
 
 namespace DB::TS
 {
@@ -49,8 +59,6 @@ inline UInt64 convertPackedU64WithTimezone(UInt64 from_time, const TimezoneInfo 
 class TantivyInputStream : public IProfilingBlockInputStream
 {
     static constexpr auto NAME = "TantivyInputStream";
-
-    static constexpr auto version_column_name = "column_-1024";
 
 public:
     TantivyInputStream(
@@ -89,16 +97,15 @@ public:
     Block readImpl() override
     {
         if (done)
-        {
             return {};
-        }
+
         Block ret = readFromS3(is_count);
         done = true;
         return ret;
     }
 
 protected:
-    Block readFromS3(bool is_count)
+    Block readFromS3(bool is_count_search)
     {
         auto return_fields = getFields(return_columns);
         auto shard_info = query_shard_info;
@@ -107,21 +114,18 @@ protected:
 
         rust::Vec<rust::String> tici_sort_column_names;
         for (const auto & sort_column_id : sort_column_ids)
-        {
             tici_sort_column_names.push_back(rust::String("column_" + std::to_string(sort_column_id)));
-        }
+
         rust::Vec<bool> tici_sort_column_asc;
         for (const auto & asc : sort_column_asc)
-        {
             tici_sort_column_asc.push_back(asc);
-        }
 
         SearchParam search_param{
             .limit = static_cast<size_t>(limit),
             .sort_field_names = std::move(tici_sort_column_names),
             .is_asc = std::move(tici_sort_column_asc),
         };
-        if (is_count)
+        if (is_count_search)
             return_fields = {};
 
         RUNTIME_CHECK(shards_snapshot != nullptr);
@@ -141,7 +145,7 @@ protected:
             read_ts);
 
         Block res(return_columns);
-        if (is_count)
+        if (is_count_search)
         {
             RUNTIME_CHECK_MSG(return_columns.size() == 1, "count search should return one column");
             auto & column = res.getByPosition(0).column->assumeMutableRef();
@@ -149,101 +153,41 @@ protected:
             return res;
         }
 
-        auto documents = search_result.rows;
-        if (documents.empty())
-        {
-            return res;
-        }
-        for (auto & name_and_type : return_columns)
-        {
-            int idx = -1;
-            for (size_t j = 0; j < documents[0].fieldValues.size(); j++)
-            {
-                if (documents[0].fieldValues[j].field_name == name_and_type.name)
-                {
-                    idx = j;
-                    break;
-                }
-            }
-            if (idx == -1)
-            {
-                if (name_and_type.name == version_column_name)
-                {
-                    auto col = res.getByName(name_and_type.name).column->assumeMutable();
-                    for (auto & doc : documents)
-                    {
-                        col->insert(Field(doc.version));
-                    }
-                    continue;
-                }
-                for (size_t j = 0; j < documents.size(); j++)
-                {
-                    // Insert default value for missing fields
-                    res.getByName(name_and_type.name).column->assumeMutable()->insertDefault();
-                }
-                continue;
-            }
+        RUNTIME_CHECK_MSG(
+            search_result.result_type == result_type_rows(),
+            "expected row search result, got type {}",
+            search_result.result_type);
 
-            auto col = res.getByName(name_and_type.name).column->assumeMutable();
-            bool has_null = false;
-            if (removeNullable(name_and_type.type)->isStringOrFixedString())
-            {
-                for (auto & doc : documents)
-                {
-                    const auto & field_value = doc.fieldValues[idx];
-                    if (field_value.is_null)
-                    {
-                        has_null = true;
-                        col->insert(Field());
-                    }
-                    else
-                    {
-                        const auto & v = field_value.string_value;
-                        col->insert(Field(String(v.begin(), v.end())));
-                    }
-                }
-            }
-            if (removeNullable(name_and_type.type)->isInteger())
-            {
-                for (auto & doc : documents)
-                {
-                    const auto & field_value = doc.fieldValues[idx];
-                    if (field_value.is_null)
-                    {
-                        has_null = true;
-                        col->insert(Field());
-                    }
-                    else
-                    {
-                        col->insert(Field(field_value.int_value));
-                    }
-                }
-            }
-            if (removeNullable(name_and_type.type)->isDateOrDateTime())
-            {
-                for (auto & doc : documents)
-                {
-                    const auto & field_value = doc.fieldValues[idx];
-                    if (field_value.is_null)
-                    {
-                        has_null = true;
-                        col->insert(Field());
-                    }
-                    else
-                    {
-                        auto t = static_cast<UInt64>(field_value.int_value);
-                        col->insert(Field(t));
-                    }
-                }
-            }
-            if (has_null)
-            {
-                RUNTIME_CHECK_MSG(
-                    col->isColumnNullable(),
-                    "column {} is not nullable, but got null value from TiCI",
-                    name_and_type.name);
-            }
+        const auto row_count = static_cast<size_t>(search_result.row_count);
+        if (row_count == 0)
+            return res;
+
+        auto name_to_pos = buildColumnPositionMap(return_columns);
+        std::vector<bool> filled(return_columns.size(), false);
+
+        for (const auto & column_data : search_result.i64_columns)
+        {
+            installIntegerLikeColumn(res, name_to_pos, filled, return_columns, column_data.col_name, column_data.values, column_data.null_map);
         }
+        for (const auto & column_data : search_result.u64_columns)
+        {
+            installIntegerLikeColumn(res, name_to_pos, filled, return_columns, column_data.col_name, column_data.values, column_data.null_map);
+        }
+        for (const auto & column_data : search_result.f64_columns)
+        {
+            installFloatColumn(res, name_to_pos, filled, return_columns, column_data);
+        }
+        for (const auto & column_data : search_result.bytes_columns)
+        {
+            installBytesColumn(res, name_to_pos, filled, return_columns, column_data);
+        }
+
+        for (size_t i = 0; i < return_columns.size(); ++i)
+        {
+            if (!filled[i])
+                fillDefaultColumn(res.getByPosition(i), row_count);
+        }
+
         return res;
     }
 
@@ -264,13 +208,270 @@ private:
     bool is_count;
     std::shared_ptr<rust::Box<ShardsSnapshot>> shards_snapshot;
 
+    static bool isNullableType(const DataTypePtr & type)
+    {
+        return typeid_cast<const DataTypeNullable *>(type.get()) != nullptr;
+    }
+
+    static std::unordered_map<String, size_t> buildColumnPositionMap(const NamesAndTypes & columns)
+    {
+        std::unordered_map<String, size_t> positions;
+        positions.reserve(columns.size());
+        for (size_t i = 0; i < columns.size(); ++i)
+            positions.emplace(columns[i].name, i);
+        return positions;
+    }
+
+    static bool hasNullValues(const rust::Vec<::std::uint8_t> & null_map)
+    {
+        for (size_t i = 0; i < null_map.size(); ++i)
+        {
+            if (null_map[i] != 0)
+                return true;
+        }
+        return false;
+    }
+
+    static ColumnUInt8::MutablePtr buildNullMapColumn(size_t row_count, const rust::Vec<::std::uint8_t> & null_map)
+    {
+        auto null_map_column = ColumnUInt8::create(row_count, 0);
+        if (null_map.size() == 0)
+            return null_map_column;
+
+        RUNTIME_CHECK_MSG(
+            null_map.size() == row_count,
+            "null map size mismatch, expect {}, got {}",
+            row_count,
+            null_map.size());
+        auto & dst = null_map_column->getData();
+        for (size_t i = 0; i < row_count; ++i)
+            dst[i] = null_map[i];
+        return null_map_column;
+    }
+
+    static void checkNonNullableColumnHasNoNulls(
+        const NameAndTypePair & name_and_type,
+        const rust::Vec<::std::uint8_t> & null_map)
+    {
+        RUNTIME_CHECK_MSG(
+            !hasNullValues(null_map),
+            "column {} is not nullable, but got null value from TiCI",
+            name_and_type.name);
+    }
+
+    static void fillDefaultColumn(ColumnWithTypeAndName & column, size_t row_count)
+    {
+        auto mutable_column = column.type->createColumn();
+        for (size_t i = 0; i < row_count; ++i)
+            mutable_column->insertDefault();
+        column.column = std::move(mutable_column);
+    }
+
+    template <typename TargetType, typename SourceType>
+    static MutableColumnPtr buildNumericColumn(
+        const NameAndTypePair & name_and_type,
+        const rust::Vec<SourceType> & values,
+        const rust::Vec<::std::uint8_t> & null_map)
+    {
+        const auto row_count = values.size();
+        auto nested_column = ColumnVector<TargetType>::create(row_count);
+        auto & data = nested_column->getData();
+        const bool has_null_map = null_map.size() != 0;
+
+        if (has_null_map)
+        {
+            RUNTIME_CHECK_MSG(
+                null_map.size() == row_count,
+                "null map size mismatch for column {}, expect {}, got {}",
+                name_and_type.name,
+                row_count,
+                null_map.size());
+        }
+
+        for (size_t i = 0; i < row_count; ++i)
+        {
+            if (has_null_map && null_map[i] != 0)
+                data[i] = TargetType{};
+            else
+                data[i] = static_cast<TargetType>(values[i]);
+        }
+
+        if (isNullableType(name_and_type.type))
+            return ColumnNullable::create(std::move(nested_column), buildNullMapColumn(row_count, null_map));
+
+        checkNonNullableColumnHasNoNulls(name_and_type, null_map);
+        return nested_column;
+    }
+
+    template <typename SourceType>
+    static MutableColumnPtr buildIntegerLikeColumn(
+        const NameAndTypePair & name_and_type,
+        const rust::Vec<SourceType> & values,
+        const rust::Vec<::std::uint8_t> & null_map)
+    {
+        const auto nested_type = removeNullable(name_and_type.type);
+        if (typeid_cast<const DataTypeInt8 *>(nested_type.get()))
+            return buildNumericColumn<Int8>(name_and_type, values, null_map);
+        if (typeid_cast<const DataTypeInt16 *>(nested_type.get()))
+            return buildNumericColumn<Int16>(name_and_type, values, null_map);
+        if (typeid_cast<const DataTypeInt32 *>(nested_type.get()))
+            return buildNumericColumn<Int32>(name_and_type, values, null_map);
+        if (typeid_cast<const DataTypeInt64 *>(nested_type.get()))
+            return buildNumericColumn<Int64>(name_and_type, values, null_map);
+        if (typeid_cast<const DataTypeUInt8 *>(nested_type.get()))
+            return buildNumericColumn<UInt8>(name_and_type, values, null_map);
+        if (typeid_cast<const DataTypeUInt16 *>(nested_type.get()))
+            return buildNumericColumn<UInt16>(name_and_type, values, null_map);
+        if (typeid_cast<const DataTypeUInt32 *>(nested_type.get()))
+            return buildNumericColumn<UInt32>(name_and_type, values, null_map);
+        if (typeid_cast<const DataTypeUInt64 *>(nested_type.get()))
+            return buildNumericColumn<UInt64>(name_and_type, values, null_map);
+        if (typeid_cast<const DataTypeDate *>(nested_type.get()))
+            return buildNumericColumn<DataTypeDate::FieldType>(name_and_type, values, null_map);
+        if (typeid_cast<const DataTypeDateTime *>(nested_type.get()))
+            return buildNumericColumn<DataTypeDateTime::FieldType>(name_and_type, values, null_map);
+        if (typeid_cast<const DataTypeMyDate *>(nested_type.get()))
+            return buildNumericColumn<DataTypeMyDate::FieldType>(name_and_type, values, null_map);
+        if (typeid_cast<const DataTypeMyDateTime *>(nested_type.get()))
+            return buildNumericColumn<DataTypeMyDateTime::FieldType>(name_and_type, values, null_map);
+
+        throw std::runtime_error(
+            fmt::format("unsupported integer-like target type {} for column {}", nested_type->getName(), name_and_type.name));
+    }
+
+    static MutableColumnPtr buildFloatColumn(
+        const NameAndTypePair & name_and_type,
+        const rust::Vec<double> & values,
+        const rust::Vec<::std::uint8_t> & null_map)
+    {
+        const auto nested_type = removeNullable(name_and_type.type);
+        if (typeid_cast<const DataTypeFloat32 *>(nested_type.get()))
+            return buildNumericColumn<Float32>(name_and_type, values, null_map);
+        if (typeid_cast<const DataTypeFloat64 *>(nested_type.get()))
+            return buildNumericColumn<Float64>(name_and_type, values, null_map);
+
+        throw std::runtime_error(
+            fmt::format("unsupported float target type {} for column {}", nested_type->getName(), name_and_type.name));
+    }
+
+    static MutableColumnPtr buildBytesColumn(const NameAndTypePair & name_and_type, const BytesColumnData & column_data)
+    {
+        const auto row_count = column_data.offsets.size();
+        if (column_data.offsets.size() != 0)
+        {
+            RUNTIME_CHECK_MSG(
+                column_data.offsets[column_data.offsets.size() - 1] == column_data.chars.size(),
+                "string offsets and chars size mismatch for column {}",
+                name_and_type.name);
+        }
+
+        if (removeNullable(name_and_type.type)->isString())
+        {
+            auto nested_column = ColumnString::create();
+            auto & chars = nested_column->getChars();
+            auto & offsets = nested_column->getOffsets();
+
+            chars.resize(column_data.chars.size());
+            for (size_t i = 0; i < column_data.chars.size(); ++i)
+                chars[i] = column_data.chars[i];
+
+            offsets.resize(row_count);
+            for (size_t i = 0; i < row_count; ++i)
+                offsets[i] = static_cast<ColumnString::Offset>(column_data.offsets[i]);
+
+            if (isNullableType(name_and_type.type))
+                return ColumnNullable::create(std::move(nested_column), buildNullMapColumn(row_count, column_data.null_map));
+
+            checkNonNullableColumnHasNoNulls(name_and_type, column_data.null_map);
+            return nested_column;
+        }
+
+        auto column = name_and_type.type->createColumn();
+        if (!isNullableType(name_and_type.type))
+            checkNonNullableColumnHasNoNulls(name_and_type, column_data.null_map);
+
+        size_t prev_offset = 0;
+        for (size_t i = 0; i < row_count; ++i)
+        {
+            const auto current_offset = static_cast<size_t>(column_data.offsets[i]);
+            RUNTIME_CHECK_MSG(
+                current_offset >= prev_offset && current_offset > 0,
+                "invalid string offset {} for column {}",
+                current_offset,
+                name_and_type.name);
+            const auto value_size = current_offset - prev_offset - 1;
+            if (i < column_data.null_map.size() && column_data.null_map[i] != 0)
+                column->insertDefault();
+            else
+                column->insert(Field(String(reinterpret_cast<const char *>(&column_data.chars[prev_offset]), value_size)));
+            prev_offset = current_offset;
+        }
+
+        return column;
+    }
+
+    template <typename ValueType>
+    static void installIntegerLikeColumn(
+        Block & res,
+        const std::unordered_map<String, size_t> & name_to_pos,
+        std::vector<bool> & filled,
+        const NamesAndTypes & columns,
+        const rust::String & col_name,
+        const rust::Vec<ValueType> & values,
+        const rust::Vec<::std::uint8_t> & null_map)
+    {
+        const String column_name(col_name);
+        const auto it = name_to_pos.find(column_name);
+        RUNTIME_CHECK_MSG(it != name_to_pos.end(), "unexpected column {} returned from TiCI", column_name);
+
+        const auto pos = it->second;
+        RUNTIME_CHECK_MSG(!filled[pos], "duplicate column {} returned from TiCI", column_name);
+        auto & result_column = res.getByPosition(pos);
+        result_column.column = buildIntegerLikeColumn(columns[pos], values, null_map);
+        filled[pos] = true;
+    }
+
+    static void installFloatColumn(
+        Block & res,
+        const std::unordered_map<String, size_t> & name_to_pos,
+        std::vector<bool> & filled,
+        const NamesAndTypes & columns,
+        const F64ColumnData & column_data)
+    {
+        const String column_name(column_data.col_name);
+        const auto it = name_to_pos.find(column_name);
+        RUNTIME_CHECK_MSG(it != name_to_pos.end(), "unexpected column {} returned from TiCI", column_name);
+
+        const auto pos = it->second;
+        RUNTIME_CHECK_MSG(!filled[pos], "duplicate column {} returned from TiCI", column_name);
+        auto & result_column = res.getByPosition(pos);
+        result_column.column = buildFloatColumn(columns[pos], column_data.values, column_data.null_map);
+        filled[pos] = true;
+    }
+
+    static void installBytesColumn(
+        Block & res,
+        const std::unordered_map<String, size_t> & name_to_pos,
+        std::vector<bool> & filled,
+        const NamesAndTypes & columns,
+        const BytesColumnData & column_data)
+    {
+        const String column_name(column_data.col_name);
+        const auto it = name_to_pos.find(column_name);
+        RUNTIME_CHECK_MSG(it != name_to_pos.end(), "unexpected column {} returned from TiCI", column_name);
+
+        const auto pos = it->second;
+        RUNTIME_CHECK_MSG(!filled[pos], "duplicate column {} returned from TiCI", column_name);
+        auto & result_column = res.getByPosition(pos);
+        result_column.column = buildBytesColumn(columns[pos], column_data);
+        filled[pos] = true;
+    }
+
     static rust::Vec<rust::String> getFields(NamesAndTypes & columns)
     {
         rust::Vec<rust::String> fields;
         for (auto & name_and_type : columns)
-        {
             fields.push_back(name_and_type.name);
-        }
         return fields;
     }
 
