@@ -558,7 +558,6 @@ private:
 
     void waitForDeleteRange(const DMContextPtr & context, const SegmentPtr & segment);
 
-    bool shouldReduceGcMergeableSegmentsCap(const Exception & e) const;
     void reduceGcMergeableSegmentsCap(std::string_view reason);
     void recoverGcMergeableSegmentsCap(std::string_view reason);
 
