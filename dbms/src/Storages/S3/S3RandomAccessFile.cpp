@@ -64,7 +64,7 @@ namespace DB::S3
 namespace
 {
 constexpr size_t s3_read_limiter_preferred_chunk_size = 128 * 1024;
-constexpr size_t s3_forward_seek_reopen_threshold = 128 * 1024;
+constexpr size_t s3_forward_seek_reopen_threshold = 64 * 1024;
 } // namespace
 
 String S3RandomAccessFile::summary() const
@@ -120,6 +120,19 @@ bool shouldRetryStreamError(Int32 retried_times, int ret, int err, Int32 max_ret
 {
     return retried_times + 1 < max_retry_times && isRetryableError(ret, err);
 }
+
+const char * retryableErrorName(int ret, int err)
+{
+    if (ret == S3StreamError)
+        return "stream_error";
+    if (err == ECONNRESET)
+        return "ECONNRESET";
+    if (err == EAGAIN)
+        return "EAGAIN";
+    if (err == EINPROGRESS)
+        return "EINPROGRESS";
+    return "unknown";
+}
 } // namespace
 
 ssize_t S3RandomAccessFile::read(char * buf, size_t size)
@@ -127,11 +140,23 @@ ssize_t S3RandomAccessFile::read(char * buf, size_t size)
     for (Int32 stream_retry_times = 0;; ++stream_retry_times)
     {
         auto n = readImpl(buf, size);
-        if (unlikely(n < 0 && shouldRetryStreamError(stream_retry_times, n, errno, max_retry)))
+        const auto err = errno;
+        if (unlikely(n < 0))
         {
-            // Stream-side retries reopen from the last committed offset instead of sharing initialize state.
-            reopenAt(cur_offset, "read meet retryable error");
-            continue;
+            const auto retryable = isRetryableError(n, err);
+            const auto can_retry = shouldRetryStreamError(stream_retry_times, n, err, max_retry);
+            if (can_retry)
+            {
+                // Stream-side retries reopen from the last committed offset instead of sharing initialize state.
+                reopenAt(cur_offset, "read meet retryable error");
+                continue;
+            }
+            if (retryable)
+            {
+                // The failure is still retryable, but this call has already used up the bounded stream-side
+                // retries. Convert it to S3_ERROR here so upper layers can classify the final remote read.
+                throwRetryExhaustedError("read", n, err);
+            }
         }
         return n;
     }
@@ -246,14 +271,40 @@ off_t S3RandomAccessFile::seek(off_t offset_, int whence)
     for (Int32 stream_retry_times = 0;; ++stream_retry_times)
     {
         auto off = seekImpl(offset_, whence);
-        if (unlikely(off < 0 && shouldRetryStreamError(stream_retry_times, off, errno, max_retry)))
+        const auto err = errno;
+        if (unlikely(off < 0))
         {
-            // Retry the seek from the last committed offset rather than from a partially drained stream.
-            reopenAt(cur_offset, "seek meet retryable error");
-            continue;
+            const auto retryable = isRetryableError(off, err);
+            const auto can_retry = shouldRetryStreamError(stream_retry_times, off, err, max_retry);
+            if (can_retry)
+            {
+                // Retry the seek from the last committed offset rather than from a partially drained stream.
+                reopenAt(cur_offset, "seek meet retryable error");
+                continue;
+            }
+            if (retryable)
+            {
+                // The failure is still retryable, but this call has already used up the bounded stream-side
+                // retries. Convert it to S3_ERROR here so upper layers can classify the final remote read.
+                throwRetryExhaustedError("seek", off, err);
+            }
         }
         return off;
     }
+}
+
+void S3RandomAccessFile::throwRetryExhaustedError(std::string_view action, int ret, int err) const
+{
+    throw Exception(
+        ErrorCodes::S3_ERROR,
+        "S3RandomAccessFile {} failed after {} stream retries, key={}, cur_offset={}, ret={}, errno={} ({})",
+        action,
+        max_retry,
+        remote_fname,
+        cur_offset,
+        ret,
+        err,
+        retryableErrorName(ret, err));
 }
 
 off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
