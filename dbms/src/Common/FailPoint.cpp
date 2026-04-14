@@ -135,6 +135,8 @@ namespace DB
     M(force_set_proxy_state_machine_cpu_cores)               \
     M(force_join_v2_probe_enable_lm)                         \
     M(force_join_v2_probe_disable_lm)                        \
+    M(force_gc_try_segment_merge_generic_error)              \
+    M(force_gc_try_segment_merge_s3_error)                   \
     M(force_s3_random_access_file_init_fail)                 \
     M(force_s3_random_access_file_read_fail)                 \
     M(force_s3_random_access_file_seek_fail)                 \
