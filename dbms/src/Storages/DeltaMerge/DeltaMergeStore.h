@@ -454,6 +454,12 @@ public:
     /// Iterator over all segments and apply gc jobs.
     UInt64 onSyncGc(Int64 limit, const GCOptions & gc_options);
 
+    /// Test hook for verifying the background GC merge fan-in cap.
+    UInt32 getGcMergeableSegmentsCapForTest() const;
+
+    /// Test hook for overriding the background GC merge fan-in cap.
+    void setGcMergeableSegmentsCapForTest(UInt32 cap);
+
     /**
      * Try to merge the segment in the current thread as the GC operation.
      * This function may be blocking, and should be called in the GC background thread.
@@ -551,6 +557,10 @@ private:
     void waitForWrite(const DMContextPtr & context, const SegmentPtr & segment);
 
     void waitForDeleteRange(const DMContextPtr & context, const SegmentPtr & segment);
+
+    bool shouldReduceGcMergeableSegmentsCap(const Exception & e) const;
+    void reduceGcMergeableSegmentsCap(std::string_view reason);
+    void recoverGcMergeableSegmentsCap(std::string_view reason);
 
     /// Should be called after every write into DeltaMergeStore.
     /// If the delta cache reaches the foreground flush limit, it will also trigger a KVStore flush of related regions,
@@ -834,6 +844,10 @@ private:
 public:
 #endif
 
+    static constexpr UInt32 gc_mergeable_segments_cap_default = 32;
+    static constexpr UInt32 gc_mergeable_segments_cap_min = 2;
+    static constexpr UInt32 gc_mergeable_segments_cap_recover_step = 2;
+
     /**
       * Ensure the segment has delta index.
       * If the segment has no delta index, it will be built in background.
@@ -918,6 +932,7 @@ public:
     MergeDeltaTaskPool background_tasks;
 
     std::atomic<DB::Timestamp> latest_gc_safe_point = 0;
+    std::atomic<UInt32> gc_mergeable_segments_cap = gc_mergeable_segments_cap_default;
 
     RowKeyValue next_gc_check_key;
 

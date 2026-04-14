@@ -39,12 +39,30 @@ namespace DB
 {
 namespace FailPoints
 {
+extern const char force_gc_try_segment_merge_generic_error[];
+extern const char force_gc_try_segment_merge_s3_error[];
 extern const char pause_before_dt_background_delta_merge[];
 extern const char pause_until_dt_background_delta_merge[];
 } // namespace FailPoints
 
+namespace ErrorCodes
+{
+extern const int LOGICAL_ERROR;
+extern const int S3_ERROR;
+} // namespace ErrorCodes
+
 namespace DM
 {
+UInt32 DeltaMergeStore::getGcMergeableSegmentsCapForTest() const
+{
+    return gc_mergeable_segments_cap.load(std::memory_order_relaxed);
+}
+
+void DeltaMergeStore::setGcMergeableSegmentsCapForTest(UInt32 cap)
+{
+    gc_mergeable_segments_cap.store(std::max(cap, gc_mergeable_segments_cap_min), std::memory_order_relaxed);
+}
+
 // A callback class for scanning the DMFiles on local filesystem
 class LocalDMFileGcScanner final
 {
@@ -326,6 +344,7 @@ std::vector<SegmentPtr> DeltaMergeStore::getMergeableSegments(
     // segment merging for this case in future.
     auto max_total_rows = context->segment_limit_rows;
     auto max_total_bytes = context->segment_limit_bytes;
+    const auto max_mergeable_segments = gc_mergeable_segments_cap.load(std::memory_order_relaxed);
 
     std::vector<SegmentPtr> results;
     {
@@ -342,6 +361,8 @@ std::vector<SegmentPtr> DeltaMergeStore::getMergeableSegments(
         auto it = segments.upper_bound(base_segment->getRowKeyRange().getEnd());
         while (it != segments.end())
         {
+            if (results.size() >= max_mergeable_segments)
+                break;
             const auto & this_seg = it->second;
             const auto this_rows = this_seg->getEstimatedRows();
             const auto this_bytes = this_seg->getEstimatedBytes();
@@ -364,6 +385,56 @@ std::vector<SegmentPtr> DeltaMergeStore::getMergeableSegments(
         return {};
 
     return results;
+}
+
+bool DeltaMergeStore::shouldReduceGcMergeableSegmentsCap(const Exception & e) const
+{
+    return e.code() == ErrorCodes::S3_ERROR;
+}
+
+void DeltaMergeStore::reduceGcMergeableSegmentsCap(std::string_view reason)
+{
+    auto old_cap = gc_mergeable_segments_cap.load(std::memory_order_relaxed);
+    while (true)
+    {
+        const auto new_cap = std::max(gc_mergeable_segments_cap_min, old_cap / 2);
+        if (new_cap == old_cap)
+            return;
+        if (gc_mergeable_segments_cap.compare_exchange_weak(old_cap, new_cap, std::memory_order_relaxed))
+        {
+            LOG_INFO(
+                log,
+                "GC - Reduce mergeable segments cap, table_id={} old_cap={} new_cap={} reason={}",
+                physical_table_id,
+                old_cap,
+                new_cap,
+                reason);
+            return;
+        }
+    }
+}
+
+void DeltaMergeStore::recoverGcMergeableSegmentsCap(std::string_view reason)
+{
+    auto old_cap = gc_mergeable_segments_cap.load(std::memory_order_relaxed);
+    while (true)
+    {
+        const auto new_cap
+            = std::min(gc_mergeable_segments_cap_default, old_cap + gc_mergeable_segments_cap_recover_step);
+        if (new_cap == old_cap)
+            return;
+        if (gc_mergeable_segments_cap.compare_exchange_weak(old_cap, new_cap, std::memory_order_relaxed))
+        {
+            LOG_INFO(
+                log,
+                "GC - Recover mergeable segments cap, table_id={} old_cap={} new_cap={} reason={}",
+                physical_table_id,
+                old_cap,
+                new_cap,
+                reason);
+            return;
+        }
+    }
 }
 
 bool DeltaMergeStore::updateGCSafePoint()
@@ -736,9 +807,22 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMerge(const DMContextPtr & dm_context, c
     }
 
     LOG_INFO(log, "GC - Trigger Merge, segment={}", segment->simpleInfo());
+    fiu_do_on(FailPoints::force_gc_try_segment_merge_s3_error, {
+        throw Exception(
+            ErrorCodes::S3_ERROR,
+            "Injected S3_ERROR in gcTrySegmentMerge, segment={}",
+            segment->simpleInfo());
+    });
+    fiu_do_on(FailPoints::force_gc_try_segment_merge_generic_error, {
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Injected non-S3 error in gcTrySegmentMerge, segment={}",
+            segment->simpleInfo());
+    });
     auto new_segment = segmentMerge(*dm_context, segments_to_merge, SegmentMergeReason::BackgroundGCThread);
     if (new_segment)
     {
+        recoverGcMergeableSegmentsCap("background_gc_merge_success");
         checkSegmentUpdate(dm_context, new_segment, ThreadType::BG_GC, InputType::NotRaft);
     }
 
@@ -950,6 +1034,8 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit, const GCOptions & gc_options)
         }
         catch (Exception & e)
         {
+            if (gc_options.do_merge && shouldReduceGcMergeableSegmentsCap(e))
+                reduceGcMergeableSegmentsCap("background_gc_merge_s3_error");
             e.addMessage(
                 fmt::format("Error while GC segment, segment={} log_ident={}", segment->info(), log->identifier()));
             e.rethrow();
