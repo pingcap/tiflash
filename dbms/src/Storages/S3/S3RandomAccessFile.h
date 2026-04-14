@@ -39,7 +39,8 @@ class TiFlashS3Client;
 namespace DB::ErrorCodes
 {
 extern const int NOT_IMPLEMENTED;
-}
+extern const int S3_ERROR;
+} // namespace DB::ErrorCodes
 
 namespace DB::S3
 {
@@ -58,9 +59,11 @@ public:
 
     /// Seek to `offset` with `SEEK_SET`.
     /// Forward seeks may reuse the current stream or reopen it depending on the implementation path.
+    /// Throws `ErrorCodes::S3_ERROR` when the remote stream keeps failing after the bounded retry budget is exhausted.
     [[nodiscard]] off_t seek(off_t offset, int whence) override;
 
     /// Read up to `size` bytes from the current offset and advance on success.
+    /// Throws `ErrorCodes::S3_ERROR` when the remote stream keeps failing after the bounded retry budget is exhausted.
     [[nodiscard]] ssize_t read(char * buf, size_t size) override;
 
     /// Return the fully qualified remote path as "{bucket}/{remote_fname}".
@@ -100,6 +103,8 @@ private:
     void initialize(std::string_view action);
     /// Reopen the object stream from `target_offset` and reset per-initialize retry state.
     void reopenAt(off_t target_offset, std::string_view action);
+    /// Convert the final retry-exhausted remote read/seek failure into a stable S3-specific error code.
+    [[noreturn]] void throwRetryExhaustedError(std::string_view action, int ret, int err) const;
     off_t seekImpl(off_t offset, int whence);
     ssize_t readImpl(char * buf, size_t size);
     String readRangeOfObject();
