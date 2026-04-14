@@ -141,14 +141,23 @@ ssize_t S3RandomAccessFile::read(char * buf, size_t size)
     {
         auto n = readImpl(buf, size);
         const auto err = errno;
-        if (unlikely(n < 0 && shouldRetryStreamError(stream_retry_times, n, err, max_retry)))
+        if (unlikely(n < 0))
         {
-            // Stream-side retries reopen from the last committed offset instead of sharing initialize state.
-            reopenAt(cur_offset, "read meet retryable error");
-            continue;
+            const auto retryable = isRetryableError(n, err);
+            const auto can_retry = shouldRetryStreamError(stream_retry_times, n, err, max_retry);
+            if (can_retry)
+            {
+                // Stream-side retries reopen from the last committed offset instead of sharing initialize state.
+                reopenAt(cur_offset, "read meet retryable error");
+                continue;
+            }
+            if (retryable)
+            {
+                // The failure is still retryable, but this call has already used up the bounded stream-side
+                // retries. Convert it to S3_ERROR here so upper layers can classify the final remote read.
+                throwRetryExhaustedError("read", n, err);
+            }
         }
-        if (unlikely(n < 0 && isRetryableError(n, err)))
-            throwRetryExhaustedError("read", n, err);
         return n;
     }
 }
@@ -263,14 +272,23 @@ off_t S3RandomAccessFile::seek(off_t offset_, int whence)
     {
         auto off = seekImpl(offset_, whence);
         const auto err = errno;
-        if (unlikely(off < 0 && shouldRetryStreamError(stream_retry_times, off, err, max_retry)))
+        if (unlikely(off < 0))
         {
-            // Retry the seek from the last committed offset rather than from a partially drained stream.
-            reopenAt(cur_offset, "seek meet retryable error");
-            continue;
+            const auto retryable = isRetryableError(off, err);
+            const auto can_retry = shouldRetryStreamError(stream_retry_times, off, err, max_retry);
+            if (can_retry)
+            {
+                // Retry the seek from the last committed offset rather than from a partially drained stream.
+                reopenAt(cur_offset, "seek meet retryable error");
+                continue;
+            }
+            if (retryable)
+            {
+                // The failure is still retryable, but this call has already used up the bounded stream-side
+                // retries. Convert it to S3_ERROR here so upper layers can classify the final remote read.
+                throwRetryExhaustedError("seek", off, err);
+            }
         }
-        if (unlikely(off < 0 && isRetryableError(off, err)))
-            throwRetryExhaustedError("seek", off, err);
         return off;
     }
 }
