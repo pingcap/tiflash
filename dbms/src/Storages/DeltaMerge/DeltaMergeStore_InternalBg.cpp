@@ -387,11 +387,6 @@ std::vector<SegmentPtr> DeltaMergeStore::getMergeableSegments(
     return results;
 }
 
-bool DeltaMergeStore::shouldReduceGcMergeableSegmentsCap(const Exception & e) const
-{
-    return e.code() == ErrorCodes::S3_ERROR;
-}
-
 void DeltaMergeStore::reduceGcMergeableSegmentsCap(std::string_view reason)
 {
     auto old_cap = gc_mergeable_segments_cap.load(std::memory_order_relaxed);
@@ -822,8 +817,8 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMerge(const DMContextPtr & dm_context, c
     auto new_segment = segmentMerge(*dm_context, segments_to_merge, SegmentMergeReason::BackgroundGCThread);
     if (new_segment)
     {
-        recoverGcMergeableSegmentsCap("background_gc_merge_success");
         checkSegmentUpdate(dm_context, new_segment, ThreadType::BG_GC, InputType::NotRaft);
+        recoverGcMergeableSegmentsCap("background_gc_merge_success");
     }
 
     return new_segment;
@@ -1020,7 +1015,18 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit, const GCOptions & gc_options)
         {
             SegmentPtr new_seg = nullptr;
             if (!new_seg && gc_options.do_merge)
-                new_seg = gcTrySegmentMerge(dm_context, segment);
+            {
+                try
+                {
+                    new_seg = gcTrySegmentMerge(dm_context, segment);
+                }
+                catch (Exception & e)
+                {
+                    if (e.code() == ErrorCodes::S3_ERROR)
+                        reduceGcMergeableSegmentsCap("background_gc_merge_s3_error");
+                    throw;
+                }
+            }
             if (!new_seg && gc_options.do_merge_delta)
                 new_seg = gcTrySegmentMergeDelta(dm_context, segment, prev_segment, next_segment, gc_safe_point);
 
@@ -1034,8 +1040,6 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit, const GCOptions & gc_options)
         }
         catch (Exception & e)
         {
-            if (gc_options.do_merge && shouldReduceGcMergeableSegmentsCap(e))
-                reduceGcMergeableSegmentsCap("background_gc_merge_s3_error");
             e.addMessage(
                 fmt::format("Error while GC segment, segment={} log_ident={}", segment->info(), log->identifier()));
             e.rethrow();
