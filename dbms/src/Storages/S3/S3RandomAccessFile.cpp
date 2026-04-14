@@ -64,7 +64,7 @@ namespace DB::S3
 namespace
 {
 constexpr size_t s3_read_limiter_preferred_chunk_size = 128 * 1024;
-constexpr size_t s3_forward_seek_reopen_threshold = 128 * 1024;
+constexpr size_t s3_forward_seek_reopen_threshold = 64 * 1024;
 } // namespace
 
 String S3RandomAccessFile::summary() const

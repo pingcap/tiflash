@@ -481,7 +481,7 @@ try
     S3RandomAccessFile file(s3_client, key, nullptr);
     mock_s3_client->resetGetObjectObservations();
 
-    constexpr off_t target_offset = 128 * 1024;
+    constexpr off_t target_offset = 64 * 1024;
     ASSERT_EQ(file.seek(target_offset, SEEK_SET), target_offset);
     ASSERT_EQ(mock_s3_client->getGetObjectCount(), 0);
     ASSERT_TRUE(mock_s3_client->getLastGetObjectRange().empty());
@@ -502,7 +502,7 @@ try
     S3RandomAccessFile file(s3_client, key, nullptr);
     mock_s3_client->resetGetObjectObservations();
 
-    constexpr off_t target_offset = 128 * 1024 + 1;
+    constexpr off_t target_offset = 64 * 1024 + 1;
     ASSERT_EQ(file.seek(target_offset, SEEK_SET), target_offset);
     ASSERT_EQ(mock_s3_client->getGetObjectCount(), 1);
     ASSERT_EQ(mock_s3_client->getLastGetObjectRange(), fmt::format("bytes={}-", target_offset));
@@ -518,7 +518,7 @@ try
 
     S3RandomAccessFile file(s3_client, key, nullptr);
 
-    constexpr off_t target_offset = 128 * 1024 + 1;
+    constexpr off_t target_offset = 64 * 1024 + 1;
     const auto read_bytes_before_seek = ProfileEvents::get(ProfileEvents::S3ReadBytes);
     ASSERT_EQ(file.seek(target_offset, SEEK_SET), target_offset);
     const auto read_bytes_after_seek = ProfileEvents::get(ProfileEvents::S3ReadBytes);
@@ -543,7 +543,7 @@ try
     ASSERT_EQ(file.read(buff.data(), buff.size()), buff.size());
 
     constexpr off_t committed_offset = 256;
-    constexpr off_t target_offset = committed_offset + 128 * 1024 + 1;
+    constexpr off_t target_offset = committed_offset + 64 * 1024 + 1;
     ASSERT_NE(file.summary().find(fmt::format("cur_offset={}", committed_offset)), String::npos);
 
     FailPointHelper::enableFailPoint(FailPoints::force_s3_random_access_file_init_fail);
