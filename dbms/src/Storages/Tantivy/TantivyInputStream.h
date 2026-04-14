@@ -37,8 +37,9 @@
 #include <common/types.h>
 #include <fcntl.h>
 #include <fmt/os.h>
-#include <stdexcept>
 #include <tici-search-lib/src/lib.rs.h>
+
+#include <stdexcept>
 #include <unordered_map>
 
 namespace DB::TS
@@ -172,11 +173,25 @@ protected:
 
         for (const auto & column_data : search_result.i64_columns)
         {
-            installIntegerLikeColumn(res, name_to_pos, filled, return_columns, column_data.col_name, column_data.values, column_data.null_map);
+            installIntegerLikeColumn(
+                res,
+                name_to_pos,
+                filled,
+                return_columns,
+                column_data.col_name,
+                column_data.values,
+                column_data.null_map);
         }
         for (const auto & column_data : search_result.u64_columns)
         {
-            installIntegerLikeColumn(res, name_to_pos, filled, return_columns, column_data.col_name, column_data.values, column_data.null_map);
+            installIntegerLikeColumn(
+                res,
+                name_to_pos,
+                filled,
+                return_columns,
+                column_data.col_name,
+                column_data.values,
+                column_data.null_map);
         }
         for (const auto & column_data : search_result.f64_columns)
         {
@@ -313,8 +328,10 @@ private:
         if (typeid_cast<const DataTypeMyDateTime *>(nested_type.get()))
             return buildNumericColumn<DataTypeMyDateTime::FieldType>(name_and_type, values, null_map);
 
-        throw std::runtime_error(
-            fmt::format("unsupported integer-like target type {} for column {}", nested_type->getName(), name_and_type.name));
+        throw std::runtime_error(fmt::format(
+            "unsupported integer-like target type {} for column {}",
+            nested_type->getName(),
+            name_and_type.name));
     }
 
     static MutableColumnPtr buildFloatColumn(
@@ -358,7 +375,9 @@ private:
                 offsets[i] = static_cast<ColumnString::Offset>(column_data.offsets[i]);
 
             if (name_and_type.type->isNullable())
-                return ColumnNullable::create(std::move(nested_column), buildNullMapColumn(row_count, column_data.null_map));
+                return ColumnNullable::create(
+                    std::move(nested_column),
+                    buildNullMapColumn(row_count, column_data.null_map));
             return nested_column;
         }
         auto column = name_and_type.type->createColumn();
@@ -375,7 +394,8 @@ private:
             if (i < column_data.null_map.size() && column_data.null_map[i] != 0)
                 column->insertDefault();
             else
-                column->insert(Field(String(reinterpret_cast<const char *>(&column_data.chars[prev_offset]), value_size)));
+                column->insert(
+                    Field(String(reinterpret_cast<const char *>(&column_data.chars[prev_offset]), value_size)));
             prev_offset = current_offset;
         }
 
