@@ -208,11 +208,6 @@ private:
     bool is_count;
     std::shared_ptr<rust::Box<ShardsSnapshot>> shards_snapshot;
 
-    static bool isNullableType(const DataTypePtr & type)
-    {
-        return typeid_cast<const DataTypeNullable *>(type.get()) != nullptr;
-    }
-
     static std::unordered_map<String, size_t> buildColumnPositionMap(const NamesAndTypes & columns)
     {
         std::unordered_map<String, size_t> positions;
@@ -220,16 +215,6 @@ private:
         for (size_t i = 0; i < columns.size(); ++i)
             positions.emplace(columns[i].name, i);
         return positions;
-    }
-
-    static bool hasNullValues(const rust::Vec<::std::uint8_t> & null_map)
-    {
-        for (size_t i = 0; i < null_map.size(); ++i)
-        {
-            if (null_map[i] != 0)
-                return true;
-        }
-        return false;
     }
 
     static ColumnUInt8::MutablePtr buildNullMapColumn(size_t row_count, const rust::Vec<::std::uint8_t> & null_map)
@@ -247,16 +232,6 @@ private:
         for (size_t i = 0; i < row_count; ++i)
             dst[i] = null_map[i];
         return null_map_column;
-    }
-
-    static void checkNonNullableColumnHasNoNulls(
-        const NameAndTypePair & name_and_type,
-        const rust::Vec<::std::uint8_t> & null_map)
-    {
-        RUNTIME_CHECK_MSG(
-            !hasNullValues(null_map),
-            "column {} is not nullable, but got null value from TiCI",
-            name_and_type.name);
     }
 
     static void fillDefaultColumn(ColumnWithTypeAndName & column, size_t row_count)
@@ -296,10 +271,8 @@ private:
                 data[i] = static_cast<TargetType>(values[i]);
         }
 
-        if (isNullableType(name_and_type.type))
+        if (name_and_type.type->isNullable())
             return ColumnNullable::create(std::move(nested_column), buildNullMapColumn(row_count, null_map));
-
-        checkNonNullableColumnHasNoNulls(name_and_type, null_map);
         return nested_column;
     }
 
@@ -379,17 +352,11 @@ private:
             for (size_t i = 0; i < row_count; ++i)
                 offsets[i] = static_cast<ColumnString::Offset>(column_data.offsets[i]);
 
-            if (isNullableType(name_and_type.type))
+            if (name_and_type.type->isNullable())
                 return ColumnNullable::create(std::move(nested_column), buildNullMapColumn(row_count, column_data.null_map));
-
-            checkNonNullableColumnHasNoNulls(name_and_type, column_data.null_map);
             return nested_column;
         }
-
         auto column = name_and_type.type->createColumn();
-        if (!isNullableType(name_and_type.type))
-            checkNonNullableColumnHasNoNulls(name_and_type, column_data.null_map);
-
         size_t prev_offset = 0;
         for (size_t i = 0; i < row_count; ++i)
         {
