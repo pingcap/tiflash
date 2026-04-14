@@ -78,6 +78,11 @@ namespace ProfileEvents
 extern const Event S3ReadBytes;
 } // namespace ProfileEvents
 
+namespace ErrorCodes
+{
+extern const int S3_ERROR;
+} // namespace ErrorCodes
+
 namespace DB::tests
 {
 using DMFileBlockOutputStreamPtr = std::shared_ptr<DMFileBlockOutputStream>;
@@ -407,8 +412,15 @@ try
     FailPointHelper::enableFailPoint(FailPoints::force_s3_random_access_file_read_fail);
     SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_s3_random_access_file_read_fail); });
 
-    auto nread = file.read(buff.data(), buff.size());
-    ASSERT_LT(nread, 0);
+    try
+    {
+        static_cast<void>(file.read(buff.data(), buff.size()));
+        FAIL() << "expected S3_ERROR";
+    }
+    catch (const DB::Exception & e)
+    {
+        ASSERT_EQ(e.code(), ErrorCodes::S3_ERROR);
+    }
     ASSERT_NE(file.summary().find("cur_retry=0"), String::npos);
 }
 CATCH
@@ -427,8 +439,15 @@ try
     FailPointHelper::enableFailPoint(FailPoints::force_s3_random_access_file_seek_fail);
     SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_s3_random_access_file_seek_fail); });
 
-    auto offset = file.seek(1024, SEEK_SET);
-    ASSERT_LT(offset, 0);
+    try
+    {
+        static_cast<void>(file.seek(1024, SEEK_SET));
+        FAIL() << "expected S3_ERROR";
+    }
+    catch (const DB::Exception & e)
+    {
+        ASSERT_EQ(e.code(), ErrorCodes::S3_ERROR);
+    }
     ASSERT_NE(file.summary().find("cur_retry=0"), String::npos);
 }
 CATCH
