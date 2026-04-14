@@ -97,15 +97,16 @@ public:
     Block readImpl() override
     {
         if (done)
+        {
             return {};
-
+        }
         Block ret = readFromS3(is_count);
         done = true;
         return ret;
     }
 
 protected:
-    Block readFromS3(bool is_count_search)
+    Block readFromS3(bool is_count)
     {
         auto return_fields = getFields(return_columns);
         auto shard_info = query_shard_info;
@@ -114,18 +115,22 @@ protected:
 
         rust::Vec<rust::String> tici_sort_column_names;
         for (const auto & sort_column_id : sort_column_ids)
+        {
             tici_sort_column_names.push_back(rust::String("column_" + std::to_string(sort_column_id)));
+        }
 
         rust::Vec<bool> tici_sort_column_asc;
         for (const auto & asc : sort_column_asc)
+        {
             tici_sort_column_asc.push_back(asc);
+        }
 
         SearchParam search_param{
             .limit = static_cast<size_t>(limit),
             .sort_field_names = std::move(tici_sort_column_names),
             .is_asc = std::move(tici_sort_column_asc),
         };
-        if (is_count_search)
+        if (is_count)
             return_fields = {};
 
         RUNTIME_CHECK(shards_snapshot != nullptr);
@@ -145,7 +150,7 @@ protected:
             read_ts);
 
         Block res(return_columns);
-        if (is_count_search)
+        if (is_count)
         {
             RUNTIME_CHECK_MSG(return_columns.size() == 1, "count search should return one column");
             auto & column = res.getByPosition(0).column->assumeMutableRef();
@@ -438,7 +443,9 @@ private:
     {
         rust::Vec<rust::String> fields;
         for (auto & name_and_type : columns)
+        {
             fields.push_back(name_and_type.name);
+        }
         return fields;
     }
 
