@@ -120,6 +120,19 @@ bool shouldRetryStreamError(Int32 retried_times, int ret, int err, Int32 max_ret
 {
     return retried_times + 1 < max_retry_times && isRetryableError(ret, err);
 }
+
+const char * retryableErrorName(int ret, int err)
+{
+    if (ret == S3StreamError)
+        return "stream_error";
+    if (err == ECONNRESET)
+        return "ECONNRESET";
+    if (err == EAGAIN)
+        return "EAGAIN";
+    if (err == EINPROGRESS)
+        return "EINPROGRESS";
+    return "unknown";
+}
 } // namespace
 
 ssize_t S3RandomAccessFile::read(char * buf, size_t size)
@@ -127,12 +140,15 @@ ssize_t S3RandomAccessFile::read(char * buf, size_t size)
     for (Int32 stream_retry_times = 0;; ++stream_retry_times)
     {
         auto n = readImpl(buf, size);
-        if (unlikely(n < 0 && shouldRetryStreamError(stream_retry_times, n, errno, max_retry)))
+        const auto err = errno;
+        if (unlikely(n < 0 && shouldRetryStreamError(stream_retry_times, n, err, max_retry)))
         {
             // Stream-side retries reopen from the last committed offset instead of sharing initialize state.
             reopenAt(cur_offset, "read meet retryable error");
             continue;
         }
+        if (unlikely(n < 0 && isRetryableError(n, err)))
+            throwRetryExhaustedError("read", n, err);
         return n;
     }
 }
@@ -246,14 +262,31 @@ off_t S3RandomAccessFile::seek(off_t offset_, int whence)
     for (Int32 stream_retry_times = 0;; ++stream_retry_times)
     {
         auto off = seekImpl(offset_, whence);
-        if (unlikely(off < 0 && shouldRetryStreamError(stream_retry_times, off, errno, max_retry)))
+        const auto err = errno;
+        if (unlikely(off < 0 && shouldRetryStreamError(stream_retry_times, off, err, max_retry)))
         {
             // Retry the seek from the last committed offset rather than from a partially drained stream.
             reopenAt(cur_offset, "seek meet retryable error");
             continue;
         }
+        if (unlikely(off < 0 && isRetryableError(off, err)))
+            throwRetryExhaustedError("seek", off, err);
         return off;
     }
+}
+
+void S3RandomAccessFile::throwRetryExhaustedError(std::string_view action, int ret, int err) const
+{
+    throw Exception(
+        ErrorCodes::S3_ERROR,
+        "S3RandomAccessFile {} failed after {} stream retries, key={}, cur_offset={}, ret={}, errno={} ({})",
+        action,
+        max_retry,
+        remote_fname,
+        cur_offset,
+        ret,
+        err,
+        retryableErrorName(ret, err));
 }
 
 off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
