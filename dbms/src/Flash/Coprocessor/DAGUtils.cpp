@@ -660,8 +660,8 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::HexStrArg, "hexStr"},
     //{tipb::ScalarFuncSig::InsertUTF8, "cast"},
     //{tipb::ScalarFuncSig::Insert, "cast"},
-    //{tipb::ScalarFuncSig::InstrUTF8, "cast"},
-    //{tipb::ScalarFuncSig::Instr, "cast"},
+    {tipb::ScalarFuncSig::InstrUTF8, "instrUTF8"},
+    {tipb::ScalarFuncSig::Instr, "instr"},
 
     {tipb::ScalarFuncSig::LeftUTF8, "leftUTF8"},
     //{tipb::ScalarFuncSig::Left, "cast"},
