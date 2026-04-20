@@ -372,8 +372,8 @@ private:
             auto & offsets = nested_column->getOffsets();
 
             chars.resize(column_data.chars.size());
-            for (size_t i = 0; i < column_data.chars.size(); ++i)
-                chars[i] = column_data.chars[i];
+            if (!column_data.chars.empty())
+                std::memcpy(chars.data(), column_data.chars.data(), column_data.chars.size());
 
             offsets.resize(row_count);
             for (size_t i = 0; i < row_count; ++i)
@@ -385,26 +385,10 @@ private:
                     buildNullMapColumn(row_count, column_data.null_map));
             return nested_column;
         }
-        auto column = name_and_type.type->createColumn();
-        size_t prev_offset = 0;
-        for (size_t i = 0; i < row_count; ++i)
-        {
-            const auto current_offset = static_cast<size_t>(column_data.offsets[i]);
-            RUNTIME_CHECK_MSG(
-                current_offset >= prev_offset && current_offset > 0,
-                "invalid string offset {} for column {}",
-                current_offset,
-                name_and_type.name);
-            const auto value_size = current_offset - prev_offset - 1;
-            if (i < column_data.null_map.size() && column_data.null_map[i] != 0)
-                column->insertDefault();
-            else
-                column->insert(
-                    Field(String(reinterpret_cast<const char *>(&column_data.chars[prev_offset]), value_size)));
-            prev_offset = current_offset;
-        }
-
-        return column;
+        throw std::runtime_error(fmt::format(
+            "unsupported bytes target type {} for column {}",
+            name_and_type.type->getName(),
+            name_and_type.name));
     }
 
     template <typename ValueType>
