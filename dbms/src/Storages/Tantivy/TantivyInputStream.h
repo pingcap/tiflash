@@ -17,6 +17,7 @@
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
+#include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Common/typeid_cast.h>
 #include <Core/Block.h>
@@ -40,7 +41,6 @@
 #include <tici-search-lib/src/lib.rs.h>
 
 #include <cstring>
-#include <stdexcept>
 #include <type_traits>
 #include <unordered_map>
 
@@ -251,16 +251,15 @@ private:
             row_count,
             null_map.size());
         auto & dst = null_map_column->getData();
-        for (size_t i = 0; i < row_count; ++i)
-            dst[i] = null_map[i];
+        if (row_count != 0)
+            std::memcpy(dst.data(), null_map.data(), row_count * sizeof(UInt8));
         return null_map_column;
     }
 
     static void fillDefaultColumn(ColumnWithTypeAndName & column, size_t row_count)
     {
         auto mutable_column = column.type->createColumn();
-        for (size_t i = 0; i < row_count; ++i)
-            mutable_column->insertDefault();
+        mutable_column->insertManyDefaults(row_count);
         column.column = std::move(mutable_column);
     }
 
@@ -333,10 +332,11 @@ private:
         if (typeid_cast<const DataTypeMyDateTime *>(nested_type.get()))
             return buildNumericColumn<DataTypeMyDateTime::FieldType>(name_and_type, values, null_map);
 
-        throw std::runtime_error(fmt::format(
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
             "unsupported integer-like target type {} for column {}",
             nested_type->getName(),
-            name_and_type.name));
+            name_and_type.name);
     }
 
     static MutableColumnPtr buildFloatColumn(
@@ -350,8 +350,11 @@ private:
         if (typeid_cast<const DataTypeFloat64 *>(nested_type.get()))
             return buildNumericColumn<Float64>(name_and_type, values, null_map);
 
-        throw std::runtime_error(
-            fmt::format("unsupported float target type {} for column {}", nested_type->getName(), name_and_type.name));
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "unsupported float target type {} for column {}",
+            nested_type->getName(),
+            name_and_type.name);
     }
 
     static MutableColumnPtr buildBytesColumn(const NameAndTypePair & name_and_type, const BytesColumnData & column_data)
@@ -385,10 +388,11 @@ private:
                     buildNullMapColumn(row_count, column_data.null_map));
             return nested_column;
         }
-        throw std::runtime_error(fmt::format(
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
             "unsupported bytes target type {} for column {}",
             name_and_type.type->getName(),
-            name_and_type.name));
+            name_and_type.name);
     }
 
     template <typename ValueType>
