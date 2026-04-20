@@ -39,7 +39,9 @@
 #include <fmt/os.h>
 #include <tici-search-lib/src/lib.rs.h>
 
+#include <cstring>
 #include <stdexcept>
+#include <type_traits>
 #include <unordered_map>
 
 namespace DB::TS
@@ -283,11 +285,14 @@ private:
                 null_map.size());
         }
 
-        for (size_t i = 0; i < row_count; ++i)
+        if constexpr (std::is_same_v<TargetType, SourceType>)
         {
-            if (has_null_map && null_map[i] != 0)
-                data[i] = TargetType{};
-            else
+            if (row_count != 0)
+                std::memcpy(data.data(), values.data(), row_count * sizeof(TargetType));
+        }
+        else
+        {
+            for (size_t i = 0; i < row_count; ++i)
                 data[i] = static_cast<TargetType>(values[i]);
         }
 
