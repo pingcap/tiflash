@@ -141,7 +141,6 @@ protected:
             **shards_snapshot,
             {
                 .keyspace_id = keyspace_id,
-                .table_id = table_id,
                 .index_id = index_id,
                 .shard_id = shard_info.shard_id,
                 .shard_epoch = shard_info.shard_epoch,
@@ -218,7 +217,7 @@ private:
     bool done = false;
     LoggerPtr log;
     UInt32 keyspace_id;
-    Int64 table_id;
+    [[maybe_unused]] Int64 table_id;
     Int64 index_id;
     ShardInfo query_shard_info;
     NamesAndTypes return_columns;
