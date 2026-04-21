@@ -146,12 +146,10 @@ void StorageTantivy::splitRemoteReadAndLocalRead()
     ShardInfoList remote_shard_infos;
     ::rust::Vec<::Shard> shards;
     auto index_id = tici_scan.getIndexId();
-    auto table_id = tici_scan.getTableId();
     for (const auto & shard_info : all)
     {
         shards.push_back(::Shard{
             .keyspace_id = tici_scan.getKeyspaceID(),
-            .table_id = table_id,
             .index_id = index_id,
             .shard_id = shard_info.shard_id,
             .shard_epoch = shard_info.shard_epoch,
