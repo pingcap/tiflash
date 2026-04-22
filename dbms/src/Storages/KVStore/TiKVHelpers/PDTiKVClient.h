@@ -27,6 +27,7 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Common/TiFlashMetrics.h>
 #include <Core/Types.h>
 #include <Storages/KVStore/Types.h>
 #include <common/logger_useful.h>
@@ -194,14 +195,18 @@ struct PDClientHelper
         pingcap::kv::Backoffer bo(get_safepoint_maxtime);
         for (;;)
         {
+            bool error_counted = false;
             try
             {
                 // Fetch the gc safepoint from PD.
                 // - When deployed with classic cluster, the gc safepoint is cluster-based, keyspace_id=NullspaceID.
                 // - When deployed with next-gen cluster, the gc safepoint is keyspace-based.
+                GET_METRIC(tiflash_gc_safepoint_request_count, type_get_gc_state).Increment();
                 auto gc_state = pd_client->getGCState(keyspace_id);
                 if (unlikely(gc_state.header().error().type() != pdpb::ErrorType::OK))
                 {
+                    error_counted = true;
+                    GET_METRIC(tiflash_gc_safepoint_request_count, type_error).Increment();
                     LOG_WARNING(
                         Logger::get(),
                         "getGCSafePointWithRetry keyspace={} message={} resp={}",
@@ -219,20 +224,23 @@ struct PDClientHelper
                     // add to cache
                     ks_gc_sp_map.updateGCSafepoint(keyspace_id, safe_point);
                 }
-#ifndef NDEBUG
                 else
                 {
+                    GET_METRIC(tiflash_gc_safepoint_request_count, type_zero_gc_safe_point).Increment();
+#ifndef NDEBUG
                     LOG_WARNING(
                         Logger::get(),
                         "getGCSafePointWithRetry keyspace_id={} gc_safe_point=0 gc_state={}",
                         keyspace_id,
                         gc_state.ShortDebugString());
-                }
 #endif
+                }
                 return safe_point;
             }
             catch (pingcap::Exception & e)
             {
+                if (!error_counted)
+                    GET_METRIC(tiflash_gc_safepoint_request_count, type_error).Increment();
                 bo.backoff(pingcap::kv::boPDRPC, e);
             }
         }
