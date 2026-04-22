@@ -226,7 +226,9 @@ struct PDClientHelper
                         ++backoff_count;
                         bo.backoff(
                             pingcap::kv::boPDRPC,
-                            pingcap::Exception(gc_state.header().error().message(), pingcap::ErrorCodes::InternalError));
+                            pingcap::Exception(
+                                gc_state.header().error().message(),
+                                pingcap::ErrorCodes::InternalError));
                     }
                     catch (pingcap::Exception &)
                     {
