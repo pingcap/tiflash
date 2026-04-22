@@ -195,7 +195,7 @@ struct PDClientHelper
         pingcap::kv::Backoffer bo(get_safepoint_maxtime);
         for (;;)
         {
-            bool error_counted = false;
+            bool has_pd_response_error = false;
             try
             {
                 // Fetch the gc safepoint from PD.
@@ -205,17 +205,25 @@ struct PDClientHelper
                 auto gc_state = pd_client->getGCState(keyspace_id);
                 if (unlikely(gc_state.header().error().type() != pdpb::ErrorType::OK))
                 {
-                    error_counted = true;
-                    GET_METRIC(tiflash_gc_safepoint_request_count, type_error).Increment();
+                    has_pd_response_error = true;
+                    GET_METRIC(tiflash_gc_safepoint_request_count, type_pd_response_error).Increment();
                     LOG_WARNING(
                         Logger::get(),
                         "getGCSafePointWithRetry keyspace={} message={} resp={}",
                         keyspace_id,
                         gc_state.header().error().message(),
                         gc_state.ShortDebugString());
-                    bo.backoff(
-                        pingcap::kv::boPDRPC,
-                        pingcap::Exception(gc_state.header().error().message(), pingcap::ErrorCodes::InternalError));
+                    try
+                    {
+                        bo.backoff(
+                            pingcap::kv::boPDRPC,
+                            pingcap::Exception(gc_state.header().error().message(), pingcap::ErrorCodes::InternalError));
+                    }
+                    catch (pingcap::Exception &)
+                    {
+                        GET_METRIC(tiflash_gc_safepoint_request_count, type_backoff_error).Increment();
+                        throw;
+                    }
                     continue; // retry
                 }
                 auto safe_point = gc_state.gc_state().gc_safe_point();
@@ -239,9 +247,17 @@ struct PDClientHelper
             }
             catch (pingcap::Exception & e)
             {
-                if (!error_counted)
-                    GET_METRIC(tiflash_gc_safepoint_request_count, type_error).Increment();
-                bo.backoff(pingcap::kv::boPDRPC, e);
+                if (!has_pd_response_error)
+                    GET_METRIC(tiflash_gc_safepoint_request_count, type_request_exception).Increment();
+                try
+                {
+                    bo.backoff(pingcap::kv::boPDRPC, e);
+                }
+                catch (pingcap::Exception &)
+                {
+                    GET_METRIC(tiflash_gc_safepoint_request_count, type_backoff_error).Increment();
+                    throw;
+                }
             }
         }
     }
