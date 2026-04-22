@@ -132,8 +132,6 @@ private:
 
 struct PDClientHelper
 {
-    static constexpr int get_safepoint_maxtime = 120000; // 120s. waiting pd recover.
-
     // 10 seconds timeout for getting TSO
     // https://github.com/pingcap/tidb/blob/069631e2ecfedc000ffb92c67207bea81380f020/pkg/store/mockstore/unistore/pd/client.go#L256-L276
     static constexpr int get_tso_maxtime = 10'000;
@@ -175,7 +173,8 @@ struct PDClientHelper
         const pingcap::pd::ClientPtr & pd_client,
         KeyspaceID keyspace_id,
         bool ignore_cache = true,
-        Int64 safe_point_update_interval_seconds = 30)
+        Int64 safe_point_update_interval_seconds = 30,
+        Int64 safe_point_get_max_backoff_ms = 120000)
     {
         UInt64 backoff_count = 0;
         auto observe_backoff_count = [&](bool success) {
@@ -201,7 +200,7 @@ struct PDClientHelper
             // else fallback to fetch from PD
         }
 
-        pingcap::kv::Backoffer bo(get_safepoint_maxtime);
+        pingcap::kv::Backoffer bo(std::max(static_cast<Int64>(0), safe_point_get_max_backoff_ms));
         for (;;)
         {
             bool has_pd_response_error = false;

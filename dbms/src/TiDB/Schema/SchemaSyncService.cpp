@@ -103,7 +103,12 @@ void SchemaSyncService::addKeyspaceGCTasks()
 
                     stage = "GC";
                     auto gc_safe_point
-                        = PDClientHelper::getGCSafePointWithRetry(context.getTMTContext().getPDClient(), keyspace);
+                        = PDClientHelper::getGCSafePointWithRetry(
+                            context.getTMTContext().getPDClient(),
+                            keyspace,
+                            true,
+                            30,
+                            context.getSettingsRef().safe_point_get_max_backoff_ms);
                     done_anything = gc(gc_safe_point, keyspace);
 
                     return done_anything;
