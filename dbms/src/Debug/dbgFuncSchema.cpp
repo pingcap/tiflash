@@ -183,7 +183,12 @@ void dbgFuncGcSchemas(Context & context, const ASTs & args, DBGInvoker::Printer 
     Timestamp gc_safe_point = 0;
     bool ignore_remain_regions = false;
     if (args.empty())
-        gc_safe_point = PDClientHelper::getGCSafePointWithRetry(context.getTMTContext().getPDClient(), NullspaceID);
+        gc_safe_point = PDClientHelper::getGCSafePointWithRetry(
+            context.getTMTContext().getPDClient(),
+            NullspaceID,
+            true,
+            30,
+            context.getSettingsRef().safe_point_get_max_backoff_ms);
     if (!args.empty())
         gc_safe_point = safeGet<Timestamp>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     if (args.size() >= 2)

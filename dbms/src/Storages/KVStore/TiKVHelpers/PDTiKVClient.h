@@ -27,6 +27,7 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Common/TiFlashMetrics.h>
 #include <Core/Types.h>
 #include <Storages/KVStore/Types.h>
 #include <common/logger_useful.h>
@@ -131,8 +132,6 @@ private:
 
 struct PDClientHelper
 {
-    static constexpr int get_safepoint_maxtime = 120000; // 120s. waiting pd recover.
-
     // 10 seconds timeout for getting TSO
     // https://github.com/pingcap/tidb/blob/069631e2ecfedc000ffb92c67207bea81380f020/pkg/store/mockstore/unistore/pd/client.go#L256-L276
     static constexpr int get_tso_maxtime = 10'000;
@@ -174,8 +173,17 @@ struct PDClientHelper
         const pingcap::pd::ClientPtr & pd_client,
         KeyspaceID keyspace_id,
         bool ignore_cache = true,
-        Int64 safe_point_update_interval_seconds = 30)
+        Int64 safe_point_update_interval_seconds = 30,
+        Int64 safe_point_get_max_backoff_ms = 120000)
     {
+        UInt64 backoff_count = 0;
+        auto observe_backoff_count = [&](bool success) {
+            if (success)
+                GET_METRIC(tiflash_gc_safepoint_backoff_count, type_success).Observe(backoff_count);
+            else
+                GET_METRIC(tiflash_gc_safepoint_backoff_count, type_failure).Observe(backoff_count);
+        };
+
         if (!ignore_cache)
         {
             // In order to avoid too frequent requests to PD,
@@ -186,31 +194,48 @@ struct PDClientHelper
             if (ks_gc_info.has_value())
             {
                 // Still valid, return the cached gc safepoint
+                observe_backoff_count(true);
                 return ks_gc_info->gc_safepoint;
             }
             // else fallback to fetch from PD
         }
 
-        pingcap::kv::Backoffer bo(get_safepoint_maxtime);
+        pingcap::kv::Backoffer bo(std::max(static_cast<Int64>(0), safe_point_get_max_backoff_ms));
         for (;;)
         {
+            bool has_pd_response_error = false;
             try
             {
                 // Fetch the gc safepoint from PD.
                 // - When deployed with classic cluster, the gc safepoint is cluster-based, keyspace_id=NullspaceID.
                 // - When deployed with next-gen cluster, the gc safepoint is keyspace-based.
+                GET_METRIC(tiflash_gc_safepoint_request_count, type_get_gc_state).Increment();
                 auto gc_state = pd_client->getGCState(keyspace_id);
                 if (unlikely(gc_state.header().error().type() != pdpb::ErrorType::OK))
                 {
+                    has_pd_response_error = true;
+                    GET_METRIC(tiflash_gc_safepoint_request_count, type_pd_response_error).Increment();
                     LOG_WARNING(
                         Logger::get(),
                         "getGCSafePointWithRetry keyspace={} message={} resp={}",
                         keyspace_id,
                         gc_state.header().error().message(),
                         gc_state.ShortDebugString());
-                    bo.backoff(
-                        pingcap::kv::boPDRPC,
-                        pingcap::Exception(gc_state.header().error().message(), pingcap::ErrorCodes::InternalError));
+                    try
+                    {
+                        ++backoff_count;
+                        bo.backoff(
+                            pingcap::kv::boPDRPC,
+                            pingcap::Exception(
+                                gc_state.header().error().message(),
+                                pingcap::ErrorCodes::InternalError));
+                    }
+                    catch (pingcap::Exception &)
+                    {
+                        GET_METRIC(tiflash_gc_safepoint_request_count, type_backoff_error).Increment();
+                        observe_backoff_count(false);
+                        throw;
+                    }
                     continue; // retry
                 }
                 auto safe_point = gc_state.gc_state().gc_safe_point();
@@ -219,21 +244,35 @@ struct PDClientHelper
                     // add to cache
                     ks_gc_sp_map.updateGCSafepoint(keyspace_id, safe_point);
                 }
-#ifndef NDEBUG
                 else
                 {
+                    GET_METRIC(tiflash_gc_safepoint_request_count, type_zero_gc_safe_point).Increment();
+#ifndef NDEBUG
                     LOG_WARNING(
                         Logger::get(),
                         "getGCSafePointWithRetry keyspace_id={} gc_safe_point=0 gc_state={}",
                         keyspace_id,
                         gc_state.ShortDebugString());
-                }
 #endif
+                }
+                observe_backoff_count(true);
                 return safe_point;
             }
             catch (pingcap::Exception & e)
             {
-                bo.backoff(pingcap::kv::boPDRPC, e);
+                if (!has_pd_response_error)
+                    GET_METRIC(tiflash_gc_safepoint_request_count, type_request_exception).Increment();
+                try
+                {
+                    ++backoff_count;
+                    bo.backoff(pingcap::kv::boPDRPC, e);
+                }
+                catch (pingcap::Exception &)
+                {
+                    GET_METRIC(tiflash_gc_safepoint_request_count, type_backoff_error).Increment();
+                    observe_backoff_count(false);
+                    throw;
+                }
             }
         }
     }
