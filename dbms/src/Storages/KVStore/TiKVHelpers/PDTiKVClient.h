@@ -177,6 +177,14 @@ struct PDClientHelper
         bool ignore_cache = true,
         Int64 safe_point_update_interval_seconds = 30)
     {
+        UInt64 backoff_count = 0;
+        auto observe_backoff_count = [&](bool success) {
+            if (success)
+                GET_METRIC(tiflash_gc_safepoint_backoff_count, type_success).Observe(backoff_count);
+            else
+                GET_METRIC(tiflash_gc_safepoint_backoff_count, type_failure).Observe(backoff_count);
+        };
+
         if (!ignore_cache)
         {
             // In order to avoid too frequent requests to PD,
@@ -187,6 +195,7 @@ struct PDClientHelper
             if (ks_gc_info.has_value())
             {
                 // Still valid, return the cached gc safepoint
+                observe_backoff_count(true);
                 return ks_gc_info->gc_safepoint;
             }
             // else fallback to fetch from PD
@@ -215,6 +224,7 @@ struct PDClientHelper
                         gc_state.ShortDebugString());
                     try
                     {
+                        ++backoff_count;
                         bo.backoff(
                             pingcap::kv::boPDRPC,
                             pingcap::Exception(gc_state.header().error().message(), pingcap::ErrorCodes::InternalError));
@@ -222,6 +232,7 @@ struct PDClientHelper
                     catch (pingcap::Exception &)
                     {
                         GET_METRIC(tiflash_gc_safepoint_request_count, type_backoff_error).Increment();
+                        observe_backoff_count(false);
                         throw;
                     }
                     continue; // retry
@@ -243,6 +254,7 @@ struct PDClientHelper
                         gc_state.ShortDebugString());
 #endif
                 }
+                observe_backoff_count(true);
                 return safe_point;
             }
             catch (pingcap::Exception & e)
@@ -251,11 +263,13 @@ struct PDClientHelper
                     GET_METRIC(tiflash_gc_safepoint_request_count, type_request_exception).Increment();
                 try
                 {
+                    ++backoff_count;
                     bo.backoff(pingcap::kv::boPDRPC, e);
                 }
                 catch (pingcap::Exception &)
                 {
                     GET_METRIC(tiflash_gc_safepoint_request_count, type_backoff_error).Increment();
+                    observe_backoff_count(false);
                     throw;
                 }
             }

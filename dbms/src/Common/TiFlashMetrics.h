@@ -203,6 +203,11 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_pd_response_error, {{"type", "pd_response_error"}}),                                                                   \
       F(type_request_exception, {{"type", "request_exception"}}),                                                                   \
       F(type_backoff_error, {{"type", "backoff_error"}}))                                                                           \
+    M(tiflash_gc_safepoint_backoff_count,                                                                                           \
+      "Bucketed histogram of GC safepoint request backoff count per call",                                                          \
+      Histogram,                                                                                                                    \
+      F(type_success, {{"type", "success"}}, ExpBuckets{1, 2, 8}),                                                                  \
+      F(type_failure, {{"type", "failure"}}, ExpBuckets{1, 2, 8}))                                                                  \
     M(tiflash_raft_read_index_count, "Total number of raft read index", Counter)                                                    \
     M(tiflash_stale_read_count, "Total number of stale read", Counter)                                                              \
     M(tiflash_raft_read_index_duration_seconds,                                                                                     \
