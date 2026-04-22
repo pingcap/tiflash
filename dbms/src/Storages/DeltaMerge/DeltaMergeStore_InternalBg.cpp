@@ -440,7 +440,8 @@ bool DeltaMergeStore::updateGCSafePoint()
             pd_client,
             keyspace_id,
             /* ignore_cache= */ false,
-            global_context.getSettingsRef().safe_point_update_interval_seconds);
+            global_context.getSettingsRef().safe_point_update_interval_seconds,
+            global_context.getSettingsRef().safe_point_get_max_backoff_ms);
         latest_gc_safe_point.store(safe_point, std::memory_order_release);
         return true;
     }
