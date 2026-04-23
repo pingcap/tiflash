@@ -26,11 +26,13 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Common/TiFlashMetrics.h>
 #include <Core/Types.h>
 #include <Storages/KVStore/Types.h>
 #include <common/logger_useful.h>
 #include <fiu.h>
 
+#include <algorithm>
 #include <atomic>
 #include <magic_enum.hpp>
 
@@ -71,11 +73,10 @@ struct KeyspaceGCInfo
 
 struct PDClientHelper
 {
-    static constexpr int get_safepoint_maxtime = 120000; // 120s. waiting pd recover.
-
     // 10 seconds timeout for getting TSO
     // https://github.com/pingcap/tidb/blob/069631e2ecfedc000ffb92c67207bea81380f020/pkg/store/mockstore/unistore/pd/client.go#L256-L276
     static constexpr int get_tso_maxtime = 10'000;
+    static constexpr int get_safepoint_maxtime = 120'000;
 
     static bool enable_safepoint_v2;
 
@@ -116,8 +117,17 @@ struct PDClientHelper
         const pingcap::pd::ClientPtr & pd_client,
         KeyspaceID keyspace_id,
         bool ignore_cache = true,
-        Int64 safe_point_update_interval_seconds = 30)
+        Int64 safe_point_update_interval_seconds = 30,
+        Int64 safe_point_get_max_backoff_ms = 120000)
     {
+        UInt64 backoff_count = 0;
+        auto observe_backoff_count = [&](bool success) {
+            if (success)
+                GET_METRIC(tiflash_gc_safepoint_backoff_count, type_success).Observe(backoff_count);
+            else
+                GET_METRIC(tiflash_gc_safepoint_backoff_count, type_failure).Observe(backoff_count);
+        };
+
         // If keyspace id is `NullspaceID` it need to use safe point v1.
         if (enable_safepoint_v2 && keyspace_id != NullspaceID)
         {
@@ -136,23 +146,41 @@ struct PDClientHelper
             const auto min_interval
                 = std::max(static_cast<Int64>(1), safe_point_update_interval_seconds); // at least one second
             if (duration.count() < min_interval)
+            {
+                observe_backoff_count(true);
                 return cached_gc_safe_point;
+            }
         }
 
-        pingcap::kv::Backoffer bo(get_safepoint_maxtime);
+        pingcap::kv::Backoffer bo(std::max(static_cast<Int64>(0), safe_point_get_max_backoff_ms));
         for (;;)
         {
+            bool has_pd_response_error = false;
             try
             {
+                GET_METRIC(tiflash_gc_safepoint_request_count, type_get_gc_state).Increment();
                 auto safe_point = pd_client->getGCSafePoint();
                 cached_gc_safe_point = safe_point;
                 LOG_TRACE(Logger::get(), "use safe point v1, gc_safe_point={}", safe_point);
                 safe_point_last_update_time = std::chrono::steady_clock::now();
+                observe_backoff_count(true);
                 return safe_point;
             }
             catch (pingcap::Exception & e)
             {
-                bo.backoff(pingcap::kv::boPDRPC, e);
+                if (!has_pd_response_error)
+                    GET_METRIC(tiflash_gc_safepoint_request_count, type_request_exception).Increment();
+                try
+                {
+                    ++backoff_count;
+                    bo.backoff(pingcap::kv::boPDRPC, e);
+                }
+                catch (pingcap::Exception &)
+                {
+                    GET_METRIC(tiflash_gc_safepoint_request_count, type_backoff_error).Increment();
+                    observe_backoff_count(false);
+                    throw;
+                }
             }
         }
     }
