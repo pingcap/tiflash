@@ -171,6 +171,7 @@ private:
     bool is_count;
     std::shared_ptr<rust::Box<ShardsSnapshot>> shards_snapshot;
 
+public:
     static std::tuple<::Expr, std::vector<ColumnID>> tipbToTiCIExpr(
         const tipb::Expr & expr,
         const TimezoneInfo & timezone_info)
