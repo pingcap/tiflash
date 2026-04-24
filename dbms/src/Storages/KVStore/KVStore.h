@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <string_view>
+
 #include <Interpreters/Context_fwd.h>
 #include <Parsers/IAST_fwd.h>
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
@@ -372,13 +374,14 @@ private:
         TMTContext & tmt,
         const RegionTaskLock & region_task_lock,
         UInt64 index,
-        UInt64 term) const;
+        UInt64 term,
+        std::string_view persist_extra_msg) const;
 
     void persistRegion(
         const Region & region,
         const RegionTaskLock & region_task_lock,
         PersistRegionReason reason,
-        const char * extra_msg) const;
+        std::string_view extra_msg) const;
 
     bool tryRegisterEagerRaftLogGCTask(const RegionPtr & region, RegionTaskLock &);
 
