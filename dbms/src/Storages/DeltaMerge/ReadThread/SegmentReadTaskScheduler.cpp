@@ -68,7 +68,7 @@ void SegmentReadTaskScheduler::submitPendingPool(SegmentReadTaskPoolPtr pool)
     Stopwatch sw;
     std::lock_guard lock(pending_mtx);
     pending_pools.push_back(pool);
-    LOG_INFO(
+    LOG_DEBUG(
         pool->getLogger(),
         "Submitted, pool_id={} segment_count={} pending_pools={} cost={}ns",
         pool->pool_id,
