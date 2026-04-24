@@ -680,7 +680,7 @@ void MPPTask::runImpl()
 
         auto result = query_executor_holder->execute();
 
-        auto log_level = Poco::Message::PRIO_DEBUG;
+        log_level = Poco::Message::PRIO_DEBUG;
         if (!result.is_success || status != RUNNING)
             log_level = Poco::Message::PRIO_INFORMATION;
         LOG_IMPL(
