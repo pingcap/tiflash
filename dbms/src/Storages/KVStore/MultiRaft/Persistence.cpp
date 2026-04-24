@@ -133,12 +133,15 @@ bool KVStore::tryFlushRegionData(
     // force persist
     auto & curr_region = *curr_region_ptr;
     const auto force_persist_msg = fmt::format("by force, term={} index={}", term, index);
-    LOG_DEBUG(
-        log,
-        "{} flush region due to tryFlushRegionData {}",
-        curr_region.toString(false),
-        force_persist_msg);
-    if (!forceFlushRegionDataImpl(curr_region, try_until_succeed, tmt, region_task_lock, index, term, force_persist_msg))
+    LOG_DEBUG(log, "{} flush region due to tryFlushRegionData {}", curr_region.toString(false), force_persist_msg);
+    if (!forceFlushRegionDataImpl(
+            curr_region,
+            try_until_succeed,
+            tmt,
+            region_task_lock,
+            index,
+            term,
+            force_persist_msg))
     {
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Force flush region failed, region_id={}", region_id);
     }
@@ -218,7 +221,8 @@ bool KVStore::canFlushRegionDataImpl(
     {
         // This rarely happens when there are too may raft logs, which don't trigger a proactive flush.
         const auto flush_msg = fmt::format(
-            "index {} term {} truncated_index {} truncated_term {} gap {}/{} table_in_mem_size={} table_id={} keyspace={}",
+            "index {} term {} truncated_index {} truncated_term {} gap {}/{} table_in_mem_size={} table_id={} "
+            "keyspace={}",
             index,
             term,
             truncated_index,
@@ -228,11 +232,7 @@ bool KVStore::canFlushRegionDataImpl(
             curr_region_ptr->getRegionTableSize(),
             curr_region_ptr->getMappedTableID(),
             curr_region_ptr->getKeyspaceID());
-        LOG_DEBUG(
-            log,
-            "{} flush region due to tryFlushRegionData, {}",
-            curr_region.toString(false),
-            flush_msg);
+        LOG_DEBUG(log, "{} flush region due to tryFlushRegionData, {}", curr_region.toString(false), flush_msg);
         GET_METRIC(tiflash_raft_region_flush_bytes, type_flushed).Observe(size_bytes);
         return forceFlushRegionDataImpl(curr_region, try_until_succeed, tmt, region_task_lock, index, term, flush_msg);
     }

@@ -14,8 +14,6 @@
 
 #pragma once
 
-#include <string_view>
-
 #include <Interpreters/Context_fwd.h>
 #include <Parsers/IAST_fwd.h>
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
@@ -31,6 +29,7 @@
 #include <Storages/KVStore/StorageEngineType.h>
 
 #include <magic_enum.hpp>
+#include <string_view>
 
 namespace TiDB
 {
