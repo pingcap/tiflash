@@ -1101,4 +1101,195 @@ TEST(KeyspacesGCInfoTest, Basic)
     ASSERT_EQ(info.getGCSafepoint(1), std::nullopt);
 }
 
+namespace
+{
+
+class CountingPDClient : public pingcap::pd::IClient
+{
+public:
+    explicit CountingPDClient(uint64_t gc_safe_point_)
+        : gc_safe_point(gc_safe_point_)
+    {}
+
+    uint64_t getTS() override { return 0; }
+
+    pdpb::GetRegionResponse getRegionByKey(const std::string &) override
+    {
+        throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
+    }
+
+    pdpb::GetRegionResponse getRegionByID(uint64_t) override
+    {
+        throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
+    }
+
+    metapb::Store getStore(uint64_t) override { throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError); }
+
+    bool isClusterBootstrapped() override { return true; }
+
+    std::vector<metapb::Store> getAllStores(bool) override
+    {
+        throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
+    }
+
+    uint64_t getGCSafePoint() override { return gc_safe_point; }
+
+    uint64_t getGCSafePointV2(KeyspaceID) override { return gc_safe_point; }
+
+    pdpb::GetGCStateResponse getGCState(KeyspaceID keyspace_id) override
+    {
+        ++gc_state_call_count;
+
+        pdpb::GetGCStateResponse gc_state;
+        auto * hdr = gc_state.mutable_header();
+        hdr->set_cluster_id(1);
+        hdr->mutable_error()->set_type(pdpb::ErrorType::OK);
+        auto * state = gc_state.mutable_gc_state();
+        state->mutable_keyspace_scope()->set_keyspace_id(keyspace_id);
+        state->set_is_keyspace_level_gc(true);
+        state->set_txn_safe_point(gc_safe_point);
+        state->set_gc_safe_point(gc_safe_point);
+        return gc_state;
+    }
+
+    pdpb::GetAllKeyspacesGCStatesResponse getAllKeyspacesGCStates() override
+    {
+        throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
+    }
+
+    KeyspaceID getKeyspaceID(const std::string &) override
+    {
+        throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
+    }
+
+    void update(const std::vector<std::string> &, const pingcap::ClusterConfig &) override
+    {
+        throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
+    }
+
+    bool isMock() override { return false; }
+
+    std::string getLeaderUrl() override { throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError); }
+
+    resource_manager::ListResourceGroupsResponse listResourceGroups(const resource_manager::ListResourceGroupsRequest &) override
+    {
+        throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
+    }
+
+    resource_manager::GetResourceGroupResponse getResourceGroup(const resource_manager::GetResourceGroupRequest &) override
+    {
+        throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
+    }
+
+    resource_manager::PutResourceGroupResponse addResourceGroup(const resource_manager::PutResourceGroupRequest &) override
+    {
+        throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
+    }
+
+    resource_manager::PutResourceGroupResponse modifyResourceGroup(const resource_manager::PutResourceGroupRequest &) override
+    {
+        throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
+    }
+
+    resource_manager::DeleteResourceGroupResponse deleteResourceGroup(const resource_manager::DeleteResourceGroupRequest &) override
+    {
+        throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
+    }
+
+    resource_manager::TokenBucketsResponse acquireTokenBuckets(const resource_manager::TokenBucketsRequest &) override
+    {
+        throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
+    }
+
+    uint64_t gc_safe_point;
+    size_t gc_state_call_count = 0;
+};
+
+} // namespace
+
+TEST(PDClientHelperTest, CacheOnlyReadPathDoesNotFetchFromPD)
+{
+    constexpr KeyspaceID keyspace_id = 9527;
+    PDClientHelper::removeKeyspaceGCSafepoint(keyspace_id);
+
+    auto pd_client = std::make_shared<CountingPDClient>(123456);
+
+    // Read path should not warm the cache on a miss.
+    auto safe_point = PDClientHelper::getGCSafePointWithRetry(
+        pd_client,
+        keyspace_id,
+        /* ignore_cache= */ false,
+        /* safe_point_update_interval_seconds= */ 30,
+        /* safe_point_get_max_backoff_ms= */ 1000,
+        GCSafepointFetchStrategy::CacheOnly);
+    ASSERT_EQ(safe_point, 0);
+    ASSERT_EQ(pd_client->gc_state_call_count, 0);
+
+    // Existing non-query paths still refresh the cache from PD.
+    safe_point = PDClientHelper::getGCSafePointWithRetry(
+        pd_client,
+        keyspace_id,
+        /* ignore_cache= */ false,
+        /* safe_point_update_interval_seconds= */ 30,
+        /* safe_point_get_max_backoff_ms= */ 1000);
+    ASSERT_EQ(safe_point, 123456);
+    ASSERT_EQ(pd_client->gc_state_call_count, 1);
+
+    // Once refreshed by other paths, read path consumes the cached value only.
+    safe_point = PDClientHelper::getGCSafePointWithRetry(
+        pd_client,
+        keyspace_id,
+        /* ignore_cache= */ false,
+        /* safe_point_update_interval_seconds= */ 30,
+        /* safe_point_get_max_backoff_ms= */ 1000,
+        GCSafepointFetchStrategy::CacheOnly);
+    ASSERT_EQ(safe_point, 123456);
+    ASSERT_EQ(pd_client->gc_state_call_count, 1);
+
+    PDClientHelper::removeKeyspaceGCSafepoint(keyspace_id);
+}
+
+TEST(PDClientHelperTest, CacheOnlyReadPathCanReturnExpiredCache)
+{
+    constexpr KeyspaceID keyspace_id = 9528;
+    PDClientHelper::removeKeyspaceGCSafepoint(keyspace_id);
+
+    auto pd_client = std::make_shared<CountingPDClient>(223344);
+
+    auto safe_point = PDClientHelper::getGCSafePointWithRetry(
+        pd_client,
+        keyspace_id,
+        /* ignore_cache= */ false,
+        /* safe_point_update_interval_seconds= */ 30,
+        /* safe_point_get_max_backoff_ms= */ 1000);
+    ASSERT_EQ(safe_point, 223344);
+    ASSERT_EQ(pd_client->gc_state_call_count, 1);
+
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+
+    // The read path keeps using the last observed safepoint even after the cache is
+    // stale. Only non-query callers are allowed to advance it via PD.
+    safe_point = PDClientHelper::getGCSafePointWithRetry(
+        pd_client,
+        keyspace_id,
+        /* ignore_cache= */ false,
+        /* safe_point_update_interval_seconds= */ 1,
+        /* safe_point_get_max_backoff_ms= */ 1000,
+        GCSafepointFetchStrategy::CacheOnly);
+    ASSERT_EQ(safe_point, 223344);
+    ASSERT_EQ(pd_client->gc_state_call_count, 1);
+
+    pd_client->gc_safe_point = 223355;
+    safe_point = PDClientHelper::getGCSafePointWithRetry(
+        pd_client,
+        keyspace_id,
+        /* ignore_cache= */ false,
+        /* safe_point_update_interval_seconds= */ 1,
+        /* safe_point_get_max_backoff_ms= */ 1000);
+    ASSERT_EQ(safe_point, 223355);
+    ASSERT_EQ(pd_client->gc_state_call_count, 2);
+
+    PDClientHelper::removeKeyspaceGCSafepoint(keyspace_id);
+}
+
 } // namespace DB::tests
