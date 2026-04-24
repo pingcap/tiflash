@@ -81,7 +81,7 @@ void Event::onInputFinish()
     if (0 == cur_value)
     {
         schedule();
-        LOG_INFO(log, "Event is scheduled");
+        LOG_DEBUG(log, "Event is scheduled");
     }
 }
 

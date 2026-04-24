@@ -106,7 +106,7 @@ grpc::Status MPPHandler::execute(const ContextPtr & context, mpp::DispatchTaskRe
 #endif
 
         task->run();
-        LOG_INFO(log, "processing dispatch is over; the time cost is {} ms", stopwatch.elapsedMilliseconds());
+        LOG_DEBUG(log, "processing dispatch is over; the time cost is {} ms", stopwatch.elapsedMilliseconds());
     }
     catch (Exception & e)
     {
