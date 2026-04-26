@@ -100,7 +100,7 @@ public:
         const kvrpcpb::CompactRequest * request,
         kvrpcpb::CompactResponse * response) override;
 
-    grpc::Status EstimateTiCICount(
+    grpc::Status GetEstimateTiCICount(
         grpc::ServerContext * grpc_context,
         const coprocessor::TiCIEstimateCountRequest * request,
         coprocessor::TiCIEstimateCountResponse * response) override;

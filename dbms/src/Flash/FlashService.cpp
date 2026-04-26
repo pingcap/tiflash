@@ -252,18 +252,14 @@ rust::Vec<::Shard> buildEstimateShards(const coprocessor::TiCIEstimateCountReque
 
 rust::Vec<::ShardWithRange> buildEstimateShardRanges(
     const coprocessor::TiCIEstimateCountRequest & request,
-    const rust::Vec<bool> & local_results,
-    coprocessor::TiCIEstimateCountResponse * response)
+    const rust::Vec<bool> & local_results)
 {
     rust::Vec<::ShardWithRange> shards;
     for (int i = 0; i < request.shard_infos_size(); ++i)
     {
         const auto & shard_info = request.shard_infos(i);
         if (i >= static_cast<int>(local_results.size()) || !local_results[static_cast<size_t>(i)])
-        {
-            response->add_retry_shards()->CopyFrom(shard_info);
             continue;
-        }
         shards.push_back({
             .shard_id = shard_info.shard_id(),
             .ranges = buildEstimateKeyRanges(shard_info.ranges()),
@@ -962,7 +958,7 @@ grpc::Status FlashService::Compact(
     return manual_compact_manager->handleRequest(request, response);
 }
 
-grpc::Status FlashService::EstimateTiCICount(
+grpc::Status FlashService::GetEstimateTiCICount(
     grpc::ServerContext * grpc_context,
     const coprocessor::TiCIEstimateCountRequest * request,
     coprocessor::TiCIEstimateCountResponse * response)
@@ -986,16 +982,7 @@ grpc::Status FlashService::EstimateTiCICount(
         auto shards = buildEstimateShards(*request, keyspace_id);
         rust::Vec<bool> local_results;
         [[maybe_unused]] auto snapshot = check_shards_and_acquire_snapshot(shards, local_results);
-        auto shard_ranges = buildEstimateShardRanges(*request, local_results, response);
-        if (response->retry_shards_size() > 0)
-        {
-            LOG_INFO(
-                log,
-                "EstimateTiCICount requires shard refresh, retry_shards={}, input_shards={}",
-                response->retry_shards_size(),
-                request->shard_infos_size());
-            return grpc::Status::OK;
-        }
+        auto shard_ranges = buildEstimateShardRanges(*request, local_results);
         if (shard_ranges.empty())
             return grpc::Status::OK;
 
@@ -1003,7 +990,7 @@ grpc::Status FlashService::EstimateTiCICount(
         response->set_est_count(estimate_result.estimated_total_count);
         LOG_INFO(
             log,
-            "EstimateTiCICount done, est_count={}, input_shards={}, available_shards={}, sampled_shards={}",
+            "GetEstimateTiCICount done, est_count={}, input_shards={}, available_shards={}, sampled_shards={}",
             response->est_count(),
             request->shard_infos_size(),
             estimate_result.available_shards,
@@ -1011,17 +998,17 @@ grpc::Status FlashService::EstimateTiCICount(
     }
     catch (const pingcap::Exception & e)
     {
-        LOG_WARNING(log, "EstimateTiCICount failed with KV exception: {}", e.message());
+        LOG_WARNING(log, "GetEstimateTiCICount failed with KV exception: {}", e.message());
         response->set_other_error(e.message());
     }
     catch (const std::exception & e)
     {
-        LOG_WARNING(log, "EstimateTiCICount failed: {}", e.what());
+        LOG_WARNING(log, "GetEstimateTiCICount failed: {}", e.what());
         response->set_other_error(e.what());
     }
     catch (...)
     {
-        LOG_WARNING(log, "EstimateTiCICount failed with unknown exception");
+        LOG_WARNING(log, "GetEstimateTiCICount failed with unknown exception");
         response->set_other_error("other exception");
     }
 
