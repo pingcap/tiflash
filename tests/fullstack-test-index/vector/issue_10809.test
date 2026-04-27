@@ -1,0 +1,55 @@
+# Copyright 2026 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+# Preparation.
+mysql> drop table if exists test.t;
+
+# Regression for #10809. TiFlash maps VECTOR(N) to Nullable(Array(Float32)).
+# A table with only NULL vectors can create a zero-byte ArrayElements substream.
+# Compacting the TiFlash replica used to crash in FramedChecksumReadBuffer::doSeek.
+mysql> CREATE TABLE test.t (`id` int primary key, `v` vector(5) DEFAULT NULL);
+mysql> ALTER TABLE test.t SET TIFLASH REPLICA 1;
+mysql> INSERT INTO test.t WITH RECURSIVE seq AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM seq WHERE n < 128) SELECT n, NULL FROM seq;
+func> wait_table test t
+
+mysql> set tidb_isolation_read_engines='tiflash';select count(*), count(v) from test.t;
++----------+----------+
+| count(*) | count(v) |
++----------+----------+
+|      128 |        0 |
++----------+----------+
+
+mysql> alter table test.t compact tiflash replica;
+
+mysql> set tidb_isolation_read_engines='tiflash';select count(*), count(v) from test.t;
++----------+----------+
+| count(*) | count(v) |
++----------+----------+
+|      128 |        0 |
++----------+----------+
+
+mysql> set tidb_isolation_read_engines='tiflash';select id from test.t where v is null order by id limit 5;
++----+
+| id |
++----+
+|  1 |
+|  2 |
+|  3 |
+|  4 |
+|  5 |
++----+
+
+# Cleanup.
+mysql> drop table if exists test.t

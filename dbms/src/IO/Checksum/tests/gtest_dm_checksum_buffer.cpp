@@ -508,4 +508,29 @@ TEST_COMPRESSEDSEEKABLE(CRC64)
 TEST_COMPRESSEDSEEKABLE(City128)
 TEST_COMPRESSEDSEEKABLE(XXH3)
 
+template <ChecksumAlgo D>
+void runEmptyCompressedSeekableReaderBufferTest()
+{
+    auto config = DM::DMChecksumConfig{{}, TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE, D};
+    auto compressed_in = CompressedReadBufferFromFileBuilder::build(
+        String{},
+        "empty-compressed-buffer",
+        config.getChecksumAlgorithm(),
+        config.getChecksumFrameLength());
+
+    compressed_in->seek(0, 0);
+}
+
+#define TEST_EMPTY_COMPRESSEDSEEKABLE(ALGO)                               \
+    TEST(DMChecksumBuffer##ALGO, EmptyCompressedSeekable)                 \
+    {                                                                     \
+        runEmptyCompressedSeekableReaderBufferTest<ChecksumAlgo::ALGO>(); \
+    } // NOLINT(cert-err58-cpp)
+
+TEST_EMPTY_COMPRESSEDSEEKABLE(None)
+TEST_EMPTY_COMPRESSEDSEEKABLE(CRC32)
+TEST_EMPTY_COMPRESSEDSEEKABLE(CRC64)
+TEST_EMPTY_COMPRESSEDSEEKABLE(City128)
+TEST_EMPTY_COMPRESSEDSEEKABLE(XXH3)
+
 } // namespace DB::tests
