@@ -1123,7 +1123,10 @@ public:
         throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
     }
 
-    metapb::Store getStore(uint64_t) override { throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError); }
+    metapb::Store getStore(uint64_t) override
+    {
+        throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
+    }
 
     bool isClusterBootstrapped() override { return true; }
 
@@ -1169,29 +1172,37 @@ public:
 
     bool isMock() override { return false; }
 
-    std::string getLeaderUrl() override { throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError); }
-
-    resource_manager::ListResourceGroupsResponse listResourceGroups(const resource_manager::ListResourceGroupsRequest &) override
+    std::string getLeaderUrl() override
     {
         throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
     }
 
-    resource_manager::GetResourceGroupResponse getResourceGroup(const resource_manager::GetResourceGroupRequest &) override
+    resource_manager::ListResourceGroupsResponse listResourceGroups(
+        const resource_manager::ListResourceGroupsRequest &) override
     {
         throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
     }
 
-    resource_manager::PutResourceGroupResponse addResourceGroup(const resource_manager::PutResourceGroupRequest &) override
+    resource_manager::GetResourceGroupResponse getResourceGroup(
+        const resource_manager::GetResourceGroupRequest &) override
     {
         throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
     }
 
-    resource_manager::PutResourceGroupResponse modifyResourceGroup(const resource_manager::PutResourceGroupRequest &) override
+    resource_manager::PutResourceGroupResponse addResourceGroup(
+        const resource_manager::PutResourceGroupRequest &) override
     {
         throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
     }
 
-    resource_manager::DeleteResourceGroupResponse deleteResourceGroup(const resource_manager::DeleteResourceGroupRequest &) override
+    resource_manager::PutResourceGroupResponse modifyResourceGroup(
+        const resource_manager::PutResourceGroupRequest &) override
+    {
+        throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
+    }
+
+    resource_manager::DeleteResourceGroupResponse deleteResourceGroup(
+        const resource_manager::DeleteResourceGroupRequest &) override
     {
         throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
     }
