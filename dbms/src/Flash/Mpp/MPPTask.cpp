@@ -787,7 +787,6 @@ void MPPTask::runImpl()
 
     total_run_time_ms = stopwatch.elapsedMilliseconds();
     LOG_DEBUG(log, "task ends, time cost is {} ms.", total_run_time_ms);
-
     unregisterTask();
 }
 
