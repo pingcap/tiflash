@@ -1111,6 +1111,8 @@ public:
         : gc_safe_point(gc_safe_point_)
     {}
 
+    uint64_t getClusterID() override { return 1; }
+
     uint64_t getTS() override { return 0; }
 
     pdpb::GetRegionResponse getRegionByKey(const std::string &) override
