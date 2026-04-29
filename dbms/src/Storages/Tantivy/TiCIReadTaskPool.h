@@ -117,7 +117,7 @@ public:
             return_columns.end(),
             [](const auto & nt, FmtBuffer & fb) { fb.fmtAppend("{}:{}", nt.name, nt.type->getName()); },
             ", ");
-        auto [expr, cids] = tipbToTiCIExpr(match_expr_, timezone_info_);
+        auto [expr, cids] = TS::tipbToTiCIExpr(match_expr_, timezone_info_);
         match_expr = std::move(expr);
         LOG_DEBUG(log, "columns: [{}], match columns: {}", buf.toString(), cids);
     }
@@ -171,22 +171,6 @@ private:
     ::Expr match_expr;
     bool is_count;
     std::shared_ptr<rust::Box<ShardsSnapshot>> shards_snapshot;
-
-public:
-    static std::tuple<::Expr, std::vector<ColumnID>> tipbToTiCIExpr(
-        const tipb::Expr & expr,
-        const TimezoneInfo & timezone_info)
-    {
-        return TS::tipbToTiCIExpr(expr, timezone_info);
-    }
-
-    static std::tuple<::Expr, std::vector<ColumnID>> tipbToTiCIExpr(
-        const google::protobuf::RepeatedPtrField<tipb::Expr> & exprs,
-        const TimezoneInfo & tz)
-    {
-        return TS::tipbToTiCIExpr(exprs, tz);
-    }
-
 };
 
 using TiCIReadTaskPoolPtr = std::shared_ptr<TiCIReadTaskPool>;
