@@ -723,12 +723,15 @@ void checkStartTs(UInt64 start_ts, const Context & context, const String & req_i
     auto pd_client = tmt.getPDClient();
     if (unlikely(pd_client->isMock()))
         return;
+    // Query paths only consume the last safepoint observed by TiFlash. Cache
+    // advancement is still handled by the existing non-query callers so that
+    // PD traffic does not scale with read concurrency.
     auto safe_point = PDClientHelper::getGCSafePointWithRetry(
         pd_client,
         keyspace_id,
-        /* ignore_cache= */ false,
         context.getSettingsRef().safe_point_update_interval_seconds,
-        context.getSettingsRef().safe_point_get_max_backoff_ms);
+        context.getSettingsRef().safe_point_get_max_backoff_ms,
+        GCSafepointFetchStrategy::CacheOnly);
     if (start_ts < safe_point)
     {
         throw TiFlashException(
