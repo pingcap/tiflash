@@ -332,7 +332,7 @@ public:
     }
 
     static std::tuple<::Expr, std::vector<ColumnID>> tipbToTiCIExpr(
-        google::protobuf::RepeatedPtrField<tipb::Expr> exprs,
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & exprs,
         const TimezoneInfo & tz)
     {
         if (exprs.empty())
