@@ -59,6 +59,25 @@ inline UInt64 convertPackedU64WithTimezone(UInt64 from_time, const TimezoneInfo 
     return result_time;
 }
 
+inline rust::Vec<::Range> getKeyRanges(const ShardInfo::KeyRanges & key_ranges)
+{
+    rust::Vec<::Range> res;
+    for (const auto & range : key_ranges)
+    {
+        rust::Slice<::std::uint8_t const> start(
+            reinterpret_cast<const unsigned char *>(range.start().c_str()),
+            range.start().size());
+        rust::Slice<::std::uint8_t const> end(
+            reinterpret_cast<const unsigned char *>(range.end().c_str()),
+            range.end().size());
+        res.push_back({
+            .start = std::move(start),
+            .end = std::move(end),
+        });
+    }
+    return res;
+}
+
 class TantivyInputStream : public IProfilingBlockInputStream
 {
     static constexpr auto NAME = "TantivyInputStream";
@@ -459,25 +478,6 @@ private:
             fields.push_back(name_and_type.name);
         }
         return fields;
-    }
-
-    static rust::Vec<::Range> getKeyRanges(ShardInfo::KeyRanges & key_ranges)
-    {
-        rust::Vec<::Range> res;
-        for (const auto & range : key_ranges)
-        {
-            rust::Slice<::std::uint8_t const> start(
-                reinterpret_cast<const unsigned char *>(range.start().c_str()),
-                range.start().size());
-            rust::Slice<::std::uint8_t const> end(
-                reinterpret_cast<const unsigned char *>(range.end().c_str()),
-                range.end().size());
-            res.push_back({
-                .start = std::move(start),
-                .end = std::move(end),
-            });
-        }
-        return res;
     }
 };
 } // namespace DB::TS

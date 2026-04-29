@@ -198,23 +198,6 @@ void updateSettingsForAutoSpill(ContextPtr & context, const LoggerPtr & log)
     }
 }
 
-rust::Vec<::Range> buildEstimateKeyRanges(const google::protobuf::RepeatedPtrField<coprocessor::KeyRange> & key_ranges)
-{
-    rust::Vec<::Range> ranges;
-    for (const auto & key_range : key_ranges)
-    {
-        ranges.push_back({
-            .start = rust::Slice<const std::uint8_t>(
-                reinterpret_cast<const std::uint8_t *>(key_range.start().data()),
-                key_range.start().size()),
-            .end = rust::Slice<const std::uint8_t>(
-                reinterpret_cast<const std::uint8_t *>(key_range.end().data()),
-                key_range.end().size()),
-        });
-    }
-    return ranges;
-}
-
 TimezoneInfo buildEstimateTimezoneInfo(const coprocessor::TiCIEstimateCountRequest & request)
 {
     TimezoneInfo timezone_info;
@@ -240,9 +223,10 @@ rust::Vec<::ShardWithRange> buildEstimateShardRanges(const coprocessor::TiCIEsti
     rust::Vec<::ShardWithRange> shards;
     for (const auto & shard_info : request.shard_infos())
     {
+        ShardInfo query_shard_info(shard_info);
         shards.push_back({
-            .shard_id = shard_info.shard_id(),
-            .ranges = buildEstimateKeyRanges(shard_info.ranges()),
+            .shard_id = query_shard_info.shard_id,
+            .ranges = TS::getKeyRanges(query_shard_info.key_ranges),
         });
     }
     return shards;
