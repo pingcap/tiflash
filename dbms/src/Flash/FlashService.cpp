@@ -235,31 +235,11 @@ tipb::FTSQueryInfo parseEstimateQueryInfo(const coprocessor::TiCIEstimateCountRe
     return query_info;
 }
 
-rust::Vec<::Shard> buildEstimateShards(const coprocessor::TiCIEstimateCountRequest & request, UInt32 keyspace_id)
-{
-    rust::Vec<::Shard> shards;
-    for (const auto & shard_info : request.shard_infos())
-    {
-        shards.push_back({
-            .keyspace_id = keyspace_id,
-            .index_id = request.index_id(),
-            .shard_id = shard_info.shard_id(),
-            .shard_epoch = shard_info.shard_epoch(),
-        });
-    }
-    return shards;
-}
-
-rust::Vec<::ShardWithRange> buildEstimateShardRanges(
-    const coprocessor::TiCIEstimateCountRequest & request,
-    const rust::Vec<bool> & local_results)
+rust::Vec<::ShardWithRange> buildEstimateShardRanges(const coprocessor::TiCIEstimateCountRequest & request)
 {
     rust::Vec<::ShardWithRange> shards;
-    for (int i = 0; i < request.shard_infos_size(); ++i)
+    for (const auto & shard_info : request.shard_infos())
     {
-        const auto & shard_info = request.shard_infos(i);
-        if (i >= static_cast<int>(local_results.size()) || !local_results[static_cast<size_t>(i)])
-            continue;
         shards.push_back({
             .shard_id = shard_info.shard_id(),
             .ranges = buildEstimateKeyRanges(shard_info.ranges()),
@@ -979,16 +959,13 @@ grpc::Status FlashService::GetEstimateTiCICount(
         auto [query, column_ids] = TS::TiCIReadTaskPool::tipbToTiCIExpr(fts_query_info.match_expr(), timezone_info);
         (void)column_ids;
 
-        auto shards = buildEstimateShards(*request, keyspace_id);
-        rust::Vec<bool> local_results;
-        [[maybe_unused]] auto snapshot = check_shards_and_acquire_snapshot(shards, local_results);
-        auto shard_ranges = buildEstimateShardRanges(*request, local_results);
+        auto shard_ranges = buildEstimateShardRanges(*request);
         if (shard_ranges.empty())
             return grpc::Status::OK;
 
         const auto estimate_result = estimate_count(keyspace_id, shard_ranges, query);
         response->set_est_count(estimate_result.estimated_total_count);
-        LOG_INFO(
+        LOG_DEBUG(
             log,
             "GetEstimateTiCICount done, est_count={}, input_shards={}, available_shards={}, sampled_shards={}",
             response->est_count(),
