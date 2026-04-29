@@ -223,10 +223,9 @@ rust::Vec<::ShardWithRange> buildEstimateShardRanges(const coprocessor::TiCIEsti
     rust::Vec<::ShardWithRange> shards;
     for (const auto & shard_info : request.shard_infos())
     {
-        ShardInfo query_shard_info(shard_info);
         shards.push_back({
-            .shard_id = query_shard_info.shard_id,
-            .ranges = TS::getKeyRanges(query_shard_info.key_ranges),
+            .shard_id = shard_info.shard_id(),
+            .ranges = TS::getKeyRanges(shard_info.ranges()),
         });
     }
     return shards;
