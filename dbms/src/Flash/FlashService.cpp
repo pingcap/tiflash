@@ -49,7 +49,7 @@
 #include <Storages/KVStore/Read/RegionException.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/S3/S3Common.h>
-#include <Storages/Tantivy/TiCIReadTaskPool.h>
+#include <Storages/Tantivy/TiCIRequestUtils.h>
 #include <common/logger_useful.h>
 #include <grpcpp/server_builder.h>
 #include <grpcpp/support/status.h>
@@ -939,7 +939,7 @@ grpc::Status FlashService::GetEstimateTiCICount(
         const auto keyspace_id = RequestUtils::deriveKeyspaceID(request->context());
         const auto fts_query_info = parseEstimateQueryInfo(*request);
         const auto timezone_info = buildEstimateTimezoneInfo(*request);
-        auto [query, column_ids] = TS::TiCIReadTaskPool::tipbToTiCIExpr(fts_query_info.match_expr(), timezone_info);
+        auto [query, column_ids] = TS::tipbToTiCIExpr(fts_query_info.match_expr(), timezone_info);
         (void)column_ids;
 
         auto shard_ranges = buildEstimateShardRanges(*request);

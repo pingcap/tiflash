@@ -30,9 +30,8 @@
 #include <DataTypes/DataTypeMyDateTime.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <Flash/Coprocessor/DAGCodec.h>
-#include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/ShardInfo.h>
+#include <Storages/Tantivy/TiCIRequestUtils.h>
 #include <TiDB/Schema/TiDBTypes.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
@@ -46,37 +45,6 @@
 
 namespace DB::TS
 {
-
-// convert literal value from timezone specified in cop request to UTC in-place
-inline UInt64 convertPackedU64WithTimezone(UInt64 from_time, const TimezoneInfo & timezone_info)
-{
-    static const auto & time_zone_utc = DateLUT::instance("UTC");
-    UInt64 result_time = from_time;
-    if (timezone_info.is_name_based)
-        convertTimeZone(from_time, result_time, *timezone_info.timezone, time_zone_utc);
-    else if (timezone_info.timezone_offset != 0)
-        convertTimeZoneByOffset(from_time, result_time, false, timezone_info.timezone_offset);
-    return result_time;
-}
-
-inline rust::Vec<::Range> getKeyRanges(const ShardInfo::KeyRanges & key_ranges)
-{
-    rust::Vec<::Range> res;
-    for (const auto & range : key_ranges)
-    {
-        rust::Slice<::std::uint8_t const> start(
-            reinterpret_cast<const unsigned char *>(range.start().c_str()),
-            range.start().size());
-        rust::Slice<::std::uint8_t const> end(
-            reinterpret_cast<const unsigned char *>(range.end().c_str()),
-            range.end().size());
-        res.push_back({
-            .start = std::move(start),
-            .end = std::move(end),
-        });
-    }
-    return res;
-}
 
 class TantivyInputStream : public IProfilingBlockInputStream
 {
