@@ -943,9 +943,6 @@ grpc::Status FlashService::GetEstimateTiCICount(
         (void)column_ids;
 
         auto shard_ranges = buildEstimateShardRanges(*request);
-        if (shard_ranges.empty())
-            return grpc::Status::OK;
-
         const auto estimate_result = estimate_count(keyspace_id, shard_ranges, query);
         response->set_est_count(estimate_result.estimated_total_count);
         LOG_DEBUG(
@@ -955,6 +952,24 @@ grpc::Status FlashService::GetEstimateTiCICount(
             request->shard_infos_size(),
             estimate_result.available_shards,
             estimate_result.sampled_shards);
+    }
+    catch (const TiFlashException & e)
+    {
+        LOG_WARNING(
+            log,
+            "GetEstimateTiCICount failed with TiFlash exception: {}\n{}",
+            e.displayText(),
+            e.getStackTrace().toString());
+        response->set_other_error(e.standardText());
+    }
+    catch (const Exception & e)
+    {
+        LOG_WARNING(
+            log,
+            "GetEstimateTiCICount failed with DB exception: {}\n{}",
+            e.message(),
+            e.getStackTrace().toString());
+        response->set_other_error(e.message());
     }
     catch (const pingcap::Exception & e)
     {
