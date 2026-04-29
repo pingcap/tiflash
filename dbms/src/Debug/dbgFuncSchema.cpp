@@ -186,7 +186,6 @@ void dbgFuncGcSchemas(Context & context, const ASTs & args, DBGInvoker::Printer 
         gc_safe_point = PDClientHelper::getGCSafePointWithRetry(
             context.getTMTContext().getPDClient(),
             NullspaceID,
-            true,
             30,
             context.getSettingsRef().safe_point_get_max_backoff_ms);
     if (!args.empty())

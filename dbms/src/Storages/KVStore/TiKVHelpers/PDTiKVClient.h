@@ -182,7 +182,6 @@ struct PDClientHelper
     static Timestamp getGCSafePointWithRetry(
         const pingcap::pd::ClientPtr & pd_client,
         KeyspaceID keyspace_id,
-        bool ignore_cache = true,
         Int64 safe_point_update_interval_seconds = 30,
         Int64 safe_point_get_max_backoff_ms = 120000,
         GCSafepointFetchStrategy fetch_strategy = GCSafepointFetchStrategy::UpdateCacheIfNeeded)
@@ -195,33 +194,30 @@ struct PDClientHelper
                 GET_METRIC(tiflash_gc_safepoint_backoff_count, type_failure).Observe(backoff_count);
         };
 
-        if (!ignore_cache)
+        if (fetch_strategy == GCSafepointFetchStrategy::CacheOnly)
         {
-            if (fetch_strategy == GCSafepointFetchStrategy::CacheOnly)
+            // Query paths use the last globally observed safepoint only. They never
+            // push the cache forward on their own, which avoids PD traffic growing
+            // linearly with query concurrency. Returning 0 on cache miss preserves
+            // the best-effort semantics expected by the caller.
+            auto ks_gc_info = ks_gc_sp_map.getGCSafepoint(keyspace_id);
+            observe_backoff_count(true);
+            return ks_gc_info.has_value() ? ks_gc_info->gc_safepoint : 0;
+        }
+        else
+        {
+            // In order to avoid too frequent requests to PD,
+            // we cache the safe point for a while.
+            // at least one second
+            const auto min_interval = std::max(static_cast<Int64>(1), safe_point_update_interval_seconds);
+            auto ks_gc_info = ks_gc_sp_map.getGCSafepointIfValid(keyspace_id, min_interval);
+            if (ks_gc_info.has_value())
             {
-                // Query paths use the last globally observed safepoint only. They never
-                // push the cache forward on their own, which avoids PD traffic growing
-                // linearly with query concurrency. Returning 0 on cache miss preserves
-                // the best-effort semantics expected by the caller.
-                auto ks_gc_info = ks_gc_sp_map.getGCSafepoint(keyspace_id);
+                // Still valid, return the cached gc safepoint
                 observe_backoff_count(true);
-                return ks_gc_info.has_value() ? ks_gc_info->gc_safepoint : 0;
+                return ks_gc_info->gc_safepoint;
             }
-            else
-            {
-                // In order to avoid too frequent requests to PD,
-                // we cache the safe point for a while.
-                // at least one second
-                const auto min_interval = std::max(static_cast<Int64>(1), safe_point_update_interval_seconds);
-                auto ks_gc_info = ks_gc_sp_map.getGCSafepointIfValid(keyspace_id, min_interval);
-                if (ks_gc_info.has_value())
-                {
-                    // Still valid, return the cached gc safepoint
-                    observe_backoff_count(true);
-                    return ks_gc_info->gc_safepoint;
-                }
-                // else fallback to fetch from PD
-            }
+            // else fallback to fetch from PD
         }
 
         pingcap::kv::Backoffer bo(std::max(static_cast<Int64>(0), safe_point_get_max_backoff_ms));

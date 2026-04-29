@@ -729,7 +729,6 @@ void checkStartTs(UInt64 start_ts, const Context & context, const String & req_i
     auto safe_point = PDClientHelper::getGCSafePointWithRetry(
         pd_client,
         keyspace_id,
-        /* ignore_cache= */ false,
         context.getSettingsRef().safe_point_update_interval_seconds,
         context.getSettingsRef().safe_point_get_max_backoff_ms,
         GCSafepointFetchStrategy::CacheOnly);

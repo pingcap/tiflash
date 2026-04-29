@@ -1231,7 +1231,6 @@ TEST(PDClientHelperTest, CacheOnlyReadPathDoesNotFetchFromPD)
     auto safe_point = PDClientHelper::getGCSafePointWithRetry(
         pd_client,
         keyspace_id,
-        /* ignore_cache= */ false,
         /* safe_point_update_interval_seconds= */ 30,
         /* safe_point_get_max_backoff_ms= */ 1000,
         GCSafepointFetchStrategy::CacheOnly);
@@ -1242,7 +1241,6 @@ TEST(PDClientHelperTest, CacheOnlyReadPathDoesNotFetchFromPD)
     safe_point = PDClientHelper::getGCSafePointWithRetry(
         pd_client,
         keyspace_id,
-        /* ignore_cache= */ false,
         /* safe_point_update_interval_seconds= */ 30,
         /* safe_point_get_max_backoff_ms= */ 1000);
     ASSERT_EQ(safe_point, 123456);
@@ -1252,7 +1250,6 @@ TEST(PDClientHelperTest, CacheOnlyReadPathDoesNotFetchFromPD)
     safe_point = PDClientHelper::getGCSafePointWithRetry(
         pd_client,
         keyspace_id,
-        /* ignore_cache= */ false,
         /* safe_point_update_interval_seconds= */ 30,
         /* safe_point_get_max_backoff_ms= */ 1000,
         GCSafepointFetchStrategy::CacheOnly);
@@ -1272,7 +1269,6 @@ TEST(PDClientHelperTest, CacheOnlyReadPathCanReturnExpiredCache)
     auto safe_point = PDClientHelper::getGCSafePointWithRetry(
         pd_client,
         keyspace_id,
-        /* ignore_cache= */ false,
         /* safe_point_update_interval_seconds= */ 30,
         /* safe_point_get_max_backoff_ms= */ 1000);
     ASSERT_EQ(safe_point, 223344);
@@ -1285,7 +1281,6 @@ TEST(PDClientHelperTest, CacheOnlyReadPathCanReturnExpiredCache)
     safe_point = PDClientHelper::getGCSafePointWithRetry(
         pd_client,
         keyspace_id,
-        /* ignore_cache= */ false,
         /* safe_point_update_interval_seconds= */ 1,
         /* safe_point_get_max_backoff_ms= */ 1000,
         GCSafepointFetchStrategy::CacheOnly);
@@ -1296,7 +1291,6 @@ TEST(PDClientHelperTest, CacheOnlyReadPathCanReturnExpiredCache)
     safe_point = PDClientHelper::getGCSafePointWithRetry(
         pd_client,
         keyspace_id,
-        /* ignore_cache= */ false,
         /* safe_point_update_interval_seconds= */ 1,
         /* safe_point_get_max_backoff_ms= */ 1000);
     ASSERT_EQ(safe_point, 223355);
