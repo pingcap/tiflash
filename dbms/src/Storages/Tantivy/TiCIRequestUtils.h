@@ -179,7 +179,11 @@ inline std::tuple<::Expr, std::vector<ColumnID>> tipbToTiCIExpr(
             break;
         }
         default:
-            throw std::runtime_error("Unsupported expression sig");
+            throw std::runtime_error(fmt::format(
+                "Unsupported expression sig: tp={}, sig={}, expr={}",
+                static_cast<int>(expr.tp()),
+                static_cast<int>(expr.sig()),
+                expr.DebugString()));
         }
 
         return {ret, children_cids};
@@ -217,12 +221,15 @@ inline std::tuple<::Expr, std::vector<ColumnID>> tipbToTiCIExpr(
         else if (field.getType() == Field::Types::Decimal256)
             str = field.get<DecimalField<Decimal256>>().toString();
         else
-            throw TiFlashException("Not decimal literal" + expr.DebugString(), Errors::Coprocessor::BadRequest);
+            throw TiFlashException("Not decimal literal: " + expr.DebugString(), Errors::Coprocessor::BadRequest);
         std::copy(str.begin(), str.end(), std::back_inserter(ret.val));
         return {ret, {}};
     }
     default:
-        throw std::runtime_error("Unsupported expression type");
+        throw std::runtime_error(fmt::format(
+            "Unsupported expression type: tp={}, expr={}",
+            static_cast<int>(expr.tp()),
+            expr.DebugString()));
     }
 }
 
