@@ -27,6 +27,7 @@
 #include <Flash/Disaggregated/WNEstablishDisaggTaskHandler.h>
 #include <Flash/Disaggregated/WNFetchPagesStreamWriter.h>
 #include <Flash/EstablishCall.h>
+#include <Flash/EstimateTiCICountHandler.h>
 #include <Flash/FlashService.h>
 #include <Flash/Management/ManualCompact.h>
 #include <Flash/Mpp/MPPHandler.h>
@@ -882,6 +883,20 @@ grpc::Status FlashService::Compact(
         return check_result;
 
     return manual_compact_manager->handleRequest(request, response);
+}
+
+grpc::Status FlashService::GetEstimateTiCICount(
+    grpc::ServerContext * grpc_context,
+    const coprocessor::TiCIEstimateCountRequest * request,
+    coprocessor::TiCIEstimateCountResponse * response)
+{
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
+    auto check_result = checkGrpcContext(grpc_context);
+    if (!check_result.ok())
+        return check_result;
+
+    EstimateTiCICountHandler handler(request, response, log->identifier());
+    return handler.execute();
 }
 
 grpc::Status FlashService::tryAddLock(
