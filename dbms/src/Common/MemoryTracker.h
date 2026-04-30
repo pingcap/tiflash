@@ -79,6 +79,7 @@ class MemoryTracker : public std::enable_shared_from_this<MemoryTracker>
     {}
 
     void reportAmount();
+    void checkRssLimitImpl(bool require_tracked_growth, Int64 will_be, Int64 size) const;
 
 public:
     /// Using `std::shared_ptr` and `new` instread of `std::make_shared` is because `std::make_shared` cannot call private constructors.
@@ -106,6 +107,10 @@ public:
     /** This function should be called after memory deallocation.
       */
     void free(Int64 size);
+
+    /// Explicitly checks whether process RSS is already much larger than the configured limit.
+    /// Unlike alloc(0), this probe does not require tracked memory growth in the current tracker.
+    void checkRssLimit() const;
 
     Int64 get() const { return amount.load(std::memory_order_relaxed); }
 
@@ -184,6 +189,7 @@ namespace CurrentMemoryTracker
 void disableThreshold();
 void submitLocalDeltaMemory();
 Int64 getLocalDeltaMemory();
+void checkRssLimit();
 void alloc(Int64 size);
 void realloc(Int64 old_size, Int64 new_size);
 void free(Int64 size);

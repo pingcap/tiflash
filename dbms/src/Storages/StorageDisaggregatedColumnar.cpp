@@ -846,11 +846,8 @@ Block RNProxyInputStream::readImpl([[maybe_unused]] FilterPtr & res_filter, [[ma
     if (rows == 0)
         return {};
 
-    // Add memory tracker check hook after reading block from proxy. If the memory is over the limit, an exception
-    // will be thrown to stop reading more data from proxy and avoid OOM.
-    CurrentMemoryTracker::submitLocalDeltaMemory();
-    if (current_memory_tracker != nullptr)
-        current_memory_tracker->alloc(0);
+    // Add a memory tracker hook after reading a block from proxy.
+    CurrentMemoryTracker::checkRssLimit();
 
     TableID physical_table_id = -1;
     Block header = getHeader();
