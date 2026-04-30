@@ -463,6 +463,36 @@ void DAGExpressionAnalyzer::fillArgumentDetail(
     arg_collators.push_back(removeNullable(arg_types.back())->isString() ? getCollatorFromExpr(arg) : nullptr);
 }
 
+void DAGExpressionAnalyzer::fillArgumentDetailForAggFuncBitwise(
+    const ExpressionActionsPtr & actions,
+    const tipb::Expr & arg,
+    Names & arg_names,
+    DataTypes & arg_types,
+    TiDB::TiDBCollators & arg_collators)
+{
+    DataTypePtr uint64_type = std::make_shared<DataTypeUInt64>();
+    const Block & sample_block = actions->getSampleBlock();
+    String name = getActions(arg, actions);
+    DataTypePtr orig_type = sample_block.getByName(name).type;
+    // Bitwise operations can only be applied to integer types.
+    // So we need to cast the argument to UInt64.
+    if (!removeNullable(orig_type)->equals(*uint64_type))
+    {
+        if (orig_type->isNullable())
+        {
+            name = appendCast(makeNullable(uint64_type), actions, name);
+        }
+        else
+        {
+            name = appendCast(uint64_type, actions, name);
+        }
+    }
+
+    arg_names.push_back(name);
+    arg_types.push_back(orig_type->isNullable() ? makeNullable(uint64_type) : uint64_type);
+    arg_collators.push_back(removeNullable(arg_types.back())->isString() ? getCollatorFromExpr(arg) : nullptr);
+}
+
 void DAGExpressionAnalyzer::buildGroupConcat(
     const tipb::Expr & expr,
     const ExpressionActionsPtr & actions,
@@ -588,6 +618,8 @@ void DAGExpressionAnalyzer::buildCommonAggFunc(
     NamesAndTypes & aggregated_columns,
     bool empty_input_as_null)
 {
+    tipb::ExprType tp = expr.tp();
+    bool is_bitwise = tp == tipb::ExprType::Agg_BitAnd || tp == tipb::ExprType::Agg_BitOr || tp == tipb::ExprType::Agg_BitXor;
     auto child_size = expr.children_size();
     Names arg_names;
     DataTypes arg_types;
@@ -595,7 +627,14 @@ void DAGExpressionAnalyzer::buildCommonAggFunc(
 
     for (Int32 i = 0; i < child_size; ++i)
     {
-        fillArgumentDetail(actions, expr.children(i), arg_names, arg_types, arg_collators);
+        if (is_bitwise)
+        {
+            fillArgumentDetailForAggFuncBitwise(actions, expr.children(i), arg_names, arg_types, arg_collators);
+        }
+        else
+        {
+            fillArgumentDetail(actions, expr.children(i), arg_names, arg_types, arg_collators);
+        }
     }
     // For count(not null column), we can transform it to count() to avoid the cost of convertToFullColumn.
     if (expr.tp() == tipb::ExprType::Count && !expr.has_distinct() && child_size == 1 && !arg_types[0]->isNullable())
