@@ -1088,10 +1088,20 @@ TEST(KeyspacesGCInfoTest, Basic)
     gc_info = info.getGCSafepoint(1);
     ASSERT_TRUE(gc_info.has_value());
     ASSERT_EQ(gc_info->gc_safepoint, 10086);
+    // update with a smaller safepoint should not move cache backwards
+    ASSERT_EQ(info.updateGCSafepoint(1, 10085), 10086);
+    gc_info = info.getGCSafepoint(1);
+    ASSERT_TRUE(gc_info.has_value());
+    ASSERT_EQ(gc_info->gc_safepoint, 10086);
+    // update with a larger safepoint should advance the cache
+    ASSERT_EQ(info.updateGCSafepoint(1, 10087), 10087);
+    gc_info = info.getGCSafepoint(1);
+    ASSERT_TRUE(gc_info.has_value());
+    ASSERT_EQ(gc_info->gc_safepoint, 10087);
     // get with valid seconds, not expired
     gc_info = info.getGCSafepointIfValid(1, 10);
     ASSERT_TRUE(gc_info.has_value());
-    ASSERT_EQ(gc_info->gc_safepoint, 10086);
+    ASSERT_EQ(gc_info->gc_safepoint, 10087);
     std::this_thread::sleep_for(std::chrono::seconds(2));
     // get with valid seconds, expired
     gc_info = info.getGCSafepointIfValid(1, 1);
@@ -1287,6 +1297,45 @@ TEST(PDClientHelperTest, CacheOnlyReadPathCanReturnExpiredCache)
         /* safe_point_update_interval_seconds= */ 1,
         /* safe_point_get_max_backoff_ms= */ 1000);
     ASSERT_EQ(safe_point, 223355);
+    ASSERT_EQ(pd_client->gc_state_call_count, 2);
+
+    PDClientHelper::removeKeyspaceGCSafepoint(keyspace_id);
+}
+
+TEST(PDClientHelperTest, CacheRefreshDoesNotMoveSafepointBackwards)
+{
+    constexpr KeyspaceID keyspace_id = 9529;
+    PDClientHelper::removeKeyspaceGCSafepoint(keyspace_id);
+
+    auto pd_client = std::make_shared<CountingPDClient>(334455);
+
+    auto safe_point = PDClientHelper::getGCSafePointWithRetry(
+        pd_client,
+        keyspace_id,
+        /* ignore_cache= */ false,
+        /* safe_point_update_interval_seconds= */ 30,
+        /* safe_point_get_max_backoff_ms= */ 1000);
+    ASSERT_EQ(safe_point, 334455);
+    ASSERT_EQ(pd_client->gc_state_call_count, 1);
+
+    pd_client->gc_safe_point = 334400;
+    safe_point = PDClientHelper::getGCSafePointWithRetry(
+        pd_client,
+        keyspace_id,
+        /* ignore_cache= */ true,
+        /* safe_point_update_interval_seconds= */ 30,
+        /* safe_point_get_max_backoff_ms= */ 1000);
+    ASSERT_EQ(safe_point, 334455);
+    ASSERT_EQ(pd_client->gc_state_call_count, 2);
+
+    safe_point = PDClientHelper::getGCSafePointWithRetry(
+        pd_client,
+        keyspace_id,
+        /* ignore_cache= */ false,
+        /* safe_point_update_interval_seconds= */ 30,
+        /* safe_point_get_max_backoff_ms= */ 1000,
+        GCSafepointFetchStrategy::CacheOnly);
+    ASSERT_EQ(safe_point, 334455);
     ASSERT_EQ(pd_client->gc_state_call_count, 2);
 
     PDClientHelper::removeKeyspaceGCSafepoint(keyspace_id);

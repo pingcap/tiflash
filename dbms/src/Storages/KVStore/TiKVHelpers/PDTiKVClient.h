@@ -33,6 +33,7 @@
 #include <common/logger_useful.h>
 #include <fiu.h>
 
+#include <algorithm>
 #include <atomic>
 #include <magic_enum.hpp>
 
@@ -92,14 +93,25 @@ public:
     KeyspacesGCInfo() = default;
 
     // Update GCSafepoint for a keyspace.
-    void updateGCSafepoint(KeyspaceID keyspace_id, Timestamp gc_safepoint)
+    Timestamp updateGCSafepoint(KeyspaceID keyspace_id, Timestamp gc_safepoint)
     {
         // guard for invalid gc safe point
         if (gc_safepoint == 0)
-            return;
+            return 0;
 
         std::unique_lock lock(mtx);
-        gc_safepoint_map[keyspace_id] = KeyspaceGCInfo(gc_safepoint);
+        auto iter = gc_safepoint_map.find(keyspace_id);
+        if (iter == gc_safepoint_map.end())
+        {
+            gc_safepoint_map[keyspace_id] = KeyspaceGCInfo(gc_safepoint);
+            return gc_safepoint;
+        }
+
+        if (gc_safepoint < iter->second.gc_safepoint)
+            GET_METRIC(tiflash_gc_safepoint_request_count, type_rewind).Increment();
+        const auto merged_gc_safepoint = std::max(iter->second.gc_safepoint, gc_safepoint);
+        iter->second = KeyspaceGCInfo(merged_gc_safepoint);
+        return merged_gc_safepoint;
     }
 
     // Get GCSafepoint for a keyspace.
@@ -266,7 +278,7 @@ struct PDClientHelper
                 if (safe_point != 0)
                 {
                     // add to cache
-                    ks_gc_sp_map.updateGCSafepoint(keyspace_id, safe_point);
+                    safe_point = ks_gc_sp_map.updateGCSafepoint(keyspace_id, safe_point);
                 }
                 else
                 {
