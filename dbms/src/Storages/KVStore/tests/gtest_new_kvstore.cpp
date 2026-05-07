@@ -1319,18 +1319,18 @@ TEST(PDClientHelperTest, CacheRefreshDoesNotMoveSafepointBackwards)
     auto safe_point = PDClientHelper::getGCSafePointWithRetry(
         pd_client,
         keyspace_id,
-        /* ignore_cache= */ false,
         /* safe_point_update_interval_seconds= */ 30,
         /* safe_point_get_max_backoff_ms= */ 1000);
     ASSERT_EQ(safe_point, 334455);
     ASSERT_EQ(pd_client->gc_state_call_count, 1);
 
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+
     pd_client->gc_safe_point = 334400;
     safe_point = PDClientHelper::getGCSafePointWithRetry(
         pd_client,
         keyspace_id,
-        /* ignore_cache= */ true,
-        /* safe_point_update_interval_seconds= */ 30,
+        /* safe_point_update_interval_seconds= */ 1,
         /* safe_point_get_max_backoff_ms= */ 1000);
     ASSERT_EQ(safe_point, 334455);
     ASSERT_EQ(pd_client->gc_state_call_count, 2);
@@ -1338,7 +1338,6 @@ TEST(PDClientHelperTest, CacheRefreshDoesNotMoveSafepointBackwards)
     safe_point = PDClientHelper::getGCSafePointWithRetry(
         pd_client,
         keyspace_id,
-        /* ignore_cache= */ false,
         /* safe_point_update_interval_seconds= */ 30,
         /* safe_point_get_max_backoff_ms= */ 1000,
         GCSafepointFetchStrategy::CacheOnly);
