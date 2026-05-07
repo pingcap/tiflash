@@ -33,6 +33,7 @@
 #include <common/logger_useful.h>
 #include <fiu.h>
 
+#include <algorithm>
 #include <atomic>
 #include <magic_enum.hpp>
 
@@ -45,6 +46,16 @@ namespace FailPoints
 {
 extern const char force_pd_grpc_error[];
 } // namespace FailPoints
+
+enum class GCSafepointFetchStrategy
+{
+    // Return the cached value directly. If the keyspace has not been refreshed yet,
+    // return 0 and leave cache advancement to the existing background / GC paths.
+    CacheOnly,
+    // Keep the original behavior: use a valid cache entry when possible, otherwise
+    // refresh from PD and update the shared cache.
+    UpdateCacheIfNeeded,
+};
 
 // The GC safepoint and its update time for a keyspace.
 struct KeyspaceGCInfo
@@ -82,14 +93,25 @@ public:
     KeyspacesGCInfo() = default;
 
     // Update GCSafepoint for a keyspace.
-    void updateGCSafepoint(KeyspaceID keyspace_id, Timestamp gc_safepoint)
+    Timestamp updateGCSafepoint(KeyspaceID keyspace_id, Timestamp gc_safepoint)
     {
         // guard for invalid gc safe point
         if (gc_safepoint == 0)
-            return;
+            return 0;
 
         std::unique_lock lock(mtx);
-        gc_safepoint_map[keyspace_id] = KeyspaceGCInfo(gc_safepoint);
+        auto iter = gc_safepoint_map.find(keyspace_id);
+        if (iter == gc_safepoint_map.end())
+        {
+            gc_safepoint_map[keyspace_id] = KeyspaceGCInfo(gc_safepoint);
+            return gc_safepoint;
+        }
+
+        if (gc_safepoint < iter->second.gc_safepoint)
+            GET_METRIC(tiflash_gc_safepoint_request_count, type_rewind).Increment();
+        const auto merged_gc_safepoint = std::max(iter->second.gc_safepoint, gc_safepoint);
+        iter->second = KeyspaceGCInfo(merged_gc_safepoint);
+        return merged_gc_safepoint;
     }
 
     // Get GCSafepoint for a keyspace.
@@ -172,9 +194,9 @@ struct PDClientHelper
     static Timestamp getGCSafePointWithRetry(
         const pingcap::pd::ClientPtr & pd_client,
         KeyspaceID keyspace_id,
-        bool ignore_cache = true,
         Int64 safe_point_update_interval_seconds = 30,
-        Int64 safe_point_get_max_backoff_ms = 120000)
+        Int64 safe_point_get_max_backoff_ms = 120000,
+        GCSafepointFetchStrategy fetch_strategy = GCSafepointFetchStrategy::UpdateCacheIfNeeded)
     {
         UInt64 backoff_count = 0;
         auto observe_backoff_count = [&](bool success) {
@@ -184,7 +206,17 @@ struct PDClientHelper
                 GET_METRIC(tiflash_gc_safepoint_backoff_count, type_failure).Observe(backoff_count);
         };
 
-        if (!ignore_cache)
+        if (fetch_strategy == GCSafepointFetchStrategy::CacheOnly)
+        {
+            // Query paths use the last globally observed safepoint only. They never
+            // push the cache forward on their own, which avoids PD traffic growing
+            // linearly with query concurrency. Returning 0 on cache miss preserves
+            // the best-effort semantics expected by the caller.
+            auto ks_gc_info = ks_gc_sp_map.getGCSafepoint(keyspace_id);
+            observe_backoff_count(true);
+            return ks_gc_info.has_value() ? ks_gc_info->gc_safepoint : 0;
+        }
+        else
         {
             // In order to avoid too frequent requests to PD,
             // we cache the safe point for a while.
@@ -242,7 +274,7 @@ struct PDClientHelper
                 if (safe_point != 0)
                 {
                     // add to cache
-                    ks_gc_sp_map.updateGCSafepoint(keyspace_id, safe_point);
+                    safe_point = ks_gc_sp_map.updateGCSafepoint(keyspace_id, safe_point);
                 }
                 else
                 {
