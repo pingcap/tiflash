@@ -200,6 +200,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       Counter,                                                                                                                      \
       F(type_get_gc_state, {{"type", "get_gc_state"}}),                                                                             \
       F(type_zero_gc_safe_point, {{"type", "zero_gc_safe_point"}}),                                                                 \
+      F(type_rewind, {{"type", "rewind"}}),                                                                                         \
       F(type_pd_response_error, {{"type", "pd_response_error"}}),                                                                   \
       F(type_request_exception, {{"type", "request_exception"}}),                                                                   \
       F(type_backoff_error, {{"type", "backoff_error"}}))                                                                           \

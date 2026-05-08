@@ -728,7 +728,6 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
                 gc_safepoint = PDClientHelper::getGCSafePointWithRetry(
                     pd_client,
                     keyspace_id,
-                    /* ignore_cache= */ false,
                     context.getSettingsRef().safe_point_update_interval_seconds,
                     context.getSettingsRef().safe_point_get_max_backoff_ms);
             }
