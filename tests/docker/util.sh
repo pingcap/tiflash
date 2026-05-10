@@ -133,6 +133,55 @@ function clean_data_log() {
   rm -rf ./data ./log
 }
 
+# feature/fts TiFlash is 8.5.x, while CI may pair it with master PD/TiKV/TiDB.
+# Pin PD's compatibility gate before TiFlash registers itself to PD.
+function set_pd_cluster_version_for_tiflash() {
+  local cluster_version="${TIFLASH_TEST_PD_CLUSTER_VERSION:-8.5.6}"
+  if [[ -z "${cluster_version}" || "${cluster_version}" == "0" || "${cluster_version}" == "false" ]]; then
+    return
+  fi
+
+  cluster_version="${cluster_version#v}"
+  if [[ ! "${cluster_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+    echo "Invalid TIFLASH_TEST_PD_CLUSTER_VERSION: ${TIFLASH_TEST_PD_CLUSTER_VERSION}" >&2
+    exit 1
+  fi
+
+  local timeout="${TIFLASH_TEST_PD_CLUSTER_VERSION_TIMEOUT:-60}"
+  local failed='true'
+
+  echo "=> set PD cluster-version to ${cluster_version} for TiFlash test"
+
+  for (( i = 0; i < "${timeout}"; i++ )); do
+    if ${COMPOSE} "$@" exec -T pd0 /pd-ctl -u http://127.0.0.1:2379 config set cluster-version "${cluster_version}"; then
+        failed='false'
+        break
+    fi
+
+    if [ $((${i} % 10)) = 0 ] && [ ${i} -ge 10 ]; then
+      echo "   #${i} waiting for PD to set cluster-version"
+    fi
+
+    sleep 1
+  done
+
+  if [ "${failed}" == 'true' ]; then
+    echo "   can not set PD cluster-version" >&2
+    exit 1
+  fi
+}
+
+function start_cluster_with_tiflash() {
+  local compose_args=()
+  for compose_file in "$@"; do
+    compose_args+=("-f" "${compose_file}")
+  done
+
+  ${COMPOSE} "${compose_args[@]}" up -d pd0 tikv0 tidb0
+  set_pd_cluster_version_for_tiflash "${compose_args[@]}"
+  ${COMPOSE} "${compose_args[@]}" up -d tiflash0
+}
+
 function check_env() {
   local cur_dir=$(pwd)
   local prebuilt_bin_dir=$(realpath "${cur_dir}/../../tests/.build/tiflash")
@@ -178,5 +227,7 @@ export -f wait_tiflash_env
 export -f wait_next_gen_env
 export -f set_branch
 export -f clean_data_log
+export -f set_pd_cluster_version_for_tiflash
+export -f start_cluster_with_tiflash
 export -f check_env
 export -f check_docker_compose
