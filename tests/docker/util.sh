@@ -153,9 +153,20 @@ function set_pd_cluster_version_for_tiflash() {
   echo "=> set PD cluster-version to ${cluster_version} for TiFlash test"
 
   for (( i = 0; i < "${timeout}"; i++ )); do
-    if ${COMPOSE} "$@" exec -T pd0 /pd-ctl -u http://127.0.0.1:2379 config set cluster-version "${cluster_version}"; then
-        failed='false'
-        break
+    local output=''
+    if output=$(${COMPOSE} "$@" exec -T pd0 /pd-ctl -u http://127.0.0.1:2379 config set cluster-version "${cluster_version}" 2>&1); then
+      echo "${output}"
+      if echo "${output}" | grep -q "Success!"; then
+        local current_version=''
+        current_version=$(${COMPOSE} "$@" exec -T pd0 /pd-ctl -u http://127.0.0.1:2379 config show cluster-version 2>&1 || true)
+        echo "${current_version}"
+        if echo "${current_version}" | grep -Fq "${cluster_version}"; then
+          failed='false'
+          break
+        fi
+      fi
+    else
+      echo "${output}"
     fi
 
     if [ $((${i} % 10)) = 0 ] && [ ${i} -ge 10 ]; then
