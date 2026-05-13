@@ -20,6 +20,7 @@
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/Context_fwd.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/ColumnDefine_fwd.h>
 #include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
@@ -72,6 +73,14 @@ private:
     // helper functions for building the task read from a shared remote storage system (e.g. S3)
     BlockInputStreams readThroughS3(const Context & db_context, unsigned num_streams);
     void readThroughS3(
+        PipelineExecutorContext & exec_context,
+        PipelineExecGroupBuilder & group_builder,
+        const Context & db_context,
+        unsigned num_streams);
+
+    bool isReadColumnar();
+    BlockInputStreams readThroughProxy(const Context & db_context, unsigned num_streams);
+    void readThroughProxy(
         PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         const Context & db_context,
@@ -140,12 +149,23 @@ private:
         PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         DAGExpressionAnalyzer & analyzer);
-    ExpressionActionsPtr getExtraCastExpr(DAGExpressionAnalyzer & analyzer);
-    void extraCast(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline);
-    void extraCast(
+    void filterConditionsWithPushedDownFilters(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline);
+    void filterConditionsWithPushedDownFilters(
         PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         DAGExpressionAnalyzer & analyzer);
+    ExpressionActionsPtr getExtraCastExpr(
+        DAGExpressionAnalyzer & analyzer,
+        bool include_pushed_down_filter_columns = false);
+    void extraCast(
+        DAGExpressionAnalyzer & analyzer,
+        DAGPipeline & pipeline,
+        bool include_pushed_down_filter_columns = false);
+    void extraCast(
+        PipelineExecutorContext & exec_context,
+        PipelineExecGroupBuilder & group_builder,
+        DAGExpressionAnalyzer & analyzer,
+        bool include_pushed_down_filter_columns = false);
     tipb::Executor buildTableScanTiPB();
 
     size_t getBuildTaskRPCTimeout() const;

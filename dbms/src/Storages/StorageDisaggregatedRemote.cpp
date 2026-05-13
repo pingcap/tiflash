@@ -100,6 +100,43 @@ void initDisaggTaskMeta(
 }
 } // namespace
 
+#if !ENABLE_COLUMNAR_DISAGG
+bool StorageDisaggregated::isReadColumnar()
+{
+    return false;
+}
+
+BlockInputStreams StorageDisaggregated::readThroughProxy(const Context &, unsigned)
+{
+    RUNTIME_CHECK_MSG(false, "columnar disaggregated read is not enabled in this build");
+    return {};
+}
+
+void StorageDisaggregated::readThroughProxy(
+    PipelineExecutorContext &,
+    PipelineExecGroupBuilder &,
+    const Context &,
+    unsigned)
+{
+    RUNTIME_CHECK_MSG(false, "columnar disaggregated read is not enabled in this build");
+}
+
+void StorageDisaggregated::filterConditionsWithPushedDownFilters(
+    DAGExpressionAnalyzer & analyzer,
+    DAGPipeline & pipeline)
+{
+    filterConditions(analyzer, pipeline);
+}
+
+void StorageDisaggregated::filterConditionsWithPushedDownFilters(
+    PipelineExecutorContext & exec_context,
+    PipelineExecGroupBuilder & group_builder,
+    DAGExpressionAnalyzer & analyzer)
+{
+    filterConditions(exec_context, group_builder, analyzer);
+}
+#endif
+
 BlockInputStreams StorageDisaggregated::readThroughS3(const Context & db_context, unsigned num_streams)
 {
     auto * dag_context = context.getDAGContext();

@@ -23,6 +23,31 @@
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/IAST.h>
 
+#include <array>
+
+namespace
+{
+DB::Int256 decodeProxyDecimal256(DB::ReadBuffer & istr)
+{
+    std::array<unsigned char, 32> bytes{};
+    istr.readStrict(reinterpret_cast<char *>(bytes.data()), bytes.size());
+
+    BoostUInt256 raw = 0;
+    for (auto it = bytes.rbegin(); it != bytes.rend(); ++it)
+    {
+        raw <<= 8;
+        raw += *it;
+    }
+
+    if ((bytes.back() & 0x80U) == 0)
+        return static_cast<DB::Int256>(raw);
+
+    BoostUInt256 magnitude = ~raw;
+    magnitude += 1;
+    return -static_cast<DB::Int256>(magnitude);
+}
+} // namespace
+
 namespace DB
 {
 template <typename T>
@@ -79,13 +104,21 @@ void DataTypeDecimal<T>::deserializeBinaryBulk(
     IColumn & column,
     ReadBuffer & istr,
     size_t limit,
-    double /*avg_value_size_hint*/) const
+    double avg_value_size_hint) const
 {
     typename ColumnType::Container & x = typeid_cast<ColumnType &>(column).getData();
-    size_t initial_size = x.size();
-    x.resize(initial_size + limit);
-    size_t size = istr.readBig(reinterpret_cast<char *>(&x[initial_size]), sizeof(FieldType) * limit);
-    x.resize(initial_size + size / sizeof(FieldType));
+    if (avg_value_size_hint < 0.0 && is_Decimal256)
+    {
+        for (size_t i = 0; i < limit; ++i)
+            x.push_back(FieldType(Decimal256(decodeProxyDecimal256(istr))));
+    }
+    else
+    {
+        size_t initial_size = x.size();
+        x.resize(initial_size + limit);
+        size_t size = istr.readBig(reinterpret_cast<char *>(&x[initial_size]), sizeof(FieldType) * limit);
+        x.resize(initial_size + size / sizeof(FieldType));
+    }
 }
 
 template <typename T>
