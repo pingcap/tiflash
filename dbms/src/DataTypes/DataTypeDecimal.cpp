@@ -24,6 +24,7 @@
 #include <Parsers/IAST.h>
 
 #include <array>
+#include <ranges>
 
 namespace
 {
@@ -33,10 +34,10 @@ DB::Int256 decodeProxyDecimal256(DB::ReadBuffer & istr)
     istr.readStrict(reinterpret_cast<char *>(bytes.data()), bytes.size());
 
     BoostUInt256 raw = 0;
-    for (auto it = bytes.rbegin(); it != bytes.rend(); ++it)
+    for (const auto byte : std::views::reverse(bytes))
     {
         raw <<= 8;
-        raw += *it;
+        raw += byte;
     }
 
     if ((bytes.back() & 0x80U) == 0)

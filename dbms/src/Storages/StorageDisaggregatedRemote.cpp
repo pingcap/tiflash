@@ -103,11 +103,13 @@ void initDisaggTaskMeta(
 #if !ENABLE_COLUMNAR_DISAGG
 bool StorageDisaggregated::isReadColumnar()
 {
+    static_cast<void>(table_scan);
     return false;
 }
 
 BlockInputStreams StorageDisaggregated::readThroughProxy(const Context &, unsigned)
 {
+    static_cast<void>(table_scan);
     RUNTIME_CHECK_MSG(false, "columnar disaggregated read is not enabled in this build");
     return {};
 }
@@ -118,6 +120,7 @@ void StorageDisaggregated::readThroughProxy(
     const Context &,
     unsigned)
 {
+    static_cast<void>(table_scan);
     RUNTIME_CHECK_MSG(false, "columnar disaggregated read is not enabled in this build");
 }
 
