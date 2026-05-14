@@ -133,6 +133,7 @@ private:
         const LoggerPtr & log)
     {
         bool init_only = false;
+        UNUSED(init_only);
         // tiflash_compute doesn't need proxy except when using columnar.
         if (disaggregated_mode == DisaggregatedMode::Compute && use_autoscaler)
         {
@@ -146,7 +147,9 @@ private:
             }
             else
             {
-                LOG_INFO(log, "TiFlash Proxy will not start because AutoScale Disaggregated Compute Mode is specified.");
+                LOG_INFO(
+                    log,
+                    "TiFlash Proxy will not start because AutoScale Disaggregated Compute Mode is specified.");
                 return false;
             }
         }

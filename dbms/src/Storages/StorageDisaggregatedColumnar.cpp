@@ -87,7 +87,8 @@ std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedReadThroug
     DM::ColumnDefinesPtr column_defines;
     int extra_table_id_index;
     std::vector<std::tuple<UInt64, String, DataTypePtr>> generated_column_infos;
-    std::tie(column_defines, extra_table_id_index, generated_column_infos) = genColumnDefinesForDisaggregatedRead(table_scan);
+    std::tie(column_defines, extra_table_id_index, generated_column_infos)
+        = genColumnDefinesForDisaggregatedRead(table_scan);
     bool has_generated_column = false;
     for (const auto & ci : table_scan.getColumns())
     {
