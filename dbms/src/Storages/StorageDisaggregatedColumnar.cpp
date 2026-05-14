@@ -84,7 +84,10 @@ std::vector<std::tuple<UInt64, String, DataTypePtr>> genGeneratedColumnInfosForD
 
 std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedReadThroughProxy(const TiDBTableScan & table_scan)
 {
-    auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
+    DM::ColumnDefinesPtr column_defines;
+    int extra_table_id_index;
+    std::vector<std::tuple<UInt64, String, DataTypePtr>> generated_column_infos;
+    std::tie(column_defines, extra_table_id_index, generated_column_infos) = genColumnDefinesForDisaggregatedRead(table_scan);
     bool has_generated_column = false;
     for (const auto & ci : table_scan.getColumns())
     {
@@ -640,7 +643,8 @@ std::vector<RNProxyReadTaskPtr> RNProxyReadTask::buildProxyReadTask(
     unsigned num_streams)
 {
     auto * dag_context = context.getDAGContext();
-    auto scan_context = std::make_shared<DM::ScanContext>(dag_context->getResourceGroupName());
+    auto scan_context
+        = std::make_shared<DM::ScanContext>(dag_context->getKeyspaceID(), dag_context->getResourceGroupName());
     dag_context->scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
 
     std::vector<RNProxyReadTaskPtr> tasks;
@@ -807,7 +811,10 @@ RNProxyInputStream::~RNProxyInputStream()
         if (auto it = dag_context->scan_context_map.find(executor_id); it != dag_context->scan_context_map.end())
         {
             if (it->second)
-                it->second->user_read_bytes += total_bytes;
+            {
+                std::optional<LACBytesCollector> lac_bytes_collector;
+                it->second->addUserReadBytes(total_bytes, DM::ReadTag::Query, lac_bytes_collector);
+            }
         }
     }
     catch (...)
