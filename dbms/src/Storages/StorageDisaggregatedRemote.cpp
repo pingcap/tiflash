@@ -100,7 +100,7 @@ void initDisaggTaskMeta(
 }
 } // namespace
 
-#if !ENABLE_COLUMNAR_DISAGG
+#if !ENABLE_NEXT_GEN_COLUMNAR
 bool StorageDisaggregated::isReadColumnar()
 {
     static_cast<void>(table_scan);

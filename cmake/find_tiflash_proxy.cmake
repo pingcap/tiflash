@@ -14,14 +14,19 @@
 
 option(USE_INTERNAL_TIFLASH_PROXY "Set to FALSE to use external tiflash-proxy instead of bundled. (Only used in CI. Set to FALSE on your own risk)" ${NOT_UNBUNDLED})
 
+# for classic tiflash-proxy
 set(_TIFLASH_PROXY_SOURCE_DIR "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy")
 set(_TIFLASH_PROXY_SUBMODULE_NAME "contrib/tiflash-proxy")
-if(ENABLE_COLUMNAR_DISAGG)
-    set(_TIFLASH_PROXY_SOURCE_DIR "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy-columnar")
-    set(_TIFLASH_PROXY_SUBMODULE_NAME "contrib/tiflash-proxy-columnar")
-elseif(ENABLE_NEXT_GEN)
-    set(_TIFLASH_PROXY_SOURCE_DIR "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy-next-gen")
-    set(_TIFLASH_PROXY_SUBMODULE_NAME "contrib/tiflash-proxy-next-gen")
+if(ENABLE_NEXT_GEN)
+    if(ENABLE_NEXT_GEN_COLUMNAR)
+        # for next-gen columnar tiflash-proxy
+        set(_TIFLASH_PROXY_SOURCE_DIR "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy-columnar")
+        set(_TIFLASH_PROXY_SUBMODULE_NAME "contrib/tiflash-proxy-columnar")
+    else()
+        # for next-gen disaggregated tiflash-proxy
+        set(_TIFLASH_PROXY_SOURCE_DIR "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy-next-gen")
+        set(_TIFLASH_PROXY_SUBMODULE_NAME "contrib/tiflash-proxy-next-gen")
+    endif()
 endif()
 
 if(NOT EXISTS "${_TIFLASH_PROXY_SOURCE_DIR}/Makefile")
@@ -60,19 +65,15 @@ if(NOT EXTERNAL_TIFLASH_PROXY_FOUND)
 endif()
 
 set(TIFLASH_PROXY_FOUND TRUE)
-if (ENABLE_NEXT_GEN AND NOT ENABLE_COLUMNAR_DISAGG AND NOT EXISTS "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy-next-gen/proxy_components/proxy_ffi/src/cloud_helper.rs")
-    message(FATAL "Can't find next-gen tiflash-proxy")
+if (ENABLE_NEXT_GEN AND NOT EXISTS "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy-next-gen/proxy_components/proxy_ffi/src/cloud_helper.rs")
+    # for next-gen disaggregated tiflash-proxy, we require the cloud_helper.rs to be present.
+    # but it could be missing in next-gen columnar tiflash-proxy.
+    if (NOT ENABLE_NEXT_GEN_COLUMNAR)
+        message(FATAL "Can't find next-gen tiflash-proxy")
+    endif()
 endif()
 
-# SERVERLESS_PROXY=0 if using normal proxy.
-# SERVERLESS_PROXY=1 if using serverless proxy.
-if (EXISTS "${_TIFLASH_PROXY_SOURCE_DIR}/proxy_components/proxy_ffi/src/cloud_helper.rs")
-    add_definitions(-DSERVERLESS_PROXY=1)
-else()
-    add_definitions(-DSERVERLESS_PROXY=0)
-endif()
-
-message(STATUS "Using tiflash-proxy: USE_INTERNAL_TIFLASH_PROXY:${USE_INTERNAL_TIFLASH_PROXY}, headers:${TIFLASH_PROXY_INCLUDE_DIR}, lib:${TIFLASH_PROXY_LIBRARY}, ENABLE_NEXT_GEN:${ENABLE_NEXT_GEN}, ENABLE_COLUMNAR_DISAGG:${ENABLE_COLUMNAR_DISAGG}, source:${_TIFLASH_PROXY_SOURCE_DIR}")
+message(STATUS "Using tiflash-proxy: USE_INTERNAL_TIFLASH_PROXY:${USE_INTERNAL_TIFLASH_PROXY}, headers:${TIFLASH_PROXY_INCLUDE_DIR}, lib:${TIFLASH_PROXY_LIBRARY}, ENABLE_NEXT_GEN:${ENABLE_NEXT_GEN}, ENABLE_NEXT_GEN_COLUMNAR:${ENABLE_NEXT_GEN_COLUMNAR}, source:${_TIFLASH_PROXY_SOURCE_DIR}")
 
 if (NOT USE_INTERNAL_TIFLASH_PROXY)
     add_custom_target(tiflash_proxy ALL DEPENDS ${TIFLASH_PROXY_LIBRARY})

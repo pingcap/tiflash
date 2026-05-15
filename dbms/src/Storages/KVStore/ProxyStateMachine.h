@@ -16,7 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Common/TiFlashBuildInfo.h>
-#include <Common/config.h> // for ENABLE_COLUMNAR_DISAGG/ENABLE_NEXT_GEN
+#include <Common/config.h> // for ENABLE_NEXT_GEN_COLUMNAR/ENABLE_NEXT_GEN
 #include <Common/setThreadName.h>
 #include <Core/TiFlashDisaggregatedMode.h>
 #include <Interpreters/Settings.h>
@@ -202,12 +202,14 @@ private:
                 args_map["labels"] = extra_label;
             }
 
-#if SERVERLESS_PROXY == 1
+#if ENABLE_NEXT_GEN == 1
             if (config.has("blacklist_file"))
                 args_map["blacklist-file"] = config.getString("blacklist_file");
+#if ENABLE_NEXT_GEN_COLUMNAR == 1
             if (init_only)
                 args_map["init-only"] = "";
-#endif
+#endif // ENABLE_NEXT_GEN_COLUMNAR
+#endif // ENABLE_NEXT_GEN
 
             for (auto && [k, v] : args_map)
                 val_map.emplace("--" + k, std::move(v));
