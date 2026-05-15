@@ -63,13 +63,13 @@ BlockInputStreams StorageDisaggregated::read(
     size_t,
     unsigned num_streams)
 {
-    if (isReadColumnar())
-        return readThroughProxy(context, num_streams);
     RUNTIME_CHECK_MSG(
         db_context.getSharedContextDisagg()->disaggregated_mode != DisaggregatedMode::None,
         "storage disaggregated mode must disaggregated, mode={}",
         magic_enum::enum_name(db_context.getSharedContextDisagg()->disaggregated_mode));
-    return readThroughS3(db_context, num_streams);
+    if (isReadColumnar())
+        return readThroughColumnar(context, num_streams);
+    return readThroughTiFlashWrite(db_context, num_streams);
 }
 
 void StorageDisaggregated::read(
@@ -81,13 +81,23 @@ void StorageDisaggregated::read(
     size_t /*max_block_size*/,
     unsigned num_streams)
 {
-    if (isReadColumnar())
-        return readThroughProxy(exec_context, group_builder, context, num_streams);
     RUNTIME_CHECK_MSG(
         db_context.getSharedContextDisagg()->disaggregated_mode != DisaggregatedMode::None,
         "storage disaggregated mode must disaggregated, mode={}",
         magic_enum::enum_name(db_context.getSharedContextDisagg()->disaggregated_mode));
-    return readThroughS3(exec_context, group_builder, db_context, num_streams);
+    if (isReadColumnar())
+        return readThroughColumnar(exec_context, group_builder, context, num_streams);
+    return readThroughTiFlashWrite(exec_context, group_builder, db_context, num_streams);
+}
+
+bool StorageDisaggregated::isReadColumnar()
+{
+#if ENABLE_NEXT_GEN_COLUMNAR == 0
+    return context.getSharedContextDisagg()->use_columnar;
+#else
+    static_cast<void>(table_scan);
+    return false;
+#endif
 }
 
 std::tuple<std::vector<StorageDisaggregated::RemoteTableRange>, UInt64> StorageDisaggregated::buildRemoteTableRanges()

@@ -137,7 +137,8 @@ TMTContext::TMTContext(
     , kvstore(
           context_.getSharedContextDisagg()->isDisaggregatedComputeMode()
                   && context_.getSharedContextDisagg()->use_autoscaler
-                  && !context_.getSharedContextDisagg()->use_columnar // read_columnar needs kvstore
+                  // use_columnar still needs kvstore to access proxy_helper
+                  && !context_.getSharedContextDisagg()->use_columnar
               ? nullptr
               : std::make_shared<KVStore>(context))
     , region_table(context)

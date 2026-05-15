@@ -101,20 +101,14 @@ void initDisaggTaskMeta(
 } // namespace
 
 #if ENABLE_NEXT_GEN_COLUMNAR == 0
-bool StorageDisaggregated::isReadColumnar()
-{
-    static_cast<void>(table_scan);
-    return false;
-}
-
-BlockInputStreams StorageDisaggregated::readThroughProxy(const Context &, unsigned)
+BlockInputStreams StorageDisaggregated::readThroughColumnar(const Context &, unsigned)
 {
     static_cast<void>(table_scan);
     RUNTIME_CHECK_MSG(false, "columnar disaggregated read is not enabled in this build");
     return {};
 }
 
-void StorageDisaggregated::readThroughProxy(
+void StorageDisaggregated::readThroughColumnar(
     PipelineExecutorContext &,
     PipelineExecGroupBuilder &,
     const Context &,
@@ -140,7 +134,7 @@ void StorageDisaggregated::filterConditionsWithPushedDownFilters(
 }
 #endif
 
-BlockInputStreams StorageDisaggregated::readThroughS3(const Context & db_context, unsigned num_streams)
+BlockInputStreams StorageDisaggregated::readThroughTiFlashWrite(const Context & db_context, unsigned num_streams)
 {
     auto * dag_context = context.getDAGContext();
     auto scan_context
@@ -173,7 +167,7 @@ BlockInputStreams StorageDisaggregated::readThroughS3(const Context & db_context
     return pipeline.streams;
 }
 
-void StorageDisaggregated::readThroughS3(
+void StorageDisaggregated::readThroughTiFlashWrite(
     PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     const Context & db_context,

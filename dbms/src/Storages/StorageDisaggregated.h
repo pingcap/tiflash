@@ -40,6 +40,9 @@ namespace DB
 {
 class DAGContext;
 
+// StorageDisaggregated is a virtual IStorage which will that handle reading Block data  for tiflash-compute node under the disaggregated architecture. It will be used in two scenarios:
+// 1. For deployed with tiflash-write, StorageDisaggregated will build a `DisaggReadSnapshot` from tiflash-write and read data from the snapshot.
+// 2. For deployed with tikv columnar, StorageDisaggregated will read data from the columnar proxy.
 class StorageDisaggregated : public IStorage
 {
 public:
@@ -70,17 +73,17 @@ public:
         unsigned num_streams) override;
 
 private:
-    // helper functions for building the task read from a shared remote storage system (e.g. S3)
-    BlockInputStreams readThroughS3(const Context & db_context, unsigned num_streams);
-    void readThroughS3(
+    // helper functions for building the task read from the disagg tiflash-write nodes
+    BlockInputStreams readThroughTiFlashWrite(const Context & db_context, unsigned num_streams);
+    void readThroughTiFlashWrite(
         PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         const Context & db_context,
         unsigned num_streams);
 
     bool isReadColumnar();
-    BlockInputStreams readThroughProxy(const Context & db_context, unsigned num_streams);
-    void readThroughProxy(
+    BlockInputStreams readThroughColumnar(const Context & db_context, unsigned num_streams);
+    void readThroughColumnar(
         PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         const Context & db_context,

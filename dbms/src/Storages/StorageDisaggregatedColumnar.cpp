@@ -233,12 +233,7 @@ void normalizeTimestampCompareDateTimeLiteralToUTC(tipb::Expr & expr, const Time
 }
 } // namespace
 
-bool StorageDisaggregated::isReadColumnar()
-{
-    return context.getSharedContextDisagg()->use_columnar;
-}
-
-BlockInputStreams StorageDisaggregated::readThroughProxy(const Context & context, unsigned num_streams)
+BlockInputStreams StorageDisaggregated::readThroughColumnar(const Context & context, unsigned num_streams)
 {
     DAGPipeline pipeline;
     const UInt64 start_ts = sender_target_mpp_task_id.gather_id.query_id.start_ts;
@@ -278,7 +273,7 @@ BlockInputStreams StorageDisaggregated::readThroughProxy(const Context & context
 }
 
 
-void StorageDisaggregated::readThroughProxy(
+void StorageDisaggregated::readThroughColumnar(
     PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     const Context & context,
