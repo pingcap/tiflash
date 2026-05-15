@@ -935,7 +935,7 @@ void RNProxySourceOp::operatePrefixImpl()
 
 OperatorStatus RNProxySourceOp::readImpl(Block & block)
 {
-    if unlikely (done)
+    if (unlikely(done))
     {
         block = {};
         return OperatorStatus::HAS_OUTPUT;
@@ -953,12 +953,12 @@ OperatorStatus RNProxySourceOp::readImpl(Block & block)
 
 OperatorStatus RNProxySourceOp::awaitImpl()
 {
-    if unlikely (done || t_block.has_value())
+    if (unlikely(done || t_block.has_value()))
     {
         return OperatorStatus::HAS_OUTPUT;
     }
 
-    if unlikely (current_reader_idx < 0)
+    if (unlikely(current_reader_idx < 0))
     {
         current_reader_idx = 0;
     }
@@ -968,12 +968,12 @@ OperatorStatus RNProxySourceOp::awaitImpl()
 
 OperatorStatus RNProxySourceOp::executeIOImpl()
 {
-    if unlikely (done || t_block.has_value())
+    if (unlikely(done || t_block.has_value()))
     {
         return OperatorStatus::HAS_OUTPUT;
     }
 
-    if unlikely (current_reader_idx < 0)
+    if (unlikely(current_reader_idx < 0))
     {
         return awaitImpl();
     }

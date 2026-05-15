@@ -948,6 +948,11 @@ try
     if (disagg_opt.use_columnar)
     {
         global_context->getSharedContextDisagg()->use_columnar = true;
+#if ENABLE_NEXT_GEN_COLUMNAR == 0
+        throw Exception(
+            ErrorCodes::NOT_IMPLEMENTED,
+            "Columnar storage is not supported in current build, please check the build configuration of TiFlash.");
+#endif
         LOG_INFO(log, "Using columnar storage as upstream");
     }
 

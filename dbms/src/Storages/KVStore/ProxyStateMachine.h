@@ -132,6 +132,7 @@ private:
         const bool use_columnar,
         const LoggerPtr & log)
     {
+        // for tiflash_compute with columnar and auto-scaler, we need to start the proxy with "init-only" args
         bool init_only = false;
         UNUSED(init_only);
         // tiflash_compute doesn't need proxy except when using columnar.
@@ -205,11 +206,11 @@ private:
 #if ENABLE_NEXT_GEN == 1
             if (config.has("blacklist_file"))
                 args_map["blacklist-file"] = config.getString("blacklist_file");
+#endif // ENABLE_NEXT_GEN
 #if ENABLE_NEXT_GEN_COLUMNAR == 1
             if (init_only)
                 args_map["init-only"] = "";
 #endif // ENABLE_NEXT_GEN_COLUMNAR
-#endif // ENABLE_NEXT_GEN
 
             for (auto && [k, v] : args_map)
                 val_map.emplace("--" + k, std::move(v));
