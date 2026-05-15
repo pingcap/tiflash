@@ -82,6 +82,7 @@ private:
         unsigned num_streams);
 
     bool isReadColumnar();
+    // helper functions for building the task read from the columnar proxy nodes
     BlockInputStreams readThroughColumnar(const Context & db_context, unsigned num_streams);
     void readThroughColumnar(
         PipelineExecutorContext & exec_context,

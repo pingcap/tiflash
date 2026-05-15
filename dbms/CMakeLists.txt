@@ -99,11 +99,6 @@ add_headers_only(dbms src/Server)
 
 add_headers_and_sources(tiflash_vector_search src/VectorSearch)
 
-if (NOT ENABLE_NEXT_GEN_COLUMNAR)
-    list(REMOVE_ITEM dbms_sources src/Storages/StorageDisaggregatedColumnar.cpp)
-    list(REMOVE_ITEM dbms_headers src/Storages/StorageDisaggregatedColumnar.h)
-endif ()
-
 check_then_add_sources_compile_flag (
     TIFLASH_ENABLE_ARCH_HASWELL_SUPPORT
     "${TIFLASH_COMPILER_ARCH_HASWELL_FLAG}"

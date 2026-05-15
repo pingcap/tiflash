@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <Common/config.h> // for ENABLE_NEXT_GEN_COLUMNAR
+#if ENABLE_NEXT_GEN_COLUMNAR
 #include <Common/Logger.h>
 #include <Common/Stopwatch.h>
 #include <DataStreams/AddExtraTableIDColumnTransformAction.h>
@@ -238,3 +240,4 @@ private:
     double duration_read_sec = 0;
 };
 } // namespace DB
+#endif

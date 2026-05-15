@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/config.h> // for ENABLE_NEXT_GEN_COLUMNAR
+#if ENABLE_NEXT_GEN_COLUMNAR
 #include <Common/Exception.h>
 #include <Common/MyTime.h>
 #include <Common/Stopwatch.h>
@@ -316,34 +318,6 @@ void StorageDisaggregated::readThroughColumnar(
     extraCast(exec_context, group_builder, *analyzer, /*include_pushed_down_filter_columns=*/true);
     // Handle filter
     filterConditionsWithPushedDownFilters(exec_context, group_builder, *analyzer);
-}
-
-void StorageDisaggregated::filterConditionsWithPushedDownFilters(
-    DAGExpressionAnalyzer & analyzer,
-    DAGPipeline & pipeline)
-{
-    FilterConditions conditions(filter_conditions.executor_id, filter_conditions.conditions);
-    conditions.conditions.MergeFrom(table_scan.getPushedDownFilters());
-    if (conditions.hasValue())
-    {
-        ::DB::executePushedDownFilter(conditions, analyzer, log, pipeline);
-        auto & profile_streams = context.getDAGContext()->getProfileStreamsMap()[conditions.executor_id];
-        pipeline.transform([&profile_streams](auto & stream) { profile_streams.push_back(stream); });
-    }
-}
-
-void StorageDisaggregated::filterConditionsWithPushedDownFilters(
-    PipelineExecutorContext & exec_context,
-    PipelineExecGroupBuilder & group_builder,
-    DAGExpressionAnalyzer & analyzer)
-{
-    FilterConditions conditions(filter_conditions.executor_id, filter_conditions.conditions);
-    conditions.conditions.MergeFrom(table_scan.getPushedDownFilters());
-    if (conditions.hasValue())
-    {
-        ::DB::executePushedDownFilter(exec_context, group_builder, conditions, analyzer, log);
-        context.getDAGContext()->addOperatorProfileInfos(conditions.executor_id, group_builder.getCurProfileInfos());
-    }
 }
 
 // RNProxyReaderPtr
@@ -999,3 +973,4 @@ OperatorStatus RNProxySourceOp::executeIOImpl()
 }
 
 } // namespace DB
+#endif
