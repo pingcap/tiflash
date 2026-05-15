@@ -147,6 +147,10 @@ String getEnabledFeatures()
             "next-gen", 
 #endif
 
+#if ENABLE_NEXT_GEN_COLUMNAR
+            "columnar"
+#endif
+
 // Clara
 #if ENABLE_CLARA
             "clara",

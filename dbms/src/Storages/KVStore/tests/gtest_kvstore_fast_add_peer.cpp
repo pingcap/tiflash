@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Debug/MockKVStore/MockRaftStoreProxy.h>
 #include <Debug/TiFlashTestEnv.h>
 #include <Interpreters/SharedContexts/Disagg.h>
