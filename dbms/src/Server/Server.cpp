@@ -701,6 +701,7 @@ try
         config(),
         disagg_opt.mode,
         disagg_opt.use_autoscaler,
+        disagg_opt.use_columnar,
         STORAGE_FORMAT_CURRENT,
         settings,
         log);
@@ -942,6 +943,17 @@ try
             global_context->getPathPool(),
             storage_config.remote_cache_config.getPageCacheDir(),
             storage_config.remote_cache_config.getPageCapacity());
+    }
+
+    if (disagg_opt.use_columnar)
+    {
+        global_context->getSharedContextDisagg()->use_columnar = true;
+#if ENABLE_NEXT_GEN_COLUMNAR == 0
+        throw Exception(
+            ErrorCodes::NOT_IMPLEMENTED,
+            "Columnar storage is not supported in current build, please check the build configuration of TiFlash.");
+#endif
+        LOG_INFO(log, "Using columnar storage as upstream");
     }
 
     /// Initialize RateLimiter.

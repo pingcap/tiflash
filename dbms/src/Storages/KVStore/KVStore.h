@@ -153,6 +153,7 @@ public:
 
 public: // Region Management
     void restore(PathPool & path_pool, const TiFlashRaftProxyHelper *);
+    void restoreProxyHelper(const TiFlashRaftProxyHelper * helper) { proxy_helper = helper; }
     void gcPersistedRegion(Seconds gc_persist_period = Seconds(60 * 5));
     RegionMap getRegionsByRangeOverlap(const RegionRange & range) const;
     void traverseRegions(std::function<void(RegionID, const RegionPtr &)> && callback) const;

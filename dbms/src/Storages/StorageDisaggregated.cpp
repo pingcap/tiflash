@@ -14,6 +14,7 @@
 
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/RequestUtils.h>
 #include <Interpreters/Context.h>
@@ -41,6 +42,9 @@ StorageDisaggregated::StorageDisaggregated(
     , sender_target_mpp_task_id(context_.getDAGContext()->getMPPTaskMeta())
     , filter_conditions(filter_conditions_)
 {
+    if (context.getSharedContextDisagg()->use_columnar)
+        return;
+
     const auto my_store_id = context.getTMTContext().getKVStore()->getStoreID();
     pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
     // TODO: PD may not have label info of CN when AutoScaler is enabled.
@@ -63,7 +67,9 @@ BlockInputStreams StorageDisaggregated::read(
         db_context.getSharedContextDisagg()->disaggregated_mode != DisaggregatedMode::None,
         "storage disaggregated mode must disaggregated, mode={}",
         magic_enum::enum_name(db_context.getSharedContextDisagg()->disaggregated_mode));
-    return readThroughS3(db_context, num_streams);
+    if (isReadColumnar())
+        return readThroughColumnar(context, num_streams);
+    return readThroughTiFlashWrite(db_context, num_streams);
 }
 
 void StorageDisaggregated::read(
@@ -79,7 +85,19 @@ void StorageDisaggregated::read(
         db_context.getSharedContextDisagg()->disaggregated_mode != DisaggregatedMode::None,
         "storage disaggregated mode must disaggregated, mode={}",
         magic_enum::enum_name(db_context.getSharedContextDisagg()->disaggregated_mode));
-    return readThroughS3(exec_context, group_builder, db_context, num_streams);
+    if (isReadColumnar())
+        return readThroughColumnar(exec_context, group_builder, context, num_streams);
+    return readThroughTiFlashWrite(exec_context, group_builder, db_context, num_streams);
+}
+
+bool StorageDisaggregated::isReadColumnar()
+{
+#if ENABLE_NEXT_GEN_COLUMNAR == 0
+    return context.getSharedContextDisagg()->use_columnar;
+#else
+    static_cast<void>(table_scan);
+    return false;
+#endif
 }
 
 std::tuple<std::vector<StorageDisaggregated::RemoteTableRange>, UInt64> StorageDisaggregated::buildRemoteTableRanges()
@@ -196,19 +214,40 @@ void StorageDisaggregated::filterConditions(
     }
 }
 
-ExpressionActionsPtr StorageDisaggregated::getExtraCastExpr(DAGExpressionAnalyzer & analyzer)
+ExpressionActionsPtr StorageDisaggregated::getExtraCastExpr(
+    DAGExpressionAnalyzer & analyzer,
+    bool include_pushed_down_filter_columns)
 {
-    // If the column is not in the columns of pushed down filter, append a cast to the column.
+    const bool need_timezone_cast = !context.getTimezoneInfo().is_utc_timezone;
+    bool has_cast_candidate = false;
+    for (const auto & col : table_scan.getColumns())
+    {
+        if (col.hasGeneratedColumnFlag() || col.id == -1)
+            continue;
+        if ((need_timezone_cast && col.tp == TiDB::TypeTimestamp) || col.tp == TiDB::TypeTime)
+        {
+            has_cast_candidate = true;
+            break;
+        }
+    }
+    if (!has_cast_candidate)
+        return nullptr;
+
     std::vector<UInt8> may_need_add_cast_column;
     may_need_add_cast_column.reserve(table_scan.getColumnSize());
     std::unordered_set<ColumnID> filter_col_id_set;
-    for (const auto & expr : table_scan.getPushedDownFilters())
+    if (!include_pushed_down_filter_columns)
     {
-        getColumnIDsFromExpr(expr, table_scan.getColumns(), filter_col_id_set);
+        for (const auto & expr : table_scan.getPushedDownFilters())
+            getColumnIDsFromExpr(expr, table_scan.getColumns(), filter_col_id_set);
     }
     for (const auto & col : table_scan.getColumns())
-        may_need_add_cast_column.push_back(
-            !col.hasGeneratedColumnFlag() && !filter_col_id_set.contains(col.id) && col.id != -1);
+    {
+        bool need_cast = !col.hasGeneratedColumnFlag() && col.id != -1;
+        if (!include_pushed_down_filter_columns)
+            need_cast = need_cast && !filter_col_id_set.contains(col.id);
+        may_need_add_cast_column.push_back(need_cast);
+    }
     bool has_need_cast_column = std::find(may_need_add_cast_column.begin(), may_need_add_cast_column.end(), true)
         != may_need_add_cast_column.end();
     ExpressionActionsChain chain;
@@ -225,9 +264,12 @@ ExpressionActionsPtr StorageDisaggregated::getExtraCastExpr(DAGExpressionAnalyze
     }
 }
 
-void StorageDisaggregated::extraCast(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline)
+void StorageDisaggregated::extraCast(
+    DAGExpressionAnalyzer & analyzer,
+    DAGPipeline & pipeline,
+    bool include_pushed_down_filter_columns)
 {
-    if (auto extra_cast = getExtraCastExpr(analyzer); extra_cast)
+    if (auto extra_cast = getExtraCastExpr(analyzer, include_pushed_down_filter_columns); extra_cast)
     {
         pipeline.transform([&](auto & stream) {
             stream = std::make_shared<ExpressionBlockInputStream>(stream, extra_cast, log->identifier());
@@ -239,9 +281,10 @@ void StorageDisaggregated::extraCast(DAGExpressionAnalyzer & analyzer, DAGPipeli
 void StorageDisaggregated::extraCast(
     PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
-    DAGExpressionAnalyzer & analyzer)
+    DAGExpressionAnalyzer & analyzer,
+    bool include_pushed_down_filter_columns)
 {
-    if (auto extra_cast = getExtraCastExpr(analyzer); extra_cast)
+    if (auto extra_cast = getExtraCastExpr(analyzer, include_pushed_down_filter_columns); extra_cast)
     {
         group_builder.transform([&](auto & builder) {
             builder.appendTransformOp(

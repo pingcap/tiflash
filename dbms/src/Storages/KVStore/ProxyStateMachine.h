@@ -16,7 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Common/TiFlashBuildInfo.h>
-#include <Common/config.h> // for ENABLE_NEXT_GEN
+#include <Common/config.h> // for ENABLE_NEXT_GEN_COLUMNAR/ENABLE_NEXT_GEN
 #include <Common/setThreadName.h>
 #include <Core/TiFlashDisaggregatedMode.h>
 #include <Interpreters/Settings.h>
@@ -54,11 +54,12 @@ struct TiFlashProxyConfig
         Poco::Util::LayeredConfiguration & config,
         const DisaggregatedMode disaggregated_mode,
         const bool use_autoscaler,
+        const bool use_columnar,
         const StorageFormatVersion & format_version,
         const Settings & settings,
         const LoggerPtr & log)
     {
-        is_proxy_runnable = tryParseFromConfig(config, disaggregated_mode, use_autoscaler, log);
+        is_proxy_runnable = tryParseFromConfig(config, disaggregated_mode, use_autoscaler, use_columnar, log);
 
         // Enable unips according to `format_version`
         if (format_version.page == PageFormat::V4)
@@ -102,7 +103,8 @@ struct TiFlashProxyConfig
         for (const auto & [k, v] : val_map)
         {
             args.push_back(k.data());
-            args.push_back(v.data());
+            if (!v.empty())
+                args.push_back(v.data());
         }
         return args;
     }
@@ -127,13 +129,30 @@ private:
         const Poco::Util::LayeredConfiguration & config,
         const DisaggregatedMode disaggregated_mode,
         const bool use_autoscaler,
+        const bool use_columnar,
         const LoggerPtr & log)
     {
-        // tiflash_compute doesn't need proxy.
+        // for tiflash_compute with columnar and auto-scaler, we need to start the proxy with "init-only" args
+        bool init_only = false;
+        UNUSED(init_only);
+        // tiflash_compute doesn't need proxy except when using columnar.
         if (disaggregated_mode == DisaggregatedMode::Compute && use_autoscaler)
         {
-            LOG_INFO(log, "TiFlash Proxy will not start because AutoScale Disaggregated Compute Mode is specified.");
-            return false;
+            if (use_columnar)
+            {
+                LOG_INFO(
+                    log,
+                    "TiFlash Proxy will start because columnar is enabled with AutoScale Disaggregated Compute Mode "
+                    "specified.");
+                init_only = true;
+            }
+            else
+            {
+                LOG_INFO(
+                    log,
+                    "TiFlash Proxy will not start because AutoScale Disaggregated Compute Mode is specified.");
+                return false;
+            }
         }
 
         Poco::Util::AbstractConfiguration::Keys keys;
@@ -184,10 +203,14 @@ private:
                 args_map["labels"] = extra_label;
             }
 
-#if ENABLE_NEXT_GEN
+#if ENABLE_NEXT_GEN == 1
             if (config.has("blacklist_file"))
                 args_map["blacklist-file"] = config.getString("blacklist_file");
-#endif
+#endif // ENABLE_NEXT_GEN
+#if ENABLE_NEXT_GEN_COLUMNAR == 1
+            if (init_only)
+                args_map["init-only"] = "";
+#endif // ENABLE_NEXT_GEN_COLUMNAR
 
             for (auto && [k, v] : args_map)
                 val_map.emplace("--" + k, std::move(v));
