@@ -14,6 +14,7 @@
 
 #include <Columns/ColumnDecimal.h>
 #include <Columns/IColumn.h>
+#include <Common/config.h>
 #include <Common/typeid_cast.h>
 #include <Core/Field.h>
 #include <DataTypes/DataTypeDecimal.h>
@@ -22,6 +23,34 @@
 #include <IO/WriteHelpers.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/IAST.h>
+
+#if ENABLE_NEXT_GEN_COLUMNAR
+#include <array>
+#include <ranges>
+
+namespace
+{
+DB::Int256 decodeProxyDecimal256(DB::ReadBuffer & istr)
+{
+    std::array<unsigned char, 32> bytes{};
+    istr.readStrict(reinterpret_cast<char *>(bytes.data()), bytes.size());
+
+    BoostUInt256 raw = 0;
+    for (const auto byte : std::views::reverse(bytes))
+    {
+        raw <<= 8;
+        raw += byte;
+    }
+
+    if ((bytes.back() & 0x80U) == 0)
+        return static_cast<DB::Int256>(raw);
+
+    BoostUInt256 magnitude = ~raw;
+    magnitude += 1;
+    return -static_cast<DB::Int256>(magnitude);
+}
+} // namespace
+#endif
 
 namespace DB
 {
@@ -79,13 +108,23 @@ void DataTypeDecimal<T>::deserializeBinaryBulk(
     IColumn & column,
     ReadBuffer & istr,
     size_t limit,
-    double /*avg_value_size_hint*/) const
+    [[maybe_unused]] double avg_value_size_hint) const
 {
     typename ColumnType::Container & x = typeid_cast<ColumnType &>(column).getData();
-    size_t initial_size = x.size();
-    x.resize(initial_size + limit);
-    size_t size = istr.readBig(reinterpret_cast<char *>(&x[initial_size]), sizeof(FieldType) * limit);
-    x.resize(initial_size + size / sizeof(FieldType));
+#if ENABLE_NEXT_GEN_COLUMNAR
+    if (avg_value_size_hint < 0.0 && is_Decimal256)
+    {
+        for (size_t i = 0; i < limit; ++i)
+            x.push_back(FieldType(Decimal256(decodeProxyDecimal256(istr))));
+    }
+    else
+#endif
+    {
+        size_t initial_size = x.size();
+        x.resize(initial_size + limit);
+        size_t size = istr.readBig(reinterpret_cast<char *>(&x[initial_size]), sizeof(FieldType) * limit);
+        x.resize(initial_size + size / sizeof(FieldType));
+    }
 }
 
 template <typename T>

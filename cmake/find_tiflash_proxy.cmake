@@ -14,9 +14,24 @@
 
 option(USE_INTERNAL_TIFLASH_PROXY "Set to FALSE to use external tiflash-proxy instead of bundled. (Only used in CI. Set to FALSE on your own risk)" ${NOT_UNBUNDLED})
 
-if(NOT EXISTS "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy/Makefile")
+# for classic tiflash-proxy
+set(_TIFLASH_PROXY_SOURCE_DIR "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy")
+set(_TIFLASH_PROXY_SUBMODULE_NAME "contrib/tiflash-proxy")
+if(ENABLE_NEXT_GEN)
+    if(ENABLE_NEXT_GEN_COLUMNAR)
+        # for next-gen columnar tiflash-proxy
+        set(_TIFLASH_PROXY_SOURCE_DIR "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy-columnar")
+        set(_TIFLASH_PROXY_SUBMODULE_NAME "contrib/tiflash-proxy-columnar")
+    else()
+        # for next-gen disaggregated tiflash-proxy
+        set(_TIFLASH_PROXY_SOURCE_DIR "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy-next-gen")
+        set(_TIFLASH_PROXY_SUBMODULE_NAME "contrib/tiflash-proxy-next-gen")
+    endif()
+endif()
+
+if(NOT EXISTS "${_TIFLASH_PROXY_SOURCE_DIR}/Makefile")
     if(USE_INTERNAL_TIFLASH_PROXY)
-        message(WARNING "submodule contrib/tiflash-proxy is missing. to fix try run: \n git submodule update --init")
+        message(WARNING "submodule ${_TIFLASH_PROXY_SUBMODULE_NAME} is missing. to fix try run: \n git submodule update --init")
         message(WARNING "Can't use internal tiflash-proxy")
         set(USE_INTERNAL_TIFLASH_PROXY FALSE)
     endif()
@@ -41,11 +56,7 @@ endif()
 
 if(NOT EXTERNAL_TIFLASH_PROXY_FOUND)
     if(NOT MISSING_INTERNAL_TIFLASH_PROXY)
-        if (ENABLE_NEXT_GEN)
-            set(TIFLASH_PROXY_INCLUDE_DIR "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy-next-gen/raftstore-proxy/ffi/src")
-        else()
-            set(TIFLASH_PROXY_INCLUDE_DIR "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy/raftstore-proxy/ffi/src")
-        endif()
+        set(TIFLASH_PROXY_INCLUDE_DIR "${_TIFLASH_PROXY_SOURCE_DIR}/raftstore-proxy/ffi/src")
         set(TIFLASH_PROXY_LIBRARY libtiflash_proxy)
         set(USE_INTERNAL_TIFLASH_PROXY TRUE)
     else()
@@ -55,10 +66,14 @@ endif()
 
 set(TIFLASH_PROXY_FOUND TRUE)
 if (ENABLE_NEXT_GEN AND NOT EXISTS "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy-next-gen/proxy_components/proxy_ffi/src/cloud_helper.rs")
-    message(FATAL "Can't find next-gen tiflash-proxy")
+    # for next-gen disaggregated tiflash-proxy, we require the cloud_helper.rs to be present.
+    # but it could be missing in next-gen columnar tiflash-proxy.
+    if (NOT ENABLE_NEXT_GEN_COLUMNAR)
+        message(FATAL "Can't find next-gen tiflash-proxy")
+    endif()
 endif()
 
-message(STATUS "Using tiflash-proxy: USE_INTERNAL_TIFLASH_PROXY:${USE_INTERNAL_TIFLASH_PROXY}, headers:${TIFLASH_PROXY_INCLUDE_DIR}, lib:${TIFLASH_PROXY_LIBRARY}, ENABLE_NEXT_GEN:${ENABLE_NEXT_GEN}")
+message(STATUS "Using tiflash-proxy: USE_INTERNAL_TIFLASH_PROXY:${USE_INTERNAL_TIFLASH_PROXY}, headers:${TIFLASH_PROXY_INCLUDE_DIR}, lib:${TIFLASH_PROXY_LIBRARY}, ENABLE_NEXT_GEN:${ENABLE_NEXT_GEN}, ENABLE_NEXT_GEN_COLUMNAR:${ENABLE_NEXT_GEN_COLUMNAR}, source:${_TIFLASH_PROXY_SOURCE_DIR}")
 
 if (NOT USE_INTERNAL_TIFLASH_PROXY)
     add_custom_target(tiflash_proxy ALL DEPENDS ${TIFLASH_PROXY_LIBRARY})

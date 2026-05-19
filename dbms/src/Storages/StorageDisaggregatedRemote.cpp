@@ -100,7 +100,66 @@ void initDisaggTaskMeta(
 }
 } // namespace
 
-BlockInputStreams StorageDisaggregated::readThroughS3(const Context & db_context, unsigned num_streams)
+#if ENABLE_NEXT_GEN_COLUMNAR == 0
+BlockInputStreams StorageDisaggregated::readThroughColumnar( // NOLINT(readability-convert-member-functions-to-static)
+    const Context &,
+    unsigned)
+{
+    // A placeholder for the columnar read path. The real implementation is in StorageDisaggregatedColumnar.cpp
+    // which is only compiled when ENABLE_NEXT_GEN_COLUMNAR is on.
+    RUNTIME_CHECK_MSG(false, "columnar disaggregated read is not enabled in this build");
+    return {};
+}
+
+void StorageDisaggregated::readThroughColumnar( // NOLINT(readability-convert-member-functions-to-static)
+    PipelineExecutorContext &,
+    PipelineExecGroupBuilder &,
+    const Context &,
+    unsigned)
+{
+    // A placeholder for the columnar read path. The real implementation is in StorageDisaggregatedColumnar.cpp
+    // which is only compiled when ENABLE_NEXT_GEN_COLUMNAR is on.
+    RUNTIME_CHECK_MSG(false, "columnar disaggregated read is not enabled in this build");
+}
+#endif
+
+void StorageDisaggregated::filterConditionsWithPushedDownFilters(
+    DAGExpressionAnalyzer & analyzer,
+    DAGPipeline & pipeline)
+{
+#if ENABLE_NEXT_GEN_COLUMNAR == 0
+    filterConditions(analyzer, pipeline);
+#else
+    FilterConditions conditions(filter_conditions.executor_id, filter_conditions.conditions);
+    conditions.conditions.MergeFrom(table_scan.getPushedDownFilters());
+    if (conditions.hasValue())
+    {
+        ::DB::executePushedDownFilter(conditions, analyzer, log, pipeline);
+        auto & profile_streams = context.getDAGContext()->getProfileStreamsMap()[conditions.executor_id];
+        pipeline.transform([&profile_streams](auto & stream) { profile_streams.push_back(stream); });
+    }
+#endif
+}
+
+void StorageDisaggregated::filterConditionsWithPushedDownFilters(
+    PipelineExecutorContext & exec_context,
+    PipelineExecGroupBuilder & group_builder,
+    DAGExpressionAnalyzer & analyzer)
+{
+#if ENABLE_NEXT_GEN_COLUMNAR == 0
+    filterConditions(exec_context, group_builder, analyzer);
+#else
+    FilterConditions conditions(filter_conditions.executor_id, filter_conditions.conditions);
+    conditions.conditions.MergeFrom(table_scan.getPushedDownFilters());
+    if (conditions.hasValue())
+    {
+        ::DB::executePushedDownFilter(exec_context, group_builder, conditions, analyzer, log);
+        context.getDAGContext()->addOperatorProfileInfos(conditions.executor_id, group_builder.getCurProfileInfos());
+    }
+#endif
+}
+
+BlockInputStreams StorageDisaggregated::readThroughTiFlashWrite(const Context & db_context, unsigned num_streams)
 {
     auto * dag_context = context.getDAGContext();
     auto scan_context
@@ -133,7 +192,7 @@ BlockInputStreams StorageDisaggregated::readThroughS3(const Context & db_context
     return pipeline.streams;
 }
 
-void StorageDisaggregated::readThroughS3(
+void StorageDisaggregated::readThroughTiFlashWrite(
     PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     const Context & db_context,
