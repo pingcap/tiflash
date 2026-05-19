@@ -1208,30 +1208,42 @@ try
         proxy_machine.startProxyService(tmt_context, store_ident);
         if (proxy_machine.isProxyRunnable())
         {
-            const auto store_id = tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst);
-            if (is_disagg_compute_mode)
+            if (auto kvstore = tmt_context.getKVStore(); kvstore == nullptr)
             {
-                // compute node do not need to handle read index
-                LOG_INFO(log, "store_id={}, tiflash proxy is ready to serve", store_id);
+                LOG_INFO(log, "columnar proxy is ready to serve");
             }
             else
             {
-                LOG_INFO(
-                    log,
-                    "store_id={}, tiflash proxy is ready to serve, try to wake up all regions' leader",
-                    store_id);
-
-                if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode() && !store_ident.has_value())
+                const auto store_id = kvstore->getStoreID(std::memory_order_seq_cst);
+                if (is_disagg_compute_mode)
                 {
-                    // Not disagg node done it before
-                    // For the disagg node has not been bootstrap, begin the very first schema sync with TiDB.
-                    // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
-                    syncSchemaWithTiDB(storage_config, bg_init_stores, terminate_signals_counter, global_context, log);
-                    bg_init_stores.waitUntilFinish();
+                    // compute node do not need to handle read index
+                    LOG_INFO(log, "store_id={}, tiflash proxy is ready to serve", store_id);
                 }
+                else
+                {
+                    LOG_INFO(
+                        log,
+                        "store_id={}, tiflash proxy is ready to serve, try to wake up all regions' leader",
+                        store_id);
 
-                // Start read index workers and wait region apply index catch up with TiKV before serving requests.
-                proxy_machine.waitProxyServiceReady(tmt_context, terminate_signals_counter);
+                    if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode() && !store_ident.has_value())
+                    {
+                        // Not disagg node done it before
+                        // For the disagg node has not been bootstrap, begin the very first schema sync with TiDB.
+                        // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
+                        syncSchemaWithTiDB(
+                            storage_config,
+                            bg_init_stores,
+                            terminate_signals_counter,
+                            global_context,
+                            log);
+                        bg_init_stores.waitUntilFinish();
+                    }
+
+                    // Start read index workers and wait region apply index catch up with TiKV before serving requests.
+                    proxy_machine.waitProxyServiceReady(tmt_context, terminate_signals_counter);
+                }
             }
         }
 

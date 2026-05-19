@@ -311,6 +311,8 @@ struct ProxyStateMachine
         size_t memory_limit)
     {
         auto kvstore = tmt_context.getKVStore();
+        if (kvstore == nullptr)
+            return;
         if (store_ident)
         {
             // Many service would depends on `store_id` when disagg is enabled.
@@ -364,7 +366,10 @@ struct ProxyStateMachine
 
         // proxy update store-id before status set `RaftProxyStatus::Running`
         assert(tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Running);
-        const auto store_id = tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst);
+        auto kvstore = tmt_context.getKVStore();
+        if (kvstore == nullptr)
+            return;
+        const auto store_id = kvstore->getStoreID(std::memory_order_seq_cst);
         if (store_ident)
         {
             RUNTIME_ASSERT(
@@ -385,6 +390,8 @@ struct ProxyStateMachine
         if (proxy_conf.getReadIndexRunnerCount() > 0)
         {
             auto & kvstore_ptr = tmt_context.getKVStore();
+            if (kvstore_ptr == nullptr)
+                return;
             auto worker_tick = kvstore_ptr->getConfigRef().readIndexWorkerTick();
             kvstore_ptr->initReadIndexWorkers(
                 [worker_tick]() { return std::chrono::milliseconds(worker_tick); },
@@ -413,13 +420,15 @@ struct ProxyStateMachine
         }
         LOG_INFO(log, "Set store context status Stopping");
         tmt_context.setStatusStopping();
+        if (auto kvstore = tmt_context.getKVStore(); kvstore != nullptr)
         {
             // Wait until there is no read-index task.
-            while (tmt_context.getKVStore()->getReadIndexEvent())
+            while (kvstore->getReadIndexEvent())
                 std::this_thread::sleep_for(std::chrono::milliseconds(200));
         }
         tmt_context.setStatusTerminated();
-        tmt_context.getKVStore()->stopReadIndexWorkers();
+        if (auto kvstore = tmt_context.getKVStore(); kvstore != nullptr)
+            kvstore->stopReadIndexWorkers();
         LOG_INFO(log, "Set store context status Terminated");
         {
             // update status and let proxy stop all services except encryption.
