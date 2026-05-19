@@ -451,6 +451,6 @@ add_target_pch("pch-stl.h" libprotobuf kvproto tipb libprotoc)
 add_target_pch("pch-stl.h" Net Crypto Util Data NetSSL)
 add_target_pch("$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/pch-stl.h>" Foundation JSON)
 
-# Show the import build flags and related proxy information for verification.
+# Show the important build flags and related proxy information for verification.
 message (STATUS "Important build flags: CMAKE_BUILD_TYPE:${CMAKE_BUILD_TYPE}, ENABLE_NEXT_GEN:${ENABLE_NEXT_GEN}, ENABLE_NEXT_GEN_COLUMNAR:${ENABLE_NEXT_GEN_COLUMNAR}")
 message (STATUS "Will build TiFlash ${TIFLASH_RELEASE_VERSION} with proxy:${_TIFLASH_PROXY_SOURCE_DIR}")
