@@ -16,22 +16,28 @@ option(USE_INTERNAL_TIFLASH_PROXY "Set to FALSE to use external tiflash-proxy in
 
 # for classic tiflash-proxy
 set(_TIFLASH_PROXY_SOURCE_DIR "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy")
-set(_TIFLASH_PROXY_SUBMODULE_NAME "contrib/tiflash-proxy")
+set(_TIFLASH_PROXY_SOURCE_HINT "submodule contrib/tiflash-proxy")
+set(_TIFLASH_PROXY_SOURCE_RECOVERY_HINT "git submodule update --init")
 if(ENABLE_NEXT_GEN)
     if(ENABLE_NEXT_GEN_COLUMNAR)
         # for next-gen columnar tiflash hub
         set(_TIFLASH_PROXY_SOURCE_DIR "${TiFlash_SOURCE_DIR}/contrib/tiflash-columnar-hub")
-        set(_TIFLASH_PROXY_SUBMODULE_NAME "contrib/tiflash-columnar-hub")
+        set(_TIFLASH_PROXY_SOURCE_HINT "bundled source directory contrib/tiflash-columnar-hub")
+        set(_TIFLASH_PROXY_SOURCE_RECOVERY_HINT "")
     else()
         # for next-gen disaggregated tiflash-proxy
         set(_TIFLASH_PROXY_SOURCE_DIR "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy-next-gen")
-        set(_TIFLASH_PROXY_SUBMODULE_NAME "contrib/tiflash-proxy-next-gen")
+        set(_TIFLASH_PROXY_SOURCE_HINT "submodule contrib/tiflash-proxy-next-gen")
+        set(_TIFLASH_PROXY_SOURCE_RECOVERY_HINT "git submodule update --init")
     endif()
 endif()
 
 if(NOT EXISTS "${_TIFLASH_PROXY_SOURCE_DIR}/Makefile")
     if(USE_INTERNAL_TIFLASH_PROXY)
-        message(WARNING "submodule ${_TIFLASH_PROXY_SUBMODULE_NAME} is missing. to fix try run: \n git submodule update --init")
+        message(WARNING "${_TIFLASH_PROXY_SOURCE_HINT} is missing.")
+        if(_TIFLASH_PROXY_SOURCE_RECOVERY_HINT)
+            message(WARNING "To fix try run: \n ${_TIFLASH_PROXY_SOURCE_RECOVERY_HINT}")
+        endif()
         message(WARNING "Can't use internal tiflash-proxy")
         set(USE_INTERNAL_TIFLASH_PROXY FALSE)
     endif()

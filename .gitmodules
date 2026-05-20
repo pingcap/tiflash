@@ -156,6 +156,3 @@
 [submodule "contrib/highfive"]
 	path = contrib/highfive
 	url = https://github.com/BlueBrain/HighFive
-[submodule "contrib/tiflash-columnar-hub"]
-	path = contrib/tiflash-columnar-hub
-	url = https://github.com/yongman/tiflash-columnar-hub.git
