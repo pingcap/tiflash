@@ -120,8 +120,12 @@ WHERE TABLE_SCHEMA = 'test';
 |------|-----|------|----------|
 | 2 | `test.t_enum`（enum 聚簇主键） | 已验证 | proxy：`columnar.rs` 读路径 `serialize_for_tiflash` 将 Enum 按 Enum16 窄化 |
 | 4 | `test.employees`（RANGE 分区） | 已验证 | TiFlash：`StorageDisaggregatedColumnar.h` RNProxy 使用 `action.getHeader()` 补齐 `_tidb_tid` |
+| 5 | `test.t_1`（BIGINT 聚簇主键） | **未修复** | 待查（columnar 读路径缺 `INT64_MAX` 行） |
 
-集成测试对照：`tests/fullstack-test/mpp/extra_physical_table_column.test`
+集成测试对照：
+
+- case 4：`tests/fullstack-test/mpp/extra_physical_table_column.test`
+- case 5：`tests/fullstack-test2/clustered_index/query.test` 第 37 行
 
 ---
 
@@ -224,6 +228,69 @@ storage_header=[exchange_receiver_0 ...]
 
 ---
 
+## Case 5：`test.t_1`（BIGINT 聚簇主键，缺 INT64_MAX 行）
+
+来源：`tests/fullstack-test2/clustered_index/query.test` **第 37 行**（2026-05-20 在当前 next-gen columnar 集群复现）。
+
+建表与数据（测试文件第 17–19 行）：
+
+```sql
+drop table if exists test.t_1;
+create table test.t_1(a bigint primary key clustered, col int);
+insert into test.t_1 values(-9223372036854775808,1),(9223372036854775807,2),(0,3);
+alter table test.t_1 set tiflash replica 1;
+-- 等待 AVAILABLE=1
+```
+
+第 37 行验证 SQL：
+
+```sql
+set session tidb_isolation_read_engines='tiflash';
+select * from test.t_1 where a > -9223372036854775808;
+```
+
+测试文件预期（2 行）：
+
+```
+| a                   | col  |
+|                   0 |    3 |
+| 9223372036854775807 |    2 |
+```
+
+当前集群实测（TiFlash，replica=1，无 SQL 报错）：
+
+| 引擎 | `a > INT64_MIN` | `select *` 全表 | `count(*)` |
+|------|-----------------|-----------------|------------|
+| TiKV | 2 行（含 MAX） | 3 行 | 3 |
+| TiFlash | **1 行**（仅 `0/3`） | **2 行**（缺 `9223372036854775807/2`） | **2** |
+
+相关边界（同一表，TiFlash 均缺 MAX 主键行）：
+
+```sql
+-- 第 44 行：应有 3 行，TiFlash 仅 MIN + 0
+set session tidb_isolation_read_engines='tiflash';
+select * from test.t_1 where a >= -9223372036854775808;
+
+-- 第 67 行：应有 1 行 MAX，TiFlash 为 0 行
+select * from test.t_1 where a >= 9223372036854775807;
+```
+
+现象归纳：不是单纯谓词过滤错误，而是 TiFlash/columnar **读不到** `a = 9223372036854775807` 这条记录（MPP `TableFullScan` 也只返回 2 行）。与 case 2（enum PK）、case 4（`_tidb_tid` schema）无关。
+
+```bash
+# 快速对比 TiKV / TiFlash
+mysql -h 10.2.12.81 -P 8031 -u root -D test -e "
+set session tidb_isolation_read_engines='tikv';
+select 'tikv' as eng, a, col from test.t_1 order by a;
+set session tidb_isolation_read_engines='tiflash';
+select 'tiflash' as eng, a, col from test.t_1 order by a;
+set session tidb_isolation_read_engines='tiflash';
+select * from test.t_1 where a > -9223372036854775808;
+"
+```
+
+---
+
 ## 一键复现（表已存在且 replica=1）
 
 ```bash
@@ -235,4 +302,10 @@ select pk, pk+0 from test.t_enum order by pk+0;
 "
 
 # case 4（见上方 heredoc 单会话脚本）
+
+# case 5（query.test:37，需先建 t_1 并 wait replica）
+mysql -h 10.2.12.81 -P 8031 -u root -D test -e "
+set session tidb_isolation_read_engines='tiflash';
+select * from test.t_1 where a > -9223372036854775808;
+"
 ```

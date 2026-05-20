@@ -15,3 +15,5 @@ tidb-ci/log
 
 fullstack-test-next-gen/data
 fullstack-test-next-gen/log
+
+*.log
