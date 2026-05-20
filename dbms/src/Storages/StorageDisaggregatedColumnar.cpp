@@ -21,7 +21,9 @@
 #include <Core/NamesAndTypes.h>
 #include <DataStreams/AddExtraTableIDColumnTransformAction.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/IDataType.h>
+#include <Flash/Coprocessor/CodecUtils.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
@@ -84,13 +86,24 @@ std::vector<std::tuple<UInt64, String, DataTypePtr>> genGeneratedColumnInfosForD
     return generated_column_infos;
 }
 
-std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedReadThroughProxy(const TiDBTableScan & table_scan)
+std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedReadThroughColumnar(
+    const TiDBTableScan & table_scan)
 {
     DM::ColumnDefinesPtr column_defines;
     int extra_table_id_index;
     std::vector<std::tuple<UInt64, String, DataTypePtr>> generated_column_infos;
     std::tie(column_defines, extra_table_id_index, generated_column_infos)
         = genColumnDefinesForDisaggregatedRead(table_scan);
+
+    // Columnar only support the legacy string format for now, so convert the data type to legacy one.
+    // We can remove this when columnar supports the new string data type.
+    for (auto & cd : *column_defines)
+    {
+        const auto & converted_type = CodecUtils::convertDataType(*cd.type);
+        if (&converted_type != cd.type.get())
+            cd.type = DataTypeFactory::instance().getOrSet(converted_type.getName());
+    }
+
     bool has_generated_column = false;
     for (const auto & ci : table_scan.getColumns())
     {
@@ -292,7 +305,7 @@ void StorageDisaggregated::readThroughColumnar(
         remote_table_ranges,
         num_streams);
     const auto generated_column_infos = genGeneratedColumnInfosForDisaggregatedRead(table_scan);
-    auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedReadThroughProxy(table_scan);
+    auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedReadThroughColumnar(table_scan);
     for (auto & task : read_proxy_tasks)
     {
         group_builder.addConcurrency(RNProxySourceOp::create({
@@ -547,7 +560,7 @@ RNProxyReaderPtr RNProxyReader::createProxyReader(
     }
 
     // Create input stream.
-    auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedReadThroughProxy(table_scan);
+    auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedReadThroughColumnar(table_scan);
     BlockInputStreamPtr input_stream = RNProxyInputStream::create({
         .context = context,
         .debug_tag = log->identifier(),
