@@ -17,6 +17,7 @@
 
 import os
 import re
+import signal
 import sys
 import time
 import datetime
@@ -44,7 +45,42 @@ NO_UNESCAPE_SUFFIX = ' #NO_UNESCAPE'
 
 # Some third-party module might output message directly to stderr/stdin, use this list to ignore such outputs
 IGNORED_CLIENT_OUTPUTS = ['<jemalloc>: Number of CPUs detected is not deterministic. Per-CPU arena disabled.']
+DEFAULT_TEST_TIMEOUT = 120
+TEST_TIMEOUT_ENV = 'test_timeout'
 verbose = False
+
+
+class TestTimeoutError(Exception):
+    pass
+
+
+def get_test_timeout():
+    value = os.getenv(TEST_TIMEOUT_ENV)
+    if value is None or value == '':
+        return DEFAULT_TEST_TIMEOUT
+    try:
+        return int(value)
+    except ValueError:
+        return DEFAULT_TEST_TIMEOUT
+
+
+def _timeout_handler(signum, frame):
+    raise TestTimeoutError()
+
+
+def run_with_timeout(seconds, func, *args, **kwargs):
+    if seconds <= 0:
+        return func(*args, **kwargs)
+    if not hasattr(signal, 'SIGALRM'):
+        return func(*args, **kwargs)
+
+    old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
+    signal.alarm(seconds)
+    try:
+        return func(*args, **kwargs)
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old_handler)
 
 def exec_func(cmd):
     cmd = cmd.strip()
@@ -379,11 +415,22 @@ def run():
     if len(sys.argv) == 6:
         verbose = (sys.argv[5] == 'true')
     if verbose: print(f'parsing file: `{path}`')
-    matched, matcher, todos = parse_exe_match(path, Executor(dbc), Executor(mysql_client),
-                                              ShellFuncExecutor(mysql_client),
-                                              CurlTiDBExecutor(),
-                                              fuzz,
-                                              )
+    timeout = get_test_timeout()
+    try:
+        matched, matcher, todos = run_with_timeout(
+            timeout,
+            parse_exe_match,
+            path,
+            Executor(dbc),
+            Executor(mysql_client),
+            ShellFuncExecutor(mysql_client),
+            CurlTiDBExecutor(),
+            fuzz,
+        )
+    except TestTimeoutError:
+        print(f'  File: {path}')
+        print(f'  Error: test timed out after {timeout}s')
+        sys.exit(1)
 
     def display(lines):
         if len(lines) == 0:
