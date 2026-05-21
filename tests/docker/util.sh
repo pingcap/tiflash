@@ -218,6 +218,10 @@ function setup_next_gen_compose_files() {
 
   compose_files=(-f next-gen-cluster.yaml -f "${DISAGG_TIFLASH_YAML}")
   append_local_binary_overrides "${compose_files_name}" "../docker/next-gen-yaml/override" "${validate_binaries}"
+  if [[ -n "${EXPOSE_TIDB_PORT:-}" ]]; then
+    compose_files+=(-f "../docker/next-gen-yaml/override/expose_tidb.yaml")
+    echo "Exposing tidb0 on host port ${EXPOSE_TIDB_PORT}"
+  fi
 }
 
 function check_docker_compose() {

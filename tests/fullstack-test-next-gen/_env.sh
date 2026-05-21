@@ -5,6 +5,11 @@ export LOCAL_PD_BIN_DIR="${LOCAL_PD_BIN_DIR:-}"
 export LOCAL_TIKV_BIN_DIR="${LOCAL_TIKV_BIN_DIR:-}"
 export LOCAL_TIDB_BIN_DIR="${LOCAL_TIDB_BIN_DIR:-}"
 
+# Examples:
+# export LOCAL_TIKV_BIN_DIR="${LOCAL_TIKV_BIN_DIR:-/path/to/tikv/target/release}"
+# export LOCAL_PD_BIN_DIR="${LOCAL_PD_BIN_DIR:-/path/to/pd/bin}"
+# export LOCAL_TIDB_BIN_DIR="${LOCAL_TIDB_BIN_DIR:-/path/to/tidb/bin}"
+
 export HUB_ADDR="${HUB_ADDR:-us-docker.pkg.dev/pingcap-testing-account/tidbx}"
 
 export PD_BRANCH="${PD_BRANCH:-master-next-gen}"
@@ -25,3 +30,7 @@ fi
 export PD_IMAGE="${PD_IMAGE:-${HUB_ADDR}/tikv/pd/image:${PD_BRANCH}}"
 export TIKV_IMAGE="${TIKV_IMAGE:-${HUB_ADDR}/tikv/tikv/image:${TIKV_BRANCH}}"
 export TIDB_IMAGE="${TIDB_IMAGE:-${HUB_ADDR}/pingcap/tidb/images/tidb-server:${TIDB_BRANCH}}"
+
+# Expose tidb0 MySQL port on host. Empty means no host port mapping.
+# export EXPOSE_TIDB_PORT="${EXPOSE_TIDB_PORT:-4000}"
+export EXPOSE_TIDB_PORT="${EXPOSE_TIDB_PORT:-}"

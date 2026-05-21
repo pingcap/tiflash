@@ -40,6 +40,7 @@ Environment:
   LOCAL_PD_BIN_DIR    directory containing pd-server
   LOCAL_TIKV_BIN_DIR  directory containing tikv-server and tikv-worker
   LOCAL_TIDB_BIN_DIR  directory containing tidb-server
+  EXPOSE_TIDB_PORT    host port mapped to tidb0:4000, e.g. 4000
   PD_IMAGE, TIKV_IMAGE, TIDB_IMAGE, HUB_ADDR, PD_BRANCH, TIKV_BRANCH, TIDB_BRANCH
 EOF
 }
