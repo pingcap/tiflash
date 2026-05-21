@@ -17,6 +17,8 @@ tcp_port = 9000
 [flash]
 disaggregated_mode = "tiflash_compute"
 service_addr = "0.0.0.0:3930"
+use_columnar = true
+
 [flash.proxy]
 addr = "0.0.0.0:20170"
 advertise-addr = "tiflash-cn0:20170"

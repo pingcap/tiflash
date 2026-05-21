@@ -15,6 +15,9 @@
 services:
   tiflash-cn0:
     image: ${TIFLASH_IMAGE:-hub.pingcap.net/tiflash/tiflash-ci-base:rocky8-20241028}
+    # TiFlash and tiflash-proxy create many threads; the default container
+    # pids_limit (2048) is too low and causes fork/exec failures (errno 11).
+    pids_limit: -1
     security_opt:
       - seccomp:unconfined
     volumes:
