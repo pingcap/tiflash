@@ -31,3 +31,10 @@ s3-key-id = "minioadmin"
 s3-secret-key = "minioadmin"
 s3-bucket = "tiflash-test"
 s3-region = "local"
+# delegate compaction to tikv-worker
+remote-compactor-addr = "http://tikv-worker0:19000/compact"
+
+[kvengine]
+# columnar and fts index on next-gen
+build-columnar = true
+build-fts-index = true
