@@ -1227,7 +1227,8 @@ try
                         "store_id={}, tiflash proxy is ready to serve, try to wake up all regions' leader",
                         store_id);
 
-                    if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode() && !store_ident.has_value())
+                    if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode()
+                        && !store_ident.has_value())
                     {
                         // Not disagg node done it before
                         // For the disagg node has not been bootstrap, begin the very first schema sync with TiDB.
