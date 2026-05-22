@@ -251,17 +251,32 @@ ExpressionActionsPtr StorageDisaggregated::getExtraCastExpr(
     bool has_need_cast_column = std::find(may_need_add_cast_column.begin(), may_need_add_cast_column.end(), true)
         != may_need_add_cast_column.end();
     ExpressionActionsChain chain;
-    if (has_need_cast_column && analyzer.appendExtraCastsAfterTS(chain, may_need_add_cast_column, table_scan))
+    if (has_need_cast_column)
     {
-        ExpressionActionsPtr extra_cast = chain.getLastActions();
-        chain.finalize();
-        chain.clear();
-        return extra_cast;
+        try
+        {
+            LOG_INFO(log, "[columnar_trace] before appendExtraCastsAfterTS");
+            if (analyzer.appendExtraCastsAfterTS(chain, may_need_add_cast_column, table_scan))
+            {
+                ExpressionActionsPtr extra_cast = chain.getLastActions();
+                chain.finalize();
+                chain.clear();
+                LOG_INFO(log, "[columnar_trace] appendExtraCastsAfterTS done, has_extra_cast=true");
+                return extra_cast;
+            }
+            LOG_INFO(log, "[columnar_trace] appendExtraCastsAfterTS done, has_extra_cast=false");
+        }
+        catch (const std::bad_alloc &)
+        {
+            LOG_ERROR(log, "[columnar_trace] std::bad_alloc in appendExtraCastsAfterTS");
+            throw;
+        }
     }
     else
     {
         return nullptr;
     }
+    return nullptr;
 }
 
 void StorageDisaggregated::extraCast(

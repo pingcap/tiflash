@@ -463,8 +463,30 @@ void executePushedDownFilter(
     DAGExpressionAnalyzer & analyzer,
     LoggerPtr log)
 {
-    auto [before_where, filter_column_name, project_after_where]
-        = analyzer.buildPushDownFilter(filter_conditions.conditions, true);
+    LOG_INFO(
+        log,
+        "[columnar_trace] executePushedDownFilter(pipeline) begin, conditions_num={}",
+        filter_conditions.conditions.size());
+    ExpressionActionsPtr before_where;
+    String filter_column_name;
+    ExpressionActionsPtr project_after_where;
+    try
+    {
+        std::tie(before_where, filter_column_name, project_after_where)
+            = analyzer.buildPushDownFilter(filter_conditions.conditions, true);
+        LOG_INFO(
+            log,
+            "[columnar_trace] buildPushDownFilter done, filter_column_name={}",
+            filter_column_name);
+    }
+    catch (const std::bad_alloc &)
+    {
+        LOG_ERROR(
+            log,
+            "[columnar_trace] std::bad_alloc in buildPushDownFilter, conditions_num={}",
+            filter_conditions.conditions.size());
+        throw;
+    }
 
     auto input_header = group_builder.getCurrentHeader();
     for (size_t i = 0; i < group_builder.concurrency(); ++i)
@@ -480,6 +502,7 @@ void executePushedDownFilter(
         builder.appendTransformOp(
             std::make_unique<ExpressionTransformOp>(exec_context, log->identifier(), project_after_where));
     }
+    LOG_INFO(log, "[columnar_trace] executePushedDownFilter(pipeline) done");
 }
 
 void executeGeneratedColumnPlaceholder(
@@ -507,6 +530,10 @@ void executeGeneratedColumnPlaceholder(
     if (generated_column_infos.empty())
         return;
 
+    LOG_INFO(
+        log,
+        "[columnar_trace] executeGeneratedColumnPlaceholder(pipeline) begin, gen_col_num={}",
+        generated_column_infos.size());
     auto input_header = group_builder.getCurrentHeader();
     group_builder.transform([&](auto & builder) {
         builder.appendTransformOp(std::make_unique<GeneratedColumnPlaceHolderTransformOp>(
@@ -515,6 +542,7 @@ void executeGeneratedColumnPlaceholder(
             input_header,
             generated_column_infos));
     });
+    LOG_INFO(log, "[columnar_trace] executeGeneratedColumnPlaceholder(pipeline) done");
 }
 
 } // namespace DB

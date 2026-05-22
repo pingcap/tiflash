@@ -89,20 +89,37 @@ std::vector<std::tuple<UInt64, String, DataTypePtr>> genGeneratedColumnInfosForD
 std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedReadThroughColumnar(
     const TiDBTableScan & table_scan)
 {
+    static auto trace_log = Logger::get("StorageDisaggregatedColumnar");
+    LOG_INFO(trace_log, "[columnar_trace] genColumnDefinesForDisaggregatedReadThroughColumnar begin");
     DM::ColumnDefinesPtr column_defines;
     int extra_table_id_index;
     std::vector<std::tuple<UInt64, String, DataTypePtr>> generated_column_infos;
-    std::tie(column_defines, extra_table_id_index, generated_column_infos)
-        = genColumnDefinesForDisaggregatedRead(table_scan);
+    try
+    {
+        std::tie(column_defines, extra_table_id_index, generated_column_infos)
+            = genColumnDefinesForDisaggregatedRead(table_scan);
+    }
+    catch (const std::bad_alloc &)
+    {
+        LOG_ERROR(trace_log, "[columnar_trace] std::bad_alloc in genColumnDefinesForDisaggregatedRead");
+        throw;
+    }
+    LOG_INFO(
+        trace_log,
+        "[columnar_trace] genColumnDefinesForDisaggregatedRead done, num_columns={}, extra_table_id_index={}",
+        column_defines->size(),
+        extra_table_id_index);
 
     // Columnar only support the legacy string format for now, so convert the data type to legacy one.
     // We can remove this when columnar supports the new string data type.
+    LOG_INFO(trace_log, "[columnar_trace] before convertDataType for columnar legacy string");
     for (auto & cd : *column_defines)
     {
         const auto & converted_type = CodecUtils::convertDataType(*cd.type);
         if (&converted_type != cd.type.get())
             cd.type = DataTypeFactory::instance().getOrSet(converted_type.getName());
     }
+    LOG_INFO(trace_log, "[columnar_trace] convertDataType done");
 
     bool has_generated_column = false;
     for (const auto & ci : table_scan.getColumns())
@@ -114,8 +131,12 @@ std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedReadThroug
         }
     }
     if (!has_generated_column)
+    {
+        LOG_INFO(trace_log, "[columnar_trace] genColumnDefinesForDisaggregatedReadThroughColumnar end, no generated column");
         return {std::move(column_defines), extra_table_id_index};
+    }
 
+    LOG_INFO(trace_log, "[columnar_trace] before filter generated columns from column_defines");
     auto filtered_column_defines = std::make_shared<DM::ColumnDefines>();
     filtered_column_defines->reserve(column_defines->size());
     int filtered_extra_table_id_index = MutSup::invalid_col_id;
@@ -125,8 +146,25 @@ std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedReadThroug
             continue;
         if (i == extra_table_id_index)
             filtered_extra_table_id_index = static_cast<int>(filtered_column_defines->size());
+        RUNTIME_CHECK_MSG(
+            static_cast<size_t>(i) < column_defines->size(),
+            "column_defines index out of range when filtering generated columns, table_scan_idx={}, "
+            "column_defines_size={}, table_scan_size={}",
+            i,
+            column_defines->size(),
+            table_scan.getColumnSize());
         filtered_column_defines->push_back((*column_defines)[i]);
     }
+    RUNTIME_CHECK_MSG(
+        filtered_column_defines->size() <= column_defines->size(),
+        "filtered column_defines size exceeds source, filtered_size={}, column_defines_size={}",
+        filtered_column_defines->size(),
+        column_defines->size());
+    LOG_INFO(
+        trace_log,
+        "[columnar_trace] genColumnDefinesForDisaggregatedReadThroughColumnar end, filtered_num_columns={}, filtered_extra_table_id_index={}",
+        filtered_column_defines->size(),
+        filtered_extra_table_id_index);
     return {std::move(filtered_column_defines), filtered_extra_table_id_index};
 }
 
@@ -294,8 +332,11 @@ void StorageDisaggregated::readThroughColumnar(
     const Context & context,
     unsigned num_streams)
 {
+    LOG_INFO(log, "[columnar_trace] readThroughColumnar(pipeline) begin");
     const UInt64 start_ts = sender_target_mpp_task_id.gather_id.query_id.start_ts;
     auto [remote_table_ranges, region_num] = buildRemoteTableRanges();
+    LOG_INFO(log, "[columnar_trace] buildRemoteTableRanges done, region_num={}", region_num);
+    LOG_INFO(log, "[columnar_trace] before buildProxyReadTaskWithBackoff");
     auto read_proxy_tasks = RNProxyReadTask::buildProxyReadTaskWithBackoff(
         log,
         context,
@@ -304,8 +345,14 @@ void StorageDisaggregated::readThroughColumnar(
         filter_conditions,
         remote_table_ranges,
         num_streams);
+    LOG_INFO(log, "[columnar_trace] buildProxyReadTaskWithBackoff done, task_num={}", read_proxy_tasks.size());
     const auto generated_column_infos = genGeneratedColumnInfosForDisaggregatedRead(table_scan);
     auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedReadThroughColumnar(table_scan);
+    LOG_INFO(
+        log,
+        "[columnar_trace] genColumnDefines done, num_columns={}, extra_table_id_index={}",
+        column_defines->size(),
+        extra_table_id_index);
     for (auto & task : read_proxy_tasks)
     {
         group_builder.addConcurrency(RNProxySourceOp::create({
@@ -317,8 +364,13 @@ void StorageDisaggregated::readThroughColumnar(
             .extra_table_id_index = extra_table_id_index,
         }));
     }
+    LOG_INFO(log, "[columnar_trace] RNProxySourceOp added, concurrency={}", group_builder.concurrency());
 
     executeGeneratedColumnPlaceholder(exec_context, group_builder, generated_column_infos, log);
+    LOG_INFO(
+        log,
+        "[columnar_trace] executeGeneratedColumnPlaceholder done, gen_col_num={}",
+        generated_column_infos.size());
 
     NamesAndTypes source_columns;
     auto header = group_builder.getCurrentHeader();
@@ -326,11 +378,20 @@ void StorageDisaggregated::readThroughColumnar(
     for (const auto & col : header)
         source_columns.emplace_back(col.name, col.type);
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
+    LOG_INFO(log, "[columnar_trace] DAGExpressionAnalyzer created, source_columns={}", source_columns.size());
 
     // Handle duration/timestamp cast for proxy path.
+    LOG_INFO(log, "[columnar_trace] before extraCast");
     extraCast(exec_context, group_builder, *analyzer, /*include_pushed_down_filter_columns=*/true);
+    LOG_INFO(log, "[columnar_trace] extraCast done");
     // Handle filter
+    LOG_INFO(
+        log,
+        "[columnar_trace] before filterConditionsWithPushedDownFilters, pushed_down_filter_num={}",
+        table_scan.getPushedDownFilters().size());
     filterConditionsWithPushedDownFilters(exec_context, group_builder, *analyzer);
+    LOG_INFO(log, "[columnar_trace] filterConditionsWithPushedDownFilters done");
+    LOG_INFO(log, "[columnar_trace] readThroughColumnar(pipeline) end");
 }
 
 // RNProxyReaderPtr
@@ -346,6 +407,12 @@ RNProxyReaderPtr RNProxyReader::createProxyReader(
     const FilterConditions & filter_conditions,
     std::mutex & output_lock)
 {
+    LOG_INFO(
+        log,
+        "[columnar_trace] createProxyReader begin region_id={}, filter_conditions_num={}, pushed_down_filter_num={}",
+        region_id,
+        filter_conditions.conditions.size(),
+        table_scan.getPushedDownFilters().size());
     auto table_scan_pb = *table_scan.getTableScanPB();
     const auto & timezone_info = context.getTimezoneInfo();
     if (table_scan_pb.tp() == tipb::TypePartitionTableScan)
@@ -451,6 +518,7 @@ RNProxyReaderPtr RNProxyReader::createProxyReader(
     const Context & global_ctx = context.getGlobalContext();
     auto * cluster = global_ctx.getTMTContext().getKVCluster();
     const TiFlashRaftProxyHelper * proxy_helper = global_ctx.getTMTContext().getKVStore()->getProxyHelper();
+    LOG_INFO(log, "[columnar_trace] before fn_get_columnar_reader region_id={}", region_id);
     ColumnarReaderPtr columnar_reader = proxy_helper->cloud_storage_engine_interfaces.fn_get_columnar_reader(
         region_id,
         region_ver,
@@ -462,6 +530,11 @@ RNProxyReaderPtr RNProxyReader::createProxyReader(
         std::move(ann_query_info_view),
         std::move(fts_query_info_view),
         proxy_helper->proxy_ptr);
+    LOG_INFO(
+        log,
+        "[columnar_trace] fn_get_columnar_reader done region_id={}, error_type={}",
+        region_id,
+        static_cast<UInt8>(columnar_reader.error_type));
     bool reader_transferred = false;
     SCOPE_EXIT({
         if (!reader_transferred)
@@ -560,7 +633,15 @@ RNProxyReaderPtr RNProxyReader::createProxyReader(
     }
 
     // Create input stream.
+    LOG_INFO(log, "[columnar_trace] before genColumnDefinesForDisaggregatedReadThroughColumnar region_id={}", region_id);
     auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedReadThroughColumnar(table_scan);
+    LOG_INFO(
+        log,
+        "[columnar_trace] genColumnDefinesForDisaggregatedReadThroughColumnar done region_id={}, num_columns={}, extra_table_id_index={}",
+        region_id,
+        column_defines->size(),
+        extra_table_id_index);
+    LOG_INFO(log, "[columnar_trace] before RNProxyInputStream::create region_id={}", region_id);
     BlockInputStreamPtr input_stream = RNProxyInputStream::create({
         .context = context,
         .debug_tag = log->identifier(),
@@ -570,6 +651,7 @@ RNProxyReaderPtr RNProxyReader::createProxyReader(
         .table_id = table_scan.getLogicalTableID(),
         .executor_id = table_scan.getTableScanExecutorID(),
     });
+    LOG_INFO(log, "[columnar_trace] RNProxyInputStream::create done region_id={}", region_id);
     reader_transferred = true;
     return std::make_shared<RNProxyReader>(input_stream);
 }
@@ -960,9 +1042,27 @@ OperatorStatus RNProxySourceOp::executeIOImpl()
         return awaitImpl();
     }
 
+    LOG_INFO(
+        log,
+        "[columnar_trace] RNProxySourceOp::executeIOImpl begin reader_idx={}/{}",
+        current_reader_idx,
+        task->getProxyReaders().size());
     FilterPtr filter_ignored = nullptr;
     Stopwatch w{CLOCK_MONOTONIC_COARSE};
-    Block block = task->getProxyReaders()[current_reader_idx]->getInputStream()->read(filter_ignored, false);
+    Block block;
+    try
+    {
+        block = task->getProxyReaders()[current_reader_idx]->getInputStream()->read(filter_ignored, false);
+    }
+    catch (const std::bad_alloc &)
+    {
+        LOG_ERROR(
+            log,
+            "[columnar_trace] std::bad_alloc in RNProxySourceOp::executeIOImpl reader_idx={}",
+            current_reader_idx);
+        throw;
+    }
+    LOG_INFO(log, "[columnar_trace] RNProxySourceOp::executeIOImpl read done rows={}", block.rows());
     duration_read_sec += w.elapsedSeconds();
     if likely (block && block.rows() > 0)
     {

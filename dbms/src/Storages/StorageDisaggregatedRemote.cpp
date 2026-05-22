@@ -151,10 +151,19 @@ void StorageDisaggregated::filterConditionsWithPushedDownFilters(
 #else
     FilterConditions conditions(filter_conditions.executor_id, filter_conditions.conditions);
     conditions.conditions.MergeFrom(table_scan.getPushedDownFilters());
+    LOG_INFO(
+        log,
+        "[columnar_trace] filterConditionsWithPushedDownFilters begin, merged_conditions_num={}",
+        conditions.conditions.size());
     if (conditions.hasValue())
     {
         ::DB::executePushedDownFilter(exec_context, group_builder, conditions, analyzer, log);
         context.getDAGContext()->addOperatorProfileInfos(conditions.executor_id, group_builder.getCurProfileInfos());
+        LOG_INFO(log, "[columnar_trace] executePushedDownFilter done");
+    }
+    else
+    {
+        LOG_INFO(log, "[columnar_trace] filterConditionsWithPushedDownFilters skipped, no conditions");
     }
 #endif
 }
