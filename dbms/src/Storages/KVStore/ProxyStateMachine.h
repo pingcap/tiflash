@@ -27,6 +27,7 @@
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <fiu.h>
 
 #include <boost/noncopyable.hpp>
 #include <chrono>
@@ -60,6 +61,7 @@ struct TiFlashProxyConfig
         const LoggerPtr & log)
     {
         is_proxy_runnable = tryParseFromConfig(config, disaggregated_mode, use_autoscaler, use_columnar, log);
+        is_columnar = use_columnar;
 
         // Enable unips according to `format_version`
         if (format_version.page == PageFormat::V4)
@@ -110,11 +112,13 @@ struct TiFlashProxyConfig
     }
 
     bool isProxyRunnable() const { return is_proxy_runnable; }
+    bool isColumnar() const { return is_columnar; }
 
     size_t getReadIndexRunnerCount() const { return read_index_runner_count; }
 
 private:
     TiFlashProxyConfig()
+        : read_index_runner_count(1)
     {
         // For test, bootstrap without proxy.
     }
@@ -220,6 +224,7 @@ private:
 
     std::unordered_map<std::string, std::string> val_map;
     bool is_proxy_runnable = false;
+    bool is_columnar = false;
     size_t read_index_runner_count;
 };
 
@@ -310,9 +315,11 @@ struct ProxyStateMachine
         std::optional<raft_serverpb::StoreIdent> & store_ident,
         size_t memory_limit)
     {
-        auto kvstore = tmt_context.getKVStore();
-        if (kvstore == nullptr)
+        // Columnar does not rely on kvstore
+        if (proxy_conf.isColumnar())
             return;
+
+        auto kvstore = tmt_context.getKVStore();
         if (store_ident)
         {
             // Many service would depends on `store_id` when disagg is enabled.
@@ -366,9 +373,13 @@ struct ProxyStateMachine
 
         // proxy update store-id before status set `RaftProxyStatus::Running`
         assert(tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Running);
-        auto kvstore = tmt_context.getKVStore();
-        if (kvstore == nullptr)
+
+        // Columnar does not rely on kvstore
+        if (proxy_conf.isColumnar())
             return;
+
+        // Check the store_id in KVStore is same as the store_id in StoreIdent, to make sure the proxy and KVStore is correctly matched.
+        auto kvstore = tmt_context.getKVStore();
         const auto store_id = kvstore->getStoreID(std::memory_order_seq_cst);
         if (store_ident)
         {
@@ -402,7 +413,7 @@ struct ProxyStateMachine
     }
 
     // Set KVStore to running, so that it could handle read index requests.
-    void runKVStore(TMTContext & tmt_context) const { tmt_context.setStatusRunning(); }
+    static void runKVStore(TMTContext & tmt_context) { tmt_context.setStatusRunning(); }
 
     /// Stop all services in TMTContext and ReadIndexWorkers.
     /// Then, inform proxy to stop by setting `tiflash_instance_wrap.status`.
@@ -473,6 +484,7 @@ struct ProxyStateMachine
     }
 
     bool isProxyRunnable() const { return proxy_conf.isProxyRunnable(); }
+    bool isColumnar() const { return proxy_conf.isColumnar(); }
 
     bool isProxyHelperInited() const { return tiflash_instance_wrap.proxy_helper != nullptr; }
 
