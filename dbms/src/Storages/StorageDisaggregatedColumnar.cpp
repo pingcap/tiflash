@@ -121,51 +121,14 @@ std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedReadThroug
     }
     LOG_INFO(trace_log, "[columnar_trace] convertDataType done");
 
-    bool has_generated_column = false;
-    for (const auto & ci : table_scan.getColumns())
-    {
-        if (ci.hasGeneratedColumnFlag())
-        {
-            has_generated_column = true;
-            break;
-        }
-    }
-    if (!has_generated_column)
-    {
-        LOG_INFO(trace_log, "[columnar_trace] genColumnDefinesForDisaggregatedReadThroughColumnar end, no generated column");
-        return {std::move(column_defines), extra_table_id_index};
-    }
-
-    LOG_INFO(trace_log, "[columnar_trace] before filter generated columns from column_defines");
-    auto filtered_column_defines = std::make_shared<DM::ColumnDefines>();
-    filtered_column_defines->reserve(column_defines->size());
-    int filtered_extra_table_id_index = MutSup::invalid_col_id;
-    for (Int32 i = 0; i < table_scan.getColumnSize(); ++i)
-    {
-        if (table_scan.getColumns()[i].hasGeneratedColumnFlag())
-            continue;
-        if (i == extra_table_id_index)
-            filtered_extra_table_id_index = static_cast<int>(filtered_column_defines->size());
-        RUNTIME_CHECK_MSG(
-            static_cast<size_t>(i) < column_defines->size(),
-            "column_defines index out of range when filtering generated columns, table_scan_idx={}, "
-            "column_defines_size={}, table_scan_size={}",
-            i,
-            column_defines->size(),
-            table_scan.getColumnSize());
-        filtered_column_defines->push_back((*column_defines)[i]);
-    }
-    RUNTIME_CHECK_MSG(
-        filtered_column_defines->size() <= column_defines->size(),
-        "filtered column_defines size exceeds source, filtered_size={}, column_defines_size={}",
-        filtered_column_defines->size(),
-        column_defines->size());
+    // genColumnDefinesForDisaggregatedRead already skips generated columns.
+    // executeGeneratedColumnPlaceholder fills virtual columns later in the pipeline.
     LOG_INFO(
         trace_log,
-        "[columnar_trace] genColumnDefinesForDisaggregatedReadThroughColumnar end, filtered_num_columns={}, filtered_extra_table_id_index={}",
-        filtered_column_defines->size(),
-        filtered_extra_table_id_index);
-    return {std::move(filtered_column_defines), filtered_extra_table_id_index};
+        "[columnar_trace] genColumnDefinesForDisaggregatedReadThroughColumnar end, num_columns={}, extra_table_id_index={}",
+        column_defines->size(),
+        extra_table_id_index);
+    return {std::move(column_defines), extra_table_id_index};
 }
 
 bool isProxyFilterComparableExpr(tipb::ScalarFuncSig sig)
