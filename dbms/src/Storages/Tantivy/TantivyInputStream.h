@@ -142,14 +142,8 @@ protected:
             .is_asc = std::move(tici_sort_column_asc),
         };
 
-        SearchResult search_result = search(
-            **shards_snapshot,
-            shard,
-            key_ranges,
-            return_fields,
-            match_expr,
-            search_param,
-            read_ts);
+        SearchResult search_result
+            = search(**shards_snapshot, shard, key_ranges, return_fields, match_expr, search_param, read_ts);
 
         const auto row_count = static_cast<size_t>(search_result.row_count);
         if (row_count == 0)
