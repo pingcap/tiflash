@@ -104,30 +104,9 @@ std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedReadThroug
             cd.type = DataTypeFactory::instance().getOrSet(converted_type.getName());
     }
 
-    bool has_generated_column = false;
-    for (const auto & ci : table_scan.getColumns())
-    {
-        if (ci.hasGeneratedColumnFlag())
-        {
-            has_generated_column = true;
-            break;
-        }
-    }
-    if (!has_generated_column)
-        return {std::move(column_defines), extra_table_id_index};
-
-    auto filtered_column_defines = std::make_shared<DM::ColumnDefines>();
-    filtered_column_defines->reserve(column_defines->size());
-    int filtered_extra_table_id_index = MutSup::invalid_col_id;
-    for (Int32 i = 0; i < table_scan.getColumnSize(); ++i)
-    {
-        if (table_scan.getColumns()[i].hasGeneratedColumnFlag())
-            continue;
-        if (i == extra_table_id_index)
-            filtered_extra_table_id_index = static_cast<int>(filtered_column_defines->size());
-        filtered_column_defines->push_back((*column_defines)[i]);
-    }
-    return {std::move(filtered_column_defines), filtered_extra_table_id_index};
+    // genColumnDefinesForDisaggregatedRead already skips generated columns.
+    // executeGeneratedColumnPlaceholder fills virtual columns later in the pipeline.
+    return {std::move(column_defines), extra_table_id_index};
 }
 
 bool isProxyFilterComparableExpr(tipb::ScalarFuncSig sig)
@@ -304,7 +283,6 @@ void StorageDisaggregated::readThroughColumnar(
         filter_conditions,
         remote_table_ranges,
         num_streams);
-    const auto generated_column_infos = genGeneratedColumnInfosForDisaggregatedRead(table_scan);
     auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedReadThroughColumnar(table_scan);
     for (auto & task : read_proxy_tasks)
     {
@@ -318,6 +296,7 @@ void StorageDisaggregated::readThroughColumnar(
         }));
     }
 
+    const auto generated_column_infos = genGeneratedColumnInfosForDisaggregatedRead(table_scan);
     executeGeneratedColumnPlaceholder(exec_context, group_builder, generated_column_infos, log);
 
     NamesAndTypes source_columns;
