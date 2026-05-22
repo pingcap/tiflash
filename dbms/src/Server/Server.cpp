@@ -1206,7 +1206,7 @@ try
 
         // Start the proxy service, including the grpc service for raft and http status service
         proxy_machine.startProxyService(tmt_context, store_ident);
-        if (proxy_machine.isColumnar())
+        if (proxy_machine.isProxyRunnable() && proxy_machine.isColumnar())
         {
             LOG_INFO(log, "columnar proxy is ready to serve");
         }

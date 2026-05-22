@@ -379,10 +379,10 @@ struct ProxyStateMachine
             return;
 
         // Check the store_id in KVStore is same as the store_id in StoreIdent, to make sure the proxy and KVStore is correctly matched.
-        auto kvstore = tmt_context.getKVStore();
-        const auto store_id = kvstore->getStoreID(std::memory_order_seq_cst);
         if (store_ident)
         {
+            auto kvstore = tmt_context.getKVStore();
+            const auto store_id = kvstore->getStoreID(std::memory_order_seq_cst);
             RUNTIME_ASSERT(
                 store_id == store_ident->store_id(),
                 log,
@@ -397,12 +397,14 @@ struct ProxyStateMachine
         if (!proxy_conf.isProxyRunnable())
             return;
 
+        // Columnar proxy does not need to execute read index, so it is ready once the proxy is running.
+        if (proxy_conf.isColumnar())
+            return;
+
         // If set 0, DO NOT enable read-index worker
         if (proxy_conf.getReadIndexRunnerCount() > 0)
         {
             auto & kvstore_ptr = tmt_context.getKVStore();
-            if (kvstore_ptr == nullptr)
-                return;
             auto worker_tick = kvstore_ptr->getConfigRef().readIndexWorkerTick();
             kvstore_ptr->initReadIndexWorkers(
                 [worker_tick]() { return std::chrono::milliseconds(worker_tick); },
