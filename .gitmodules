@@ -39,10 +39,6 @@
 [submodule "contrib/tiflash-proxy-next-gen"]
 	path = contrib/tiflash-proxy-next-gen
 	url = git@github.com:tidbcloud/cloud-storage-engine.git
-[submodule "contrib/tiflash-proxy-columnar"]
-	path = contrib/tiflash-proxy-columnar
-	url = git@github.com:tidbcloud/cloud-storage-engine.git
-	branch = tiflash-proxy-7.0
 [submodule "contrib/prometheus-cpp"]
 	path = contrib/prometheus-cpp
 	url = https://github.com/jupp0r/prometheus-cpp.git

@@ -62,7 +62,13 @@ int mainEntryVersion(int, char **)
     TiFlashBuildInfo::outputDetail(std::cout);
     std::cout << std::endl;
 
-    std::cout << "Raft Proxy" << std::endl;
+    std::cout
+#if ENABLE_NEXT_GEN_COLUMNAR
+        << "TiFlash Columnar Hub"
+#else
+        << "Raft Proxy"
+#endif
+        << std::endl;
     print_raftstore_proxy_version();
     return 0;
 }

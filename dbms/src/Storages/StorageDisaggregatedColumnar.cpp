@@ -450,7 +450,8 @@ RNProxyReaderPtr RNProxyReader::createProxyReader(
     BaseBuffView fts_query_info_view = BaseBuffView{fts_query_info_data.data(), fts_query_info_data.size()};
     const Context & global_ctx = context.getGlobalContext();
     auto * cluster = global_ctx.getTMTContext().getKVCluster();
-    const TiFlashRaftProxyHelper * proxy_helper = global_ctx.getTMTContext().getKVStore()->getProxyHelper();
+    const TiFlashRaftProxyHelper * proxy_helper = global_ctx.getSharedContextDisagg()->getColumnarProxyHelper();
+    RUNTIME_CHECK_MSG(proxy_helper != nullptr, "columnar proxy helper is not initialized");
     ColumnarReaderPtr columnar_reader = proxy_helper->cloud_storage_engine_interfaces.fn_get_columnar_reader(
         region_id,
         region_ver,
@@ -550,13 +551,21 @@ RNProxyReaderPtr RNProxyReader::createProxyReader(
     }
     else if (columnar_reader.error_type == ColumnarReaderErrorType::PdClientError)
     {
-        LOG_WARNING(log, "create columnar reader failed, pd client error");
-        throw Exception("pd client error", ErrorCodes::COLUMNAR_SNAPSHOT_ERROR);
+        auto error_msg = String(columnar_reader.error.buff.data, columnar_reader.error.buff.len);
+        LOG_WARNING(log, "create columnar reader failed, pd client error: {}", error_msg);
+        throw Exception(fmt::format("pd client error: {}", error_msg), ErrorCodes::COLUMNAR_SNAPSHOT_ERROR);
     }
     else if (columnar_reader.error_type != ColumnarReaderErrorType::OK)
     {
-        LOG_WARNING(log, "create columnar reader, other error_type {}", uint8_t(columnar_reader.error_type));
-        throw Exception("unknown error type", ErrorCodes::COLUMNAR_SNAPSHOT_ERROR);
+        auto error_msg = String(columnar_reader.error.buff.data, columnar_reader.error.buff.len);
+        LOG_WARNING(
+            log,
+            "create columnar reader failed, error_type={}, error={}",
+            uint8_t(columnar_reader.error_type),
+            error_msg);
+        throw Exception(
+            fmt::format("columnar reader error_type={}, error={}", uint8_t(columnar_reader.error_type), error_msg),
+            ErrorCodes::COLUMNAR_SNAPSHOT_ERROR);
     }
 
     // Create input stream.
@@ -822,7 +831,8 @@ Block RNProxyInputStream::readImpl([[maybe_unused]] FilterPtr & res_filter, [[ma
     if (done)
         return {};
     const Context & global_ctx = context.getGlobalContext();
-    const TiFlashRaftProxyHelper * proxy_helper = global_ctx.getTMTContext().getKVStore()->getProxyHelper();
+    const TiFlashRaftProxyHelper * proxy_helper = global_ctx.getSharedContextDisagg()->getColumnarProxyHelper();
+    RUNTIME_CHECK_MSG(proxy_helper != nullptr, "columnar proxy helper is not initialized");
     Stopwatch w{CLOCK_MONOTONIC_COARSE};
     UInt64 rows = proxy_helper->cloud_storage_engine_interfaces.fn_read_block(reader, batch_size);
     duration_read_sec += w.elapsedSecondsFromLastTime();
