@@ -21,7 +21,9 @@ enable-ttl = true
 low-space-threshold = 0
 
 [raftstore]
-capacity = "100GB"
+# 0 means use full disk capacity; avoid false "no available space"
+# on large host mounts since https://github.com/tidbcloud/cloud-storage-engine/pull/4728.
+capacity = 0
 
 # object storage for next-gen
 [dfs]
