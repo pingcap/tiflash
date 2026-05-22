@@ -95,7 +95,7 @@ bool StorageDisaggregated::isReadColumnar()
 #if ENABLE_NEXT_GEN_COLUMNAR == 1
     return context.getSharedContextDisagg()->use_columnar;
 #else
-    static_cast<void>(table_scan);
+    static_cast<void>(context);
     return false;
 #endif
 }

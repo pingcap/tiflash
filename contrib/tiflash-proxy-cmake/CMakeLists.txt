@@ -18,7 +18,9 @@ if (ENABLE_JEMALLOC)
         message(STATUS "proxy's jemalloc is disabled (AppleOS)")
     else()
         message(STATUS "proxy's jemalloc is enabled")
-        if (ENABLE_NEXT_GEN_COLUMNAR OR ENABLE_NEXT_GEN)
+        if (ENABLE_NEXT_GEN_COLUMNAR)
+            set(_TIFLASH_PROXY_ENABLE_FEATURES ENABLE_FEATURES="external-jemalloc")
+        elseif (ENABLE_NEXT_GEN)
             set(_TIFLASH_PROXY_ENABLE_FEATURES ENABLE_FEATURES="raftstore-proxy/external-jemalloc")
         else()
             set(_TIFLASH_PROXY_ENABLE_FEATURES ENABLE_FEATURES="external-jemalloc")
@@ -36,16 +38,26 @@ set(_TIFLASH_PROXY_MAKE_COMMAND "${_TIFLASH_PROXY_ENABLE_FEATURES}" make "${_TIF
 
 # use different tiflash-proxy for classic, next-gen, or columnar
 if (ENABLE_NEXT_GEN_COLUMNAR)
-    set(_TIFLASH_PROXY_SOURCE_DIR "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy-columnar")
+    set(_TIFLASH_PROXY_SOURCE_DIR "${TiFlash_SOURCE_DIR}/contrib/tiflash-columnar-hub")
 elseif (ENABLE_NEXT_GEN)
     set(_TIFLASH_PROXY_SOURCE_DIR "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy-next-gen")
 else()
     set(_TIFLASH_PROXY_SOURCE_DIR "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy")
 endif()
-message(STATUS "Using tiflash-proxy source dir: ${_TIFLASH_PROXY_SOURCE_DIR}, make command: ${_TIFLASH_PROXY_MAKE_COMMAND}")
+message(STATUS "Using TiFlash Rust FFI source dir: ${_TIFLASH_PROXY_SOURCE_DIR}, make command: ${_TIFLASH_PROXY_MAKE_COMMAND}")
 
 set(_TIFLASH_PROXY_LIBRARY "${CMAKE_CURRENT_BINARY_DIR}/${_TIFLASH_PROXY_BUILD_PROFILE}/${CMAKE_SHARED_LIBRARY_PREFIX}tiflash_proxy${CMAKE_SHARED_LIBRARY_SUFFIX}")
 file(GLOB_RECURSE _TIFLASH_PROXY_SRCS "${_TIFLASH_PROXY_SOURCE_DIR}/*.rs")
+list(FILTER _TIFLASH_PROXY_SRCS EXCLUDE REGEX "/target/")
+set(_TIFLASH_PROXY_MAKEFILE "${_TIFLASH_PROXY_SOURCE_DIR}/Makefile")
+set(_TIFLASH_PROXY_CARGO_MANIFEST "${_TIFLASH_PROXY_SOURCE_DIR}/Cargo.toml")
+set(_TIFLASH_PROXY_CARGO_LOCK "${_TIFLASH_PROXY_SOURCE_DIR}/Cargo.lock")
+set(_TIFLASH_PROXY_RUST_TOOLCHAIN "${TiFlash_SOURCE_DIR}/rust-toolchain.toml")
+if (EXISTS "${_TIFLASH_PROXY_SOURCE_DIR}/rust-toolchain.toml")
+    set(_TIFLASH_PROXY_RUST_TOOLCHAIN "${_TIFLASH_PROXY_SOURCE_DIR}/rust-toolchain.toml")
+elseif (EXISTS "${_TIFLASH_PROXY_SOURCE_DIR}/rust-toolchain")
+    set(_TIFLASH_PROXY_RUST_TOOLCHAIN "${_TIFLASH_PROXY_SOURCE_DIR}/rust-toolchain")
+endif()
 
 # Build in the build directory instead of the default source directory
 set(TIFLASH_RUST_ENV "CARGO_TARGET_DIR=${CMAKE_CURRENT_BINARY_DIR}" ${TIFLASH_RUST_ENV})
@@ -83,15 +95,22 @@ endif()
 
 message(STATUS "Using rust env for tiflash-proxy: ${TIFLASH_RUST_ENV}")
 
+set(_TIFLASH_PROXY_CUSTOM_DEPENDS
+    "${_TIFLASH_PROXY_SRCS}"
+    "${_TIFLASH_PROXY_MAKEFILE}"
+    "${_TIFLASH_PROXY_CARGO_MANIFEST}"
+    "${_TIFLASH_PROXY_RUST_TOOLCHAIN}")
+if (EXISTS "${_TIFLASH_PROXY_CARGO_LOCK}")
+    list(APPEND _TIFLASH_PROXY_CUSTOM_DEPENDS "${_TIFLASH_PROXY_CARGO_LOCK}")
+endif()
+
 add_custom_command(OUTPUT ${_TIFLASH_PROXY_LIBRARY}
     COMMENT "Building TiFlash Proxy using ${_TIFLASH_PROXY_BUILD_PROFILE} profile"
     COMMAND ${CMAKE_COMMAND} -E env ${TIFLASH_RUST_ENV} ${_TIFLASH_PROXY_MAKE_COMMAND}
     VERBATIM
     USES_TERMINAL
     WORKING_DIRECTORY ${_TIFLASH_PROXY_SOURCE_DIR}
-    DEPENDS "${_TIFLASH_PROXY_SRCS}"
-            "${_TIFLASH_PROXY_SOURCE_DIR}/Cargo.lock"
-            "${TiFlash_SOURCE_DIR}/rust-toolchain.toml")
+    DEPENDS ${_TIFLASH_PROXY_CUSTOM_DEPENDS})
 
 add_custom_target(tiflash_proxy ALL DEPENDS ${_TIFLASH_PROXY_LIBRARY})
 add_library(libtiflash_proxy SHARED IMPORTED GLOBAL)

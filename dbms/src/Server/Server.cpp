@@ -1206,9 +1206,14 @@ try
 
         // Start the proxy service, including the grpc service for raft and http status service
         proxy_machine.startProxyService(tmt_context, store_ident);
-        if (proxy_machine.isProxyRunnable())
+        if (proxy_machine.isProxyRunnable() && proxy_machine.isColumnar())
         {
-            const auto store_id = tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst);
+            LOG_INFO(log, "columnar proxy is ready to serve");
+        }
+        else if (proxy_machine.isProxyRunnable())
+        {
+            auto kvstore = tmt_context.getKVStore();
+            const auto store_id = kvstore->getStoreID(std::memory_order_seq_cst);
             if (is_disagg_compute_mode)
             {
                 // compute node do not need to handle read index

@@ -1,0 +1,9 @@
+[package]
+name = "workspace-hack"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Local workspace-hack override for tiflash-columnar-hub"
+
+[lib]
+path = "src/lib.rs"
