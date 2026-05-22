@@ -148,7 +148,7 @@ impl Default for HubLogConfig {
     }
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default, rename_all = "kebab-case")]
 struct ConfigFile {
     pd: PdConfig,
@@ -167,6 +167,45 @@ struct ConfigFile {
     log_file: String,
     log_format: Option<LogFormat>,
     log_rotation_size: ReadableSize,
+}
+
+#[cfg(target_os = "macos")]
+fn update_default_ia_config(ia: &mut IaConfig) {
+    // In MacOS, a relative directory size cannot be correctly calculated.
+    // So we use a fixed value by default.
+    ia.mem_cap = AbsoluteOrPercentSize::Abs(ReadableSize::mb(100));
+    ia.disk_cap = AbsoluteOrPercentSize::Abs(ReadableSize::mb(100));
+}
+
+#[cfg(target_os = "linux")]
+fn update_default_ia_config(ia: &mut IaConfig) {
+    ia.mem_cap = AbsoluteOrPercentSize::Percent(20.0);
+    ia.disk_cap = AbsoluteOrPercentSize::Percent(70.0);
+}
+
+impl Default for ConfigFile {
+    fn default() -> Self {
+        let mut ia = IaConfig::default();
+        update_default_ia_config(&mut ia);
+        Self {
+            pd: PdConfig::default(),
+            security: SecurityConfig::default(),
+            storage: StorageConfig::default(),
+            server: ServerConfig::default(),
+            dfs: DFSConfig::default(),
+            ia,
+            vector_index: VectorIndexConfig::default(),
+            columnar_file_cache: ColumnarFileCacheConfig::default(),
+            fts_cache: FtsCacheConfig::default(),
+            fts_delta_cache: FtsDeltaCacheConfig::default(),
+            block_cache_size: AbsoluteOrPercentSize::default(),
+            log: HubLogConfig::default(),
+            log_level: String::default(),
+            log_file: String::default(),
+            log_format: Option::default(),
+            log_rotation_size: ReadableSize::default(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1384,6 +1423,54 @@ log-level = "debug"
         assert_eq!(resolved.filename, "/tmp/tiflash-proxy.log");
         assert_eq!(resolved.level, slog::Level::Debug);
         assert_eq!(resolved.format, LogFormat::Text);
+    }
+
+    #[test]
+    fn test_config_file_default_uses_proxy_compatible_ia_defaults() {
+        let config = ConfigFile::default();
+        #[cfg(target_os = "linux")]
+        {
+            assert_eq!(config.ia.mem_cap, AbsoluteOrPercentSize::Percent(20.0));
+            assert_eq!(config.ia.disk_cap, AbsoluteOrPercentSize::Percent(70.0));
+        }
+        #[cfg(target_os = "macos")]
+        {
+            assert_eq!(
+                config.ia.mem_cap,
+                AbsoluteOrPercentSize::Abs(ReadableSize::mb(100))
+            );
+            assert_eq!(
+                config.ia.disk_cap,
+                AbsoluteOrPercentSize::Abs(ReadableSize::mb(100))
+            );
+        }
+    }
+
+    #[test]
+    fn test_missing_ia_config_uses_proxy_compatible_defaults() {
+        let config: ConfigFile = toml::from_str(
+            r#"
+[server]
+engine-addr = "1.2.3.4:3930"
+"#,
+        )
+        .unwrap();
+        #[cfg(target_os = "linux")]
+        {
+            assert_eq!(config.ia.mem_cap, AbsoluteOrPercentSize::Percent(20.0));
+            assert_eq!(config.ia.disk_cap, AbsoluteOrPercentSize::Percent(70.0));
+        }
+        #[cfg(target_os = "macos")]
+        {
+            assert_eq!(
+                config.ia.mem_cap,
+                AbsoluteOrPercentSize::Abs(ReadableSize::mb(100))
+            );
+            assert_eq!(
+                config.ia.disk_cap,
+                AbsoluteOrPercentSize::Abs(ReadableSize::mb(100))
+            );
+        }
     }
 
     #[test]
