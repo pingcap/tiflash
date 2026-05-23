@@ -1275,6 +1275,10 @@ try
             GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
         }
 
+        // TiCI reader uses mmap heavily; file-backed RSS (RssFile) should not trigger memory control.
+        // Effective value is true only when TiCI reader is enabled AND
+        // `tici.exclude-rss-file-from-memory-control` is true (default: true).
+        // If reader is disabled, this stays false regardless of the config item.
         const auto tici_reader_addr = config().getString("tici.reader-node.addr", "");
         const auto tici_reader_port = config().getInt("tici.reader-node.port", 0);
         const bool tici_reader_enabled = !tici_reader_addr.empty() || tici_reader_port > 0;
