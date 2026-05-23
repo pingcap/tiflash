@@ -90,6 +90,17 @@ struct TiFlashProxyConfig
                 }
             },
             settings.max_memory_usage_for_all_queries.get());
+
+        const auto tici_reader_addr = config.getString("tici.reader-node.addr", "");
+        const auto tici_reader_port = config.getInt("tici.reader-node.port", 0);
+        const bool tici_reader_enabled = !tici_reader_addr.empty() || tici_reader_port > 0;
+        const bool exclude_rss_file_from_memory_control
+            = tici_reader_enabled && config.getBool("tici.exclude-rss-file-from-memory-control", true);
+        if (exclude_rss_file_from_memory_control)
+        {
+            LOG_INFO(log, "Enable proxy adjusted RSS memory control for TiCI");
+            addExtraArgs("exclude-rss-file-from-memory-control", "1");
+        }
     }
 
     static TiFlashProxyConfig genForTest() { return TiFlashProxyConfig{}; }

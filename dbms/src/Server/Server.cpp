@@ -23,6 +23,7 @@
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/MemoryAllocTrace.h>
+#include <Common/MemoryTracker.h>
 #include <Common/RedactHelpers.h>
 #include <Common/SpillLimiter.h>
 #include <Common/StringUtils/StringUtils.h>
@@ -1274,6 +1275,18 @@ try
             GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
         }
 
+        const auto tici_reader_addr = config().getString("tici.reader-node.addr", "");
+        const auto tici_reader_port = config().getInt("tici.reader-node.port", 0);
+        const bool tici_reader_enabled = !tici_reader_addr.empty() || tici_reader_port > 0;
+        const bool exclude_rss_file_from_memory_control
+            = tici_reader_enabled && config().getBool("tici.exclude-rss-file-from-memory-control", true);
+        setExcludeRssFileFromMemoryControl(exclude_rss_file_from_memory_control);
+        LOG_INFO(
+            log,
+            "TiCI memory control config: reader_enabled={} exclude_rss_file_from_memory_control={}",
+            tici_reader_enabled,
+            exclude_rss_file_from_memory_control);
+
         /// startup flash service for handling coprocessor and MPP requests.
         FlashGrpcServerHolder flash_grpc_server_holder(this->context(), this->config(), raft_config, log);
 
@@ -1289,9 +1302,7 @@ try
 
         proxy_machine.runKVStore(tmt_context);
 
-        auto tici_reader_addr = config().getString("tici.reader-node.addr", "");
-        auto tici_reader_port = config().getInt("tici.reader-node.port", 0);
-        if (!tici_reader_addr.empty() || tici_reader_port > 0)
+        if (tici_reader_enabled)
         {
             Stopwatch watch;
             auto service_addr = config().getString("flash.service_addr");
