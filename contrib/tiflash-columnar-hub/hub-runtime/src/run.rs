@@ -1241,6 +1241,7 @@ pub unsafe fn run_proxy(argc: c_int, argv: *const *const c_char, helper_ptr: *co
         Some(server)
     };
 
+    info!("wait for engine-store server to start");
     let mut engine_store_status = helper.handle_get_engine_store_server_status();
     while matches!(engine_store_status, EngineStoreServerStatus::Idle) {
         thread::sleep(Duration::from_millis(200));
@@ -1248,6 +1249,9 @@ pub unsafe fn run_proxy(argc: c_int, argv: *const *const c_char, helper_ptr: *co
     }
 
     if matches!(engine_store_status, EngineStoreServerStatus::Running) {
+        info!("engine-store server is running");
+
+        // Only register the store and start the heartbeat loop after the engine-store server is running. This ensures that TiFlash does not register itself before the PD successfully bootstrapped the cluster with init TiKV servers.
         if let Some((store, start_time)) = store_registration.take() {
             let store_id = store.get_id();
             pd_client.put_store(store).unwrap_or_else(|err| {
@@ -1294,12 +1298,19 @@ pub unsafe fn run_proxy(argc: c_int, argv: *const *const c_char, helper_ptr: *co
         engine_store_status = helper.handle_get_engine_store_server_status();
     }
 
+    info!(
+        "found engine-store server status is {:?}, start to stop all services in columnar hub",
+        engine_store_status
+    );
+
     if let Some(handle) = heartbeat_handle.take() {
         let _ = handle.join();
     }
     if let Some(server) = status_server.take() {
         server.stop();
     }
+
+    info!("TiFlash Columnar Hub has been stopped");
 }
 
 #[cfg(test)]
