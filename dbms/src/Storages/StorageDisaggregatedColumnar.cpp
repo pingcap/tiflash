@@ -123,11 +123,6 @@ std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedReadThroug
 
     // genColumnDefinesForDisaggregatedRead already skips generated columns.
     // executeGeneratedColumnPlaceholder fills virtual columns later in the pipeline.
-    LOG_INFO(
-        trace_log,
-        "[columnar_trace] genColumnDefinesForDisaggregatedReadThroughColumnar end, num_columns={}, extra_table_id_index={}",
-        column_defines->size(),
-        extra_table_id_index);
     return {std::move(column_defines), extra_table_id_index};
 }
 
@@ -308,8 +303,6 @@ void StorageDisaggregated::readThroughColumnar(
         filter_conditions,
         remote_table_ranges,
         num_streams);
-    LOG_INFO(log, "[columnar_trace] buildProxyReadTaskWithBackoff done, task_num={}", read_proxy_tasks.size());
-    const auto generated_column_infos = genGeneratedColumnInfosForDisaggregatedRead(table_scan);
     auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedReadThroughColumnar(table_scan);
     LOG_INFO(
         log,
@@ -329,6 +322,7 @@ void StorageDisaggregated::readThroughColumnar(
     }
     LOG_INFO(log, "[columnar_trace] RNProxySourceOp added, concurrency={}", group_builder.concurrency());
 
+    const auto generated_column_infos = genGeneratedColumnInfosForDisaggregatedRead(table_scan);
     executeGeneratedColumnPlaceholder(exec_context, group_builder, generated_column_infos, log);
     LOG_INFO(
         log,
@@ -578,24 +572,20 @@ RNProxyReaderPtr RNProxyReader::createProxyReader(
     }
     else if (columnar_reader.error_type == ColumnarReaderErrorType::PdClientError)
     {
-        auto error_msg = String(columnar_reader.error.buff.data, columnar_reader.error.buff.len);
-        LOG_WARNING(log, "create columnar reader failed, pd client error: {}", error_msg);
-        throw Exception(fmt::format("pd client error: {}", error_msg), ErrorCodes::COLUMNAR_SNAPSHOT_ERROR);
+        auto error_msg = fmt::format(
+            "create columnar reader failed, pd client error: {}",
+            String(columnar_reader.error.buff.data, columnar_reader.error.buff.len));
+        LOG_WARNING(log, "{}", error_msg);
+        throw Exception(ErrorCodes::COLUMNAR_SNAPSHOT_ERROR, "{}", error_msg);
     }
     else if (columnar_reader.error_type != ColumnarReaderErrorType::OK)
     {
-        auto error_msg = String(columnar_reader.error.buff.data, columnar_reader.error.buff.len);
-        LOG_WARNING(
-            log,
-            "create columnar reader failed, error_type={}, error={}",
-            uint8_t(columnar_reader.error_type),
-            error_msg);
-        throw Exception(
-            fmt::format(
-                "columnar reader error_type={}, error={}",
-                static_cast<uint8_t>(columnar_reader.error_type),
-                error_msg),
-            ErrorCodes::COLUMNAR_SNAPSHOT_ERROR);
+        auto error_msg = fmt::format(
+            "create columnar reader failed, error_type={} error={}",
+            static_cast<uint8_t>(columnar_reader.error_type),
+            String(columnar_reader.error.buff.data, columnar_reader.error.buff.len));
+        LOG_WARNING(log, "{}", error_msg);
+        throw Exception(ErrorCodes::COLUMNAR_SNAPSHOT_ERROR, "{}", error_msg);
     }
 
     // Create input stream.

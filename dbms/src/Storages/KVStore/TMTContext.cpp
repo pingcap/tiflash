@@ -265,7 +265,7 @@ void TMTContext::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * pr
         return;
     }
 
-    // For tiflash_compute with columnar, we don't need kvstore
+    // For tiflash_compute with use_columnar, we don't need kvstore
     if (!context.getSharedContextDisagg()->use_columnar)
     {
         kvstore->restore(path_pool, proxy_helper);
