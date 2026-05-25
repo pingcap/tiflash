@@ -1,4 +1,4 @@
-# Copyright 2025 PingCAP, Inc.
+# Copyright 2026 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,6 +16,9 @@
 enable-experimental = true
 enable-telemetry = false
 internal-proxy = false
+
+# We only setup 1 tikv for testing.
+[replication]
 max-replicas = 1
 
 # pre-allocated keyspace for next-gen

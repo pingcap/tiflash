@@ -1,4 +1,4 @@
-# Copyright 2025 PingCAP, Inc.
+# Copyright 2026 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,8 +21,8 @@ services:
     security_opt:
       - seccomp:unconfined
     volumes:
-      - ./next-gen-config/tiflash_cn.toml:/tiflash.toml:ro
-      - ./next-gen-config/tiflash_cn_proxy.toml:/tiflash_tikv.toml:ro
+      - ./next-gen-columnar-config/tiflash_cn.toml:/tiflash.toml:ro
+      - ./next-gen-columnar-config/tiflash_cn_proxy.toml:/tiflash_tikv.toml:ro
       - ./data/tiflash-cn0:/data
       - ./log/tiflash-cn0:/log
       - ..:/tests

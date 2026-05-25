@@ -1,4 +1,4 @@
-# Copyright 2025 PingCAP, Inc.
+# Copyright 2026 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ services:
     security_opt:
       - seccomp:unconfined
     volumes:
-      - ./next-gen-config/pd.toml:/pd.toml:ro
+      - ./next-gen-columnar-config/pd.toml:/pd.toml:ro
       - ./data/pd0:/data
       - ./log/pd0:/log
     command: --name=pd0 --client-urls=http://0.0.0.0:2379 --peer-urls=http://0.0.0.0:2380 --advertise-client-urls=http://pd0:2379 --advertise-peer-urls=http://pd0:2380 --initial-cluster=pd0=http://pd0:2380 --config=/pd.toml --data-dir=/data --log-file=/log/pd.log
@@ -39,7 +39,7 @@ services:
     security_opt:
       - seccomp:unconfined
     volumes:
-      - ./next-gen-config/tikv.toml:/tikv.toml:ro
+      - ./next-gen-columnar-config/tikv.toml:/tikv.toml:ro
       - ./data/tikv0:/data
       - ./log/tikv0:/log
     command: --addr=0.0.0.0:20160 --advertise-addr=tikv0:20160 --status-addr=0.0.0.0:20180 --advertise-status-addr=tikv0:20180 --pd=pd0:2379 --config=/tikv.toml --data-dir=/data --log-file=/log/tikv.log
@@ -52,7 +52,7 @@ services:
     security_opt:
       - seccomp:unconfined
     volumes:
-      - ./next-gen-config/tikv-worker.toml:/tikv-worker.toml:ro
+      - ./next-gen-columnar-config/tikv-worker.toml:/tikv-worker.toml:ro
       - ./data/tikv-worker0:/data
       - ./log/tikv-worker0:/log
     entrypoint: /tikv-worker
@@ -65,7 +65,7 @@ services:
     security_opt:
       - seccomp:unconfined
     volumes:
-      - ./next-gen-config/tidb.toml:/tidb.toml:ro
+      - ./next-gen-columnar-config/tidb.toml:/tidb.toml:ro
       - ./log/tidb0:/log
     command: --store=tikv --path=pd0:2379 --config=/tidb.toml --log-file=/log/tidb.log --advertise-address=tidb0
     depends_on:
