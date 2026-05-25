@@ -67,6 +67,7 @@ void CollectProcInfoBackgroundTask::memCheckJob()
             // Update the memory usage of the current process. Defined in Common/MemoryTracker.cpp
             auto res = get_process_mem_usage();
             real_rss = res.resident_bytes;
+            rss_file = res.rss_file_bytes;
             proc_num_threads = res.cur_proc_num_threads;
             proc_virt_size = res.cur_virt_bytes;
             baseline_of_query_mem_tracker = root_of_query_mem_trackers->get();

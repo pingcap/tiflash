@@ -31,8 +31,40 @@ extern const Metric MemoryTrackingSharedColumnData;
 extern const Metric MemoryTrackingKVStore;
 } // namespace CurrentMetrics
 
-std::atomic<Int64> real_rss{0}, proc_num_threads{1}, baseline_of_query_mem_tracker{0};
+std::atomic<Int64> real_rss{0}, rss_file{0}, proc_num_threads{1}, baseline_of_query_mem_tracker{0};
 std::atomic<UInt64> proc_virt_size{0};
+std::atomic<bool> exclude_rss_file_from_memory_control{false};
+
+void setExcludeRssFileFromMemoryControl(bool value)
+{
+    exclude_rss_file_from_memory_control.store(value, std::memory_order_relaxed);
+}
+
+bool getExcludeRssFileFromMemoryControl()
+{
+    return exclude_rss_file_from_memory_control.load(std::memory_order_relaxed);
+}
+
+struct MemoryControlRssInfo
+{
+    Int64 real_rss;
+    Int64 rss_file;
+    Int64 memory_control_rss;
+};
+
+static MemoryControlRssInfo getMemoryControlRss()
+{
+    const Int64 current_real_rss = real_rss.load(std::memory_order_relaxed);
+    const Int64 current_rss_file = rss_file.load(std::memory_order_relaxed);
+    if (!getExcludeRssFileFromMemoryControl())
+        return {current_real_rss, current_rss_file, current_real_rss};
+    return {
+        current_real_rss,
+        current_rss_file,
+        current_real_rss > current_rss_file ? current_real_rss - current_rss_file : 0,
+    };
+}
+
 MemoryTracker::~MemoryTracker()
 {
     // Destruction of global root mem tracker means the process is shutting down, log and metrics models may have been released!
@@ -133,9 +165,10 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
     {
         Int64 current_limit = limit.load(std::memory_order_relaxed);
         Int64 current_accuracy_diff_for_test = accuracy_diff_for_test.load(std::memory_order_relaxed);
+        const auto rss_info = getMemoryControlRss();
         if (unlikely(
                 !next.load(std::memory_order_relaxed) && current_accuracy_diff_for_test && current_limit
-                && real_rss > current_accuracy_diff_for_test + current_limit))
+                && rss_info.memory_control_rss > current_accuracy_diff_for_test + current_limit))
         {
             DB::FmtBuffer fmt_buf;
             fmt_buf.append("Memory tracker accuracy ");
@@ -144,10 +177,13 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
                 fmt_buf.fmtAppend(" {}", tmp_decr);
 
             fmt_buf.fmtAppend(
-                ": fault injected. real_rss ({}) is much larger than limit ({}). Debug info, threads of process: {}, "
+                ": fault injected. memory_control_rss ({}) is much larger than limit ({}). Debug info, "
+                "real_rss: {}, rss_file: {}, threads of process: {}, "
                 "memory usage tracked by ProcessList: peak {}, current {}. Virtual memory size: {}.",
-                formatReadableSizeWithBinarySuffix(real_rss),
+                formatReadableSizeWithBinarySuffix(rss_info.memory_control_rss),
                 formatReadableSizeWithBinarySuffix(current_limit),
+                formatReadableSizeWithBinarySuffix(rss_info.real_rss),
+                formatReadableSizeWithBinarySuffix(rss_info.rss_file),
                 proc_num_threads.load(),
                 (root_of_query_mem_trackers ? formatReadableSizeWithBinarySuffix(root_of_query_mem_trackers->peak)
                                             : "0"),
@@ -181,7 +217,7 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
         Int64 current_bytes_rss_larger_than_limit = bytes_rss_larger_than_limit.load(std::memory_order_relaxed);
         bool is_rss_too_large
             = (!next.load(std::memory_order_relaxed) && current_limit
-               && real_rss > current_limit + current_bytes_rss_larger_than_limit
+               && rss_info.memory_control_rss > current_limit + current_bytes_rss_larger_than_limit
                && will_be > baseline_of_query_mem_tracker);
         if (is_rss_too_large || unlikely(current_limit && will_be > current_limit))
         {
@@ -207,11 +243,14 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
             else
             { // RSS too large
                 fmt_buf.fmtAppend(
-                    " exceeded caused by 'RSS(Resident Set Size) much larger than limit' : process memory size would "
-                    "be {} for (attempt to allocate chunk of {} bytes), limit of memory for data computing : {}.",
-                    formatReadableSizeWithBinarySuffix(real_rss),
+                    " exceeded caused by 'memory_control_rss much larger than limit' : memory_control_rss would "
+                    "be {} for (attempt to allocate chunk of {} bytes), limit of memory for data computing : {}. "
+                    "real_rss={}, rss_file={}.",
+                    formatReadableSizeWithBinarySuffix(rss_info.memory_control_rss),
                     size,
-                    formatReadableSizeWithBinarySuffix(current_limit));
+                    formatReadableSizeWithBinarySuffix(current_limit),
+                    formatReadableSizeWithBinarySuffix(rss_info.real_rss),
+                    formatReadableSizeWithBinarySuffix(rss_info.rss_file));
             }
 
             fmt_buf.fmtAppend(" Memory Usage of Storage: {}", storageMemoryUsageDetail());

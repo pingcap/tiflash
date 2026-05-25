@@ -16,6 +16,8 @@
 #include <common/config_common.h> // Included for `USE_JEMALLOC`
 
 #include <fstream>
+#include <sstream>
+#include <string_view>
 
 #if USE_JEMALLOC
 #include <jemalloc/jemalloc.h>
@@ -38,45 +40,76 @@ std::tuple<uint64_t *, uint64_t *> getAllocDeallocPtr()
 #endif
 }
 
-bool process_mem_usage(double & resident_set, Int64 & cur_proc_num_threads, UInt64 & cur_virt_size)
+static bool parseStatusFieldKb(const std::string & line, std::string_view field_name, UInt64 & out_kb)
 {
-    resident_set = 0.0;
-
-    // 'file' stat seems to give the most reliable results
-    std::ifstream stat_stream("/proc/self/stat", std::ios_base::in);
-    // if "/proc/self/stat" is not supported
-    if (!stat_stream.is_open())
+    if (line.rfind(field_name, 0) != 0)
         return false;
 
-    // dummy vars for leading entries in stat that we don't care about
-    std::string pid, comm, state, ppid, pgrp, session, tty_nr;
-    std::string tpgid, flags, minflt, cminflt, majflt, cmajflt;
-    std::string utime, stime, cutime, cstime, priority, nice;
-    std::string itrealvalue, starttime;
+    const auto colon_pos = line.find(':');
+    if (colon_pos == std::string::npos)
+        return false;
 
-    // the field we want
-    Int64 rss;
+    std::istringstream iss(line.substr(colon_pos + 1));
+    iss >> out_kb;
+    return !iss.fail();
+}
 
-    stat_stream >> pid >> comm >> state >> ppid >> pgrp >> session >> tty_nr >> tpgid >> flags >> minflt >> cminflt
-        >> majflt >> cmajflt >> utime >> stime >> cutime >> cstime >> priority >> nice >> cur_proc_num_threads
-        >> itrealvalue >> starttime >> cur_virt_size >> rss; // don't care about the rest
+static bool parseStatusFieldInt(const std::string & line, std::string_view field_name, Int64 & out_value)
+{
+    if (line.rfind(field_name, 0) != 0)
+        return false;
 
-    stat_stream.close();
+    const auto colon_pos = line.find(':');
+    if (colon_pos == std::string::npos)
+        return false;
 
-    Int64 page_size_kb = sysconf(_SC_PAGE_SIZE) / 1024; // in case x86-64 is configured to use 2MB pages
-    resident_set = rss * page_size_kb;
+    std::istringstream iss(line.substr(colon_pos + 1));
+    iss >> out_value;
+    return !iss.fail();
+}
+
+bool process_mem_usage(
+    UInt64 & resident_bytes,
+    UInt64 & rss_file_bytes,
+    Int64 & cur_proc_num_threads,
+    UInt64 & cur_virt_size)
+{
+    std::ifstream status_stream("/proc/self/status", std::ios_base::in);
+    if (!status_stream.is_open())
+        return false;
+
+    UInt64 vm_rss_kb = 0;
+    UInt64 rss_file_kb = 0;
+    UInt64 vm_size_kb = 0;
+    Int64 threads = 1;
+
+    std::string line;
+    while (std::getline(status_stream, line))
+    {
+        if (parseStatusFieldKb(line, "VmRSS", vm_rss_kb))
+            resident_bytes = vm_rss_kb * 1024;
+        if (parseStatusFieldKb(line, "RssFile", rss_file_kb))
+            rss_file_bytes = rss_file_kb * 1024;
+        if (parseStatusFieldKb(line, "VmSize", vm_size_kb))
+            cur_virt_size = vm_size_kb * 1024;
+        if (parseStatusFieldInt(line, "Threads", threads))
+            cur_proc_num_threads = threads;
+    }
+
     return true;
 }
 
 ProcessMemoryUsage get_process_mem_usage()
 {
-    double resident_set;
+    UInt64 raw_rss = 0;
+    UInt64 rss_file = 0;
     Int64 cur_proc_num_threads = 1;
     UInt64 cur_virt_size = 0;
-    process_mem_usage(resident_set, cur_proc_num_threads, cur_virt_size);
-    resident_set *= 1024; // transfrom from KB to bytes
+    process_mem_usage(raw_rss, rss_file, cur_proc_num_threads, cur_virt_size);
+
     return ProcessMemoryUsage{
-        static_cast<size_t>(resident_set),
+        raw_rss,
+        rss_file,
         cur_virt_size,
         cur_proc_num_threads,
     };

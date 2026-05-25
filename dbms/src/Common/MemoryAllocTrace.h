@@ -25,6 +25,7 @@ std::tuple<uint64_t *, uint64_t *> getAllocDeallocPtr();
 struct ProcessMemoryUsage
 {
     UInt64 resident_bytes;
+    UInt64 rss_file_bytes;
     UInt64 cur_virt_bytes;
     Int64 cur_proc_num_threads;
 };
