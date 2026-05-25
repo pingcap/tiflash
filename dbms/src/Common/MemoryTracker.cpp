@@ -120,6 +120,12 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
       */
     Int64 will_be = size + amount.fetch_add(size, std::memory_order_relaxed);
     reportAmount();
+    auto rollbackCurrentAlloc = [&] {
+        amount.fetch_sub(size, std::memory_order_relaxed);
+        reportAmount();
+        if (!next.load(std::memory_order_relaxed))
+            CurrentMetrics::sub(metric, size);
+    };
 
     if (!next.load(std::memory_order_relaxed))
     {
@@ -143,6 +149,8 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
                 !next.load(std::memory_order_relaxed) && current_accuracy_diff_for_test && current_limit
                 && effective_rss > current_accuracy_diff_for_test + current_limit))
         {
+            rollbackCurrentAlloc();
+
             DB::FmtBuffer fmt_buf;
             fmt_buf.append("Memory tracker accuracy ");
             const char * tmp_decr = description.load();
@@ -171,8 +179,7 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
         /// In this case, it doesn't matter.
         if (unlikely(fault_probability && drand48() < fault_probability))
         {
-            amount.fetch_sub(size, std::memory_order_relaxed);
-            reportAmount();
+            rollbackCurrentAlloc();
 
             DB::FmtBuffer fmt_buf;
             fmt_buf.append("Memory tracker");
@@ -187,12 +194,19 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
             fmt_buf.fmtAppend(" Memory Usage of Storage: {}", storageMemoryUsageDetail());
             throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
         }
-        checkRssLimitImpl(/* require_tracked_growth */ true, will_be, size);
+        try
+        {
+            checkRssLimitImpl(/* require_tracked_growth */ true, will_be, size);
+        }
+        catch (...)
+        {
+            rollbackCurrentAlloc();
+            throw;
+        }
         if (unlikely(current_limit && will_be > current_limit))
         {
             DB::GET_METRIC(tiflash_memory_exceed_quota_count).Increment();
-            amount.fetch_sub(size, std::memory_order_relaxed);
-            reportAmount();
+            rollbackCurrentAlloc();
 
             DB::FmtBuffer fmt_buf;
             fmt_buf.append("Memory limit");
