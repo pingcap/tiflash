@@ -522,24 +522,20 @@ RNProxyReaderPtr RNProxyReader::createProxyReader(
     }
     else if (columnar_reader.error_type == ColumnarReaderErrorType::PdClientError)
     {
-        auto error_msg = String(columnar_reader.error.buff.data, columnar_reader.error.buff.len);
-        LOG_WARNING(log, "create columnar reader failed, pd client error: {}", error_msg);
-        throw Exception(fmt::format("pd client error: {}", error_msg), ErrorCodes::COLUMNAR_SNAPSHOT_ERROR);
+        auto error_msg = fmt::format(
+            "create columnar reader failed, pd client error: {}",
+            String(columnar_reader.error.buff.data, columnar_reader.error.buff.len));
+        LOG_WARNING(log, "{}", error_msg);
+        throw Exception(ErrorCodes::COLUMNAR_SNAPSHOT_ERROR, "{}", error_msg);
     }
     else if (columnar_reader.error_type != ColumnarReaderErrorType::OK)
     {
-        auto error_msg = String(columnar_reader.error.buff.data, columnar_reader.error.buff.len);
-        LOG_WARNING(
-            log,
-            "create columnar reader failed, error_type={}, error={}",
-            uint8_t(columnar_reader.error_type),
-            error_msg);
-        throw Exception(
-            fmt::format(
-                "columnar reader error_type={}, error={}",
-                static_cast<uint8_t>(columnar_reader.error_type),
-                error_msg),
-            ErrorCodes::COLUMNAR_SNAPSHOT_ERROR);
+        auto error_msg = fmt::format(
+            "create columnar reader failed, error_type={} error={}",
+            static_cast<uint8_t>(columnar_reader.error_type),
+            String(columnar_reader.error.buff.data, columnar_reader.error.buff.len));
+        LOG_WARNING(log, "{}", error_msg);
+        throw Exception(ErrorCodes::COLUMNAR_SNAPSHOT_ERROR, "{}", error_msg);
     }
 
     // Create input stream.
