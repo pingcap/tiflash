@@ -380,21 +380,23 @@ RNProxyReaderPtr RNProxyReader::createProxyReader(
     tipb::TableInfo table_info;
     bool is_partition_scan = table_scan.isPartitionTableScan();
     const auto & tidb_columns = table_scan.getColumns();
+    const auto should_skip_column_for_columnar_table_info = [&](ColumnID column_id) {
+        // _tidb_tid is filled locally by TiFlash, consistent with genColumnDefinesForDisaggregatedRead().
+        if (column_id == MutSup::extra_table_id_col_id)
+            return true;
+        // Generated columns are not stored in kvengine; executeGeneratedColumnPlaceholder fills them later.
+        for (const auto & ci : tidb_columns)
+        {
+            if (ci.id == column_id && ci.hasGeneratedColumnFlag())
+                return true;
+        }
+        return false;
+    };
     if (is_partition_scan)
     {
         for (const auto & column : table_scan_pb.partition_table_scan().columns())
         {
-            const auto column_id = column.column_id();
-            bool is_generated_column = false;
-            for (const auto & ci : tidb_columns)
-            {
-                if (ci.id == column_id && ci.hasGeneratedColumnFlag())
-                {
-                    is_generated_column = true;
-                    break;
-                }
-            }
-            if (is_generated_column)
+            if (should_skip_column_for_columnar_table_info(column.column_id()))
                 continue;
             *table_info.add_columns() = column;
         }
@@ -403,17 +405,7 @@ RNProxyReaderPtr RNProxyReader::createProxyReader(
     {
         for (const auto & column : table_scan_pb.tbl_scan().columns())
         {
-            const auto column_id = column.column_id();
-            bool is_generated_column = false;
-            for (const auto & ci : tidb_columns)
-            {
-                if (ci.id == column_id && ci.hasGeneratedColumnFlag())
-                {
-                    is_generated_column = true;
-                    break;
-                }
-            }
-            if (is_generated_column)
+            if (should_skip_column_for_columnar_table_info(column.column_id()))
                 continue;
             *table_info.add_columns() = column;
         }
