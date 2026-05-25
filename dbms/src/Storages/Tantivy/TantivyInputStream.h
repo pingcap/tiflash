@@ -98,10 +98,31 @@ public:
 protected:
     Block readFromS3(bool is_count)
     {
-        auto return_fields = getFields(return_columns);
         auto shard_info = query_shard_info;
         LOG_DEBUG(log, "shard info: {}", shard_info.toString());
         auto key_ranges = getKeyRanges(shard_info.key_ranges);
+
+        const auto shard = ::Shard{
+            .keyspace_id = keyspace_id,
+            .index_id = index_id,
+            .shard_id = shard_info.shard_id,
+            .shard_epoch = shard_info.shard_epoch,
+        };
+
+        RUNTIME_CHECK(shards_snapshot != nullptr);
+
+        Block res(return_columns);
+        if (is_count)
+        {
+            CountResult count_result = count(**shards_snapshot, shard, key_ranges, match_expr, read_ts);
+
+            RUNTIME_CHECK_MSG(return_columns.size() == 1, "count search should return one column");
+            auto & column = res.getByPosition(0).column->assumeMutableRef();
+            column.insert(Int64(count_result.count));
+            return res;
+        }
+
+        auto return_fields = getFields(return_columns);
 
         rust::Vec<rust::String> tici_sort_column_names;
         for (const auto & sort_column_id : sort_column_ids)
@@ -120,37 +141,9 @@ protected:
             .sort_field_names = std::move(tici_sort_column_names),
             .is_asc = std::move(tici_sort_column_asc),
         };
-        if (is_count)
-            return_fields = {};
 
-        RUNTIME_CHECK(shards_snapshot != nullptr);
-        SearchResult search_result = search(
-            **shards_snapshot,
-            {
-                .keyspace_id = keyspace_id,
-                .index_id = index_id,
-                .shard_id = shard_info.shard_id,
-                .shard_epoch = shard_info.shard_epoch,
-            },
-            key_ranges,
-            return_fields,
-            match_expr,
-            search_param,
-            read_ts);
-
-        Block res(return_columns);
-        if (is_count)
-        {
-            RUNTIME_CHECK_MSG(return_columns.size() == 1, "count search should return one column");
-            auto & column = res.getByPosition(0).column->assumeMutableRef();
-            column.insert(Int64(search_result.count));
-            return res;
-        }
-
-        RUNTIME_CHECK_MSG(
-            search_result.result_type == result_type_rows(),
-            "expected row search result, got type {}",
-            search_result.result_type);
+        SearchResult search_result
+            = search(**shards_snapshot, shard, key_ranges, return_fields, match_expr, search_param, read_ts);
 
         const auto row_count = static_cast<size_t>(search_result.row_count);
         if (row_count == 0)
