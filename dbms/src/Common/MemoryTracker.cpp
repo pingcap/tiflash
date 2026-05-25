@@ -120,7 +120,7 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
       */
     Int64 will_be = size + amount.fetch_add(size, std::memory_order_relaxed);
     reportAmount();
-    auto rollbackCurrentAlloc = [&] {
+    auto rollback_current_alloc = [&] {
         amount.fetch_sub(size, std::memory_order_relaxed);
         reportAmount();
         if (!next.load(std::memory_order_relaxed))
@@ -149,7 +149,7 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
                 !next.load(std::memory_order_relaxed) && current_accuracy_diff_for_test && current_limit
                 && effective_rss > current_accuracy_diff_for_test + current_limit))
         {
-            rollbackCurrentAlloc();
+            rollback_current_alloc();
 
             DB::FmtBuffer fmt_buf;
             fmt_buf.append("Memory tracker accuracy ");
@@ -179,7 +179,7 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
         /// In this case, it doesn't matter.
         if (unlikely(fault_probability && drand48() < fault_probability))
         {
-            rollbackCurrentAlloc();
+            rollback_current_alloc();
 
             DB::FmtBuffer fmt_buf;
             fmt_buf.append("Memory tracker");
@@ -200,13 +200,13 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
         }
         catch (...)
         {
-            rollbackCurrentAlloc();
+            rollback_current_alloc();
             throw;
         }
         if (unlikely(current_limit && will_be > current_limit))
         {
             DB::GET_METRIC(tiflash_memory_exceed_quota_count).Increment();
-            rollbackCurrentAlloc();
+            rollback_current_alloc();
 
             DB::FmtBuffer fmt_buf;
             fmt_buf.append("Memory limit");
