@@ -59,7 +59,7 @@ public:
         RegionID region_id,
         RegionVersion region_ver,
         UInt64 region_conf_ver,
-        const std::vector<std::tuple<TableID, pingcap::coprocessor::KeyRanges>> & partition_table_ranges,
+        const std::vector<std::tuple<TableID, pingcap::coprocessor::KeyRanges>> & physical_table_ranges,
         UInt64 start_ts,
         const TiDBTableScan & table_scan,
         const FilterConditions & filter_conditions,

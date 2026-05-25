@@ -341,7 +341,7 @@ RNProxyReaderPtr RNProxyReader::createProxyReader(
             normalizeTimestampCompareDateTimeLiteralToUTC(*pushed_down_filters->Mutable(i), timezone_info);
     }
     auto table_scan_data = table_scan_pb.SerializeAsString();
-    BaseBuffView table_scan_view = BaseBuffView{table_scan_data.data(), table_scan_data.size()};
+    auto table_scan_view = BaseBuffView{table_scan_data.data(), table_scan_data.size()};
     auto conditions = filter_conditions.conditions;
     for (int i = 0; i < conditions.size(); ++i)
         normalizeTimestampCompareDateTimeLiteralToUTC(*conditions.Mutable(i), timezone_info);
@@ -368,7 +368,7 @@ RNProxyReaderPtr RNProxyReader::createProxyReader(
         tables_range_data.append(reinterpret_cast<const char *>(&ranges_data_size), sizeof(ranges_data_size));
         tables_range_data.append(ranges_data.data(), ranges_data.size());
     }
-    BaseBuffView tables_range_view = BaseBuffView{tables_range_data.data(), tables_range_data.size()};
+    auto tables_range_view = BaseBuffView{tables_range_data.data(), tables_range_data.size()};
     String filter_conditions_data;
     for (const auto & condition : conditions)
     {
@@ -379,14 +379,14 @@ RNProxyReaderPtr RNProxyReader::createProxyReader(
     }
     tipb::TableInfo table_info;
     bool is_partition_scan = table_scan.isPartitionTableScan();
-    const auto & tidbColumns = table_scan.getColumns();
+    const auto & tidb_columns = table_scan.getColumns();
     if (is_partition_scan)
     {
         for (const auto & column : table_scan_pb.partition_table_scan().columns())
         {
             const auto column_id = column.column_id();
             bool is_generated_column = false;
-            for (const auto & ci : tidbColumns)
+            for (const auto & ci : tidb_columns)
             {
                 if (ci.id == column_id && ci.hasGeneratedColumnFlag())
                 {
@@ -405,7 +405,7 @@ RNProxyReaderPtr RNProxyReader::createProxyReader(
         {
             const auto column_id = column.column_id();
             bool is_generated_column = false;
-            for (const auto & ci : tidbColumns)
+            for (const auto & ci : tidb_columns)
             {
                 if (ci.id == column_id && ci.hasGeneratedColumnFlag())
                 {
@@ -419,14 +419,14 @@ RNProxyReaderPtr RNProxyReader::createProxyReader(
         }
     }
     auto table_info_data = table_info.SerializeAsString();
-    BaseBuffView columns = BaseBuffView{table_info_data.data(), table_info_data.size()};
-    BaseBuffView filter_conditions_view = BaseBuffView{filter_conditions_data.data(), filter_conditions_data.size()};
-    auto ann_query_info_pb = table_scan.getANNQueryInfo();
-    auto fts_query_info_pb = table_scan.getFTSQueryInfo();
+    auto columns = BaseBuffView{table_info_data.data(), table_info_data.size()};
+    auto filter_conditions_view = BaseBuffView{filter_conditions_data.data(), filter_conditions_data.size()};
+    const auto & ann_query_info_pb = table_scan.getANNQueryInfo();
+    const auto & fts_query_info_pb = table_scan.getFTSQueryInfo();
     auto ann_query_info_data = ann_query_info_pb.SerializeAsString();
     auto fts_query_info_data = fts_query_info_pb.SerializeAsString();
-    BaseBuffView ann_query_info_view = BaseBuffView{ann_query_info_data.data(), ann_query_info_data.size()};
-    BaseBuffView fts_query_info_view = BaseBuffView{fts_query_info_data.data(), fts_query_info_data.size()};
+    auto ann_query_info_view = BaseBuffView{ann_query_info_data.data(), ann_query_info_data.size()};
+    auto fts_query_info_view = BaseBuffView{fts_query_info_data.data(), fts_query_info_data.size()};
     const Context & global_ctx = context.getGlobalContext();
     auto * cluster = global_ctx.getTMTContext().getKVCluster();
     const TiFlashRaftProxyHelper * proxy_helper = global_ctx.getSharedContextDisagg()->getColumnarProxyHelper();
@@ -470,7 +470,7 @@ RNProxyReaderPtr RNProxyReader::createProxyReader(
                 region_id_ver = std::to_string(region.id()) + ":" + std::to_string(region_ver) + ":"
                     + std::to_string(region.region_epoch().conf_ver());
             }
-            auto _guard = std::lock_guard(output_lock);
+            auto guard = std::lock_guard(output_lock);
             cluster->region_cache->dropRegion(region_ver_id);
             LOG_WARNING(
                 log,
@@ -506,7 +506,7 @@ RNProxyReaderPtr RNProxyReader::createProxyReader(
                     std::to_string(region_id),
                     region_error.ShortDebugString());
             }
-            auto _guard = std::lock_guard(output_lock);
+            auto guard = std::lock_guard(output_lock);
             cluster->region_cache->dropRegion(region_ver_id);
             throw RegionException(
                 std::move(unavailable_regions),
@@ -523,7 +523,7 @@ RNProxyReaderPtr RNProxyReader::createProxyReader(
         pingcap::kv::Backoffer bo(pingcap::kv::copNextMaxBackoff);
         std::vector<uint64_t> pushed;
         std::vector<pingcap::kv::LockPtr> locks{std::make_shared<pingcap::kv::Lock>(lock_info)};
-        auto _guard = std::lock_guard(output_lock);
+        auto guard = std::lock_guard(output_lock);
         auto before_expired = cluster->lock_resolver->resolveLocks(bo, start_ts, locks, pushed);
         LOG_WARNING(log, "Finished resolve locks, before_expired={}", before_expired);
         throw Exception("lock error", ErrorCodes::COLUMNAR_SNAPSHOT_ERROR);
@@ -543,7 +543,10 @@ RNProxyReaderPtr RNProxyReader::createProxyReader(
             uint8_t(columnar_reader.error_type),
             error_msg);
         throw Exception(
-            fmt::format("columnar reader error_type={}, error={}", uint8_t(columnar_reader.error_type), error_msg),
+            fmt::format(
+                "columnar reader error_type={}, error={}",
+                static_cast<uint8_t>(columnar_reader.error_type),
+                error_msg),
             ErrorCodes::COLUMNAR_SNAPSHOT_ERROR);
     }
 
@@ -636,7 +639,7 @@ std::vector<RNProxyReadTaskPtr> RNProxyReadTask::buildProxyReadTask(
     pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
     pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
     auto & region_cache = cluster->region_cache;
-    for (auto idx = 0; idx < int(ranges_for_each_physical_table.size()); idx++)
+    for (auto idx = 0; idx < static_cast<int>(ranges_for_each_physical_table.size()); idx++)
     {
         const auto physical_table_id = physical_table_ids[idx];
         const auto ranges = ranges_for_each_physical_table[idx];
@@ -826,7 +829,7 @@ Block RNProxyInputStream::readImpl([[maybe_unused]] FilterPtr & res_filter, [[ma
 
     TableID physical_table_id = -1;
     Block header = getHeader();
-    const ColumnsWithTypeAndName col_type_and_name = header.getColumnsWithTypeAndName();
+    const ColumnsWithTypeAndName & col_type_and_name = header.getColumnsWithTypeAndName();
     // Construct block from proxy column data.
     MutableColumns columns = header.cloneEmptyColumns();
     for (UInt32 i = 0; i < col_type_and_name.size(); ++i)
@@ -961,11 +964,11 @@ OperatorStatus RNProxySourceOp::executeIOImpl()
     }
     else
     {
-        if (current_reader_idx == Int32(task->getProxyReaders().size() - 1))
+        if (current_reader_idx == static_cast<Int32>(task->getProxyReaders().size() - 1))
         {
             done = true;
         }
-        else if (current_reader_idx < Int32(task->getProxyReaders().size() - 1))
+        else if (current_reader_idx < static_cast<Int32>(task->getProxyReaders().size() - 1))
         {
             ++current_reader_idx;
         }
