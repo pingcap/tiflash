@@ -49,17 +49,16 @@ if [[ -n "$ENABLE_NEXT_GEN" && "$ENABLE_NEXT_GEN" != "false" && "$ENABLE_NEXT_GE
 
     # run fullstack-tests
     wait_next_gen_columnar_env
-    ENV_ARGS="ENABLE_NEXT_GEN=true verbose=${verbose} "
+    ENV_ARGS="ENABLE_NEXT_GEN=true verbose=${verbose} continue_on_error=true"
     # most failpoints are expected to be set on the compute layer, use tiflash-cn0 to run tests
     ${COMPOSE} "${COMPOSE_FILES[@]}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test/sample.test"
     #${COMPOSE} "${COMPOSE_FILES[@]}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test-index"
-    #${COMPOSE} "${COMPOSE_FILES[@]}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test-next-gen/placement"
-    #${COMPOSE} "${COMPOSE_FILES[@]}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test2/clustered_index"
-    #${COMPOSE} "${COMPOSE_FILES[@]}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test2/dml"
-    #${COMPOSE} "${COMPOSE_FILES[@]}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test2/variables"
-    #${COMPOSE} "${COMPOSE_FILES[@]}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test2/mpp"
-    #${COMPOSE} "${COMPOSE_FILES[@]}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test/expr"
-    #${COMPOSE} "${COMPOSE_FILES[@]}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test/mpp"
+    ${COMPOSE} "${COMPOSE_FILES[@]}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test2/clustered_index"
+    ${COMPOSE} "${COMPOSE_FILES[@]}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test2/dml"
+    ${COMPOSE} "${COMPOSE_FILES[@]}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test2/variables"
+    ${COMPOSE} "${COMPOSE_FILES[@]}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test2/mpp"
+    ${COMPOSE} "${COMPOSE_FILES[@]}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test/expr"
+    ${COMPOSE} "${COMPOSE_FILES[@]}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test/mpp"
     ${COMPOSE} "${COMPOSE_FILES[@]}" down
     clean_data_log
 
