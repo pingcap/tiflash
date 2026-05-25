@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/BackgroundTask.h>
+#include <Common/MemoryAllocTrace.h>
 #include <Common/MemoryTracker.h>
 #include <ProcessMetrics/ProcessMetrics.h>
 
@@ -22,28 +23,6 @@ namespace DB
 {
 namespace
 {
-bool process_num_threads(Int64 & cur_proc_num_threads)
-{
-    // '/proc/self/stat' provides process thread count on Linux.
-    std::ifstream stat_stream("/proc/self/stat", std::ios_base::in);
-    if (!stat_stream.is_open())
-        return false;
-
-    std::string pid, comm, state, ppid, pgrp, session, tty_nr;
-    std::string tpgid, flags, minflt, cminflt, majflt, cmajflt;
-    std::string utime, stime, cutime, cstime, priority, nice;
-    std::string itrealvalue, starttime;
-    UInt64 cur_virt_size = 0;
-    Int64 rss = 0;
-
-    stat_stream >> pid >> comm >> state >> ppid >> pgrp >> session >> tty_nr >> tpgid >> flags >> minflt >> cminflt
-        >> majflt >> cmajflt >> utime >> stime >> cutime >> cstime >> priority >> nice >> cur_proc_num_threads
-        >> itrealvalue >> starttime >> cur_virt_size >> rss;
-
-    stat_stream.close();
-    return true;
-}
-
 bool isProcStatSupported()
 {
     std::ifstream stat_stream("/proc/self/stat", std::ios_base::in);
@@ -84,15 +63,14 @@ void CollectProcInfoBackgroundTask::memCheckJob()
 {
     try
     {
-        Int64 cur_proc_num_threads = 1;
         while (!end_syn)
         {
+            auto mem_usage = get_process_mem_usage();
             auto metrics = get_process_metrics();
-            process_num_threads(cur_proc_num_threads);
-            real_rss = static_cast<Int64>(metrics.rss);
+            real_rss = static_cast<Int64>(mem_usage.resident_bytes);
             real_rss_file = static_cast<Int64>(metrics.rss_file);
-            proc_num_threads = cur_proc_num_threads;
-            proc_virt_size = metrics.vsize;
+            proc_num_threads = mem_usage.cur_proc_num_threads;
+            proc_virt_size = mem_usage.cur_virt_bytes;
             baseline_of_query_mem_tracker = root_of_query_mem_trackers->get();
             usleep(100000); // sleep 100ms
         }
