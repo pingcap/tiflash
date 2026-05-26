@@ -55,8 +55,10 @@ extern const char force_not_clean_fap_on_destroy[];
 
 KVStore::KVStore(Context & context)
     : region_persister(
-        context.getSharedContextDisagg()->isDisaggregatedComputeMode() ? nullptr
-                                                                       : std::make_unique<RegionPersister>(context))
+        context.getSharedContextDisagg()->isDisaggregatedComputeMode()
+                && !context.getSharedContextDisagg()->use_columnar
+            ? nullptr
+            : std::make_unique<RegionPersister>(context))
     , log(Logger::get())
     // Eager RaftLog GC is only enabled under UniPS
     , eager_raft_log_gc_enabled(context.getPageStorageRunMode() == PageStorageRunMode::UNI_PS)

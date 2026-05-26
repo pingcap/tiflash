@@ -701,6 +701,7 @@ try
         config(),
         disagg_opt.mode,
         disagg_opt.use_autoscaler,
+        disagg_opt.use_columnar,
         STORAGE_FORMAT_CURRENT,
         settings,
         log);
@@ -942,6 +943,17 @@ try
             global_context->getPathPool(),
             storage_config.remote_cache_config.getPageCacheDir(),
             storage_config.remote_cache_config.getPageCapacity());
+    }
+
+    if (disagg_opt.use_columnar)
+    {
+        global_context->getSharedContextDisagg()->use_columnar = true;
+#if ENABLE_NEXT_GEN_COLUMNAR == 0
+        throw Exception(
+            ErrorCodes::NOT_IMPLEMENTED,
+            "Columnar storage is not supported in current build, please check the build configuration of TiFlash.");
+#endif
+        LOG_INFO(log, "Using columnar storage as upstream");
     }
 
     /// Initialize RateLimiter.
@@ -1194,9 +1206,14 @@ try
 
         // Start the proxy service, including the grpc service for raft and http status service
         proxy_machine.startProxyService(tmt_context, store_ident);
-        if (proxy_machine.isProxyRunnable())
+        if (proxy_machine.isProxyRunnable() && proxy_machine.isColumnar())
         {
-            const auto store_id = tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst);
+            LOG_INFO(log, "columnar proxy is ready to serve");
+        }
+        else if (proxy_machine.isProxyRunnable())
+        {
+            auto kvstore = tmt_context.getKVStore();
+            const auto store_id = kvstore->getStoreID(std::memory_order_seq_cst);
             if (is_disagg_compute_mode)
             {
                 // compute node do not need to handle read index

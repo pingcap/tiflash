@@ -16,7 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Common/TiFlashBuildInfo.h>
-#include <Common/config.h> // for ENABLE_NEXT_GEN
+#include <Common/config.h> // for ENABLE_NEXT_GEN_COLUMNAR/ENABLE_NEXT_GEN
 #include <Common/setThreadName.h>
 #include <Core/TiFlashDisaggregatedMode.h>
 #include <Interpreters/Settings.h>
@@ -27,6 +27,7 @@
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <fiu.h>
 
 #include <boost/noncopyable.hpp>
 #include <chrono>
@@ -54,11 +55,13 @@ struct TiFlashProxyConfig
         Poco::Util::LayeredConfiguration & config,
         const DisaggregatedMode disaggregated_mode,
         const bool use_autoscaler,
+        const bool use_columnar,
         const StorageFormatVersion & format_version,
         const Settings & settings,
         const LoggerPtr & log)
     {
-        is_proxy_runnable = tryParseFromConfig(config, disaggregated_mode, use_autoscaler, log);
+        is_proxy_runnable = tryParseFromConfig(config, disaggregated_mode, use_autoscaler, use_columnar, log);
+        is_columnar = use_columnar;
 
         // Enable unips according to `format_version`
         if (format_version.page == PageFormat::V4)
@@ -102,17 +105,20 @@ struct TiFlashProxyConfig
         for (const auto & [k, v] : val_map)
         {
             args.push_back(k.data());
-            args.push_back(v.data());
+            if (!v.empty())
+                args.push_back(v.data());
         }
         return args;
     }
 
     bool isProxyRunnable() const { return is_proxy_runnable; }
+    bool isColumnar() const { return is_columnar; }
 
     size_t getReadIndexRunnerCount() const { return read_index_runner_count; }
 
 private:
     TiFlashProxyConfig()
+        : read_index_runner_count(1)
     {
         // For test, bootstrap without proxy.
     }
@@ -127,13 +133,30 @@ private:
         const Poco::Util::LayeredConfiguration & config,
         const DisaggregatedMode disaggregated_mode,
         const bool use_autoscaler,
+        const bool use_columnar,
         const LoggerPtr & log)
     {
-        // tiflash_compute doesn't need proxy.
+        // for tiflash_compute with columnar and auto-scaler, we need to start the proxy with "init-only" args
+        bool init_only = false;
+        UNUSED(init_only);
+        // tiflash_compute doesn't need proxy except when using columnar.
         if (disaggregated_mode == DisaggregatedMode::Compute && use_autoscaler)
         {
-            LOG_INFO(log, "TiFlash Proxy will not start because AutoScale Disaggregated Compute Mode is specified.");
-            return false;
+            if (use_columnar)
+            {
+                LOG_INFO(
+                    log,
+                    "TiFlash Proxy will start because columnar is enabled with AutoScale Disaggregated Compute Mode "
+                    "specified.");
+                init_only = true;
+            }
+            else
+            {
+                LOG_INFO(
+                    log,
+                    "TiFlash Proxy will not start because AutoScale Disaggregated Compute Mode is specified.");
+                return false;
+            }
         }
 
         Poco::Util::AbstractConfiguration::Keys keys;
@@ -184,10 +207,14 @@ private:
                 args_map["labels"] = extra_label;
             }
 
-#if ENABLE_NEXT_GEN
+#if ENABLE_NEXT_GEN == 1
             if (config.has("blacklist_file"))
                 args_map["blacklist-file"] = config.getString("blacklist_file");
-#endif
+#endif // ENABLE_NEXT_GEN
+#if ENABLE_NEXT_GEN_COLUMNAR == 1
+            if (init_only)
+                args_map["init-only"] = "";
+#endif // ENABLE_NEXT_GEN_COLUMNAR
 
             for (auto && [k, v] : args_map)
                 val_map.emplace("--" + k, std::move(v));
@@ -197,6 +224,7 @@ private:
 
     std::unordered_map<std::string, std::string> val_map;
     bool is_proxy_runnable = false;
+    bool is_columnar = false;
     size_t read_index_runner_count;
 };
 
@@ -287,6 +315,10 @@ struct ProxyStateMachine
         std::optional<raft_serverpb::StoreIdent> & store_ident,
         size_t memory_limit)
     {
+        // Columnar does not rely on kvstore
+        if (proxy_conf.isColumnar())
+            return;
+
         auto kvstore = tmt_context.getKVStore();
         if (store_ident)
         {
@@ -341,9 +373,16 @@ struct ProxyStateMachine
 
         // proxy update store-id before status set `RaftProxyStatus::Running`
         assert(tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Running);
-        const auto store_id = tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst);
+
+        // Columnar does not rely on kvstore
+        if (proxy_conf.isColumnar())
+            return;
+
+        // Check the store_id in KVStore is same as the store_id in StoreIdent, to make sure the proxy and KVStore is correctly matched.
         if (store_ident)
         {
+            auto kvstore = tmt_context.getKVStore();
+            const auto store_id = kvstore->getStoreID(std::memory_order_seq_cst);
             RUNTIME_ASSERT(
                 store_id == store_ident->store_id(),
                 log,
@@ -356,6 +395,10 @@ struct ProxyStateMachine
     void waitProxyServiceReady(TMTContext & tmt_context, std::atomic_size_t & terminate_signals_counter) const
     {
         if (!proxy_conf.isProxyRunnable())
+            return;
+
+        // Columnar proxy does not need to execute read index, so it is ready once the proxy is running.
+        if (proxy_conf.isColumnar())
             return;
 
         // If set 0, DO NOT enable read-index worker
@@ -372,7 +415,7 @@ struct ProxyStateMachine
     }
 
     // Set KVStore to running, so that it could handle read index requests.
-    void runKVStore(TMTContext & tmt_context) const { tmt_context.setStatusRunning(); }
+    static void runKVStore(TMTContext & tmt_context) { tmt_context.setStatusRunning(); }
 
     /// Stop all services in TMTContext and ReadIndexWorkers.
     /// Then, inform proxy to stop by setting `tiflash_instance_wrap.status`.
@@ -390,13 +433,15 @@ struct ProxyStateMachine
         }
         LOG_INFO(log, "Set store context status Stopping");
         tmt_context.setStatusStopping();
+        if (auto kvstore = tmt_context.getKVStore(); kvstore != nullptr)
         {
             // Wait until there is no read-index task.
-            while (tmt_context.getKVStore()->getReadIndexEvent())
+            while (kvstore->getReadIndexEvent())
                 std::this_thread::sleep_for(std::chrono::milliseconds(200));
         }
         tmt_context.setStatusTerminated();
-        tmt_context.getKVStore()->stopReadIndexWorkers();
+        if (auto kvstore = tmt_context.getKVStore(); kvstore != nullptr)
+            kvstore->stopReadIndexWorkers();
         LOG_INFO(log, "Set store context status Terminated");
         {
             // update status and let proxy stop all services except encryption.
@@ -441,6 +486,7 @@ struct ProxyStateMachine
     }
 
     bool isProxyRunnable() const { return proxy_conf.isProxyRunnable(); }
+    bool isColumnar() const { return proxy_conf.isColumnar(); }
 
     bool isProxyHelperInited() const { return tiflash_instance_wrap.proxy_helper != nullptr; }
 
