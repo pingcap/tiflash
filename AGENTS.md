@@ -128,6 +128,15 @@ For more detailed information on specific subsystems, refer to:
   - Search for `SyncPointCtl` or `SYNC_FOR` for syncpoints in the code.
 - **Build artifacts:** If `compile_commands.json` is missing, ensure you configured with a preset.
 
+## 🔀 Issues & Pull Requests
+
+When creating an **issue** or **pull request**, read the repo templates first and follow their structure:
+
+- **Issue:** `.github/ISSUE_TEMPLATE/` — pick the template that matches the request (bug, enhancement, feature, question, performance).
+- **PR:** `.github/pull_request_template.md` — use it for the PR title/body, checklists, and release note.
+
+Typical fork workflow: branch from `upstream/master`, push to `origin`, open the PR against `pingcap/tiflash` (`master`).
+
 ## 📖 References
 - `docs/DEVELOPMENT.md`: General engineering practices.
 - `docs/design/`: Design documents for major features.
