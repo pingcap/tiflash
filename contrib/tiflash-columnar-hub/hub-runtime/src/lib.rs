@@ -60,13 +60,6 @@ pub(crate) fn proxy_version_info() -> String {
     )
 }
 
-pub(crate) fn log_columnar_hub_info() {
-    info!("Welcome to TiFlash Columnar");
-    for line in proxy_version_info().lines() {
-        info!("{}", line);
-    }
-}
-
 #[no_mangle]
 pub unsafe extern "C" fn print_raftstore_proxy_version() {
     println!("{}", proxy_version_info());

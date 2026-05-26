@@ -26,6 +26,25 @@ fn main() {
     println!("cargo:rustc-env=CLOUD_STORAGE_ENGINE_GIT_HASH={hash}");
 }
 
+fn extract_git_hash_from_source(source: &str) -> Option<String> {
+    if let Some(hash_start) = source.rfind('#') {
+        let hash = source[hash_start + 1..].trim_end_matches('"');
+        if !hash.is_empty() {
+            return Some(hash.to_string());
+        }
+    }
+
+    if let Some(rev_start) = source.find("?rev=") {
+        let rev_part = &source[rev_start + "?rev=".len()..];
+        let hash = rev_part.split('#').next()?.trim_end_matches('"');
+        if !hash.is_empty() {
+            return Some(hash.to_string());
+        }
+    }
+
+    None
+}
+
 fn extract_kvengine_git_hash(content: &str) -> Option<String> {
     for block in content.split("[[package]]") {
         if !block.contains("name = \"kvengine\"") {
@@ -35,10 +54,8 @@ fn extract_kvengine_git_hash(content: &str) -> Option<String> {
             let Some(source) = line.strip_prefix("source = \"") else {
                 continue;
             };
-            if let Some(rev_start) = source.find("?rev=") {
-                let rev_part = &source[rev_start + "?rev=".len()..];
-                let hash = rev_part.split('#').next()?.trim_end_matches('"');
-                return Some(hash.to_string());
+            if let Some(hash) = extract_git_hash_from_source(source) {
+                return Some(hash);
             }
         }
     }
@@ -50,12 +67,26 @@ mod tests {
     use super::extract_kvengine_git_hash;
 
     #[test]
-    fn test_extract_kvengine_git_hash() {
+    fn test_extract_kvengine_git_hash_from_rev() {
         let lock = r#"
 [[package]]
 name = "kvengine"
 version = "0.0.1"
 source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?rev=a9d93252f2ad0cba95eec51a857cd867cd5e6567#a9d93252f2ad0cba95eec51a857cd867cd5e6567"
+"#;
+        assert_eq!(
+            extract_kvengine_git_hash(lock),
+            Some("a9d93252f2ad0cba95eec51a857cd867cd5e6567".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_kvengine_git_hash_from_branch() {
+        let lock = r#"
+[[package]]
+name = "kvengine"
+version = "0.0.1"
+source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#a9d93252f2ad0cba95eec51a857cd867cd5e6567"
 "#;
         assert_eq!(
             extract_kvengine_git_hash(lock),
