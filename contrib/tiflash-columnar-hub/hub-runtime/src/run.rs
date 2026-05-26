@@ -517,6 +517,13 @@ fn init_hub_logger(config: &ConfigFile) {
     }
 }
 
+fn log_columnar_hub_info() {
+    info!("Welcome to TiFlash Columnar");
+    for line in crate::proxy_version_info().lines() {
+        info!("{}", line);
+    }
+}
+
 fn build_cli_app<'a, 'b>() -> App<'a, 'b> {
     App::new("TiFlash Columnar Hub")
         .arg(
@@ -1178,6 +1185,7 @@ pub unsafe fn run_proxy(argc: c_int, argv: *const *const c_char, helper_ptr: *co
     let mut config = load_config(matches.value_of_os("config"));
     let init_only = overwrite_config_with_cmd_args(&mut config, &matches);
     init_hub_logger(&config);
+    log_columnar_hub_info();
     config.security.override_from_env();
     config.dfs.override_from_env();
     config.pd.validate().unwrap();
