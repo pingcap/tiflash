@@ -20,7 +20,7 @@ source ./_env.sh
 
 set_branch
 
-set -xe
+set -x
 
 export verbose=${verbose:-"false"}
 
