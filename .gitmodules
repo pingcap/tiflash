@@ -157,4 +157,5 @@
 	url = git@github.com:tidbcloud/cloud-storage-engine.git
 [submodule "contrib/tici"]
 	path = contrib/tici
-	url = git@github.com:pingcap-inc/tici.git
+	url = git@github.com:glorv/tici.git
+	branch = evcit-redundant-reader
