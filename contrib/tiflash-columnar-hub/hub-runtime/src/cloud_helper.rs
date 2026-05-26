@@ -176,6 +176,16 @@ impl PdClientWithCache {
     pub fn get_security_mgr(&self) -> Arc<SecurityManager> {
         self.pd_client.get_security_mgr()
     }
+
+    pub fn get_region_bucket_keys(&self, region_id: u64, region_ver: u64) -> Vec<Vec<u8>> {
+        let Some(bucket_stat) = self.pd_client.get_buckets(region_id) else {
+            return Vec::new();
+        };
+        if bucket_stat.meta.region_epoch.get_version() != region_ver {
+            return Vec::new();
+        }
+        bucket_stat.meta.keys.clone()
+    }
 }
 
 #[derive(Clone)]
@@ -443,6 +453,10 @@ impl CloudHelper {
                 Err(Error::Other(e.to_string()))
             }
         }
+    }
+
+    pub fn get_region_bucket_keys(&self, region_id: u64, region_ver: u64) -> Vec<Vec<u8>> {
+        self.pd_client.get_region_bucket_keys(region_id, region_ver)
     }
 }
 

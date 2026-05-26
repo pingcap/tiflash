@@ -48,49 +48,24 @@ class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
 } // namespace DM
 
-class RNProxyReader;
-using RNProxyReaderPtr = std::shared_ptr<RNProxyReader>;
-class RNProxyReader : boost::noncopyable
+struct RNProxyReaderSharedContext;
+
+struct RNProxyReaderPlan
 {
-public:
-    static RNProxyReaderPtr createProxyReader(
-        const LoggerPtr & log,
-        const Context & context,
-        RegionID region_id,
-        RegionVersion region_ver,
-        UInt64 region_conf_ver,
-        const std::vector<std::tuple<TableID, pingcap::coprocessor::KeyRanges>> & physical_table_ranges,
-        UInt64 start_ts,
-        const TiDBTableScan & table_scan,
-        const FilterConditions & filter_conditions,
-        std::mutex & output_lock);
-
-    BlockInputStreamPtr getInputStream() const
-    {
-        RUNTIME_CHECK(input_stream != nullptr);
-        return input_stream;
-    }
-
-    RNProxyReader(BlockInputStreamPtr input_stream)
-        : input_stream(input_stream)
-    {}
-
-private:
-    BlockInputStreamPtr input_stream;
+    RegionID region_id;
+    RegionVersion region_ver;
+    UInt64 region_conf_ver;
+    std::vector<std::tuple<TableID, pingcap::coprocessor::KeyRanges>> physical_table_ranges;
 };
 
 class RNProxyReadTask;
 using RNProxyReadTaskPtr = std::shared_ptr<RNProxyReadTask>;
-class RNProxyReadTask : boost::noncopyable
+class RNProxyReadTask
+    : public boost::noncopyable
+    , public std::enable_shared_from_this<RNProxyReadTask>
 {
 public:
     using RemoteTableRange = std::pair<TableID, pingcap::coprocessor::KeyRanges>;
-    const std::vector<RNProxyReaderPtr> proxy_readers;
-
-    static RNProxyReadTaskPtr create(const std::vector<RNProxyReaderPtr> & proxy_readers)
-    {
-        return std::shared_ptr<RNProxyReadTask>(new RNProxyReadTask(proxy_readers));
-    }
 
     static std::vector<RNProxyReadTaskPtr> buildProxyReadTaskWithBackoff(
         const LoggerPtr & log,
@@ -110,13 +85,33 @@ public:
         const std::vector<RemoteTableRange> & remote_table_ranges,
         unsigned num_streams);
 
-    BlockInputStreams getInputStreams() const;
+    BlockInputStreams getInputStreams();
 
-    std::vector<RNProxyReaderPtr> getProxyReaders() { return proxy_readers; }
+    BlockInputStreamPtr createInputStream(size_t reader_index);
 
-    RNProxyReadTask(const std::vector<RNProxyReaderPtr> & proxy_readers)
-        : proxy_readers(proxy_readers)
-    {}
+    ColumnarReaderPtr createColumnarReaderWithBackoff(size_t reader_index) const;
+
+    size_t getReaderCount() const;
+
+    const Context & getContext() const;
+
+    const LoggerPtr & getLog() const;
+
+    const DM::ColumnDefines & getColumnsToRead() const;
+
+    int getExtraTableIDIndex() const;
+
+    TableID getLogicalTableID() const;
+
+    const String & getExecutorID() const;
+
+    RNProxyReadTask(
+        std::vector<RNProxyReaderPlan> reader_plans,
+        std::shared_ptr<RNProxyReaderSharedContext> shared_reader_context);
+
+private:
+    std::vector<RNProxyReaderPlan> reader_plans;
+    std::shared_ptr<RNProxyReaderSharedContext> shared_reader_context;
 };
 
 class RNProxyInputStream : public IProfilingBlockInputStream
@@ -139,9 +134,10 @@ public:
     struct Options
     {
         const Context & context;
-        std::string_view debug_tag;
+        LoggerPtr log;
+        RNProxyReadTaskPtr task;
+        size_t reader_index;
         const DM::ColumnDefines & columns_to_read;
-        ColumnarReaderPtr reader;
         int extra_table_id_index;
         TableID table_id;
         const String & executor_id;
@@ -149,8 +145,9 @@ public:
 
     explicit RNProxyInputStream(const Options & options)
         : context(options.context)
-        , log(Logger::get(options.debug_tag))
-        , reader(options.reader)
+        , log(options.log)
+        , task(options.task)
+        , reader_index(options.reader_index)
         , action(options.columns_to_read, options.extra_table_id_index)
         , table_id(options.table_id)
         , executor_id(options.executor_id)
@@ -162,9 +159,13 @@ public:
     static BlockInputStreamPtr create(const Options & options) { return std::make_shared<RNProxyInputStream>(options); }
 
 private:
+    void ensureReader();
+
     const Context & context;
     const LoggerPtr log;
-    ColumnarReaderPtr reader;
+    RNProxyReadTaskPtr task;
+    size_t reader_index;
+    std::optional<ColumnarReaderPtr> reader;
     AddExtraTableIDColumnTransformAction action;
     TableID table_id;
     const String executor_id;
@@ -185,23 +186,19 @@ class RNProxySourceOp : public SourceOp
 public:
     struct Options
     {
-        const Context & context;
-        std::string_view debug_tag;
         PipelineExecutorContext & exec_context;
-        const DM::ColumnDefines & columns_to_read;
         RNProxyReadTaskPtr task;
-        int extra_table_id_index;
     };
 
     explicit RNProxySourceOp(const Options & options)
-        : SourceOp(options.exec_context, String(options.debug_tag))
-        , context(options.context)
-        , log(Logger::get(options.debug_tag))
+        : SourceOp(options.exec_context, options.task->getLog()->identifier())
+        , context(options.task->getContext())
+        , log(options.task->getLog())
         , task(options.task)
-        , action(options.columns_to_read, options.extra_table_id_index)
     {
-        // Keep header aligned with genNamesAndTypesForTableScan when TiDB requests _tidb_tid on partition scans.
-        setHeader(action.getHeader());
+        setHeader(AddExtraTableIDColumnTransformAction::buildHeader(
+            options.task->getColumnsToRead(),
+            options.task->getExtraTableIDIndex()));
     }
 
     static SourceOpPtr create(const Options & options) { return std::make_unique<RNProxySourceOp>(options); }
@@ -225,10 +222,10 @@ private:
     const Context & context;
     const LoggerPtr log;
     RNProxyReadTaskPtr task;
-    AddExtraTableIDColumnTransformAction action;
     size_t total_rows = 0;
 
     Int32 current_reader_idx = -1;
+    BlockInputStreamPtr current_input_stream;
 
     // Temporarily store the block read from current_seg_task->stream and pass it to downstream operators in readImpl.
     std::optional<Block> t_block = std::nullopt;
