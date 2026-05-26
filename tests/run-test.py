@@ -50,6 +50,7 @@ IGNORED_CLIENT_OUTPUTS = ['<jemalloc>: Number of CPUs detected is not determinis
 DEFAULT_TEST_TIMEOUT = 120
 TEST_TIMEOUT_ENV = 'test_timeout'
 verbose = False
+_run_state = {'matcher': None, 'stuck_line_number': 0, 'stuck_query': None}
 
 
 class TestTimeoutError(Exception):
@@ -373,35 +374,45 @@ def parse_exe_match(path, executor, executor_tidb, executor_func, executor_curl_
     todos = []
     line_number = 0
     line_number_cached = 0
+    _run_state['stuck_line_number'] = 0
+    _run_state['stuck_query'] = None
     with open(path) as file:
         matcher = Matcher(executor, executor_tidb, executor_func, executor_curl_tidb, fuzz)
-        cached = None
-        for origin in file:
-            line_number += 1
-            line = origin.strip()
-            if line.startswith(RETURN_PREFIX):
-                break
-            # Some tests are designed to be skipped in next-gen TiFlash.
-            if line.startswith(SKIP_NEXT_GEN_PREFIX) and os.getenv('ENABLE_NEXT_GEN', 'false') != 'false':
-                print(f'Skipping test for next-gen from line {line_number}.')
-                break
-            if line.startswith(TODO_PREFIX):
-                todos.append(line[len(TODO_PREFIX):].strip())
-                continue
-            if line.startswith(COMMENT_PREFIX) or len(line) == 0:
-                continue
-            if origin.startswith(UNFINISHED_1_PREFIX) or origin.startswith(UNFINISHED_2_PREFIX):
-                if cached[-1] == ',':
-                    cached += ' '
-                cached += line
-                continue
-            if cached != None and not matcher.on_line(cached, line_number_cached):
+        _run_state['matcher'] = matcher
+        try:
+            cached = None
+            for origin in file:
+                line_number += 1
+                line = origin.strip()
+                if line.startswith(RETURN_PREFIX):
+                    break
+                # Some tests are designed to be skipped in next-gen TiFlash.
+                if line.startswith(SKIP_NEXT_GEN_PREFIX) and os.getenv('ENABLE_NEXT_GEN', 'false') != 'false':
+                    print(f'Skipping test for next-gen from line {line_number}.')
+                    break
+                if line.startswith(TODO_PREFIX):
+                    todos.append(line[len(TODO_PREFIX):].strip())
+                    continue
+                if line.startswith(COMMENT_PREFIX) or len(line) == 0:
+                    continue
+                if origin.startswith(UNFINISHED_1_PREFIX) or origin.startswith(UNFINISHED_2_PREFIX):
+                    if cached[-1] == ',':
+                        cached += ' '
+                    cached += line
+                    continue
+                if cached != None and not matcher.on_line(cached, line_number_cached):
+                    return False, matcher, todos
+                cached = line
+                line_number_cached = line_number
+            if (cached != None and not matcher.on_line(cached, line_number)) or not matcher.on_finish():
                 return False, matcher, todos
-            cached = line
-            line_number_cached = line_number
-        if (cached != None and not matcher.on_line(cached, line_number)) or not matcher.on_finish():
-            return False, matcher, todos
-        return True, matcher, todos
+            return True, matcher, todos
+        finally:
+            matcher = _run_state.get('matcher')
+            if matcher is not None and matcher.query_line_number:
+                _run_state['stuck_line_number'] = matcher.query_line_number
+                _run_state['stuck_query'] = matcher.query
+            _run_state['matcher'] = None
 
 
 def run():
@@ -431,6 +442,9 @@ def run():
         )
     except TestTimeoutError:
         print(f'  File: {path}')
+        if _run_state.get('stuck_line_number'):
+            print(f'  Error line: {_run_state["stuck_line_number"]}')
+            print(f'  Error: {_run_state["stuck_query"]}')
         print(f'  Error: test timed out after {timeout}s')
         sys.exit(1)
 
