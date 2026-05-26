@@ -228,6 +228,8 @@ struct SSTReaderInterfaces {
 struct CloudStorageEngineInterfaces {
   bool (*fn_get_keyspace_encryption)(RaftStoreProxyPtr, uint32_t);
   RawCppStringPtr (*fn_get_master_key)(RaftStoreProxyPtr);
+  RustStrWithViewVec (*fn_get_region_bucket_keys)(uint64_t, uint64_t,
+                                                  RaftStoreProxyPtr);
   ColumnarReaderPtr (*fn_get_columnar_reader)(uint64_t, uint64_t, uint64_t,
                                               BaseBuffView, BaseBuffView,
                                               BaseBuffView, BaseBuffView,

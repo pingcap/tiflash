@@ -18,10 +18,10 @@ use kvengine::{CloudColumnarReaders, TableCtx};
 use protobuf::{parse_from_bytes, Message};
 
 use crate::{
-    build_from_string,
+    build_from_string, build_from_vec_string,
     interfaces_ffi::{
         BaseBuffView, ColumnarReaderErrorType, ColumnarReaderPtr, RaftStoreProxyPtr, RawRustPtr,
-        RawVoidPtr, RustStrWithView,
+        RawVoidPtr, RustStrWithView, RustStrWithViewVec,
     },
     RawRustPtrType,
 };
@@ -70,6 +70,22 @@ impl From<crate::Error> for ColumnarReaderPtr {
                 error_type: ColumnarReaderErrorType::Other,
             },
         }
+    }
+}
+
+pub unsafe extern "C" fn ffi_get_region_bucket_keys(
+    region_id: u64,
+    region_ver: u64,
+    hub_ptr: RaftStoreProxyPtr,
+) -> RustStrWithViewVec {
+    let hub = hub_ptr.as_ref();
+    let bucket_keys = hub
+        .cloud_helper
+        .get_region_bucket_keys(region_id, region_ver);
+    if bucket_keys.is_empty() {
+        RustStrWithViewVec::default()
+    } else {
+        build_from_vec_string(bucket_keys)
     }
 }
 
