@@ -50,15 +50,21 @@ pub use self::{
 
 use std::os::raw::{c_char, c_int};
 
-fn proxy_version_info() -> String {
+pub(crate) fn proxy_version_info() -> String {
     let fallback = "Unknown";
     format!(
-        "Git Commit Hash:   {}\nGit Commit Branch: {}\nRust Version:      {}\nProfile:           {}",
-        option_env!("PROXY_BUILD_GIT_HASH").unwrap_or(fallback),
-        option_env!("PROXY_BUILD_GIT_BRANCH").unwrap_or(fallback),
+        "Git Commit Hash:   {}\nRust Version:      {}\nProfile:           {}",
+        option_env!("CLOUD_STORAGE_ENGINE_GIT_HASH").unwrap_or(fallback),
         option_env!("PROXY_BUILD_RUSTC_VERSION").unwrap_or(fallback),
         option_env!("PROXY_PROFILE").unwrap_or(fallback),
     )
+}
+
+pub(crate) fn log_columnar_hub_info() {
+    info!("Welcome to TiFlash Columnar");
+    for line in proxy_version_info().lines() {
+        info!("{}", line);
+    }
 }
 
 #[no_mangle]

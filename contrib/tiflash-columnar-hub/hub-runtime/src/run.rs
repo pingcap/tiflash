@@ -1178,6 +1178,7 @@ pub unsafe fn run_proxy(argc: c_int, argv: *const *const c_char, helper_ptr: *co
     let mut config = load_config(matches.value_of_os("config"));
     let init_only = overwrite_config_with_cmd_args(&mut config, &matches);
     init_hub_logger(&config);
+    crate::log_columnar_hub_info();
     config.security.override_from_env();
     config.dfs.override_from_env();
     config.pd.validate().unwrap();
