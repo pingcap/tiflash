@@ -3,15 +3,15 @@ members = ["hub-runtime"]
 resolver = "2"
 
 [workspace.dependencies]
-api_version = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine" }
-builtin_dfs = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine" }
-cloud_encryption = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine" }
-keys = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine" }
-kvengine = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine" }
-kvenginepb = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine" }
-pd_client = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine", default-features = false }
-security = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine", default-features = false }
-tikv_util = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine" }
+api_version = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", rev = "a9d93252f2ad0cba95eec51a857cd867cd5e6567" }
+builtin_dfs = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", rev = "a9d93252f2ad0cba95eec51a857cd867cd5e6567" }
+cloud_encryption = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", rev = "a9d93252f2ad0cba95eec51a857cd867cd5e6567" }
+keys = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", rev = "a9d93252f2ad0cba95eec51a857cd867cd5e6567" }
+kvengine = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", rev = "a9d93252f2ad0cba95eec51a857cd867cd5e6567" }
+kvenginepb = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", rev = "a9d93252f2ad0cba95eec51a857cd867cd5e6567" }
+pd_client = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", rev = "a9d93252f2ad0cba95eec51a857cd867cd5e6567", default-features = false }
+security = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", rev = "a9d93252f2ad0cba95eec51a857cd867cd5e6567", default-features = false }
+tikv_util = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", rev = "a9d93252f2ad0cba95eec51a857cd867cd5e6567" }
 
 [patch.crates-io]
 raft = { git = "https://github.com/tikv/raft-rs", branch = "master" }
