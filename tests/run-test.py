@@ -31,6 +31,8 @@ CMD_PREFIX_TIDB = 'mysql> '
 CMD_PREFIX_TIDB_BINALY_AS_HEX = 'mysql_bin_as_hex> '
 CMD_PREFIX_FUNC = 'func> '
 RETURN_PREFIX = '#RETURN'
+# if the environment ENABLE_NEXT_GEN is not false, the `.test` file will be
+# skipped when it contains the line starts with SKIP_NEXT_GEN_PREFIX.
 SKIP_NEXT_GEN_PREFIX = '#SKIP_FOR_NEXT_GEN'
 SLEEP_PREFIX = 'SLEEP '
 TODO_PREFIX = '#TODO'
