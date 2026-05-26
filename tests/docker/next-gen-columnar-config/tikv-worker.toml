@@ -21,8 +21,13 @@ s3-secret-key = "minioadmin"
 s3-bucket = "tiflash-test"
 s3-region = "local"
 
+# Schema manager syncs TiDB DDL (e.g. set tiflash replica) to columnar stores.
+# tikv-worker polls TiDB schema on this interval; columnar compaction starts only
+# after the new schema is broadcast. Lower values reduce wait_table latency in
+# fullstack tests.
 [schema-manager]
 dir = "/data/schemas"
 enabled = true
-keyspace-refresh-interval = "10s"
+keyspace-refresh-interval = "500ms"
+# Sync even for tiny keyspaces. Production default is 256MB (268435456).
 schema-refresh-threshold = 1
