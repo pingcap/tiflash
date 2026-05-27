@@ -167,7 +167,7 @@ private:
     ColumnarReaderPtr reader;
     AddExtraTableIDColumnTransformAction action;
     TableID table_id;
-    const String & executor_id;
+    const String executor_id;
     Block header;
 
     bool done = false;

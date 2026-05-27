@@ -803,13 +803,15 @@ RNProxyInputStream::~RNProxyInputStream()
             total_bytes,
             duration_read_sec,
             duration_deserialize_sec);
-        auto * dag_context = context.getDAGContext();
-        if (auto it = dag_context->scan_context_map.find(executor_id); it != dag_context->scan_context_map.end())
+        if (auto * dag_context = context.getDAGContext(); dag_context != nullptr)
         {
-            if (it->second)
+            if (auto it = dag_context->scan_context_map.find(executor_id); it != dag_context->scan_context_map.end())
             {
-                std::optional<LACBytesCollector> lac_bytes_collector;
-                it->second->addUserReadBytes(total_bytes, DM::ReadTag::Query, lac_bytes_collector);
+                if (it->second)
+                {
+                    std::optional<LACBytesCollector> lac_bytes_collector;
+                    it->second->addUserReadBytes(total_bytes, DM::ReadTag::Query, lac_bytes_collector);
+                }
             }
         }
     }
