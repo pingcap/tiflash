@@ -227,6 +227,40 @@ void normalizeTimestampCompareDateTimeLiteralToUTC(tipb::Expr & expr, const Time
 }
 } // namespace
 
+void StorageDisaggregated::filterConditionsWithPushedDownFilters(
+    DAGExpressionAnalyzer & analyzer,
+    DAGPipeline & pipeline)
+{
+    // Proxy columnar reader uses late-materialization filters only to reduce packs loaded from disk.
+    // It does not guarantee that all rows failing those filters are removed, so merge them into
+    // FilterConditions and re-apply them in the TiFlash pipeline for correctness.
+    FilterConditions conditions(filter_conditions.executor_id, filter_conditions.conditions);
+    conditions.conditions.MergeFrom(table_scan.getPushedDownFilters());
+    if (conditions.hasValue())
+    {
+        ::DB::executePushedDownFilter(conditions, analyzer, log, pipeline);
+        auto & profile_streams = context.getDAGContext()->getProfileStreamsMap()[conditions.executor_id];
+        pipeline.transform([&profile_streams](auto & stream) { profile_streams.push_back(stream); });
+    }
+}
+
+void StorageDisaggregated::filterConditionsWithPushedDownFilters(
+    PipelineExecutorContext & exec_context,
+    PipelineExecGroupBuilder & group_builder,
+    DAGExpressionAnalyzer & analyzer)
+{
+    // Proxy columnar reader uses late-materialization filters only to reduce packs loaded from disk.
+    // It does not guarantee that all rows failing those filters are removed, so merge them into
+    // FilterConditions and re-apply them in the TiFlash pipeline for correctness.
+    FilterConditions conditions(filter_conditions.executor_id, filter_conditions.conditions);
+    conditions.conditions.MergeFrom(table_scan.getPushedDownFilters());
+    if (conditions.hasValue())
+    {
+        ::DB::executePushedDownFilter(exec_context, group_builder, conditions, analyzer, log);
+        context.getDAGContext()->addOperatorProfileInfos(conditions.executor_id, group_builder.getCurProfileInfos());
+    }
+}
+
 BlockInputStreams StorageDisaggregated::readThroughColumnar(const Context & context, unsigned num_streams)
 {
     DAGPipeline pipeline;

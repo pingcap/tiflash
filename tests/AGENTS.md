@@ -6,6 +6,8 @@ This document describes how to run tests under `tests/`.
 - Integration tests under `tests/fullstack-test*`.
 - Mock tests under `tests/delta-merge-test`.
 - Next-gen integration tests under `tests/fullstack-test-next-gen`.
+- Next-gen columnar integration tests under `tests/fullstack-test-next-gen-columnar`.
+- Scripts that pull TiDB next-gen images or binaries under `tests/docker/next-gen-utils/README.md`
 - Unit test workflows are described in the repository root `AGENTS.md`.
 
 ## Build Prerequisite
@@ -37,6 +39,48 @@ This document describes how to run tests under `tests/`.
   ENABLE_NEXT_GEN=true ./run.sh
   ```
 - See `tests/README.md` for the full build and docker compose steps.
+
+### Fullstack Next-Gen Columnar Tests
+- Directory: `tests/fullstack-test-next-gen-columnar`.
+- Use this suite for next-gen **columnar-only** topology: `tiflash-cn0` only (no `tiflash-wn0`), with configs under `tests/docker/next-gen-columnar-yaml/` and `tests/docker/next-gen-columnar-config/`.
+- Build TiFlash first and ensure the prebuilt binary exists at `tests/.build/tiflash/tiflash` (for example, `cmake --workflow --preset dev`).
+
+**Configure local component binaries (optional):** edit `_env.sh`:
+  ```bash
+  export LOCAL_TIKV_BIN_DIR="${LOCAL_TIKV_BIN_DIR:-/path/to/cloud-storage-engine/target/release}"
+  export LOCAL_TIDB_BIN_DIR="${LOCAL_TIDB_BIN_DIR:-/path/to/tidb/bin}"
+  export LOCAL_PD_BIN_DIR="${LOCAL_PD_BIN_DIR:-/path/to/pd/bin}"   # optional
+  ```
+  When set, `compose.sh` mounts these binaries via `tests/docker/override-yaml/`.
+
+#### Run the scripted suite
+Brings cluster up, runs tests, and tears down:
+  ```bash
+  cd tests/fullstack-test-next-gen-columnar
+  ENABLE_NEXT_GEN=true ./run.sh
+  ```
+
+#### Run the test manually
+Start or stop the cluster manually:
+  ```bash
+  cd tests/fullstack-test-next-gen-columnar
+  ./compose.sh up -d
+  ./compose.sh ps
+  ./compose.sh exec tiflash-cn0 bash
+  ./compose.sh down
+  ```
+
+**Run one test against a running cluster:**
+  ```bash
+  cd tests/fullstack-test-next-gen-columnar
+  ./compose.sh exec -T tiflash-cn0 bash -c \
+    'cd /tests && ENABLE_NEXT_GEN=true verbose=true ./run-test.sh <test-path>'
+  ```
+
+**Notes:**
+- `_env.sh` sets `NEXT_GEN_COLUMNAR_ONLY=true`, so compose helpers create/wait only columnar paths (`prepare_next_gen_columnar_data_dirs`, `wait_next_gen_columnar_env`).
+- Most tests should be executed inside `tiflash-cn0` because failpoints and columnar reads run on the compute node.
+- Image tags and registry defaults are controlled by `_env.sh` (`HUB_ADDR`, `PD_BRANCH`, `TIKV_BRANCH`, `TIDB_BRANCH`).
 
 ## Notes
 - Some tests assume local binaries or shared libraries built from this repository.
