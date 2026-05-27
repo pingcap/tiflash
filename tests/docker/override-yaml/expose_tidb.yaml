@@ -1,4 +1,4 @@
-# Copyright 2025 PingCAP, Inc.
+# Copyright 2026 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,22 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Enable disagg tiflash for next-gen
-disaggregated-tiflash = true
-
-# After https://github.com/pingcap/tidb/pull/61752, the next-gen cluster requires a SYSTEM keyspace tidb.
-# Now tests are ran on the SYSTEM keyspace tidb.
-keyspace-name = "SYSTEM"
-
-tikv-worker-url = "tikv-worker0:19000"
-
-enable-telemetry = false
-temp-dir = "/data/tmp"
-
-[instance]
-tidb_service_scope = "dxf_service"
-
-[performance]
-tcp-keep-alive = true
-[security]
-enable-sem = false
+services:
+  tidb0:
+    ports:
+      - "127.0.0.1:${EXPOSE_TIDB_PORT}:4000"
