@@ -54,14 +54,14 @@ This document describes how to run tests under `tests/`.
   When set, `compose.sh` mounts these binaries via `tests/docker/override-yaml/`.
 
 #### Run the scripted suite
-**Run the scripted suite** (brings cluster up, runs tests, tears down):
+Brings cluster up, runs tests, and tears down:
   ```bash
   cd tests/fullstack-test-next-gen-columnar
   ENABLE_NEXT_GEN=true ./run.sh
   ```
 
 #### Run the test manually
-**Start/stop the cluster manually:**
+Start or stop the cluster manually:
   ```bash
   cd tests/fullstack-test-next-gen-columnar
   ./compose.sh up -d
@@ -74,7 +74,7 @@ This document describes how to run tests under `tests/`.
   ```bash
   cd tests/fullstack-test-next-gen-columnar
   ./compose.sh exec -T tiflash-cn0 bash -c \
-    'cd /tests && ENABLE_NEXT_GEN=true verbose=true ./run-test.sh fullstack-test/sample.test'
+    'cd /tests && ENABLE_NEXT_GEN=true verbose=true ./run-test.sh <test-path>'
   ```
 
 **Notes:**

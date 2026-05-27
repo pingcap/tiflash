@@ -60,6 +60,7 @@ if [[ -n "$ENABLE_NEXT_GEN" && "$ENABLE_NEXT_GEN" != "false" && "$ENABLE_NEXT_GE
     ${COMPOSE} "${COMPOSE_FILES[@]}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test2/mpp"
     ${COMPOSE} "${COMPOSE_FILES[@]}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test/expr"
     ${COMPOSE} "${COMPOSE_FILES[@]}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test/mpp"
+    # If test commands fail, data and logs are kept for inspection and root-cause analysis.
     ${COMPOSE} "${COMPOSE_FILES[@]}" down
     clean_data_log
 

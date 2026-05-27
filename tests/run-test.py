@@ -193,7 +193,7 @@ def match_ph_word(line):
 # TODO: Support more place holders, eg: {#NUMBER}
 def compare_line(line, template):
     if template.startswith(REGEXP_MATCH):
-        return re.match(template[len(REGEXP_MATCH):], line) != None
+        return re.match(template[len(REGEXP_MATCH):], line) is not None
     l = template.find(LINE_PH)
     if l >= 0:
         return True
@@ -306,7 +306,7 @@ class Matcher:
                 unescape_flag = False
                 line = line[:-len(NO_UNESCAPE_SUFFIX)]
             if verbose: print(f'{datetime.datetime.now().strftime("%H:%M:%S.%f")} running {line}')
-            if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
+            if self.outputs is not None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
                 self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
                 return False
             self.query_line_number = line_number
@@ -321,19 +321,19 @@ class Matcher:
             self.matches = []
         elif line.startswith(CURL_TIDB_STATUS_PREFIX):
             if verbose: print(f'{datetime.datetime.now().strftime("%H:%M:%S.%f")} running {line}')
-            if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
+            if self.outputs is not None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
                 self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
                 return False
             self.query_line_number = line_number
             self.is_mysql = True
             self.query = line[len(CURL_TIDB_STATUS_PREFIX):]
             self.outputs, err = self.executor_curl_tidb.exe(self.query)
-            if err != None:
+            if err is not None:
                 return False
             self.matches = []
         elif line.startswith(CMD_PREFIX) or line.startswith(CMD_PREFIX_ALTER):
             if verbose: print(f'{datetime.datetime.now().strftime("%H:%M:%S.%f")} running {line}')
-            if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
+            if self.outputs is not None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
                 self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
                 return False
             self.query_line_number = line_number
@@ -347,7 +347,7 @@ class Matcher:
             self.matches = []
         elif line.startswith(CMD_PREFIX_FUNC):
             if verbose: print(f'{datetime.datetime.now().strftime("%H:%M:%S.%f")} running {line}')
-            if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
+            if self.outputs is not None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
                 self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
                 return False
             self.query_line_number = line_number
@@ -355,7 +355,7 @@ class Matcher:
             self.query = line[len(CMD_PREFIX_FUNC):]
             self.outputs, err = self.executor_func.exe(self.query)
             self.outputs = [x.strip() for x in self.outputs]
-            if err != None:
+            if err is not None:
                 return False
             self.outputs = []
             self.matches = []
@@ -364,7 +364,7 @@ class Matcher:
         return True
 
     def on_finish(self):
-        if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
+        if self.outputs is not None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
             self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
             return False
         return True
@@ -400,11 +400,11 @@ def parse_exe_match(path, executor, executor_tidb, executor_func, executor_curl_
                         cached += ' '
                     cached += line
                     continue
-                if cached != None and not matcher.on_line(cached, line_number_cached):
+                if cached is not None and not matcher.on_line(cached, line_number_cached):
                     return False, matcher, todos
                 cached = line
                 line_number_cached = line_number
-            if (cached != None and not matcher.on_line(cached, line_number)) or not matcher.on_finish():
+            if (cached is not None and not matcher.on_line(cached, line_number)) or not matcher.on_finish():
                 return False, matcher, todos
             return True, matcher, todos
         finally:
