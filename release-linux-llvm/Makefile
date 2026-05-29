@@ -38,7 +38,7 @@ build_tiflash_next_gen_release:
 
 # Package tiflash docker image using the binaries under directory "tiflash" && "tiflash-columnar"
 image_tiflash_next_gen_release:
-	$(DOCKER) build -f dockerfiles/Dockerfile-tiflash-next-gen-rocky8 -t ghcr.io/pingcap-qe/cd/builders/tiflash/tiflash-server-rocky8 .
+	$(DOCKER) build -f dockerfiles/Dockerfile-tiflash-next-gen-rocky8 -t ghcr.io/pingcap-qe/cd/builders/tiflash/tiflash-server-rocky8-next-gen .
 
 # Add build_tiflash_debug target to enable FailPoints. Since outputs are the same as release version, no new package targets added.
 build_tiflash_debug:
