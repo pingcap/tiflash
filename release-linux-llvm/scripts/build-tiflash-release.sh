@@ -109,9 +109,10 @@ else
   ${INSTALL_DIR}/tiflash version
 fi
 
-if [[ -n "${ENABLE_NEXT_GEN_COLUMNAR:-}" && "${ENABLE_NEXT_GEN_COLUMNAR}" != "false" && "${ENABLE_NEXT_GEN_COLUMNAR}" != "0" ]]; then
+# If CMAKE_ENABLE_NEXT_GEN is enabled, build another binary with next-gen columnar features enabled and install to a different directory to avoid conflict with the non-columnar binary.
+if [ "${CMAKE_ENABLE_NEXT_GEN}" = "ON" ]; then
   CMAKE_ENABLE_NEXT_GEN_COLUMNAR="ON"
-  echo "Building TiFlash with next-gen columnar features enabled"
+  echo "Building TiFlash columnar (ENABLE_NEXT_GEN=${CMAKE_ENABLE_NEXT_GEN})"
 
   # prepare build dir and install dir for columnar
   if [ $CMAKE_BUILD_TYPE == "RELWITHDEBINFO" ]; then

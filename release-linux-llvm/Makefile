@@ -32,7 +32,6 @@ image_tiflash_release:
 build_tiflash_next_gen_release:
 	$(DOCKER) run --rm \
 		-e ENABLE_NEXT_GEN \
-		-e ENABLE_NEXT_GEN_COLUMNAR \
 		-v $(realpath ..):/build/tics \
 		hub.pingcap.net/tiflash/tiflash-llvm-base:rocky8$(SUFFIX) \
 		/build/tics/release-linux-llvm/scripts/build-release.sh
