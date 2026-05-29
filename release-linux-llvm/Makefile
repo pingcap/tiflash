@@ -28,7 +28,16 @@ build_tiflash_release:
 image_tiflash_release:
 	$(DOCKER) build -f dockerfiles/Dockerfile-tiflash-rocky8 -t hub.pingcap.net/tiflash/tiflash-server-rocky8 .
 
-# Package tiflash docker image using the binaries under directory "tiflash"
+# Build tiflash binaries with next-gen features under directory "tiflash" and "tiflash-columnar"
+build_tiflash_next_gen_release:
+	$(DOCKER) run --rm \
+		-e ENABLE_NEXT_GEN \
+		-e ENABLE_NEXT_GEN_COLUMNAR \
+		-v $(realpath ..):/build/tics \
+		hub.pingcap.net/tiflash/tiflash-llvm-base:rocky8$(SUFFIX) \
+		/build/tics/release-linux-llvm/scripts/build-release.sh
+
+# Package tiflash docker image using the binaries under directory "tiflash" && "tiflash-columnar"
 image_tiflash_next_gen_release:
 	$(DOCKER) build -f dockerfiles/Dockerfile-tiflash-next-gen-rocky8 -t hub.pingcap.net/tiflash/tiflash-server-rocky8 .
 
