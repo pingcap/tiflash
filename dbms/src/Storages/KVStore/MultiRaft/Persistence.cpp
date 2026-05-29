@@ -220,31 +220,18 @@ bool KVStore::canFlushRegionDataImpl(
     if (can_flush && flush_if_possible)
     {
         // This rarely happens when there are too may raft logs, which don't trigger a proactive flush.
-<<<<<<< HEAD
-        LOG_INFO(
-            log,
-            "{} flush region due to tryFlushRegionData, index {} term {} truncated_index {} truncated_term {}"
-            " gap {}/{}",
-            curr_region.toString(false),
-=======
         const auto flush_msg = fmt::format(
-            "index {} term {} truncated_index {} truncated_term {} gap {}/{} table_in_mem_size={} table_id={} "
+            "index {} term {} truncated_index {} truncated_term {} gap {}/{} table_id={} "
             "keyspace={}",
->>>>>>> 0dc254b776 (KVStore: reduce log (#10813))
             index,
             term,
             truncated_index,
             truncated_term,
             current_applied_gap,
-<<<<<<< HEAD
-            gap_threshold);
-=======
             gap_threshold,
-            curr_region_ptr->getRegionTableSize(),
             curr_region_ptr->getMappedTableID(),
             curr_region_ptr->getKeyspaceID());
         LOG_DEBUG(log, "{} flush region due to tryFlushRegionData, {}", curr_region.toString(false), flush_msg);
->>>>>>> 0dc254b776 (KVStore: reduce log (#10813))
         GET_METRIC(tiflash_raft_region_flush_bytes, type_flushed).Observe(size_bytes);
         return forceFlushRegionDataImpl(curr_region, try_until_succeed, tmt, region_task_lock, index, term, flush_msg);
     }
