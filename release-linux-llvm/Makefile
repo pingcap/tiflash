@@ -28,6 +28,10 @@ build_tiflash_release:
 image_tiflash_release:
 	$(DOCKER) build -f dockerfiles/Dockerfile-tiflash-rocky8 -t hub.pingcap.net/tiflash/tiflash-server-rocky8 .
 
+# Package tiflash docker image using the binaries under directory "tiflash"
+image_tiflash_next_gen_release:
+	$(DOCKER) build -f dockerfiles/Dockerfile-tiflash-next-gen-rocky8 -t hub.pingcap.net/tiflash/tiflash-server-rocky8 .
+
 # Add build_tiflash_debug target to enable FailPoints. Since outputs are the same as release version, no new package targets added.
 build_tiflash_debug:
 	$(DOCKER) run --rm -v $(realpath ..):/build/tics hub.pingcap.net/tiflash/tiflash-llvm-base:rocky8$(SUFFIX) /build/tics/release-linux-llvm/scripts/build-debug.sh

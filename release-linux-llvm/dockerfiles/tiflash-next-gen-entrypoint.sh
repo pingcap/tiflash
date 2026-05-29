@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # Copyright 2026 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,7 +13,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-services:
-  tidb0:
-    ports:
-      - "0.0.0.0:${EXPOSE_TIDB_PORT}:4000"
+set -euo pipefail
+
+# TIFLASH_COLUMNAR unset or "false" -> classic tiflash; "true" -> columnar build.
+tiflash_columnar="${TIFLASH_COLUMNAR:-false}"
+tiflash_columnar_lower="$(echo "${tiflash_columnar}" | tr '[:upper:]' '[:lower:]')"
+
+if [ "${tiflash_columnar_lower}" = "true" ] && [ -x /tiflash-columnar/tiflash ]; then
+    export LD_LIBRARY_PATH=/tiflash-columnar
+    exec /tiflash-columnar/tiflash server "$@"
+fi
+
+export LD_LIBRARY_PATH=/tiflash
+exec /tiflash/tiflash server "$@"

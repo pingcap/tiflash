@@ -54,7 +54,7 @@ SCRIPTPATH="$(
   pwd -P
 )"
 SRCPATH=$(
-  cd ${SCRIPTPATH}/../..
+  cd "${SCRIPTPATH}/../.."
   pwd -P
 )
 NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
@@ -65,11 +65,11 @@ INSTALL_DIR="${SRCPATH}/release-linux-llvm/tiflash"
 rm -rf ${INSTALL_DIR} && mkdir -p ${INSTALL_DIR}
 
 if [ $CMAKE_BUILD_TYPE == "RELWITHDEBINFO" ]; then
-  BUILD_DIR="$SRCPATH/release-linux-llvm/build-release"
+  BUILD_DIR="${SRCPATH}/release-linux-llvm/build-release"
   ENABLE_FAILPOINTS="OFF"
   JEMALLOC_NARENAS="-1"
 else
-  BUILD_DIR="$SRCPATH/release-linux-llvm/build-debug"
+  BUILD_DIR="${SRCPATH}/release-linux-llvm/build-debug"
   ENABLE_FAILPOINTS="ON"
   JEMALLOC_NARENAS="40"
 fi
@@ -97,6 +97,52 @@ if [ $CMAKE_BUILD_TYPE == "TSAN" ] || [ $CMAKE_BUILD_TYPE == "ASAN" ]; then
   cmake --build . --target tiflash --parallel ${NPROC}
   cmake --install . --component=tiflash-release --prefix="${INSTALL_DIR}"
 else
+  cmake --build . --target tiflash --parallel ${NPROC}
+  cmake --install . --component=tiflash-release --prefix="${INSTALL_DIR}"
+  
+  # unset LD_LIBRARY_PATH before test
+  unset LD_LIBRARY_PATH
+  readelf -d "${INSTALL_DIR}/tiflash"
+  ldd "${INSTALL_DIR}/tiflash"
+  
+  # show version
+  ${INSTALL_DIR}/tiflash version
+fi
+
+if [[ -n "${ENABLE_NEXT_GEN_COLUMNAR}" && "${ENABLE_NEXT_GEN_COLUMNAR}" != "false" && "${ENABLE_NEXT_GEN_COLUMNAR}" != "0" ]]; then
+  CMAKE_ENABLE_NEXT_GEN_COLUMNAR="ON"
+  echo "Building TiFlash with next-gen columnar features enabled"
+
+  # prepare build dir and install dir for columnar
+  if [ $CMAKE_BUILD_TYPE == "RELWITHDEBINFO" ]; then
+    BUILD_DIR="${SRCPATH}/release-linux-llvm/build-release-columnar"
+  else
+    BUILD_DIR="${SRCPATH}/release-linux-llvm/build-debug-columnar"
+  fi
+  rm -rf ${BUILD_DIR} && mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
+
+  INSTALL_DIR="${SRCPATH}/release-linux-llvm/tiflash-columnar"
+  rm -rf ${INSTALL_DIR} && mkdir -p ${INSTALL_DIR}
+
+  # build binary with next-gen columnar features enabled
+  cmake -S "${SRCPATH}" \
+    ${DEFINE_CMAKE_PREFIX_PATH} \
+    -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
+    -DENABLE_TESTING=OFF \
+    -DENABLE_TESTS=${ENABLE_TESTS} \
+    -DENABLE_FAILPOINTS=${ENABLE_FAILPOINTS} \
+    -DENABLE_NEXT_GEN=${CMAKE_ENABLE_NEXT_GEN} \
+    -DENABLE_NEXT_GEN_COLUMNAR=${CMAKE_ENABLE_NEXT_GEN_COLUMNAR} \
+    -DJEMALLOC_NARENAS=${JEMALLOC_NARENAS} \
+    -Wno-dev \
+    -DUSE_CCACHE=OFF \
+    -DUSE_INTERNAL_SSL_LIBRARY=ON \
+    -DRUN_HAVE_STD_REGEX=0 \
+    -DENABLE_THINLTO=${ENABLE_THINLTO} \
+    -DTHINLTO_JOBS=${NPROC} \
+    -DENABLE_PCH=${ENABLE_PCH} \
+    -GNinja
+
   cmake --build . --target tiflash --parallel ${NPROC}
   cmake --install . --component=tiflash-release --prefix="${INSTALL_DIR}"
   

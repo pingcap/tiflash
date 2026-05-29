@@ -12,7 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-services:
-  tidb0:
-    ports:
-      - "0.0.0.0:${EXPOSE_TIDB_PORT}:4000"
+FROM quay.io/rockylinux/rockylinux:8.10.20240528-ubi
+
+USER root
+WORKDIR /root/
+
+ENV HOME /root/
+ENV TZ Asia/Shanghai
+
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+COPY tiflash /tiflash
+COPY tiflash-columnar /tiflash-columnar
+COPY dockerfiles/tiflash-next-gen-entrypoint.sh /usr/local/bin/tiflash-next-gen-entrypoint.sh
+RUN chmod +x /usr/local/bin/tiflash-next-gen-entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/tiflash-next-gen-entrypoint.sh"]
