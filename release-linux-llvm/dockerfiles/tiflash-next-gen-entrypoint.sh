@@ -15,14 +15,17 @@
 
 set -euo pipefail
 
-# TIFLASH_COLUMNAR unset or "false" -> classic tiflash; "true" -> columnar build.
+# TIFLASH_COLUMNAR unset or "false" -> tiflash under /tiflash.
+# "true" -> columnar build under /tiflash-columnar when the binary exists.
 tiflash_columnar="${TIFLASH_COLUMNAR:-false}"
 tiflash_columnar_lower="$(echo "${tiflash_columnar}" | tr '[:upper:]' '[:lower:]')"
 
 if [ "${tiflash_columnar_lower}" = "true" ] && [ -x /tiflash-columnar/tiflash ]; then
     export LD_LIBRARY_PATH=/tiflash-columnar
+    # exec replaces this shell; lines below are not run on success.
     exec /tiflash-columnar/tiflash server "$@"
 fi
 
+# Reached only when columnar mode is off, or /tiflash-columnar/tiflash is missing.
 export LD_LIBRARY_PATH=/tiflash
 exec /tiflash/tiflash server "$@"
