@@ -13,7 +13,7 @@
 # limitations under the License.
 
 DOCKER ?= docker
-SUFFIX ?= ""
+SUFFIX ?= "-llvm-17.0.6-v2"
 ARCH = $(shell uname -m)
 
 # Base docker files with prerequisites build tools

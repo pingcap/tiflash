@@ -296,7 +296,8 @@ try
             /*concurrency=*/1,
             register_operator_spill_context,
             /*is_auto_pass_through=*/false,
-            params->use_magic_hash);
+            params->use_magic_hash,
+            params->use_phmap);
         data_variants->aggregator = aggregator.get();
 
         Aggregator::AggProcessInfo agg_process_info(aggregator.get());

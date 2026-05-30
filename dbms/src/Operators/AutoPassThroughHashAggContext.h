@@ -72,7 +72,8 @@ public:
             /*concurrency=*/1,
             nullptr,
             /*is_auto_pass_through=*/true,
-            params_.use_magic_hash);
+            params_.use_magic_hash,
+            params_.use_phmap);
         aggregator->setCancellationHook(hook);
         aggregator->initThresholdByAggregatedDataVariantsSize(1);
         RUNTIME_CHECK(aggregator->getParams().keys_size > 0);

@@ -427,6 +427,8 @@ struct IntHash32<T, salt, std::enable_if_t<!is_fit_register<T>, void>>
     }
 };
 
+namespace detail
+{
 // MagicHash is a new set of hash functions for int types (int32/int64/int128/int256),
 // which utilize specific magic numbers ported from different libraries for hashing.
 // It's slower than HashCRC32 but produce more uniformly distributed results,
@@ -437,6 +439,7 @@ inline uint64_t umul128(uint64_t v, uint64_t kmul, uint64_t * high)
     *high = static_cast<uint64_t>(res >> 64);
     return static_cast<uint64_t>(res);
 }
+} // namespace detail
 
 template <typename T>
 inline void hash_combine(uint64_t & seed, const T & val)
@@ -507,7 +510,7 @@ struct MagicHashHelper<8>
         // Constant kmul is ported from https://github.com/martinus/robin-hood-hashing/blob/b21730713f4b5296bec411917c46919f7b38b178/src/include/robin_hood.h#L735
         static constexpr uint64_t kmul = 0xde5fb9d2630458e9ULL;
         uint64_t high = 0;
-        uint64_t low = umul128(v, kmul, &high);
+        uint64_t low = detail::umul128(v, kmul, &high);
         return static_cast<size_t>(high + low);
     }
 };
