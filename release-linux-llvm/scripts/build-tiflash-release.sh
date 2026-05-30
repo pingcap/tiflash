@@ -73,7 +73,8 @@ else
   ENABLE_FAILPOINTS="ON"
   JEMALLOC_NARENAS="40"
 fi
-rm -rf ${BUILD_DIR} && mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
+rm -rf ${BUILD_DIR} && mkdir -p ${BUILD_DIR}
+cd ${BUILD_DIR}
 
 cmake -S "${SRCPATH}" \
   ${DEFINE_CMAKE_PREFIX_PATH} \
@@ -114,13 +115,18 @@ if [ "${CMAKE_ENABLE_NEXT_GEN}" = "ON" ]; then
   CMAKE_ENABLE_NEXT_GEN_COLUMNAR="ON"
   echo "Building TiFlash columnar (ENABLE_NEXT_GEN=${CMAKE_ENABLE_NEXT_GEN})"
 
+  # workaround compile issue of cloud-storage-engine dependency
+  export CARGO_NET_GIT_FETCH_WITH_CLI=true
+  git config --global url."git@github.com:".insteadOf "https://github.com/"
+
   # prepare build dir and install dir for columnar
   if [ $CMAKE_BUILD_TYPE == "RELWITHDEBINFO" ]; then
     BUILD_DIR="${SRCPATH}/release-linux-llvm/build-release-columnar"
   else
     BUILD_DIR="${SRCPATH}/release-linux-llvm/build-debug-columnar"
   fi
-  rm -rf ${BUILD_DIR} && mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
+  rm -rf ${BUILD_DIR} && mkdir -p ${BUILD_DIR}
+  cd ${BUILD_DIR}
 
   INSTALL_DIR="${SRCPATH}/release-linux-llvm/tiflash-columnar"
   rm -rf ${INSTALL_DIR} && mkdir -p ${INSTALL_DIR}

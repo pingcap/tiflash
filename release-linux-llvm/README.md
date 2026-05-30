@@ -16,7 +16,11 @@ Usage:
 To build TiFlash binaries && docker image for TiDB X:
 
 ```bash
+# Requires ~/.ssh access to git@github.com:tidbcloud/cloud-storage-engine (mounted into the build container).
 > make build_tiflash_next_gen_release SUFFIX=-llvm-17.0.6-v2
+# To enter the build container interactively (same mounts/env as above):
+> make shell_tiflash_next_gen_release SUFFIX=-llvm-17.0.6-v2
+
 # The binary for tiflash-write is built under directory `tiflash`
 # The binary for tiflash-compute is built under directory `tiflash-columnar`
 > ./tiflash/tiflash version
