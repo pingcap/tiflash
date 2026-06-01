@@ -15,4 +15,4 @@
 services:
   tidb0:
     ports:
-      - "127.0.0.1:${EXPOSE_TIDB_PORT}:4000"
+      - "0.0.0.0:${EXPOSE_TIDB_PORT}:4000"
