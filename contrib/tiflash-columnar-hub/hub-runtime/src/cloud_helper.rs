@@ -16,7 +16,7 @@ use std::{
     fs,
     ops::Deref,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, Weak},
     time::{Duration, UNIX_EPOCH},
 };
 
@@ -69,6 +69,7 @@ const BACKOFF_RETRY_COUNT: usize = 5;
 
 const SNAPSHOT_CACHE_SIZE: usize = 10240; // 10k shards
 const SNAPSHOT_CACHE_CAP: u64 = 1024 * 1024 * 1024; // 1GB snapshot size with memtable
+const SHARED_SNAP_ACCESS_CACHE_SIZE: usize = 10240; // 10k request-local snapshot handles
 const SNAPSHOT_CACHE_CAPABILITY_HEADER: &str = "x-cse-snapshot-cache-version";
 
 #[derive(Debug, Error)]
@@ -201,6 +202,8 @@ pub struct CloudHelper {
     block_cache: BlockCache,
     snapshot_cache: SnapCache,
     snapshot_cache_capable_stores: Arc<DashMap<u64, ()>>,
+    shared_snap_access_cache: SharedSnapAccessCache,
+    shared_snap_access_loaders: Arc<DashMap<SharedSnapAccessKey, Arc<tokio::sync::Mutex<()>>>>,
     meta_file_cache: Arc<Cache<u64, Arc<dyn File>, MetaFileCacheWeighter>>,
     schema_files: Arc<DashMap<u64, SchemaFile>>,
     runtime: Arc<tokio::runtime::Runtime>,
@@ -248,6 +251,8 @@ impl CloudHelper {
         );
         let snapshot_cache = SnapCache::new(SNAPSHOT_CACHE_SIZE, SNAPSHOT_CACHE_CAP);
         let snapshot_cache_capable_stores = Arc::new(DashMap::new());
+        let shared_snap_access_cache = SharedSnapAccessCache::new(SHARED_SNAP_ACCESS_CACHE_SIZE);
+        let shared_snap_access_loaders = Arc::new(DashMap::new());
 
         // Create a long-lived HTTP client for connection reuse
         let http_client = {
@@ -267,6 +272,8 @@ impl CloudHelper {
             block_cache,
             snapshot_cache,
             snapshot_cache_capable_stores,
+            shared_snap_access_cache,
+            shared_snap_access_loaders,
             meta_file_cache,
             schema_files: Arc::new(DashMap::new()),
             runtime,
@@ -382,6 +389,8 @@ impl CloudHelper {
         let vector_index_cache = self.vector_index_cache.clone();
         let snap_cache = self.snapshot_cache.clone();
         let snap_cache_capable_stores = self.snapshot_cache_capable_stores.clone();
+        let shared_snap_access_cache = self.shared_snap_access_cache.clone();
+        let shared_snap_access_loaders = self.shared_snap_access_loaders.clone();
         let meta_file_cache = self.meta_file_cache.clone();
         let columnar_file_cache = self.columnar_file_cache.clone();
         let fts_cache = self.fts_cache.clone();
@@ -390,7 +399,9 @@ impl CloudHelper {
         let tables_clone = tables.clone();
         let fts_query_info_clone = fts_query_info.clone();
         self.runtime.spawn(async move {
-            let snap = request_snapshot_from_leader(
+            let snap = get_or_request_shared_snapshot(
+                shared_snap_access_cache,
+                shared_snap_access_loaders,
                 pd_client,
                 http_client,
                 dfs,
@@ -408,7 +419,7 @@ impl CloudHelper {
                 shard_id,
                 shard_ver,
                 start_ts,
-                &tables_clone,
+                tables_clone,
                 &master_key,
                 fts_query_info_clone,
             )
@@ -879,4 +890,204 @@ impl quick_cache::Weighter<SnapCacheKey, SnapCacheEntry> for SnapWeighter {
     fn weight(&self, _key: &SnapCacheKey, val: &SnapCacheEntry) -> u64 {
         val.snap.len() as u64
     }
+}
+
+#[derive(Clone)]
+pub struct SharedSnapAccessCache {
+    core: Arc<SharedSnapAccessCacheCore>,
+}
+
+impl Deref for SharedSnapAccessCache {
+    type Target = SharedSnapAccessCacheCore;
+    fn deref(&self) -> &Self::Target {
+        &self.core
+    }
+}
+
+impl SharedSnapAccessCache {
+    pub fn new(size: usize) -> Self {
+        Self {
+            core: Arc::new(SharedSnapAccessCacheCore::new(size)),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct SharedSnapAccessCacheCore {
+    cache: Arc<
+        Cache<
+            SharedSnapAccessKey,
+            Weak<kvengine::SnapAccessCore>,
+            SharedSnapAccessWeighter,
+            DefaultHashBuilder,
+        >,
+    >,
+}
+
+impl SharedSnapAccessCacheCore {
+    pub fn new(size: usize) -> Self {
+        let opts = quick_cache::OptionsBuilder::new()
+            .weight_capacity(size as u64)
+            .estimated_items_capacity(size)
+            .build()
+            .unwrap();
+
+        let cache = Arc::new(Cache::with_options(
+            opts,
+            SharedSnapAccessWeighter,
+            DefaultHashBuilder::default(),
+            DefaultLifecycle::default(),
+        ));
+        Self { cache }
+    }
+
+    pub fn get(&self, key: &SharedSnapAccessKey) -> Option<Weak<kvengine::SnapAccessCore>> {
+        self.cache.get(key)
+    }
+
+    pub fn insert(&self, key: SharedSnapAccessKey, entry: Weak<kvengine::SnapAccessCore>) {
+        self.cache.insert(key, entry);
+    }
+}
+
+#[derive(Clone, Eq, PartialEq, Hash)]
+pub struct SharedSnapAccessKey {
+    pub shard_id: u64,
+    pub shard_ver: u64,
+    pub start_ts: u64,
+    pub start_table_id: i64,
+    pub end_table_id: i64,
+    pub prepare_all: bool,
+}
+
+impl SharedSnapAccessKey {
+    pub fn new(
+        shard_id: u64,
+        shard_ver: u64,
+        start_ts: u64,
+        start_table_id: i64,
+        end_table_id: i64,
+        prepare_all: bool,
+    ) -> Self {
+        Self {
+            shard_id,
+            shard_ver,
+            start_ts,
+            start_table_id,
+            end_table_id,
+            prepare_all,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct SharedSnapAccessWeighter;
+
+impl quick_cache::Weighter<SharedSnapAccessKey, Weak<kvengine::SnapAccessCore>>
+    for SharedSnapAccessWeighter
+{
+    fn weight(&self, _key: &SharedSnapAccessKey, _val: &Weak<kvengine::SnapAccessCore>) -> u64 {
+        1
+    }
+}
+
+fn upgrade_shared_snap_access(
+    cache: &SharedSnapAccessCache,
+    key: &SharedSnapAccessKey,
+) -> Option<SnapAccess> {
+    let core = cache.get(key)?.upgrade()?;
+    Some(SnapAccess { core })
+}
+
+async fn get_or_request_shared_snapshot(
+    shared_snap_access_cache: SharedSnapAccessCache,
+    shared_snap_access_loaders: Arc<DashMap<SharedSnapAccessKey, Arc<tokio::sync::Mutex<()>>>>,
+    pd_client: Arc<PdClientWithCache>,
+    http_client: security::HttpClient,
+    dfs: Arc<dyn dfs::Dfs>,
+    ia_ctx: IaCtx,
+    vector_index_cache: VectorIndexCache,
+    columnar_file_cache: ColumnarFileCache,
+    snap_cache: SnapCache,
+    snap_cache_capable_stores: Arc<DashMap<u64, ()>>,
+    meta_file_cache: Arc<Cache<u64, Arc<dyn File>, MetaFileCacheWeighter>>,
+    schema_files: Arc<DashMap<u64, SchemaFile>>,
+    txn_chunk_manager: TxnChunkManager,
+    block_cache: BlockCache,
+    fts_cache: FtsCache,
+    fts_delta_cache: FtsDeltaCache,
+    shard_id: u64,
+    shard_ver: u64,
+    start_ts: u64,
+    tables: Vec<TableCtx>,
+    master_key: &MasterKey,
+    fts_query_info: tipb::FtsQueryInfo,
+) -> Result<SnapAccess, Error> {
+    let start_table_id = tables[0].table_id;
+    let end_table_id = tables[tables.len() - 1].table_id;
+    let prepare_all = fts_query_info.get_query_type() != tipb::FtsQueryType::FtsQueryTypeInvalid;
+    let key = SharedSnapAccessKey::new(
+        shard_id,
+        shard_ver,
+        start_ts,
+        start_table_id,
+        end_table_id,
+        prepare_all,
+    );
+
+    if let Some(snap) = upgrade_shared_snap_access(&shared_snap_access_cache, &key) {
+        info!(
+            "reuse shared snapaccess directly, shard_id: {}, shard_ver: {}, start_ts: {}, start_table_id: {}, end_table_id: {}",
+            shard_id, shard_ver, start_ts, start_table_id, end_table_id
+        );
+        return Ok(snap);
+    }
+
+    let loader = shared_snap_access_loaders
+        .entry(key.clone())
+        .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+        .clone();
+    let _guard = loader.lock().await;
+
+    if let Some(snap) = upgrade_shared_snap_access(&shared_snap_access_cache, &key) {
+        info!(
+            "reuse shared snapaccess after wait, shard_id: {}, shard_ver: {}, start_ts: {}, start_table_id: {}, end_table_id: {}",
+            shard_id, shard_ver, start_ts, start_table_id, end_table_id
+        );
+        return Ok(snap);
+    }
+
+    info!(
+        "load shared snapaccess, shard_id: {}, shard_ver: {}, start_ts: {}, start_table_id: {}, end_table_id: {}",
+        shard_id, shard_ver, start_ts, start_table_id, end_table_id
+    );
+    let snap = request_snapshot_from_leader(
+        pd_client,
+        http_client,
+        dfs,
+        ia_ctx,
+        vector_index_cache,
+        columnar_file_cache,
+        snap_cache,
+        snap_cache_capable_stores,
+        meta_file_cache,
+        schema_files,
+        txn_chunk_manager,
+        block_cache,
+        fts_cache,
+        fts_delta_cache,
+        shard_id,
+        shard_ver,
+        start_ts,
+        &tables,
+        master_key,
+        fts_query_info,
+    )
+    .await;
+
+    if let Ok(ref snap_access) = snap {
+        shared_snap_access_cache.insert(key.clone(), Arc::downgrade(&snap_access.core));
+    }
+    shared_snap_access_loaders.remove(&key);
+    snap
 }
