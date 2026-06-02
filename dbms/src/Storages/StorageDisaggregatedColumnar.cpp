@@ -41,7 +41,7 @@
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/TMTContext.h>
-#include <Storages/KVStore/TiKVHelpers/TiKVKeyspaceIDImpl.h>
+#include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageDisaggregated.h>
 #include <Storages/StorageDisaggregatedColumnar.h>
@@ -134,15 +134,17 @@ BucketSplitResult splitRangesByBucketKeys(
             bool current_range_split = false;
             for (const auto & bucket_key : bucket_keys)
             {
-                auto bucket_key_without_keyspace = TiKVKeyspaceID::removeKeyspaceID(bucket_key);
-                String normalized_bucket_key(bucket_key_without_keyspace);
+                const auto decoded_bucket_key
+                    = RecordKVFormat::decodeTiKVKey(TiKVKey(bucket_key.data(), bucket_key.size()));
+                String normalized_bucket_key(decoded_bucket_key.data(), decoded_bucket_key.size());
                 LOG_INFO(
                     log,
                     "bucket split compare keys, region_id={}, range_start_key={}, range_end_key={}, "
-                    "normalized_bucket_key={}",
+                    "encoded_bucket_key={}, normalized_bucket_key={}",
                     region_id,
                     Redact::keyToHexString(range.start_key.data(), range.start_key.size()),
                     Redact::keyToHexString(range.end_key.data(), range.end_key.size()),
+                    Redact::keyToHexString(bucket_key.data(), bucket_key.size()),
                     Redact::keyToHexString(normalized_bucket_key.data(), normalized_bucket_key.size()));
                 if (!isBucketBoundaryInsideRange(normalized_bucket_key, range))
                     continue;
