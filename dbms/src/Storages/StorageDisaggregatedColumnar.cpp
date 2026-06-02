@@ -509,12 +509,22 @@ void StorageDisaggregated::readThroughColumnar(
         remote_table_ranges,
         num_streams);
     const auto generated_column_infos = genGeneratedColumnInfosForDisaggregatedRead(table_scan);
-    for (auto & task : read_proxy_tasks)
+    if (!read_proxy_tasks.empty())
     {
-        group_builder.addConcurrency(RNProxySourceOp::create({
-            .exec_context = exec_context,
-            .task = task,
-        }));
+        auto & task_pool = read_proxy_tasks.front();
+        const size_t source_num = std::min<size_t>(num_streams, task_pool->getReaderCount());
+        LOG_INFO(
+            log,
+            "use shared proxy reader task pool, reader_num={}, source_num={}",
+            task_pool->getReaderCount(),
+            source_num);
+        for (size_t i = 0; i < source_num; ++i)
+        {
+            group_builder.addConcurrency(RNProxySourceOp::create({
+                .exec_context = exec_context,
+                .task = task_pool,
+            }));
+        }
     }
 
     executeGeneratedColumnPlaceholder(exec_context, group_builder, generated_column_infos, log);
@@ -690,12 +700,22 @@ ColumnarReaderPtr createProxyColumnarReader(
 }
 
 // RNProxyReadTask
+RNProxyReaderSlot::~RNProxyReaderSlot()
+{
+    if (reader.has_value() && reader->inner.ptr != nullptr)
+        RustGcHelper::instance().gcRustPtr(reader->inner.ptr, reader->inner.type);
+}
+
 RNProxyReadTask::RNProxyReadTask(
     std::vector<RNProxyReaderPlan> reader_plans_,
     std::shared_ptr<RNProxyReaderSharedContext> shared_reader_context_)
     : reader_plans(std::move(reader_plans_))
     , shared_reader_context(std::move(shared_reader_context_))
-{}
+{
+    reader_slots.reserve(reader_plans.size());
+    for (size_t i = 0; i < reader_plans.size(); ++i)
+        reader_slots.emplace_back(std::make_shared<RNProxyReaderSlot>());
+}
 
 size_t RNProxyReadTask::getReaderCount() const
 {
@@ -761,6 +781,134 @@ ColumnarReaderPtr RNProxyReadTask::createColumnarReaderWithBackoff(size_t reader
             bo.backoff(pingcap::kv::boRegionMiss, pingcap::Exception(e.message(), e.code()));
         }
     }
+}
+
+ColumnarReaderPtr RNProxyReadTask::getOrCreateReader(size_t reader_index)
+{
+    RUNTIME_CHECK(reader_index < reader_slots.size());
+    auto slot = reader_slots[reader_index];
+    bool should_create_inline = false;
+    {
+        std::unique_lock lock(slot->mutex);
+        switch (slot->state)
+        {
+        case RNProxyReaderMaterializeState::Ready:
+        {
+            auto reader = std::move(slot->reader);
+            slot->reader.reset();
+            slot->state = RNProxyReaderMaterializeState::Consumed;
+            return reader.value();
+        }
+        case RNProxyReaderMaterializeState::Failed:
+            std::rethrow_exception(slot->exception);
+        case RNProxyReaderMaterializeState::Consumed:
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "proxy reader {} is already consumed", reader_index);
+        case RNProxyReaderMaterializeState::Creating:
+            slot->cv.wait(lock, [&] { return slot->state != RNProxyReaderMaterializeState::Creating; });
+            if (slot->state == RNProxyReaderMaterializeState::Ready)
+            {
+                auto reader = std::move(slot->reader);
+                slot->reader.reset();
+                slot->state = RNProxyReaderMaterializeState::Consumed;
+                return reader.value();
+            }
+            if (slot->state == RNProxyReaderMaterializeState::Failed)
+                std::rethrow_exception(slot->exception);
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "proxy reader {} becomes invalid after wait, state={}",
+                reader_index,
+                static_cast<Int32>(slot->state));
+        case RNProxyReaderMaterializeState::NotStarted:
+            slot->state = RNProxyReaderMaterializeState::Creating;
+            should_create_inline = true;
+            break;
+        }
+    }
+
+    RUNTIME_CHECK(should_create_inline);
+    LOG_INFO(
+        getLog(),
+        "materialize proxy reader synchronously, reader_index={}, region_id={}",
+        reader_index,
+        reader_plans[reader_index].region_id);
+    try
+    {
+        auto reader = createColumnarReaderWithBackoff(reader_index);
+        {
+            auto guard = std::lock_guard(slot->mutex);
+            slot->state = RNProxyReaderMaterializeState::Consumed;
+        }
+        slot->cv.notify_all();
+        return reader;
+    }
+    catch (...)
+    {
+        {
+            auto guard = std::lock_guard(slot->mutex);
+            slot->exception = std::current_exception();
+            slot->state = RNProxyReaderMaterializeState::Failed;
+        }
+        slot->cv.notify_all();
+        throw;
+    }
+}
+
+void RNProxyReadTask::prefetchReader(size_t reader_index)
+{
+    if (reader_index >= reader_slots.size())
+        return;
+
+    std::call_once(prefetch_thread_manager_once, [&] { prefetch_thread_manager = newThreadManager(); });
+
+    auto slot = reader_slots[reader_index];
+    {
+        auto guard = std::lock_guard(slot->mutex);
+        if (slot->state != RNProxyReaderMaterializeState::NotStarted)
+            return;
+        slot->state = RNProxyReaderMaterializeState::Creating;
+    }
+
+    prefetch_thread_manager->scheduleThenDetach(
+        true,
+        "PrefetchRNProxyReader",
+        [self = shared_from_this(), slot, reader_index] {
+            LOG_INFO(
+                self->getLog(),
+                "materialize proxy reader asynchronously, reader_index={}, region_id={}",
+                reader_index,
+                self->reader_plans[reader_index].region_id);
+            try
+            {
+                auto reader = self->createColumnarReaderWithBackoff(reader_index);
+                {
+                    auto guard = std::lock_guard(slot->mutex);
+                    if (slot->state == RNProxyReaderMaterializeState::Consumed)
+                        return;
+                    slot->reader.emplace(std::move(reader));
+                    slot->state = RNProxyReaderMaterializeState::Ready;
+                }
+            }
+            catch (...)
+            {
+                {
+                    auto guard = std::lock_guard(slot->mutex);
+                    if (slot->state == RNProxyReaderMaterializeState::Consumed)
+                        return;
+                    slot->exception = std::current_exception();
+                    slot->state = RNProxyReaderMaterializeState::Failed;
+                }
+            }
+            slot->cv.notify_all();
+        });
+}
+
+std::optional<size_t> RNProxyReadTask::tryAcquireReaderIndex()
+{
+    const size_t reader_index = next_reader_index.fetch_add(1, std::memory_order_relaxed);
+    if (reader_index >= reader_plans.size())
+        return std::nullopt;
+    return reader_index;
 }
 
 BlockInputStreamPtr RNProxyReadTask::createInputStream(size_t reader_index)
@@ -970,31 +1118,9 @@ std::vector<RNProxyReadTaskPtr> RNProxyReadTask::buildProxyReadTask(
         }
     }
 
-    unsigned reader_num = all_reader_plans.size();
-    if (reader_num == 0)
+    if (all_reader_plans.empty())
         return tasks;
-    unsigned real_num_streams = std::min(num_streams, reader_num);
-    // Readers per RNProxyReadTask, it should be ceil of reader_num / real_num_streams.
-    unsigned readers_per_task = (reader_num + real_num_streams - 1) / real_num_streams;
-    unsigned reader_idx = 0;
-    std::vector<RNProxyReaderPlan> readers;
-    for (auto & reader_plan : all_reader_plans)
-    {
-        ++reader_idx;
-        readers.push_back(std::move(reader_plan));
-        if (reader_idx == readers_per_task)
-        {
-            reader_idx = 0;
-            tasks.push_back(std::make_shared<RNProxyReadTask>(std::move(readers), shared_reader_context));
-            readers.clear();
-        }
-    }
-
-    if (!readers.empty())
-    {
-        tasks.push_back(std::make_shared<RNProxyReadTask>(std::move(readers), shared_reader_context));
-    }
-
+    tasks.push_back(std::make_shared<RNProxyReadTask>(std::move(all_reader_plans), shared_reader_context));
     return tasks;
 }
 
@@ -1014,7 +1140,7 @@ void RNProxyInputStream::ensureReader()
 {
     if (reader.has_value())
         return;
-    reader.emplace(task->createColumnarReaderWithBackoff(reader_index));
+    reader.emplace(task->getOrCreateReader(reader_index));
 }
 
 RNProxyInputStream::~RNProxyInputStream()
@@ -1156,11 +1282,28 @@ Block RNProxyInputStream::readImpl([[maybe_unused]] FilterPtr & res_filter, [[ma
 void RNProxySourceOp::operateSuffixImpl()
 {
     UNUSED(context);
-    LOG_INFO(log, "Finished reading proxy snapshots, rows={} cost={:.3f}s", total_rows, duration_read_sec);
+    const double total_cost_sec = total_cost_watch.elapsedSeconds();
+    const UInt64 rows_per_sec
+        = total_cost_sec > 0 ? static_cast<UInt64>(static_cast<double>(total_rows) / total_cost_sec) : 0;
+    const UInt64 bytes_per_sec
+        = total_cost_sec > 0 ? static_cast<UInt64>(static_cast<double>(total_bytes) / total_cost_sec) : 0;
+    LOG_INFO(
+        log,
+        "Finished reading proxy snapshots, task_pool_worker_total_cost={:.3f}s claimed_streams={} rows={} "
+        "rows_per_sec={} "
+        "bytes={} bytes_per_sec={} read_cost={:.3f}s",
+        total_cost_sec,
+        total_streams,
+        total_rows,
+        rows_per_sec,
+        total_bytes,
+        bytes_per_sec,
+        duration_read_sec);
 }
 
 void RNProxySourceOp::operatePrefixImpl()
 {
+    total_cost_watch.restart();
     LOG_INFO(log, "Begin reading proxy snapshots");
 }
 
@@ -1179,7 +1322,7 @@ OperatorStatus RNProxySourceOp::readImpl(Block & block)
         return OperatorStatus::HAS_OUTPUT;
     }
 
-    return current_reader_idx < 0 ? OperatorStatus::IO_IN : awaitImpl();
+    return awaitImpl();
 }
 
 OperatorStatus RNProxySourceOp::awaitImpl()
@@ -1187,11 +1330,6 @@ OperatorStatus RNProxySourceOp::awaitImpl()
     if (unlikely(done || t_block.has_value()))
     {
         return OperatorStatus::HAS_OUTPUT;
-    }
-
-    if (unlikely(current_reader_idx < 0))
-    {
-        current_reader_idx = 0;
     }
 
     return OperatorStatus::IO_IN;
@@ -1204,13 +1342,19 @@ OperatorStatus RNProxySourceOp::executeIOImpl()
         return OperatorStatus::HAS_OUTPUT;
     }
 
-    if (unlikely(current_reader_idx < 0))
-    {
-        return awaitImpl();
-    }
-
     if (!current_input_stream)
-        current_input_stream = task->createInputStream(static_cast<size_t>(current_reader_idx));
+    {
+        auto next_reader_idx = task->tryAcquireReaderIndex();
+        if (!next_reader_idx.has_value())
+        {
+            done = true;
+            return OperatorStatus::HAS_OUTPUT;
+        }
+        current_reader_idx = next_reader_idx;
+        current_input_stream = task->createInputStream(current_reader_idx.value());
+        ++total_streams;
+        task->prefetchReader(current_reader_idx.value() + 1);
+    }
 
     FilterPtr filter_ignored = nullptr;
     Stopwatch w{CLOCK_MONOTONIC_COARSE};
@@ -1219,21 +1363,14 @@ OperatorStatus RNProxySourceOp::executeIOImpl()
     if likely (block && block.rows() > 0)
     {
         total_rows += block.rows();
+        total_bytes += block.bytes();
         t_block.emplace(std::move(block));
         return OperatorStatus::HAS_OUTPUT;
     }
     else
     {
         current_input_stream.reset();
-        if (current_reader_idx == static_cast<Int32>(task->getReaderCount() - 1))
-        {
-            done = true;
-        }
-        else if (current_reader_idx < static_cast<Int32>(task->getReaderCount() - 1))
-        {
-            ++current_reader_idx;
-        }
-        // Current stream is drained, try to read from next stream.
+        current_reader_idx.reset();
         return awaitImpl();
     }
 }

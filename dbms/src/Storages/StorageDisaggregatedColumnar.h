@@ -35,12 +35,18 @@
 #include <pingcap/kv/RegionCache.h>
 #include <tipb/executor.pb.h>
 
+#include <atomic>
+#include <condition_variable>
+#include <exception>
+#include <mutex>
+#include <optional>
 #include <string_view>
 #pragma GCC diagnostic pop
 
 namespace DB
 {
 class DAGContext;
+class ThreadManager;
 
 namespace DM
 {
@@ -56,6 +62,26 @@ struct RNProxyReaderPlan
     RegionVersion region_ver;
     UInt64 region_conf_ver;
     std::vector<std::tuple<TableID, pingcap::coprocessor::KeyRanges>> physical_table_ranges;
+};
+
+enum class RNProxyReaderMaterializeState
+{
+    NotStarted,
+    Creating,
+    Ready,
+    Failed,
+    Consumed,
+};
+
+struct RNProxyReaderSlot
+{
+    ~RNProxyReaderSlot();
+
+    std::mutex mutex;
+    std::condition_variable cv;
+    RNProxyReaderMaterializeState state = RNProxyReaderMaterializeState::NotStarted;
+    std::optional<ColumnarReaderPtr> reader;
+    std::exception_ptr exception;
 };
 
 class RNProxyReadTask;
@@ -91,6 +117,12 @@ public:
 
     ColumnarReaderPtr createColumnarReaderWithBackoff(size_t reader_index) const;
 
+    ColumnarReaderPtr getOrCreateReader(size_t reader_index);
+
+    void prefetchReader(size_t reader_index);
+
+    std::optional<size_t> tryAcquireReaderIndex();
+
     size_t getReaderCount() const;
 
     const Context & getContext() const;
@@ -112,6 +144,10 @@ public:
 private:
     std::vector<RNProxyReaderPlan> reader_plans;
     std::shared_ptr<RNProxyReaderSharedContext> shared_reader_context;
+    std::vector<std::shared_ptr<RNProxyReaderSlot>> reader_slots;
+    std::atomic_size_t next_reader_index = 0;
+    std::once_flag prefetch_thread_manager_once;
+    std::shared_ptr<ThreadManager> prefetch_thread_manager;
 };
 
 class RNProxyInputStream : public IProfilingBlockInputStream
@@ -222,9 +258,11 @@ private:
     const Context & context;
     const LoggerPtr log;
     RNProxyReadTaskPtr task;
+    UInt64 total_bytes = 0;
     size_t total_rows = 0;
+    size_t total_streams = 0;
 
-    Int32 current_reader_idx = -1;
+    std::optional<size_t> current_reader_idx;
     BlockInputStreamPtr current_input_stream;
 
     // Temporarily store the block read from current_seg_task->stream and pass it to downstream operators in readImpl.
@@ -233,7 +271,7 @@ private:
     bool done = false;
     // Count the time spent waiting for segment tasks to be ready.
     //double duration_wait_ready_task_sec = 0;
-    Stopwatch wait_stop_watch{CLOCK_MONOTONIC_COARSE};
+    Stopwatch total_cost_watch{CLOCK_MONOTONIC_COARSE};
 
     // Count the time consumed by reading blocks in the stream of segment tasks.
     double duration_read_sec = 0;
