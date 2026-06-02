@@ -117,8 +117,6 @@ bool isBucketBoundaryInsideRange(const String & bucket_key, const pingcap::copro
 }
 
 BucketSplitResult splitRangesByBucketKeys(
-    const LoggerPtr & log,
-    RegionID region_id,
     const ProxyPhysicalTableRanges & physical_table_ranges,
     const std::vector<String> & bucket_keys)
 {
@@ -137,15 +135,6 @@ BucketSplitResult splitRangesByBucketKeys(
                 const auto decoded_bucket_key
                     = RecordKVFormat::decodeTiKVKey(TiKVKey(bucket_key.data(), bucket_key.size()));
                 String normalized_bucket_key(decoded_bucket_key.data(), decoded_bucket_key.size());
-                LOG_INFO(
-                    log,
-                    "bucket split compare keys, region_id={}, range_start_key={}, range_end_key={}, "
-                    "encoded_bucket_key={}, normalized_bucket_key={}",
-                    region_id,
-                    Redact::keyToHexString(range.start_key.data(), range.start_key.size()),
-                    Redact::keyToHexString(range.end_key.data(), range.end_key.size()),
-                    Redact::keyToHexString(bucket_key.data(), bucket_key.size()),
-                    Redact::keyToHexString(normalized_bucket_key.data(), normalized_bucket_key.size()));
                 if (!isBucketBoundaryInsideRange(normalized_bucket_key, range))
                     continue;
                 result.units.emplace_back(
@@ -1026,7 +1015,7 @@ std::vector<RNProxyReadTaskPtr> RNProxyReadTask::buildProxyReadTask(
         if (enable_bucket_parallel)
         {
             auto bucket_keys = getRegionBucketKeysFromProxy(context, region_id, plan.region_ver_id.ver);
-            auto split_result = splitRangesByBucketKeys(log, region_id, physical_table_ranges, bucket_keys);
+            auto split_result = splitRangesByBucketKeys(physical_table_ranges, bucket_keys);
             if (split_result.has_bucket_split && split_result.units.size() > 1)
             {
                 total_max_reader_num += split_result.units.size() - 1;
