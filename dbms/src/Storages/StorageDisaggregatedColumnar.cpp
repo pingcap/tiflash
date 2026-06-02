@@ -55,7 +55,6 @@
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
 
-#include <algorithm>
 #include <ext/scope_guard.h>
 #include <limits>
 
@@ -144,48 +143,6 @@ BucketSplitResult splitRangesByBucketKeys(
         }
     }
     return result;
-}
-
-void appendRangeToReaderRanges(
-    ProxyPhysicalTableRanges & reader_ranges,
-    TableID table_id,
-    pingcap::coprocessor::KeyRange range)
-{
-    auto it = std::find_if(reader_ranges.begin(), reader_ranges.end(), [&](const auto & entry) {
-        return std::get<0>(entry) == table_id;
-    });
-    if (it == reader_ranges.end())
-    {
-        reader_ranges.emplace_back(table_id, pingcap::coprocessor::KeyRanges{std::move(range)});
-        return;
-    }
-    std::get<1>(*it).push_back(std::move(range));
-}
-
-std::vector<ProxyPhysicalTableRanges> packBucketUnitsIntoReaders(
-    const std::vector<BucketSplitUnit> & units,
-    size_t reader_count)
-{
-    std::vector<ProxyPhysicalTableRanges> reader_groups;
-    if (units.empty() || reader_count == 0)
-        return reader_groups;
-
-    reader_count = std::min(reader_count, units.size());
-    reader_groups.resize(reader_count);
-    size_t base_unit_count = units.size() / reader_count;
-    size_t remainder = units.size() % reader_count;
-    size_t unit_index = 0;
-    for (size_t reader_index = 0; reader_index < reader_count; ++reader_index)
-    {
-        size_t current_unit_count = base_unit_count + (reader_index < remainder ? 1 : 0);
-        auto & reader_ranges = reader_groups[reader_index];
-        for (size_t i = 0; i < current_unit_count; ++i)
-        {
-            const auto & [table_id, range] = units[unit_index++];
-            appendRangeToReaderRanges(reader_ranges, table_id, range);
-        }
-    }
-    return reader_groups;
 }
 
 std::vector<String> getRegionBucketKeysFromProxy(const Context & context, RegionID region_id, UInt64 region_ver)
@@ -1095,33 +1052,7 @@ std::vector<RNProxyReadTaskPtr> RNProxyReadTask::buildProxyReadTask(
         }
         region_reader_plans.emplace_back(std::move(plan));
     }
-
-    std::vector<size_t> reader_count_per_region(region_reader_plans.size(), 1);
-    if (enable_bucket_parallel)
-    {
-        size_t target_reader_num = std::min(total_max_reader_num, static_cast<size_t>(num_streams));
-        size_t extra_reader_budget = target_reader_num > region_num ? target_reader_num - region_num : 0;
-        while (extra_reader_budget > 0)
-        {
-            bool allocated = false;
-            for (size_t i = 0; i < region_reader_plans.size() && extra_reader_budget > 0; ++i)
-            {
-                const auto max_reader_count
-                    = region_reader_plans[i].bucket_units.empty() ? 1 : region_reader_plans[i].bucket_units.size();
-                if (reader_count_per_region[i] >= max_reader_count)
-                    continue;
-                ++reader_count_per_region[i];
-                --extra_reader_budget;
-                allocated = true;
-            }
-            if (!allocated)
-                break;
-        }
-    }
-
-    size_t planned_reader_num = 0;
-    for (auto reader_count : reader_count_per_region)
-        planned_reader_num += reader_count;
+    const size_t planned_reader_num = total_max_reader_num;
     if (enable_bucket_parallel)
     {
         LOG_INFO(log, "bucket parallel split bucket count={}", total_split_bucket_num);
@@ -1144,17 +1075,27 @@ std::vector<RNProxyReadTaskPtr> RNProxyReadTask::buildProxyReadTask(
     for (size_t i = 0; i < region_reader_plans.size(); ++i)
     {
         const auto & plan = region_reader_plans[i];
-        auto reader_groups = plan.bucket_units.empty() || reader_count_per_region[i] <= 1
-            ? std::vector<ProxyPhysicalTableRanges>{plan.physical_table_ranges}
-            : packBucketUnitsIntoReaders(plan.bucket_units, reader_count_per_region[i]);
-        for (const auto & physical_table_ranges : reader_groups)
+        if (plan.bucket_units.empty())
         {
             all_reader_plans.push_back(RNProxyReaderPlan{
                 .region_id = plan.region_id,
                 .region_ver = plan.region_ver_id.ver,
                 .region_conf_ver = plan.region_ver_id.conf_ver,
-                .physical_table_ranges = physical_table_ranges,
+                .physical_table_ranges = plan.physical_table_ranges,
             });
+        }
+        else
+        {
+            for (const auto & [table_id, range] : plan.bucket_units)
+            {
+                all_reader_plans.push_back(RNProxyReaderPlan{
+                    .region_id = plan.region_id,
+                    .region_ver = plan.region_ver_id.ver,
+                    .region_conf_ver = plan.region_ver_id.conf_ver,
+                    .physical_table_ranges = ProxyPhysicalTableRanges{
+                        std::make_tuple(table_id, pingcap::coprocessor::KeyRanges{range})},
+                });
+            }
         }
     }
 
