@@ -1040,6 +1040,7 @@ std::vector<RNProxyReadTaskPtr> RNProxyReadTask::buildProxyReadTask(
     std::vector<RegionReaderPlan> region_reader_plans;
     region_reader_plans.reserve(region_num);
     size_t total_max_reader_num = region_num;
+    size_t total_split_bucket_num = 0;
     for (const auto & [region_id, physical_table_ranges] : all_remote_regions_by_region)
     {
         RegionReaderPlan plan{
@@ -1054,6 +1055,7 @@ std::vector<RNProxyReadTaskPtr> RNProxyReadTask::buildProxyReadTask(
             if (split_result.has_bucket_split && split_result.units.size() > 1)
             {
                 total_max_reader_num += split_result.units.size() - 1;
+                total_split_bucket_num += split_result.units.size();
                 plan.bucket_units = std::move(split_result.units);
             }
         }
@@ -1086,6 +1088,10 @@ std::vector<RNProxyReadTaskPtr> RNProxyReadTask::buildProxyReadTask(
     size_t planned_reader_num = 0;
     for (auto reader_count : reader_count_per_region)
         planned_reader_num += reader_count;
+    if (enable_bucket_parallel)
+    {
+        LOG_INFO(log, "bucket parallel split bucket count={}", total_split_bucket_num);
+    }
     LOG_INFO(
         log,
         "region_num={}, table_num={}, num_streams={}, keep_order={}, bucket_parallel={}, planned_reader_num={}, "
