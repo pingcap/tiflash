@@ -16,6 +16,7 @@
 #if ENABLE_NEXT_GEN_COLUMNAR
 #include <Common/Exception.h>
 #include <Common/MyTime.h>
+#include <Common/RedactHelpers.h>
 #include <Common/Stopwatch.h>
 #include <Common/ThreadManager.h>
 #include <Core/NamesAndTypes.h>
@@ -40,6 +41,7 @@
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/TiKVHelpers/TiKVKeyspaceIDImpl.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageDisaggregated.h>
 #include <Storages/StorageDisaggregatedColumnar.h>
@@ -115,6 +117,8 @@ bool isBucketBoundaryInsideRange(const String & bucket_key, const pingcap::copro
 }
 
 BucketSplitResult splitRangesByBucketKeys(
+    const LoggerPtr & log,
+    RegionID region_id,
     const ProxyPhysicalTableRanges & physical_table_ranges,
     const std::vector<String> & bucket_keys)
 {
@@ -130,10 +134,22 @@ BucketSplitResult splitRangesByBucketKeys(
             bool current_range_split = false;
             for (const auto & bucket_key : bucket_keys)
             {
-                if (!isBucketBoundaryInsideRange(bucket_key, range))
+                auto bucket_key_without_keyspace = TiKVKeyspaceID::removeKeyspaceID(bucket_key);
+                String normalized_bucket_key(bucket_key_without_keyspace);
+                LOG_INFO(
+                    log,
+                    "bucket split compare keys, region_id={}, range_start_key={}, range_end_key={}, "
+                    "normalized_bucket_key={}",
+                    region_id,
+                    Redact::keyToHexString(range.start_key.data(), range.start_key.size()),
+                    Redact::keyToHexString(range.end_key.data(), range.end_key.size()),
+                    Redact::keyToHexString(normalized_bucket_key.data(), normalized_bucket_key.size()));
+                if (!isBucketBoundaryInsideRange(normalized_bucket_key, range))
                     continue;
-                result.units.emplace_back(table_id, pingcap::coprocessor::KeyRange{current_start, bucket_key});
-                current_start = bucket_key;
+                result.units.emplace_back(
+                    table_id,
+                    pingcap::coprocessor::KeyRange{current_start, normalized_bucket_key});
+                current_start = std::move(normalized_bucket_key);
                 current_range_split = true;
             }
             if (!range.end_key.empty() && current_start >= range.end_key)
@@ -1042,7 +1058,7 @@ std::vector<RNProxyReadTaskPtr> RNProxyReadTask::buildProxyReadTask(
         if (enable_bucket_parallel)
         {
             auto bucket_keys = getRegionBucketKeysFromProxy(context, region_id, plan.region_ver_id.ver);
-            auto split_result = splitRangesByBucketKeys(physical_table_ranges, bucket_keys);
+            auto split_result = splitRangesByBucketKeys(log, region_id, physical_table_ranges, bucket_keys);
             if (split_result.has_bucket_split && split_result.units.size() > 1)
             {
                 total_max_reader_num += split_result.units.size() - 1;
