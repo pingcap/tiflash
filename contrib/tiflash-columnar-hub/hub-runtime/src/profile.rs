@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::pin::Pin;
+#[cfg(feature = "external-jemalloc")]
 use std::{
     ffi::{c_char, c_int, c_void, CString},
     fs::File,
     io::BufReader,
-    pin::Pin,
 };
 
 use futures::{
