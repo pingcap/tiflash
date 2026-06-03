@@ -32,7 +32,8 @@ func> wait_table test fk_parent
 mysql> set @@session.foreign_key_checks = on; set @@session.tidb_foreign_key_check_in_shared_lock = on; insert into test.fk_parent (id, v, big_v) values (1, 'p1', 'seed');
 
 # written in one line so that `tests/run-test.py` could execute all the DML in the same txn
-mysql> set @@session.foreign_key_checks = on; set @@session.tidb_foreign_key_check_in_shared_lock = on; begin pessimistic; insert into test.fk_child (id, parent_id, v) values (1, 1, 'c1'); insert into test.fk_parent (id, v, big_v) values (2, 'p2', repeat('x', 512)); commit;
+# turn off fair locking because these two features are conflict
+mysql> set @@session.foreign_key_checks = on; set @@session.tidb_foreign_key_check_in_shared_lock = on; set @@session.tidb_pessimistic_txn_fair_locking = off; begin pessimistic; insert into test.fk_child (id, parent_id, v) values (1, 1, 'c1'); insert into test.fk_parent (id, v, big_v) values (2, 'p2', repeat('x', 512)); commit;
 
 mysql> set session tidb_isolation_read_engines='tikv'; select id, length(big_v) as big_v_bytes from test.fk_parent order by id;
 +----+-------------+
