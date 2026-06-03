@@ -18,7 +18,7 @@
 #   3. Pessimistic txn: INSERT child -> FK shared lock on parent(1);
 #      INSERT parent(id=2, big_v=REPEAT('x',512)) in the same txn.
 #   4. Read back from TiKV, then from TiFlash.
-# Unfixed proxy (e.g. raft proxy 66199984c): TiFlash read fails; wn log may show
+# Unfixed proxy (e.g. tiflash-proxy-next-gen 66199984c): TiFlash read fails; log may show
 #   "can not found in default cf". Fixed proxy should match TiKV output below.
 
 mysql> drop table if exists test.fk_child;
@@ -43,7 +43,7 @@ mysql> set session tidb_isolation_read_engines='tikv'; select id, length(big_v) 
 |  2 |         512 |
 +----+-------------+
 
-mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ READ_FROM_STORAGE(TIFLASH[fk_parent]) */ id, length(big_v) as big_v_bytes from test.fk_parent order by id;
+mysql> set session tidb_isolation_read_engines='tiflash'; select id, length(big_v) as big_v_bytes from test.fk_parent order by id;
 +----+-------------+
 | id | big_v_bytes |
 +----+-------------+
