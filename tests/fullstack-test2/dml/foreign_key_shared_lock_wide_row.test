@@ -28,8 +28,8 @@ func> wait_table test fk_child_wide
 
 mysql> insert into test.fk_parent_wide with recursive seq as (select 1 as n union all select n + 1 from seq where n < 100) select n from seq;
 
-mysql> begin;
-mysql> set @@session.tidb_txn_mode = 'pessimistic';set @@session.tidb_foreign_key_check_in_shared_lock = on;set @@session.foreign_key_checks = on;insert into test.fk_child_wide with recursive seq as (select 1 as n union all select n + 1 from seq where n < 100) select n, n, repeat('a', 1000) from seq;
+mysql> set @@session.tidb_txn_mode = 'pessimistic';begin;
+mysql> set @@session.tidb_foreign_key_check_in_shared_lock = on;set @@session.foreign_key_checks = on;insert into test.fk_child_wide with recursive seq as (select 1 as n union all select n + 1 from seq where n < 100) select n, n, repeat('a', 1000) from seq;
 mysql> commit;
 
 mysql> set session tidb_isolation_read_engines='tiflash'; select count(*) as cnt, min(id) as min_id, max(id) as max_id from test.fk_parent_wide;
