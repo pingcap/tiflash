@@ -33,7 +33,7 @@ kvproto = { git = "ssh://git@github.com/pingcap/kvproto.git", rev = "02dc8a9dc01
 lazy_static = "1.5.0"
 num_cpus = "1"
 pd_client = { workspace = true }
-pprof = { version = "0.15", default-features = false, features = ["flamegraph", "frame-pointer", "protobuf-codec"] }
+pprof = { version = "0.15", default-features = false, features = ["flamegraph", "cpp", "framehop-unwinder", "protobuf-codec"] }
 pprof_util = { version = "0.8.2", features = ["flamegraph"] }
 prometheus = { version = "0.13", features = ["nightly", "push"], default-features = true }
 protobuf = { version = "2.8", features = ["bytes"], default-features = true }
