@@ -18,7 +18,7 @@
 
 mysql> drop table if exists test.fk_child_wide;
 mysql> drop table if exists test.fk_parent_wide;
-mysql> create table test.fk_parent_wide (id int not null, primary key (id));
+mysql> create table test.fk_parent_wide (id int not null, big_v varchar(1024) not null default '', primary key (id));
 mysql> create table test.fk_child_wide (id int not null, pid int not null, payload varchar(1000) not null, primary key (id), index idx_pid (pid), constraint fk_child_wide_pid foreign key (pid) references test.fk_parent_wide(id));
 mysql> alter table test.fk_parent_wide set tiflash replica 1;
 mysql> alter table test.fk_child_wide set tiflash replica 1;
@@ -26,11 +26,9 @@ mysql> alter table test.fk_child_wide set tiflash replica 1;
 func> wait_table test fk_parent_wide
 func> wait_table test fk_child_wide
 
-mysql> insert into test.fk_parent_wide with recursive seq as (select 1 as n union all select n + 1 from seq where n < 100) select n from seq;
+mysql> insert into test.fk_parent_wide with recursive seq as (select 1 as n union all select n + 1 from seq where n < 100) select n, repeat('x', 512) from seq;
 
-mysql> set @@session.tidb_txn_mode = 'pessimistic';begin;
-mysql> set @@session.tidb_foreign_key_check_in_shared_lock = on;set @@session.foreign_key_checks = on;insert into test.fk_child_wide with recursive seq as (select 1 as n union all select n + 1 from seq where n < 100) select n, n, repeat('a', 1000) from seq;
-mysql> commit;
+mysql> BEGIN PESSIMISTIC;set @@session.tidb_foreign_key_check_in_shared_lock = on;set @@session.foreign_key_checks = on;insert into test.fk_child_wide with recursive seq as (select 1 as n union all select n + 1 from seq where n < 100) select n, n, repeat('a', 1000) from seq; commit;
 
 mysql> set session tidb_isolation_read_engines='tiflash'; select count(*) as cnt, min(id) as min_id, max(id) as max_id from test.fk_parent_wide;
 +-----+--------+--------+
