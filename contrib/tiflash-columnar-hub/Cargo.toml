@@ -23,14 +23,8 @@ sysinfo = { git = "https://github.com/tikv/sysinfo", branch = "0.26-fix-cpu" }
 tokio-executor = { git = "https://github.com/tikv/tokio", branch = "tokio-timer-hotfix" }
 lindera = { git = "https://github.com/breezewish/lindera", branch = "v0.43.1-tokio-1.24" }
 tantivy = { git = "https://github.com/breezewish/tikv-tantivy.git", branch = "patch-0.22.1" }
-kvproto = { git = "https://github.com/pingcap/kvproto.git", rev = "02dc8a9dc01827367f9d91ff2d88c447d3a838ab" }
-tipb = { git = "https://github.com/pingcap/tipb.git", rev = "9fd33ded6f2c94633e601104cde26f2bdb5147d5" }
-
-# [patch."https://github.com/pingcap/kvproto.git"]
-# kvproto = { git = "ssh://git@github.com/pingcap/kvproto.git", rev = "02dc8a9dc01827367f9d91ff2d88c447d3a838ab" }
-
-# [patch."https://github.com/pingcap/tipb.git"]
-# tipb = { git = "ssh://git@github.com/pingcap/tipb.git", rev = "9fd33ded6f2c94633e601104cde26f2bdb5147d5" }
+kvproto = { git = "https://github.com/pingcap/kvproto.git" }
+tipb = { git = "https://github.com/pingcap/tipb.git" }
 
 [patch."https://github.com/tidbcloud/cloud-storage-engine.git"]
 #api_version = { path = "../../../cloud-storage-engine/components/api_version" }
