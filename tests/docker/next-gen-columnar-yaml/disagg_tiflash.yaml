@@ -27,7 +27,6 @@ services:
       - ./log/tiflash-cn0:/log
       - ..:/tests
       - ../docker/_env.sh:/tests/_env.sh
-      - ../.build/tiflash:/tiflash
     entrypoint: /tiflash/tiflash server --config-file /tiflash.toml
     depends_on:
       - "minio0"

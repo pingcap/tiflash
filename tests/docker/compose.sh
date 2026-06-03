@@ -37,9 +37,10 @@ Defaults:
   Edit ./_env.sh using ${VAR:-default}. Command-line values take precedence.
 
 Environment:
-  LOCAL_PD_BIN_DIR    directory containing pd-server
-  LOCAL_TIKV_BIN_DIR  directory containing tikv-server and tikv-worker
-  LOCAL_TIDB_BIN_DIR  directory containing tidb-server
+  LOCAL_PD_BIN_DIR      directory containing pd-server
+  LOCAL_TIKV_BIN_DIR    directory containing tikv-server and tikv-worker
+  LOCAL_TIDB_BIN_DIR    directory containing tidb-server
+  LOCAL_TiFLASH_BIN_DIR directory containing tiflash and runtime libs (default: ../.build/tiflash)
   EXPOSE_TIDB_PORT    host port mapped to tidb0:4000, e.g. 4000
   PD_IMAGE, TIKV_IMAGE, TIDB_IMAGE, HUB_ADDR, PD_BRANCH, TIKV_BRANCH, TIDB_BRANCH
 EOF

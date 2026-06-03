@@ -40,13 +40,30 @@ This document describes how to run tests under `tests/`.
   ```
 - See `tests/README.md` for the full build and docker compose steps.
 
+**Configure local component binaries (optional):** edit `_env.sh`:
+  ```bash
+  export LOCAL_TiFLASH_BIN_DIR="${LOCAL_TiFLASH_BIN_DIR:-/path/to/tiflash/install/dir}"
+  export LOCAL_TIKV_BIN_DIR="${LOCAL_TIKV_BIN_DIR:-/path/to/cloud-storage-engine/target/release}"
+  export LOCAL_TIDB_BIN_DIR="${LOCAL_TIDB_BIN_DIR:-/path/to/tidb/bin}"
+  export LOCAL_PD_BIN_DIR="${LOCAL_PD_BIN_DIR:-/path/to/pd/bin}"   # optional
+  ```
+  `LOCAL_TiFLASH_BIN_DIR` must be a full install tree (`tiflash`, `libtiflash_proxy.so`, runtime libs), for example from `cmake --install . --component=tiflash-release --prefix <dir>`. When set, `compose.sh` mounts it via `tests/docker/override-yaml/local_tiflash.yaml`.
+
+**Start the cluster manually:**
+  ```bash
+  cd tests/fullstack-test-next-gen
+  ./compose.sh up -d
+  ./compose.sh down
+  ```
+
 ### Fullstack Next-Gen Columnar Tests
 - Directory: `tests/fullstack-test-next-gen-columnar`.
 - Use this suite for next-gen **columnar-only** topology: `tiflash-cn0` only (no `tiflash-wn0`), with configs under `tests/docker/next-gen-columnar-yaml/` and `tests/docker/next-gen-columnar-config/`.
-- Build TiFlash first and ensure the prebuilt binary exists at `tests/.build/tiflash/tiflash` (for example, `cmake --workflow --preset dev`).
+- Build TiFlash first (for example `cmake --workflow --preset dev` with `-DENABLE_NEXT_GEN=ON`), then set `LOCAL_TiFLASH_BIN_DIR` in `_env.sh` or install to `tests/.build/tiflash`.
 
 **Configure local component binaries (optional):** edit `_env.sh`:
   ```bash
+  export LOCAL_TiFLASH_BIN_DIR="${LOCAL_TiFLASH_BIN_DIR:-/path/to/tiflash/install/dir}"
   export LOCAL_TIKV_BIN_DIR="${LOCAL_TIKV_BIN_DIR:-/path/to/cloud-storage-engine/target/release}"
   export LOCAL_TIDB_BIN_DIR="${LOCAL_TIDB_BIN_DIR:-/path/to/tidb/bin}"
   export LOCAL_PD_BIN_DIR="${LOCAL_PD_BIN_DIR:-/path/to/pd/bin}"   # optional

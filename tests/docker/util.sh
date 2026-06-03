@@ -184,14 +184,15 @@ function prepare_next_gen_columnar_data_dirs() {
 
 function check_env() {
   local cur_dir=$(pwd)
-  local prebuilt_bin_dir=$(realpath "${cur_dir}/../../tests/.build/tiflash")
-  if [[ ! -d ${prebuilt_bin_dir} ]]; then
-    echo "No pre-build tiflash binary directory: ${prebuilt_bin_dir}"
+  local tiflash_bin_dir="${LOCAL_TiFLASH_BIN_DIR:-${cur_dir}/../.build/tiflash}"
+  tiflash_bin_dir="$(realpath "${tiflash_bin_dir}")"
+  if [[ ! -d ${tiflash_bin_dir} ]]; then
+    echo "No TiFlash binary directory: ${tiflash_bin_dir}"
     exit -1
   else
-    echo "Running tests with pre-built tiflash binary: ${prebuilt_bin_dir}/tiflash"
-    ls -l ${prebuilt_bin_dir}
-    ${prebuilt_bin_dir}/tiflash --version
+    echo "Running tests with TiFlash binary: ${tiflash_bin_dir}/tiflash"
+    ls -l "${tiflash_bin_dir}"
+    "${tiflash_bin_dir}/tiflash" --version
   fi
 }
 
@@ -241,6 +242,25 @@ function append_local_binary_overrides() {
   fi
 }
 
+function append_tiflash_bin_dir_override() {
+  local -n compose_files=$1
+  local override_dir="${2:-../docker/override-yaml}"
+  local validate_binaries="${3:-true}"
+
+  local tiflash_bin_dir="${LOCAL_TiFLASH_BIN_DIR:-../.build/tiflash}"
+  export LOCAL_TiFLASH_BIN_DIR="$(realpath "${tiflash_bin_dir}")"
+  if [[ "${validate_binaries}" == "true" ]]; then
+    validate_local_binary "${LOCAL_TiFLASH_BIN_DIR}/tiflash" "tiflash"
+  fi
+  echo "Using TiFlash install directory: ${LOCAL_TiFLASH_BIN_DIR}"
+
+  if [[ "${NEXT_GEN_COLUMNAR_ONLY:-}" == "true" ]]; then
+    compose_files+=(-f "${override_dir}/local_tiflash_columnar.yaml")
+  else
+    compose_files+=(-f "${override_dir}/local_tiflash.yaml")
+  fi
+}
+
 function setup_next_gen_compose_files() {
   local compose_files_name=$1
   local -n compose_files=${compose_files_name}
@@ -256,6 +276,7 @@ function setup_next_gen_compose_files() {
 
   compose_files=(-f next-gen-cluster.yaml -f "${DISAGG_TIFLASH_YAML}")
   append_local_binary_overrides "${compose_files_name}" "../docker/override-yaml" "${validate_binaries}"
+  append_tiflash_bin_dir_override "${compose_files_name}" "../docker/override-yaml" "${validate_binaries}"
   if [[ -n "${EXPOSE_TIDB_PORT:-}" ]]; then
     compose_files+=(-f "../docker/override-yaml/expose_tidb.yaml")
     echo "Exposing tidb0 on host port ${EXPOSE_TIDB_PORT}"
