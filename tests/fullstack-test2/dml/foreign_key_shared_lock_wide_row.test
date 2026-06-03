@@ -19,35 +19,40 @@
 mysql> drop table if exists test.fk_child_wide;
 mysql> drop table if exists test.fk_parent_wide;
 mysql> create table test.fk_parent_wide (id int not null, primary key (id));
-mysql> create table test.fk_child_wide (id int not null, pid int not null, payload varchar(300) not null, primary key (id), index idx_pid (pid), constraint fk_child_wide_pid foreign key (pid) references test.fk_parent_wide(id));
+mysql> create table test.fk_child_wide (id int not null, pid int not null, payload varchar(1000) not null, primary key (id), index idx_pid (pid), constraint fk_child_wide_pid foreign key (pid) references test.fk_parent_wide(id));
 mysql> alter table test.fk_parent_wide set tiflash replica 1;
 mysql> alter table test.fk_child_wide set tiflash replica 1;
 
 func> wait_table test fk_parent_wide
 func> wait_table test fk_child_wide
 
-mysql> insert into test.fk_parent_wide values (1);
+mysql> insert into test.fk_parent_wide with recursive seq as (select 1 as n union all select n + 1 from seq where n < 100) select n from seq;
 
-mysql> set @@session.tidb_txn_mode = 'pessimistic';
-mysql> set @@session.tidb_foreign_key_check_in_shared_lock = on;
-mysql> set @@session.foreign_key_checks = on;
 mysql> begin;
-mysql> insert into test.fk_child_wide values (1, 1, repeat('a', 300));
+mysql> set @@session.tidb_txn_mode = 'pessimistic';set @@session.tidb_foreign_key_check_in_shared_lock = on;set @@session.foreign_key_checks = on;insert into test.fk_child_wide with recursive seq as (select 1 as n union all select n + 1 from seq where n < 100) select n, n, repeat('a', 1000) from seq;
 mysql> commit;
 
-mysql> set session tidb_isolation_read_engines='tiflash'; select id, pid, char_length(payload) as payload_len from test.fk_child_wide;
-+----+-----+-------------+
-| id | pid | payload_len |
-+----+-----+-------------+
-|  1 |   1 |         300 |
-+----+-----+-------------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*) as cnt, min(id) as min_id, max(id) as max_id from test.fk_parent_wide;
++-----+--------+--------+
+| cnt | min_id | max_id |
++-----+--------+--------+
+| 100 |      1 |    100 |
++-----+--------+--------+
 
-mysql> set session tidb_isolation_read_engines='tiflash'; select id, pid, left(payload, 16) as payload_prefix from test.fk_child_wide;
-+----+-----+------------------+
-| id | pid | payload_prefix   |
-+----+-----+------------------+
-|  1 |   1 | aaaaaaaaaaaaaaaa |
-+----+-----+------------------+
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*) as cnt, min(id) as min_id, max(id) as max_id, min(char_length(payload)) as min_payload_len, max(char_length(payload)) as max_payload_len from test.fk_child_wide;
++-----+--------+--------+-----------------+-----------------+
+| cnt | min_id | max_id | min_payload_len | max_payload_len |
++-----+--------+--------+-----------------+-----------------+
+| 100 |      1 |    100 |            1000 |            1000 |
++-----+--------+--------+-----------------+-----------------+
 
-mysql> drop table if exists test.fk_child_wide;
-mysql> drop table if exists test.fk_parent_wide;
+mysql> set session tidb_isolation_read_engines='tiflash'; select id, pid, left(payload, 16) as payload_prefix from test.fk_child_wide where id in (1, 100) order by id;
++-----+-----+------------------+
+| id  | pid | payload_prefix   |
++-----+-----+------------------+
+|   1 |   1 | aaaaaaaaaaaaaaaa |
+| 100 | 100 | aaaaaaaaaaaaaaaa |
++-----+-----+------------------+
+
+#mysql> drop table if exists test.fk_child_wide;
+#mysql> drop table if exists test.fk_parent_wide;
