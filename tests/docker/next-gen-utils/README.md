@@ -3,9 +3,9 @@
 Note that the images under `us-docker.pkg.dev` are private. You need to acquire the access token and login before using this script.
 
 ```bash
-docker login -u oauth2accesstoken --password-stdin us-docker.pkg.dev
+gcloud auth print-access-token | docker login -u oauth2accesstoken --password-stdin us-docker.pkg.dev
 # or using podman instead of docker
-# podman login -u oauth2accesstoken --password-stdin us-docker.pkg.dev
+# gcloud auth print-access-token | podman login -u oauth2accesstoken --password-stdin us-docker.pkg.dev
 ```
 
 Download the binaries and start a tiup cluster.
