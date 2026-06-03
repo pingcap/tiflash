@@ -20,11 +20,13 @@ export NEXT_GEN_COLUMNAR_ONLY="${NEXT_GEN_COLUMNAR_ONLY:-true}"
 export LOCAL_PD_BIN_DIR="${LOCAL_PD_BIN_DIR:-}"
 export LOCAL_TIKV_BIN_DIR="${LOCAL_TIKV_BIN_DIR:-}"
 export LOCAL_TIDB_BIN_DIR="${LOCAL_TIDB_BIN_DIR:-}"
+export LOCAL_TiFLASH_BIN_DIR="${LOCAL_TiFLASH_BIN_DIR:-../.build/tiflash}"
 
 # Examples:
 # export LOCAL_TIKV_BIN_DIR="${LOCAL_TIKV_BIN_DIR:-/path/to/tikv/target/release}"
 # export LOCAL_PD_BIN_DIR="${LOCAL_PD_BIN_DIR:-/path/to/pd/bin}"
 # export LOCAL_TIDB_BIN_DIR="${LOCAL_TIDB_BIN_DIR:-/path/to/tidb/bin}"
+# export LOCAL_TiFLASH_BIN_DIR="${LOCAL_TiFLASH_BIN_DIR:-/path/to/tiflash/install/dir}"
 
 export HUB_ADDR="${HUB_ADDR:-us-docker.pkg.dev/pingcap-testing-account/tidbx}"
 
