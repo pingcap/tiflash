@@ -14,7 +14,7 @@ version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b5d307320b3181d6d7954e663bd7c774a838b8220fe0593c86d9fb09f498b4b"
 dependencies = [
- "gimli 0.32.3",
+ "gimli",
 ]
 
 [[package]]
@@ -173,7 +173,7 @@ dependencies = [
  "bytes",
  "codec",
  "engine_traits",
- "kvproto",
+ "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
  "match-template",
  "thiserror 1.0.69",
  "tikv_alloc",
@@ -382,7 +382,7 @@ dependencies = [
  "http 0.2.12",
  "hyper 0.14.26",
  "hyper-tls 0.5.0",
- "kvproto",
+ "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
  "lazy_static",
  "md5",
  "prometheus",
@@ -952,7 +952,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "miniz_oxide",
- "object 0.37.3",
+ "object",
  "rustc-demangle",
  "windows-link",
 ]
@@ -1120,7 +1120,7 @@ dependencies = [
  "http 0.2.12",
  "hyper 0.14.26",
  "kvengine",
- "kvproto",
+ "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
  "pd_client",
  "rand 0.8.6",
  "serde",
@@ -1396,7 +1396,7 @@ dependencies = [
  "charabia",
  "fastrand 2.4.1",
  "lazy_static",
- "memmap2 0.9.10",
+ "memmap2",
  "once_cell",
  "ordered-float 5.3.0",
  "prost 0.13.5",
@@ -1404,7 +1404,7 @@ dependencies = [
  "stable_deref_trait",
  "tantivy",
  "tempfile",
- "tipb",
+ "tipb 0.0.1 (git+https://github.com/pingcap/tipb.git)",
  "workspace-hack",
 ]
 
@@ -1417,7 +1417,7 @@ dependencies = [
  "derive_more",
  "error_code",
  "futures-io",
- "kvproto",
+ "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
  "lazy_static",
  "openssl",
  "prometheus",
@@ -1443,7 +1443,7 @@ dependencies = [
  "fxhash",
  "hmac 0.10.1",
  "kvenginepb",
- "kvproto",
+ "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
  "lazy_static",
  "log",
  "openssl",
@@ -1568,15 +1568,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b49ba7ef1ad6107f8824dbe97de947cbaac53c44e7f9756a1fba0d37c1eec505"
 dependencies = [
  "memchr",
-]
-
-[[package]]
-name = "cpp_demangle"
-version = "0.4.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2bb79cb74d735044c972aae58ed0aaa9a837e85b01106a54c39e42e97f62253"
-dependencies = [
- "cfg-if",
 ]
 
 [[package]]
@@ -2112,7 +2103,7 @@ dependencies = [
  "futures 0.3.32",
  "futures-util",
  "hex 0.4.3",
- "kvproto",
+ "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
  "lazy_static",
  "online_config",
  "openssl",
@@ -2140,7 +2131,7 @@ dependencies = [
  "error_code",
  "fail 0.5.1",
  "file_system",
- "kvproto",
+ "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
  "log_wrappers",
  "protobuf 2.8.0",
  "quick_cache",
@@ -2230,7 +2221,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2239,7 +2230,7 @@ version = "0.0.1"
 source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#a9d93252f2ad0cba95eec51a857cd867cd5e6567"
 dependencies = [
  "grpcio",
- "kvproto",
+ "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
  "lazy_static",
  "raft",
  "serde",
@@ -2313,12 +2304,6 @@ name = "fallible-iterator"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4443176a9f2c162692bd3d352d745ef9413eec5782a80d8fd6f8a1ac692a07f7"
-
-[[package]]
-name = "fallible-iterator"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2acce4a10f12dc2fb14a218589d4f1f62ef011b2d0cc4b3cb1bba8e94da14649"
 
 [[package]]
 name = "farmhash"
@@ -2460,20 +2445,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
 dependencies = [
  "percent-encoding",
-]
-
-[[package]]
-name = "framehop"
-version = "0.13.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09a5a3f0acb82df800ca3aa50c0d60d286c5d13d4cfc3114b3a9663f13b032fe"
-dependencies = [
- "arrayvec",
- "cfg-if",
- "fallible-iterator 0.3.0",
- "gimli 0.31.1",
- "macho-unwind-info",
- "pe-unwind-info",
 ]
 
 [[package]]
@@ -2722,16 +2693,6 @@ dependencies = [
 
 [[package]]
 name = "gimli"
-version = "0.31.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07e28edb80900c19c28f1072f2e8aeca7fa06b23cd4169cefe1af5aa3260783f"
-dependencies = [
- "fallible-iterator 0.3.0",
- "stable_deref_trait",
-]
-
-[[package]]
-name = "gimli"
 version = "0.32.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e629b9b98ef3dd8afe6ca2bd0f89306cec16d43d907889945bc5d6687f2f13c7"
@@ -2928,7 +2889,7 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f530c66081961311028f67d22da8e3f739dab6979fc200f199c3ef0fb2e194a"
 dependencies = [
- "fallible-iterator 0.2.0",
+ "fallible-iterator",
 ]
 
 [[package]]
@@ -3363,7 +3324,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi 0.5.2",
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3466,7 +3427,7 @@ version = "0.1.0"
 source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#a9d93252f2ad0cba95eec51a857cd867cd5e6567"
 dependencies = [
  "byteorder",
- "kvproto",
+ "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
  "log_wrappers",
  "thiserror 1.0.69",
  "tikv_alloc",
@@ -3527,13 +3488,13 @@ dependencies = [
  "itertools 0.10.5",
  "keys",
  "kvenginepb",
- "kvproto",
+ "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
  "lazy_static",
  "libc",
  "log_wrappers",
  "lz4",
  "maybe-async",
- "memmap2 0.9.10",
+ "memmap2",
  "nix 0.24.3",
  "num_cpus",
  "online_config",
@@ -3570,7 +3531,7 @@ dependencies = [
  "tikv_alloc",
  "tikv_util",
  "time 0.1.45",
- "tipb",
+ "tipb 0.0.1 (git+https://github.com/pingcap/tipb.git)",
  "tokio",
  "tokio-util",
  "tracker",
@@ -3595,7 +3556,20 @@ dependencies = [
 [[package]]
 name = "kvproto"
 version = "0.0.2"
-source = "git+ssh://git@github.com/pingcap/kvproto.git?rev=02dc8a9dc01827367f9d91ff2d88c447d3a838ab#02dc8a9dc01827367f9d91ff2d88c447d3a838ab"
+source = "git+https://github.com/pingcap/kvproto.git?rev=02dc8a9dc01827367f9d91ff2d88c447d3a838ab#02dc8a9dc01827367f9d91ff2d88c447d3a838ab"
+dependencies = [
+ "bytes",
+ "futures 0.3.32",
+ "grpcio",
+ "protobuf 2.8.0",
+ "protobuf-build",
+ "raft-proto",
+]
+
+[[package]]
+name = "kvproto"
+version = "0.0.2"
+source = "git+https://github.com/pingcap/kvproto.git#1e6ff1c80df24a9ead2b4408133af23c09273718"
 dependencies = [
  "bytes",
  "futures 0.3.32",
@@ -3929,17 +3903,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "373f5eceeeab7925e0c1098212f2fbc4d416adec9d35051a6ab251e824c1854a"
 
 [[package]]
-name = "macho-unwind-info"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb4bdc8b0ce69932332cf76d24af69c3a155242af95c226b2ab6c2e371ed1149"
-dependencies = [
- "thiserror 2.0.18",
- "zerocopy",
- "zerocopy-derive",
-]
-
-[[package]]
 name = "match-template"
 version = "0.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4017,15 +3980,6 @@ name = "memchr"
 version = "2.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
-
-[[package]]
-name = "memmap2"
-version = "0.5.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83faa42c0a078c393f6b29d5db232d8be22776a891f8f56e5284faee4a20b327"
-dependencies = [
- "libc",
-]
 
 [[package]]
 name = "memmap2"
@@ -4348,16 +4302,6 @@ dependencies = [
 
 [[package]]
 name = "object"
-version = "0.29.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21158b2c33aa6d4561f1c0a6ea283ca92bc54802a93b263e910746d679a7eb53"
-dependencies = [
- "flate2",
- "memchr",
-]
-
-[[package]]
-name = "object"
 version = "0.37.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff76201f031d8863c38aa7f905eca4f53abbfa15f609db4277d44cd8938f33fe"
@@ -4607,7 +4551,7 @@ dependencies = [
  "grpcio",
  "hex 0.4.3",
  "http 0.2.12",
- "kvproto",
+ "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
  "lazy_static",
  "log",
  "log_wrappers",
@@ -4630,19 +4574,6 @@ dependencies = [
  "url",
  "workspace-hack",
  "yatp",
-]
-
-[[package]]
-name = "pe-unwind-info"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "500fa4cdeacd98997c5865e3d0d1cb8fe7e9d7d75ecc775e07989a433a9a9a59"
-dependencies = [
- "arrayvec",
- "bitflags 2.11.1",
- "thiserror 2.0.18",
- "zerocopy",
- "zerocopy-derive",
 ]
 
 [[package]]
@@ -4762,19 +4693,17 @@ checksum = "439ee305def115ba05938db6eb1644ff94165c5ab5e9420d1c1bcedbba909391"
 [[package]]
 name = "pprof"
 version = "0.15.0"
-source = "git+https://github.com/tikv/pprof-rs.git?rev=01cff82dbe6fe110a707bf2b38d8ebb1d14a18f8#01cff82dbe6fe110a707bf2b38d8ebb1d14a18f8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "38a01da47675efa7673b032bf8efd8214f1917d89685e07e395ab125ea42b187"
 dependencies = [
  "aligned-vec",
  "backtrace",
  "cfg-if",
  "findshlibs",
- "framehop",
  "inferno 0.11.21",
  "libc",
  "log",
- "memmap2 0.5.10",
  "nix 0.26.4",
- "object 0.29.0",
  "once_cell",
  "protobuf 3.7.2",
  "protobuf-codegen 3.7.2",
@@ -5805,7 +5734,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -5818,7 +5747,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5934,7 +5863,7 @@ dependencies = [
  "slog-term",
  "tidb_query_datatype",
  "tikv_util",
- "tipb",
+ "tipb 0.0.1 (git+https://github.com/pingcap/tipb.git)",
  "txn_types",
  "workspace-hack",
 ]
@@ -5979,7 +5908,7 @@ dependencies = [
  "http 0.2.12",
  "hyper 0.14.26",
  "hyper-rustls",
- "kvproto",
+ "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
  "lazy_static",
  "prometheus",
  "rustls",
@@ -6039,7 +5968,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b55fb86dfd3a2f5f76ea78310a88f96c4ea21a3031f8d212443d56123fd0521"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6498,7 +6427,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "332615d90111d8eeaf86a84dc9bbe9f65d0d8c5cf11b4caccedc37754eb0dcfd"
 dependencies = [
  "debugid",
- "memmap2 0.9.10",
+ "memmap2",
  "stable_deref_trait",
  "uuid 1.23.1",
 ]
@@ -6509,7 +6438,6 @@ version = "12.18.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "912017718eb4d21930546245af9a3475c9dccf15675a5c215664e76621afc471"
 dependencies = [
- "cpp_demangle",
  "rustc-demangle",
  "symbolic-common",
 ]
@@ -6607,7 +6535,7 @@ dependencies = [
  "lru",
  "lz4_flex",
  "measure_time",
- "memmap2 0.9.10",
+ "memmap2",
  "num_cpus",
  "once_cell",
  "oneshot",
@@ -6737,7 +6665,7 @@ dependencies = [
  "getrandom 0.4.2",
  "once_cell",
  "rustix 1.1.4",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6850,7 +6778,7 @@ dependencies = [
  "derive_more",
  "error_code",
  "futures 0.3.32",
- "kvproto",
+ "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
  "lazy_static",
  "log_wrappers",
  "maybe-async",
@@ -6886,7 +6814,7 @@ dependencies = [
  "encoding_rs 0.8.29",
  "error_code",
  "hex 0.4.3",
- "kvproto",
+ "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
  "lazy_static",
  "log_wrappers",
  "match-template",
@@ -6907,7 +6835,7 @@ dependencies = [
  "tidb_query_common",
  "tikv_alloc",
  "tikv_util",
- "tipb",
+ "tipb 0.0.1 (git+https://github.com/pingcap/tipb.git)",
  "workspace-hack",
 ]
 
@@ -6930,7 +6858,7 @@ dependencies = [
  "keys",
  "kvengine",
  "kvenginepb",
- "kvproto",
+ "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git?rev=02dc8a9dc01827367f9d91ff2d88c447d3a838ab)",
  "lazy_static",
  "num_cpus",
  "pd_client",
@@ -6948,7 +6876,7 @@ dependencies = [
  "tempfile",
  "thiserror 1.0.69",
  "tikv_util",
- "tipb",
+ "tipb 0.0.1 (git+https://github.com/pingcap/tipb.git?rev=9fd33ded6f2c94633e601104cde26f2bdb5147d5)",
  "tokio",
  "tokio-executor",
  "toml",
@@ -7018,7 +6946,7 @@ dependencies = [
  "grpcio",
  "http 0.2.12",
  "hyper 0.14.26",
- "kvproto",
+ "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
  "lazy_static",
  "libc",
  "log",
@@ -7122,7 +7050,18 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 [[package]]
 name = "tipb"
 version = "0.0.1"
-source = "git+ssh://git@github.com/pingcap/tipb.git?rev=9fd33ded6f2c94633e601104cde26f2bdb5147d5#9fd33ded6f2c94633e601104cde26f2bdb5147d5"
+source = "git+https://github.com/pingcap/tipb.git?rev=9fd33ded6f2c94633e601104cde26f2bdb5147d5#9fd33ded6f2c94633e601104cde26f2bdb5147d5"
+dependencies = [
+ "futures 0.3.32",
+ "grpcio",
+ "protobuf 2.8.0",
+ "protobuf-build",
+]
+
+[[package]]
+name = "tipb"
+version = "0.0.1"
+source = "git+https://github.com/pingcap/tipb.git#a4d204a193b4f9aa776343ac75281cf8442343ba"
 dependencies = [
  "futures 0.3.32",
  "grpcio",
@@ -7406,7 +7345,7 @@ source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud
 dependencies = [
  "collections",
  "crossbeam-utils",
- "kvproto",
+ "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
  "lazy_static",
  "parking_lot 0.12.5",
  "pin-project",
@@ -7434,7 +7373,7 @@ dependencies = [
  "collections",
  "error_code",
  "farmhash",
- "kvproto",
+ "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
  "log_wrappers",
  "slog",
  "thiserror 1.0.69",
@@ -7848,7 +7787,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
