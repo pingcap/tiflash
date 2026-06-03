@@ -2,7 +2,7 @@
 # The members of 'sig-community-*' are synced from memberships defined in repository: https://github.com/pingcap/community.
 aliases:
   sig-critical-approvers-config:
-    - BenMeadowcroft
+    - likidu
     - yudongusa
   sig-community-reviewers:
     - LiSong0214
@@ -35,5 +35,6 @@ aliases:
     - windtalker
     - wshwsh12
     - yibin87
+    - yongman
     - ywqzzy
     - zanmato1984
