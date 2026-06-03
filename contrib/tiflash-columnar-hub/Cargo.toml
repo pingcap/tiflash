@@ -23,6 +23,7 @@ sysinfo = { git = "https://github.com/tikv/sysinfo", branch = "0.26-fix-cpu" }
 tokio-executor = { git = "https://github.com/tikv/tokio", branch = "tokio-timer-hotfix" }
 lindera = { git = "https://github.com/breezewish/lindera", branch = "v0.43.1-tokio-1.24" }
 tantivy = { git = "https://github.com/breezewish/tikv-tantivy.git", branch = "patch-0.22.1" }
+pprof = { git = "https://github.com/tikv/pprof-rs.git", rev = "01cff82dbe6fe110a707bf2b38d8ebb1d14a18f8" }
 
 [patch."https://github.com/pingcap/kvproto.git"]
 kvproto = { git = "ssh://git@github.com/pingcap/kvproto.git", rev = "02dc8a9dc01827367f9d91ff2d88c447d3a838ab" }
