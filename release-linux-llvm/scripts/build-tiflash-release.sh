@@ -117,7 +117,6 @@ if [ "${CMAKE_ENABLE_NEXT_GEN}" = "ON" ]; then
 
   # workaround compile issue of cloud-storage-engine dependency
   export CARGO_NET_GIT_FETCH_WITH_CLI=true
-  git config --global url."git@github.com:".insteadOf "https://github.com/"
 
   # prepare build dir and install dir for columnar
   if [ $CMAKE_BUILD_TYPE == "RELWITHDEBINFO" ]; then
