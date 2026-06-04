@@ -91,6 +91,7 @@ release-linux-llvm/tiflash
 release-linux-llvm/tiflash-columnar
 release-linux-llvm/build-release
 release-linux-llvm/build-release-columnar
+release-linux-llvm/.cargo/
 
 
 gtest_10x_workdir/

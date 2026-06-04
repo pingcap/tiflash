@@ -55,12 +55,11 @@ build_tiflash_next_gen_release:
 # Interactive shell with the same settings as build_tiflash_next_gen_release.
 .PHONY: shell_tiflash_next_gen_release
 shell_tiflash_next_gen_release:
-	@test -d "$(HOME)/.ssh" || (echo "error: $(HOME)/.ssh is required for private git access" && exit 1)
+	@mkdir -p $(realpath .)/.cargo/registry
 	$(DOCKER) run -it --rm \
 		-e ENABLE_NEXT_GEN=true \
-		$(BUILD_TIFLASH_SSH_ENV) \
-		$(BUILD_TIFLASH_SSH_VOLUME) \
 		-v $(realpath ..):/build/tics \
+		-v $(realpath .)/.cargo/registry:/root/.cargo/registry \
 		$(TIFLASH_BUILDER_IMAGE) \
 		/bin/bash
 
