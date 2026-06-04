@@ -49,18 +49,23 @@ auto buildCtx(
     RUNTIME_CHECK(fts_query_info != nullptr);
     RUNTIME_CHECK(schema != nullptr);
 
-    // Currently only TopK is supported.
-    RUNTIME_CHECK(fts_query_info->query_type() == tipb::FTSQueryTypeWithScore);
+    RUNTIME_CHECK(
+        fts_query_info->query_type() == tipb::FTSQueryTypeWithScore
+        || fts_query_info->query_type() == tipb::FTSQueryTypeNoScore);
     RUNTIME_CHECK(fts_query_info->has_index_id());
     RUNTIME_CHECK(fts_query_info->columns().size() == 1);
 
     RUNTIME_CHECK(!schema->empty());
-    auto score_cd_in_schema = schema->back();
-    RUNTIME_CHECK(score_cd_in_schema.id == FullTextIndexStreamCtx::VIRTUAL_SCORE_CD.id);
-    RUNTIME_CHECK(score_cd_in_schema.type->equals(*FullTextIndexStreamCtx::VIRTUAL_SCORE_CD.type));
+    std::optional<ColumnDefine> score_cd_in_schema;
+    if (fts_query_info->query_type() == tipb::FTSQueryTypeWithScore)
+    {
+        score_cd_in_schema.emplace(schema->back());
+        RUNTIME_CHECK(score_cd_in_schema->id == FullTextIndexStreamCtx::VIRTUAL_SCORE_CD.id);
+        RUNTIME_CHECK(score_cd_in_schema->type->equals(*FullTextIndexStreamCtx::VIRTUAL_SCORE_CD.type));
+    }
 
     auto rest_col_schema = std::make_shared<ColumnDefines>();
-    rest_col_schema->reserve(schema->size() - 1);
+    rest_col_schema->reserve(schema->size() - (score_cd_in_schema.has_value() ? 1 : 0));
 
     ColumnID fts_col_id = fts_query_info->columns()[0].column_id();
     std::optional<size_t> fts_idx_in_schema;
@@ -73,7 +78,7 @@ auto buildCtx(
             fts_idx_in_schema.emplace(i);
             fts_cd_in_schema.emplace(cd);
         }
-        if (cd.id != score_cd_in_schema.id && cd.id != fts_col_id)
+        if ((!score_cd_in_schema.has_value() || cd.id != score_cd_in_schema->id) && cd.id != fts_col_id)
         {
             rest_col_schema->emplace_back(cd);
         }

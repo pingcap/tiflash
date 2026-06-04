@@ -175,6 +175,30 @@ protected:
             std::make_shared<BitmapFilter>(mvcc_bitmap_init));
     }
 
+    BlockInputStreamPtr searchFromDMFileNoScore(
+        FtsQueryInfoNoScoreOptions options,
+        std::initializer_list<UInt8> mvcc_bitmap_init)
+    {
+        auto read_cols = std::make_shared<ColumnDefines>();
+        read_cols->emplace_back(getExtraHandleColumnDefine(/* common_handle */ false));
+        if (!test_no_fts_column)
+            read_cols->emplace_back(cdFts());
+
+        DMFileBlockInputStreamBuilder builder(dbContext());
+
+        auto fts_idx_ctx = FullTextIndexStreamCtx::createForStableOnlyTests(ftsQueryInfoNoScore(options), read_cols);
+        auto stream = builder.setFtsIndexQuery(fts_idx_ctx)
+                          .build(
+                              dm_file,
+                              *read_cols,
+                              RowKeyRanges{RowKeyRange::newAll(false, 1)},
+                              std::make_shared<ScanContext>());
+        return FullTextIndexTestUtils::wrapFTSStream( //
+            fts_idx_ctx,
+            stream,
+            std::make_shared<BitmapFilter>(mvcc_bitmap_init));
+    }
+
     Block searchFromDMFileAndSort(FtsQueryInfoTopKOptions options, std::initializer_list<UInt8> mvcc_bitmap_init)
     {
         auto stream = searchFromDMFile(options, mvcc_bitmap_init);
@@ -332,6 +356,37 @@ try
                 createColumn<String>({}),
             }));
     }
+}
+CATCH
+
+TEST_P(FullTextIndexDMFileTestWithNoIndex, OnePackNoScore)
+try
+{
+    writeDMFile({
+        "Who knew the people would adore me so much?",
+        "Being too popular can be such a hassle",
+        "The world is but a stage.",
+    });
+    dm_file = restoreDMFile();
+    if (!test_no_index)
+        dm_file = buildIndex(TiDB::FullTextIndexDefinition{
+            .parser_type = "STANDARD_V1",
+        });
+
+    // top_k should not truncate rows for NoScore queries.
+    auto stream = searchFromDMFileNoScore( //
+        {.query = "the", .top_k = 1},
+        /* bitmap_filter */ {1, 1, 1});
+    ASSERT_INPUTSTREAM_COLS_UR(
+        stream,
+        createColumnNames(),
+        createColumnData({
+            createColumn<Int64>({0, 2}),
+            createColumn<String>({
+                "Who knew the people would adore me so much?",
+                "The world is but a stage.",
+            }),
+        }));
 }
 CATCH
 
@@ -565,6 +620,22 @@ public:
             segment_end_key,
             *read_cols,
             ftsQueryInfoTopK({.query = query, .top_k = top_k}));
+    }
+
+    BlockInputStreamPtr ftsQueryNoScore(PageIdU64 segment_id, const String & query, UInt32 top_k = 0)
+    {
+        auto read_cols = std::make_shared<ColumnDefines>();
+        read_cols->emplace_back(getExtraHandleColumnDefine(/* common_handle */ false));
+        if (!test_no_fts_column)
+            read_cols->emplace_back(cdFts());
+
+        auto [segment_start_key, segment_end_key] = getSegmentKeyRange(segment_id);
+        return read(
+            segment_id,
+            segment_start_key,
+            segment_end_key,
+            *read_cols,
+            ftsQueryInfoNoScore({.query = query, .top_k = top_k}));
     }
 
     BlockInputStreamPtr ftsQueryAll(PageIdU64 segment_id, const String & query)
@@ -840,6 +911,23 @@ try
     assertStreamOut(stream, "[20, 21)");
 
     stream = ftsQueryAll(DELTA_MERGE_FIRST_SEGMENT_ID, "word");
+    assertStreamOut(stream, "[0, 5)|[20, 30)");
+}
+CATCH
+
+TEST_P(FullTextIndexSegmentTest1, HybridStableAndDeltaNoScore)
+try
+{
+    ingestDTFileIntoDelta(DELTA_MERGE_FIRST_SEGMENT_ID, 5, /* at */ 0, /* clear */ false);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+    ensureSegmentStableLocalIndex(DELTA_MERGE_FIRST_SEGMENT_ID, indexInfo());
+
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 10, /* at */ 20);
+
+    // NoScore should filter both stable index data and delta fallback data without returning a score column.
+    // It should also ignore top_k because scores are not requested.
+    auto stream = ftsQueryNoScore(DELTA_MERGE_FIRST_SEGMENT_ID, "word", /* top_k */ 1);
     assertStreamOut(stream, "[0, 5)|[20, 30)");
 }
 CATCH

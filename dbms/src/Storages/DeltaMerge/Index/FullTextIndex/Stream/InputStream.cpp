@@ -39,6 +39,8 @@ void FullTextIndexInputStream::initSearchResults()
     // Note, we do not reserve size=topN, because we first append all matching results, then perform the topn.
     search_results->reserve(bitmap_filter->size() / 2);
 
+    const bool with_score = ctx->fts_query_info->query_type() == tipb::FTSQueryTypeWithScore;
+
     // 1. Do full text search for all index streams.
     for (size_t i = 0, i_max = stream->children.size(); i < i_max; ++i)
     {
@@ -47,16 +49,36 @@ void FullTextIndexInputStream::initSearchResults()
             auto reader = index_stream->getFullTextIndexReader();
             RUNTIME_CHECK(reader != nullptr);
             auto current_filter = BitmapFilterView(bitmap_filter, precedes_rows, stream->rows[i]);
-            reader->searchScored(ctx->perf, ctx->fts_query_info->query_text(), current_filter, ctx->results);
-            const size_t results_n = ctx->results.size();
-            for (size_t i = 0; i < results_n; ++i)
+            if (with_score)
             {
-                search_results->emplace_back(IProvideFullTextIndex::SearchResult{
-                    // We need to sort globally so convert it to a global offset temporarily.
-                    // We will convert it back to local offset when we feed it back to substreams.
-                    .rowid = ctx->results[i].doc_id + precedes_rows,
-                    .score = ctx->results[i].score,
-                });
+                reader->searchScored(ctx->perf, ctx->fts_query_info->query_text(), current_filter, ctx->results);
+                const size_t results_n = ctx->results.size();
+                for (size_t i = 0; i < results_n; ++i)
+                {
+                    search_results->emplace_back(IProvideFullTextIndex::SearchResult{
+                        // We need to sort globally so convert it to a global offset temporarily.
+                        // We will convert it back to local offset when we feed it back to substreams.
+                        .rowid = ctx->results[i].doc_id + precedes_rows,
+                        .score = ctx->results[i].score,
+                    });
+                }
+            }
+            else
+            {
+                reader->searchNoScore(
+                    ctx->perf,
+                    ctx->fts_query_info->query_text(),
+                    current_filter,
+                    ctx->no_score_results);
+                const size_t results_n = ctx->no_score_results.size();
+                for (size_t i = 0; i < results_n; ++i)
+                {
+                    search_results->emplace_back(IProvideFullTextIndex::SearchResult{
+                        // We need to sort globally so convert it to a global offset temporarily.
+                        // We will convert it back to local offset when we feed it back to substreams.
+                        .rowid = ctx->no_score_results[i] + precedes_rows,
+                    });
+                }
             }
         }
         precedes_rows += stream->rows[i];
@@ -65,7 +87,7 @@ void FullTextIndexInputStream::initSearchResults()
     // 2. Keep the top k minimum scored rows.
     // [0, top_k) will be the top k largest score rows. (However it is not sorted)
     const auto top_k = ctx->fts_query_info->top_k();
-    if (top_k < search_results->size())
+    if (with_score && top_k < search_results->size())
     {
         std::nth_element( //
             search_results->begin(),

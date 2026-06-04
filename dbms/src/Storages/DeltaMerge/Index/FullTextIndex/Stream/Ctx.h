@@ -37,16 +37,13 @@ struct FullTextIndexStreamCtx
     /// Notice: name must not be used because ExchangeReceiver expects some different names
     static const ColumnDefine VIRTUAL_SCORE_CD;
 
-    // Note: Currently FTSQueryInfo always asks Storage layer to return
-    // an additional score column, with columnId=-2050.
-
     const LocalIndexCachePtr index_cache_light; // nullable
     const LocalIndexCachePtr index_cache_heavy; // nullable
     const FTSQueryInfoPtr fts_query_info;
 
     /// This is what TiDB asks TiFlashTableScan to return (i.e. TableScan's schema)
-    /// It always contains the score column at last. The score column must match the constant
-    //// VIRTUAL_SCORE_CD.
+    /// It contains the score column at last only when FTSQueryTypeWithScore is requested.
+    /// The score column must match the constant VIRTUAL_SCORE_CD.
     /// It may, or may not contain the FTS column, depends on whether user asks for it.
     const ColumnDefinesPtr schema;
     /// The FTS column index in the `schema`, if exists. This may be `nullopt`
@@ -55,10 +52,10 @@ struct FullTextIndexStreamCtx
     /// The ColumnDefinition of the FTS column when it is presented in `schema`.
     /// It could be `nullopt` if the FTS column is not in the schema.
     const std::optional<ColumnDefine> fts_cd_in_schema;
-    /// The ColumnDefinition of the score column in `schema`.
+    /// The ColumnDefinition of the score column in `schema`, if FTSQueryTypeWithScore is requested.
     /// It should be the same as `VIRTUAL_SCORE_CD` except the name (which may be changed by ExchangeReceiver).
-    const ColumnDefine score_cd_in_schema;
-    /// Roughtly, `rest_col_schema=schema-score_col-optional_fts_col`. This is used
+    const std::optional<ColumnDefine> score_cd_in_schema;
+    /// Roughtly, `rest_col_schema=schema-optional_score_col-optional_fts_col`. This is used
     /// to fill the content of the block after we have finished FullTextSearch.
     /// The column order must be the same as in `schema`.
     const ColumnDefinesPtr rest_col_schema;
@@ -96,6 +93,8 @@ struct FullTextIndexStreamCtx
     rust::String text_value;
     /// reused in each read()
     rust::Vec<ClaraFTS::ScoredResult> results;
+    /// reused in each read() when score is not needed.
+    rust::Vec<UInt32> no_score_results;
     /// reused in each read() when a scoring on-demand search is needed.
     /// Use ensureBruteScoredSearcher() for an easy access.
     std::optional<rust::Box<ClaraFTS::BruteScoredSearcher>> brute_searcher;

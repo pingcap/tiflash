@@ -83,6 +83,7 @@ Block DMFileInputStreamProvideFullTextIndex::read()
     }
     // Fill score column
     MutableColumnPtr score_col_p = nullptr;
+    if (ctx->score_cd_in_schema.has_value())
     {
         score_col_p = ColumnFloat32::create();
         auto * score_col = typeid_cast<ColumnFloat32 *>(score_col_p.get());
@@ -128,12 +129,13 @@ Block DMFileInputStreamProvideFullTextIndex::read()
                                   ctx->fts_cd_in_schema->name,
                                   ctx->fts_cd_in_schema->id});
     }
+    if (ctx->score_cd_in_schema.has_value())
     {
         block.insert(ColumnWithTypeAndName( //
             std::move(score_col_p),
-            ctx->score_cd_in_schema.type,
-            ctx->score_cd_in_schema.name,
-            ctx->score_cd_in_schema.id));
+            ctx->score_cd_in_schema->type,
+            ctx->score_cd_in_schema->name,
+            ctx->score_cd_in_schema->id));
     }
 
     block.setStartOffset(start_row_offset);

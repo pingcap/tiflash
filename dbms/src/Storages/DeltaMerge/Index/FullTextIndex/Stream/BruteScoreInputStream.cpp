@@ -86,7 +86,7 @@ Block FullTextBruteScoreInputStream::read()
     // will not do a TopK again for unindexed data.
     {
         const auto top_k = ctx->fts_query_info->top_k();
-        if (top_k < ctx->results.size())
+        if (ctx->fts_query_info->query_type() == tipb::FTSQueryTypeWithScore && top_k < ctx->results.size())
         {
             std::nth_element( //
                 ctx->results.begin(),
@@ -116,7 +116,8 @@ Block FullTextBruteScoreInputStream::read()
 
     // Finally, reassemble the block.
     // The current layout of block is `noindex_read_schema` which is `rest_col_schema + fts_col`.
-    // The target layout of block is `schema` which is `rest_col_schema + (possibly fts column somewhere) + score_col`.
+    // The target layout of block is `schema` which is `rest_col_schema + (possibly fts column somewhere) +
+    // optional score_col`.
     {
         // 1. Remove the FTS column at last
         const auto fts_column_filtered = block.safeGetByPosition(block.columns() - 1).column;
@@ -135,20 +136,23 @@ Block FullTextBruteScoreInputStream::read()
                     ctx->fts_cd_in_schema->name,
                     ctx->fts_cd_in_schema->id));
         }
-        // 3. Add Score column at last
-        auto score_column = ctx->score_cd_in_schema.type->createColumn();
-        score_column->reserve(ctx->results.size());
-        // ctx->results are already sorted by rowid, so let's just insert them sequentially.
-        // An alternative is to first create a score Column with full length, then assign the scores according to rowid
-        // and finally filter the column. This does not need to sort the `results` by `doc_id`. However this requires
-        // allocating large bulk of memory and could be slower then the current approach.
-        for (const auto & result : ctx->results)
-            score_column->insert(static_cast<Float64>(result.score));
-        block.insert(ColumnWithTypeAndName( //
-            std::move(score_column),
-            ctx->score_cd_in_schema.type,
-            ctx->score_cd_in_schema.name,
-            ctx->score_cd_in_schema.id));
+        // 3. Add Score column at last if requested
+        if (ctx->score_cd_in_schema.has_value())
+        {
+            auto score_column = ctx->score_cd_in_schema->type->createColumn();
+            score_column->reserve(ctx->results.size());
+            // ctx->results are already sorted by rowid, so let's just insert them sequentially.
+            // An alternative is to first create a score Column with full length, then assign the scores according to
+            // rowid and finally filter the column. This does not need to sort the `results` by `doc_id`. However this
+            // requires allocating large bulk of memory and could be slower then the current approach.
+            for (const auto & result : ctx->results)
+                score_column->insert(static_cast<Float64>(result.score));
+            block.insert(ColumnWithTypeAndName( //
+                std::move(score_column),
+                ctx->score_cd_in_schema->type,
+                ctx->score_cd_in_schema->name,
+                ctx->score_cd_in_schema->id));
+        }
     }
 
     RUNTIME_CHECK(block.columns() == ctx->schema->size());
