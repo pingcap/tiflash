@@ -60,7 +60,13 @@ SRCPATH=$(
 NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
 ENABLE_THINLTO=${ENABLE_THINLTO:-ON}
 ENABLE_PCH=${ENABLE_PCH:-ON}
-
+if [ $CMAKE_BUILD_TYPE == "RELWITHDEBINFO" ]; then
+  ENABLE_FAILPOINTS="OFF"
+  JEMALLOC_NARENAS="-1"
+else
+  ENABLE_FAILPOINTS="ON"
+  JEMALLOC_NARENAS="40"
+fi
 
 # If CMAKE_ENABLE_NEXT_GEN is enabled, build another binary with next-gen columnar features enabled and install to a different directory to avoid conflict with the non-columnar binary.
 if [ "${CMAKE_ENABLE_NEXT_GEN}" = "ON" ]; then
@@ -111,15 +117,6 @@ if [ "${CMAKE_ENABLE_NEXT_GEN}" = "ON" ]; then
   
   # show version
   ${INSTALL_DIR}/tiflash version
-fi
-
-
-if [ $CMAKE_BUILD_TYPE == "RELWITHDEBINFO" ]; then
-  ENABLE_FAILPOINTS="OFF"
-  JEMALLOC_NARENAS="-1"
-else
-  ENABLE_FAILPOINTS="ON"
-  JEMALLOC_NARENAS="40"
 fi
 
 INSTALL_DIR="${SRCPATH}/release-linux-llvm/tiflash"
