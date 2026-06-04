@@ -61,54 +61,6 @@ NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
 ENABLE_THINLTO=${ENABLE_THINLTO:-ON}
 ENABLE_PCH=${ENABLE_PCH:-ON}
 
-INSTALL_DIR="${SRCPATH}/release-linux-llvm/tiflash"
-rm -rf ${INSTALL_DIR} && mkdir -p ${INSTALL_DIR}
-
-if [ $CMAKE_BUILD_TYPE == "RELWITHDEBINFO" ]; then
-  BUILD_DIR="${SRCPATH}/release-linux-llvm/build-release"
-  ENABLE_FAILPOINTS="OFF"
-  JEMALLOC_NARENAS="-1"
-else
-  BUILD_DIR="${SRCPATH}/release-linux-llvm/build-debug"
-  ENABLE_FAILPOINTS="ON"
-  JEMALLOC_NARENAS="40"
-fi
-rm -rf ${BUILD_DIR} && mkdir -p ${BUILD_DIR}
-cd ${BUILD_DIR}
-
-cmake -S "${SRCPATH}" \
-  ${DEFINE_CMAKE_PREFIX_PATH} \
-  -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
-  -DENABLE_TESTING=OFF \
-  -DENABLE_TESTS=${ENABLE_TESTS} \
-  -DENABLE_FAILPOINTS=${ENABLE_FAILPOINTS} \
-  -DENABLE_NEXT_GEN=${CMAKE_ENABLE_NEXT_GEN} \
-  -DJEMALLOC_NARENAS=${JEMALLOC_NARENAS} \
-  -Wno-dev \
-  -DUSE_CCACHE=OFF \
-  -DUSE_INTERNAL_SSL_LIBRARY=ON \
-  -DRUN_HAVE_STD_REGEX=0 \
-  -DENABLE_THINLTO=${ENABLE_THINLTO} \
-  -DTHINLTO_JOBS=${NPROC} \
-  -DENABLE_PCH=${ENABLE_PCH} \
-  -GNinja
-
-if [ $CMAKE_BUILD_TYPE == "TSAN" ] || [ $CMAKE_BUILD_TYPE == "ASAN" ]; then
-  cmake --build . --target gtests_dbms gtests_libcommon --parallel ${NPROC}
-  cmake --build . --target tiflash --parallel ${NPROC}
-  cmake --install . --component=tiflash-release --prefix="${INSTALL_DIR}"
-else
-  cmake --build . --target tiflash --parallel ${NPROC}
-  cmake --install . --component=tiflash-release --prefix="${INSTALL_DIR}"
-  
-  # unset LD_LIBRARY_PATH before test
-  unset LD_LIBRARY_PATH
-  readelf -d "${INSTALL_DIR}/tiflash"
-  ldd "${INSTALL_DIR}/tiflash"
-  
-  # show version
-  ${INSTALL_DIR}/tiflash version
-fi
 
 # If CMAKE_ENABLE_NEXT_GEN is enabled, build another binary with next-gen columnar features enabled and install to a different directory to avoid conflict with the non-columnar binary.
 if [ "${CMAKE_ENABLE_NEXT_GEN}" = "ON" ]; then
@@ -149,6 +101,60 @@ if [ "${CMAKE_ENABLE_NEXT_GEN}" = "ON" ]; then
     -DENABLE_PCH=${ENABLE_PCH} \
     -GNinja
 
+  cmake --build . --target tiflash --parallel ${NPROC}
+  cmake --install . --component=tiflash-release --prefix="${INSTALL_DIR}"
+  
+  # unset LD_LIBRARY_PATH before test
+  unset LD_LIBRARY_PATH
+  readelf -d "${INSTALL_DIR}/tiflash"
+  ldd "${INSTALL_DIR}/tiflash"
+  
+  # show version
+  ${INSTALL_DIR}/tiflash version
+fi
+
+
+if [ $CMAKE_BUILD_TYPE == "RELWITHDEBINFO" ]; then
+  ENABLE_FAILPOINTS="OFF"
+  JEMALLOC_NARENAS="-1"
+else
+  ENABLE_FAILPOINTS="ON"
+  JEMALLOC_NARENAS="40"
+fi
+
+INSTALL_DIR="${SRCPATH}/release-linux-llvm/tiflash"
+rm -rf ${INSTALL_DIR} && mkdir -p ${INSTALL_DIR}
+# prepare build_dir
+if [ $CMAKE_BUILD_TYPE == "RELWITHDEBINFO" ]; then
+  BUILD_DIR="${SRCPATH}/release-linux-llvm/build-release"
+else
+  BUILD_DIR="${SRCPATH}/release-linux-llvm/build-debug"
+fi
+rm -rf ${BUILD_DIR} && mkdir -p ${BUILD_DIR}
+cd ${BUILD_DIR}
+
+cmake -S "${SRCPATH}" \
+  ${DEFINE_CMAKE_PREFIX_PATH} \
+  -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
+  -DENABLE_TESTING=OFF \
+  -DENABLE_TESTS=${ENABLE_TESTS} \
+  -DENABLE_FAILPOINTS=${ENABLE_FAILPOINTS} \
+  -DENABLE_NEXT_GEN=${CMAKE_ENABLE_NEXT_GEN} \
+  -DJEMALLOC_NARENAS=${JEMALLOC_NARENAS} \
+  -Wno-dev \
+  -DUSE_CCACHE=OFF \
+  -DUSE_INTERNAL_SSL_LIBRARY=ON \
+  -DRUN_HAVE_STD_REGEX=0 \
+  -DENABLE_THINLTO=${ENABLE_THINLTO} \
+  -DTHINLTO_JOBS=${NPROC} \
+  -DENABLE_PCH=${ENABLE_PCH} \
+  -GNinja
+
+if [ $CMAKE_BUILD_TYPE == "TSAN" ] || [ $CMAKE_BUILD_TYPE == "ASAN" ]; then
+  cmake --build . --target gtests_dbms gtests_libcommon --parallel ${NPROC}
+  cmake --build . --target tiflash --parallel ${NPROC}
+  cmake --install . --component=tiflash-release --prefix="${INSTALL_DIR}"
+else
   cmake --build . --target tiflash --parallel ${NPROC}
   cmake --install . --component=tiflash-release --prefix="${INSTALL_DIR}"
   
