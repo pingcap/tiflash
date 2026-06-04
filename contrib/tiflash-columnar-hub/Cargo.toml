@@ -27,16 +27,18 @@ pprof = { git = "https://github.com/tikv/pprof-rs.git", rev = "01cff82dbe6fe110a
 kvproto = { git = "https://github.com/pingcap/kvproto.git" }
 tipb = { git = "https://github.com/pingcap/tipb.git" }
 
+# cloud-storage-engine now is private. We add it as a submodule to workaround
+# image release issue for building tiflash-columnar-hub in internal CD pipeline.
 [patch."https://github.com/tidbcloud/cloud-storage-engine.git"]
-#api_version = { path = "../../../cloud-storage-engine/components/api_version" }
-#builtin_dfs = { path = "../../../cloud-storage-engine/components/builtin_dfs" }
-#cloud_encryption = { path = "../../../cloud-storage-engine/components/cloud_encryption" }
-#keys = { path = "../../../cloud-storage-engine/components/keys" }
-#kvengine = { path = "../../../cloud-storage-engine/components/kvengine" }
-#kvenginepb = { path = "../../../cloud-storage-engine/components/kvenginepb" }
-#pd_client = { path = "../../../cloud-storage-engine/components/pd_client" }
-#security = { path = "../../../cloud-storage-engine/components/security" }
-#tikv_util = { path = "../../../cloud-storage-engine/components/tikv_util" }
+api_version = { path = "../cloud-storage-engine/components/api_version" }
+builtin_dfs = { path = "../cloud-storage-engine/components/builtin_dfs" }
+cloud_encryption = { path = "../cloud-storage-engine/components/cloud_encryption" }
+keys = { path = "../cloud-storage-engine/components/keys" }
+kvengine = { path = "../cloud-storage-engine/components/kvengine" }
+kvenginepb = { path = "../cloud-storage-engine/components/kvenginepb" }
+pd_client = { path = "../cloud-storage-engine/components/pd_client" }
+security = { path = "../cloud-storage-engine/components/security" }
+tikv_util = { path = "../cloud-storage-engine/components/tikv_util" }
 
 # cloud-storage-engine's generated workspace-hack currently forces
 # tikv-jemalloc-* into every consumer. That is fine for standalone
