@@ -48,7 +48,7 @@ use kvproto::{
     coprocessor::DelegateResponse,
     metapb::{Peer, Store},
 };
-use pd_client::PdClient;
+use pd_client::{BucketStat, PdClient};
 use protobuf::Message;
 use quick_cache::{
     sync::{Cache, DefaultLifecycle},
@@ -116,10 +116,26 @@ pub struct CloudEngineBackends {
 }
 
 #[derive(Clone)]
+struct RegionBucketCacheEntry {
+    region_ver: u64,
+    keys: Vec<Vec<u8>>,
+}
+
+impl From<&BucketStat> for RegionBucketCacheEntry {
+    fn from(bucket_stat: &BucketStat) -> Self {
+        Self {
+            region_ver: bucket_stat.meta.region_epoch.get_version(),
+            keys: bucket_stat.meta.keys.clone(),
+        }
+    }
+}
+
+#[derive(Clone)]
 pub struct PdClientWithCache {
     pd_client: Arc<dyn PdClient>,
     store_cache: Arc<DashMap<u64, Store>>, // store_id -> Store
     region_cache: Arc<DashMap<u64, Peer>>, // region_id -> Peer
+    region_bucket_cache: Arc<DashMap<u64, RegionBucketCacheEntry>>, // region_id -> bucket keys
 }
 
 impl PdClientWithCache {
@@ -128,6 +144,7 @@ impl PdClientWithCache {
             pd_client,
             store_cache: Arc::new(DashMap::new()),
             region_cache: Arc::new(DashMap::new()),
+            region_bucket_cache: Arc::new(DashMap::new()),
         }
     }
 
@@ -172,6 +189,7 @@ impl PdClientWithCache {
 
     pub fn evict_region_cache(&self, region_id: u64) {
         self.region_cache.remove(&region_id);
+        self.region_bucket_cache.remove(&region_id);
     }
 
     pub fn get_security_mgr(&self) -> Arc<SecurityManager> {
@@ -179,13 +197,26 @@ impl PdClientWithCache {
     }
 
     pub fn get_region_bucket_keys(&self, region_id: u64, region_ver: u64) -> Vec<Vec<u8>> {
+        if let Some(bucket_entry) = self.region_bucket_cache.get(&region_id) {
+            match bucket_entry.region_ver.cmp(&region_ver) {
+                std::cmp::Ordering::Equal => return bucket_entry.keys.clone(),
+                std::cmp::Ordering::Greater => return Vec::new(),
+                std::cmp::Ordering::Less => {}
+            }
+        }
+
         let Some(bucket_stat) = self.pd_client.get_buckets(region_id) else {
+            self.region_bucket_cache.remove(&region_id);
             return Vec::new();
         };
-        if bucket_stat.meta.region_epoch.get_version() != region_ver {
-            return Vec::new();
-        }
-        bucket_stat.meta.keys.clone()
+        let bucket_entry = RegionBucketCacheEntry::from(&bucket_stat);
+        let bucket_keys = if bucket_entry.region_ver == region_ver {
+            bucket_entry.keys.clone()
+        } else {
+            Vec::new()
+        };
+        self.region_bucket_cache.insert(region_id, bucket_entry);
+        bucket_keys
     }
 }
 
