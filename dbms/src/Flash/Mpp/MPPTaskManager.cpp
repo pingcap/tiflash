@@ -249,10 +249,20 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(
             if (gather_task_set == nullptr)
                 gather_task_set = query->addMPPGatherTaskSet(id.gather_id);
             auto & alarm = call_data->getAlarm();
+            auto & alarms_by_receiver_task_id = gather_task_set->alarms[sender_task_id];
+            if (alarms_by_receiver_task_id.find(receiver_task_id) != alarms_by_receiver_task_id.end())
+            {
+                return {
+                    nullptr,
+                    fmt::format(
+                        "{}: duplicated establish mpp connection request while waiting for task [{}]",
+                        req_info,
+                        id.toString())};
+            }
             call_data->setCallStateAndUpdateMetrics(
                 EstablishCallData::WAIT_TUNNEL,
                 GET_METRIC(tiflash_establish_calldata_count, type_wait_tunnel_calldata));
-            gather_task_set->alarms[sender_task_id].emplace(receiver_task_id, std::ref(alarm));
+            alarms_by_receiver_task_id.emplace(receiver_task_id, std::ref(alarm));
             if likely (cq != nullptr)
             {
                 alarm.Set(cq, Clock::now() + std::chrono::seconds(10), call_data->asGRPCKickTag());
