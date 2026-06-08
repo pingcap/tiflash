@@ -39,6 +39,12 @@
 [submodule "contrib/tiflash-proxy-next-gen"]
 	path = contrib/tiflash-proxy-next-gen
 	url = git@github.com:tidbcloud/cloud-storage-engine.git
+# cloud-storage-engine is a private repo. It is added as a submodule in TiFlash to bypass image 
+# release issues for tiflash-columnar-hub. This avoids private repo cloning in the internal CD pipeline.
+[submodule "contrib/cloud-storage-engine"]
+	path = contrib/cloud-storage-engine
+	url = git@github.com:tidbcloud/cloud-storage-engine.git
+	branch = cloud-engine
 [submodule "contrib/prometheus-cpp"]
 	path = contrib/prometheus-cpp
 	url = https://github.com/jupp0r/prometheus-cpp.git

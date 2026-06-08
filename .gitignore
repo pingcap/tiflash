@@ -88,7 +88,9 @@ CoverageReport
 
 # installation and sysroot path
 release-linux-llvm/tiflash
+release-linux-llvm/tiflash-columnar
 release-linux-llvm/build-release
+release-linux-llvm/build-release-columnar
 
 
 gtest_10x_workdir/

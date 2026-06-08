@@ -44,5 +44,5 @@ export tidb_table="t"
 # "true" or "false"
 export verbose=${verbose:-"false"}
 
-export LANG=en_US.utf-8
-export LC_ALL=en_US.utf-8
+export LANG=C.utf-8
+export LC_ALL=C.utf-8
