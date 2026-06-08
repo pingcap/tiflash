@@ -18,14 +18,6 @@ ARCH = $(shell uname -m)
 
 TIFLASH_BUILDER_IMAGE := ghcr.io/pingcap-qe/cd/builders/tiflash:v2025.4.15-rocky8$(SUFFIX)
 
-# Mount host SSH into the build container for private git deps (e.g. cloud-storage-engine).
-BUILD_TIFLASH_SSH_VOLUME := -v $(HOME)/.ssh:/root/.ssh:ro
-BUILD_TIFLASH_SSH_ENV := -e GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new"
-ifneq ($(SSH_AUTH_SOCK),)
-BUILD_TIFLASH_SSH_VOLUME += -v $(SSH_AUTH_SOCK):/ssh-agent
-BUILD_TIFLASH_SSH_ENV += -e SSH_AUTH_SOCK=/ssh-agent
-endif
-
 # Base docker files with prerequisites build tools
 image_tiflash_llvm_base:
 	$(DOCKER) buildx build dockerfiles -f dockerfiles/Dockerfile-tiflash-llvm-base --progress plain --build-arg arch="$(ARCH)" -t $(TIFLASH_BUILDER_IMAGE)
@@ -43,24 +35,22 @@ image_tiflash_release:
 
 # Build tiflash binaries with next-gen features under directory "tiflash" and "tiflash-columnar"
 build_tiflash_next_gen_release:
-	@test -d "$(HOME)/.ssh" || (echo "error: $(HOME)/.ssh is required for private git access" && exit 1)
+	@mkdir -p $(realpath .)/.cargo/registry
 	$(DOCKER) run --rm \
 		-e ENABLE_NEXT_GEN=true \
-		$(BUILD_TIFLASH_SSH_ENV) \
-		$(BUILD_TIFLASH_SSH_VOLUME) \
 		-v $(realpath ..):/build/tics \
+		-v $(realpath .)/.cargo/registry:/root/.cargo/registry \
 		$(TIFLASH_BUILDER_IMAGE) \
 		/build/tics/release-linux-llvm/scripts/build-release.sh
 
 # Interactive shell with the same settings as build_tiflash_next_gen_release.
 .PHONY: shell_tiflash_next_gen_release
 shell_tiflash_next_gen_release:
-	@test -d "$(HOME)/.ssh" || (echo "error: $(HOME)/.ssh is required for private git access" && exit 1)
+	@mkdir -p $(realpath .)/.cargo/registry
 	$(DOCKER) run -it --rm \
 		-e ENABLE_NEXT_GEN=true \
-		$(BUILD_TIFLASH_SSH_ENV) \
-		$(BUILD_TIFLASH_SSH_VOLUME) \
 		-v $(realpath ..):/build/tics \
+		-v $(realpath .)/.cargo/registry:/root/.cargo/registry \
 		$(TIFLASH_BUILDER_IMAGE) \
 		/bin/bash
 
