@@ -17,6 +17,7 @@
 
 import os
 import re
+import signal
 import sys
 import time
 import datetime
@@ -30,6 +31,8 @@ CMD_PREFIX_TIDB = 'mysql> '
 CMD_PREFIX_TIDB_BINALY_AS_HEX = 'mysql_bin_as_hex> '
 CMD_PREFIX_FUNC = 'func> '
 RETURN_PREFIX = '#RETURN'
+# if the environment ENABLE_NEXT_GEN is not false, the `.test` file will be
+# skipped when it contains the line starts with SKIP_NEXT_GEN_PREFIX.
 SKIP_NEXT_GEN_PREFIX = '#SKIP_FOR_NEXT_GEN'
 SLEEP_PREFIX = 'SLEEP '
 TODO_PREFIX = '#TODO'
@@ -44,7 +47,43 @@ NO_UNESCAPE_SUFFIX = ' #NO_UNESCAPE'
 
 # Some third-party module might output message directly to stderr/stdin, use this list to ignore such outputs
 IGNORED_CLIENT_OUTPUTS = ['<jemalloc>: Number of CPUs detected is not deterministic. Per-CPU arena disabled.']
+DEFAULT_TEST_TIMEOUT = 120
+TEST_TIMEOUT_ENV = 'test_timeout'
 verbose = False
+_run_state = {'matcher': None, 'stuck_line_number': 0, 'stuck_query': None}
+
+
+class TestTimeoutError(Exception):
+    pass
+
+
+def get_test_timeout():
+    value = os.getenv(TEST_TIMEOUT_ENV)
+    if value is None or value == '':
+        return DEFAULT_TEST_TIMEOUT
+    try:
+        return int(value)
+    except ValueError:
+        return DEFAULT_TEST_TIMEOUT
+
+
+def _timeout_handler(signum, frame):
+    raise TestTimeoutError()
+
+
+def run_with_timeout(seconds, func, *args, **kwargs):
+    if seconds <= 0:
+        return func(*args, **kwargs)
+    if not hasattr(signal, 'SIGALRM'):
+        return func(*args, **kwargs)
+
+    old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
+    signal.alarm(seconds)
+    try:
+        return func(*args, **kwargs)
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old_handler)
 
 def exec_func(cmd):
     cmd = cmd.strip()
@@ -154,7 +193,7 @@ def match_ph_word(line):
 # TODO: Support more place holders, eg: {#NUMBER}
 def compare_line(line, template):
     if template.startswith(REGEXP_MATCH):
-        return re.match(template[len(REGEXP_MATCH):], line) != None
+        return re.match(template[len(REGEXP_MATCH):], line) is not None
     l = template.find(LINE_PH)
     if l >= 0:
         return True
@@ -267,7 +306,7 @@ class Matcher:
                 unescape_flag = False
                 line = line[:-len(NO_UNESCAPE_SUFFIX)]
             if verbose: print(f'{datetime.datetime.now().strftime("%H:%M:%S.%f")} running {line}')
-            if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
+            if self.outputs is not None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
                 self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
                 return False
             self.query_line_number = line_number
@@ -282,19 +321,19 @@ class Matcher:
             self.matches = []
         elif line.startswith(CURL_TIDB_STATUS_PREFIX):
             if verbose: print(f'{datetime.datetime.now().strftime("%H:%M:%S.%f")} running {line}')
-            if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
+            if self.outputs is not None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
                 self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
                 return False
             self.query_line_number = line_number
             self.is_mysql = True
             self.query = line[len(CURL_TIDB_STATUS_PREFIX):]
             self.outputs, err = self.executor_curl_tidb.exe(self.query)
-            if err != None:
+            if err is not None:
                 return False
             self.matches = []
         elif line.startswith(CMD_PREFIX) or line.startswith(CMD_PREFIX_ALTER):
             if verbose: print(f'{datetime.datetime.now().strftime("%H:%M:%S.%f")} running {line}')
-            if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
+            if self.outputs is not None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
                 self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
                 return False
             self.query_line_number = line_number
@@ -308,7 +347,7 @@ class Matcher:
             self.matches = []
         elif line.startswith(CMD_PREFIX_FUNC):
             if verbose: print(f'{datetime.datetime.now().strftime("%H:%M:%S.%f")} running {line}')
-            if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
+            if self.outputs is not None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
                 self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
                 return False
             self.query_line_number = line_number
@@ -316,7 +355,7 @@ class Matcher:
             self.query = line[len(CMD_PREFIX_FUNC):]
             self.outputs, err = self.executor_func.exe(self.query)
             self.outputs = [x.strip() for x in self.outputs]
-            if err != None:
+            if err is not None:
                 return False
             self.outputs = []
             self.matches = []
@@ -325,7 +364,7 @@ class Matcher:
         return True
 
     def on_finish(self):
-        if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
+        if self.outputs is not None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (
             self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
             return False
         return True
@@ -335,35 +374,45 @@ def parse_exe_match(path, executor, executor_tidb, executor_func, executor_curl_
     todos = []
     line_number = 0
     line_number_cached = 0
+    _run_state['stuck_line_number'] = 0
+    _run_state['stuck_query'] = None
     with open(path) as file:
         matcher = Matcher(executor, executor_tidb, executor_func, executor_curl_tidb, fuzz)
-        cached = None
-        for origin in file:
-            line_number += 1
-            line = origin.strip()
-            if line.startswith(RETURN_PREFIX):
-                break
-            # Some tests are designed to be skipped in next-gen TiFlash.
-            if line.startswith(SKIP_NEXT_GEN_PREFIX) and os.getenv('ENABLE_NEXT_GEN', 'false') != 'false':
-                print(f'Skipping test for next-gen from line {line_number}.')
-                break
-            if line.startswith(TODO_PREFIX):
-                todos.append(line[len(TODO_PREFIX):].strip())
-                continue
-            if line.startswith(COMMENT_PREFIX) or len(line) == 0:
-                continue
-            if origin.startswith(UNFINISHED_1_PREFIX) or origin.startswith(UNFINISHED_2_PREFIX):
-                if cached[-1] == ',':
-                    cached += ' '
-                cached += line
-                continue
-            if cached != None and not matcher.on_line(cached, line_number_cached):
+        _run_state['matcher'] = matcher
+        try:
+            cached = None
+            for origin in file:
+                line_number += 1
+                line = origin.strip()
+                if line.startswith(RETURN_PREFIX):
+                    break
+                # Some tests are designed to be skipped in next-gen TiFlash.
+                if line.startswith(SKIP_NEXT_GEN_PREFIX) and os.getenv('ENABLE_NEXT_GEN', 'false') != 'false':
+                    print(f'Skipping test for next-gen from line {line_number}.')
+                    break
+                if line.startswith(TODO_PREFIX):
+                    todos.append(line[len(TODO_PREFIX):].strip())
+                    continue
+                if line.startswith(COMMENT_PREFIX) or len(line) == 0:
+                    continue
+                if origin.startswith(UNFINISHED_1_PREFIX) or origin.startswith(UNFINISHED_2_PREFIX):
+                    if cached[-1] == ',':
+                        cached += ' '
+                    cached += line
+                    continue
+                if cached is not None and not matcher.on_line(cached, line_number_cached):
+                    return False, matcher, todos
+                cached = line
+                line_number_cached = line_number
+            if (cached is not None and not matcher.on_line(cached, line_number)) or not matcher.on_finish():
                 return False, matcher, todos
-            cached = line
-            line_number_cached = line_number
-        if (cached != None and not matcher.on_line(cached, line_number)) or not matcher.on_finish():
-            return False, matcher, todos
-        return True, matcher, todos
+            return True, matcher, todos
+        finally:
+            matcher = _run_state.get('matcher')
+            if matcher is not None and matcher.query_line_number:
+                _run_state['stuck_line_number'] = matcher.query_line_number
+                _run_state['stuck_query'] = matcher.query
+            _run_state['matcher'] = None
 
 
 def run():
@@ -379,11 +428,25 @@ def run():
     if len(sys.argv) == 6:
         verbose = (sys.argv[5] == 'true')
     if verbose: print(f'parsing file: `{path}`')
-    matched, matcher, todos = parse_exe_match(path, Executor(dbc), Executor(mysql_client),
-                                              ShellFuncExecutor(mysql_client),
-                                              CurlTiDBExecutor(),
-                                              fuzz,
-                                              )
+    timeout = get_test_timeout()
+    try:
+        matched, matcher, todos = run_with_timeout(
+            timeout,
+            parse_exe_match,
+            path,
+            Executor(dbc),
+            Executor(mysql_client),
+            ShellFuncExecutor(mysql_client),
+            CurlTiDBExecutor(),
+            fuzz,
+        )
+    except TestTimeoutError:
+        print(f'  File: {path}')
+        if _run_state.get('stuck_line_number'):
+            print(f'  Error line: {_run_state["stuck_line_number"]}')
+            print(f'  Error: {_run_state["stuck_query"]}')
+        print(f'  Error: test timed out after {timeout}s')
+        sys.exit(1)
 
     def display(lines):
         if len(lines) == 0:

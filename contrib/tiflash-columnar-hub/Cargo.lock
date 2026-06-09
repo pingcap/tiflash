@@ -14,7 +14,7 @@ version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b5d307320b3181d6d7954e663bd7c774a838b8220fe0593c86d9fb09f498b4b"
 dependencies = [
- "gimli",
+ "gimli 0.32.3",
 ]
 
 [[package]]
@@ -63,7 +63,6 @@ dependencies = [
 [[package]]
 name = "aliyun"
 version = "0.1.0"
-source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#0bbdec544e26c1500f34e04a28f37959f05523cf"
 dependencies = [
  "async-trait",
  "aws",
@@ -167,7 +166,6 @@ checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 [[package]]
 name = "api_version"
 version = "0.1.0"
-source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#0bbdec544e26c1500f34e04a28f37959f05523cf"
 dependencies = [
  "bitflags 1.3.2",
  "bytes",
@@ -361,7 +359,6 @@ dependencies = [
 [[package]]
 name = "aws"
 version = "0.0.1"
-source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#0bbdec544e26c1500f34e04a28f37959f05523cf"
 dependencies = [
  "async-trait",
  "aws-config",
@@ -952,7 +949,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "miniz_oxide",
- "object",
+ "object 0.37.3",
  "rustc-demangle",
  "windows-link",
 ]
@@ -1112,7 +1109,6 @@ dependencies = [
 [[package]]
 name = "builtin_dfs"
 version = "0.1.0"
-source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#0bbdec544e26c1500f34e04a28f37959f05523cf"
 dependencies = [
  "api_version",
  "async-trait",
@@ -1183,7 +1179,6 @@ dependencies = [
 [[package]]
 name = "case_macros"
 version = "0.1.0"
-source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#0bbdec544e26c1500f34e04a28f37959f05523cf"
 dependencies = [
  "workspace-hack",
 ]
@@ -1342,9 +1337,26 @@ dependencies = [
  "atty",
  "bitflags 1.3.2",
  "strsim 0.8.0",
- "textwrap",
+ "textwrap 0.11.0",
  "unicode-width",
  "vec_map",
+]
+
+[[package]]
+name = "clap"
+version = "3.2.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ea181bf566f71cb9a5d17a59e1871af638180a18fb0035c92ae62b705207123"
+dependencies = [
+ "atty",
+ "bitflags 1.3.2",
+ "clap_derive 3.2.25",
+ "clap_lex 0.2.4",
+ "indexmap 1.9.3",
+ "once_cell",
+ "strsim 0.10.0",
+ "termcolor",
+ "textwrap 0.16.2",
 ]
 
 [[package]]
@@ -1354,7 +1366,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ddb117e43bbf7dacf0a4190fef4d345b9bad68dfc649cb349e7d17d28428e51"
 dependencies = [
  "clap_builder",
- "clap_derive",
+ "clap_derive 4.6.1",
 ]
 
 [[package]]
@@ -1365,8 +1377,21 @@ checksum = "714a53001bf66416adb0e2ef5ac857140e7dc3a0c48fb28b2f10762fc4b5069f"
 dependencies = [
  "anstream",
  "anstyle",
- "clap_lex",
+ "clap_lex 1.1.0",
  "strsim 0.11.1",
+]
+
+[[package]]
+name = "clap_derive"
+version = "3.2.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae6371b8bdc8b7d3959e9cf7b22d4435ef3e79e138688421ec654acf8c81b008"
+dependencies = [
+ "heck 0.4.1",
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -1383,6 +1408,15 @@ dependencies = [
 
 [[package]]
 name = "clap_lex"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2850f2f5a82cbf437dd5af4d49848fbdfc27c157c3d010345776f952765261c5"
+dependencies = [
+ "os_str_bytes",
+]
+
+[[package]]
+name = "clap_lex"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
@@ -1390,13 +1424,12 @@ checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 [[package]]
 name = "clara_fts"
 version = "0.0.1"
-source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#0bbdec544e26c1500f34e04a28f37959f05523cf"
 dependencies = [
  "anyhow",
  "charabia",
  "fastrand 2.4.1",
  "lazy_static",
- "memmap2",
+ "memmap2 0.9.10",
  "once_cell",
  "ordered-float 5.3.0",
  "prost 0.13.5",
@@ -1411,7 +1444,6 @@ dependencies = [
 [[package]]
 name = "cloud"
 version = "0.0.1"
-source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#0bbdec544e26c1500f34e04a28f37959f05523cf"
 dependencies = [
  "async-trait",
  "derive_more",
@@ -1431,7 +1463,6 @@ dependencies = [
 [[package]]
 name = "cloud_encryption"
 version = "0.1.0"
-source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#0bbdec544e26c1500f34e04a28f37959f05523cf"
 dependencies = [
  "aliyun",
  "aws",
@@ -1476,7 +1507,6 @@ dependencies = [
 [[package]]
 name = "codec"
 version = "0.0.1"
-source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#0bbdec544e26c1500f34e04a28f37959f05523cf"
 dependencies = [
  "byteorder",
  "error_code",
@@ -1501,7 +1531,6 @@ dependencies = [
 [[package]]
 name = "collections"
 version = "0.1.0"
-source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#0bbdec544e26c1500f34e04a28f37959f05523cf"
 dependencies = [
  "fxhash",
  "tikv_alloc",
@@ -1568,6 +1597,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b49ba7ef1ad6107f8824dbe97de947cbaac53c44e7f9756a1fba0d37c1eec505"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "cpp_demangle"
+version = "0.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2bb79cb74d735044c972aae58ed0aaa9a837e85b01106a54c39e42e97f62253"
+dependencies = [
+ "cfg-if",
 ]
 
 [[package]]
@@ -2088,7 +2126,6 @@ dependencies = [
 [[package]]
 name = "encryption"
 version = "0.0.1"
-source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#0bbdec544e26c1500f34e04a28f37959f05523cf"
 dependencies = [
  "async-trait",
  "byteorder",
@@ -2124,7 +2161,6 @@ dependencies = [
 [[package]]
 name = "engine_traits"
 version = "0.0.1"
-source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#0bbdec544e26c1500f34e04a28f37959f05523cf"
 dependencies = [
  "bytes",
  "case_macros",
@@ -2221,13 +2257,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
 name = "error_code"
 version = "0.0.1"
-source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#0bbdec544e26c1500f34e04a28f37959f05523cf"
 dependencies = [
  "grpcio",
  "kvproto",
@@ -2306,6 +2341,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4443176a9f2c162692bd3d352d745ef9413eec5782a80d8fd6f8a1ac692a07f7"
 
 [[package]]
+name = "fallible-iterator"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2acce4a10f12dc2fb14a218589d4f1f62ef011b2d0cc4b3cb1bba8e94da14649"
+
+[[package]]
 name = "farmhash"
 version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2335,7 +2376,6 @@ checksum = "9f1f227452a390804cdb637b74a86990f2a7d7ba4b7d5693aac9b4dd6defd8d6"
 [[package]]
 name = "file_system"
 version = "0.1.0"
-source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#0bbdec544e26c1500f34e04a28f37959f05523cf"
 dependencies = [
  "collections",
  "crc32fast",
@@ -2402,6 +2442,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "843fba2746e448b37e26a819579957415c8cef339bf08564fe8b7ddbd959573c"
 dependencies = [
  "crc32fast",
+ "libz-sys",
  "miniz_oxide",
 ]
 
@@ -2445,6 +2486,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
 dependencies = [
  "percent-encoding",
+]
+
+[[package]]
+name = "framehop"
+version = "0.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09a5a3f0acb82df800ca3aa50c0d60d286c5d13d4cfc3114b3a9663f13b032fe"
+dependencies = [
+ "arrayvec",
+ "cfg-if",
+ "fallible-iterator 0.3.0",
+ "gimli 0.31.1",
+ "macho-unwind-info",
+ "pe-unwind-info",
 ]
 
 [[package]]
@@ -2693,6 +2748,16 @@ dependencies = [
 
 [[package]]
 name = "gimli"
+version = "0.31.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "07e28edb80900c19c28f1072f2e8aeca7fa06b23cd4169cefe1af5aa3260783f"
+dependencies = [
+ "fallible-iterator 0.3.0",
+ "stable_deref_trait",
+]
+
+[[package]]
+name = "gimli"
 version = "0.32.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e629b9b98ef3dd8afe6ca2bd0f89306cec16d43d907889945bc5d6687f2f13c7"
@@ -2842,6 +2907,15 @@ dependencies = [
 
 [[package]]
 name = "heck"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8"
+dependencies = [
+ "unicode-segmentation",
+]
+
+[[package]]
+name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
@@ -2889,7 +2963,7 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f530c66081961311028f67d22da8e3f739dab6979fc200f199c3ef0fb2e194a"
 dependencies = [
- "fallible-iterator",
+ "fallible-iterator 0.2.0",
 ]
 
 [[package]]
@@ -3324,7 +3398,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi 0.5.2",
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3424,7 +3498,6 @@ dependencies = [
 [[package]]
 name = "keys"
 version = "0.1.0"
-source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#0bbdec544e26c1500f34e04a28f37959f05523cf"
 dependencies = [
  "byteorder",
  "kvproto",
@@ -3438,7 +3511,6 @@ dependencies = [
 [[package]]
 name = "kvengine"
 version = "0.0.1"
-source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#0bbdec544e26c1500f34e04a28f37959f05523cf"
 dependencies = [
  "aligned-vec",
  "aliyun",
@@ -3494,7 +3566,7 @@ dependencies = [
  "log_wrappers",
  "lz4",
  "maybe-async",
- "memmap2",
+ "memmap2 0.9.10",
  "nix 0.24.3",
  "num_cpus",
  "online_config",
@@ -3546,7 +3618,6 @@ dependencies = [
 [[package]]
 name = "kvenginepb"
 version = "0.0.1"
-source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#0bbdec544e26c1500f34e04a28f37959f05523cf"
 dependencies = [
  "protobuf 2.8.0",
  "protobuf-codegen-pure",
@@ -3556,7 +3627,7 @@ dependencies = [
 [[package]]
 name = "kvproto"
 version = "0.0.2"
-source = "git+ssh://git@github.com/pingcap/kvproto.git?rev=02dc8a9dc01827367f9d91ff2d88c447d3a838ab#02dc8a9dc01827367f9d91ff2d88c447d3a838ab"
+source = "git+https://github.com/pingcap/kvproto.git#1e6ff1c80df24a9ead2b4408133af23c09273718"
 dependencies = [
  "bytes",
  "futures 0.3.32",
@@ -3571,6 +3642,9 @@ name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
+dependencies = [
+ "spin 0.9.8",
+]
 
 [[package]]
 name = "lazycell"
@@ -3845,7 +3919,6 @@ checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
 [[package]]
 name = "log_wrappers"
 version = "0.0.1"
-source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#0bbdec544e26c1500f34e04a28f37959f05523cf"
 dependencies = [
  "hex 0.4.3",
  "protobuf 2.8.0",
@@ -3888,6 +3961,17 @@ name = "lz4_flex"
 version = "0.11.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "373f5eceeeab7925e0c1098212f2fbc4d416adec9d35051a6ab251e824c1854a"
+
+[[package]]
+name = "macho-unwind-info"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb4bdc8b0ce69932332cf76d24af69c3a155242af95c226b2ab6c2e371ed1149"
+dependencies = [
+ "thiserror 2.0.18",
+ "zerocopy",
+ "zerocopy-derive",
+]
 
 [[package]]
 name = "match-template"
@@ -3970,6 +4054,15 @@ checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
 
 [[package]]
 name = "memmap2"
+version = "0.5.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83faa42c0a078c393f6b29d5db232d8be22776a891f8f56e5284faee4a20b327"
+dependencies = [
+ "libc",
+]
+
+[[package]]
+name = "memmap2"
 version = "0.9.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "714098028fe011992e1c3962653c96b2d578c4b4bce9036e15ff220319b1e0e3"
@@ -4027,6 +4120,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1587ebb20a5b04738f16cffa7e2526f1b8496b84f92920facd518362ff1559eb"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "multimap"
+version = "0.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -4289,6 +4391,16 @@ dependencies = [
 
 [[package]]
 name = "object"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21158b2c33aa6d4561f1c0a6ea283ca92bc54802a93b263e910746d679a7eb53"
+dependencies = [
+ "flate2",
+ "memchr",
+]
+
+[[package]]
+name = "object"
 version = "0.37.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff76201f031d8863c38aa7f905eca4f53abbfa15f609db4277d44cd8938f33fe"
@@ -4317,7 +4429,6 @@ checksum = "269bca4c2591a28585d6bf10d9ed0332b7d76900a1b02bec41bdc3a2cdcda107"
 [[package]]
 name = "online_config"
 version = "0.1.0"
-source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#0bbdec544e26c1500f34e04a28f37959f05523cf"
 dependencies = [
  "online_config_derive",
  "serde",
@@ -4327,7 +4438,6 @@ dependencies = [
 [[package]]
 name = "online_config_derive"
 version = "0.1.0"
-source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#0bbdec544e26c1500f34e04a28f37959f05523cf"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4417,6 +4527,12 @@ checksum = "b7d950ca161dc355eaf28f82b11345ed76c6e1f6eb1f4f4479e0323b9e2fbd0e"
 dependencies = [
  "num-traits",
 ]
+
+[[package]]
+name = "os_str_bytes"
+version = "6.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e2355d85b9a3786f481747ced0e0ff2ba35213a1f9bd406ed906554d7af805a1"
 
 [[package]]
 name = "outref"
@@ -4524,7 +4640,6 @@ checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 [[package]]
 name = "pd_client"
 version = "0.1.0"
-source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#0bbdec544e26c1500f34e04a28f37959f05523cf"
 dependencies = [
  "async-trait",
  "bstr",
@@ -4561,6 +4676,19 @@ dependencies = [
  "url",
  "workspace-hack",
  "yatp",
+]
+
+[[package]]
+name = "pe-unwind-info"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "500fa4cdeacd98997c5865e3d0d1cb8fe7e9d7d75ecc775e07989a433a9a9a59"
+dependencies = [
+ "arrayvec",
+ "bitflags 2.11.1",
+ "thiserror 2.0.18",
+ "zerocopy",
+ "zerocopy-derive",
 ]
 
 [[package]]
@@ -4680,22 +4808,24 @@ checksum = "439ee305def115ba05938db6eb1644ff94165c5ab5e9420d1c1bcedbba909391"
 [[package]]
 name = "pprof"
 version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38a01da47675efa7673b032bf8efd8214f1917d89685e07e395ab125ea42b187"
+source = "git+https://github.com/tikv/pprof-rs.git?rev=01cff82dbe6fe110a707bf2b38d8ebb1d14a18f8#01cff82dbe6fe110a707bf2b38d8ebb1d14a18f8"
 dependencies = [
  "aligned-vec",
  "backtrace",
  "cfg-if",
  "findshlibs",
+ "framehop",
  "inferno 0.11.21",
  "libc",
  "log",
+ "memmap2 0.5.10",
  "nix 0.26.4",
+ "object 0.29.0",
  "once_cell",
  "protobuf 3.7.2",
  "protobuf-codegen 3.7.2",
  "smallvec",
- "spin",
+ "spin 0.10.0",
  "symbolic-demangle",
  "tempfile",
  "thiserror 2.0.18",
@@ -4855,6 +4985,16 @@ dependencies = [
 
 [[package]]
 name = "prost"
+version = "0.11.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b82eaa1d779e9a4bc1c3217db8ffbeabaae1dca241bf70183242128d48681cd"
+dependencies = [
+ "bytes",
+ "prost-derive 0.11.9",
+]
+
+[[package]]
+name = "prost"
 version = "0.12.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "deb1435c188b76130da55f17a466d252ff7b1418b2ad3e037d127b94e3411f29"
@@ -4892,7 +5032,7 @@ dependencies = [
  "heck 0.5.0",
  "itertools 0.14.0",
  "log",
- "multimap",
+ "multimap 0.10.1",
  "once_cell",
  "petgraph",
  "prettyplease",
@@ -4901,6 +5041,19 @@ dependencies = [
  "regex",
  "syn 2.0.117",
  "tempfile",
+]
+
+[[package]]
+name = "prost-derive"
+version = "0.11.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5d2d8d10f3c6ded6da8b05b5fb3b8a5082514344d56c9f871412d29b4e075b4"
+dependencies = [
+ "anyhow",
+ "itertools 0.10.5",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -5330,7 +5483,6 @@ dependencies = [
 [[package]]
 name = "recovery"
 version = "0.1.0"
-source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#0bbdec544e26c1500f34e04a28f37959f05523cf"
 dependencies = [
  "dashmap 6.2.1",
  "http 0.2.12",
@@ -5383,7 +5535,7 @@ dependencies = [
  "aho-corasick",
  "memchr",
  "regex-automata 0.4.14",
- "regex-syntax",
+ "regex-syntax 0.8.10",
 ]
 
 [[package]]
@@ -5391,6 +5543,9 @@ name = "regex-automata"
 version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c230d73fb8d8c1b9c0b3135c5142a8acee3a0558fb8db5cf1cb65f8d7862132"
+dependencies = [
+ "regex-syntax 0.6.29",
+]
 
 [[package]]
 name = "regex-automata"
@@ -5400,7 +5555,7 @@ checksum = "6e1dd4122fc1595e8162618945476892eefca7b88c52820e74af6262213cae8f"
 dependencies = [
  "aho-corasick",
  "memchr",
- "regex-syntax",
+ "regex-syntax 0.8.10",
 ]
 
 [[package]]
@@ -5408,6 +5563,12 @@ name = "regex-lite"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cab834c73d247e67f4fae452806d17d3c7501756d98c8808d7c9c7aa7d18f973"
+
+[[package]]
+name = "regex-syntax"
+version = "0.6.29"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f162c6dd7b008981e4d40210aca20b4bd0f9b60ca9271061b07f78537722f2e1"
 
 [[package]]
 name = "regex-syntax"
@@ -5721,7 +5882,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5734,7 +5895,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5831,7 +5992,6 @@ dependencies = [
 [[package]]
 name = "schema"
 version = "0.1.0"
-source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#0bbdec544e26c1500f34e04a28f37959f05523cf"
 dependencies = [
  "api_version",
  "async-trait",
@@ -5880,7 +6040,6 @@ dependencies = [
 [[package]]
 name = "security"
 version = "0.0.1"
-source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#0bbdec544e26c1500f34e04a28f37959f05523cf"
 dependencies = [
  "aliyun",
  "aws",
@@ -5955,7 +6114,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b55fb86dfd3a2f5f76ea78310a88f96c4ea21a3031f8d212443d56123fd0521"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -6322,6 +6481,12 @@ dependencies = [
 
 [[package]]
 name = "spin"
+version = "0.9.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
+
+[[package]]
+name = "spin"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d5fe4ccb98d9c292d56fec89a5e07da7fc4cf0dc11e156b41793132775d3e591"
@@ -6352,6 +6517,12 @@ name = "strsim"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ea5119cdb4c55b55d432abb513a0429384878c15dde60cc77b1c99de1a95a6a"
+
+[[package]]
+name = "strsim"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
 
 [[package]]
 name = "strsim"
@@ -6414,7 +6585,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "332615d90111d8eeaf86a84dc9bbe9f65d0d8c5cf11b4caccedc37754eb0dcfd"
 dependencies = [
  "debugid",
- "memmap2",
+ "memmap2 0.9.10",
  "stable_deref_trait",
  "uuid 1.23.1",
 ]
@@ -6425,6 +6596,7 @@ version = "12.18.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "912017718eb4d21930546245af9a3475c9dccf15675a5c215664e76621afc471"
 dependencies = [
+ "cpp_demangle",
  "rustc-demangle",
  "symbolic-common",
 ]
@@ -6522,7 +6694,7 @@ dependencies = [
  "lru",
  "lz4_flex",
  "measure_time",
- "memmap2",
+ "memmap2 0.9.10",
  "num_cpus",
  "once_cell",
  "oneshot",
@@ -6590,7 +6762,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d60769b80ad7953d8a7b2c70cdfe722bbcdcac6bccc8ac934c40c034d866fc18"
 dependencies = [
  "byteorder",
- "regex-syntax",
+ "regex-syntax 0.8.10",
  "utf8-ranges",
 ]
 
@@ -6652,13 +6824,12 @@ dependencies = [
  "getrandom 0.4.2",
  "once_cell",
  "rustix 1.1.4",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
 name = "tencentcloud"
 version = "0.1.0"
-source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#0bbdec544e26c1500f34e04a28f37959f05523cf"
 dependencies = [
  "async-trait",
  "aws",
@@ -6704,6 +6875,12 @@ checksum = "d326610f408c7a4eb6f51c37c330e496b08506c9457c9d34287ecc38809fb060"
 dependencies = [
  "unicode-width",
 ]
+
+[[package]]
+name = "textwrap"
+version = "0.16.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c13547615a44dc9c452a8a534638acdf07120d4b6847c8178705da06306a3057"
 
 [[package]]
 name = "thiserror"
@@ -6757,7 +6934,6 @@ dependencies = [
 [[package]]
 name = "tidb_query_common"
 version = "0.0.1"
-source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#0bbdec544e26c1500f34e04a28f37959f05523cf"
 dependencies = [
  "anyhow",
  "api_version",
@@ -6785,7 +6961,6 @@ dependencies = [
 [[package]]
 name = "tidb_query_datatype"
 version = "0.0.1"
-source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#0bbdec544e26c1500f34e04a28f37959f05523cf"
 dependencies = [
  "api_version",
  "base64 0.13.1",
@@ -6899,9 +7074,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "tikv-jemalloc-ctl"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "661f1f6a57b3a36dc9174a2c10f19513b4866816e13425d3e418b11cc37bc24c"
+dependencies = [
+ "libc",
+ "paste",
+ "tikv-jemalloc-sys",
+]
+
+[[package]]
+name = "tikv-jemalloc-sys"
+version = "0.6.1+5.3.0-1-ge13ca993e8ccb9ba9847cc330696e02839f328f7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd8aa5b2ab86a2cefa406d889139c162cbb230092f7d1d7cbc1716405d852a3b"
+dependencies = [
+ "cc",
+ "libc",
+]
+
+[[package]]
+name = "tikv-jemallocator"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0359b4327f954e0567e69fb191cf1436617748813819c94b8cd4a431422d053a"
+dependencies = [
+ "libc",
+ "tikv-jemalloc-sys",
+]
+
+[[package]]
 name = "tikv_alloc"
 version = "0.1.0"
-source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#0bbdec544e26c1500f34e04a28f37959f05523cf"
 dependencies = [
  "fxhash",
  "lazy_static",
@@ -6912,7 +7117,6 @@ dependencies = [
 [[package]]
 name = "tikv_util"
 version = "0.1.0"
-source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#0bbdec544e26c1500f34e04a28f37959f05523cf"
 dependencies = [
  "async-speed-limit",
  "backtrace",
@@ -7037,7 +7241,7 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 [[package]]
 name = "tipb"
 version = "0.0.1"
-source = "git+ssh://git@github.com/pingcap/tipb.git?rev=9fd33ded6f2c94633e601104cde26f2bdb5147d5#9fd33ded6f2c94633e601104cde26f2bdb5147d5"
+source = "git+https://github.com/pingcap/tipb.git#a4d204a193b4f9aa776343ac75281cf8442343ba"
 dependencies = [
  "futures 0.3.32",
  "grpcio",
@@ -7148,6 +7352,7 @@ dependencies = [
  "futures-io",
  "futures-sink",
  "pin-project-lite",
+ "slab",
  "tokio",
  "tracing",
 ]
@@ -7227,7 +7432,6 @@ checksum = "8df9b6e13f2d32c91b9bd719c00d1958837bc7dec474d94952798cc8e69eeec3"
 [[package]]
 name = "trace_event"
 version = "0.1.0"
-source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#0bbdec544e26c1500f34e04a28f37959f05523cf"
 dependencies = [
  "arc-swap 1.9.1",
  "bitflags 1.3.2",
@@ -7246,6 +7450,7 @@ version = "0.1.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "63e71662fa4b2a2c3a26f570f037eb95bb1f85397f3cd8076caed2f026a6d100"
 dependencies = [
+ "log",
  "pin-project-lite",
  "tracing-attributes",
  "tracing-core",
@@ -7317,7 +7522,6 @@ dependencies = [
 [[package]]
 name = "tracker"
 version = "0.0.1"
-source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#0bbdec544e26c1500f34e04a28f37959f05523cf"
 dependencies = [
  "collections",
  "crossbeam-utils",
@@ -7341,7 +7545,6 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 [[package]]
 name = "txn_types"
 version = "0.1.0"
-source = "git+https://github.com/tidbcloud/cloud-storage-engine.git?branch=cloud-engine#0bbdec544e26c1500f34e04a28f37959f05523cf"
 dependencies = [
  "bitflags 1.3.2",
  "byteorder",
@@ -7763,7 +7966,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -8171,6 +8374,90 @@ dependencies = [
 [[package]]
 name = "workspace-hack"
 version = "0.1.0"
+dependencies = [
+ "ahash",
+ "aho-corasick",
+ "base64 0.21.7",
+ "bytes",
+ "cc",
+ "chrono",
+ "clap 2.34.0",
+ "clap 3.2.25",
+ "crossbeam-queue",
+ "crossbeam-utils",
+ "data-encoding",
+ "deranged",
+ "digest 0.10.7",
+ "either",
+ "flate2",
+ "futures 0.3.32",
+ "futures-channel",
+ "futures-core",
+ "futures-executor",
+ "futures-io",
+ "futures-sink",
+ "futures-task",
+ "futures-util",
+ "grpcio",
+ "grpcio-sys",
+ "hashbrown 0.14.5",
+ "hashbrown 0.15.5",
+ "heck 0.4.1",
+ "indexmap 1.9.3",
+ "indexmap 2.14.0",
+ "instant",
+ "itertools 0.10.5",
+ "lazy_static",
+ "libc",
+ "lindera-dictionary",
+ "log",
+ "memchr",
+ "multimap 0.8.3",
+ "nom 7.1.3",
+ "num 0.4.3",
+ "num-integer",
+ "num-iter",
+ "num-rational 0.4.2",
+ "num-traits",
+ "once_cell",
+ "openssl",
+ "phf_shared",
+ "proc-macro2",
+ "prost 0.11.9",
+ "protobuf 2.8.0",
+ "protobuf-build",
+ "rand 0.8.6",
+ "rand_core 0.6.4",
+ "regex",
+ "regex-automata 0.1.10",
+ "regex-automata 0.4.14",
+ "regex-syntax 0.8.10",
+ "reqwest 0.11.27",
+ "rustls",
+ "serde",
+ "serde_json",
+ "slog",
+ "smallvec",
+ "strum 0.27.2",
+ "syn 1.0.109",
+ "syn 2.0.117",
+ "tikv-jemalloc-ctl",
+ "tikv-jemalloc-sys",
+ "tikv-jemallocator",
+ "time 0.3.41",
+ "tokio",
+ "tokio-rustls",
+ "tokio-stream",
+ "tokio-util",
+ "tower",
+ "tracing",
+ "tracing-core",
+ "unicode-bidi",
+ "unicode-normalization",
+ "url",
+ "uuid 1.23.1",
+ "zstd-sys",
+]
 
 [[package]]
 name = "xattr"
@@ -8293,3 +8580,7 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "workspace-hack"
+version = "0.1.0"

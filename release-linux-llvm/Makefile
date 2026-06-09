@@ -16,32 +16,62 @@ DOCKER ?= docker
 SUFFIX ?= ""
 ARCH = $(shell uname -m)
 
+TIFLASH_BUILDER_IMAGE := ghcr.io/pingcap-qe/cd/builders/tiflash:v2025.4.15-rocky8$(SUFFIX)
+
 # Base docker files with prerequisites build tools
 image_tiflash_llvm_base:
-	$(DOCKER) buildx build dockerfiles -f dockerfiles/Dockerfile-tiflash-llvm-base --progress plain --build-arg arch="$(ARCH)" -t hub.pingcap.net/tiflash/tiflash-llvm-base:rocky8$(SUFFIX)
+	$(DOCKER) buildx build dockerfiles -f dockerfiles/Dockerfile-tiflash-llvm-base --progress plain --build-arg arch="$(ARCH)" -t $(TIFLASH_BUILDER_IMAGE)
 
 # Build tiflash binaries under directory "tiflash"
 build_tiflash_release:
-	$(DOCKER) run --rm -v $(realpath ..):/build/tics hub.pingcap.net/tiflash/tiflash-llvm-base:rocky8$(SUFFIX) /build/tics/release-linux-llvm/scripts/build-release.sh
+	$(DOCKER) run --rm \
+		-v $(realpath ..):/build/tics \
+		$(TIFLASH_BUILDER_IMAGE) \
+		/build/tics/release-linux-llvm/scripts/build-release.sh
 
 # Package tiflash docker image using the binaries under directory "tiflash"
 image_tiflash_release:
-	$(DOCKER) build -f dockerfiles/Dockerfile-tiflash-rocky8 -t hub.pingcap.net/tiflash/tiflash-server-rocky8 .
+	$(DOCKER) build -f dockerfiles/Dockerfile-tiflash-rocky8 -t ghcr.io/pingcap-qe/cd/builders/tiflash/tiflash-server-rocky8 .
+
+# Build tiflash binaries with next-gen features under directory "tiflash" and "tiflash-columnar"
+build_tiflash_next_gen_release:
+	@mkdir -p $(realpath .)/.cargo/registry
+	$(DOCKER) run --rm \
+		-e ENABLE_NEXT_GEN=true \
+		-v $(realpath ..):/build/tics \
+		-v $(realpath .)/.cargo/registry:/root/.cargo/registry \
+		$(TIFLASH_BUILDER_IMAGE) \
+		/build/tics/release-linux-llvm/scripts/build-release.sh
+
+# Interactive shell with the same settings as build_tiflash_next_gen_release.
+.PHONY: shell_tiflash_next_gen_release
+shell_tiflash_next_gen_release:
+	@mkdir -p $(realpath .)/.cargo/registry
+	$(DOCKER) run -it --rm \
+		-e ENABLE_NEXT_GEN=true \
+		-v $(realpath ..):/build/tics \
+		-v $(realpath .)/.cargo/registry:/root/.cargo/registry \
+		$(TIFLASH_BUILDER_IMAGE) \
+		/bin/bash
+
+# Package tiflash docker image using the binaries under directory "tiflash" && "tiflash-columnar"
+image_tiflash_next_gen_release:
+	$(DOCKER) build -f dockerfiles/Dockerfile-tiflash-next-gen-rocky8 -t ghcr.io/pingcap-qe/cd/builders/tiflash/tiflash-server-rocky8-next-gen .
 
 # Add build_tiflash_debug target to enable FailPoints. Since outputs are the same as release version, no new package targets added.
 build_tiflash_debug:
-	$(DOCKER) run --rm -v $(realpath ..):/build/tics hub.pingcap.net/tiflash/tiflash-llvm-base:rocky8$(SUFFIX) /build/tics/release-linux-llvm/scripts/build-debug.sh
+	$(DOCKER) run --rm -v $(realpath ..):/build/tics $(TIFLASH_BUILDER_IMAGE) /build/tics/release-linux-llvm/scripts/build-debug.sh
 
 build_tiflash_tsan:
-	$(DOCKER) run --rm -v $(realpath ..):/build/tics hub.pingcap.net/tiflash/tiflash-llvm-base:rocky8$(SUFFIX) /build/tics/release-linux-llvm/scripts/build-tsan.sh
+	$(DOCKER) run --rm -v $(realpath ..):/build/tics $(TIFLASH_BUILDER_IMAGE) /build/tics/release-linux-llvm/scripts/build-tsan.sh
 
 build_tiflash_asan:
-	$(DOCKER) run --rm -v $(realpath ..):/build/tics hub.pingcap.net/tiflash/tiflash-llvm-base:rocky8$(SUFFIX) /build/tics/release-linux-llvm/scripts/build-asan.sh
+	$(DOCKER) run --rm -v $(realpath ..):/build/tics $(TIFLASH_BUILDER_IMAGE) /build/tics/release-linux-llvm/scripts/build-asan.sh
 
 # Base docker with prerequisites running integration tests
 image_tiflash_ci_base:
-	$(DOCKER) build -f dockerfiles/Dockerfile-tiflash-ci-base -t hub.pingcap.net/tiflash/tiflash-ci-base:rocky9-20250529 .
+	$(DOCKER) build -f dockerfiles/Dockerfile-tiflash-ci-base -t ghcr.io/pingcap-qe/cd/builders/tiflash/tiflash-ci-base:rocky9-20250529 .
 
 # Package tiflash CI docker image using the binaries under directory "tiflash"
 image_tiflash_ci:
-	$(DOCKER) build -f dockerfiles/Dockerfile-tiflash-ci -t hub.pingcap.net/tiflash/tiflash-ci-rocky8 .
+	$(DOCKER) build -f dockerfiles/Dockerfile-tiflash-ci -t ghcr.io/pingcap-qe/cd/builders/tiflash/tiflash-ci-rocky8 .

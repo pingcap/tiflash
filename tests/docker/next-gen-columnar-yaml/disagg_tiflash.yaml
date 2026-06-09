@@ -1,0 +1,36 @@
+# Copyright 2026 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+services:
+  tiflash-cn0:
+    image: ${TIFLASH_IMAGE:-hub.pingcap.net/tiflash/tiflash-ci-base:rocky8-20241028}
+    # TiFlash and tiflash-proxy create many threads; the default container
+    # pids_limit (2048) is too low and causes fork/exec failures (errno 11).
+    pids_limit: -1
+    security_opt:
+      - seccomp:unconfined
+    volumes:
+      - ./next-gen-columnar-config/tiflash_cn.toml:/tiflash.toml:ro
+      - ./next-gen-columnar-config/tiflash_cn_proxy.toml:/tiflash_tikv.toml:ro
+      - ./data/tiflash-cn0:/data
+      - ./log/tiflash-cn0:/log
+      - ..:/tests
+      - ../docker/_env.sh:/tests/_env.sh
+    entrypoint: /tiflash/tiflash server --config-file /tiflash.toml
+    depends_on:
+      - "minio0"
+      - "tikv0"
+    environment:
+      - MALLOC_CONF=prof:true,prof_active:false
+    restart: on-failure

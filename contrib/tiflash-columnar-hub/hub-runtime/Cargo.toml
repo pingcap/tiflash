@@ -29,11 +29,11 @@ hyper = { version = "0.14.26", features = ["full", "runtime"] }
 keys = { workspace = true }
 kvengine = { workspace = true }
 kvenginepb = { workspace = true }
-kvproto = { git = "ssh://git@github.com/pingcap/kvproto.git", rev = "02dc8a9dc01827367f9d91ff2d88c447d3a838ab" }
+kvproto = { git = "https://github.com/pingcap/kvproto.git" }
 lazy_static = "1.5.0"
 num_cpus = "1"
 pd_client = { workspace = true }
-pprof = { version = "0.15", default-features = false, features = ["flamegraph", "frame-pointer", "protobuf-codec"] }
+pprof = { version = "0.15", default-features = false, features = ["flamegraph", "cpp", "framehop-unwinder", "protobuf-codec"] }
 pprof_util = { version = "0.8.2", features = ["flamegraph"] }
 prometheus = { version = "0.13", features = ["nightly", "push"], default-features = true }
 protobuf = { version = "2.8", features = ["bytes"], default-features = true }
@@ -47,7 +47,7 @@ slog-global = { git = "https://github.com/breeswish/slog-global.git", rev = "d59
 tempfile = "3"
 thiserror = "1.0.44"
 tikv_util = { workspace = true }
-tipb = { git = "ssh://git@github.com/pingcap/tipb.git", rev = "9fd33ded6f2c94633e601104cde26f2bdb5147d5" }
+tipb = { git = "https://github.com/pingcap/tipb.git" }
 tokio = { version = "=1.26.0", features = ["fs", "full", "macros", "net", "process", "rt", "rt-multi-thread", "sync", "time"], default-features = true }
 # Keep tokio-executor aligned with the tokio-timer hotfix used by tikv_util.
 tokio-executor = "=0.1.9"
