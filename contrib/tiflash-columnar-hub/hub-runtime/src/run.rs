@@ -55,8 +55,9 @@ use tikv_util::{
 use crate::{
     cloud_helper::{CloudEngineBackends, CloudHelper},
     columnar_impls::{
-        ffi_get_region_bucket_keys, ffi_make_columnar_reader, ffi_physical_table_id,
-        ffi_read_block, ffi_read_column, ffi_read_handle, ffi_read_version,
+        ffi_clear_shared_snap_access_by_start_ts, ffi_get_region_bucket_keys,
+        ffi_make_columnar_reader, ffi_physical_table_id, ffi_read_block, ffi_read_column,
+        ffi_read_handle, ffi_read_version,
     },
     domain_impls::ffi_gc_rust_ptr,
     engine_store_helper::{
@@ -1148,6 +1149,7 @@ fn build_hub_ffi_helper(hub: &ColumnarHub) -> RaftStoreProxyFFIHelper {
             fn_get_keyspace_encryption: Some(ffi_get_keyspace_encryption),
             fn_get_master_key: Some(ffi_get_master_key),
             fn_get_region_bucket_keys: Some(ffi_get_region_bucket_keys),
+            fn_clear_shared_snap_access_by_start_ts: Some(ffi_clear_shared_snap_access_by_start_ts),
             fn_get_columnar_reader: Some(ffi_make_columnar_reader),
             fn_read_block: Some(ffi_read_block),
             fn_read_handle: Some(ffi_read_handle),

@@ -230,6 +230,8 @@ struct CloudStorageEngineInterfaces {
   RawCppStringPtr (*fn_get_master_key)(RaftStoreProxyPtr);
   RustStrWithViewVec (*fn_get_region_bucket_keys)(uint64_t, uint64_t,
                                                   RaftStoreProxyPtr);
+  void (*fn_clear_shared_snap_access_by_start_ts)(uint64_t,
+                                                  RaftStoreProxyPtr);
   ColumnarReaderPtr (*fn_get_columnar_reader)(uint64_t, uint64_t, uint64_t,
                                               BaseBuffView, BaseBuffView,
                                               BaseBuffView, BaseBuffView,

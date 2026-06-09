@@ -69,6 +69,8 @@ extern const int COLUMNAR_SNAPSHOT_ERROR;
 
 struct RNProxyReaderSharedContext
 {
+    using ClearSharedSnapAccessByStartTsFn = void (*)(uint64_t, RaftStoreProxyPtr);
+
     LoggerPtr log;
     const Context * context = nullptr;
     UInt64 start_ts = 0;
@@ -81,7 +83,30 @@ struct RNProxyReaderSharedContext
     String table_info_data;
     String ann_query_info_data;
     String fts_query_info_data;
+    RaftStoreProxyPtr proxy_ptr{};
+    ClearSharedSnapAccessByStartTsFn clear_shared_snap_access_by_start_ts = nullptr;
     std::shared_ptr<std::mutex> output_lock = std::make_shared<std::mutex>();
+
+    ~RNProxyReaderSharedContext() noexcept
+    {
+        if (start_ts == 0 || proxy_ptr.inner == nullptr || clear_shared_snap_access_by_start_ts == nullptr)
+            return;
+
+        try
+        {
+            clear_shared_snap_access_by_start_ts(start_ts, proxy_ptr);
+        }
+        catch (...)
+        {
+            try
+            {
+                LOG_WARNING(log, "clear shared snapaccess cache failed, start_ts={}", start_ts);
+            }
+            catch (...)
+            {
+            }
+        }
+    }
 };
 
 namespace
@@ -230,6 +255,14 @@ std::shared_ptr<RNProxyReaderSharedContext> buildProxyReaderSharedContext(
     shared_context->start_ts = start_ts;
     shared_context->logical_table_id = table_scan.getLogicalTableID();
     shared_context->executor_id = table_scan.getTableScanExecutorID();
+    const TiFlashRaftProxyHelper * proxy_helper
+        = context.getGlobalContext().getSharedContextDisagg()->getColumnarProxyHelper();
+    if (proxy_helper != nullptr)
+    {
+        shared_context->proxy_ptr = proxy_helper->proxy_ptr;
+        shared_context->clear_shared_snap_access_by_start_ts
+            = proxy_helper->cloud_storage_engine_interfaces.fn_clear_shared_snap_access_by_start_ts;
+    }
     std::tie(shared_context->column_defines, shared_context->extra_table_id_index)
         = genColumnDefinesForDisaggregatedReadThroughColumnar(table_scan);
 
