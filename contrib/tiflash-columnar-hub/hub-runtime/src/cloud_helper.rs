@@ -16,7 +16,10 @@ use std::{
     fs,
     ops::Deref,
     path::{Path, PathBuf},
-    sync::{Arc, Weak},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex, Weak,
+    },
     time::{Duration, UNIX_EPOCH},
 };
 
@@ -500,12 +503,12 @@ impl CloudHelper {
             return;
         }
 
-        let (removed_cache_entries, removed_loader_entries) =
+        let (cleared_cache_entries, in_flight_loader_entries) =
             self.shared_snap_access_cache.remove_by_start_ts(start_ts);
 
         info!(
-            "clear shared snapaccess by start_ts, start_ts: {}, removed_cache_entries: {}, removed_loader_entries: {}",
-            start_ts, removed_cache_entries, removed_loader_entries
+            "clear shared snapaccess by start_ts, start_ts: {}, cleared_cache_entries: {}, in_flight_loader_entries: {}",
+            start_ts, cleared_cache_entries, in_flight_loader_entries
         );
     }
 }
@@ -964,41 +967,51 @@ impl SharedSnapAccessCacheCore {
     }
 
     pub fn get(&self, key: &SharedSnapAccessKey) -> Option<Weak<kvengine::SnapAccessCore>> {
-        self.groups
-            .get(&key.start_ts)?
-            .entries
-            .get(key)
-            .map(|entry| entry.clone())
+        let group = self.groups.get(&key.start_ts).map(|entry| entry.clone())?;
+        let _state_guard = group.state_lock.lock().unwrap();
+        if group.is_terminal() {
+            return None;
+        }
+        group.entries.get(key).map(|entry| entry.clone())
     }
 
     pub fn insert(&self, key: SharedSnapAccessKey, entry: Weak<kvengine::SnapAccessCore>) {
-        let group = self
-            .groups
-            .entry(key.start_ts)
-            .or_insert_with(|| Arc::new(SharedSnapAccessGroup::new()))
-            .clone();
+        let Some(group) = self.groups.get(&key.start_ts).map(|entry| entry.clone()) else {
+            return;
+        };
+        let _state_guard = group.state_lock.lock().unwrap();
+        if group.is_terminal() {
+            return;
+        }
         group.entries.insert(key, entry);
     }
 
-    pub fn get_loader(&self, key: &SharedSnapAccessKey) -> Arc<tokio::sync::Mutex<()>> {
-        let group = self
-            .groups
-            .entry(key.start_ts)
-            .or_insert_with(|| Arc::new(SharedSnapAccessGroup::new()))
-            .clone();
+    pub fn get_loader(&self, key: &SharedSnapAccessKey) -> Option<Arc<tokio::sync::Mutex<()>>> {
+        let group = match self.groups.entry(key.start_ts) {
+            dashmap::mapref::entry::Entry::Occupied(entry) => entry.get().clone(),
+            dashmap::mapref::entry::Entry::Vacant(entry) => {
+                entry.insert(Arc::new(SharedSnapAccessGroup::new())).clone()
+            }
+        };
+        let _state_guard = group.state_lock.lock().unwrap();
+        if group.is_terminal() {
+            return None;
+        }
         let loader = group
             .loaders
             .entry(key.clone())
             .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
             .clone();
-        loader
+        Some(loader)
     }
 
     pub fn remove_loader(&self, key: &SharedSnapAccessKey) -> bool {
         let Some(group) = self.groups.get(&key.start_ts).map(|entry| entry.clone()) else {
             return false;
         };
+        let _state_guard = group.state_lock.lock().unwrap();
         let removed = group.loaders.remove(key).is_some();
+        drop(_state_guard);
         self.try_remove_empty_group(key.start_ts, &group);
         removed
     }
@@ -1007,19 +1020,29 @@ impl SharedSnapAccessCacheCore {
         let Some(group) = self.groups.get(&key.start_ts).map(|entry| entry.clone()) else {
             return false;
         };
+        let _state_guard = group.state_lock.lock().unwrap();
         let removed = group.entries.remove(key).is_some();
+        drop(_state_guard);
         self.try_remove_empty_group(key.start_ts, &group);
         removed
     }
 
     pub fn remove_by_start_ts(&self, start_ts: u64) -> (usize, usize) {
-        let Some((_, group)) = self.groups.remove(&start_ts) else {
+        let Some(group) = self.groups.get(&start_ts).map(|entry| entry.clone()) else {
             return (0, 0);
         };
-        (group.entries.len(), group.loaders.len())
+        let _state_guard = group.state_lock.lock().unwrap();
+        group.mark_terminal();
+        let removed_entries = group.entries.len();
+        let in_flight_loaders = group.loaders.len();
+        group.entries.clear();
+        drop(_state_guard);
+        self.try_remove_empty_group(start_ts, &group);
+        (removed_entries, in_flight_loaders)
     }
 
     fn try_remove_empty_group(&self, start_ts: u64, group: &Arc<SharedSnapAccessGroup>) {
+        let _state_guard = group.state_lock.lock().unwrap();
         if group.entries.is_empty() && group.loaders.is_empty() {
             if let Some(entry) = self.groups.get(&start_ts) {
                 if Arc::ptr_eq(entry.value(), group) {
@@ -1034,6 +1057,8 @@ impl SharedSnapAccessCacheCore {
 pub struct SharedSnapAccessGroup {
     entries: DashMap<SharedSnapAccessKey, Weak<kvengine::SnapAccessCore>>,
     loaders: DashMap<SharedSnapAccessKey, Arc<tokio::sync::Mutex<()>>>,
+    terminal: AtomicBool,
+    state_lock: Mutex<()>,
 }
 
 impl SharedSnapAccessGroup {
@@ -1041,7 +1066,17 @@ impl SharedSnapAccessGroup {
         Self {
             entries: DashMap::new(),
             loaders: DashMap::new(),
+            terminal: AtomicBool::new(false),
+            state_lock: Mutex::new(()),
         }
+    }
+
+    fn is_terminal(&self) -> bool {
+        self.terminal.load(Ordering::Acquire)
+    }
+
+    fn mark_terminal(&self) {
+        self.terminal.store(true, Ordering::Release);
     }
 }
 
@@ -1135,7 +1170,9 @@ async fn get_or_request_shared_snapshot(
         return Ok(snap);
     }
 
-    let loader = shared_snap_access_cache.get_loader(&key);
+    let Some(loader) = shared_snap_access_cache.get_loader(&key) else {
+        return Err(format!("shared snapaccess evicted, start_ts: {}", start_ts).into());
+    };
     let _guard = loader.lock().await;
 
     if let Some(snap) = upgrade_shared_snap_access(&shared_snap_access_cache, &key) {
@@ -1179,4 +1216,40 @@ async fn get_or_request_shared_snapshot(
     }
     shared_snap_access_cache.remove_loader(&key);
     snap
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shared_snap_access_eviction_is_sticky_for_in_flight_loader() {
+        let cache = SharedSnapAccessCache::new();
+        let key = SharedSnapAccessKey::new(1, 2, 3, 4, 5, false);
+
+        let loader = cache
+            .get_loader(&key)
+            .expect("active group should create loader");
+        cache.insert(key.clone(), Weak::new());
+        assert!(cache
+            .groups
+            .get(&key.start_ts)
+            .is_some_and(|group| group.entries.contains_key(&key)));
+
+        let (removed_entries, in_flight_loaders) = cache.remove_by_start_ts(key.start_ts);
+        assert_eq!(removed_entries, 1);
+        assert_eq!(in_flight_loaders, 1);
+        assert!(cache.get(&key).is_none());
+        assert!(cache.get_loader(&key).is_none());
+
+        cache.insert(key.clone(), Weak::new());
+        assert!(cache
+            .groups
+            .get(&key.start_ts)
+            .is_some_and(|group| group.entries.is_empty()));
+
+        drop(loader);
+        assert!(cache.remove_loader(&key));
+        assert!(cache.groups.get(&key.start_ts).is_none());
+    }
 }
