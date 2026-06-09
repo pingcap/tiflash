@@ -59,6 +59,7 @@
 
 #include <ext/scope_guard.h>
 #include <limits>
+#include <unordered_map>
 
 namespace DB
 {
@@ -70,6 +71,50 @@ extern const int COLUMNAR_SNAPSHOT_ERROR;
 struct RNProxyReaderSharedContext
 {
     using ClearSharedSnapAccessByStartTsFn = void (*)(uint64_t, RaftStoreProxyPtr);
+
+    struct StartTsClearRegistry
+    {
+        enum class UnregisterResult
+        {
+            NotRegistered,
+            NotLastOwner,
+            LastOwner,
+        };
+
+        std::mutex mutex;
+        std::unordered_map<UInt64, UInt64> ref_counts;
+
+        void registerStartTs(UInt64 start_ts)
+        {
+            if (start_ts == 0)
+                return;
+            auto guard = std::lock_guard(mutex);
+            ++ref_counts[start_ts];
+        }
+
+        UnregisterResult unregisterStartTs(UInt64 start_ts)
+        {
+            if (start_ts == 0)
+                return UnregisterResult::NotRegistered;
+
+            auto guard = std::lock_guard(mutex);
+            auto it = ref_counts.find(start_ts);
+            if (it == ref_counts.end() || it->second == 0)
+                return UnregisterResult::NotRegistered;
+            --it->second;
+            if (it->second != 0)
+                return UnregisterResult::NotLastOwner;
+
+            ref_counts.erase(it);
+            return UnregisterResult::LastOwner;
+        }
+    };
+
+    static StartTsClearRegistry & getStartTsClearRegistry()
+    {
+        static StartTsClearRegistry registry;
+        return registry;
+    }
 
     LoggerPtr log;
     const Context * context = nullptr;
@@ -86,10 +131,18 @@ struct RNProxyReaderSharedContext
     RaftStoreProxyPtr proxy_ptr{};
     ClearSharedSnapAccessByStartTsFn clear_shared_snap_access_by_start_ts = nullptr;
     std::shared_ptr<std::mutex> output_lock = std::make_shared<std::mutex>();
+    bool registered_for_start_ts = false;
 
     ~RNProxyReaderSharedContext() noexcept
     {
-        if (start_ts == 0 || proxy_ptr.inner == nullptr || clear_shared_snap_access_by_start_ts == nullptr)
+        if (!registered_for_start_ts)
+            return;
+
+        auto unregister_result = getStartTsClearRegistry().unregisterStartTs(start_ts);
+        if (unregister_result != StartTsClearRegistry::UnregisterResult::LastOwner)
+            return;
+
+        if (proxy_ptr.inner == nullptr || clear_shared_snap_access_by_start_ts == nullptr)
             return;
 
         try
@@ -98,13 +151,7 @@ struct RNProxyReaderSharedContext
         }
         catch (...)
         {
-            try
-            {
-                LOG_WARNING(log, "clear shared snapaccess cache failed, start_ts={}", start_ts);
-            }
-            catch (...)
-            {
-            }
+            LOG_WARNING(log, "clear shared snapaccess cache failed, start_ts={}", start_ts);
         }
     }
 };
@@ -258,6 +305,8 @@ std::shared_ptr<RNProxyReaderSharedContext> buildProxyReaderSharedContext(
     shared_context->log = log;
     shared_context->context = &context;
     shared_context->start_ts = start_ts;
+    RNProxyReaderSharedContext::getStartTsClearRegistry().registerStartTs(start_ts);
+    shared_context->registered_for_start_ts = true;
     shared_context->logical_table_id = table_scan.getLogicalTableID();
     shared_context->executor_id = table_scan.getTableScanExecutorID();
     const TiFlashRaftProxyHelper * proxy_helper
@@ -1156,13 +1205,14 @@ std::vector<RNProxyReadTaskPtr> RNProxyReadTask::buildProxyReadTask(
         {
             for (const auto & [table_id, range] : plan.bucket_units)
             {
-                all_reader_plans.push_back(RNProxyReaderPlan{
-                    .region_id = plan.region_id,
-                    .region_ver = plan.region_ver_id.ver,
-                    .region_conf_ver = plan.region_ver_id.conf_ver,
-                    .physical_table_ranges = ProxyPhysicalTableRanges{
-                        std::make_tuple(table_id, pingcap::coprocessor::KeyRanges{range})},
-                });
+                all_reader_plans.push_back(
+                    RNProxyReaderPlan{
+                        .region_id = plan.region_id,
+                        .region_ver = plan.region_ver_id.ver,
+                        .region_conf_ver = plan.region_ver_id.conf_ver,
+                        .physical_table_ranges
+                        = ProxyPhysicalTableRanges{std::make_tuple(table_id, pingcap::coprocessor::KeyRanges{range})},
+                    });
             }
         }
     }
