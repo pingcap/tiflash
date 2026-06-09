@@ -360,6 +360,12 @@ Block DMFileReader::readImpl(const ReadBlockInfo & read_info)
     Block res(std::move(columns));
     res.setStartOffset(start_row_offset);
     res.setRSResult(rs_result);
+    LOG_DEBUG(
+        log,
+        "DMFileReader::readImpl done: rows={} cols={} packs={}",
+        read_rows,
+        read_columns.size(),
+        pack_count);
     return res;
 }
 
@@ -549,6 +555,7 @@ ColumnPtr DMFileReader::readFromDisk(
             try
             {
                 sub_stream->buf->seek(offset_in_file, offset_in_decompressed_block);
+            scan_context->dm_io_seek_count.fetch_add(1, std::memory_order_relaxed);
             }
             catch (...)
             {

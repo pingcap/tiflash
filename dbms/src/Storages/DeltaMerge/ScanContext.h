@@ -48,6 +48,7 @@ public:
     std::atomic<uint64_t> dmfile_lm_filter_scanned_rows{0};
     std::atomic<uint64_t> dmfile_lm_filter_skipped_rows{0};
     std::atomic<uint64_t> total_dmfile_read_time_ns{0};
+    std::atomic<uint64_t> dm_io_seek_count{0};
 
     std::atomic<uint64_t> total_rs_pack_filter_check_time_ns{0};
     std::atomic<uint64_t> rs_pack_filter_none{0};
