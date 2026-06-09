@@ -1171,14 +1171,13 @@ std::vector<RNProxyReadTaskPtr> RNProxyReadTask::buildProxyReadTask(
         {
             for (const auto & [table_id, range] : plan.bucket_units)
             {
-                all_reader_plans.push_back(
-                    RNProxyReaderPlan{
-                        .region_id = plan.region_id,
-                        .region_ver = plan.region_ver_id.ver,
-                        .region_conf_ver = plan.region_ver_id.conf_ver,
-                        .physical_table_ranges
-                        = ProxyPhysicalTableRanges{std::make_tuple(table_id, pingcap::coprocessor::KeyRanges{range})},
-                    });
+                all_reader_plans.push_back(RNProxyReaderPlan{
+                    .region_id = plan.region_id,
+                    .region_ver = plan.region_ver_id.ver,
+                    .region_conf_ver = plan.region_ver_id.conf_ver,
+                    .physical_table_ranges
+                    = ProxyPhysicalTableRanges{std::make_tuple(table_id, pingcap::coprocessor::KeyRanges{range})},
+                });
             }
         }
     }
