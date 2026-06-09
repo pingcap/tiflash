@@ -69,7 +69,6 @@ const BACKOFF_RETRY_COUNT: usize = 5;
 
 const SNAPSHOT_CACHE_SIZE: usize = 10240; // 10k shards
 const SNAPSHOT_CACHE_CAP: u64 = 1024 * 1024 * 1024; // 1GB snapshot size with memtable
-const SHARED_SNAP_ACCESS_CACHE_SIZE: usize = 10240; // 10k request-local snapshot handles
 const SNAPSHOT_CACHE_CAPABILITY_HEADER: &str = "x-cse-snapshot-cache-version";
 
 #[derive(Debug, Error)]
@@ -234,7 +233,6 @@ pub struct CloudHelper {
     snapshot_cache: SnapCache,
     snapshot_cache_capable_stores: Arc<DashMap<u64, ()>>,
     shared_snap_access_cache: SharedSnapAccessCache,
-    shared_snap_access_loaders: Arc<DashMap<SharedSnapAccessKey, Arc<tokio::sync::Mutex<()>>>>,
     meta_file_cache: Arc<Cache<u64, Arc<dyn File>, MetaFileCacheWeighter>>,
     schema_files: Arc<DashMap<u64, SchemaFile>>,
     runtime: Arc<tokio::runtime::Runtime>,
@@ -282,8 +280,7 @@ impl CloudHelper {
         );
         let snapshot_cache = SnapCache::new(SNAPSHOT_CACHE_SIZE, SNAPSHOT_CACHE_CAP);
         let snapshot_cache_capable_stores = Arc::new(DashMap::new());
-        let shared_snap_access_cache = SharedSnapAccessCache::new(SHARED_SNAP_ACCESS_CACHE_SIZE);
-        let shared_snap_access_loaders = Arc::new(DashMap::new());
+        let shared_snap_access_cache = SharedSnapAccessCache::new();
 
         // Create a long-lived HTTP client for connection reuse
         let http_client = {
@@ -304,7 +301,6 @@ impl CloudHelper {
             snapshot_cache,
             snapshot_cache_capable_stores,
             shared_snap_access_cache,
-            shared_snap_access_loaders,
             meta_file_cache,
             schema_files: Arc::new(DashMap::new()),
             runtime,
@@ -421,7 +417,6 @@ impl CloudHelper {
         let snap_cache = self.snapshot_cache.clone();
         let snap_cache_capable_stores = self.snapshot_cache_capable_stores.clone();
         let shared_snap_access_cache = self.shared_snap_access_cache.clone();
-        let shared_snap_access_loaders = self.shared_snap_access_loaders.clone();
         let meta_file_cache = self.meta_file_cache.clone();
         let columnar_file_cache = self.columnar_file_cache.clone();
         let fts_cache = self.fts_cache.clone();
@@ -432,7 +427,6 @@ impl CloudHelper {
         self.runtime.spawn(async move {
             let snap = get_or_request_shared_snapshot(
                 shared_snap_access_cache,
-                shared_snap_access_loaders,
                 pd_client,
                 http_client,
                 dfs,
@@ -499,6 +493,20 @@ impl CloudHelper {
 
     pub fn get_region_bucket_keys(&self, region_id: u64, region_ver: u64) -> Vec<Vec<u8>> {
         self.pd_client.get_region_bucket_keys(region_id, region_ver)
+    }
+
+    pub fn clear_shared_snap_access_by_start_ts(&self, start_ts: u64) {
+        if start_ts == 0 {
+            return;
+        }
+
+        let (removed_cache_entries, removed_loader_entries) =
+            self.shared_snap_access_cache.remove_by_start_ts(start_ts);
+
+        info!(
+            "clear shared snapaccess by start_ts, start_ts: {}, removed_cache_entries: {}, removed_loader_entries: {}",
+            start_ts, removed_cache_entries, removed_loader_entries
+        );
     }
 }
 
@@ -936,48 +944,104 @@ impl Deref for SharedSnapAccessCache {
 }
 
 impl SharedSnapAccessCache {
-    pub fn new(size: usize) -> Self {
+    pub fn new() -> Self {
         Self {
-            core: Arc::new(SharedSnapAccessCacheCore::new(size)),
+            core: Arc::new(SharedSnapAccessCacheCore::new()),
         }
     }
 }
 
 #[derive(Clone)]
 pub struct SharedSnapAccessCacheCore {
-    cache: Arc<
-        Cache<
-            SharedSnapAccessKey,
-            Weak<kvengine::SnapAccessCore>,
-            SharedSnapAccessWeighter,
-            DefaultHashBuilder,
-        >,
-    >,
+    groups: Arc<DashMap<u64, Arc<SharedSnapAccessGroup>>>,
 }
 
 impl SharedSnapAccessCacheCore {
-    pub fn new(size: usize) -> Self {
-        let opts = quick_cache::OptionsBuilder::new()
-            .weight_capacity(size as u64)
-            .estimated_items_capacity(size)
-            .build()
-            .unwrap();
-
-        let cache = Arc::new(Cache::with_options(
-            opts,
-            SharedSnapAccessWeighter,
-            DefaultHashBuilder::default(),
-            DefaultLifecycle::default(),
-        ));
-        Self { cache }
+    pub fn new() -> Self {
+        Self {
+            groups: Arc::new(DashMap::new()),
+        }
     }
 
     pub fn get(&self, key: &SharedSnapAccessKey) -> Option<Weak<kvengine::SnapAccessCore>> {
-        self.cache.get(key)
+        self.groups
+            .get(&key.start_ts)?
+            .entries
+            .get(key)
+            .map(|entry| entry.clone())
     }
 
     pub fn insert(&self, key: SharedSnapAccessKey, entry: Weak<kvengine::SnapAccessCore>) {
-        self.cache.insert(key, entry);
+        let group = self
+            .groups
+            .entry(key.start_ts)
+            .or_insert_with(|| Arc::new(SharedSnapAccessGroup::new()))
+            .clone();
+        group.entries.insert(key, entry);
+    }
+
+    pub fn get_loader(&self, key: &SharedSnapAccessKey) -> Arc<tokio::sync::Mutex<()>> {
+        let group = self
+            .groups
+            .entry(key.start_ts)
+            .or_insert_with(|| Arc::new(SharedSnapAccessGroup::new()))
+            .clone();
+        let loader = group
+            .loaders
+            .entry(key.clone())
+            .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+            .clone();
+        loader
+    }
+
+    pub fn remove_loader(&self, key: &SharedSnapAccessKey) -> bool {
+        let Some(group) = self.groups.get(&key.start_ts).map(|entry| entry.clone()) else {
+            return false;
+        };
+        let removed = group.loaders.remove(key).is_some();
+        self.try_remove_empty_group(key.start_ts, &group);
+        removed
+    }
+
+    pub fn remove_entry(&self, key: &SharedSnapAccessKey) -> bool {
+        let Some(group) = self.groups.get(&key.start_ts).map(|entry| entry.clone()) else {
+            return false;
+        };
+        let removed = group.entries.remove(key).is_some();
+        self.try_remove_empty_group(key.start_ts, &group);
+        removed
+    }
+
+    pub fn remove_by_start_ts(&self, start_ts: u64) -> (usize, usize) {
+        let Some((_, group)) = self.groups.remove(&start_ts) else {
+            return (0, 0);
+        };
+        (group.entries.len(), group.loaders.len())
+    }
+
+    fn try_remove_empty_group(&self, start_ts: u64, group: &Arc<SharedSnapAccessGroup>) {
+        if group.entries.is_empty() && group.loaders.is_empty() {
+            if let Some(entry) = self.groups.get(&start_ts) {
+                if Arc::ptr_eq(entry.value(), group) {
+                    drop(entry);
+                    let _ = self.groups.remove(&start_ts);
+                }
+            }
+        }
+    }
+}
+
+pub struct SharedSnapAccessGroup {
+    entries: DashMap<SharedSnapAccessKey, Weak<kvengine::SnapAccessCore>>,
+    loaders: DashMap<SharedSnapAccessKey, Arc<tokio::sync::Mutex<()>>>,
+}
+
+impl SharedSnapAccessGroup {
+    pub fn new() -> Self {
+        Self {
+            entries: DashMap::new(),
+            loaders: DashMap::new(),
+        }
     }
 }
 
@@ -1011,28 +1075,25 @@ impl SharedSnapAccessKey {
     }
 }
 
-#[derive(Clone)]
-pub struct SharedSnapAccessWeighter;
-
-impl quick_cache::Weighter<SharedSnapAccessKey, Weak<kvengine::SnapAccessCore>>
-    for SharedSnapAccessWeighter
-{
-    fn weight(&self, _key: &SharedSnapAccessKey, _val: &Weak<kvengine::SnapAccessCore>) -> u64 {
-        1
-    }
-}
-
 fn upgrade_shared_snap_access(
     cache: &SharedSnapAccessCache,
     key: &SharedSnapAccessKey,
 ) -> Option<SnapAccess> {
-    let core = cache.get(key)?.upgrade()?;
+    let core = match cache.get(key) {
+        Some(core) => match core.upgrade() {
+            Some(core) => core,
+            None => {
+                cache.remove_entry(key);
+                return None;
+            }
+        },
+        None => return None,
+    };
     Some(SnapAccess { core })
 }
 
 async fn get_or_request_shared_snapshot(
     shared_snap_access_cache: SharedSnapAccessCache,
-    shared_snap_access_loaders: Arc<DashMap<SharedSnapAccessKey, Arc<tokio::sync::Mutex<()>>>>,
     pd_client: Arc<PdClientWithCache>,
     http_client: security::HttpClient,
     dfs: Arc<dyn dfs::Dfs>,
@@ -1074,10 +1135,7 @@ async fn get_or_request_shared_snapshot(
         return Ok(snap);
     }
 
-    let loader = shared_snap_access_loaders
-        .entry(key.clone())
-        .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
-        .clone();
+    let loader = shared_snap_access_cache.get_loader(&key);
     let _guard = loader.lock().await;
 
     if let Some(snap) = upgrade_shared_snap_access(&shared_snap_access_cache, &key) {
@@ -1119,6 +1177,6 @@ async fn get_or_request_shared_snapshot(
     if let Ok(ref snap_access) = snap {
         shared_snap_access_cache.insert(key.clone(), Arc::downgrade(&snap_access.core));
     }
-    shared_snap_access_loaders.remove(&key);
+    shared_snap_access_cache.remove_loader(&key);
     snap
 }

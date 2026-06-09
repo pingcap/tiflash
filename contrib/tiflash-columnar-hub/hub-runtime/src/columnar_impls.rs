@@ -89,6 +89,15 @@ pub unsafe extern "C" fn ffi_get_region_bucket_keys(
     }
 }
 
+pub unsafe extern "C" fn ffi_clear_shared_snap_access_by_start_ts(
+    start_ts: u64,
+    hub_ptr: RaftStoreProxyPtr,
+) {
+    let hub = hub_ptr.as_ref();
+    hub.cloud_helper
+        .clear_shared_snap_access_by_start_ts(start_ts);
+}
+
 pub unsafe extern "C" fn ffi_make_columnar_reader(
     shard_id: u64,
     shard_ver: u64,

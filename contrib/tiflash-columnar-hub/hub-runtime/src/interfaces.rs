@@ -362,6 +362,9 @@ pub mod root {
                     arg3: root::DB::RaftStoreProxyPtr,
                 ) -> root::DB::RustStrWithViewVec,
             >,
+            pub fn_clear_shared_snap_access_by_start_ts: ::std::option::Option<
+                unsafe extern "C" fn(arg1: u64, arg2: root::DB::RaftStoreProxyPtr),
+            >,
             pub fn_get_columnar_reader: ::std::option::Option<
                 unsafe extern "C" fn(
                     arg1: u64,
