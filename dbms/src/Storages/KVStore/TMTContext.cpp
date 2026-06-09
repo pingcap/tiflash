@@ -255,13 +255,22 @@ void TMTContext::updateSecurityConfig(
 
 void TMTContext::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper)
 {
-    // For tiflash_compute mode, kvstore should be nullptr, no need to restore region_table.
+    if (context.getSharedContextDisagg()->use_columnar)
+        context.getSharedContextDisagg()->setColumnarProxyHelper(proxy_helper);
+
+    // For tiflash_compute with autoscaler, kvstore should be nullptr, no need to restore region_table.
     if (context.getSharedContextDisagg()->isDisaggregatedComputeMode()
         && context.getSharedContextDisagg()->use_autoscaler)
+    {
         return;
+    }
 
-    kvstore->restore(path_pool, proxy_helper);
-    region_table.restore();
+    // For tiflash_compute with use_columnar, we don't need kvstore
+    if (!context.getSharedContextDisagg()->use_columnar)
+    {
+        kvstore->restore(path_pool, proxy_helper);
+        region_table.restore();
+    }
     store_status = StoreStatus::Ready;
 
     if (proxy_helper != nullptr)
@@ -455,6 +464,8 @@ bool TMTContext::checkRunning(std::memory_order memory_order) const
 void TMTContext::setStatusStopping()
 {
     store_status = StoreStatus::Stopping;
+    if (kvstore == nullptr)
+        return;
     // notify all region to stop learner read.
     kvstore->traverseRegions([](const RegionID, const RegionPtr & region) { region->notifyApplied(); });
 }

@@ -15,11 +15,13 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Common/config.h> // For ENABLE_NEXT_GEN_COLUMNAR
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/Context_fwd.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/ColumnDefine_fwd.h>
 #include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
@@ -39,6 +41,9 @@ namespace DB
 {
 class DAGContext;
 
+// StorageDisaggregated is a virtual IStorage which will that handle reading Block data  for tiflash-compute node under the disaggregated architecture. It will be used in two scenarios:
+// 1. For deployed with tiflash-write, StorageDisaggregated will build a `DisaggReadSnapshot` from tiflash-write and read data from the snapshot.
+// 2. For deployed with tikv columnar, StorageDisaggregated will read data from the columnar proxy.
 class StorageDisaggregated : public IStorage
 {
 public:
@@ -69,9 +74,18 @@ public:
         unsigned num_streams) override;
 
 private:
-    // helper functions for building the task read from a shared remote storage system (e.g. S3)
-    BlockInputStreams readThroughS3(const Context & db_context, unsigned num_streams);
-    void readThroughS3(
+    // helper functions for building the task read from the disagg tiflash-write nodes
+    BlockInputStreams readThroughTiFlashWrite(const Context & db_context, unsigned num_streams);
+    void readThroughTiFlashWrite(
+        PipelineExecutorContext & exec_context,
+        PipelineExecGroupBuilder & group_builder,
+        const Context & db_context,
+        unsigned num_streams);
+
+    bool isReadColumnar();
+    // helper functions for building the task read from the columnar proxy nodes
+    BlockInputStreams readThroughColumnar(const Context & db_context, unsigned num_streams);
+    void readThroughColumnar(
         PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         const Context & db_context,
@@ -140,12 +154,25 @@ private:
         PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         DAGExpressionAnalyzer & analyzer);
-    ExpressionActionsPtr getExtraCastExpr(DAGExpressionAnalyzer & analyzer);
-    void extraCast(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline);
-    void extraCast(
+#if ENABLE_NEXT_GEN_COLUMNAR
+    void filterConditionsWithPushedDownFilters(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline);
+    void filterConditionsWithPushedDownFilters(
         PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         DAGExpressionAnalyzer & analyzer);
+#endif
+    ExpressionActionsPtr getExtraCastExpr(
+        DAGExpressionAnalyzer & analyzer,
+        bool include_pushed_down_filter_columns = false);
+    void extraCast(
+        DAGExpressionAnalyzer & analyzer,
+        DAGPipeline & pipeline,
+        bool include_pushed_down_filter_columns = false);
+    void extraCast(
+        PipelineExecutorContext & exec_context,
+        PipelineExecGroupBuilder & group_builder,
+        DAGExpressionAnalyzer & analyzer,
+        bool include_pushed_down_filter_columns = false);
     tipb::Executor buildTableScanTiPB();
 
     size_t getBuildTaskRPCTimeout() const;

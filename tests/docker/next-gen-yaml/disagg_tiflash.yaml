@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-version: '2.3'
-
 services:
   tiflash-wn0:
     image: ${TIFLASH_IMAGE:-hub.pingcap.net/tiflash/tiflash-ci-base:rocky8-20241028}

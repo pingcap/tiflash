@@ -26,7 +26,15 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${TiFlash_SOURCE_DIR}/cmake/Modules/
 set(CMAKE_MACOSX_RPATH 1)
 
 option(TIFLASH_ENABLE_LLVM_DEVELOPMENT "enable facilities for development with LLVM" OFF)
+# tiflash next-gen support 2 types: next-gen disagg and next-gen columnar
+# TODO: drop the support for next-gen disagg after we fully replace it by next-gen columnar
 option(ENABLE_NEXT_GEN "enable TiDB next-gen features" OFF)
+option(ENABLE_NEXT_GEN_COLUMNAR "enable disaggregated columnar read through dedicated tiflash proxy" OFF)
+
+# some features are shared for both next-gen disagg and next-gen columnar
+if (ENABLE_NEXT_GEN_COLUMNAR AND NOT ENABLE_NEXT_GEN)
+    message(FATAL_ERROR "ENABLE_NEXT_GEN_COLUMNAR requires ENABLE_NEXT_GEN to be enabled")
+endif ()
 
 if(NOT CMAKE_PREFIX_PATH AND DEFINED ENV{CMAKE_PREFIX_PATH})
     message(STATUS "Reading CMAKE_PREFIX_PATH from env... $ENV{CMAKE_PREFIX_PATH}")

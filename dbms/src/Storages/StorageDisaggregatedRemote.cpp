@@ -100,7 +100,30 @@ void initDisaggTaskMeta(
 }
 } // namespace
 
-BlockInputStreams StorageDisaggregated::readThroughS3(const Context & db_context, unsigned num_streams)
+#if ENABLE_NEXT_GEN_COLUMNAR == 0
+BlockInputStreams StorageDisaggregated::readThroughColumnar( // NOLINT(readability-convert-member-functions-to-static)
+    const Context &,
+    unsigned)
+{
+    // A placeholder for the columnar read path. The real implementation is in StorageDisaggregatedColumnar.cpp
+    // which is only compiled when ENABLE_NEXT_GEN_COLUMNAR is on.
+    RUNTIME_CHECK_MSG(false, "columnar disaggregated read is not enabled in this build");
+    return {};
+}
+
+void StorageDisaggregated::readThroughColumnar( // NOLINT(readability-convert-member-functions-to-static)
+    PipelineExecutorContext &,
+    PipelineExecGroupBuilder &,
+    const Context &,
+    unsigned)
+{
+    // A placeholder for the columnar read path. The real implementation is in StorageDisaggregatedColumnar.cpp
+    // which is only compiled when ENABLE_NEXT_GEN_COLUMNAR is on.
+    RUNTIME_CHECK_MSG(false, "columnar disaggregated read is not enabled in this build");
+}
+#endif
+
+BlockInputStreams StorageDisaggregated::readThroughTiFlashWrite(const Context & db_context, unsigned num_streams)
 {
     auto * dag_context = context.getDAGContext();
     auto scan_context
@@ -133,7 +156,7 @@ BlockInputStreams StorageDisaggregated::readThroughS3(const Context & db_context
     return pipeline.streams;
 }
 
-void StorageDisaggregated::readThroughS3(
+void StorageDisaggregated::readThroughTiFlashWrite(
     PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     const Context & db_context,

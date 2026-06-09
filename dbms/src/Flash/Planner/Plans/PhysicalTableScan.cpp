@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/TiFlashException.h>
+#include <Core/NamesAndTypes.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
@@ -38,13 +39,14 @@ NamesWithAliases buildTableScanProjectionCols(
 {
     if (unlikely(schema.size() != storage_header.columns()))
         throw TiFlashException(
-            fmt::format(
-                "The tidb table scan schema size {} is different from the tiflash storage schema size {}, table id is "
-                "{}",
-                schema.size(),
-                storage_header.columns(),
-                logical_table_id),
-            Errors::Planner::BadRequest);
+            Errors::Planner::BadRequest,
+            "The tidb table scan schema size {} is different from the tiflash storage schema size {}, table_id={} "
+            "schema={} storage_header={}",
+            schema.size(),
+            storage_header.columns(),
+            logical_table_id,
+            dumpJsonStructure(schema),
+            storage_header.dumpJsonStructure());
     NamesWithAliases schema_project_cols;
     for (size_t i = 0; i < schema.size(); ++i)
     {
@@ -54,19 +56,17 @@ NamesWithAliases buildTableScanProjectionCols(
         const auto & storage_col_type = storage_header.getColumnsWithTypeAndName()[i].type;
         if (unlikely(!table_scan_col_type->equals(*storage_col_type)))
             throw TiFlashException(
-                fmt::format(
-                    R"(The data type {} from tidb table scan schema is different from the data type {} from tiflash storage schema, 
-                    table id is {}, 
-                    column index is {}, 
-                    column name from tidb table scan is {}, 
+                Errors::Planner::BadRequest,
+                R"(The data type {} from tidb table scan schema is different from the data type {} from tiflash storage schema,
+                    table_id={} column_index={}
+                    column name from tidb table scan is {},
                     column name from tiflash storage is {})",
-                    table_scan_col_type->getName(),
-                    storage_col_type->getName(),
-                    logical_table_id,
-                    i,
-                    table_scan_col_name,
-                    storage_col_name),
-                Errors::Planner::BadRequest);
+                table_scan_col_type->getName(),
+                storage_col_type->getName(),
+                logical_table_id,
+                i,
+                table_scan_col_name,
+                storage_col_name);
         schema_project_cols.emplace_back(storage_col_name, table_scan_col_name);
     }
     return schema_project_cols;

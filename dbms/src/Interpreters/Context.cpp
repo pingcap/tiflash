@@ -362,6 +362,7 @@ std::unique_ptr<Context> Context::createGlobal(
     {
         res->shared->ctx_disagg->disaggregated_mode = disagg_opt->mode;
         res->shared->ctx_disagg->use_autoscaler = disagg_opt->use_autoscaler;
+        res->shared->ctx_disagg->use_columnar = disagg_opt->use_columnar;
     }
     res->quota = std::make_shared<QuotaForIntervals>();
     res->timezone_info.init();
