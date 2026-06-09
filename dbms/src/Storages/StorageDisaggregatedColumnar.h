@@ -113,6 +113,8 @@ public:
 
     BlockInputStreams getInputStreams();
 
+    BlockInputStreamPtr createSharedInputStream();
+
     BlockInputStreamPtr createInputStream(size_t reader_index);
 
     ColumnarReaderPtr createColumnarReaderWithBackoff(size_t reader_index) const;
@@ -124,6 +126,8 @@ public:
     std::optional<size_t> tryAcquireReaderIndex();
 
     size_t getReaderCount() const;
+
+    size_t getSourceNum() const;
 
     const Context & getContext() const;
 
@@ -139,10 +143,12 @@ public:
 
     RNProxyReadTask(
         std::vector<RNProxyReaderPlan> reader_plans,
+        size_t source_num,
         std::shared_ptr<RNProxyReaderSharedContext> shared_reader_context);
 
 private:
     std::vector<RNProxyReaderPlan> reader_plans;
+    size_t source_num;
     std::shared_ptr<RNProxyReaderSharedContext> shared_reader_context;
     std::vector<std::shared_ptr<RNProxyReaderSlot>> reader_slots;
     std::atomic_size_t next_reader_index = 0;
@@ -172,7 +178,7 @@ public:
         const Context & context;
         LoggerPtr log;
         RNProxyReadTaskPtr task;
-        size_t reader_index;
+        std::optional<size_t> reader_index;
         const DM::ColumnDefines & columns_to_read;
         int extra_table_id_index;
         TableID table_id;
@@ -183,7 +189,7 @@ public:
         : context(options.context)
         , log(options.log)
         , task(options.task)
-        , reader_index(options.reader_index)
+        , fixed_reader_index(options.reader_index)
         , action(options.columns_to_read, options.extra_table_id_index)
         , table_id(options.table_id)
         , executor_id(options.executor_id)
@@ -195,12 +201,14 @@ public:
     static BlockInputStreamPtr create(const Options & options) { return std::make_shared<RNProxyInputStream>(options); }
 
 private:
-    void ensureReader();
+    bool ensureReader();
+    void releaseReader();
 
     const Context & context;
     const LoggerPtr log;
     RNProxyReadTaskPtr task;
-    size_t reader_index;
+    const std::optional<size_t> fixed_reader_index;
+    std::optional<size_t> current_reader_index;
     std::optional<ColumnarReaderPtr> reader;
     AddExtraTableIDColumnTransformAction action;
     TableID table_id;
