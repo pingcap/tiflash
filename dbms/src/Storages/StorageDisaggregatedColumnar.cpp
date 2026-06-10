@@ -308,7 +308,8 @@ std::vector<RegionReaderPlan> buildRegionReaderPlansFromPhysicalTableRanges(
     return region_reader_plans;
 }
 
-std::vector<RNProxyReaderPlan> buildReaderPlansFromRegionReaderPlans(const std::vector<RegionReaderPlan> & region_reader_plans)
+std::vector<RNProxyReaderPlan> buildReaderPlansFromRegionReaderPlans(
+    const std::vector<RegionReaderPlan> & region_reader_plans)
 {
     std::vector<RNProxyReaderPlan> reader_plans;
     reader_plans.reserve(region_reader_plans.size());
@@ -974,7 +975,8 @@ ColumnarReaderPtr RNProxyReadTask::createColumnarReaderWithBackoff(const RNProxy
                     replaceReaderWork(reader_work, std::move(replanned_reader_plans));
                     LOG_WARNING(
                         getLog(),
-                        "replanned proxy reader work after region error, old_error={}, new_region_id={}, split_count={}",
+                        "replanned proxy reader work after region error, old_error={}, new_region_id={}, "
+                        "split_count={}",
                         e.message(),
                         reader_work->plan.region_id,
                         replanned_reader_plan_count);
@@ -1087,39 +1089,33 @@ void RNProxyReadTask::prefetchReaderWork(const RNProxyReaderWorkPtr & reader_wor
         reader_work->state = RNProxyReaderMaterializeState::Creating;
     }
 
-    LOG_INFO(
-        getLog(),
-        "materialize proxy reader asynchronously, region_id={}",
-        reader_work->plan.region_id);
-    newThreadManager()->scheduleThenDetach(
-        true,
-        "PrefetchRNProxyReader",
-        [self = shared_from_this(), reader_work] {
-            try
+    LOG_INFO(getLog(), "materialize proxy reader asynchronously, region_id={}", reader_work->plan.region_id);
+    newThreadManager()->scheduleThenDetach(true, "PrefetchRNProxyReader", [self = shared_from_this(), reader_work] {
+        try
+        {
+            auto reader = self->createColumnarReaderWithBackoff(reader_work);
             {
-                auto reader = self->createColumnarReaderWithBackoff(reader_work);
-                {
-                    auto guard = std::lock_guard(reader_work->mutex);
-                    if (reader_work->state == RNProxyReaderMaterializeState::Consumed)
-                        return;
-                    reader_work->reader.emplace(std::move(reader));
-                    reader_work->exception = nullptr;
-                    reader_work->state = RNProxyReaderMaterializeState::Ready;
-                }
+                auto guard = std::lock_guard(reader_work->mutex);
+                if (reader_work->state == RNProxyReaderMaterializeState::Consumed)
+                    return;
+                reader_work->reader.emplace(std::move(reader));
+                reader_work->exception = nullptr;
+                reader_work->state = RNProxyReaderMaterializeState::Ready;
             }
-            catch (...)
+        }
+        catch (...)
+        {
             {
-                {
-                    auto guard = std::lock_guard(reader_work->mutex);
-                    if (reader_work->state == RNProxyReaderMaterializeState::Consumed)
-                        return;
-                    reader_work->reader.reset();
-                    reader_work->exception = std::current_exception();
-                    reader_work->state = RNProxyReaderMaterializeState::Failed;
-                }
+                auto guard = std::lock_guard(reader_work->mutex);
+                if (reader_work->state == RNProxyReaderMaterializeState::Consumed)
+                    return;
+                reader_work->reader.reset();
+                reader_work->exception = std::current_exception();
+                reader_work->state = RNProxyReaderMaterializeState::Failed;
             }
-            reader_work->cv.notify_all();
-        });
+        }
+        reader_work->cv.notify_all();
+    });
 }
 
 std::optional<RNProxyReaderWorkPtr> RNProxyReadTask::tryAcquireReaderWork()
