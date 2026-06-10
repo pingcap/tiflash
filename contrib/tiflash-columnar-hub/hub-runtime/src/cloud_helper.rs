@@ -713,7 +713,7 @@ async fn request_snapshot_from_leader(
                     continue;
                 }
                 if delegate_resp.get_region_error().has_epoch_not_match() {
-                    // Return epoch not match error to TiDB to retry.
+                    // Return epoch not match error to caller to retry new plan.
                     error!(
                         "{} request_snapshot_from_leader failed, epoch not match, {:?}",
                         tag,

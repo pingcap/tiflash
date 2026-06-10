@@ -18,6 +18,7 @@
 #if ENABLE_NEXT_GEN_COLUMNAR
 #include <Common/Logger.h>
 #include <Common/Stopwatch.h>
+#include <Common/ThreadManager.h>
 #include <DataStreams/AddExtraTableIDColumnTransformAction.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
@@ -37,6 +38,7 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <deque>
 #include <exception>
 #include <mutex>
 #include <optional>
@@ -46,13 +48,21 @@
 namespace DB
 {
 class DAGContext;
-class ThreadManager;
 
 namespace DM
 {
 class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
 } // namespace DM
+
+enum class RNProxyReaderMaterializeState
+{
+    NotStarted,
+    Creating,
+    Ready,
+    Failed,
+    Consumed,
+};
 
 struct RNProxyReaderSharedContext;
 
@@ -64,25 +74,23 @@ struct RNProxyReaderPlan
     std::vector<std::tuple<TableID, pingcap::coprocessor::KeyRanges>> physical_table_ranges;
 };
 
-enum class RNProxyReaderMaterializeState
+struct RNProxyReaderWork
 {
-    NotStarted,
-    Creating,
-    Ready,
-    Failed,
-    Consumed,
-};
+    explicit RNProxyReaderWork(RNProxyReaderPlan plan_)
+        : plan(std::move(plan_))
+    {}
 
-struct RNProxyReaderSlot
-{
-    ~RNProxyReaderSlot();
+    ~RNProxyReaderWork();
 
+    RNProxyReaderPlan plan;
     std::mutex mutex;
     std::condition_variable cv;
     RNProxyReaderMaterializeState state = RNProxyReaderMaterializeState::NotStarted;
     std::optional<ColumnarReaderPtr> reader;
     std::exception_ptr exception;
 };
+
+using RNProxyReaderWorkPtr = std::shared_ptr<RNProxyReaderWork>;
 
 class RNProxyReadTask;
 using RNProxyReadTaskPtr = std::shared_ptr<RNProxyReadTask>;
@@ -115,15 +123,19 @@ public:
 
     BlockInputStreamPtr createSharedInputStream();
 
-    BlockInputStreamPtr createInputStream(size_t reader_index);
+    BlockInputStreamPtr createInputStream(const RNProxyReaderWorkPtr & reader_work);
 
-    ColumnarReaderPtr createColumnarReaderWithBackoff(size_t reader_index) const;
+    ColumnarReaderPtr createColumnarReaderWithBackoff(const RNProxyReaderWorkPtr & reader_work);
 
-    ColumnarReaderPtr getOrCreateReader(size_t reader_index);
+    ColumnarReaderPtr getOrCreateReader(const RNProxyReaderWorkPtr & reader_work);
 
-    void prefetchReader(size_t reader_index);
+    std::optional<RNProxyReaderWorkPtr> tryAcquireReaderWork();
 
-    std::optional<size_t> tryAcquireReaderIndex();
+#ifdef DBMS_PUBLIC_GTEST
+    void replaceReaderWorkForTest(
+        const RNProxyReaderWorkPtr & reader_work,
+        std::vector<RNProxyReaderPlan> replanned_reader_plans);
+#endif
 
     size_t getReaderCount() const;
 
@@ -147,13 +159,19 @@ public:
         std::shared_ptr<RNProxyReaderSharedContext> shared_reader_context);
 
 private:
-    std::vector<RNProxyReaderPlan> reader_plans;
+    void prefetchPendingWork();
+
+    void prefetchReaderWork(const RNProxyReaderWorkPtr & reader_work);
+
+    void replaceReaderWork(
+        const RNProxyReaderWorkPtr & reader_work,
+        std::vector<RNProxyReaderPlan> replanned_reader_plans);
+
+    size_t reader_count;
     size_t source_num;
     std::shared_ptr<RNProxyReaderSharedContext> shared_reader_context;
-    std::vector<std::shared_ptr<RNProxyReaderSlot>> reader_slots;
-    std::atomic_size_t next_reader_index = 0;
-    std::once_flag prefetch_thread_manager_once;
-    std::shared_ptr<ThreadManager> prefetch_thread_manager;
+    mutable std::mutex pending_reader_works_mutex;
+    std::deque<RNProxyReaderWorkPtr> pending_reader_works;
 };
 
 class RNProxyInputStream : public IProfilingBlockInputStream
@@ -178,7 +196,7 @@ public:
         const Context & context;
         LoggerPtr log;
         RNProxyReadTaskPtr task;
-        std::optional<size_t> reader_index;
+        RNProxyReaderWorkPtr reader_work;
         const DM::ColumnDefines & columns_to_read;
         int extra_table_id_index;
         TableID table_id;
@@ -189,7 +207,7 @@ public:
         : context(options.context)
         , log(options.log)
         , task(options.task)
-        , fixed_reader_index(options.reader_index)
+        , fixed_reader_work(options.reader_work)
         , action(options.columns_to_read, options.extra_table_id_index)
         , table_id(options.table_id)
         , executor_id(options.executor_id)
@@ -207,8 +225,8 @@ private:
     const Context & context;
     const LoggerPtr log;
     RNProxyReadTaskPtr task;
-    const std::optional<size_t> fixed_reader_index;
-    std::optional<size_t> current_reader_index;
+    const RNProxyReaderWorkPtr fixed_reader_work;
+    RNProxyReaderWorkPtr current_reader_work;
     std::optional<ColumnarReaderPtr> reader;
     AddExtraTableIDColumnTransformAction action;
     TableID table_id;
@@ -270,7 +288,6 @@ private:
     size_t total_rows = 0;
     size_t total_streams = 0;
 
-    std::optional<size_t> current_reader_idx;
     BlockInputStreamPtr current_input_stream;
 
     // Temporarily store the block read from current_seg_task->stream and pass it to downstream operators in readImpl.
