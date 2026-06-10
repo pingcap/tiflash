@@ -18,7 +18,6 @@
 #include <Common/MyTime.h>
 #include <Common/RedactHelpers.h>
 #include <Common/Stopwatch.h>
-#include <Common/ThreadManager.h>
 #include <Core/NamesAndTypes.h>
 #include <DataStreams/AddExtraTableIDColumnTransformAction.h>
 #include <DataStreams/IBlockInputStream.h>
@@ -250,6 +249,79 @@ std::vector<String> getRegionBucketKeysFromProxy(const Context & context, Region
     for (size_t i = 0; i < bucket_keys.len; ++i)
         res.emplace_back(bucket_keys.buffs[i].data, bucket_keys.buffs[i].len);
     return res;
+}
+
+std::vector<RegionReaderPlan> buildRegionReaderPlansFromPhysicalTableRanges(
+    const LoggerPtr & log,
+    const Context & context,
+    const ProxyPhysicalTableRanges & physical_table_ranges)
+{
+    std::vector<RegionReaderPlan> region_reader_plans;
+    if (physical_table_ranges.empty())
+        return region_reader_plans;
+
+    pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
+    pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
+    auto & region_cache = cluster->region_cache;
+
+    std::unordered_map<uint64_t, size_t> plan_index_by_region_id;
+    region_reader_plans.reserve(physical_table_ranges.size());
+
+    for (const auto & [physical_table_id, ranges] : physical_table_ranges)
+    {
+        const auto locations = pingcap::coprocessor::details::splitKeyRangesByLocations(region_cache, bo, ranges);
+        for (const auto & location : locations)
+        {
+            const auto & region = location.location.region;
+            auto it = plan_index_by_region_id.find(region.id);
+            if (it == plan_index_by_region_id.end())
+            {
+                plan_index_by_region_id.emplace(region.id, region_reader_plans.size());
+                region_reader_plans.push_back(RegionReaderPlan{
+                    .region_id = region.id,
+                    .region_ver_id = region,
+                    .physical_table_ranges
+                    = ProxyPhysicalTableRanges{std::make_tuple(physical_table_id, location.ranges)},
+                });
+                continue;
+            }
+
+            auto & plan = region_reader_plans[it->second];
+            if (plan.region_ver_id != region)
+            {
+                region_cache->dropRegion(plan.region_ver_id);
+                region_cache->dropRegion(region);
+                LOG_WARNING(
+                    log,
+                    "buildProxyReadTask failed region_id={}, epoch not match {}",
+                    region.id,
+                    region.toString());
+                throw RegionException(
+                    RegionException::UnavailableRegions{region.id},
+                    RegionException::RegionReadStatus::EPOCH_NOT_MATCH,
+                    region.toString().c_str());
+            }
+            plan.physical_table_ranges.push_back(std::make_tuple(physical_table_id, location.ranges));
+        }
+    }
+
+    return region_reader_plans;
+}
+
+std::vector<RNProxyReaderPlan> buildReaderPlansFromRegionReaderPlans(const std::vector<RegionReaderPlan> & region_reader_plans)
+{
+    std::vector<RNProxyReaderPlan> reader_plans;
+    reader_plans.reserve(region_reader_plans.size());
+    for (const auto & plan : region_reader_plans)
+    {
+        reader_plans.push_back(RNProxyReaderPlan{
+            .region_id = plan.region_id,
+            .region_ver = plan.region_ver_id.ver,
+            .region_conf_ver = plan.region_ver_id.conf_ver,
+            .physical_table_ranges = plan.physical_table_ranges,
+        });
+    }
+    return reader_plans;
 }
 
 std::vector<std::tuple<UInt64, String, DataTypePtr>> genGeneratedColumnInfosForDisaggregatedRead(
@@ -785,30 +857,29 @@ ColumnarReaderPtr createProxyColumnarReader(
 }
 
 // RNProxyReadTask
-RNProxyReaderSlot::~RNProxyReaderSlot()
+RNProxyReaderWork::~RNProxyReaderWork()
 {
     if (reader.has_value() && reader->inner.ptr != nullptr)
         RustGcHelper::instance().gcRustPtr(reader->inner.ptr, reader->inner.type);
 }
 
 RNProxyReadTask::RNProxyReadTask(
-    std::vector<RNProxyReaderPlan> reader_plans_,
+    std::vector<RNProxyReaderPlan> reader_plans,
     size_t source_num_,
     std::shared_ptr<RNProxyReaderSharedContext> shared_reader_context_)
-    : reader_plans(std::move(reader_plans_))
+    : reader_count(reader_plans.size())
     , source_num(source_num_)
     , shared_reader_context(std::move(shared_reader_context_))
 {
     RUNTIME_CHECK(source_num > 0);
-    RUNTIME_CHECK(source_num <= reader_plans.size(), source_num, reader_plans.size());
-    reader_slots.reserve(reader_plans.size());
-    for (size_t i = 0; i < reader_plans.size(); ++i)
-        reader_slots.emplace_back(std::make_shared<RNProxyReaderSlot>());
+    RUNTIME_CHECK(source_num <= reader_count, source_num, reader_count);
+    for (auto & reader_plan : reader_plans)
+        pending_reader_works.push_back(std::make_shared<RNProxyReaderWork>(std::move(reader_plan)));
 }
 
 size_t RNProxyReadTask::getReaderCount() const
 {
-    return reader_plans.size();
+    return reader_count;
 }
 
 size_t RNProxyReadTask::getSourceNum() const
@@ -846,15 +917,40 @@ const String & RNProxyReadTask::getExecutorID() const
     return shared_reader_context->executor_id;
 }
 
-ColumnarReaderPtr RNProxyReadTask::createColumnarReaderWithBackoff(size_t reader_index) const
+void RNProxyReadTask::replaceReaderWork(
+    const RNProxyReaderWorkPtr & reader_work,
+    std::vector<RNProxyReaderPlan> replanned_reader_plans)
 {
-    RUNTIME_CHECK(reader_index < reader_plans.size());
-    const auto & reader_plan = reader_plans[reader_index];
+    RUNTIME_CHECK(reader_work != nullptr);
+    RUNTIME_CHECK(!replanned_reader_plans.empty());
+
+    reader_work->plan = std::move(replanned_reader_plans.front());
+    if (replanned_reader_plans.size() == 1)
+        return;
+
+    auto queue_guard = std::lock_guard(pending_reader_works_mutex);
+    for (auto it = replanned_reader_plans.rbegin(); it != replanned_reader_plans.rend() - 1; ++it)
+        pending_reader_works.push_front(std::make_shared<RNProxyReaderWork>(*it));
+}
+
+#ifdef DBMS_PUBLIC_GTEST
+void RNProxyReadTask::replaceReaderWorkForTest(
+    const RNProxyReaderWorkPtr & reader_work,
+    std::vector<RNProxyReaderPlan> replanned_reader_plans)
+{
+    replaceReaderWork(reader_work, std::move(replanned_reader_plans));
+}
+#endif
+
+ColumnarReaderPtr RNProxyReadTask::createColumnarReaderWithBackoff(const RNProxyReaderWorkPtr & reader_work)
+{
+    RUNTIME_CHECK(reader_work != nullptr);
     pingcap::kv::Backoffer bo(pingcap::kv::copNextMaxBackoff);
     while (true)
     {
         try
         {
+            const auto & reader_plan = reader_work->plan;
             LOG_INFO(
                 getLog(),
                 "materialize proxy reader for tables in region, region_id={}, table_num={}",
@@ -864,6 +960,30 @@ ColumnarReaderPtr RNProxyReadTask::createColumnarReaderWithBackoff(size_t reader
         }
         catch (RegionException & e)
         {
+            if (e.status == RegionException::RegionReadStatus::EPOCH_NOT_MATCH
+                || e.status == RegionException::RegionReadStatus::NOT_FOUND)
+            {
+                try
+                {
+                    auto replanned_region_reader_plans = buildRegionReaderPlansFromPhysicalTableRanges(
+                        getLog(),
+                        getContext(),
+                        reader_work->plan.physical_table_ranges);
+                    auto replanned_reader_plans = buildReaderPlansFromRegionReaderPlans(replanned_region_reader_plans);
+                    const auto replanned_reader_plan_count = replanned_reader_plans.size();
+                    replaceReaderWork(reader_work, std::move(replanned_reader_plans));
+                    LOG_WARNING(
+                        getLog(),
+                        "replanned proxy reader work after region error, old_error={}, new_region_id={}, split_count={}",
+                        e.message(),
+                        reader_work->plan.region_id,
+                        replanned_reader_plan_count);
+                }
+                catch (const std::exception & replan_e)
+                {
+                    LOG_WARNING(getLog(), "replan proxy reader work failed, {}", replan_e.what());
+                }
+            }
             LOG_WARNING(getLog(), "create proxy reader failed, backoff and retry, {}", e.message());
             bo.backoff(pingcap::kv::boRegionMiss, pingcap::Exception(e.message(), e.code()));
         }
@@ -877,142 +997,153 @@ ColumnarReaderPtr RNProxyReadTask::createColumnarReaderWithBackoff(size_t reader
     }
 }
 
-ColumnarReaderPtr RNProxyReadTask::getOrCreateReader(size_t reader_index)
+ColumnarReaderPtr RNProxyReadTask::getOrCreateReader(const RNProxyReaderWorkPtr & reader_work)
 {
-    RUNTIME_CHECK(reader_index < reader_slots.size());
-    auto slot = reader_slots[reader_index];
+    RUNTIME_CHECK(reader_work != nullptr);
+
     bool should_create_inline = false;
+    while (true)
     {
-        std::unique_lock lock(slot->mutex);
-        switch (slot->state)
         {
-        case RNProxyReaderMaterializeState::Ready:
-        {
-            auto reader = std::move(slot->reader);
-            slot->reader.reset();
-            slot->state = RNProxyReaderMaterializeState::Consumed;
-            return reader.value();
-        }
-        case RNProxyReaderMaterializeState::Failed:
-            std::rethrow_exception(slot->exception);
-        case RNProxyReaderMaterializeState::Consumed:
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "proxy reader {} is already consumed", reader_index);
-        case RNProxyReaderMaterializeState::Creating:
-            slot->cv.wait(lock, [&] { return slot->state != RNProxyReaderMaterializeState::Creating; });
-            if (slot->state == RNProxyReaderMaterializeState::Ready)
+            std::unique_lock lock(reader_work->mutex);
+            switch (reader_work->state)
             {
-                auto reader = std::move(slot->reader);
-                slot->reader.reset();
-                slot->state = RNProxyReaderMaterializeState::Consumed;
+            case RNProxyReaderMaterializeState::Ready:
+            {
+                auto reader = std::move(reader_work->reader);
+                reader_work->reader.reset();
+                reader_work->exception = nullptr;
+                reader_work->state = RNProxyReaderMaterializeState::Consumed;
                 return reader.value();
             }
-            if (slot->state == RNProxyReaderMaterializeState::Failed)
-                std::rethrow_exception(slot->exception);
-            throw Exception(
-                ErrorCodes::LOGICAL_ERROR,
-                "proxy reader {} becomes invalid after wait, state={}",
-                reader_index,
-                static_cast<Int32>(slot->state));
-        case RNProxyReaderMaterializeState::NotStarted:
-            slot->state = RNProxyReaderMaterializeState::Creating;
-            should_create_inline = true;
-            break;
+            case RNProxyReaderMaterializeState::Failed:
+                std::rethrow_exception(reader_work->exception);
+            case RNProxyReaderMaterializeState::Consumed:
+                throw Exception(
+                    ErrorCodes::LOGICAL_ERROR,
+                    "proxy reader work for region {} is already consumed",
+                    reader_work->plan.region_id);
+            case RNProxyReaderMaterializeState::Creating:
+                reader_work->cv.wait(lock, [&] {
+                    return reader_work->state != RNProxyReaderMaterializeState::Creating;
+                });
+                continue;
+            case RNProxyReaderMaterializeState::NotStarted:
+                reader_work->state = RNProxyReaderMaterializeState::Creating;
+                should_create_inline = true;
+                break;
+            }
         }
+        break;
     }
 
     RUNTIME_CHECK(should_create_inline);
-    LOG_INFO(
-        getLog(),
-        "materialize proxy reader synchronously, reader_index={}, region_id={}",
-        reader_index,
-        reader_plans[reader_index].region_id);
     try
     {
-        auto reader = createColumnarReaderWithBackoff(reader_index);
+        auto reader = createColumnarReaderWithBackoff(reader_work);
         {
-            auto guard = std::lock_guard(slot->mutex);
-            slot->state = RNProxyReaderMaterializeState::Consumed;
+            auto guard = std::lock_guard(reader_work->mutex);
+            reader_work->reader.reset();
+            reader_work->exception = nullptr;
+            reader_work->state = RNProxyReaderMaterializeState::Consumed;
         }
-        slot->cv.notify_all();
+        reader_work->cv.notify_all();
         return reader;
     }
     catch (...)
     {
         {
-            auto guard = std::lock_guard(slot->mutex);
-            slot->exception = std::current_exception();
-            slot->state = RNProxyReaderMaterializeState::Failed;
+            auto guard = std::lock_guard(reader_work->mutex);
+            reader_work->reader.reset();
+            reader_work->exception = std::current_exception();
+            reader_work->state = RNProxyReaderMaterializeState::Failed;
         }
-        slot->cv.notify_all();
+        reader_work->cv.notify_all();
         throw;
     }
 }
 
-void RNProxyReadTask::prefetchReader(size_t reader_index)
+void RNProxyReadTask::prefetchPendingWork()
 {
-    if (reader_index >= reader_slots.size())
-        return;
-
-    std::call_once(prefetch_thread_manager_once, [&] { prefetch_thread_manager = newThreadManager(); });
-
-    auto slot = reader_slots[reader_index];
+    RNProxyReaderWorkPtr reader_work;
     {
-        auto guard = std::lock_guard(slot->mutex);
-        if (slot->state != RNProxyReaderMaterializeState::NotStarted)
+        auto guard = std::lock_guard(pending_reader_works_mutex);
+        if (pending_reader_works.empty())
             return;
-        slot->state = RNProxyReaderMaterializeState::Creating;
+        reader_work = pending_reader_works.front();
     }
 
-    prefetch_thread_manager->scheduleThenDetach(
+    prefetchReaderWork(reader_work);
+}
+
+void RNProxyReadTask::prefetchReaderWork(const RNProxyReaderWorkPtr & reader_work)
+{
+    RUNTIME_CHECK(reader_work != nullptr);
+
+    {
+        auto guard = std::lock_guard(reader_work->mutex);
+        if (reader_work->state != RNProxyReaderMaterializeState::NotStarted)
+            return;
+        reader_work->state = RNProxyReaderMaterializeState::Creating;
+    }
+
+    LOG_INFO(
+        getLog(),
+        "materialize proxy reader asynchronously, region_id={}",
+        reader_work->plan.region_id);
+    newThreadManager()->scheduleThenDetach(
         true,
         "PrefetchRNProxyReader",
-        [self = shared_from_this(), slot, reader_index] {
-            LOG_INFO(
-                self->getLog(),
-                "materialize proxy reader asynchronously, reader_index={}, region_id={}",
-                reader_index,
-                self->reader_plans[reader_index].region_id);
+        [self = shared_from_this(), reader_work] {
             try
             {
-                auto reader = self->createColumnarReaderWithBackoff(reader_index);
+                auto reader = self->createColumnarReaderWithBackoff(reader_work);
                 {
-                    auto guard = std::lock_guard(slot->mutex);
-                    if (slot->state == RNProxyReaderMaterializeState::Consumed)
+                    auto guard = std::lock_guard(reader_work->mutex);
+                    if (reader_work->state == RNProxyReaderMaterializeState::Consumed)
                         return;
-                    slot->reader.emplace(std::move(reader));
-                    slot->state = RNProxyReaderMaterializeState::Ready;
+                    reader_work->reader.emplace(std::move(reader));
+                    reader_work->exception = nullptr;
+                    reader_work->state = RNProxyReaderMaterializeState::Ready;
                 }
             }
             catch (...)
             {
                 {
-                    auto guard = std::lock_guard(slot->mutex);
-                    if (slot->state == RNProxyReaderMaterializeState::Consumed)
+                    auto guard = std::lock_guard(reader_work->mutex);
+                    if (reader_work->state == RNProxyReaderMaterializeState::Consumed)
                         return;
-                    slot->exception = std::current_exception();
-                    slot->state = RNProxyReaderMaterializeState::Failed;
+                    reader_work->reader.reset();
+                    reader_work->exception = std::current_exception();
+                    reader_work->state = RNProxyReaderMaterializeState::Failed;
                 }
             }
-            slot->cv.notify_all();
+            reader_work->cv.notify_all();
         });
 }
 
-std::optional<size_t> RNProxyReadTask::tryAcquireReaderIndex()
+std::optional<RNProxyReaderWorkPtr> RNProxyReadTask::tryAcquireReaderWork()
 {
-    const size_t reader_index = next_reader_index.fetch_add(1, std::memory_order_relaxed);
-    if (reader_index >= reader_plans.size())
-        return std::nullopt;
-    return reader_index;
+    RNProxyReaderWorkPtr reader_work;
+    {
+        auto guard = std::lock_guard(pending_reader_works_mutex);
+        if (pending_reader_works.empty())
+            return std::nullopt;
+        reader_work = pending_reader_works.front();
+        pending_reader_works.pop_front();
+    }
+    prefetchPendingWork();
+    return reader_work;
 }
 
-BlockInputStreamPtr RNProxyReadTask::createInputStream(size_t reader_index)
+BlockInputStreamPtr RNProxyReadTask::createInputStream(const RNProxyReaderWorkPtr & reader_work)
 {
-    RUNTIME_CHECK(reader_index < reader_plans.size());
+    RUNTIME_CHECK(reader_work != nullptr);
     return RNProxyInputStream::create({
         .context = getContext(),
         .log = getLog(),
         .task = shared_from_this(),
-        .reader_index = reader_index,
+        .reader_work = reader_work,
         .columns_to_read = getColumnsToRead(),
         .extra_table_id_index = getExtraTableIDIndex(),
         .table_id = getLogicalTableID(),
@@ -1026,7 +1157,7 @@ BlockInputStreamPtr RNProxyReadTask::createSharedInputStream()
         .context = getContext(),
         .log = getLog(),
         .task = shared_from_this(),
-        .reader_index = std::nullopt,
+        .reader_work = nullptr,
         .columns_to_read = getColumnsToRead(),
         .extra_table_id_index = getExtraTableIDIndex(),
         .table_id = getLogicalTableID(),
@@ -1091,75 +1222,23 @@ std::vector<RNProxyReadTaskPtr> RNProxyReadTask::buildProxyReadTask(
     auto shared_reader_context = buildProxyReaderSharedContext(log, context, start_ts, table_scan, filter_conditions);
 
     std::vector<RNProxyReadTaskPtr> tasks;
-    // Collect all regions in the table scan.
-    std::unordered_map<uint64_t, std::vector<std::tuple<TableID, pingcap::coprocessor::KeyRanges>>>
-        all_remote_regions_by_region;
-    std::unordered_map<uint64_t, pingcap::kv::RegionVerID> region_ver_ids;
-
-    std::vector<UInt64> physical_table_ids;
-    std::vector<pingcap::coprocessor::KeyRanges> ranges_for_each_physical_table;
-    physical_table_ids.reserve(remote_table_ranges.size());
-    ranges_for_each_physical_table.reserve(remote_table_ranges.size());
+    ProxyPhysicalTableRanges physical_table_ranges;
+    physical_table_ranges.reserve(remote_table_ranges.size());
     for (const auto & remote_table_range : remote_table_ranges)
-    {
-        physical_table_ids.emplace_back(remote_table_range.first);
-        ranges_for_each_physical_table.emplace_back(remote_table_range.second);
-    }
-    pingcap::kv::Cluster * cluster = context.getTMTContext().getKVCluster();
-    pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
-    auto & region_cache = cluster->region_cache;
-    for (auto idx = 0; idx < static_cast<int>(ranges_for_each_physical_table.size()); idx++)
-    {
-        const auto physical_table_id = physical_table_ids[idx];
-        const auto ranges = ranges_for_each_physical_table[idx];
-        const auto locations = pingcap::coprocessor::details::splitKeyRangesByLocations(region_cache, bo, ranges);
-        for (const auto & location : locations)
-        {
-            // If the region_ver_ids already exists, compare the value with location.location.region.
-            // If the value is not equal, drop cache and retry.
-            const auto & region = location.location.region;
-            if (auto it = region_ver_ids.find(region.id); it != region_ver_ids.end() && it->second != region)
-            {
-                region_cache->dropRegion(it->second);
-                region_cache->dropRegion(region);
-                region_ver_ids.erase(it);
-                LOG_WARNING(
-                    log,
-                    "buildProxyReadTask failed region_id={}, epoch not match {}",
-                    region.id,
-                    region.toString());
-                throw RegionException(
-                    RegionException::UnavailableRegions{region.id},
-                    RegionException::RegionReadStatus::EPOCH_NOT_MATCH,
-                    region.toString().c_str());
-            }
-            all_remote_regions_by_region[region.id].push_back(std::make_tuple(physical_table_id, location.ranges));
-            region_ver_ids[region.id] = region;
-            LOG_DEBUG(
-                log,
-                "buildProxyReadTask, physical_table_id={}, region_ver_id={}",
-                physical_table_id,
-                region.toString());
-        }
-    }
-    unsigned region_num = all_remote_regions_by_region.size();
-    unsigned physical_table_num = physical_table_ids.size();
+        physical_table_ranges.emplace_back(remote_table_range.first, remote_table_range.second);
+
+    auto region_reader_plans = buildRegionReaderPlansFromPhysicalTableRanges(log, context, physical_table_ranges);
+    const auto region_num = static_cast<unsigned>(region_reader_plans.size());
+    const auto physical_table_num = static_cast<unsigned>(physical_table_ranges.size());
     const bool enable_bucket_parallel = !table_scan.keepOrder() && num_streams > region_num;
-    std::vector<RegionReaderPlan> region_reader_plans;
-    region_reader_plans.reserve(region_num);
     size_t total_max_reader_num = region_num;
     size_t total_split_bucket_num = 0;
-    for (const auto & [region_id, physical_table_ranges] : all_remote_regions_by_region)
+    for (auto & plan : region_reader_plans)
     {
-        RegionReaderPlan plan{
-            .region_id = region_id,
-            .region_ver_id = region_ver_ids[region_id],
-            .physical_table_ranges = physical_table_ranges,
-        };
         if (enable_bucket_parallel)
         {
-            auto bucket_keys = getRegionBucketKeysFromProxy(context, region_id, plan.region_ver_id.ver);
-            auto split_result = splitRangesByBucketKeys(physical_table_ranges, bucket_keys);
+            auto bucket_keys = getRegionBucketKeysFromProxy(context, plan.region_id, plan.region_ver_id.ver);
+            auto split_result = splitRangesByBucketKeys(plan.physical_table_ranges, bucket_keys);
             if (split_result.has_bucket_split && split_result.units.size() > 1)
             {
                 total_max_reader_num += split_result.units.size() - 1;
@@ -1167,7 +1246,6 @@ std::vector<RNProxyReadTaskPtr> RNProxyReadTask::buildProxyReadTask(
                 plan.bucket_units = std::move(split_result.units);
             }
         }
-        region_reader_plans.emplace_back(std::move(plan));
     }
     const size_t planned_reader_num = total_max_reader_num;
     if (enable_bucket_parallel)
@@ -1242,20 +1320,19 @@ bool RNProxyInputStream::ensureReader()
     if (reader.has_value())
         return true;
 
-    if (fixed_reader_index.has_value())
+    if (fixed_reader_work != nullptr)
     {
-        current_reader_index = fixed_reader_index;
-        reader.emplace(task->getOrCreateReader(fixed_reader_index.value()));
+        current_reader_work = fixed_reader_work;
+        reader.emplace(task->getOrCreateReader(fixed_reader_work));
         return true;
     }
 
-    auto next_reader_index = task->tryAcquireReaderIndex();
-    if (!next_reader_index.has_value())
+    auto next_reader_work = task->tryAcquireReaderWork();
+    if (!next_reader_work.has_value())
         return false;
 
-    current_reader_index = next_reader_index;
-    reader.emplace(task->getOrCreateReader(next_reader_index.value()));
-    task->prefetchReader(next_reader_index.value() + 1);
+    current_reader_work = next_reader_work.value();
+    reader.emplace(task->getOrCreateReader(next_reader_work.value()));
     return true;
 }
 
@@ -1264,7 +1341,7 @@ void RNProxyInputStream::releaseReader()
     if (reader.has_value() && reader->inner.ptr != nullptr)
         RustGcHelper::instance().gcRustPtr(reader->inner.ptr, reader->inner.type);
     reader.reset();
-    current_reader_index.reset();
+    current_reader_work.reset();
 }
 
 RNProxyInputStream::~RNProxyInputStream()
@@ -1340,7 +1417,7 @@ Block RNProxyInputStream::readImpl([[maybe_unused]] FilterPtr & res_filter, [[ma
         if (rows == 0)
         {
             releaseReader();
-            if (fixed_reader_index.has_value())
+            if (fixed_reader_work != nullptr)
             {
                 done = true;
                 return {};
@@ -1484,16 +1561,14 @@ OperatorStatus RNProxySourceOp::executeIOImpl()
 
     if (!current_input_stream)
     {
-        auto next_reader_idx = task->tryAcquireReaderIndex();
-        if (!next_reader_idx.has_value())
+        auto next_reader_work = task->tryAcquireReaderWork();
+        if (!next_reader_work.has_value())
         {
             done = true;
             return OperatorStatus::HAS_OUTPUT;
         }
-        current_reader_idx = next_reader_idx;
-        current_input_stream = task->createInputStream(current_reader_idx.value());
+        current_input_stream = task->createInputStream(next_reader_work.value());
         ++total_streams;
-        task->prefetchReader(current_reader_idx.value() + 1);
     }
 
     FilterPtr filter_ignored = nullptr;
@@ -1510,7 +1585,6 @@ OperatorStatus RNProxySourceOp::executeIOImpl()
     else
     {
         current_input_stream.reset();
-        current_reader_idx.reset();
         return awaitImpl();
     }
 }
