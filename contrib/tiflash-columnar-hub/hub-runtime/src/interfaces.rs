@@ -355,6 +355,16 @@ pub mod root {
                     arg1: root::DB::RaftStoreProxyPtr,
                 ) -> root::DB::RawCppStringPtr,
             >,
+            pub fn_get_region_bucket_keys: ::std::option::Option<
+                unsafe extern "C" fn(
+                    arg1: u64,
+                    arg2: u64,
+                    arg3: root::DB::RaftStoreProxyPtr,
+                ) -> root::DB::RustStrWithViewVec,
+            >,
+            pub fn_clear_shared_snap_access_by_start_ts: ::std::option::Option<
+                unsafe extern "C" fn(arg1: u64, arg2: root::DB::RaftStoreProxyPtr),
+            >,
             pub fn_get_columnar_reader: ::std::option::Option<
                 unsafe extern "C" fn(
                     arg1: u64,
