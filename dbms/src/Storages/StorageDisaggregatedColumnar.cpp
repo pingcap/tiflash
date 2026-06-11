@@ -67,7 +67,7 @@ namespace ErrorCodes
 extern const int COLUMNAR_SNAPSHOT_ERROR;
 } // namespace ErrorCodes
 
-struct RNProxyReaderSharedContext
+struct RNColumnarReaderSharedContext
 {
     using ClearSharedSnapAccessByStartTsFn = void (*)(uint64_t, RaftStoreProxyPtr);
 
@@ -132,7 +132,7 @@ struct RNProxyReaderSharedContext
     std::shared_ptr<std::mutex> output_lock = std::make_shared<std::mutex>();
     bool registered_for_start_ts = false;
 
-    ~RNProxyReaderSharedContext() noexcept
+    ~RNColumnarReaderSharedContext() noexcept
     {
         if (!registered_for_start_ts)
             return;
@@ -155,14 +155,14 @@ struct RNProxyReaderSharedContext
     }
 };
 
-size_t getRNProxySourceNum(size_t num_streams, size_t reader_count)
+size_t getRNColumnarSourceNum(size_t num_streams, size_t reader_count)
 {
     return std::min(std::max<size_t>(1, num_streams), reader_count);
 }
 
 namespace
 {
-using ProxyPhysicalTableRanges = std::vector<std::tuple<TableID, pingcap::coprocessor::KeyRanges>>;
+using ColumnarPhysicalTableRanges = std::vector<std::tuple<TableID, pingcap::coprocessor::KeyRanges>>;
 using BucketSplitUnit = std::pair<TableID, pingcap::coprocessor::KeyRange>;
 
 void normalizeTimestampCompareDateTimeLiteralToUTC(tipb::Expr & expr, const TimezoneInfo & timezone_info);
@@ -177,7 +177,7 @@ struct RegionReaderPlan
 {
     RegionID region_id;
     pingcap::kv::RegionVerID region_ver_id;
-    ProxyPhysicalTableRanges physical_table_ranges;
+    ColumnarPhysicalTableRanges physical_table_ranges;
     std::vector<BucketSplitUnit> bucket_units;
 };
 
@@ -193,7 +193,7 @@ bool isBucketBoundaryInsideRange(const String & bucket_key, const pingcap::copro
 }
 
 BucketSplitResult splitRangesByBucketKeys(
-    const ProxyPhysicalTableRanges & physical_table_ranges,
+    const ColumnarPhysicalTableRanges & physical_table_ranges,
     const std::vector<String> & bucket_keys)
 {
     BucketSplitResult result;
@@ -228,7 +228,7 @@ BucketSplitResult splitRangesByBucketKeys(
     return result;
 }
 
-std::vector<String> getRegionBucketKeysFromProxy(const Context & context, RegionID region_id, UInt64 region_ver)
+std::vector<String> getRegionBucketKeysFromColumnar(const Context & context, RegionID region_id, UInt64 region_ver)
 {
     const Context & global_ctx = context.getGlobalContext();
     const TiFlashRaftProxyHelper * proxy_helper = global_ctx.getSharedContextDisagg()->getColumnarProxyHelper();
@@ -254,7 +254,7 @@ std::vector<String> getRegionBucketKeysFromProxy(const Context & context, Region
 std::vector<RegionReaderPlan> buildRegionReaderPlansFromPhysicalTableRanges(
     const LoggerPtr & log,
     const Context & context,
-    const ProxyPhysicalTableRanges & physical_table_ranges)
+    const ColumnarPhysicalTableRanges & physical_table_ranges)
 {
     std::vector<RegionReaderPlan> region_reader_plans;
     if (physical_table_ranges.empty())
@@ -281,7 +281,7 @@ std::vector<RegionReaderPlan> buildRegionReaderPlansFromPhysicalTableRanges(
                     .region_id = region.id,
                     .region_ver_id = region,
                     .physical_table_ranges
-                    = ProxyPhysicalTableRanges{std::make_tuple(physical_table_id, location.ranges)},
+                    = ColumnarPhysicalTableRanges{std::make_tuple(physical_table_id, location.ranges)},
                 });
                 continue;
             }
@@ -293,7 +293,7 @@ std::vector<RegionReaderPlan> buildRegionReaderPlansFromPhysicalTableRanges(
                 region_cache->dropRegion(region);
                 LOG_WARNING(
                     log,
-                    "buildProxyReadTask failed region_id={}, epoch not match {}",
+                    "build RegionReaderPlan failed region_id={}, epoch not match {}",
                     region.id,
                     region.toString());
                 throw RegionException(
@@ -308,14 +308,14 @@ std::vector<RegionReaderPlan> buildRegionReaderPlansFromPhysicalTableRanges(
     return region_reader_plans;
 }
 
-std::vector<RNProxyReaderPlan> buildReaderPlansFromRegionReaderPlans(
+std::vector<RNColumnarReaderPlan> buildReaderPlansFromRegionReaderPlans(
     const std::vector<RegionReaderPlan> & region_reader_plans)
 {
-    std::vector<RNProxyReaderPlan> reader_plans;
+    std::vector<RNColumnarReaderPlan> reader_plans;
     reader_plans.reserve(region_reader_plans.size());
     for (const auto & plan : region_reader_plans)
     {
-        reader_plans.push_back(RNProxyReaderPlan{
+        reader_plans.push_back(RNColumnarReaderPlan{
             .region_id = plan.region_id,
             .region_ver = plan.region_ver_id.ver,
             .region_conf_ver = plan.region_ver_id.conf_ver,
@@ -367,18 +367,18 @@ std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedReadThroug
     return {std::move(column_defines), extra_table_id_index};
 }
 
-std::shared_ptr<RNProxyReaderSharedContext> buildProxyReaderSharedContext(
+std::shared_ptr<RNColumnarReaderSharedContext> buildColumnarReaderSharedContext(
     const LoggerPtr & log,
     const Context & context,
     UInt64 start_ts,
     const TiDBTableScan & table_scan,
     const FilterConditions & filter_conditions)
 {
-    auto shared_context = std::make_shared<RNProxyReaderSharedContext>();
+    auto shared_context = std::make_shared<RNColumnarReaderSharedContext>();
     shared_context->log = log;
     shared_context->context = &context;
     shared_context->start_ts = start_ts;
-    RNProxyReaderSharedContext::getStartTsClearRegistry().registerStartTs(start_ts);
+    RNColumnarReaderSharedContext::getStartTsClearRegistry().registerStartTs(start_ts);
     shared_context->registered_for_start_ts = true;
     shared_context->logical_table_id = table_scan.getLogicalTableID();
     shared_context->executor_id = table_scan.getTableScanExecutorID();
@@ -458,10 +458,10 @@ std::shared_ptr<RNProxyReaderSharedContext> buildProxyReaderSharedContext(
     return shared_context;
 }
 
-bool isProxyFilterComparableExpr(tipb::ScalarFuncSig sig)
+bool isColumnarFilterComparableExpr(tipb::ScalarFuncSig sig)
 {
-    // Keep this aligned with proxy columnar filter supported signatures:
-    // `contrib/tiflash-proxy/components/kvengine/src/table/columnar/filter.rs`.
+    // Keep this aligned with kvengine columnar filter supported signatures:
+    // `components/kvengine/src/table/columnar/filter.rs`.
     switch (sig)
     {
     case tipb::ScalarFuncSig::LTInt:
@@ -525,9 +525,9 @@ void normalizeTimestampCompareDateTimeLiteralToUTC(tipb::Expr & expr, const Time
     if (!isFunctionExpr(expr))
         return;
 
-    // Only normalize for comparison expressions that proxy filter supports.
+    // Only normalize for comparison expressions that columnar filter supports.
     // Keep recursion so nested comparisons under AND/OR/NOT still work.
-    if (isScalarFunctionExpr(expr) && isProxyFilterComparableExpr(expr.sig()))
+    if (isScalarFunctionExpr(expr) && isColumnarFilterComparableExpr(expr.sig()))
     {
         bool has_timestamp_column = false;
         bool only_column_or_literal = true;
@@ -546,9 +546,9 @@ void normalizeTimestampCompareDateTimeLiteralToUTC(tipb::Expr & expr, const Time
             }
         }
 
-        // Proxy filter parser only supports simple column-literal expressions.
+        // Columnar filter parser only supports simple column-literal expressions.
         // If a timestamp column is compared with a datetime literal, normalize the
-        // datetime literal from session timezone to UTC before passing to proxy.
+        // datetime literal from session timezone to UTC before passing to columnar.
         if (has_timestamp_column && only_column_or_literal && column_ref_count == 1)
         {
             static const auto & time_zone_utc = DateLUT::instance("UTC");
@@ -580,7 +580,7 @@ void StorageDisaggregated::filterConditionsWithPushedDownFilters(
     DAGExpressionAnalyzer & analyzer,
     DAGPipeline & pipeline)
 {
-    // Proxy columnar reader uses late-materialization filters only to reduce packs loaded from disk.
+    // Columnar reader uses late-materialization filters only to reduce packs loaded from disk.
     // It does not guarantee that all rows failing those filters are removed, so merge them into
     // FilterConditions and re-apply them in the TiFlash pipeline for correctness.
     FilterConditions conditions(filter_conditions.executor_id, filter_conditions.conditions);
@@ -598,7 +598,7 @@ void StorageDisaggregated::filterConditionsWithPushedDownFilters(
     PipelineExecGroupBuilder & group_builder,
     DAGExpressionAnalyzer & analyzer)
 {
-    // Proxy columnar reader uses late-materialization filters only to reduce packs loaded from disk.
+    // Columnar reader uses late-materialization filters only to reduce packs loaded from disk.
     // It does not guarantee that all rows failing those filters are removed, so merge them into
     // FilterConditions and re-apply them in the TiFlash pipeline for correctness.
     FilterConditions conditions(filter_conditions.executor_id, filter_conditions.conditions);
@@ -616,7 +616,7 @@ BlockInputStreams StorageDisaggregated::readThroughColumnar(const Context & cont
     const UInt64 start_ts = sender_target_mpp_task_id.gather_id.query_id.start_ts;
     auto [remote_table_ranges, region_num] = buildRemoteTableRanges();
     const auto generated_column_infos = genGeneratedColumnInfosForDisaggregatedRead(table_scan);
-    auto read_proxy_tasks = RNProxyReadTask::buildProxyReadTaskWithBackoff(
+    auto read_columnar_tasks = RNColumnarReadTask::buildColumnarReadTaskWithBackoff(
         log,
         context,
         start_ts,
@@ -624,12 +624,12 @@ BlockInputStreams StorageDisaggregated::readThroughColumnar(const Context & cont
         filter_conditions,
         remote_table_ranges,
         num_streams);
-    for (auto & task : read_proxy_tasks)
+    for (auto & task : read_columnar_tasks)
     {
         auto streams = task->getInputStreams();
         pipeline.streams.insert(pipeline.streams.end(), streams.begin(), streams.end());
     }
-    // Avoid reading generated columns from proxy, generate placeholders locally.
+    // Avoid reading generated columns from columnar, generate placeholders locally.
     executeGeneratedColumnPlaceholder(generated_column_infos, log, pipeline);
     NamesAndTypes source_columns;
     source_columns.reserve(table_scan.getColumnSize());
@@ -640,7 +640,7 @@ BlockInputStreams StorageDisaggregated::readThroughColumnar(const Context & cont
     }
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
-    // Handle duration/timestamp cast for proxy path.
+    // Handle duration/timestamp cast for columnar path.
     // We still execute pushed-down filters on RN side, so timestamp columns in those filters
     // must also be converted from UTC to session timezone.
     extraCast(*analyzer, pipeline, /*include_pushed_down_filter_columns=*/true);
@@ -658,7 +658,7 @@ void StorageDisaggregated::readThroughColumnar(
 {
     const UInt64 start_ts = sender_target_mpp_task_id.gather_id.query_id.start_ts;
     auto [remote_table_ranges, region_num] = buildRemoteTableRanges();
-    auto read_proxy_tasks = RNProxyReadTask::buildProxyReadTaskWithBackoff(
+    auto read_columnar_tasks = RNColumnarReadTask::buildColumnarReadTaskWithBackoff(
         log,
         context,
         start_ts,
@@ -667,18 +667,18 @@ void StorageDisaggregated::readThroughColumnar(
         remote_table_ranges,
         num_streams);
     const auto generated_column_infos = genGeneratedColumnInfosForDisaggregatedRead(table_scan);
-    if (!read_proxy_tasks.empty())
+    if (!read_columnar_tasks.empty())
     {
-        auto & task_pool = read_proxy_tasks.front();
+        auto & task_pool = read_columnar_tasks.front();
         const size_t source_num = task_pool->getSourceNum();
         LOG_INFO(
             log,
-            "use shared proxy reader task pool, reader_num={}, source_num={}",
+            "use shared columnar reader task pool, reader_num={}, source_num={}",
             task_pool->getReaderCount(),
             source_num);
         for (size_t i = 0; i < source_num; ++i)
         {
-            group_builder.addConcurrency(RNProxySourceOp::create({
+            group_builder.addConcurrency(RNColumnarSourceOp::create({
                 .exec_context = exec_context,
                 .task = task_pool,
             }));
@@ -694,15 +694,15 @@ void StorageDisaggregated::readThroughColumnar(
         source_columns.emplace_back(col.name, col.type);
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
-    // Handle duration/timestamp cast for proxy path.
+    // Handle duration/timestamp cast for columnar path.
     extraCast(exec_context, group_builder, *analyzer, /*include_pushed_down_filter_columns=*/true);
     // Handle filter
     filterConditionsWithPushedDownFilters(exec_context, group_builder, *analyzer);
 }
 
-ColumnarReaderPtr createProxyColumnarReader(
-    const RNProxyReaderSharedContext & shared_context,
-    const RNProxyReaderPlan & reader_plan)
+ColumnarReaderPtr createColumnarReader(
+    const RNColumnarReaderSharedContext & shared_context,
+    const RNColumnarReaderPlan & reader_plan)
 {
     const auto & log = shared_context.log;
     const auto & context = *shared_context.context;
@@ -857,17 +857,17 @@ ColumnarReaderPtr createProxyColumnarReader(
     return columnar_reader;
 }
 
-// RNProxyReadTask
-RNProxyReaderWork::~RNProxyReaderWork()
+// RNColumnarReadTask
+RNColumnarReaderWork::~RNColumnarReaderWork()
 {
     if (reader.has_value() && reader->inner.ptr != nullptr)
         RustGcHelper::instance().gcRustPtr(reader->inner.ptr, reader->inner.type);
 }
 
-RNProxyReadTask::RNProxyReadTask(
-    std::vector<RNProxyReaderPlan> reader_plans,
+RNColumnarReadTask::RNColumnarReadTask(
+    std::vector<RNColumnarReaderPlan> reader_plans,
     size_t source_num_,
-    std::shared_ptr<RNProxyReaderSharedContext> shared_reader_context_)
+    std::shared_ptr<RNColumnarReaderSharedContext> shared_reader_context_)
     : reader_count(reader_plans.size())
     , source_num(source_num_)
     , shared_reader_context(std::move(shared_reader_context_))
@@ -875,52 +875,52 @@ RNProxyReadTask::RNProxyReadTask(
     RUNTIME_CHECK(source_num > 0);
     RUNTIME_CHECK(source_num <= reader_count, source_num, reader_count);
     for (auto & reader_plan : reader_plans)
-        pending_reader_works.push_back(std::make_shared<RNProxyReaderWork>(std::move(reader_plan)));
+        pending_reader_works.push_back(std::make_shared<RNColumnarReaderWork>(std::move(reader_plan)));
 }
 
-size_t RNProxyReadTask::getReaderCount() const
+size_t RNColumnarReadTask::getReaderCount() const
 {
     return reader_count;
 }
 
-size_t RNProxyReadTask::getSourceNum() const
+size_t RNColumnarReadTask::getSourceNum() const
 {
     return source_num;
 }
 
-const Context & RNProxyReadTask::getContext() const
+const Context & RNColumnarReadTask::getContext() const
 {
     return *shared_reader_context->context;
 }
 
-const LoggerPtr & RNProxyReadTask::getLog() const
+const LoggerPtr & RNColumnarReadTask::getLog() const
 {
     return shared_reader_context->log;
 }
 
-const DM::ColumnDefines & RNProxyReadTask::getColumnsToRead() const
+const DM::ColumnDefines & RNColumnarReadTask::getColumnsToRead() const
 {
     return *shared_reader_context->column_defines;
 }
 
-int RNProxyReadTask::getExtraTableIDIndex() const
+int RNColumnarReadTask::getExtraTableIDIndex() const
 {
     return shared_reader_context->extra_table_id_index;
 }
 
-TableID RNProxyReadTask::getLogicalTableID() const
+TableID RNColumnarReadTask::getLogicalTableID() const
 {
     return shared_reader_context->logical_table_id;
 }
 
-const String & RNProxyReadTask::getExecutorID() const
+const String & RNColumnarReadTask::getExecutorID() const
 {
     return shared_reader_context->executor_id;
 }
 
-void RNProxyReadTask::replaceReaderWork(
-    const RNProxyReaderWorkPtr & reader_work,
-    std::vector<RNProxyReaderPlan> replanned_reader_plans)
+void RNColumnarReadTask::replaceReaderWork(
+    const RNColumnarReaderWorkPtr & reader_work,
+    std::vector<RNColumnarReaderPlan> replanned_reader_plans)
 {
     RUNTIME_CHECK(reader_work != nullptr);
     RUNTIME_CHECK(!replanned_reader_plans.empty());
@@ -931,19 +931,19 @@ void RNProxyReadTask::replaceReaderWork(
 
     auto queue_guard = std::lock_guard(pending_reader_works_mutex);
     for (auto it = replanned_reader_plans.rbegin(); it != replanned_reader_plans.rend() - 1; ++it)
-        pending_reader_works.push_front(std::make_shared<RNProxyReaderWork>(*it));
+        pending_reader_works.push_front(std::make_shared<RNColumnarReaderWork>(*it));
 }
 
 #ifdef DBMS_PUBLIC_GTEST
-void RNProxyReadTask::replaceReaderWorkForTest(
-    const RNProxyReaderWorkPtr & reader_work,
-    std::vector<RNProxyReaderPlan> replanned_reader_plans)
+void RNColumnarReadTask::replaceReaderWorkForTest(
+    const RNColumnarReaderWorkPtr & reader_work,
+    std::vector<RNColumnarReaderPlan> replanned_reader_plans)
 {
     replaceReaderWork(reader_work, std::move(replanned_reader_plans));
 }
 #endif
 
-ColumnarReaderPtr RNProxyReadTask::createColumnarReaderWithBackoff(const RNProxyReaderWorkPtr & reader_work)
+ColumnarReaderPtr RNColumnarReadTask::createColumnarReaderWithBackoff(const RNColumnarReaderWorkPtr & reader_work)
 {
     RUNTIME_CHECK(reader_work != nullptr);
     pingcap::kv::Backoffer bo(pingcap::kv::copNextMaxBackoff);
@@ -954,10 +954,10 @@ ColumnarReaderPtr RNProxyReadTask::createColumnarReaderWithBackoff(const RNProxy
             const auto & reader_plan = reader_work->plan;
             LOG_INFO(
                 getLog(),
-                "materialize proxy reader for tables in region, region_id={}, table_num={}",
+                "materialize columnar reader for tables in region, region_id={}, table_num={}",
                 reader_plan.region_id,
                 reader_plan.physical_table_ranges.size());
-            return createProxyColumnarReader(*shared_reader_context, reader_plan);
+            return createColumnarReader(*shared_reader_context, reader_plan);
         }
         catch (RegionException & e)
         {
@@ -975,7 +975,7 @@ ColumnarReaderPtr RNProxyReadTask::createColumnarReaderWithBackoff(const RNProxy
                     replaceReaderWork(reader_work, std::move(replanned_reader_plans));
                     LOG_WARNING(
                         getLog(),
-                        "replanned proxy reader work after region error, old_error={}, new_region_id={}, "
+                        "replanned columnar reader work after region error, old_error={}, new_region_id={}, "
                         "split_count={}",
                         e.message(),
                         reader_work->plan.region_id,
@@ -983,10 +983,10 @@ ColumnarReaderPtr RNProxyReadTask::createColumnarReaderWithBackoff(const RNProxy
                 }
                 catch (const std::exception & replan_e)
                 {
-                    LOG_WARNING(getLog(), "replan proxy reader work failed, {}", replan_e.what());
+                    LOG_WARNING(getLog(), "replan columnar reader work failed, {}", replan_e.what());
                 }
             }
-            LOG_WARNING(getLog(), "create proxy reader failed, backoff and retry, {}", e.message());
+            LOG_WARNING(getLog(), "create columnar reader failed, backoff and retry, {}", e.message());
             bo.backoff(pingcap::kv::boRegionMiss, pingcap::Exception(e.message(), e.code()));
         }
         catch (Exception & e)
@@ -999,7 +999,7 @@ ColumnarReaderPtr RNProxyReadTask::createColumnarReaderWithBackoff(const RNProxy
     }
 }
 
-ColumnarReaderPtr RNProxyReadTask::getOrCreateReader(const RNProxyReaderWorkPtr & reader_work)
+ColumnarReaderPtr RNColumnarReadTask::getOrCreateReader(const RNColumnarReaderWorkPtr & reader_work)
 {
     RUNTIME_CHECK(reader_work != nullptr);
 
@@ -1010,28 +1010,28 @@ ColumnarReaderPtr RNProxyReadTask::getOrCreateReader(const RNProxyReaderWorkPtr 
             std::unique_lock lock(reader_work->mutex);
             switch (reader_work->state)
             {
-            case RNProxyReaderMaterializeState::Ready:
+            case RNColumnarReaderMaterializeState::Ready:
             {
                 auto reader = std::move(reader_work->reader);
                 reader_work->reader.reset();
                 reader_work->exception = nullptr;
-                reader_work->state = RNProxyReaderMaterializeState::Consumed;
+                reader_work->state = RNColumnarReaderMaterializeState::Consumed;
                 return reader.value();
             }
-            case RNProxyReaderMaterializeState::Failed:
+            case RNColumnarReaderMaterializeState::Failed:
                 std::rethrow_exception(reader_work->exception);
-            case RNProxyReaderMaterializeState::Consumed:
+            case RNColumnarReaderMaterializeState::Consumed:
                 throw Exception(
                     ErrorCodes::LOGICAL_ERROR,
-                    "proxy reader work for region {} is already consumed",
+                    "columnar reader work for region {} is already consumed",
                     reader_work->plan.region_id);
-            case RNProxyReaderMaterializeState::Creating:
+            case RNColumnarReaderMaterializeState::Creating:
                 reader_work->cv.wait(lock, [&] {
-                    return reader_work->state != RNProxyReaderMaterializeState::Creating;
+                    return reader_work->state != RNColumnarReaderMaterializeState::Creating;
                 });
                 continue;
-            case RNProxyReaderMaterializeState::NotStarted:
-                reader_work->state = RNProxyReaderMaterializeState::Creating;
+            case RNColumnarReaderMaterializeState::NotStarted:
+                reader_work->state = RNColumnarReaderMaterializeState::Creating;
                 should_create_inline = true;
                 break;
             }
@@ -1047,7 +1047,7 @@ ColumnarReaderPtr RNProxyReadTask::getOrCreateReader(const RNProxyReaderWorkPtr 
             auto guard = std::lock_guard(reader_work->mutex);
             reader_work->reader.reset();
             reader_work->exception = nullptr;
-            reader_work->state = RNProxyReaderMaterializeState::Consumed;
+            reader_work->state = RNColumnarReaderMaterializeState::Consumed;
         }
         reader_work->cv.notify_all();
         return reader;
@@ -1058,16 +1058,16 @@ ColumnarReaderPtr RNProxyReadTask::getOrCreateReader(const RNProxyReaderWorkPtr 
             auto guard = std::lock_guard(reader_work->mutex);
             reader_work->reader.reset();
             reader_work->exception = std::current_exception();
-            reader_work->state = RNProxyReaderMaterializeState::Failed;
+            reader_work->state = RNColumnarReaderMaterializeState::Failed;
         }
         reader_work->cv.notify_all();
         throw;
     }
 }
 
-void RNProxyReadTask::prefetchPendingWork()
+void RNColumnarReadTask::prefetchPendingWork()
 {
-    RNProxyReaderWorkPtr reader_work;
+    RNColumnarReaderWorkPtr reader_work;
     {
         auto guard = std::lock_guard(pending_reader_works_mutex);
         if (pending_reader_works.empty())
@@ -1078,49 +1078,49 @@ void RNProxyReadTask::prefetchPendingWork()
     prefetchReaderWork(reader_work);
 }
 
-void RNProxyReadTask::prefetchReaderWork(const RNProxyReaderWorkPtr & reader_work)
+void RNColumnarReadTask::prefetchReaderWork(const RNColumnarReaderWorkPtr & reader_work)
 {
     RUNTIME_CHECK(reader_work != nullptr);
 
     {
         auto guard = std::lock_guard(reader_work->mutex);
-        if (reader_work->state != RNProxyReaderMaterializeState::NotStarted)
+        if (reader_work->state != RNColumnarReaderMaterializeState::NotStarted)
             return;
-        reader_work->state = RNProxyReaderMaterializeState::Creating;
+        reader_work->state = RNColumnarReaderMaterializeState::Creating;
     }
 
-    LOG_INFO(getLog(), "materialize proxy reader asynchronously, region_id={}", reader_work->plan.region_id);
-    newThreadManager()->scheduleThenDetach(true, "PrefetchRNProxyReader", [self = shared_from_this(), reader_work] {
+    LOG_INFO(getLog(), "materialize columnar reader asynchronously, region_id={}", reader_work->plan.region_id);
+    newThreadManager()->scheduleThenDetach(true, "PrefetchRNColumnarReader", [self = shared_from_this(), reader_work] {
         try
         {
             auto reader = self->createColumnarReaderWithBackoff(reader_work);
             {
                 auto guard = std::lock_guard(reader_work->mutex);
-                if (reader_work->state == RNProxyReaderMaterializeState::Consumed)
+                if (reader_work->state == RNColumnarReaderMaterializeState::Consumed)
                     return;
                 reader_work->reader.emplace(std::move(reader));
                 reader_work->exception = nullptr;
-                reader_work->state = RNProxyReaderMaterializeState::Ready;
+                reader_work->state = RNColumnarReaderMaterializeState::Ready;
             }
         }
         catch (...)
         {
             {
                 auto guard = std::lock_guard(reader_work->mutex);
-                if (reader_work->state == RNProxyReaderMaterializeState::Consumed)
+                if (reader_work->state == RNColumnarReaderMaterializeState::Consumed)
                     return;
                 reader_work->reader.reset();
                 reader_work->exception = std::current_exception();
-                reader_work->state = RNProxyReaderMaterializeState::Failed;
+                reader_work->state = RNColumnarReaderMaterializeState::Failed;
             }
         }
         reader_work->cv.notify_all();
     });
 }
 
-std::optional<RNProxyReaderWorkPtr> RNProxyReadTask::tryAcquireReaderWork()
+std::optional<RNColumnarReaderWorkPtr> RNColumnarReadTask::tryAcquireReaderWork()
 {
-    RNProxyReaderWorkPtr reader_work;
+    RNColumnarReaderWorkPtr reader_work;
     {
         auto guard = std::lock_guard(pending_reader_works_mutex);
         if (pending_reader_works.empty())
@@ -1132,10 +1132,10 @@ std::optional<RNProxyReaderWorkPtr> RNProxyReadTask::tryAcquireReaderWork()
     return reader_work;
 }
 
-BlockInputStreamPtr RNProxyReadTask::createInputStream(const RNProxyReaderWorkPtr & reader_work)
+BlockInputStreamPtr RNColumnarReadTask::createInputStream(const RNColumnarReaderWorkPtr & reader_work)
 {
     RUNTIME_CHECK(reader_work != nullptr);
-    return RNProxyInputStream::create({
+    return RNColumnarInputStream::create({
         .context = getContext(),
         .log = getLog(),
         .task = shared_from_this(),
@@ -1147,9 +1147,9 @@ BlockInputStreamPtr RNProxyReadTask::createInputStream(const RNProxyReaderWorkPt
     });
 }
 
-BlockInputStreamPtr RNProxyReadTask::createSharedInputStream()
+BlockInputStreamPtr RNColumnarReadTask::createSharedInputStream()
 {
-    return RNProxyInputStream::create({
+    return RNColumnarInputStream::create({
         .context = getContext(),
         .log = getLog(),
         .task = shared_from_this(),
@@ -1161,7 +1161,7 @@ BlockInputStreamPtr RNProxyReadTask::createSharedInputStream()
     });
 }
 
-std::vector<RNProxyReadTaskPtr> RNProxyReadTask::buildProxyReadTaskWithBackoff(
+std::vector<RNColumnarReadTaskPtr> RNColumnarReadTask::buildColumnarReadTaskWithBackoff(
     const LoggerPtr & log,
     const Context & context,
     UInt64 start_ts,
@@ -1170,13 +1170,13 @@ std::vector<RNProxyReadTaskPtr> RNProxyReadTask::buildProxyReadTaskWithBackoff(
     const std::vector<RemoteTableRange> & remote_table_ranges,
     unsigned num_streams)
 {
-    std::vector<RNProxyReadTaskPtr> tasks;
+    std::vector<RNColumnarReadTaskPtr> tasks;
     pingcap::kv::Backoffer bo(pingcap::kv::copNextMaxBackoff);
     while (true)
     {
         try
         {
-            tasks = RNProxyReadTask::buildProxyReadTask(
+            tasks = RNColumnarReadTask::buildColumnarReadTask(
                 log,
                 context,
                 start_ts,
@@ -1188,21 +1188,21 @@ std::vector<RNProxyReadTaskPtr> RNProxyReadTask::buildProxyReadTaskWithBackoff(
         }
         catch (RegionException & e)
         {
-            LOG_WARNING(log, "buildProxyReadTask failed, backoff and retry, {}", e.message());
+            LOG_WARNING(log, "buildColumnarReadTask failed, backoff and retry, {}", e.message());
             bo.backoff(pingcap::kv::boRegionMiss, pingcap::Exception(e.message(), e.code()));
         }
         catch (Exception & e)
         {
             if (e.code() != ErrorCodes::COLUMNAR_SNAPSHOT_ERROR)
                 throw;
-            LOG_WARNING(log, "buildProxyReadTask failed, backoff and retry, {}", e.message());
+            LOG_WARNING(log, "buildColumnarReadTask failed, backoff and retry, {}", e.message());
             bo.backoff(pingcap::kv::boRegionMiss, pingcap::Exception(e.message(), e.code()));
         }
     }
     return tasks;
 }
 
-std::vector<RNProxyReadTaskPtr> RNProxyReadTask::buildProxyReadTask(
+std::vector<RNColumnarReadTaskPtr> RNColumnarReadTask::buildColumnarReadTask(
     const LoggerPtr & log,
     const Context & context,
     UInt64 start_ts,
@@ -1215,10 +1215,11 @@ std::vector<RNProxyReadTaskPtr> RNProxyReadTask::buildProxyReadTask(
     auto scan_context
         = std::make_shared<DM::ScanContext>(dag_context->getKeyspaceID(), dag_context->getResourceGroupName());
     dag_context->scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
-    auto shared_reader_context = buildProxyReaderSharedContext(log, context, start_ts, table_scan, filter_conditions);
+    auto shared_reader_context
+        = buildColumnarReaderSharedContext(log, context, start_ts, table_scan, filter_conditions);
 
-    std::vector<RNProxyReadTaskPtr> tasks;
-    ProxyPhysicalTableRanges physical_table_ranges;
+    std::vector<RNColumnarReadTaskPtr> tasks;
+    ColumnarPhysicalTableRanges physical_table_ranges;
     physical_table_ranges.reserve(remote_table_ranges.size());
     for (const auto & remote_table_range : remote_table_ranges)
         physical_table_ranges.emplace_back(remote_table_range.first, remote_table_range.second);
@@ -1228,47 +1229,38 @@ std::vector<RNProxyReadTaskPtr> RNProxyReadTask::buildProxyReadTask(
     const auto physical_table_num = static_cast<unsigned>(physical_table_ranges.size());
     const bool enable_bucket_parallel = !table_scan.keepOrder() && num_streams > region_num;
     size_t total_max_reader_num = region_num;
-    size_t total_split_bucket_num = 0;
     for (auto & plan : region_reader_plans)
     {
         if (enable_bucket_parallel)
         {
-            auto bucket_keys = getRegionBucketKeysFromProxy(context, plan.region_id, plan.region_ver_id.ver);
+            auto bucket_keys = getRegionBucketKeysFromColumnar(context, plan.region_id, plan.region_ver_id.ver);
             auto split_result = splitRangesByBucketKeys(plan.physical_table_ranges, bucket_keys);
             if (split_result.has_bucket_split && split_result.units.size() > 1)
             {
                 total_max_reader_num += split_result.units.size() - 1;
-                total_split_bucket_num += split_result.units.size();
                 plan.bucket_units = std::move(split_result.units);
             }
         }
     }
-    const size_t planned_reader_num = total_max_reader_num;
-    if (enable_bucket_parallel)
-    {
-        LOG_INFO(log, "bucket parallel split bucket count={}", total_split_bucket_num);
-    }
     LOG_INFO(
         log,
-        "region_num={}, table_num={}, num_streams={}, keep_order={}, bucket_parallel={}, planned_reader_num={}, "
-        "max_reader_num={}",
+        "region_num={}, table_num={}, num_streams={}, keep_order={}, bucket_parallel={}, planned_reader_num={}",
         region_num,
         physical_table_num,
         num_streams,
         table_scan.keepOrder(),
         enable_bucket_parallel,
-        planned_reader_num,
         total_max_reader_num);
 
-    std::vector<RNProxyReaderPlan> all_reader_plans;
-    all_reader_plans.reserve(planned_reader_num);
+    std::vector<RNColumnarReaderPlan> all_reader_plans;
+    all_reader_plans.reserve(total_max_reader_num);
 
     for (size_t i = 0; i < region_reader_plans.size(); ++i)
     {
         const auto & plan = region_reader_plans[i];
         if (plan.bucket_units.empty())
         {
-            all_reader_plans.push_back(RNProxyReaderPlan{
+            all_reader_plans.push_back(RNColumnarReaderPlan{
                 .region_id = plan.region_id,
                 .region_ver = plan.region_ver_id.ver,
                 .region_conf_ver = plan.region_ver_id.conf_ver,
@@ -1279,12 +1271,12 @@ std::vector<RNProxyReadTaskPtr> RNProxyReadTask::buildProxyReadTask(
         {
             for (const auto & [table_id, range] : plan.bucket_units)
             {
-                all_reader_plans.push_back(RNProxyReaderPlan{
+                all_reader_plans.push_back(RNColumnarReaderPlan{
                     .region_id = plan.region_id,
                     .region_ver = plan.region_ver_id.ver,
                     .region_conf_ver = plan.region_ver_id.conf_ver,
                     .physical_table_ranges
-                    = ProxyPhysicalTableRanges{std::make_tuple(table_id, pingcap::coprocessor::KeyRanges{range})},
+                    = ColumnarPhysicalTableRanges{std::make_tuple(table_id, pingcap::coprocessor::KeyRanges{range})},
                 });
             }
         }
@@ -1292,14 +1284,14 @@ std::vector<RNProxyReadTaskPtr> RNProxyReadTask::buildProxyReadTask(
 
     if (all_reader_plans.empty())
         return tasks;
-    tasks.push_back(std::make_shared<RNProxyReadTask>(
+    tasks.push_back(std::make_shared<RNColumnarReadTask>(
         std::move(all_reader_plans),
-        getRNProxySourceNum(num_streams, planned_reader_num),
+        getRNColumnarSourceNum(num_streams, total_max_reader_num),
         shared_reader_context));
     return tasks;
 }
 
-BlockInputStreams RNProxyReadTask::getInputStreams()
+BlockInputStreams RNColumnarReadTask::getInputStreams()
 {
     BlockInputStreams streams;
     streams.reserve(source_num);
@@ -1310,8 +1302,8 @@ BlockInputStreams RNProxyReadTask::getInputStreams()
     return streams;
 }
 
-// RNProxyInputStream
-bool RNProxyInputStream::ensureReader()
+// RNColumnarInputStream
+bool RNColumnarInputStream::ensureReader()
 {
     if (reader.has_value())
         return true;
@@ -1332,7 +1324,7 @@ bool RNProxyInputStream::ensureReader()
     return true;
 }
 
-void RNProxyInputStream::releaseReader()
+void RNColumnarInputStream::releaseReader()
 {
     if (reader.has_value() && reader->inner.ptr != nullptr)
         RustGcHelper::instance().gcRustPtr(reader->inner.ptr, reader->inner.type);
@@ -1340,7 +1332,7 @@ void RNProxyInputStream::releaseReader()
     current_reader_work.reset();
 }
 
-RNProxyInputStream::~RNProxyInputStream()
+RNColumnarInputStream::~RNColumnarInputStream()
 {
     SCOPE_EXIT({
         if (reader.has_value() && reader->inner.ptr != nullptr)
@@ -1348,15 +1340,18 @@ RNProxyInputStream::~RNProxyInputStream()
     });
     try
     {
+        const auto * dag_context = context.getDAGContext();
+        const auto keyspace_id = dag_context != nullptr ? dag_context->getKeyspaceID() : NullspaceID;
         LOG_INFO(
             log,
-            "Finished reading remote snapshot through proxy, rows={} bytes={} read_cost={:.3f}s "
+            "Finished reading remote snapshot through columnar, keyspace_id={} rows={} bytes={} read_cost={:.3f}s "
             "deserialize_cost={:.3f}s",
+            keyspace_id,
             action.totalRows(),
             total_bytes,
             duration_read_sec,
             duration_deserialize_sec);
-        if (auto * dag_context = context.getDAGContext(); dag_context != nullptr)
+        if (dag_context != nullptr)
         {
             if (auto it = dag_context->scan_context_map.find(executor_id); it != dag_context->scan_context_map.end())
             {
@@ -1374,24 +1369,24 @@ RNProxyInputStream::~RNProxyInputStream()
     }
 }
 
-Block RNProxyInputStream::read(FilterPtr & res_filter, bool return_filter)
+Block RNColumnarInputStream::read(FilterPtr & res_filter, bool return_filter)
 {
     return readImpl(res_filter, return_filter);
 }
 
-Block RNProxyInputStream::readImpl()
+Block RNColumnarInputStream::readImpl()
 {
     FilterPtr filter_ignored;
     return readImpl(filter_ignored, false);
 }
 
-Block RNProxyInputStream::readImpl([[maybe_unused]] FilterPtr & res_filter, [[maybe_unused]] bool return_filter)
+Block RNColumnarInputStream::readImpl([[maybe_unused]] FilterPtr & res_filter, [[maybe_unused]] bool return_filter)
 {
     if (done)
         return {};
     const Context & global_ctx = context.getGlobalContext();
     const TiFlashRaftProxyHelper * proxy_helper = global_ctx.getSharedContextDisagg()->getColumnarProxyHelper();
-    RUNTIME_CHECK_MSG(proxy_helper != nullptr, "columnar proxy helper is not initialized");
+    RUNTIME_CHECK_MSG(proxy_helper != nullptr, "columnar helper is not initialized");
 
     while (true)
     {
@@ -1404,11 +1399,11 @@ Block RNProxyInputStream::readImpl([[maybe_unused]] FilterPtr & res_filter, [[ma
         Stopwatch w{CLOCK_MONOTONIC_COARSE};
         UInt64 rows = proxy_helper->cloud_storage_engine_interfaces.fn_read_block(reader.value(), batch_size);
         duration_read_sec += w.elapsedSecondsFromLastTime();
-        LOG_DEBUG(log, "Read {} rows from proxy", rows);
+        LOG_DEBUG(log, "Read {} rows from columnar", rows);
         if (rows == std::numeric_limits<UInt64>::max())
         {
-            LOG_WARNING(log, "Read block from proxy failed");
-            throw Exception("read_block failed in tiflash-proxy", ErrorCodes::LOGICAL_ERROR);
+            LOG_WARNING(log, "Read block from columnar failed");
+            throw Exception("read_block failed in columnar", ErrorCodes::LOGICAL_ERROR);
         }
         if (rows == 0)
         {
@@ -1424,7 +1419,7 @@ Block RNProxyInputStream::readImpl([[maybe_unused]] FilterPtr & res_filter, [[ma
         TableID physical_table_id = -1;
         Block header = getHeader();
         const ColumnsWithTypeAndName & col_type_and_name = header.getColumnsWithTypeAndName();
-        // Construct block from proxy column data.
+        // Construct block from columnar column data.
         MutableColumns columns = header.cloneEmptyColumns();
         for (UInt32 i = 0; i < col_type_and_name.size(); ++i)
         {
@@ -1434,7 +1429,7 @@ Block RNProxyInputStream::readImpl([[maybe_unused]] FilterPtr & res_filter, [[ma
                 col_type_and_name[i].column_id,
                 col_type_and_name[i].name,
                 col_type_and_name[i].type->getName());
-            // Read column data from proxy
+            // Read column data from columnar
             Int64 col_id = col_type_and_name[i].column_id;
             if (col_id == MutSup::extra_handle_id)
             {
@@ -1447,7 +1442,7 @@ Block RNProxyInputStream::readImpl([[maybe_unused]] FilterPtr & res_filter, [[ma
                     col,
                     [&](const IDataType::SubstreamPath &) { return &buf; },
                     rows,
-                    -1.0, // avg_value_size_hint set to -1 to indicate Decimal format from proxy
+                    -1.0, // avg_value_size_hint set to -1 to indicate Decimal format from columnar
                     true,
                     {});
             }
@@ -1467,7 +1462,7 @@ Block RNProxyInputStream::readImpl([[maybe_unused]] FilterPtr & res_filter, [[ma
                     col,
                     [&](const IDataType::SubstreamPath &) { return &buf; },
                     rows,
-                    -1.0, // avg_value_size_hint set to -1 to indicate Decimal format from proxy
+                    -1.0, // avg_value_size_hint set to -1 to indicate Decimal format from columnar
                     true,
                     {});
                 LOG_DEBUG(log, "Read column data done, col size={}", col.size());
@@ -1491,10 +1486,11 @@ Block RNProxyInputStream::readImpl([[maybe_unused]] FilterPtr & res_filter, [[ma
     }
 }
 
-// RNProxySourceOp
-void RNProxySourceOp::operateSuffixImpl()
+// RNColumnarSourceOp
+void RNColumnarSourceOp::operateSuffixImpl()
 {
     UNUSED(context);
+    const auto keyspace_id = exec_context.getKeyspaceID();
     const double total_cost_sec = total_cost_watch.elapsedSeconds();
     const UInt64 rows_per_sec
         = total_cost_sec > 0 ? static_cast<UInt64>(static_cast<double>(total_rows) / total_cost_sec) : 0;
@@ -1502,9 +1498,11 @@ void RNProxySourceOp::operateSuffixImpl()
         = total_cost_sec > 0 ? static_cast<UInt64>(static_cast<double>(total_bytes) / total_cost_sec) : 0;
     LOG_INFO(
         log,
-        "Finished reading proxy snapshots, task_pool_worker_total_cost={:.3f}s claimed_streams={} rows={} "
+        "Finished reading columnar snapshots, keyspace_id={} task_pool_worker_total_cost={:.3f}s claimed_streams={} "
+        "rows={} "
         "rows_per_sec={} "
         "bytes={} bytes_per_sec={} read_cost={:.3f}s",
+        keyspace_id,
         total_cost_sec,
         total_streams,
         total_rows,
@@ -1514,13 +1512,13 @@ void RNProxySourceOp::operateSuffixImpl()
         duration_read_sec);
 }
 
-void RNProxySourceOp::operatePrefixImpl()
+void RNColumnarSourceOp::operatePrefixImpl()
 {
     total_cost_watch.restart();
-    LOG_INFO(log, "Begin reading proxy snapshots");
+    LOG_INFO(log, "Begin reading columnar snapshots, keyspace_id={}", exec_context.getKeyspaceID());
 }
 
-OperatorStatus RNProxySourceOp::readImpl(Block & block)
+OperatorStatus RNColumnarSourceOp::readImpl(Block & block)
 {
     if (unlikely(done))
     {
@@ -1538,7 +1536,7 @@ OperatorStatus RNProxySourceOp::readImpl(Block & block)
     return awaitImpl();
 }
 
-OperatorStatus RNProxySourceOp::awaitImpl()
+OperatorStatus RNColumnarSourceOp::awaitImpl()
 {
     if (unlikely(done || t_block.has_value()))
     {
@@ -1548,7 +1546,7 @@ OperatorStatus RNProxySourceOp::awaitImpl()
     return OperatorStatus::IO_IN;
 }
 
-OperatorStatus RNProxySourceOp::executeIOImpl()
+OperatorStatus RNColumnarSourceOp::executeIOImpl()
 {
     if (unlikely(done || t_block.has_value()))
     {
