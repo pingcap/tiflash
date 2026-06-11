@@ -207,7 +207,9 @@ impl PdClientWithCache {
             }
         }
 
-        let Some(bucket_stat) = self.pd_client.get_buckets(region_id) else {
+        let Ok(Some(bucket_stat)) =
+            futures::executor::block_on(self.pd_client.get_buckets_async(region_id))
+        else {
             self.region_bucket_cache.remove(&region_id);
             return Vec::new();
         };

@@ -208,9 +208,17 @@ BucketSplitResult splitRangesByBucketKeys(
             bool current_range_split = false;
             for (const auto & bucket_key : bucket_keys)
             {
-                const auto decoded_bucket_key
-                    = RecordKVFormat::decodeTiKVKey(TiKVKey(bucket_key.data(), bucket_key.size()));
-                String normalized_bucket_key(decoded_bucket_key.data(), decoded_bucket_key.size());
+                String normalized_bucket_key;
+                try
+                {
+                    const auto decoded_bucket_key
+                        = RecordKVFormat::decodeTiKVKey(TiKVKey(bucket_key.data(), bucket_key.size()));
+                    normalized_bucket_key.assign(decoded_bucket_key.data(), decoded_bucket_key.size());
+                }
+                catch (...)
+                {
+                    continue;
+                }
                 if (!isBucketBoundaryInsideRange(normalized_bucket_key, range))
                     continue;
                 result.units.emplace_back(

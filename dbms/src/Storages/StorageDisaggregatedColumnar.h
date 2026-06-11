@@ -217,7 +217,9 @@ public:
     }
 
     static BlockInputStreamPtr create(const Options & options)
-    { return std::make_shared<RNColumnarInputStream>(options); }
+    {
+        return std::make_shared<RNColumnarInputStream>(options);
+    }
 
 private:
     bool ensureReader();
