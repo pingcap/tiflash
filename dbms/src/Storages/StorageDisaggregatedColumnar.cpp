@@ -211,6 +211,11 @@ BucketSplitResult splitRangesByBucketKeys(
                 String normalized_bucket_key;
                 try
                 {
+                    // Bucket boundaries from PD are TiKV encoded keys. Empty region boundaries and
+                    // malformed non-empty keys are both possible invalid split points, and length
+                    // checks alone cannot validate TiKV memcomparable encoding markers/padding.
+                    // Skip only the bad boundary so the original range is still covered by a
+                    // coarser reader plan.
                     const auto decoded_bucket_key
                         = RecordKVFormat::decodeTiKVKey(TiKVKey(bucket_key.data(), bucket_key.size()));
                     normalized_bucket_key.assign(decoded_bucket_key.data(), decoded_bucket_key.size());
@@ -734,15 +739,14 @@ ColumnarReaderPtr createColumnarReader(
         tables_range_data.append(reinterpret_cast<const char *>(&ranges_data_size), sizeof(ranges_data_size));
         tables_range_data.append(ranges_data.data(), ranges_data.size());
     }
-    BaseBuffView tables_range_view = BaseBuffView{tables_range_data.data(), tables_range_data.size()};
-    BaseBuffView columns = BaseBuffView{shared_context.table_info_data.data(), shared_context.table_info_data.size()};
-    BaseBuffView filter_conditions_view
+    auto tables_range_view = BaseBuffView{tables_range_data.data(), tables_range_data.size()};
+    auto columns = BaseBuffView{shared_context.table_info_data.data(), shared_context.table_info_data.size()};
+    auto filter_conditions_view
         = BaseBuffView{shared_context.filter_conditions_data.data(), shared_context.filter_conditions_data.size()};
-    BaseBuffView table_scan_view
-        = BaseBuffView{shared_context.table_scan_data.data(), shared_context.table_scan_data.size()};
-    BaseBuffView ann_query_info_view
+    auto table_scan_view = BaseBuffView{shared_context.table_scan_data.data(), shared_context.table_scan_data.size()};
+    auto ann_query_info_view
         = BaseBuffView{shared_context.ann_query_info_data.data(), shared_context.ann_query_info_data.size()};
-    BaseBuffView fts_query_info_view
+    auto fts_query_info_view
         = BaseBuffView{shared_context.fts_query_info_data.data(), shared_context.fts_query_info_data.size()};
     const Context & global_ctx = context.getGlobalContext();
     auto * cluster = global_ctx.getTMTContext().getKVCluster();
@@ -787,7 +791,7 @@ ColumnarReaderPtr createColumnarReader(
                 region_id_ver = std::to_string(region.id()) + ":" + std::to_string(reader_plan.region_ver) + ":"
                     + std::to_string(region.region_epoch().conf_ver());
             }
-            auto _guard = std::lock_guard(*shared_context.output_lock);
+            auto guard = std::lock_guard(*shared_context.output_lock);
             cluster->region_cache->dropRegion(region_ver_id);
             LOG_WARNING(
                 log,
@@ -821,7 +825,7 @@ ColumnarReaderPtr createColumnarReader(
                     std::to_string(reader_plan.region_id),
                     region_error.ShortDebugString());
             }
-            auto _guard = std::lock_guard(*shared_context.output_lock);
+            auto guard = std::lock_guard(*shared_context.output_lock);
             cluster->region_cache->dropRegion(region_ver_id);
             throw RegionException(
                 std::move(unavailable_regions),
@@ -838,7 +842,7 @@ ColumnarReaderPtr createColumnarReader(
         pingcap::kv::Backoffer bo(pingcap::kv::copNextMaxBackoff);
         std::vector<uint64_t> pushed;
         std::vector<pingcap::kv::LockPtr> locks{std::make_shared<pingcap::kv::Lock>(lock_info)};
-        auto _guard = std::lock_guard(*shared_context.output_lock);
+        auto guard = std::lock_guard(*shared_context.output_lock);
         auto before_expired = cluster->lock_resolver->resolveLocks(bo, shared_context.start_ts, locks, pushed);
         LOG_WARNING(log, "Finished resolve locks, before_expired={}", before_expired);
         throw Exception("lock error", ErrorCodes::COLUMNAR_SNAPSHOT_ERROR);
@@ -937,6 +941,8 @@ void RNColumnarReadTask::replaceReaderWork(
     if (replanned_reader_plans.size() == 1)
         return;
 
+    // If the original range now spans multiple regions, enqueue the remaining partitions for
+    // other sources. These ranges are produced by re-splitting the failed work's own key ranges.
     auto queue_guard = std::lock_guard(pending_reader_works_mutex);
     for (auto it = replanned_reader_plans.rbegin(); it != replanned_reader_plans.rend() - 1; ++it)
         pending_reader_works.push_front(std::make_shared<RNColumnarReaderWork>(*it));
@@ -974,6 +980,9 @@ ColumnarReaderPtr RNColumnarReadTask::createColumnarReaderWithBackoff(const RNCo
             {
                 try
                 {
+                    // Replan only the key ranges owned by this failed work. Dropping the stale
+                    // region cache happens before this exception, so this locate pass can pick up
+                    // the latest region epoch and split layout.
                     auto replanned_region_reader_plans = buildRegionReaderPlansFromPhysicalTableRanges(
                         getLog(),
                         getContext(),
@@ -1263,9 +1272,8 @@ std::vector<RNColumnarReadTaskPtr> RNColumnarReadTask::buildColumnarReadTask(
     std::vector<RNColumnarReaderPlan> all_reader_plans;
     all_reader_plans.reserve(total_max_reader_num);
 
-    for (size_t i = 0; i < region_reader_plans.size(); ++i)
+    for (const auto & plan : region_reader_plans)
     {
-        const auto & plan = region_reader_plans[i];
         if (plan.bucket_units.empty())
         {
             all_reader_plans.push_back(RNColumnarReaderPlan{
