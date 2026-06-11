@@ -55,7 +55,7 @@ class RSOperator;
 using RSOperatorPtr = std::shared_ptr<RSOperator>;
 } // namespace DM
 
-enum class RNProxyReaderMaterializeState
+enum class RNColumnarReaderMaterializeState
 {
     NotStarted,
     Creating,
@@ -64,9 +64,9 @@ enum class RNProxyReaderMaterializeState
     Consumed,
 };
 
-struct RNProxyReaderSharedContext;
+struct RNColumnarReaderSharedContext;
 
-struct RNProxyReaderPlan
+struct RNColumnarReaderPlan
 {
     RegionID region_id;
     RegionVersion region_ver;
@@ -74,34 +74,34 @@ struct RNProxyReaderPlan
     std::vector<std::tuple<TableID, pingcap::coprocessor::KeyRanges>> physical_table_ranges;
 };
 
-struct RNProxyReaderWork
+struct RNColumnarReaderWork
 {
-    explicit RNProxyReaderWork(RNProxyReaderPlan plan_)
+    explicit RNColumnarReaderWork(RNColumnarReaderPlan plan_)
         : plan(std::move(plan_))
     {}
 
-    ~RNProxyReaderWork();
+    ~RNColumnarReaderWork();
 
-    RNProxyReaderPlan plan;
+    RNColumnarReaderPlan plan;
     std::mutex mutex;
     std::condition_variable cv;
-    RNProxyReaderMaterializeState state = RNProxyReaderMaterializeState::NotStarted;
+    RNColumnarReaderMaterializeState state = RNColumnarReaderMaterializeState::NotStarted;
     std::optional<ColumnarReaderPtr> reader;
     std::exception_ptr exception;
 };
 
-using RNProxyReaderWorkPtr = std::shared_ptr<RNProxyReaderWork>;
+using RNColumnarReaderWorkPtr = std::shared_ptr<RNColumnarReaderWork>;
 
-class RNProxyReadTask;
-using RNProxyReadTaskPtr = std::shared_ptr<RNProxyReadTask>;
-class RNProxyReadTask
+class RNColumnarReadTask;
+using RNColumnarReadTaskPtr = std::shared_ptr<RNColumnarReadTask>;
+class RNColumnarReadTask
     : public boost::noncopyable
-    , public std::enable_shared_from_this<RNProxyReadTask>
+    , public std::enable_shared_from_this<RNColumnarReadTask>
 {
 public:
     using RemoteTableRange = std::pair<TableID, pingcap::coprocessor::KeyRanges>;
 
-    static std::vector<RNProxyReadTaskPtr> buildProxyReadTaskWithBackoff(
+    static std::vector<RNColumnarReadTaskPtr> buildColumnarReadTaskWithBackoff(
         const LoggerPtr & log,
         const Context & context,
         UInt64 start_ts,
@@ -110,7 +110,7 @@ public:
         const std::vector<RemoteTableRange> & remote_table_ranges,
         unsigned num_streams);
 
-    static std::vector<RNProxyReadTaskPtr> buildProxyReadTask(
+    static std::vector<RNColumnarReadTaskPtr> buildColumnarReadTask(
         const LoggerPtr & log,
         const Context & context,
         UInt64 start_ts,
@@ -123,18 +123,18 @@ public:
 
     BlockInputStreamPtr createSharedInputStream();
 
-    BlockInputStreamPtr createInputStream(const RNProxyReaderWorkPtr & reader_work);
+    BlockInputStreamPtr createInputStream(const RNColumnarReaderWorkPtr & reader_work);
 
-    ColumnarReaderPtr createColumnarReaderWithBackoff(const RNProxyReaderWorkPtr & reader_work);
+    ColumnarReaderPtr createColumnarReaderWithBackoff(const RNColumnarReaderWorkPtr & reader_work);
 
-    ColumnarReaderPtr getOrCreateReader(const RNProxyReaderWorkPtr & reader_work);
+    ColumnarReaderPtr getOrCreateReader(const RNColumnarReaderWorkPtr & reader_work);
 
-    std::optional<RNProxyReaderWorkPtr> tryAcquireReaderWork();
+    std::optional<RNColumnarReaderWorkPtr> tryAcquireReaderWork();
 
 #ifdef DBMS_PUBLIC_GTEST
     void replaceReaderWorkForTest(
-        const RNProxyReaderWorkPtr & reader_work,
-        std::vector<RNProxyReaderPlan> replanned_reader_plans);
+        const RNColumnarReaderWorkPtr & reader_work,
+        std::vector<RNColumnarReaderPlan> replanned_reader_plans);
 #endif
 
     size_t getReaderCount() const;
@@ -153,33 +153,33 @@ public:
 
     const String & getExecutorID() const;
 
-    RNProxyReadTask(
-        std::vector<RNProxyReaderPlan> reader_plans,
+    RNColumnarReadTask(
+        std::vector<RNColumnarReaderPlan> reader_plans,
         size_t source_num,
-        std::shared_ptr<RNProxyReaderSharedContext> shared_reader_context);
+        std::shared_ptr<RNColumnarReaderSharedContext> shared_reader_context);
 
 private:
     void prefetchPendingWork();
 
-    void prefetchReaderWork(const RNProxyReaderWorkPtr & reader_work);
+    void prefetchReaderWork(const RNColumnarReaderWorkPtr & reader_work);
 
     void replaceReaderWork(
-        const RNProxyReaderWorkPtr & reader_work,
-        std::vector<RNProxyReaderPlan> replanned_reader_plans);
+        const RNColumnarReaderWorkPtr & reader_work,
+        std::vector<RNColumnarReaderPlan> replanned_reader_plans);
 
     size_t reader_count;
     size_t source_num;
-    std::shared_ptr<RNProxyReaderSharedContext> shared_reader_context;
+    std::shared_ptr<RNColumnarReaderSharedContext> shared_reader_context;
     mutable std::mutex pending_reader_works_mutex;
-    std::deque<RNProxyReaderWorkPtr> pending_reader_works;
+    std::deque<RNColumnarReaderWorkPtr> pending_reader_works;
 };
 
-class RNProxyInputStream : public IProfilingBlockInputStream
+class RNColumnarInputStream : public IProfilingBlockInputStream
 {
     static constexpr auto NAME = "RNProxy";
 
 public:
-    ~RNProxyInputStream();
+    ~RNColumnarInputStream();
 
     String getName() const { return NAME; }
     Block getHeader() const { return header; }
@@ -195,15 +195,15 @@ public:
     {
         const Context & context;
         LoggerPtr log;
-        RNProxyReadTaskPtr task;
-        RNProxyReaderWorkPtr reader_work;
+        RNColumnarReadTaskPtr task;
+        RNColumnarReaderWorkPtr reader_work;
         const DM::ColumnDefines & columns_to_read;
         int extra_table_id_index;
         TableID table_id;
         const String & executor_id;
     };
 
-    explicit RNProxyInputStream(const Options & options)
+    explicit RNColumnarInputStream(const Options & options)
         : context(options.context)
         , log(options.log)
         , task(options.task)
@@ -216,7 +216,8 @@ public:
         setHeader(action.getHeader());
     }
 
-    static BlockInputStreamPtr create(const Options & options) { return std::make_shared<RNProxyInputStream>(options); }
+    static BlockInputStreamPtr create(const Options & options)
+    { return std::make_shared<RNColumnarInputStream>(options); }
 
 private:
     bool ensureReader();
@@ -224,9 +225,9 @@ private:
 
     const Context & context;
     const LoggerPtr log;
-    RNProxyReadTaskPtr task;
-    const RNProxyReaderWorkPtr fixed_reader_work;
-    RNProxyReaderWorkPtr current_reader_work;
+    RNColumnarReadTaskPtr task;
+    const RNColumnarReaderWorkPtr fixed_reader_work;
+    RNColumnarReaderWorkPtr current_reader_work;
     std::optional<ColumnarReaderPtr> reader;
     AddExtraTableIDColumnTransformAction action;
     TableID table_id;
@@ -241,7 +242,7 @@ private:
     UInt64 total_bytes = 0;
 };
 
-class RNProxySourceOp : public SourceOp
+class RNColumnarSourceOp : public SourceOp
 {
     static constexpr auto NAME = "RNProxy";
 
@@ -249,10 +250,10 @@ public:
     struct Options
     {
         PipelineExecutorContext & exec_context;
-        RNProxyReadTaskPtr task;
+        RNColumnarReadTaskPtr task;
     };
 
-    explicit RNProxySourceOp(const Options & options)
+    explicit RNColumnarSourceOp(const Options & options)
         : SourceOp(options.exec_context, options.task->getLog()->identifier())
         , context(options.task->getContext())
         , log(options.task->getLog())
@@ -263,7 +264,7 @@ public:
             options.task->getExtraTableIDIndex()));
     }
 
-    static SourceOpPtr create(const Options & options) { return std::make_unique<RNProxySourceOp>(options); }
+    static SourceOpPtr create(const Options & options) { return std::make_unique<RNColumnarSourceOp>(options); }
 
     String getName() const override { return NAME; }
 
@@ -283,7 +284,7 @@ protected:
 private:
     const Context & context;
     const LoggerPtr log;
-    RNProxyReadTaskPtr task;
+    RNColumnarReadTaskPtr task;
     UInt64 total_bytes = 0;
     size_t total_rows = 0;
     size_t total_streams = 0;
