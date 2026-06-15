@@ -24,6 +24,7 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/IDataType.h>
 #include <Flash/Coprocessor/CodecUtils.h>
+#include <Flash/Coprocessor/ColumnarScanContext.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
@@ -1269,6 +1270,14 @@ std::vector<RNColumnarReadTaskPtr> RNColumnarReadTask::buildColumnarReadTask(
         enable_bucket_parallel,
         total_max_reader_num);
 
+    auto columnar_scan_context = std::make_shared<ColumnarScanContext>();
+    columnar_scan_context->regions = region_num;
+    columnar_scan_context->read_tasks = total_max_reader_num;
+    columnar_scan_context->physical_tables = physical_table_num;
+    columnar_scan_context->columns
+        = shared_reader_context->column_defines != nullptr ? shared_reader_context->column_defines->size() : 0;
+    dag_context->columnar_scan_context_map[table_scan.getTableScanExecutorID()] = columnar_scan_context;
+
     std::vector<RNColumnarReaderPlan> all_reader_plans;
     all_reader_plans.reserve(total_max_reader_num);
 
@@ -1342,17 +1351,44 @@ bool RNColumnarInputStream::ensureReader()
 
 void RNColumnarInputStream::releaseReader()
 {
+    mergeReaderStats();
     if (reader.has_value() && reader->inner.ptr != nullptr)
         RustGcHelper::instance().gcRustPtr(reader->inner.ptr, reader->inner.type);
     reader.reset();
     current_reader_work.reset();
 }
 
+void RNColumnarInputStream::mergeReaderStats()
+{
+    if (!reader.has_value() || reader->inner.ptr == nullptr)
+        return;
+
+    const auto * dag_context = context.getDAGContext();
+    if (dag_context == nullptr)
+        return;
+
+    auto scan_ctx_iter = dag_context->columnar_scan_context_map.find(executor_id);
+    if (scan_ctx_iter == dag_context->columnar_scan_context_map.end() || !scan_ctx_iter->second)
+        return;
+
+    const auto & global_ctx = context.getGlobalContext();
+    const TiFlashRaftProxyHelper * proxy_helper = global_ctx.getSharedContextDisagg()->getColumnarProxyHelper();
+    if (proxy_helper == nullptr || proxy_helper->cloud_storage_engine_interfaces.fn_columnar_scan_stats == nullptr)
+        return;
+
+    const auto stats = proxy_helper->cloud_storage_engine_interfaces.fn_columnar_scan_stats(reader.value());
+    scan_ctx_iter->second->merge(stats);
+}
+
 RNColumnarInputStream::~RNColumnarInputStream()
 {
     SCOPE_EXIT({
-        if (reader.has_value() && reader->inner.ptr != nullptr)
-            RustGcHelper::instance().gcRustPtr(reader->inner.ptr, reader->inner.type);
+        try
+        {
+            releaseReader();
+        }
+        catch (...)
+        {}
     });
     try
     {
@@ -1376,6 +1412,12 @@ RNColumnarInputStream::~RNColumnarInputStream()
                     std::optional<LACBytesCollector> lac_bytes_collector;
                     it->second->addUserReadBytes(total_bytes, DM::ReadTag::Query, lac_bytes_collector);
                 }
+            }
+            if (auto it = dag_context->columnar_scan_context_map.find(executor_id);
+                it != dag_context->columnar_scan_context_map.end() && it->second)
+            {
+                it->second->addUserReadBytes(total_bytes);
+                it->second->addDeserializeBlockNs(static_cast<uint64_t>(duration_deserialize_sec * 1000000000.0));
             }
         }
     }
