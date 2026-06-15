@@ -279,6 +279,23 @@ pub mod root {
             pub inner: root::DB::RawRustPtr,
         }
         #[repr(C)]
+        #[derive(Debug, Default, Copy, Clone)]
+        pub struct ColumnarScanStats {
+            pub mvcc_input_rows: u64,
+            pub mvcc_input_bytes: u64,
+            pub mvcc_output_rows: u64,
+            pub read_block_ns: u64,
+            pub serialize_ns: u64,
+            pub init_reader_ns: u64,
+            pub prefetch_ns: u64,
+            pub rough_check_total_packs: u64,
+            pub rough_check_selected_packs: u64,
+            pub rough_check_skipped_packs: u64,
+            pub rough_check_unknown_packs: u64,
+            pub remote_segments: u64,
+            pub total_segments: u64,
+        }
+        #[repr(C)]
         #[derive(Debug)]
         pub struct SSTReaderInterfaces {
             pub fn_get_sst_reader: ::std::option::Option<
@@ -400,6 +417,11 @@ pub mod root {
             >,
             pub fn_physical_table_id: ::std::option::Option<
                 unsafe extern "C" fn(arg1: root::DB::ColumnarReaderPtr) -> i64,
+            >,
+            pub fn_columnar_scan_stats: ::std::option::Option<
+                unsafe extern "C" fn(
+                    arg1: root::DB::ColumnarReaderPtr,
+                ) -> root::DB::ColumnarScanStats,
             >,
         }
         #[repr(u32)]
