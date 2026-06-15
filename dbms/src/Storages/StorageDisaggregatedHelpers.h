@@ -16,8 +16,12 @@
 #include <Storages/KVStore/Types.h>
 #include <kvproto/coprocessor.pb.h>
 #include <kvproto/disaggregated.pb.h>
+#include <kvproto/kvrpcpb.pb.h>
+#include <pingcap/kv/LockResolver.h>
 
+#include <memory>
 #include <unordered_set>
+#include <vector>
 
 namespace DB
 {
@@ -25,6 +29,35 @@ namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
+
+// Convert lock errors from disaggregated read responses into client-c locks.
+// This boundary intentionally rejects SharedLock wrappers: normal TiFlash read
+// paths should treat them as read-compatible and skip them before reporting a
+// lock conflict, so resolving one here would hide an upstream invariant break.
+inline pingcap::kv::LockPtr makeLockForDisaggResolve(const kvrpcpb::LockInfo & lock_info)
+{
+    if (lock_info.lock_type() == kvrpcpb::Op::SharedLock)
+    {
+        // TiFlash read paths must skip shared locks before reporting a lock conflict.
+        // Seeing a SharedLock here means an upstream read path violated that invariant.
+        // Do not resolve the wrapper: its txn fields are intentionally invalid.
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Unexpected SharedLock in TiFlash disaggregated lock resolver; shared locks are read-compatible and should "
+            "be skipped before producing locked errors");
+    }
+    return std::make_shared<pingcap::kv::Lock>(lock_info);
+}
+
+inline std::vector<pingcap::kv::LockPtr> makeLocksForDisaggResolve(
+    const google::protobuf::RepeatedPtrField<kvrpcpb::LockInfo> & lock_infos)
+{
+    std::vector<pingcap::kv::LockPtr> locks;
+    locks.reserve(lock_infos.size());
+    for (const auto & lock_info : lock_infos)
+        locks.emplace_back(makeLockForDisaggResolve(lock_info));
+    return locks;
+}
 
 template <typename RegionCachePtr>
 void dropRegionCache(
