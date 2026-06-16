@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/RedactHelpers.h>
 #include <Storages/KVStore/Types.h>
 #include <kvproto/coprocessor.pb.h>
 #include <kvproto/disaggregated.pb.h>
@@ -44,7 +45,15 @@ inline pingcap::kv::LockPtr makeLockForDisaggResolve(const kvrpcpb::LockInfo & l
         throw Exception(
             ErrorCodes::LOGICAL_ERROR,
             "Unexpected SharedLock in TiFlash disaggregated lock resolver; shared locks are read-compatible and should "
-            "be skipped before producing locked errors");
+            "be skipped before producing locked errors, lock_key={}, lock_version={}, lock_ttl={}, min_commit_ts={}, "
+            "lock_for_update_ts={}, txn_size={}, shared_lock_count={}",
+            Redact::keyToDebugString(lock_info.key().data(), lock_info.key().size()),
+            lock_info.lock_version(),
+            lock_info.lock_ttl(),
+            lock_info.min_commit_ts(),
+            lock_info.lock_for_update_ts(),
+            lock_info.txn_size(),
+            lock_info.shared_lock_infos_size());
     }
     return std::make_shared<pingcap::kv::Lock>(lock_info);
 }
