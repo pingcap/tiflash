@@ -33,10 +33,16 @@
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/RequestUtils.h>
+#include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <IO/Buffer/ReadBufferFromMemory.h>
 #include <IO/IOThreadPools.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
+#include <Operators/NullSourceOp.h>
+#include <Operators/SharedQueue.h>
+#include <Storages/Columnar/ColumnarReadSourceOp.h>
+#include <Storages/Columnar/ColumnarSourceOp.h>
+#include <Storages/Columnar/PrefetchColumnarReaderTask.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/TMTContext.h>
@@ -623,6 +629,49 @@ void StorageDisaggregated::filterConditionsWithPushedDownFilters(
     }
 }
 
+namespace
+{
+void addColumnarNullSource(
+    PipelineExecutorContext & exec_context,
+    PipelineExecGroupBuilder & group_builder,
+    const TiDBTableScan & table_scan,
+    const LoggerPtr & log)
+{
+    auto header = Block(getColumnWithTypeAndName(genNamesAndTypesForTableScan(table_scan)));
+    group_builder.addConcurrency(std::make_unique<NullSourceOp>(exec_context, header, log->identifier()));
+}
+
+void addColumnarTableScanProfileInfos(
+    const Context & context,
+    PipelineExecGroupBuilder & group_builder,
+    const TiDBTableScan & table_scan)
+{
+    auto * dag_context = context.getDAGContext();
+    const auto & table_scan_id = table_scan.getTableScanExecutorID();
+    dag_context->addInboundIOProfileInfos(table_scan_id, group_builder.getCurIOProfileInfos());
+    dag_context->addOperatorProfileInfos(table_scan_id, group_builder.getCurProfileInfos());
+}
+} // namespace
+
+#ifdef DBMS_PUBLIC_GTEST
+void addColumnarNullSourceForTest(
+    PipelineExecutorContext & exec_context,
+    PipelineExecGroupBuilder & group_builder,
+    const TiDBTableScan & table_scan,
+    const LoggerPtr & log)
+{
+    addColumnarNullSource(exec_context, group_builder, table_scan, log);
+}
+
+void addColumnarTableScanProfileInfosForTest(
+    const Context & context,
+    PipelineExecGroupBuilder & group_builder,
+    const TiDBTableScan & table_scan)
+{
+    addColumnarTableScanProfileInfos(context, group_builder, table_scan);
+}
+#endif
+
 BlockInputStreams StorageDisaggregated::readThroughColumnar(const Context & context, unsigned num_streams)
 {
     DAGPipeline pipeline;
@@ -680,22 +729,65 @@ void StorageDisaggregated::readThroughColumnar(
         remote_table_ranges,
         num_streams);
     const auto generated_column_infos = genGeneratedColumnInfosForDisaggregatedRead(table_scan);
-    if (!read_columnar_tasks.empty())
+    bool has_columnar_source = false;
+    if (!read_columnar_tasks.empty() && read_columnar_tasks.front()->getReaderCount() > 0)
     {
         auto & task_pool = read_columnar_tasks.front();
+        task_pool->setPipelineExecutorContext(&exec_context);
         const size_t source_num = task_pool->getSourceNum();
+        // Producers do the columnar IO (materialize + read + deserialize);
+        // consumers run the CPU transform chain.  Keep the producer count
+        // high enough to saturate the IO pool, and size the SharedQueue
+        // buffer so that IO bursts do not starve the consumers.
+        const size_t producer_num = std::max<size_t>(1, source_num * 2 / 3);
         LOG_INFO(
             log,
-            "use shared columnar reader task pool, reader_num={}, source_num={}",
+            "use shared columnar reader task pool, reader_num={}, producer_num={}, source_num={}",
             task_pool->getReaderCount(),
+            producer_num,
             source_num);
-        for (size_t i = 0; i < source_num; ++i)
+        SharedQueueSinkHolderPtr shared_queue_sink_holder;
+        SharedQueueSourceHolderPtr shared_queue_source_holder;
+        std::tie(shared_queue_sink_holder, shared_queue_source_holder) = SharedQueue::build(
+            exec_context,
+            producer_num,
+            source_num,
+            /*max_buffered_bytes=*/-1,
+            /*max_queue_size=*/static_cast<Int64>(producer_num * 2));
+
+        for (size_t i = 0; i < producer_num; ++i)
         {
-            group_builder.addConcurrency(RNColumnarSourceOp::create({
+            group_builder.addConcurrency(ColumnarReadSourceOp::create({
                 .exec_context = exec_context,
                 .task = task_pool,
             }));
         }
+
+        addColumnarTableScanProfileInfos(context, group_builder, table_scan);
+
+        group_builder.transform([&](auto & builder) {
+            builder.setSinkOp(
+                std::make_unique<SharedQueueSinkOp>(exec_context, log->identifier(), shared_queue_sink_holder));
+        });
+        auto source_header = group_builder.getCurrentHeader();
+        group_builder.addGroup();
+        for (size_t i = 0; i < source_num; ++i)
+        {
+            group_builder.addConcurrency(RNColumnarSourceOp::create({
+                .exec_context = exec_context,
+                .req_id = log->identifier(),
+                .header = source_header,
+                .shared_queue = shared_queue_source_holder,
+            }));
+        }
+        has_columnar_source = true;
+    }
+    if (!has_columnar_source)
+    {
+        // Keep the pipeline group non-empty so downstream generated-column, cast and projection
+        // transforms can still derive their input header for empty columnar ranges.
+        addColumnarNullSource(exec_context, group_builder, table_scan, log);
+        addColumnarTableScanProfileInfos(context, group_builder, table_scan);
     }
 
     executeGeneratedColumnPlaceholder(exec_context, group_builder, generated_column_infos, log);
@@ -1067,6 +1159,7 @@ ColumnarReaderPtr RNColumnarReadTask::getOrCreateReader(const RNColumnarReaderWo
             reader_work->state = RNColumnarReaderMaterializeState::Consumed;
         }
         reader_work->cv.notify_all();
+        reader_work->notify_future.notifyAll();
         return reader;
     }
     catch (...)
@@ -1078,8 +1171,44 @@ ColumnarReaderPtr RNColumnarReadTask::getOrCreateReader(const RNColumnarReaderWo
             reader_work->state = RNColumnarReaderMaterializeState::Failed;
         }
         reader_work->cv.notify_all();
+        reader_work->notify_future.notifyAll();
         throw;
     }
+}
+
+std::optional<ColumnarReaderPtr> RNColumnarReadTask::tryGetReadyReader(const RNColumnarReaderWorkPtr & reader_work)
+{
+    RUNTIME_CHECK(reader_work != nullptr);
+
+    std::lock_guard lock(reader_work->mutex);
+    switch (reader_work->state)
+    {
+    case RNColumnarReaderMaterializeState::Ready:
+    {
+        auto reader = std::move(reader_work->reader);
+        reader_work->reader.reset();
+        reader_work->exception = nullptr;
+        reader_work->state = RNColumnarReaderMaterializeState::Consumed;
+        return reader.value();
+    }
+    case RNColumnarReaderMaterializeState::Failed:
+        std::rethrow_exception(reader_work->exception);
+    case RNColumnarReaderMaterializeState::Consumed:
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "columnar reader work for region {} is already consumed",
+            reader_work->plan.region_id);
+    case RNColumnarReaderMaterializeState::Creating:
+    case RNColumnarReaderMaterializeState::NotStarted:
+        return std::nullopt;
+    }
+    return std::nullopt;
+}
+
+void RNColumnarReadTask::startAsyncMaterializeReader(const RNColumnarReaderWorkPtr & reader_work)
+{
+    LOG_INFO(getLog(), "startAsyncMaterializeReader triggered, region_id={}", reader_work->plan.region_id);
+    prefetchReaderWork(reader_work);
 }
 
 void RNColumnarReadTask::prefetchPendingWork()
@@ -1106,36 +1235,26 @@ void RNColumnarReadTask::prefetchReaderWork(const RNColumnarReaderWorkPtr & read
         reader_work->state = RNColumnarReaderMaterializeState::Creating;
     }
 
-    LOG_INFO(getLog(), "materialize columnar reader asynchronously, region_id={}", reader_work->plan.region_id);
-    newThreadManager()->scheduleThenDetach(true, "PrefetchRNColumnarReader", [self = shared_from_this(), reader_work] {
-        try
-        {
-            auto reader = self->createColumnarReaderWithBackoff(reader_work);
-            {
-                auto guard = std::lock_guard(reader_work->mutex);
-                if (reader_work->state == RNColumnarReaderMaterializeState::Consumed)
-                    return;
-                reader_work->reader.emplace(std::move(reader));
-                reader_work->exception = nullptr;
-                reader_work->state = RNColumnarReaderMaterializeState::Ready;
-            }
-        }
-        catch (...)
-        {
-            {
-                auto guard = std::lock_guard(reader_work->mutex);
-                if (reader_work->state == RNColumnarReaderMaterializeState::Consumed)
-                    return;
-                reader_work->reader.reset();
-                reader_work->exception = std::current_exception();
-                reader_work->state = RNColumnarReaderMaterializeState::Failed;
-            }
-        }
-        reader_work->cv.notify_all();
-    });
+    const auto region_id = reader_work->plan.region_id;
+    LOG_INFO(getLog(), "materialize columnar reader asynchronously, region_id={}", region_id);
+
+    // Submit a lightweight IO task to the pipeline scheduler instead of
+    // spawning a detached thread.  The task materializes the reader in the
+    // IO pool and transitions the work to Ready (or Failed) on completion.
+    // The stream path will not have exec_context set, so prefetch is only
+    // used by the pipeline path; the stream path relies on blocking wait.
+    if (exec_context == nullptr)
+        return;
+
+    auto & task_log = getLog();
+    TaskScheduler::instance->submit(std::make_unique<PrefetchColumnarReaderTask>(
+        *exec_context,
+        task_log->identifier(),
+        shared_from_this(),
+        reader_work));
 }
 
-std::optional<RNColumnarReaderWorkPtr> RNColumnarReadTask::tryAcquireReaderWork()
+std::optional<RNColumnarReaderWorkPtr> RNColumnarReadTask::tryAcquireReaderWork(bool enable_prefetch)
 {
     RNColumnarReaderWorkPtr reader_work;
     {
@@ -1145,7 +1264,8 @@ std::optional<RNColumnarReaderWorkPtr> RNColumnarReadTask::tryAcquireReaderWork(
         reader_work = pending_reader_works.front();
         pending_reader_works.pop_front();
     }
-    prefetchPendingWork();
+    if (enable_prefetch)
+        prefetchPendingWork();
     return reader_work;
 }
 
@@ -1176,6 +1296,14 @@ BlockInputStreamPtr RNColumnarReadTask::createSharedInputStream()
         .table_id = getLogicalTableID(),
         .executor_id = getExecutorID(),
     });
+}
+
+BlockInputStreamPtr RNColumnarInputStream::createWithReader(const Options & options, ColumnarReaderPtr reader)
+{
+    auto stream = std::make_shared<RNColumnarInputStream>(options);
+    stream->current_reader_work = options.reader_work;
+    stream->reader.emplace(std::move(reader));
+    return stream;
 }
 
 std::vector<RNColumnarReadTaskPtr> RNColumnarReadTask::buildColumnarReadTaskWithBackoff(
@@ -1348,6 +1476,20 @@ void RNColumnarInputStream::releaseReader()
     current_reader_work.reset();
 }
 
+RNColumnarInputStream::RNColumnarInputStream(const Options & options)
+    : context(options.context)
+    , log(options.log)
+    , task(options.task)
+    , fixed_reader_work(options.reader_work)
+    , action(options.columns_to_read, options.extra_table_id_index)
+    , table_id(options.table_id)
+    , executor_id(options.executor_id)
+    , batch_size(options.context.getSettingsRef().max_block_size)
+{
+    // Keep header aligned with genNamesAndTypesForTableScan when TiDB requests _tidb_tid on partition scans.
+    setHeader(action.getHeader());
+}
+
 RNColumnarInputStream::~RNColumnarInputStream()
 {
     SCOPE_EXIT({
@@ -1499,103 +1641,6 @@ Block RNColumnarInputStream::readImpl([[maybe_unused]] FilterPtr & res_filter, [
 
         total_bytes += block.bytes();
         return block;
-    }
-}
-
-// RNColumnarSourceOp
-void RNColumnarSourceOp::operateSuffixImpl()
-{
-    UNUSED(context);
-    const auto keyspace_id = exec_context.getKeyspaceID();
-    const double total_cost_sec = total_cost_watch.elapsedSeconds();
-    const UInt64 rows_per_sec
-        = total_cost_sec > 0 ? static_cast<UInt64>(static_cast<double>(total_rows) / total_cost_sec) : 0;
-    const UInt64 bytes_per_sec
-        = total_cost_sec > 0 ? static_cast<UInt64>(static_cast<double>(total_bytes) / total_cost_sec) : 0;
-    LOG_INFO(
-        log,
-        "Finished reading columnar snapshots, keyspace_id={} task_pool_worker_total_cost={:.3f}s claimed_streams={} "
-        "rows={} "
-        "rows_per_sec={} "
-        "bytes={} bytes_per_sec={} read_cost={:.3f}s",
-        keyspace_id,
-        total_cost_sec,
-        total_streams,
-        total_rows,
-        rows_per_sec,
-        total_bytes,
-        bytes_per_sec,
-        duration_read_sec);
-}
-
-void RNColumnarSourceOp::operatePrefixImpl()
-{
-    total_cost_watch.restart();
-    LOG_INFO(log, "Begin reading columnar snapshots, keyspace_id={}", exec_context.getKeyspaceID());
-}
-
-OperatorStatus RNColumnarSourceOp::readImpl(Block & block)
-{
-    if (unlikely(done))
-    {
-        block = {};
-        return OperatorStatus::HAS_OUTPUT;
-    }
-
-    if (t_block.has_value())
-    {
-        std::swap(block, t_block.value());
-        t_block.reset();
-        return OperatorStatus::HAS_OUTPUT;
-    }
-
-    return awaitImpl();
-}
-
-OperatorStatus RNColumnarSourceOp::awaitImpl()
-{
-    if (unlikely(done || t_block.has_value()))
-    {
-        return OperatorStatus::HAS_OUTPUT;
-    }
-
-    return OperatorStatus::IO_IN;
-}
-
-OperatorStatus RNColumnarSourceOp::executeIOImpl()
-{
-    if (unlikely(done || t_block.has_value()))
-    {
-        return OperatorStatus::HAS_OUTPUT;
-    }
-
-    if (!current_input_stream)
-    {
-        auto next_reader_work = task->tryAcquireReaderWork();
-        if (!next_reader_work.has_value())
-        {
-            done = true;
-            return OperatorStatus::HAS_OUTPUT;
-        }
-        current_input_stream = task->createInputStream(next_reader_work.value());
-        ++total_streams;
-    }
-
-    FilterPtr filter_ignored = nullptr;
-    Stopwatch w{CLOCK_MONOTONIC_COARSE};
-    Block block = current_input_stream->read(filter_ignored, false);
-    duration_read_sec += w.elapsedSeconds();
-    if likely (block && block.rows() > 0)
-    {
-        total_rows += block.rows();
-        total_bytes += block.bytes();
-        t_block.emplace(std::move(block));
-        return OperatorStatus::HAS_OUTPUT;
-    }
-    else
-    {
-        current_input_stream.reset();
-        return awaitImpl();
     }
 }
 

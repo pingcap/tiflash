@@ -17,7 +17,6 @@
 #include <Common/config.h> // for ENABLE_NEXT_GEN_COLUMNAR
 #if ENABLE_NEXT_GEN_COLUMNAR
 #include <Common/Logger.h>
-#include <Common/Stopwatch.h>
 #include <Common/ThreadManager.h>
 #include <DataStreams/AddExtraTableIDColumnTransformAction.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
@@ -25,9 +24,10 @@
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Flash/Mpp/MPPTaskId.h>
+#include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
+#include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/SharedContexts/Disagg.h>
-#include <Operators/Operator.h>
 #include <Storages/IStorage.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #pragma GCC diagnostic push
@@ -36,18 +36,18 @@
 #include <pingcap/kv/RegionCache.h>
 #include <tipb/executor.pb.h>
 
-#include <atomic>
 #include <condition_variable>
 #include <deque>
 #include <exception>
 #include <mutex>
 #include <optional>
-#include <string_view>
 #pragma GCC diagnostic pop
 
 namespace DB
 {
 class DAGContext;
+class PipelineExecGroupBuilder;
+class PipelineExecutorContext;
 
 namespace DM
 {
@@ -74,6 +74,21 @@ struct RNColumnarReaderPlan
     std::vector<std::tuple<TableID, pingcap::coprocessor::KeyRanges>> physical_table_ranges;
 };
 
+/// NotifyFuture adapter so pipeline tasks can wait on reader materialize without blocking an IO thread.
+/// Delegates task registration and wakeup to an internal PipeConditionVariable.
+struct RNColumnarReaderNotifyFuture : public NotifyFuture
+{
+    void registerTask(TaskPtr && task) override
+    {
+        task->setNotifyType(NotifyType::WAIT_ON_TABLE_SCAN_READ);
+        pipe_cv.registerTask(std::move(task));
+    }
+
+    void notifyAll() { pipe_cv.notifyAll(); }
+
+    PipeConditionVariable pipe_cv;
+};
+
 struct RNColumnarReaderWork
 {
     explicit RNColumnarReaderWork(RNColumnarReaderPlan plan_)
@@ -84,7 +99,11 @@ struct RNColumnarReaderWork
 
     RNColumnarReaderPlan plan;
     std::mutex mutex;
+    // cv is kept for the stream path (RNColumnarInputStream) which still uses blocking wait.
     std::condition_variable cv;
+    // notify_future is kept for experimental one-shot/latch implementations; the current pipeline path
+    // does not wait on reader materialize with WAIT_FOR_NOTIFY.
+    RNColumnarReaderNotifyFuture notify_future;
     RNColumnarReaderMaterializeState state = RNColumnarReaderMaterializeState::NotStarted;
     std::optional<ColumnarReaderPtr> reader;
     std::exception_ptr exception;
@@ -129,7 +148,19 @@ public:
 
     ColumnarReaderPtr getOrCreateReader(const RNColumnarReaderWorkPtr & reader_work);
 
-    std::optional<RNColumnarReaderWorkPtr> tryAcquireReaderWork();
+    /// Start asynchronous materialize for a given work on a detached thread.
+    /// Atomically transitions NotStarted → Creating and kicks off columnar reader
+    /// creation with backoff. No-op if the work is already in a later state.
+    /// Used by the pipeline path so the IO thread is never blocked on materialize.
+    void startAsyncMaterializeReader(const RNColumnarReaderWorkPtr & reader_work);
+
+    /// Non-blocking read attempt for the pipeline path.
+    /// Returns the reader if state is Ready (and transitions to Consumed).
+    /// Returns std::nullopt if state is NotStarted or Creating.
+    /// Throws if state is Failed or Consumed (error state).
+    std::optional<ColumnarReaderPtr> tryGetReadyReader(const RNColumnarReaderWorkPtr & reader_work);
+
+    std::optional<RNColumnarReaderWorkPtr> tryAcquireReaderWork(bool enable_prefetch = true);
 
 #ifdef DBMS_PUBLIC_GTEST
     void replaceReaderWorkForTest(
@@ -158,6 +189,10 @@ public:
         size_t source_num,
         std::shared_ptr<RNColumnarReaderSharedContext> shared_reader_context);
 
+    /// Set by the pipeline path before any source ops are created so
+    /// async prefetch tasks can be submitted to the scheduler.
+    void setPipelineExecutorContext(PipelineExecutorContext * ctx) { exec_context = ctx; }
+
 private:
     void prefetchPendingWork();
 
@@ -170,6 +205,7 @@ private:
     size_t reader_count;
     size_t source_num;
     std::shared_ptr<RNColumnarReaderSharedContext> shared_reader_context;
+    PipelineExecutorContext * exec_context = nullptr;
     mutable std::mutex pending_reader_works_mutex;
     std::deque<RNColumnarReaderWorkPtr> pending_reader_works;
 };
@@ -179,16 +215,16 @@ class RNColumnarInputStream : public IProfilingBlockInputStream
     static constexpr auto NAME = "RNProxy";
 
 public:
-    ~RNColumnarInputStream();
+    ~RNColumnarInputStream() override;
 
-    String getName() const { return NAME; }
-    Block getHeader() const { return header; }
+    String getName() const override { return NAME; }
+    Block getHeader() const override { return header; }
     void setHeader(const Block & header) { this->header = header; }
-    Block read(FilterPtr & res_filter, bool return_filter);
+    Block read(FilterPtr & res_filter, bool return_filter) override;
 
 protected:
-    Block readImpl();
-    Block readImpl(FilterPtr & res_filter, bool return_filter);
+    Block readImpl() override;
+    Block readImpl(FilterPtr & res_filter, bool return_filter) override;
 
 public:
     struct Options
@@ -203,23 +239,15 @@ public:
         const String & executor_id;
     };
 
-    explicit RNColumnarInputStream(const Options & options)
-        : context(options.context)
-        , log(options.log)
-        , task(options.task)
-        , fixed_reader_work(options.reader_work)
-        , action(options.columns_to_read, options.extra_table_id_index)
-        , table_id(options.table_id)
-        , executor_id(options.executor_id)
-    {
-        // Keep header aligned with genNamesAndTypesForTableScan when TiDB requests _tidb_tid on partition scans.
-        setHeader(action.getHeader());
-    }
+    explicit RNColumnarInputStream(const Options & options);
 
     static BlockInputStreamPtr create(const Options & options)
     {
         return std::make_shared<RNColumnarInputStream>(options);
     }
+
+    /// Create an input stream that already owns a materialized reader, bypassing ensureReader().
+    static BlockInputStreamPtr createWithReader(const Options & options, ColumnarReaderPtr reader);
 
 private:
     bool ensureReader();
@@ -244,65 +272,18 @@ private:
     UInt64 total_bytes = 0;
 };
 
-class RNColumnarSourceOp : public SourceOp
-{
-    static constexpr auto NAME = "RNProxy";
+#ifdef DBMS_PUBLIC_GTEST
+void addColumnarNullSourceForTest(
+    PipelineExecutorContext & exec_context,
+    PipelineExecGroupBuilder & group_builder,
+    const TiDBTableScan & table_scan,
+    const LoggerPtr & log);
 
-public:
-    struct Options
-    {
-        PipelineExecutorContext & exec_context;
-        RNColumnarReadTaskPtr task;
-    };
+void addColumnarTableScanProfileInfosForTest(
+    const Context & context,
+    PipelineExecGroupBuilder & group_builder,
+    const TiDBTableScan & table_scan);
+#endif
 
-    explicit RNColumnarSourceOp(const Options & options)
-        : SourceOp(options.exec_context, options.task->getLog()->identifier())
-        , context(options.task->getContext())
-        , log(options.task->getLog())
-        , task(options.task)
-    {
-        setHeader(AddExtraTableIDColumnTransformAction::buildHeader(
-            options.task->getColumnsToRead(),
-            options.task->getExtraTableIDIndex()));
-    }
-
-    static SourceOpPtr create(const Options & options) { return std::make_unique<RNColumnarSourceOp>(options); }
-
-    String getName() const override { return NAME; }
-
-    IOProfileInfoPtr getIOProfileInfo() const override { return IOProfileInfo::createForLocal(profile_info_ptr); }
-
-protected:
-    void operateSuffixImpl() override;
-
-    void operatePrefixImpl() override;
-
-    OperatorStatus readImpl(Block & block) override;
-
-    OperatorStatus awaitImpl() override;
-
-    OperatorStatus executeIOImpl() override;
-
-private:
-    const Context & context;
-    const LoggerPtr log;
-    RNColumnarReadTaskPtr task;
-    UInt64 total_bytes = 0;
-    size_t total_rows = 0;
-    size_t total_streams = 0;
-
-    BlockInputStreamPtr current_input_stream;
-
-    // Temporarily store the block read from current_seg_task->stream and pass it to downstream operators in readImpl.
-    std::optional<Block> t_block = std::nullopt;
-
-    bool done = false;
-    // Count the time spent waiting for segment tasks to be ready.
-    //double duration_wait_ready_task_sec = 0;
-    Stopwatch total_cost_watch{CLOCK_MONOTONIC_COARSE};
-
-    // Count the time consumed by reading blocks in the stream of segment tasks.
-    double duration_read_sec = 0;
-};
 } // namespace DB
 #endif
