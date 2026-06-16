@@ -151,6 +151,11 @@ TEST_F(StorageDisaggregatedHelpersTest, MakeLocksForDisaggResolveRejectsSharedLo
     // fields as a real pessimistic lock.
     kvrpcpb::LockInfo shared_lock_wrapper;
     shared_lock_wrapper.set_key("row-key");
+    shared_lock_wrapper.set_lock_version(88);
+    shared_lock_wrapper.set_lock_ttl(3000);
+    shared_lock_wrapper.set_min_commit_ts(99);
+    shared_lock_wrapper.set_lock_for_update_ts(77);
+    shared_lock_wrapper.set_txn_size(2);
     shared_lock_wrapper.set_lock_type(kvrpcpb::Op::SharedLock);
 
     auto * holder = shared_lock_wrapper.add_shared_lock_infos();
@@ -169,7 +174,15 @@ TEST_F(StorageDisaggregatedHelpersTest, MakeLocksForDisaggResolveRejectsSharedLo
     catch (const DB::Exception & e)
     {
         ASSERT_EQ(e.code(), ErrorCodes::LOGICAL_ERROR);
-        ASSERT_NE(std::string(e.message()).find("Unexpected SharedLock"), std::string::npos);
+        const auto message = std::string(e.message());
+        ASSERT_NE(message.find("Unexpected SharedLock"), std::string::npos);
+        ASSERT_NE(message.find("lock_key=726F772D6B6579"), std::string::npos);
+        ASSERT_NE(message.find("lock_version=88"), std::string::npos);
+        ASSERT_NE(message.find("lock_ttl=3000"), std::string::npos);
+        ASSERT_NE(message.find("min_commit_ts=99"), std::string::npos);
+        ASSERT_NE(message.find("lock_for_update_ts=77"), std::string::npos);
+        ASSERT_NE(message.find("txn_size=2"), std::string::npos);
+        ASSERT_NE(message.find("shared_lock_count=1"), std::string::npos);
     }
 }
 
