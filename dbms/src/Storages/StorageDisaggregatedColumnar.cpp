@@ -841,7 +841,7 @@ ColumnarReaderPtr createColumnarReader(
         // Try to resolve locks.
         pingcap::kv::Backoffer bo(pingcap::kv::copNextMaxBackoff);
         std::vector<uint64_t> pushed;
-        std::vector<pingcap::kv::LockPtr> locks{std::make_shared<pingcap::kv::Lock>(lock_info)};
+        std::vector<pingcap::kv::LockPtr> locks{makeLockForDisaggResolve(lock_info)};
         auto guard = std::lock_guard(*shared_context.output_lock);
         auto before_expired = cluster->lock_resolver->resolveLocks(bo, shared_context.start_ts, locks, pushed);
         LOG_WARNING(log, "Finished resolve locks, before_expired={}", before_expired);

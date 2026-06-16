@@ -378,7 +378,7 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
             const auto & error = resp.error().error_locked();
 
             String error_msg = fmt::format(
-                "Received EstablishDisaggTask response with retryable error: {}, addr={} lock_info_size={}",
+                "Received EstablishDisaggTask response with locked error: {}, addr={} lock_info_size={}",
                 error.msg(),
                 batch_cop_task.store_addr,
                 error.locked().size());
@@ -389,9 +389,7 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
             // Try to resolve all locks.
             kv::Backoffer bo(kv::copNextMaxBackoff);
             std::vector<uint64_t> pushed;
-            std::vector<kv::LockPtr> locks{};
-            for (const auto & lock_info : error.locked())
-                locks.emplace_back(std::make_shared<kv::Lock>(lock_info));
+            auto locks = makeLocksForDisaggResolve(error.locked());
             auto before_expired = cluster->lock_resolver->resolveLocks(
                 bo,
                 sender_target_mpp_task_id.gather_id.query_id.start_ts,
