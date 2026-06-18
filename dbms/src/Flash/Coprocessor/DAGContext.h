@@ -32,11 +32,11 @@
 #include <Core/TaskOperatorSpillContexts.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/Coprocessor/ColumnarScanContext_fwd.h>
 #include <Flash/Coprocessor/DAGRequest.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
-#include <Flash/Coprocessor/ColumnarScanContext_fwd.h>
 #include <Flash/Executor/toRU.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/SubqueryForSet.h>
