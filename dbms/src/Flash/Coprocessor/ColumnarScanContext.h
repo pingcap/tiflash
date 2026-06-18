@@ -19,7 +19,6 @@
 #include <fmt/format.h>
 #include <tipb/executor.pb.h>
 
-#include <algorithm>
 #include <atomic>
 
 namespace DB
@@ -27,29 +26,29 @@ namespace DB
 class ColumnarScanContext
 {
 public:
-    std::atomic<uint64_t> regions{0};
-    std::atomic<uint64_t> read_tasks{0};
-    std::atomic<uint64_t> physical_tables{0};
-    std::atomic<uint64_t> columns{0};
-    std::atomic<uint64_t> user_read_bytes{0};
+    std::atomic<UInt64> regions{0};
+    std::atomic<UInt64> read_tasks{0};
+    std::atomic<UInt64> physical_tables{0};
+    std::atomic<UInt64> columns{0};
+    std::atomic<UInt64> user_read_bytes{0};
 
-    std::atomic<uint64_t> mvcc_input_rows{0};
-    std::atomic<uint64_t> mvcc_input_bytes{0};
-    std::atomic<uint64_t> mvcc_output_rows{0};
+    std::atomic<UInt64> mvcc_input_rows{0};
+    std::atomic<UInt64> mvcc_input_bytes{0};
+    std::atomic<UInt64> mvcc_output_rows{0};
 
-    std::atomic<uint64_t> total_read_block_ns{0};
-    std::atomic<uint64_t> total_serialize_block_ns{0};
-    std::atomic<uint64_t> total_init_reader_ns{0};
-    std::atomic<uint64_t> total_prefetch_ns{0};
-    std::atomic<uint64_t> total_deserialize_block_ns{0};
+    std::atomic<UInt64> total_read_block_ns{0};
+    std::atomic<UInt64> total_serialize_block_ns{0};
+    std::atomic<UInt64> total_init_reader_ns{0};
+    std::atomic<UInt64> total_prefetch_ns{0};
+    std::atomic<UInt64> total_deserialize_block_ns{0};
 
-    std::atomic<uint64_t> rough_check_total_packs{0};
-    std::atomic<uint64_t> rough_check_selected_packs{0};
-    std::atomic<uint64_t> rough_check_skipped_packs{0};
-    std::atomic<uint64_t> rough_check_unknown_packs{0};
+    std::atomic<UInt64> rough_check_total_packs{0};
+    std::atomic<UInt64> rough_check_selected_packs{0};
+    std::atomic<UInt64> rough_check_skipped_packs{0};
+    std::atomic<UInt64> rough_check_unknown_packs{0};
 
-    std::atomic<uint64_t> remote_segments{0};
-    std::atomic<uint64_t> total_segments{0};
+    std::atomic<UInt64> remote_segments{0};
+    std::atomic<UInt64> total_segments{0};
 
     void deserialize(const tipb::ColumnarScanContext & pb)
     {
@@ -103,8 +102,8 @@ public:
     {
         regions += other.regions.load();
         read_tasks += other.read_tasks.load();
-        physical_tables = std::max(physical_tables.load(), other.physical_tables.load());
-        columns = std::max(columns.load(), other.columns.load());
+        mergeMax(physical_tables, other.physical_tables.load());
+        mergeMax(columns, other.columns.load());
         user_read_bytes += other.user_read_bytes.load();
         mvcc_input_rows += other.mvcc_input_rows.load();
         mvcc_input_bytes += other.mvcc_input_bytes.load();
@@ -126,8 +125,8 @@ public:
     {
         regions += other.regions();
         read_tasks += other.read_tasks();
-        physical_tables = std::max(physical_tables.load(), other.physical_tables());
-        columns = std::max(columns.load(), other.columns());
+        mergeMax(physical_tables, other.physical_tables());
+        mergeMax(columns, other.columns());
         user_read_bytes += other.user_read_bytes();
         mvcc_input_rows += other.mvcc_input_rows();
         mvcc_input_bytes += other.mvcc_input_bytes();
@@ -194,6 +193,15 @@ public:
     }
 
     void addUserReadBytes(size_t bytes) { user_read_bytes += bytes; }
-    void addDeserializeBlockNs(uint64_t ns) { total_deserialize_block_ns += ns; }
+    void addDeserializeBlockNs(UInt64 ns) { total_deserialize_block_ns += ns; }
+
+private:
+    static void mergeMax(std::atomic<UInt64> & target, UInt64 value)
+    {
+        auto current = target.load();
+        while (current < value && !target.compare_exchange_weak(current, value))
+        {
+        }
+    }
 };
 } // namespace DB
