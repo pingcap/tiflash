@@ -5,6 +5,7 @@ resolver = "2"
 [workspace.dependencies]
 api_version = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine" }
 builtin_dfs = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine" }
+chrono = { version = "=0.4.34", default-features = true }
 cloud_encryption = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine" }
 keys = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine" }
 kvengine = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine" }
