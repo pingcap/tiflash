@@ -199,9 +199,7 @@ private:
     static void mergeMax(std::atomic<UInt64> & target, UInt64 value)
     {
         auto current = target.load();
-        while (current < value && !target.compare_exchange_weak(current, value))
-        {
-        }
+        while (current < value && !target.compare_exchange_weak(current, value)) {}
     }
 };
 } // namespace DB
