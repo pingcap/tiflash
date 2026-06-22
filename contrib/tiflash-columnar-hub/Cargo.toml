@@ -5,6 +5,7 @@ resolver = "2"
 [workspace.dependencies]
 api_version = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine" }
 builtin_dfs = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine" }
+chrono = { version = "=0.4.34", default-features = true }
 cloud_encryption = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine" }
 keys = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine" }
 kvengine = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine" }
@@ -12,6 +13,7 @@ kvenginepb = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", br
 pd_client = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine", default-features = false }
 security = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine", default-features = false }
 tikv_util = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine" }
+url = { version = "2", default-features = true }
 
 [patch.crates-io]
 raft = { git = "https://github.com/tikv/raft-rs", branch = "master" }
@@ -23,23 +25,22 @@ sysinfo = { git = "https://github.com/tikv/sysinfo", branch = "0.26-fix-cpu" }
 tokio-executor = { git = "https://github.com/tikv/tokio", branch = "tokio-timer-hotfix" }
 lindera = { git = "https://github.com/breezewish/lindera", branch = "v0.43.1-tokio-1.24" }
 tantivy = { git = "https://github.com/breezewish/tikv-tantivy.git", branch = "patch-0.22.1" }
+pprof = { git = "https://github.com/tikv/pprof-rs.git", rev = "01cff82dbe6fe110a707bf2b38d8ebb1d14a18f8" }
+kvproto = { git = "https://github.com/pingcap/kvproto.git" }
+tipb = { git = "https://github.com/pingcap/tipb.git" }
 
-[patch."https://github.com/pingcap/kvproto.git"]
-kvproto = { git = "ssh://git@github.com/pingcap/kvproto.git", rev = "02dc8a9dc01827367f9d91ff2d88c447d3a838ab" }
-
-[patch."https://github.com/pingcap/tipb.git"]
-tipb = { git = "ssh://git@github.com/pingcap/tipb.git", rev = "9fd33ded6f2c94633e601104cde26f2bdb5147d5" }
-
+# cloud-storage-engine now is private. We add it as a submodule to workaround
+# image release issue for building tiflash-columnar-hub in internal CD pipeline.
 [patch."https://github.com/tidbcloud/cloud-storage-engine.git"]
-#api_version = { path = "../../../cloud-storage-engine/components/api_version" }
-#builtin_dfs = { path = "../../../cloud-storage-engine/components/builtin_dfs" }
-#cloud_encryption = { path = "../../../cloud-storage-engine/components/cloud_encryption" }
-#keys = { path = "../../../cloud-storage-engine/components/keys" }
-#kvengine = { path = "../../../cloud-storage-engine/components/kvengine" }
-#kvenginepb = { path = "../../../cloud-storage-engine/components/kvenginepb" }
-#pd_client = { path = "../../../cloud-storage-engine/components/pd_client" }
-#security = { path = "../../../cloud-storage-engine/components/security" }
-#tikv_util = { path = "../../../cloud-storage-engine/components/tikv_util" }
+api_version = { path = "../cloud-storage-engine/components/api_version" }
+builtin_dfs = { path = "../cloud-storage-engine/components/builtin_dfs" }
+cloud_encryption = { path = "../cloud-storage-engine/components/cloud_encryption" }
+keys = { path = "../cloud-storage-engine/components/keys" }
+kvengine = { path = "../cloud-storage-engine/components/kvengine" }
+kvenginepb = { path = "../cloud-storage-engine/components/kvenginepb" }
+pd_client = { path = "../cloud-storage-engine/components/pd_client" }
+security = { path = "../cloud-storage-engine/components/security" }
+tikv_util = { path = "../cloud-storage-engine/components/tikv_util" }
 
 # cloud-storage-engine's generated workspace-hack currently forces
 # tikv-jemalloc-* into every consumer. That is fine for standalone

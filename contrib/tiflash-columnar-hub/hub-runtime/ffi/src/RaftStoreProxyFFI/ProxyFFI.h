@@ -211,6 +211,22 @@ struct RustStrWithViewVec {
   RawRustPtr inner;
 };
 
+struct ColumnarScanStats {
+  uint64_t mvcc_input_rows;
+  uint64_t mvcc_input_bytes;
+  uint64_t mvcc_output_rows;
+  uint64_t read_block_ns;
+  uint64_t serialize_ns;
+  uint64_t init_reader_ns;
+  uint64_t prefetch_ns;
+  uint64_t rough_check_total_packs;
+  uint64_t rough_check_selected_packs;
+  uint64_t rough_check_skipped_packs;
+  uint64_t rough_check_unknown_packs;
+  uint64_t remote_segments;
+  uint64_t total_segments;
+};
+
 struct SSTReaderInterfaces {
   SSTReaderPtr (*fn_get_sst_reader)(SSTView, RaftStoreProxyPtr);
   uint8_t (*fn_remained)(SSTReaderPtr, ColumnFamilyType);
@@ -228,6 +244,10 @@ struct SSTReaderInterfaces {
 struct CloudStorageEngineInterfaces {
   bool (*fn_get_keyspace_encryption)(RaftStoreProxyPtr, uint32_t);
   RawCppStringPtr (*fn_get_master_key)(RaftStoreProxyPtr);
+  RustStrWithViewVec (*fn_get_region_bucket_keys)(uint64_t, uint64_t,
+                                                  RaftStoreProxyPtr);
+  void (*fn_clear_shared_snap_access_by_start_ts)(uint64_t,
+                                                  RaftStoreProxyPtr);
   ColumnarReaderPtr (*fn_get_columnar_reader)(uint64_t, uint64_t, uint64_t,
                                               BaseBuffView, BaseBuffView,
                                               BaseBuffView, BaseBuffView,
@@ -238,6 +258,7 @@ struct CloudStorageEngineInterfaces {
   RustStrWithView (*fn_read_version)(ColumnarReaderPtr);
   RustStrWithView (*fn_read_column)(ColumnarReaderPtr, int64_t);
   int64_t (*fn_physical_table_id)(ColumnarReaderPtr);
+  ColumnarScanStats (*fn_columnar_scan_stats)(ColumnarReaderPtr);
 };
 
 enum class MsgPBType : uint32_t {

@@ -18,10 +18,10 @@ use kvengine::{CloudColumnarReaders, TableCtx};
 use protobuf::{parse_from_bytes, Message};
 
 use crate::{
-    build_from_string,
+    build_from_string, build_from_vec_string,
     interfaces_ffi::{
-        BaseBuffView, ColumnarReaderErrorType, ColumnarReaderPtr, RaftStoreProxyPtr, RawRustPtr,
-        RawVoidPtr, RustStrWithView,
+        BaseBuffView, ColumnarReaderErrorType, ColumnarReaderPtr, ColumnarScanStats,
+        RaftStoreProxyPtr, RawRustPtr, RawVoidPtr, RustStrWithView, RustStrWithViewVec,
     },
     RawRustPtrType,
 };
@@ -71,6 +71,51 @@ impl From<crate::Error> for ColumnarReaderPtr {
             },
         }
     }
+}
+
+impl From<kvengine::table::columnar::ColumnarRuntimeStats> for ColumnarScanStats {
+    fn from(stats: kvengine::table::columnar::ColumnarRuntimeStats) -> Self {
+        Self {
+            mvcc_input_rows: stats.mvcc_input_rows,
+            mvcc_input_bytes: stats.mvcc_input_bytes,
+            mvcc_output_rows: stats.mvcc_output_rows,
+            read_block_ns: stats.read_block_ns,
+            serialize_ns: stats.serialize_ns,
+            init_reader_ns: stats.init_reader_ns,
+            prefetch_ns: stats.prefetch_ns,
+            rough_check_total_packs: stats.rough_check_total_packs,
+            rough_check_selected_packs: stats.rough_check_selected_packs,
+            rough_check_skipped_packs: stats.rough_check_skipped_packs,
+            rough_check_unknown_packs: stats.rough_check_unknown_packs,
+            remote_segments: stats.remote_segments,
+            total_segments: stats.total_segments,
+        }
+    }
+}
+
+pub unsafe extern "C" fn ffi_get_region_bucket_keys(
+    region_id: u64,
+    region_ver: u64,
+    hub_ptr: RaftStoreProxyPtr,
+) -> RustStrWithViewVec {
+    let hub = hub_ptr.as_ref();
+    let bucket_keys = hub
+        .cloud_helper
+        .get_region_bucket_keys(region_id, region_ver);
+    if bucket_keys.is_empty() {
+        RustStrWithViewVec::default()
+    } else {
+        build_from_vec_string(bucket_keys)
+    }
+}
+
+pub unsafe extern "C" fn ffi_clear_shared_snap_access_by_start_ts(
+    start_ts: u64,
+    hub_ptr: RaftStoreProxyPtr,
+) {
+    let hub = hub_ptr.as_ref();
+    hub.cloud_helper
+        .clear_shared_snap_access_by_start_ts(start_ts);
 }
 
 pub unsafe extern "C" fn ffi_make_columnar_reader(
@@ -207,3 +252,8 @@ pub unsafe extern "C" fn ffi_read_column(
 pub unsafe extern "C" fn ffi_physical_table_id(mut reader: ColumnarReaderPtr) -> i64 {
     reader.as_mut().ffi_physical_table_id()
 }
+
+pub unsafe extern "C" fn ffi_columnar_scan_stats(
+    mut reader: ColumnarReaderPtr,
+) -> ColumnarScanStats
+{ reader.as_mut().runtime_stats().into() }

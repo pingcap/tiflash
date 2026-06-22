@@ -18,6 +18,7 @@
 #include <Storages/StorageDisaggregatedHelpers.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <kvproto/disaggregated.pb.h>
+#include <kvproto/kvrpcpb.pb.h>
 #include <pingcap/coprocessor/Client.h>
 #include <pingcap/kv/Backoff.h>
 
@@ -117,6 +118,72 @@ TEST_F(StorageDisaggregatedHelpersTest, DropRegionCacheWithDuplicateID)
     ASSERT_EQ(region_cache->dropped_id[1].id, 23917);
     ASSERT_EQ(region_cache->dropped_id[1].conf_ver, 9);
     ASSERT_EQ(region_cache->dropped_id[1].ver, 98);
+}
+
+TEST_F(StorageDisaggregatedHelpersTest, MakeLocksForDisaggResolveKeepsNormalLock)
+{
+    // Baseline for the shared-lock guard: ordinary lock errors are still
+    // converted to client-c locks and can continue through lock resolution.
+    kvrpcpb::LockInfo lock_info;
+    lock_info.set_key("row-key");
+    lock_info.set_primary_lock("primary-key");
+    lock_info.set_lock_version(42);
+    lock_info.set_lock_ttl(3000);
+    lock_info.set_lock_type(kvrpcpb::Op::Put);
+
+    google::protobuf::RepeatedPtrField<kvrpcpb::LockInfo> lock_infos;
+    lock_infos.Add()->CopyFrom(lock_info);
+
+    auto locks = makeLocksForDisaggResolve(lock_infos);
+    ASSERT_EQ(locks.size(), 1);
+    ASSERT_EQ(locks[0]->key, "row-key");
+    ASSERT_EQ(locks[0]->primary, "primary-key");
+    ASSERT_EQ(locks[0]->txn_id, 42);
+    ASSERT_EQ(locks[0]->ttl, 3000);
+    ASSERT_EQ(locks[0]->lock_type, kvrpcpb::Op::Put);
+}
+
+TEST_F(StorageDisaggregatedHelpersTest, MakeLocksForDisaggResolveRejectsSharedLockWrapper)
+{
+    // A SharedLock LockInfo is a wrapper around holder locks, not a resolvable
+    // lock for TiFlash reads. If one reaches this disaggregated resolver
+    // boundary, fail fast instead of interpreting the wrapper's invalid txn
+    // fields as a real pessimistic lock.
+    kvrpcpb::LockInfo shared_lock_wrapper;
+    shared_lock_wrapper.set_key("row-key");
+    shared_lock_wrapper.set_lock_version(88);
+    shared_lock_wrapper.set_lock_ttl(3000);
+    shared_lock_wrapper.set_min_commit_ts(99);
+    shared_lock_wrapper.set_lock_for_update_ts(77);
+    shared_lock_wrapper.set_txn_size(2);
+    shared_lock_wrapper.set_lock_type(kvrpcpb::Op::SharedLock);
+
+    auto * holder = shared_lock_wrapper.add_shared_lock_infos();
+    holder->set_key("row-key");
+    holder->set_primary_lock("holder-primary");
+    holder->set_lock_version(101);
+    holder->set_lock_ttl(5000);
+    holder->set_lock_type(kvrpcpb::Op::Lock);
+
+    try
+    {
+        auto lock = makeLockForDisaggResolve(shared_lock_wrapper);
+        (void)lock;
+        FAIL() << "SharedLock wrappers must not reach TiFlash disaggregated lock resolution";
+    }
+    catch (const DB::Exception & e)
+    {
+        ASSERT_EQ(e.code(), ErrorCodes::LOGICAL_ERROR);
+        const auto message = std::string(e.message());
+        ASSERT_NE(message.find("Unexpected SharedLock"), std::string::npos);
+        ASSERT_NE(message.find("lock_key=726F772D6B6579"), std::string::npos);
+        ASSERT_NE(message.find("lock_version=88"), std::string::npos);
+        ASSERT_NE(message.find("lock_ttl=3000"), std::string::npos);
+        ASSERT_NE(message.find("min_commit_ts=99"), std::string::npos);
+        ASSERT_NE(message.find("lock_for_update_ts=77"), std::string::npos);
+        ASSERT_NE(message.find("txn_size=2"), std::string::npos);
+        ASSERT_NE(message.find("shared_lock_count=1"), std::string::npos);
+    }
 }
 
 } // namespace DB::tests

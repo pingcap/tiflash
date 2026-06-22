@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Common/config.h> // For ENABLE_NEXT_GEN_COLUMNAR
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
@@ -153,11 +154,13 @@ private:
         PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         DAGExpressionAnalyzer & analyzer);
+#if ENABLE_NEXT_GEN_COLUMNAR
     void filterConditionsWithPushedDownFilters(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline);
     void filterConditionsWithPushedDownFilters(
         PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         DAGExpressionAnalyzer & analyzer);
+#endif
     ExpressionActionsPtr getExtraCastExpr(
         DAGExpressionAnalyzer & analyzer,
         bool include_pushed_down_filter_columns = false);

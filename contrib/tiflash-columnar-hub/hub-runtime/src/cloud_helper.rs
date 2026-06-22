@@ -16,7 +16,10 @@ use std::{
     fs,
     ops::Deref,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex, Weak,
+    },
     time::{Duration, UNIX_EPOCH},
 };
 
@@ -48,7 +51,7 @@ use kvproto::{
     coprocessor::DelegateResponse,
     metapb::{Peer, Store},
 };
-use pd_client::PdClient;
+use pd_client::{BucketStat, PdClient};
 use protobuf::Message;
 use quick_cache::{
     sync::{Cache, DefaultLifecycle},
@@ -57,7 +60,10 @@ use quick_cache::{
 use security::SecurityManager;
 use thiserror::Error;
 use tikv_util::{
-    config::AbsoluteOrPercentSize, memory::MemoryLimiter, sys::SysQuota, time::Instant,
+    config::AbsoluteOrPercentSize,
+    memory::{MemoryLimiter, MemoryQuota},
+    sys::SysQuota,
+    time::Instant,
 };
 use tipb::ColumnInfo;
 
@@ -115,10 +121,26 @@ pub struct CloudEngineBackends {
 }
 
 #[derive(Clone)]
+struct RegionBucketCacheEntry {
+    region_ver: u64,
+    keys: Vec<Vec<u8>>,
+}
+
+impl From<&BucketStat> for RegionBucketCacheEntry {
+    fn from(bucket_stat: &BucketStat) -> Self {
+        Self {
+            region_ver: bucket_stat.meta.region_epoch.get_version(),
+            keys: bucket_stat.meta.keys.clone(),
+        }
+    }
+}
+
+#[derive(Clone)]
 pub struct PdClientWithCache {
     pd_client: Arc<dyn PdClient>,
     store_cache: Arc<DashMap<u64, Store>>, // store_id -> Store
     region_cache: Arc<DashMap<u64, Peer>>, // region_id -> Peer
+    region_bucket_cache: Arc<DashMap<u64, RegionBucketCacheEntry>>, // region_id -> bucket keys
 }
 
 impl PdClientWithCache {
@@ -127,6 +149,7 @@ impl PdClientWithCache {
             pd_client,
             store_cache: Arc::new(DashMap::new()),
             region_cache: Arc::new(DashMap::new()),
+            region_bucket_cache: Arc::new(DashMap::new()),
         }
     }
 
@@ -171,10 +194,36 @@ impl PdClientWithCache {
 
     pub fn evict_region_cache(&self, region_id: u64) {
         self.region_cache.remove(&region_id);
+        self.region_bucket_cache.remove(&region_id);
     }
 
     pub fn get_security_mgr(&self) -> Arc<SecurityManager> {
         self.pd_client.get_security_mgr()
+    }
+
+    pub fn get_region_bucket_keys(&self, region_id: u64, region_ver: u64) -> Vec<Vec<u8>> {
+        if let Some(bucket_entry) = self.region_bucket_cache.get(&region_id) {
+            match bucket_entry.region_ver.cmp(&region_ver) {
+                std::cmp::Ordering::Equal => return bucket_entry.keys.clone(),
+                std::cmp::Ordering::Greater => return Vec::new(),
+                std::cmp::Ordering::Less => {}
+            }
+        }
+
+        let Ok(Some(bucket_stat)) =
+            futures::executor::block_on(self.pd_client.get_buckets_async(region_id))
+        else {
+            self.region_bucket_cache.remove(&region_id);
+            return Vec::new();
+        };
+        let bucket_entry = RegionBucketCacheEntry::from(&bucket_stat);
+        let bucket_keys = if bucket_entry.region_ver == region_ver {
+            bucket_entry.keys.clone()
+        } else {
+            Vec::new()
+        };
+        self.region_bucket_cache.insert(region_id, bucket_entry);
+        bucket_keys
     }
 }
 
@@ -191,6 +240,7 @@ pub struct CloudHelper {
     block_cache: BlockCache,
     snapshot_cache: SnapCache,
     snapshot_cache_capable_stores: Arc<DashMap<u64, ()>>,
+    shared_snap_access_cache: SharedSnapAccessCache,
     meta_file_cache: Arc<Cache<u64, Arc<dyn File>, MetaFileCacheWeighter>>,
     schema_files: Arc<DashMap<u64, SchemaFile>>,
     runtime: Arc<tokio::runtime::Runtime>,
@@ -238,6 +288,7 @@ impl CloudHelper {
         );
         let snapshot_cache = SnapCache::new(SNAPSHOT_CACHE_SIZE, SNAPSHOT_CACHE_CAP);
         let snapshot_cache_capable_stores = Arc::new(DashMap::new());
+        let shared_snap_access_cache = SharedSnapAccessCache::new();
 
         // Create a long-lived HTTP client for connection reuse
         let http_client = {
@@ -257,6 +308,7 @@ impl CloudHelper {
             block_cache,
             snapshot_cache,
             snapshot_cache_capable_stores,
+            shared_snap_access_cache,
             meta_file_cache,
             schema_files: Arc::new(DashMap::new()),
             runtime,
@@ -372,6 +424,7 @@ impl CloudHelper {
         let vector_index_cache = self.vector_index_cache.clone();
         let snap_cache = self.snapshot_cache.clone();
         let snap_cache_capable_stores = self.snapshot_cache_capable_stores.clone();
+        let shared_snap_access_cache = self.shared_snap_access_cache.clone();
         let meta_file_cache = self.meta_file_cache.clone();
         let columnar_file_cache = self.columnar_file_cache.clone();
         let fts_cache = self.fts_cache.clone();
@@ -380,7 +433,8 @@ impl CloudHelper {
         let tables_clone = tables.clone();
         let fts_query_info_clone = fts_query_info.clone();
         self.runtime.spawn(async move {
-            let snap = request_snapshot_from_leader(
+            let snap = get_or_request_shared_snapshot(
+                shared_snap_access_cache,
                 pd_client,
                 http_client,
                 dfs,
@@ -398,7 +452,7 @@ impl CloudHelper {
                 shard_id,
                 shard_ver,
                 start_ts,
-                &tables_clone,
+                tables_clone,
                 &master_key,
                 fts_query_info_clone,
             )
@@ -443,6 +497,24 @@ impl CloudHelper {
                 Err(Error::Other(e.to_string()))
             }
         }
+    }
+
+    pub fn get_region_bucket_keys(&self, region_id: u64, region_ver: u64) -> Vec<Vec<u8>> {
+        self.pd_client.get_region_bucket_keys(region_id, region_ver)
+    }
+
+    pub fn clear_shared_snap_access_by_start_ts(&self, start_ts: u64) {
+        if start_ts == 0 {
+            return;
+        }
+
+        let (cleared_cache_entries, in_flight_loader_entries) =
+            self.shared_snap_access_cache.remove_by_start_ts(start_ts);
+
+        info!(
+            "clear shared snapaccess by start_ts, start_ts: {}, cleared_cache_entries: {}, in_flight_loader_entries: {}",
+            start_ts, cleared_cache_entries, in_flight_loader_entries
+        );
     }
 }
 
@@ -646,7 +718,7 @@ async fn request_snapshot_from_leader(
                     continue;
                 }
                 if delegate_resp.get_region_error().has_epoch_not_match() {
-                    // Return epoch not match error to TiDB to retry.
+                    // Return epoch not match error to caller to retry new plan.
                     error!(
                         "{} request_snapshot_from_leader failed, epoch not match, {:?}",
                         tag,
@@ -698,6 +770,8 @@ async fn request_snapshot_from_leader(
                     read_columnar: true,
                     columnar_meta_cache: ColumnarMetaCache::default(),
                     encryption_key_manager: Arc::new(cloud_encryption::EncryptionKeyManager::new()),
+                    strict_file_memory_quota_wait_timeout: Duration::from_secs(30),
+                    strict_file_memory_quota: Arc::new(MemoryQuota::new(usize::MAX)),
                 };
                 let memory_limiter = MemoryLimiter::new(u64::MAX, None);
                 let (snap, _) = SnapAccess::construct_snapshot(
@@ -864,5 +938,325 @@ pub struct SnapWeighter;
 impl quick_cache::Weighter<SnapCacheKey, SnapCacheEntry> for SnapWeighter {
     fn weight(&self, _key: &SnapCacheKey, val: &SnapCacheEntry) -> u64 {
         val.snap.len() as u64
+    }
+}
+
+#[derive(Clone)]
+pub struct SharedSnapAccessCache {
+    core: Arc<SharedSnapAccessCacheCore>,
+}
+
+impl Deref for SharedSnapAccessCache {
+    type Target = SharedSnapAccessCacheCore;
+    fn deref(&self) -> &Self::Target {
+        &self.core
+    }
+}
+
+impl SharedSnapAccessCache {
+    pub fn new() -> Self {
+        Self {
+            core: Arc::new(SharedSnapAccessCacheCore::new()),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct SharedSnapAccessCacheCore {
+    groups: Arc<DashMap<u64, Arc<SharedSnapAccessGroup>>>,
+}
+
+impl SharedSnapAccessCacheCore {
+    pub fn new() -> Self {
+        Self {
+            groups: Arc::new(DashMap::new()),
+        }
+    }
+
+    pub fn get(&self, key: &SharedSnapAccessKey) -> Option<Weak<kvengine::SnapAccessCore>> {
+        let group = self.groups.get(&key.start_ts).map(|entry| entry.clone())?;
+        let _state_guard = group.state_lock.lock().unwrap();
+        if group.is_terminal() {
+            return None;
+        }
+        group.entries.get(key).map(|entry| entry.clone())
+    }
+
+    pub fn insert(&self, key: SharedSnapAccessKey, entry: Weak<kvengine::SnapAccessCore>) {
+        let Some(group) = self.groups.get(&key.start_ts).map(|entry| entry.clone()) else {
+            return;
+        };
+        let _state_guard = group.state_lock.lock().unwrap();
+        if group.is_terminal() {
+            return;
+        }
+        group.entries.insert(key, entry);
+    }
+
+    pub fn get_loader(&self, key: &SharedSnapAccessKey) -> Option<Arc<tokio::sync::Mutex<()>>> {
+        let group = match self.groups.entry(key.start_ts) {
+            dashmap::mapref::entry::Entry::Occupied(entry) => entry.get().clone(),
+            dashmap::mapref::entry::Entry::Vacant(entry) => {
+                entry.insert(Arc::new(SharedSnapAccessGroup::new())).clone()
+            }
+        };
+        let _state_guard = group.state_lock.lock().unwrap();
+        if group.is_terminal() {
+            return None;
+        }
+        let loader = group
+            .loaders
+            .entry(key.clone())
+            .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+            .clone();
+        Some(loader)
+    }
+
+    pub fn remove_loader(&self, key: &SharedSnapAccessKey) -> bool {
+        let Some(group) = self.groups.get(&key.start_ts).map(|entry| entry.clone()) else {
+            return false;
+        };
+        let _state_guard = group.state_lock.lock().unwrap();
+        let removed = group.loaders.remove(key).is_some();
+        drop(_state_guard);
+        self.try_remove_empty_group(key.start_ts, &group);
+        removed
+    }
+
+    pub fn remove_entry(&self, key: &SharedSnapAccessKey) -> bool {
+        let Some(group) = self.groups.get(&key.start_ts).map(|entry| entry.clone()) else {
+            return false;
+        };
+        let _state_guard = group.state_lock.lock().unwrap();
+        let removed = group.entries.remove(key).is_some();
+        drop(_state_guard);
+        self.try_remove_empty_group(key.start_ts, &group);
+        removed
+    }
+
+    pub fn remove_by_start_ts(&self, start_ts: u64) -> (usize, usize) {
+        let Some(group) = self.groups.get(&start_ts).map(|entry| entry.clone()) else {
+            return (0, 0);
+        };
+        let _state_guard = group.state_lock.lock().unwrap();
+        group.mark_terminal();
+        let removed_entries = group.entries.len();
+        let in_flight_loaders = group.loaders.len();
+        group.entries.clear();
+        drop(_state_guard);
+        self.try_remove_empty_group(start_ts, &group);
+        (removed_entries, in_flight_loaders)
+    }
+
+    fn try_remove_empty_group(&self, start_ts: u64, group: &Arc<SharedSnapAccessGroup>) {
+        let _state_guard = group.state_lock.lock().unwrap();
+        if group.entries.is_empty() && group.loaders.is_empty() {
+            if let Some(entry) = self.groups.get(&start_ts) {
+                if Arc::ptr_eq(entry.value(), group) {
+                    drop(entry);
+                    let _ = self.groups.remove(&start_ts);
+                }
+            }
+        }
+    }
+}
+
+pub struct SharedSnapAccessGroup {
+    entries: DashMap<SharedSnapAccessKey, Weak<kvengine::SnapAccessCore>>,
+    loaders: DashMap<SharedSnapAccessKey, Arc<tokio::sync::Mutex<()>>>,
+    terminal: AtomicBool,
+    state_lock: Mutex<()>,
+}
+
+impl SharedSnapAccessGroup {
+    pub fn new() -> Self {
+        Self {
+            entries: DashMap::new(),
+            loaders: DashMap::new(),
+            terminal: AtomicBool::new(false),
+            state_lock: Mutex::new(()),
+        }
+    }
+
+    fn is_terminal(&self) -> bool {
+        self.terminal.load(Ordering::Acquire)
+    }
+
+    fn mark_terminal(&self) {
+        self.terminal.store(true, Ordering::Release);
+    }
+}
+
+#[derive(Clone, Eq, PartialEq, Hash)]
+pub struct SharedSnapAccessKey {
+    pub shard_id: u64,
+    pub shard_ver: u64,
+    pub start_ts: u64,
+    pub start_table_id: i64,
+    pub end_table_id: i64,
+    pub prepare_all: bool,
+}
+
+impl SharedSnapAccessKey {
+    pub fn new(
+        shard_id: u64,
+        shard_ver: u64,
+        start_ts: u64,
+        start_table_id: i64,
+        end_table_id: i64,
+        prepare_all: bool,
+    ) -> Self {
+        Self {
+            shard_id,
+            shard_ver,
+            start_ts,
+            start_table_id,
+            end_table_id,
+            prepare_all,
+        }
+    }
+}
+
+fn upgrade_shared_snap_access(
+    cache: &SharedSnapAccessCache,
+    key: &SharedSnapAccessKey,
+) -> Option<SnapAccess> {
+    let core = match cache.get(key) {
+        Some(core) => match core.upgrade() {
+            Some(core) => core,
+            None => {
+                cache.remove_entry(key);
+                return None;
+            }
+        },
+        None => return None,
+    };
+    Some(SnapAccess { core })
+}
+
+async fn get_or_request_shared_snapshot(
+    shared_snap_access_cache: SharedSnapAccessCache,
+    pd_client: Arc<PdClientWithCache>,
+    http_client: security::HttpClient,
+    dfs: Arc<dyn dfs::Dfs>,
+    ia_ctx: IaCtx,
+    vector_index_cache: VectorIndexCache,
+    columnar_file_cache: ColumnarFileCache,
+    snap_cache: SnapCache,
+    snap_cache_capable_stores: Arc<DashMap<u64, ()>>,
+    meta_file_cache: Arc<Cache<u64, Arc<dyn File>, MetaFileCacheWeighter>>,
+    schema_files: Arc<DashMap<u64, SchemaFile>>,
+    txn_chunk_manager: TxnChunkManager,
+    block_cache: BlockCache,
+    fts_cache: FtsCache,
+    fts_delta_cache: FtsDeltaCache,
+    shard_id: u64,
+    shard_ver: u64,
+    start_ts: u64,
+    tables: Vec<TableCtx>,
+    master_key: &MasterKey,
+    fts_query_info: tipb::FtsQueryInfo,
+) -> Result<SnapAccess, Error> {
+    let start_table_id = tables[0].table_id;
+    let end_table_id = tables[tables.len() - 1].table_id;
+    let prepare_all = fts_query_info.get_query_type() != tipb::FtsQueryType::FtsQueryTypeInvalid;
+    let key = SharedSnapAccessKey::new(
+        shard_id,
+        shard_ver,
+        start_ts,
+        start_table_id,
+        end_table_id,
+        prepare_all,
+    );
+
+    if let Some(snap) = upgrade_shared_snap_access(&shared_snap_access_cache, &key) {
+        info!(
+            "reuse shared snapaccess directly, shard_id: {}, shard_ver: {}, start_ts: {}, start_table_id: {}, end_table_id: {}",
+            shard_id, shard_ver, start_ts, start_table_id, end_table_id
+        );
+        return Ok(snap);
+    }
+
+    let Some(loader) = shared_snap_access_cache.get_loader(&key) else {
+        return Err(format!("shared snapaccess evicted, start_ts: {}", start_ts).into());
+    };
+    let _guard = loader.lock().await;
+
+    if let Some(snap) = upgrade_shared_snap_access(&shared_snap_access_cache, &key) {
+        info!(
+            "reuse shared snapaccess after wait, shard_id: {}, shard_ver: {}, start_ts: {}, start_table_id: {}, end_table_id: {}",
+            shard_id, shard_ver, start_ts, start_table_id, end_table_id
+        );
+        return Ok(snap);
+    }
+
+    info!(
+        "load shared snapaccess, shard_id: {}, shard_ver: {}, start_ts: {}, start_table_id: {}, end_table_id: {}",
+        shard_id, shard_ver, start_ts, start_table_id, end_table_id
+    );
+    let snap = request_snapshot_from_leader(
+        pd_client,
+        http_client,
+        dfs,
+        ia_ctx,
+        vector_index_cache,
+        columnar_file_cache,
+        snap_cache,
+        snap_cache_capable_stores,
+        meta_file_cache,
+        schema_files,
+        txn_chunk_manager,
+        block_cache,
+        fts_cache,
+        fts_delta_cache,
+        shard_id,
+        shard_ver,
+        start_ts,
+        &tables,
+        master_key,
+        fts_query_info,
+    )
+    .await;
+
+    if let Ok(ref snap_access) = snap {
+        shared_snap_access_cache.insert(key.clone(), Arc::downgrade(&snap_access.core));
+    }
+    shared_snap_access_cache.remove_loader(&key);
+    snap
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shared_snap_access_eviction_is_sticky_for_in_flight_loader() {
+        let cache = SharedSnapAccessCache::new();
+        let key = SharedSnapAccessKey::new(1, 2, 3, 4, 5, false);
+
+        let loader = cache
+            .get_loader(&key)
+            .expect("active group should create loader");
+        cache.insert(key.clone(), Weak::new());
+        assert!(cache
+            .groups
+            .get(&key.start_ts)
+            .is_some_and(|group| group.entries.contains_key(&key)));
+
+        let (removed_entries, in_flight_loaders) = cache.remove_by_start_ts(key.start_ts);
+        assert_eq!(removed_entries, 1);
+        assert_eq!(in_flight_loaders, 1);
+        assert!(cache.get(&key).is_none());
+        assert!(cache.get_loader(&key).is_none());
+
+        cache.insert(key.clone(), Weak::new());
+        assert!(cache
+            .groups
+            .get(&key.start_ts)
+            .is_some_and(|group| group.entries.is_empty()));
+
+        drop(loader);
+        assert!(cache.remove_loader(&key));
+        assert!(cache.groups.get(&key.start_ts).is_none());
     }
 }

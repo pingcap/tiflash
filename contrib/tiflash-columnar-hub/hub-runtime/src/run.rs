@@ -55,8 +55,9 @@ use tikv_util::{
 use crate::{
     cloud_helper::{CloudEngineBackends, CloudHelper},
     columnar_impls::{
-        ffi_make_columnar_reader, ffi_physical_table_id, ffi_read_block, ffi_read_column,
-        ffi_read_handle, ffi_read_version,
+        ffi_clear_shared_snap_access_by_start_ts, ffi_columnar_scan_stats,
+        ffi_get_region_bucket_keys, ffi_make_columnar_reader, ffi_physical_table_id,
+        ffi_read_block, ffi_read_column, ffi_read_handle, ffi_read_version,
     },
     domain_impls::ffi_gc_rust_ptr,
     engine_store_helper::{
@@ -514,6 +515,13 @@ fn init_hub_logger(config: &ConfigFile) {
 
     if let Err(err) = init_result {
         panic!("failed to initialize TiFlash Columnar Hub logger: {}", err);
+    }
+}
+
+fn log_columnar_hub_info() {
+    info!("Welcome to TiFlash Columnar");
+    for line in crate::proxy_version_info().lines() {
+        info!("{}", line);
     }
 }
 
@@ -1140,12 +1148,15 @@ fn build_hub_ffi_helper(hub: &ColumnarHub) -> RaftStoreProxyFFIHelper {
         cloud_storage_engine_interfaces: CloudStorageEngineInterfaces {
             fn_get_keyspace_encryption: Some(ffi_get_keyspace_encryption),
             fn_get_master_key: Some(ffi_get_master_key),
+            fn_get_region_bucket_keys: Some(ffi_get_region_bucket_keys),
+            fn_clear_shared_snap_access_by_start_ts: Some(ffi_clear_shared_snap_access_by_start_ts),
             fn_get_columnar_reader: Some(ffi_make_columnar_reader),
             fn_read_block: Some(ffi_read_block),
             fn_read_handle: Some(ffi_read_handle),
             fn_read_version: Some(ffi_read_version),
             fn_read_column: Some(ffi_read_column),
             fn_physical_table_id: Some(ffi_physical_table_id),
+            fn_columnar_scan_stats: Some(ffi_columnar_scan_stats),
         },
         fn_server_info: Some(ffi_server_info),
         fn_make_read_index_task: None,
@@ -1178,6 +1189,7 @@ pub unsafe fn run_proxy(argc: c_int, argv: *const *const c_char, helper_ptr: *co
     let mut config = load_config(matches.value_of_os("config"));
     let init_only = overwrite_config_with_cmd_args(&mut config, &matches);
     init_hub_logger(&config);
+    log_columnar_hub_info();
     config.security.override_from_env();
     config.dfs.override_from_env();
     config.pd.validate().unwrap();

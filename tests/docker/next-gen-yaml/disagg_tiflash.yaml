@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-version: '2.3'
-
 services:
   tiflash-wn0:
     image: ${TIFLASH_IMAGE:-hub.pingcap.net/tiflash/tiflash-ci-base:rocky8-20241028}
@@ -26,7 +24,6 @@ services:
       - ./log/tiflash-wn0:/log
       - ..:/tests
       - ../docker/_env.sh:/tests/_env.sh
-      - ../.build/tiflash:/tiflash
     entrypoint: /tiflash/tiflash server --config-file /tiflash.toml
     depends_on:
       - "minio0"
@@ -39,6 +36,9 @@ services:
     #  - "127.0.0.1:20292:20292"  # tiflash-wn0 proxy status port
   tiflash-cn0:
     image: ${TIFLASH_IMAGE:-hub.pingcap.net/tiflash/tiflash-ci-base:rocky8-20241028}
+    # TiFlash and tiflash-proxy create many threads; the default container
+    # pids_limit (2048) is too low and causes fork/exec failures (errno 11).
+    pids_limit: -1
     security_opt:
       - seccomp:unconfined
     volumes:
@@ -48,7 +48,6 @@ services:
       - ./log/tiflash-cn0:/log
       - ..:/tests
       - ../docker/_env.sh:/tests/_env.sh
-      - ../.build/tiflash:/tiflash
     entrypoint: /tiflash/tiflash server --config-file /tiflash.toml
     depends_on:
       - "minio0"
