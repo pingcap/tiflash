@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #include <Common/TiFlashMetrics.h>
-#include <Storages/Columnar/ColumnarScanContext.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Statistics/ExecutionSummaryHelper.h>
+#include <Storages/Columnar/ColumnarScanContext.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
 namespace DB

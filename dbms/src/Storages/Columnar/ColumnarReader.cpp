@@ -1032,10 +1032,8 @@ std::vector<ColumnarReadTaskPoolPtr> ColumnarReadTaskPool::build(
     if (all_reader_plans.empty())
         return tasks;
     const size_t source_num = std::min(std::max<size_t>(1, num_streams), total_max_reader_num);
-    tasks.push_back(std::make_shared<ColumnarReadTaskPool>(
-        std::move(all_reader_plans),
-        source_num,
-        shared_reader_context));
+    tasks.push_back(
+        std::make_shared<ColumnarReadTaskPool>(std::move(all_reader_plans), source_num, shared_reader_context));
     return tasks;
 }
 
