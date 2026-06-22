@@ -66,11 +66,6 @@ namespace ErrorCodes
 extern const int COLUMNAR_SNAPSHOT_ERROR;
 } // namespace ErrorCodes
 
-size_t getColumnarSourceNum(size_t num_streams, size_t reader_count)
-{
-    return std::min(std::max<size_t>(1, num_streams), reader_count);
-}
-
 namespace
 {
 using ColumnarPhysicalTableRanges = std::vector<std::tuple<TableID, pingcap::coprocessor::KeyRanges>>;
@@ -637,14 +632,14 @@ ColumnarReaderPtr createColumnarReader(
     return columnar_reader;
 }
 
-// ColumnarReadTask
+// ColumnarReadTaskPool
 ColumnarReaderWork::~ColumnarReaderWork()
 {
     if (reader.has_value() && reader->inner.ptr != nullptr)
         RustGcHelper::instance().gcRustPtr(reader->inner.ptr, reader->inner.type);
 }
 
-ColumnarReadTask::ColumnarReadTask(
+ColumnarReadTaskPool::ColumnarReadTaskPool(
     std::vector<ColumnarReaderPlan> reader_plans,
     size_t source_num_,
     std::shared_ptr<ColumnarReaderSharedContext> shared_reader_context_)
@@ -658,47 +653,7 @@ ColumnarReadTask::ColumnarReadTask(
         pending_reader_works.push_back(std::make_shared<ColumnarReaderWork>(std::move(reader_plan)));
 }
 
-size_t ColumnarReadTask::getReaderCount() const
-{
-    return reader_count;
-}
-
-size_t ColumnarReadTask::getSourceNum() const
-{
-    return source_num;
-}
-
-const Context & ColumnarReadTask::getContext() const
-{
-    return *shared_reader_context->context;
-}
-
-const LoggerPtr & ColumnarReadTask::getLog() const
-{
-    return shared_reader_context->log;
-}
-
-const DM::ColumnDefines & ColumnarReadTask::getColumnsToRead() const
-{
-    return *shared_reader_context->column_defines;
-}
-
-int ColumnarReadTask::getExtraTableIDIndex() const
-{
-    return shared_reader_context->extra_table_id_index;
-}
-
-TableID ColumnarReadTask::getLogicalTableID() const
-{
-    return shared_reader_context->logical_table_id;
-}
-
-const String & ColumnarReadTask::getExecutorID() const
-{
-    return shared_reader_context->executor_id;
-}
-
-void ColumnarReadTask::replaceReaderWork(
+void ColumnarReadTaskPool::replaceReaderWork(
     const ColumnarReaderWorkPtr & reader_work,
     std::vector<ColumnarReaderPlan> replanned_reader_plans)
 {
@@ -717,7 +672,7 @@ void ColumnarReadTask::replaceReaderWork(
 }
 
 #ifdef DBMS_PUBLIC_GTEST
-void ColumnarReadTask::replaceReaderWorkForTest(
+void ColumnarReadTaskPool::replaceReaderWorkForTest(
     const ColumnarReaderWorkPtr & reader_work,
     std::vector<ColumnarReaderPlan> replanned_reader_plans)
 {
@@ -725,7 +680,7 @@ void ColumnarReadTask::replaceReaderWorkForTest(
 }
 #endif
 
-ColumnarReaderPtr ColumnarReadTask::createColumnarReaderWithBackoff(const ColumnarReaderWorkPtr & reader_work)
+ColumnarReaderPtr ColumnarReadTaskPool::createColumnarReaderWithBackoff(const ColumnarReaderWorkPtr & reader_work)
 {
     RUNTIME_CHECK(reader_work != nullptr);
     pingcap::kv::Backoffer bo(pingcap::kv::copNextMaxBackoff);
@@ -784,7 +739,7 @@ ColumnarReaderPtr ColumnarReadTask::createColumnarReaderWithBackoff(const Column
     }
 }
 
-ColumnarReaderPtr ColumnarReadTask::getOrCreateReader(const ColumnarReaderWorkPtr & reader_work)
+ColumnarReaderPtr ColumnarReadTaskPool::getOrCreateReader(const ColumnarReaderWorkPtr & reader_work)
 {
     RUNTIME_CHECK(reader_work != nullptr);
 
@@ -850,7 +805,7 @@ ColumnarReaderPtr ColumnarReadTask::getOrCreateReader(const ColumnarReaderWorkPt
     }
 }
 
-void ColumnarReadTask::prefetchPendingWork()
+void ColumnarReadTaskPool::prefetchPendingWork()
 {
     ColumnarReaderWorkPtr reader_work;
     {
@@ -863,7 +818,7 @@ void ColumnarReadTask::prefetchPendingWork()
     prefetchReaderWork(reader_work);
 }
 
-void ColumnarReadTask::prefetchReaderWork(const ColumnarReaderWorkPtr & reader_work)
+void ColumnarReadTaskPool::prefetchReaderWork(const ColumnarReaderWorkPtr & reader_work)
 {
     RUNTIME_CHECK(reader_work != nullptr);
 
@@ -903,7 +858,7 @@ void ColumnarReadTask::prefetchReaderWork(const ColumnarReaderWorkPtr & reader_w
     });
 }
 
-std::optional<ColumnarReaderWorkPtr> ColumnarReadTask::tryAcquireReaderWork()
+std::optional<ColumnarReaderWorkPtr> ColumnarReadTaskPool::tryAcquireReaderWork()
 {
     ColumnarReaderWorkPtr reader_work;
     {
@@ -917,7 +872,7 @@ std::optional<ColumnarReaderWorkPtr> ColumnarReadTask::tryAcquireReaderWork()
     return reader_work;
 }
 
-BlockInputStreamPtr ColumnarReadTask::createInputStream(const ColumnarReaderWorkPtr & reader_work)
+BlockInputStreamPtr ColumnarReadTaskPool::createInputStream(const ColumnarReaderWorkPtr & reader_work)
 {
     RUNTIME_CHECK(reader_work != nullptr);
     return ColumnarInputStream::create({
@@ -932,7 +887,7 @@ BlockInputStreamPtr ColumnarReadTask::createInputStream(const ColumnarReaderWork
     });
 }
 
-BlockInputStreamPtr ColumnarReadTask::createSharedInputStream()
+BlockInputStreamPtr ColumnarReadTaskPool::createSharedInputStream()
 {
     return ColumnarInputStream::create({
         .context = getContext(),
@@ -946,7 +901,7 @@ BlockInputStreamPtr ColumnarReadTask::createSharedInputStream()
     });
 }
 
-std::vector<ColumnarReadTaskPtr> ColumnarReadTask::buildColumnarReadTaskWithBackoff(
+std::vector<ColumnarReadTaskPoolPtr> ColumnarReadTaskPool::buildWithBackoff(
     const LoggerPtr & log,
     const Context & context,
     UInt64 start_ts,
@@ -955,13 +910,13 @@ std::vector<ColumnarReadTaskPtr> ColumnarReadTask::buildColumnarReadTaskWithBack
     const std::vector<RemoteTableRange> & remote_table_ranges,
     unsigned num_streams)
 {
-    std::vector<ColumnarReadTaskPtr> tasks;
+    std::vector<ColumnarReadTaskPoolPtr> tasks;
     pingcap::kv::Backoffer bo(pingcap::kv::copNextMaxBackoff);
     while (true)
     {
         try
         {
-            tasks = ColumnarReadTask::buildColumnarReadTask(
+            tasks = ColumnarReadTaskPool::build(
                 log,
                 context,
                 start_ts,
@@ -973,21 +928,21 @@ std::vector<ColumnarReadTaskPtr> ColumnarReadTask::buildColumnarReadTaskWithBack
         }
         catch (RegionException & e)
         {
-            LOG_WARNING(log, "buildColumnarReadTask failed, backoff and retry, {}", e.message());
+            LOG_WARNING(log, "build failed, backoff and retry, {}", e.message());
             bo.backoff(pingcap::kv::boRegionMiss, pingcap::Exception(e.message(), e.code()));
         }
         catch (Exception & e)
         {
             if (e.code() != ErrorCodes::COLUMNAR_SNAPSHOT_ERROR)
                 throw;
-            LOG_WARNING(log, "buildColumnarReadTask failed, backoff and retry, {}", e.message());
+            LOG_WARNING(log, "build failed, backoff and retry, {}", e.message());
             bo.backoff(pingcap::kv::boRegionMiss, pingcap::Exception(e.message(), e.code()));
         }
     }
     return tasks;
 }
 
-std::vector<ColumnarReadTaskPtr> ColumnarReadTask::buildColumnarReadTask(
+std::vector<ColumnarReadTaskPoolPtr> ColumnarReadTaskPool::build(
     const LoggerPtr & log,
     const Context & context,
     UInt64 start_ts,
@@ -1003,7 +958,7 @@ std::vector<ColumnarReadTaskPtr> ColumnarReadTask::buildColumnarReadTask(
     auto shared_reader_context
         = buildColumnarReaderSharedContext(log, context, start_ts, table_scan, filter_conditions);
 
-    std::vector<ColumnarReadTaskPtr> tasks;
+    std::vector<ColumnarReadTaskPoolPtr> tasks;
     ColumnarPhysicalTableRanges physical_table_ranges;
     physical_table_ranges.reserve(remote_table_ranges.size());
     for (const auto & remote_table_range : remote_table_ranges)
@@ -1076,14 +1031,15 @@ std::vector<ColumnarReadTaskPtr> ColumnarReadTask::buildColumnarReadTask(
 
     if (all_reader_plans.empty())
         return tasks;
-    tasks.push_back(std::make_shared<ColumnarReadTask>(
+    const size_t source_num = std::min(std::max<size_t>(1, num_streams), total_max_reader_num);
+    tasks.push_back(std::make_shared<ColumnarReadTaskPool>(
         std::move(all_reader_plans),
-        getColumnarSourceNum(num_streams, total_max_reader_num),
+        source_num,
         shared_reader_context));
     return tasks;
 }
 
-BlockInputStreams ColumnarReadTask::getInputStreams()
+BlockInputStreams ColumnarReadTaskPool::getInputStreams()
 {
     BlockInputStreams streams;
     streams.reserve(source_num);

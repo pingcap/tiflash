@@ -46,7 +46,7 @@ public:
     {
         const Context & context;
         LoggerPtr log;
-        ColumnarReadTaskPtr task;
+        ColumnarReadTaskPoolPtr task;
         ColumnarReaderWorkPtr reader_work;
         const DM::ColumnDefines & columns_to_read;
         int extra_table_id_index;
@@ -79,7 +79,7 @@ private:
 
     const Context & context;
     const LoggerPtr log;
-    ColumnarReadTaskPtr task;
+    ColumnarReadTaskPoolPtr task;
     const ColumnarReaderWorkPtr fixed_reader_work;
     ColumnarReaderWorkPtr current_reader_work;
     std::optional<ColumnarReaderPtr> reader;

@@ -629,7 +629,7 @@ BlockInputStreams StorageDisaggregated::readThroughColumnar(const Context & cont
     const UInt64 start_ts = sender_target_mpp_task_id.gather_id.query_id.start_ts;
     auto [remote_table_ranges, region_num] = buildRemoteTableRanges();
     const auto generated_column_infos = genGeneratedColumnInfosForDisaggregatedRead(table_scan);
-    auto read_columnar_tasks = ColumnarReadTask::buildColumnarReadTaskWithBackoff(
+    auto columnar_task_pools = ColumnarReadTaskPool::buildWithBackoff(
         log,
         context,
         start_ts,
@@ -637,9 +637,9 @@ BlockInputStreams StorageDisaggregated::readThroughColumnar(const Context & cont
         filter_conditions,
         remote_table_ranges,
         num_streams);
-    for (auto & task : read_columnar_tasks)
+    for (auto & task_pool : columnar_task_pools)
     {
-        auto streams = task->getInputStreams();
+        auto streams = task_pool->getInputStreams();
         pipeline.streams.insert(pipeline.streams.end(), streams.begin(), streams.end());
     }
     // Avoid reading generated columns from columnar, generate placeholders locally.
@@ -671,7 +671,7 @@ void StorageDisaggregated::readThroughColumnar(
 {
     const UInt64 start_ts = sender_target_mpp_task_id.gather_id.query_id.start_ts;
     auto [remote_table_ranges, region_num] = buildRemoteTableRanges();
-    auto read_columnar_tasks = ColumnarReadTask::buildColumnarReadTaskWithBackoff(
+    auto columnar_task_pools = ColumnarReadTaskPool::buildWithBackoff(
         log,
         context,
         start_ts,
@@ -680,9 +680,9 @@ void StorageDisaggregated::readThroughColumnar(
         remote_table_ranges,
         num_streams);
     const auto generated_column_infos = genGeneratedColumnInfosForDisaggregatedRead(table_scan);
-    if (!read_columnar_tasks.empty())
+    if (!columnar_task_pools.empty())
     {
-        auto & task_pool = read_columnar_tasks.front();
+        auto & task_pool = columnar_task_pools.front();
         const size_t source_num = task_pool->getSourceNum();
         LOG_INFO(
             log,

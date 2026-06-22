@@ -52,6 +52,10 @@ enum class ColumnarReaderMaterializeState
     Consumed,
 };
 
+/// Immutable context shared by all ColumnarReaderWork items within a
+/// ColumnarReadTaskPool. Contains the serialized table scan request,
+/// filter conditions, table info, and the FFI proxy handle needed to
+/// materialize ColumnarReader instances via the Rust columnar engine.
 struct ColumnarReaderSharedContext
 {
     using ClearSharedSnapAccessByStartTsFn = void (*)(uint64_t, RaftStoreProxyPtr);
@@ -148,6 +152,10 @@ struct ColumnarReaderPlan
     std::vector<std::tuple<TableID, pingcap::coprocessor::KeyRanges>> physical_table_ranges;
 };
 
+/// A unit of work representing one region (or bucket) to be read via the
+/// columnar FFI. Each work item owns a ColumnarReaderPlan and drives a
+/// state machine (NotStarted → Creating → Ready/Failed → Consumed) to
+/// manage the lifecycle of the underlying Rust ColumnarReader.
 struct ColumnarReaderWork
 {
     explicit ColumnarReaderWork(ColumnarReaderPlan plan_)
@@ -166,16 +174,30 @@ struct ColumnarReaderWork
 
 using ColumnarReaderWorkPtr = std::shared_ptr<ColumnarReaderWork>;
 
-class ColumnarReadTask;
-using ColumnarReadTaskPtr = std::shared_ptr<ColumnarReadTask>;
-class ColumnarReadTask
+class ColumnarReadTaskPool;
+using ColumnarReadTaskPoolPtr = std::shared_ptr<ColumnarReadTaskPool>;
+
+/// A pool of ColumnarReaderWork items that manages concurrent consumption by
+/// multiple ColumnarInputStream / ColumnarSourceOp instances.
+///
+/// Each work item corresponds to a region (or bucket) to be read via the
+/// columnar FFI. The pool supports:
+///   - Work-stealing: consumers call tryAcquireReaderWork() to claim work.
+///   - Prefetching: the next pending work is materialized asynchronously
+///     while consumers process their current work.
+///   - Backoff/retry: region epoch mismatches and transient errors are
+///     retried with exponential backoff, and stale region caches are dropped.
+///   - Bucket-level parallelism: when num_streams exceeds the region count
+///     and ordering is not required, key ranges are further split by bucket
+///     boundaries obtained from the columnar proxy.
+class ColumnarReadTaskPool
     : public boost::noncopyable
-    , public std::enable_shared_from_this<ColumnarReadTask>
+    , public std::enable_shared_from_this<ColumnarReadTaskPool>
 {
 public:
     using RemoteTableRange = std::pair<TableID, pingcap::coprocessor::KeyRanges>;
 
-    static std::vector<ColumnarReadTaskPtr> buildColumnarReadTaskWithBackoff(
+    static std::vector<ColumnarReadTaskPoolPtr> buildWithBackoff(
         const LoggerPtr & log,
         const Context & context,
         UInt64 start_ts,
@@ -184,7 +206,7 @@ public:
         const std::vector<RemoteTableRange> & remote_table_ranges,
         unsigned num_streams);
 
-    static std::vector<ColumnarReadTaskPtr> buildColumnarReadTask(
+    static std::vector<ColumnarReadTaskPoolPtr> build(
         const LoggerPtr & log,
         const Context & context,
         UInt64 start_ts,
@@ -211,23 +233,23 @@ public:
         std::vector<ColumnarReaderPlan> replanned_reader_plans);
 #endif
 
-    size_t getReaderCount() const;
+    size_t getReaderCount() const { return reader_count; }
 
-    size_t getSourceNum() const;
+    size_t getSourceNum() const { return source_num; }
 
-    const Context & getContext() const;
+    const Context & getContext() const { return *shared_reader_context->context; }
 
-    const LoggerPtr & getLog() const;
+    const LoggerPtr & getLog() const { return shared_reader_context->log; }
 
-    const DM::ColumnDefines & getColumnsToRead() const;
+    const DM::ColumnDefines & getColumnsToRead() const { return *shared_reader_context->column_defines; }
 
-    int getExtraTableIDIndex() const;
+    int getExtraTableIDIndex() const { return shared_reader_context->extra_table_id_index; }
 
-    TableID getLogicalTableID() const;
+    TableID getLogicalTableID() const { return shared_reader_context->logical_table_id; }
 
-    const String & getExecutorID() const;
+    const String & getExecutorID() const { return shared_reader_context->executor_id; }
 
-    ColumnarReadTask(
+    ColumnarReadTaskPool(
         std::vector<ColumnarReaderPlan> reader_plans,
         size_t source_num,
         std::shared_ptr<ColumnarReaderSharedContext> shared_reader_context);
@@ -241,10 +263,20 @@ private:
         const ColumnarReaderWorkPtr & reader_work,
         std::vector<ColumnarReaderPlan> replanned_reader_plans);
 
+    // Total number of ColumnarReaderWork items in this pool.
     size_t reader_count;
+
+    // Number of concurrent consumers (ColumnarInputStream / ColumnarSourceOp)
+    // that will pull work from this pool.
     size_t source_num;
+
     std::shared_ptr<ColumnarReaderSharedContext> shared_reader_context;
+
     mutable std::mutex pending_reader_works_mutex;
+
+    // Queue of work items not yet claimed by any consumer.
+    // Consumers call tryAcquireReaderWork() to pop from the front;
+    // failed/replanned works are pushed back to the front for retry.
     std::deque<ColumnarReaderWorkPtr> pending_reader_works;
 };
 
@@ -252,8 +284,6 @@ private:
 ColumnarReaderPtr createColumnarReader(
     const ColumnarReaderSharedContext & shared_context,
     const ColumnarReaderPlan & reader_plan);
-
-size_t getColumnarSourceNum(size_t num_streams, size_t reader_count);
 
 } // namespace DB
 #endif

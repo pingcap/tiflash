@@ -35,7 +35,7 @@ public:
     struct Options
     {
         PipelineExecutorContext & exec_context;
-        ColumnarReadTaskPtr task;
+        ColumnarReadTaskPoolPtr task;
     };
 
     explicit ColumnarSourceOp(const Options & options)
@@ -69,7 +69,7 @@ protected:
 private:
     const Context & context;
     const LoggerPtr log;
-    ColumnarReadTaskPtr task;
+    ColumnarReadTaskPoolPtr task;
     UInt64 total_bytes = 0;
     size_t total_rows = 0;
     size_t total_streams = 0;
