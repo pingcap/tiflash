@@ -37,9 +37,9 @@
 #include <IO/IOThreadPools.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
+#include <Storages/Columnar/ColumnarInputStream.h>
 #include <Storages/Columnar/ColumnarReader.h>
 #include <Storages/Columnar/ColumnarScanContext.h>
-#include <Storages/Columnar/ColumnarStreams.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/TMTContext.h>
@@ -57,7 +57,6 @@
 #include <tipb/select.pb.h>
 
 #include <ext/scope_guard.h>
-#include <limits>
 #include <unordered_map>
 
 namespace DB
