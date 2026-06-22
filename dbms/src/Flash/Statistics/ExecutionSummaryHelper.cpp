@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/TiFlashMetrics.h>
-#include <Flash/Coprocessor/ColumnarScanContext.h>
+#include <Storages/Columnar/ColumnarScanContext.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Statistics/ExecutionSummaryHelper.h>
 #include <Storages/DeltaMerge/ScanContext.h>

@@ -14,7 +14,7 @@
 
 #include <Common/FmtUtils.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
-#include <Flash/Coprocessor/ColumnarScanContext.h>
+#include <Storages/Columnar/ColumnarScanContext.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/RemoteExecutionSummary.h>
 #include <Flash/Statistics/CommonExecutorImpl.h>

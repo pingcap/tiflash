@@ -14,7 +14,7 @@
 
 #include <Common/formatReadable.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
-#include <Flash/Coprocessor/ColumnarScanContext.h>
+#include <Storages/Columnar/ColumnarScanContext.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Flash/Statistics/TableScanImpl.h>
 #include <Interpreters/Join.h>
