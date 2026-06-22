@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/config.h> // for ENABLE_NEXT_GEN_COLUMNAR
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <common/types.h>
 #include <fmt/format.h>
@@ -144,6 +145,7 @@ public:
         total_segments += other.total_segments();
     }
 
+#if ENABLE_NEXT_GEN_COLUMNAR
     void merge(const ColumnarScanStats & other)
     {
         mvcc_input_rows += other.mvcc_input_rows;
@@ -160,6 +162,7 @@ public:
         remote_segments += other.remote_segments;
         total_segments += other.total_segments;
     }
+#endif
 
     String toJson() const
     {
