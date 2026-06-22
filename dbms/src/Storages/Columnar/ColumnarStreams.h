@@ -27,12 +27,12 @@
 namespace DB
 {
 
-class RNColumnarInputStream : public IProfilingBlockInputStream
+class ColumnarInputStream : public IProfilingBlockInputStream
 {
     static constexpr auto NAME = "RNProxy";
 
 public:
-    ~RNColumnarInputStream() override;
+    ~ColumnarInputStream() override;
 
     String getName() const override { return NAME; }
     Block getHeader() const override { return header; }
@@ -48,15 +48,15 @@ public:
     {
         const Context & context;
         LoggerPtr log;
-        RNColumnarReadTaskPtr task;
-        RNColumnarReaderWorkPtr reader_work;
+        ColumnarReadTaskPtr task;
+        ColumnarReaderWorkPtr reader_work;
         const DM::ColumnDefines & columns_to_read;
         int extra_table_id_index;
         TableID table_id;
         const String & executor_id;
     };
 
-    explicit RNColumnarInputStream(const Options & options)
+    explicit ColumnarInputStream(const Options & options)
         : context(options.context)
         , log(options.log)
         , task(options.task)
@@ -71,7 +71,7 @@ public:
 
     static BlockInputStreamPtr create(const Options & options)
     {
-        return std::make_shared<RNColumnarInputStream>(options);
+        return std::make_shared<ColumnarInputStream>(options);
     }
 
 private:
@@ -81,9 +81,9 @@ private:
 
     const Context & context;
     const LoggerPtr log;
-    RNColumnarReadTaskPtr task;
-    const RNColumnarReaderWorkPtr fixed_reader_work;
-    RNColumnarReaderWorkPtr current_reader_work;
+    ColumnarReadTaskPtr task;
+    const ColumnarReaderWorkPtr fixed_reader_work;
+    ColumnarReaderWorkPtr current_reader_work;
     std::optional<ColumnarReaderPtr> reader;
     AddExtraTableIDColumnTransformAction action;
     TableID table_id;
@@ -98,7 +98,7 @@ private:
     UInt64 total_bytes = 0;
 };
 
-class RNColumnarSourceOp : public SourceOp
+class ColumnarSourceOp : public SourceOp
 {
     static constexpr auto NAME = "RNProxy";
 
@@ -106,10 +106,10 @@ public:
     struct Options
     {
         PipelineExecutorContext & exec_context;
-        RNColumnarReadTaskPtr task;
+        ColumnarReadTaskPtr task;
     };
 
-    explicit RNColumnarSourceOp(const Options & options)
+    explicit ColumnarSourceOp(const Options & options)
         : SourceOp(options.exec_context, options.task->getLog()->identifier())
         , context(options.task->getContext())
         , log(options.task->getLog())
@@ -120,7 +120,7 @@ public:
             options.task->getExtraTableIDIndex()));
     }
 
-    static SourceOpPtr create(const Options & options) { return std::make_unique<RNColumnarSourceOp>(options); }
+    static SourceOpPtr create(const Options & options) { return std::make_unique<ColumnarSourceOp>(options); }
 
     String getName() const override { return NAME; }
 
@@ -140,7 +140,7 @@ protected:
 private:
     const Context & context;
     const LoggerPtr log;
-    RNColumnarReadTaskPtr task;
+    ColumnarReadTaskPtr task;
     UInt64 total_bytes = 0;
     size_t total_rows = 0;
     size_t total_streams = 0;

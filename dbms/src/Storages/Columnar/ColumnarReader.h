@@ -43,7 +43,7 @@ namespace DB
 class DAGContext;
 class TiDBTableScan;
 
-enum class RNColumnarReaderMaterializeState
+enum class ColumnarReaderMaterializeState
 {
     NotStarted,
     Creating,
@@ -52,7 +52,7 @@ enum class RNColumnarReaderMaterializeState
     Consumed,
 };
 
-struct RNColumnarReaderSharedContext
+struct ColumnarReaderSharedContext
 {
     using ClearSharedSnapAccessByStartTsFn = void (*)(uint64_t, RaftStoreProxyPtr);
 
@@ -117,7 +117,7 @@ struct RNColumnarReaderSharedContext
     std::shared_ptr<std::mutex> output_lock = std::make_shared<std::mutex>();
     bool registered_for_start_ts = false;
 
-    ~RNColumnarReaderSharedContext() noexcept
+    ~ColumnarReaderSharedContext() noexcept
     {
         if (!registered_for_start_ts)
             return;
@@ -140,7 +140,7 @@ struct RNColumnarReaderSharedContext
     }
 };
 
-struct RNColumnarReaderPlan
+struct ColumnarReaderPlan
 {
     RegionID region_id;
     RegionVersion region_ver;
@@ -148,34 +148,34 @@ struct RNColumnarReaderPlan
     std::vector<std::tuple<TableID, pingcap::coprocessor::KeyRanges>> physical_table_ranges;
 };
 
-struct RNColumnarReaderWork
+struct ColumnarReaderWork
 {
-    explicit RNColumnarReaderWork(RNColumnarReaderPlan plan_)
+    explicit ColumnarReaderWork(ColumnarReaderPlan plan_)
         : plan(std::move(plan_))
     {}
 
-    ~RNColumnarReaderWork();
+    ~ColumnarReaderWork();
 
-    RNColumnarReaderPlan plan;
+    ColumnarReaderPlan plan;
     std::mutex mutex;
     std::condition_variable cv;
-    RNColumnarReaderMaterializeState state = RNColumnarReaderMaterializeState::NotStarted;
+    ColumnarReaderMaterializeState state = ColumnarReaderMaterializeState::NotStarted;
     std::optional<ColumnarReaderPtr> reader;
     std::exception_ptr exception;
 };
 
-using RNColumnarReaderWorkPtr = std::shared_ptr<RNColumnarReaderWork>;
+using ColumnarReaderWorkPtr = std::shared_ptr<ColumnarReaderWork>;
 
-class RNColumnarReadTask;
-using RNColumnarReadTaskPtr = std::shared_ptr<RNColumnarReadTask>;
-class RNColumnarReadTask
+class ColumnarReadTask;
+using ColumnarReadTaskPtr = std::shared_ptr<ColumnarReadTask>;
+class ColumnarReadTask
     : public boost::noncopyable
-    , public std::enable_shared_from_this<RNColumnarReadTask>
+    , public std::enable_shared_from_this<ColumnarReadTask>
 {
 public:
     using RemoteTableRange = std::pair<TableID, pingcap::coprocessor::KeyRanges>;
 
-    static std::vector<RNColumnarReadTaskPtr> buildColumnarReadTaskWithBackoff(
+    static std::vector<ColumnarReadTaskPtr> buildColumnarReadTaskWithBackoff(
         const LoggerPtr & log,
         const Context & context,
         UInt64 start_ts,
@@ -184,7 +184,7 @@ public:
         const std::vector<RemoteTableRange> & remote_table_ranges,
         unsigned num_streams);
 
-    static std::vector<RNColumnarReadTaskPtr> buildColumnarReadTask(
+    static std::vector<ColumnarReadTaskPtr> buildColumnarReadTask(
         const LoggerPtr & log,
         const Context & context,
         UInt64 start_ts,
@@ -197,18 +197,18 @@ public:
 
     BlockInputStreamPtr createSharedInputStream();
 
-    BlockInputStreamPtr createInputStream(const RNColumnarReaderWorkPtr & reader_work);
+    BlockInputStreamPtr createInputStream(const ColumnarReaderWorkPtr & reader_work);
 
-    ColumnarReaderPtr createColumnarReaderWithBackoff(const RNColumnarReaderWorkPtr & reader_work);
+    ColumnarReaderPtr createColumnarReaderWithBackoff(const ColumnarReaderWorkPtr & reader_work);
 
-    ColumnarReaderPtr getOrCreateReader(const RNColumnarReaderWorkPtr & reader_work);
+    ColumnarReaderPtr getOrCreateReader(const ColumnarReaderWorkPtr & reader_work);
 
-    std::optional<RNColumnarReaderWorkPtr> tryAcquireReaderWork();
+    std::optional<ColumnarReaderWorkPtr> tryAcquireReaderWork();
 
 #ifdef DBMS_PUBLIC_GTEST
     void replaceReaderWorkForTest(
-        const RNColumnarReaderWorkPtr & reader_work,
-        std::vector<RNColumnarReaderPlan> replanned_reader_plans);
+        const ColumnarReaderWorkPtr & reader_work,
+        std::vector<ColumnarReaderPlan> replanned_reader_plans);
 #endif
 
     size_t getReaderCount() const;
@@ -227,33 +227,33 @@ public:
 
     const String & getExecutorID() const;
 
-    RNColumnarReadTask(
-        std::vector<RNColumnarReaderPlan> reader_plans,
+    ColumnarReadTask(
+        std::vector<ColumnarReaderPlan> reader_plans,
         size_t source_num,
-        std::shared_ptr<RNColumnarReaderSharedContext> shared_reader_context);
+        std::shared_ptr<ColumnarReaderSharedContext> shared_reader_context);
 
 private:
     void prefetchPendingWork();
 
-    void prefetchReaderWork(const RNColumnarReaderWorkPtr & reader_work);
+    void prefetchReaderWork(const ColumnarReaderWorkPtr & reader_work);
 
     void replaceReaderWork(
-        const RNColumnarReaderWorkPtr & reader_work,
-        std::vector<RNColumnarReaderPlan> replanned_reader_plans);
+        const ColumnarReaderWorkPtr & reader_work,
+        std::vector<ColumnarReaderPlan> replanned_reader_plans);
 
     size_t reader_count;
     size_t source_num;
-    std::shared_ptr<RNColumnarReaderSharedContext> shared_reader_context;
+    std::shared_ptr<ColumnarReaderSharedContext> shared_reader_context;
     mutable std::mutex pending_reader_works_mutex;
-    std::deque<RNColumnarReaderWorkPtr> pending_reader_works;
+    std::deque<ColumnarReaderWorkPtr> pending_reader_works;
 };
 
 // Free function to create a columnar reader via FFI.
 ColumnarReaderPtr createColumnarReader(
-    const RNColumnarReaderSharedContext & shared_context,
-    const RNColumnarReaderPlan & reader_plan);
+    const ColumnarReaderSharedContext & shared_context,
+    const ColumnarReaderPlan & reader_plan);
 
-size_t getRNColumnarSourceNum(size_t num_streams, size_t reader_count);
+size_t getColumnarSourceNum(size_t num_streams, size_t reader_count);
 
 } // namespace DB
 #endif

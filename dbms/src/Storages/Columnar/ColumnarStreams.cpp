@@ -36,8 +36,8 @@
 namespace DB
 {
 
-// RNColumnarInputStream
-bool RNColumnarInputStream::ensureReader()
+// ColumnarInputStream
+bool ColumnarInputStream::ensureReader()
 {
     if (reader.has_value())
         return true;
@@ -58,7 +58,7 @@ bool RNColumnarInputStream::ensureReader()
     return true;
 }
 
-void RNColumnarInputStream::releaseReader()
+void ColumnarInputStream::releaseReader()
 {
     mergeReaderStats();
     if (reader.has_value() && reader->inner.ptr != nullptr)
@@ -67,7 +67,7 @@ void RNColumnarInputStream::releaseReader()
     current_reader_work.reset();
 }
 
-void RNColumnarInputStream::mergeReaderStats()
+void ColumnarInputStream::mergeReaderStats()
 {
     if (!reader.has_value() || reader->inner.ptr == nullptr)
         return;
@@ -89,7 +89,7 @@ void RNColumnarInputStream::mergeReaderStats()
     scan_ctx_iter->second->merge(stats);
 }
 
-RNColumnarInputStream::~RNColumnarInputStream()
+ColumnarInputStream::~ColumnarInputStream()
 {
     SCOPE_EXIT({
         try
@@ -136,18 +136,18 @@ RNColumnarInputStream::~RNColumnarInputStream()
     }
 }
 
-Block RNColumnarInputStream::read(FilterPtr & res_filter, bool return_filter)
+Block ColumnarInputStream::read(FilterPtr & res_filter, bool return_filter)
 {
     return readImpl(res_filter, return_filter);
 }
 
-Block RNColumnarInputStream::readImpl()
+Block ColumnarInputStream::readImpl()
 {
     FilterPtr filter_ignored;
     return readImpl(filter_ignored, false);
 }
 
-Block RNColumnarInputStream::readImpl([[maybe_unused]] FilterPtr & res_filter, [[maybe_unused]] bool return_filter)
+Block ColumnarInputStream::readImpl([[maybe_unused]] FilterPtr & res_filter, [[maybe_unused]] bool return_filter)
 {
     if (done)
         return {};
@@ -253,8 +253,8 @@ Block RNColumnarInputStream::readImpl([[maybe_unused]] FilterPtr & res_filter, [
     }
 }
 
-// RNColumnarSourceOp
-void RNColumnarSourceOp::operateSuffixImpl()
+// ColumnarSourceOp
+void ColumnarSourceOp::operateSuffixImpl()
 {
     UNUSED(context);
     const auto keyspace_id = exec_context.getKeyspaceID();
@@ -279,13 +279,13 @@ void RNColumnarSourceOp::operateSuffixImpl()
         duration_read_sec);
 }
 
-void RNColumnarSourceOp::operatePrefixImpl()
+void ColumnarSourceOp::operatePrefixImpl()
 {
     total_cost_watch.restart();
     LOG_INFO(log, "Begin reading columnar snapshots, keyspace_id={}", exec_context.getKeyspaceID());
 }
 
-OperatorStatus RNColumnarSourceOp::readImpl(Block & block)
+OperatorStatus ColumnarSourceOp::readImpl(Block & block)
 {
     if (unlikely(done))
     {
@@ -303,7 +303,7 @@ OperatorStatus RNColumnarSourceOp::readImpl(Block & block)
     return awaitImpl();
 }
 
-OperatorStatus RNColumnarSourceOp::awaitImpl()
+OperatorStatus ColumnarSourceOp::awaitImpl()
 {
     if (unlikely(done || t_block.has_value()))
     {
@@ -313,7 +313,7 @@ OperatorStatus RNColumnarSourceOp::awaitImpl()
     return OperatorStatus::IO_IN;
 }
 
-OperatorStatus RNColumnarSourceOp::executeIOImpl()
+OperatorStatus ColumnarSourceOp::executeIOImpl()
 {
     if (unlikely(done || t_block.has_value()))
     {

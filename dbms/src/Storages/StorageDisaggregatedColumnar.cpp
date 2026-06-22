@@ -44,7 +44,6 @@
 #include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageDisaggregated.h>
-#include <Storages/StorageDisaggregatedColumnar.h>
 #include <Storages/StorageDisaggregatedHelpers.h>
 #include <TiDB/Decode/TypeMapping.h>
 #include <TiDB/Schema/TiDB.h>
@@ -630,7 +629,7 @@ BlockInputStreams StorageDisaggregated::readThroughColumnar(const Context & cont
     const UInt64 start_ts = sender_target_mpp_task_id.gather_id.query_id.start_ts;
     auto [remote_table_ranges, region_num] = buildRemoteTableRanges();
     const auto generated_column_infos = genGeneratedColumnInfosForDisaggregatedRead(table_scan);
-    auto read_columnar_tasks = RNColumnarReadTask::buildColumnarReadTaskWithBackoff(
+    auto read_columnar_tasks = ColumnarReadTask::buildColumnarReadTaskWithBackoff(
         log,
         context,
         start_ts,
@@ -672,7 +671,7 @@ void StorageDisaggregated::readThroughColumnar(
 {
     const UInt64 start_ts = sender_target_mpp_task_id.gather_id.query_id.start_ts;
     auto [remote_table_ranges, region_num] = buildRemoteTableRanges();
-    auto read_columnar_tasks = RNColumnarReadTask::buildColumnarReadTaskWithBackoff(
+    auto read_columnar_tasks = ColumnarReadTask::buildColumnarReadTaskWithBackoff(
         log,
         context,
         start_ts,
@@ -692,7 +691,7 @@ void StorageDisaggregated::readThroughColumnar(
             source_num);
         for (size_t i = 0; i < source_num; ++i)
         {
-            group_builder.addConcurrency(RNColumnarSourceOp::create({
+            group_builder.addConcurrency(ColumnarSourceOp::create({
                 .exec_context = exec_context,
                 .task = task_pool,
             }));

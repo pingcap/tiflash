@@ -67,7 +67,7 @@ namespace ErrorCodes
 extern const int COLUMNAR_SNAPSHOT_ERROR;
 } // namespace ErrorCodes
 
-size_t getRNColumnarSourceNum(size_t num_streams, size_t reader_count)
+size_t getColumnarSourceNum(size_t num_streams, size_t reader_count)
 {
     return std::min(std::max<size_t>(1, num_streams), reader_count);
 }
@@ -233,14 +233,14 @@ std::vector<RegionReaderPlan> buildRegionReaderPlansFromPhysicalTableRanges(
     return region_reader_plans;
 }
 
-std::vector<RNColumnarReaderPlan> buildReaderPlansFromRegionReaderPlans(
+std::vector<ColumnarReaderPlan> buildReaderPlansFromRegionReaderPlans(
     const std::vector<RegionReaderPlan> & region_reader_plans)
 {
-    std::vector<RNColumnarReaderPlan> reader_plans;
+    std::vector<ColumnarReaderPlan> reader_plans;
     reader_plans.reserve(region_reader_plans.size());
     for (const auto & plan : region_reader_plans)
     {
-        reader_plans.push_back(RNColumnarReaderPlan{
+        reader_plans.push_back(ColumnarReaderPlan{
             .region_id = plan.region_id,
             .region_ver = plan.region_ver_id.ver,
             .region_conf_ver = plan.region_ver_id.conf_ver,
@@ -273,18 +273,18 @@ std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedReadThroug
     return {std::move(column_defines), extra_table_id_index};
 }
 
-std::shared_ptr<RNColumnarReaderSharedContext> buildColumnarReaderSharedContext(
+std::shared_ptr<ColumnarReaderSharedContext> buildColumnarReaderSharedContext(
     const LoggerPtr & log,
     const Context & context,
     UInt64 start_ts,
     const TiDBTableScan & table_scan,
     const FilterConditions & filter_conditions)
 {
-    auto shared_context = std::make_shared<RNColumnarReaderSharedContext>();
+    auto shared_context = std::make_shared<ColumnarReaderSharedContext>();
     shared_context->log = log;
     shared_context->context = &context;
     shared_context->start_ts = start_ts;
-    RNColumnarReaderSharedContext::getStartTsClearRegistry().registerStartTs(start_ts);
+    ColumnarReaderSharedContext::getStartTsClearRegistry().registerStartTs(start_ts);
     shared_context->registered_for_start_ts = true;
     shared_context->logical_table_id = table_scan.getLogicalTableID();
     shared_context->executor_id = table_scan.getTableScanExecutorID();
@@ -483,8 +483,8 @@ void normalizeTimestampCompareDateTimeLiteralToUTC(tipb::Expr & expr, const Time
 } // namespace
 
 ColumnarReaderPtr createColumnarReader(
-    const RNColumnarReaderSharedContext & shared_context,
-    const RNColumnarReaderPlan & reader_plan)
+    const ColumnarReaderSharedContext & shared_context,
+    const ColumnarReaderPlan & reader_plan)
 {
     const auto & log = shared_context.log;
     const auto & context = *shared_context.context;
@@ -638,17 +638,17 @@ ColumnarReaderPtr createColumnarReader(
     return columnar_reader;
 }
 
-// RNColumnarReadTask
-RNColumnarReaderWork::~RNColumnarReaderWork()
+// ColumnarReadTask
+ColumnarReaderWork::~ColumnarReaderWork()
 {
     if (reader.has_value() && reader->inner.ptr != nullptr)
         RustGcHelper::instance().gcRustPtr(reader->inner.ptr, reader->inner.type);
 }
 
-RNColumnarReadTask::RNColumnarReadTask(
-    std::vector<RNColumnarReaderPlan> reader_plans,
+ColumnarReadTask::ColumnarReadTask(
+    std::vector<ColumnarReaderPlan> reader_plans,
     size_t source_num_,
-    std::shared_ptr<RNColumnarReaderSharedContext> shared_reader_context_)
+    std::shared_ptr<ColumnarReaderSharedContext> shared_reader_context_)
     : reader_count(reader_plans.size())
     , source_num(source_num_)
     , shared_reader_context(std::move(shared_reader_context_))
@@ -656,52 +656,52 @@ RNColumnarReadTask::RNColumnarReadTask(
     RUNTIME_CHECK(source_num > 0);
     RUNTIME_CHECK(source_num <= reader_count, source_num, reader_count);
     for (auto & reader_plan : reader_plans)
-        pending_reader_works.push_back(std::make_shared<RNColumnarReaderWork>(std::move(reader_plan)));
+        pending_reader_works.push_back(std::make_shared<ColumnarReaderWork>(std::move(reader_plan)));
 }
 
-size_t RNColumnarReadTask::getReaderCount() const
+size_t ColumnarReadTask::getReaderCount() const
 {
     return reader_count;
 }
 
-size_t RNColumnarReadTask::getSourceNum() const
+size_t ColumnarReadTask::getSourceNum() const
 {
     return source_num;
 }
 
-const Context & RNColumnarReadTask::getContext() const
+const Context & ColumnarReadTask::getContext() const
 {
     return *shared_reader_context->context;
 }
 
-const LoggerPtr & RNColumnarReadTask::getLog() const
+const LoggerPtr & ColumnarReadTask::getLog() const
 {
     return shared_reader_context->log;
 }
 
-const DM::ColumnDefines & RNColumnarReadTask::getColumnsToRead() const
+const DM::ColumnDefines & ColumnarReadTask::getColumnsToRead() const
 {
     return *shared_reader_context->column_defines;
 }
 
-int RNColumnarReadTask::getExtraTableIDIndex() const
+int ColumnarReadTask::getExtraTableIDIndex() const
 {
     return shared_reader_context->extra_table_id_index;
 }
 
-TableID RNColumnarReadTask::getLogicalTableID() const
+TableID ColumnarReadTask::getLogicalTableID() const
 {
     return shared_reader_context->logical_table_id;
 }
 
-const String & RNColumnarReadTask::getExecutorID() const
+const String & ColumnarReadTask::getExecutorID() const
 {
     return shared_reader_context->executor_id;
 }
 
-void RNColumnarReadTask::replaceReaderWork(
-    const RNColumnarReaderWorkPtr & reader_work,
-    std::vector<RNColumnarReaderPlan> replanned_reader_plans)
+void ColumnarReadTask::replaceReaderWork(
+    const ColumnarReaderWorkPtr & reader_work,
+    std::vector<ColumnarReaderPlan> replanned_reader_plans)
 {
     RUNTIME_CHECK(reader_work != nullptr);
     RUNTIME_CHECK(!replanned_reader_plans.empty());
@@ -714,19 +714,19 @@ void RNColumnarReadTask::replaceReaderWork(
     // other sources. These ranges are produced by re-splitting the failed work's own key ranges.
     auto queue_guard = std::lock_guard(pending_reader_works_mutex);
     for (auto it = replanned_reader_plans.rbegin(); it != replanned_reader_plans.rend() - 1; ++it)
-        pending_reader_works.push_front(std::make_shared<RNColumnarReaderWork>(*it));
+        pending_reader_works.push_front(std::make_shared<ColumnarReaderWork>(*it));
 }
 
 #ifdef DBMS_PUBLIC_GTEST
-void RNColumnarReadTask::replaceReaderWorkForTest(
-    const RNColumnarReaderWorkPtr & reader_work,
-    std::vector<RNColumnarReaderPlan> replanned_reader_plans)
+void ColumnarReadTask::replaceReaderWorkForTest(
+    const ColumnarReaderWorkPtr & reader_work,
+    std::vector<ColumnarReaderPlan> replanned_reader_plans)
 {
     replaceReaderWork(reader_work, std::move(replanned_reader_plans));
 }
 #endif
 
-ColumnarReaderPtr RNColumnarReadTask::createColumnarReaderWithBackoff(const RNColumnarReaderWorkPtr & reader_work)
+ColumnarReaderPtr ColumnarReadTask::createColumnarReaderWithBackoff(const ColumnarReaderWorkPtr & reader_work)
 {
     RUNTIME_CHECK(reader_work != nullptr);
     pingcap::kv::Backoffer bo(pingcap::kv::copNextMaxBackoff);
@@ -785,7 +785,7 @@ ColumnarReaderPtr RNColumnarReadTask::createColumnarReaderWithBackoff(const RNCo
     }
 }
 
-ColumnarReaderPtr RNColumnarReadTask::getOrCreateReader(const RNColumnarReaderWorkPtr & reader_work)
+ColumnarReaderPtr ColumnarReadTask::getOrCreateReader(const ColumnarReaderWorkPtr & reader_work)
 {
     RUNTIME_CHECK(reader_work != nullptr);
 
@@ -796,28 +796,28 @@ ColumnarReaderPtr RNColumnarReadTask::getOrCreateReader(const RNColumnarReaderWo
             std::unique_lock lock(reader_work->mutex);
             switch (reader_work->state)
             {
-            case RNColumnarReaderMaterializeState::Ready:
+            case ColumnarReaderMaterializeState::Ready:
             {
                 auto reader = std::move(reader_work->reader);
                 reader_work->reader.reset();
                 reader_work->exception = nullptr;
-                reader_work->state = RNColumnarReaderMaterializeState::Consumed;
+                reader_work->state = ColumnarReaderMaterializeState::Consumed;
                 return reader.value();
             }
-            case RNColumnarReaderMaterializeState::Failed:
+            case ColumnarReaderMaterializeState::Failed:
                 std::rethrow_exception(reader_work->exception);
-            case RNColumnarReaderMaterializeState::Consumed:
+            case ColumnarReaderMaterializeState::Consumed:
                 throw Exception(
                     ErrorCodes::LOGICAL_ERROR,
                     "columnar reader work for region {} is already consumed",
                     reader_work->plan.region_id);
-            case RNColumnarReaderMaterializeState::Creating:
+            case ColumnarReaderMaterializeState::Creating:
                 reader_work->cv.wait(lock, [&] {
-                    return reader_work->state != RNColumnarReaderMaterializeState::Creating;
+                    return reader_work->state != ColumnarReaderMaterializeState::Creating;
                 });
                 continue;
-            case RNColumnarReaderMaterializeState::NotStarted:
-                reader_work->state = RNColumnarReaderMaterializeState::Creating;
+            case ColumnarReaderMaterializeState::NotStarted:
+                reader_work->state = ColumnarReaderMaterializeState::Creating;
                 should_create_inline = true;
                 break;
             }
@@ -833,7 +833,7 @@ ColumnarReaderPtr RNColumnarReadTask::getOrCreateReader(const RNColumnarReaderWo
             auto guard = std::lock_guard(reader_work->mutex);
             reader_work->reader.reset();
             reader_work->exception = nullptr;
-            reader_work->state = RNColumnarReaderMaterializeState::Consumed;
+            reader_work->state = ColumnarReaderMaterializeState::Consumed;
         }
         reader_work->cv.notify_all();
         return reader;
@@ -844,16 +844,16 @@ ColumnarReaderPtr RNColumnarReadTask::getOrCreateReader(const RNColumnarReaderWo
             auto guard = std::lock_guard(reader_work->mutex);
             reader_work->reader.reset();
             reader_work->exception = std::current_exception();
-            reader_work->state = RNColumnarReaderMaterializeState::Failed;
+            reader_work->state = ColumnarReaderMaterializeState::Failed;
         }
         reader_work->cv.notify_all();
         throw;
     }
 }
 
-void RNColumnarReadTask::prefetchPendingWork()
+void ColumnarReadTask::prefetchPendingWork()
 {
-    RNColumnarReaderWorkPtr reader_work;
+    ColumnarReaderWorkPtr reader_work;
     {
         auto guard = std::lock_guard(pending_reader_works_mutex);
         if (pending_reader_works.empty())
@@ -864,49 +864,49 @@ void RNColumnarReadTask::prefetchPendingWork()
     prefetchReaderWork(reader_work);
 }
 
-void RNColumnarReadTask::prefetchReaderWork(const RNColumnarReaderWorkPtr & reader_work)
+void ColumnarReadTask::prefetchReaderWork(const ColumnarReaderWorkPtr & reader_work)
 {
     RUNTIME_CHECK(reader_work != nullptr);
 
     {
         auto guard = std::lock_guard(reader_work->mutex);
-        if (reader_work->state != RNColumnarReaderMaterializeState::NotStarted)
+        if (reader_work->state != ColumnarReaderMaterializeState::NotStarted)
             return;
-        reader_work->state = RNColumnarReaderMaterializeState::Creating;
+        reader_work->state = ColumnarReaderMaterializeState::Creating;
     }
 
     LOG_INFO(getLog(), "materialize columnar reader asynchronously, region_id={}", reader_work->plan.region_id);
-    newThreadManager()->scheduleThenDetach(true, "PrefetchRNColumnarReader", [self = shared_from_this(), reader_work] {
+    newThreadManager()->scheduleThenDetach(true, "PrefetchColumnarReader", [self = shared_from_this(), reader_work] {
         try
         {
             auto reader = self->createColumnarReaderWithBackoff(reader_work);
             {
                 auto guard = std::lock_guard(reader_work->mutex);
-                if (reader_work->state == RNColumnarReaderMaterializeState::Consumed)
+                if (reader_work->state == ColumnarReaderMaterializeState::Consumed)
                     return;
                 reader_work->reader.emplace(std::move(reader));
                 reader_work->exception = nullptr;
-                reader_work->state = RNColumnarReaderMaterializeState::Ready;
+                reader_work->state = ColumnarReaderMaterializeState::Ready;
             }
         }
         catch (...)
         {
             {
                 auto guard = std::lock_guard(reader_work->mutex);
-                if (reader_work->state == RNColumnarReaderMaterializeState::Consumed)
+                if (reader_work->state == ColumnarReaderMaterializeState::Consumed)
                     return;
                 reader_work->reader.reset();
                 reader_work->exception = std::current_exception();
-                reader_work->state = RNColumnarReaderMaterializeState::Failed;
+                reader_work->state = ColumnarReaderMaterializeState::Failed;
             }
         }
         reader_work->cv.notify_all();
     });
 }
 
-std::optional<RNColumnarReaderWorkPtr> RNColumnarReadTask::tryAcquireReaderWork()
+std::optional<ColumnarReaderWorkPtr> ColumnarReadTask::tryAcquireReaderWork()
 {
-    RNColumnarReaderWorkPtr reader_work;
+    ColumnarReaderWorkPtr reader_work;
     {
         auto guard = std::lock_guard(pending_reader_works_mutex);
         if (pending_reader_works.empty())
@@ -918,10 +918,10 @@ std::optional<RNColumnarReaderWorkPtr> RNColumnarReadTask::tryAcquireReaderWork(
     return reader_work;
 }
 
-BlockInputStreamPtr RNColumnarReadTask::createInputStream(const RNColumnarReaderWorkPtr & reader_work)
+BlockInputStreamPtr ColumnarReadTask::createInputStream(const ColumnarReaderWorkPtr & reader_work)
 {
     RUNTIME_CHECK(reader_work != nullptr);
-    return RNColumnarInputStream::create({
+    return ColumnarInputStream::create({
         .context = getContext(),
         .log = getLog(),
         .task = shared_from_this(),
@@ -933,9 +933,9 @@ BlockInputStreamPtr RNColumnarReadTask::createInputStream(const RNColumnarReader
     });
 }
 
-BlockInputStreamPtr RNColumnarReadTask::createSharedInputStream()
+BlockInputStreamPtr ColumnarReadTask::createSharedInputStream()
 {
-    return RNColumnarInputStream::create({
+    return ColumnarInputStream::create({
         .context = getContext(),
         .log = getLog(),
         .task = shared_from_this(),
@@ -947,7 +947,7 @@ BlockInputStreamPtr RNColumnarReadTask::createSharedInputStream()
     });
 }
 
-std::vector<RNColumnarReadTaskPtr> RNColumnarReadTask::buildColumnarReadTaskWithBackoff(
+std::vector<ColumnarReadTaskPtr> ColumnarReadTask::buildColumnarReadTaskWithBackoff(
     const LoggerPtr & log,
     const Context & context,
     UInt64 start_ts,
@@ -956,13 +956,13 @@ std::vector<RNColumnarReadTaskPtr> RNColumnarReadTask::buildColumnarReadTaskWith
     const std::vector<RemoteTableRange> & remote_table_ranges,
     unsigned num_streams)
 {
-    std::vector<RNColumnarReadTaskPtr> tasks;
+    std::vector<ColumnarReadTaskPtr> tasks;
     pingcap::kv::Backoffer bo(pingcap::kv::copNextMaxBackoff);
     while (true)
     {
         try
         {
-            tasks = RNColumnarReadTask::buildColumnarReadTask(
+            tasks = ColumnarReadTask::buildColumnarReadTask(
                 log,
                 context,
                 start_ts,
@@ -988,7 +988,7 @@ std::vector<RNColumnarReadTaskPtr> RNColumnarReadTask::buildColumnarReadTaskWith
     return tasks;
 }
 
-std::vector<RNColumnarReadTaskPtr> RNColumnarReadTask::buildColumnarReadTask(
+std::vector<ColumnarReadTaskPtr> ColumnarReadTask::buildColumnarReadTask(
     const LoggerPtr & log,
     const Context & context,
     UInt64 start_ts,
@@ -1004,7 +1004,7 @@ std::vector<RNColumnarReadTaskPtr> RNColumnarReadTask::buildColumnarReadTask(
     auto shared_reader_context
         = buildColumnarReaderSharedContext(log, context, start_ts, table_scan, filter_conditions);
 
-    std::vector<RNColumnarReadTaskPtr> tasks;
+    std::vector<ColumnarReadTaskPtr> tasks;
     ColumnarPhysicalTableRanges physical_table_ranges;
     physical_table_ranges.reserve(remote_table_ranges.size());
     for (const auto & remote_table_range : remote_table_ranges)
@@ -1046,14 +1046,14 @@ std::vector<RNColumnarReadTaskPtr> RNColumnarReadTask::buildColumnarReadTask(
         = shared_reader_context->column_defines != nullptr ? shared_reader_context->column_defines->size() : 0;
     dag_context->columnar_scan_context_map[table_scan.getTableScanExecutorID()] = columnar_scan_context;
 
-    std::vector<RNColumnarReaderPlan> all_reader_plans;
+    std::vector<ColumnarReaderPlan> all_reader_plans;
     all_reader_plans.reserve(total_max_reader_num);
 
     for (const auto & plan : region_reader_plans)
     {
         if (plan.bucket_units.empty())
         {
-            all_reader_plans.push_back(RNColumnarReaderPlan{
+            all_reader_plans.push_back(ColumnarReaderPlan{
                 .region_id = plan.region_id,
                 .region_ver = plan.region_ver_id.ver,
                 .region_conf_ver = plan.region_ver_id.conf_ver,
@@ -1064,7 +1064,7 @@ std::vector<RNColumnarReadTaskPtr> RNColumnarReadTask::buildColumnarReadTask(
         {
             for (const auto & [table_id, range] : plan.bucket_units)
             {
-                all_reader_plans.push_back(RNColumnarReaderPlan{
+                all_reader_plans.push_back(ColumnarReaderPlan{
                     .region_id = plan.region_id,
                     .region_ver = plan.region_ver_id.ver,
                     .region_conf_ver = plan.region_ver_id.conf_ver,
@@ -1077,14 +1077,14 @@ std::vector<RNColumnarReadTaskPtr> RNColumnarReadTask::buildColumnarReadTask(
 
     if (all_reader_plans.empty())
         return tasks;
-    tasks.push_back(std::make_shared<RNColumnarReadTask>(
+    tasks.push_back(std::make_shared<ColumnarReadTask>(
         std::move(all_reader_plans),
-        getRNColumnarSourceNum(num_streams, total_max_reader_num),
+        getColumnarSourceNum(num_streams, total_max_reader_num),
         shared_reader_context));
     return tasks;
 }
 
-BlockInputStreams RNColumnarReadTask::getInputStreams()
+BlockInputStreams ColumnarReadTask::getInputStreams()
 {
     BlockInputStreams streams;
     streams.reserve(source_num);
