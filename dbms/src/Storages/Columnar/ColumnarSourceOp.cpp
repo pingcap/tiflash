@@ -35,8 +35,7 @@ void ColumnarSourceOp::operateSuffixImpl()
     LOG_INFO(
         log,
         "Finished reading columnar snapshots, keyspace_id={} task_pool_worker_total_cost={:.3f}s claimed_streams={} "
-        "rows={} "
-        "rows_per_sec={} "
+        "rows={} rows_per_sec={} "
         "bytes={} bytes_per_sec={} read_cost={:.3f}s",
         keyspace_id,
         total_cost_sec,

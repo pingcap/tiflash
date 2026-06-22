@@ -181,15 +181,7 @@ using ColumnarReadTaskPoolPtr = std::shared_ptr<ColumnarReadTaskPool>;
 /// multiple ColumnarInputStream / ColumnarSourceOp instances.
 ///
 /// Each work item corresponds to a region (or bucket) to be read via the
-/// columnar FFI. The pool supports:
-///   - Work-stealing: consumers call tryAcquireReaderWork() to claim work.
-///   - Prefetching: the next pending work is materialized asynchronously
-///     while consumers process their current work.
-///   - Backoff/retry: region epoch mismatches and transient errors are
-///     retried with exponential backoff, and stale region caches are dropped.
-///   - Bucket-level parallelism: when num_streams exceeds the region count
-///     and ordering is not required, key ranges are further split by bucket
-///     boundaries obtained from the columnar proxy.
+/// columnar FFI.
 class ColumnarReadTaskPool
     : public boost::noncopyable
     , public std::enable_shared_from_this<ColumnarReadTaskPool>
@@ -197,6 +189,9 @@ class ColumnarReadTaskPool
 public:
     using RemoteTableRange = std::pair<TableID, pingcap::coprocessor::KeyRanges>;
 
+    /// Build task pools with exponential backoff on transient errors
+    /// (region epoch mismatch, snapshot errors). Stale region caches are
+    /// dropped and key ranges are re-planned on retry.
     static std::vector<ColumnarReadTaskPoolPtr> buildWithBackoff(
         const LoggerPtr & log,
         const Context & context,
@@ -206,6 +201,9 @@ public:
         const std::vector<RemoteTableRange> & remote_table_ranges,
         unsigned num_streams);
 
+    /// Build task pools from remote table ranges. When num_streams exceeds
+    /// the region count and ordering is not required, key ranges are further
+    /// split by bucket boundaries obtained from the columnar proxy.
     static std::vector<ColumnarReadTaskPoolPtr> build(
         const LoggerPtr & log,
         const Context & context,
@@ -225,6 +223,9 @@ public:
 
     ColumnarReaderPtr getOrCreateReader(const ColumnarReaderWorkPtr & reader_work);
 
+    /// Pop the next unclaimed work item from the front of the queue and
+    /// trigger prefetch of the following item. Returns std::nullopt when
+    /// the queue is empty.
     std::optional<ColumnarReaderWorkPtr> tryAcquireReaderWork();
 
 #ifdef DBMS_PUBLIC_GTEST
@@ -255,6 +256,8 @@ public:
         std::shared_ptr<ColumnarReaderSharedContext> shared_reader_context);
 
 private:
+    /// Materialize the next pending work item asynchronously via a detached
+    /// thread, so it is ready when the next consumer calls tryAcquireReaderWork.
     void prefetchPendingWork();
 
     void prefetchReaderWork(const ColumnarReaderWorkPtr & reader_work);

@@ -27,7 +27,7 @@ namespace DB
 
 class ColumnarInputStream : public IProfilingBlockInputStream
 {
-    static constexpr auto NAME = "RNProxy";
+    static constexpr auto NAME = "ColumnarSource";
 
 public:
     ~ColumnarInputStream() override;

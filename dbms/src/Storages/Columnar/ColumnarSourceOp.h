@@ -29,7 +29,7 @@ namespace DB
 
 class ColumnarSourceOp : public SourceOp
 {
-    static constexpr auto NAME = "RNProxy";
+    static constexpr auto NAME = "ColumnarSource";
 
 public:
     struct Options
