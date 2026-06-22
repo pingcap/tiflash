@@ -32,6 +32,7 @@
 #include <Core/TaskOperatorSpillContexts.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/Coprocessor/ColumnarScanContext_fwd.h>
 #include <Flash/Coprocessor/DAGRequest.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Coprocessor/RuntimeFilterMgr.h>
@@ -473,6 +474,7 @@ public:
     /// While when we support collcate join later, scan_context_map.size() may > 1,
     /// thus we need to pay attention to scan_context_map usage that time.
     std::unordered_map<String, DM::ScanContextPtr> scan_context_map;
+    std::unordered_map<String, ColumnarScanContextPtr> columnar_scan_context_map;
 
     RuntimeFilterMgr runtime_filter_mgr;
 

@@ -14,6 +14,7 @@
 
 #include <Common/formatReadable.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
+#include <Flash/Coprocessor/ColumnarScanContext.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Flash/Statistics/TableScanImpl.h>
 #include <Interpreters/Join.h>
@@ -55,14 +56,28 @@ String RemoteTableScanDetail::toJson() const
 }
 void TableScanStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
 {
+    auto columnar_scan_ctx_it = dag_context.columnar_scan_context_map.find(executor_id);
     auto scan_ctx_it = dag_context.scan_context_map.find(executor_id);
+    // A table scan runs on either the columnar path or the DeltaMerge path, so tracing should only show one.
+    const bool has_columnar_scan_ctx
+        = columnar_scan_ctx_it != dag_context.columnar_scan_context_map.end() && columnar_scan_ctx_it->second;
+    const char * scan_details = "{}";
+    String scan_details_buf;
+    if (has_columnar_scan_ctx)
+    {
+        scan_details_buf = columnar_scan_ctx_it->second->toJson();
+        scan_details = scan_details_buf.c_str();
+    }
+    else if (scan_ctx_it != dag_context.scan_context_map.end() && scan_ctx_it->second)
+    {
+        scan_details_buf = scan_ctx_it->second->toJson();
+        scan_details = scan_details_buf.c_str();
+    }
     fmt_buffer.fmtAppend(
         R"("connection_details":[{},{}],"scan_details":{})",
         local_table_scan_detail.toJson(),
         remote_table_scan_detail.toJson(),
-        scan_ctx_it != dag_context.scan_context_map.end() ? scan_ctx_it->second->toJson()
-                                                          : "{}" // empty json object for nullptr
-    );
+        scan_details);
 }
 
 void TableScanStatistics::updateTableScanDetail(const std::vector<ConnectionProfileInfo> & connection_profile_infos)

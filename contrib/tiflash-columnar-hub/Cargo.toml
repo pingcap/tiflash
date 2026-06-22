@@ -5,6 +5,7 @@ resolver = "2"
 [workspace.dependencies]
 api_version = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine" }
 builtin_dfs = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine" }
+chrono = { version = "=0.4.34", default-features = true }
 cloud_encryption = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine" }
 keys = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine" }
 kvengine = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine" }
@@ -12,6 +13,7 @@ kvenginepb = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", br
 pd_client = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine", default-features = false }
 security = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine", default-features = false }
 tikv_util = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine" }
+url = { version = "2", default-features = true }
 
 [patch.crates-io]
 raft = { git = "https://github.com/tikv/raft-rs", branch = "master" }

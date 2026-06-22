@@ -60,7 +60,10 @@ use quick_cache::{
 use security::SecurityManager;
 use thiserror::Error;
 use tikv_util::{
-    config::AbsoluteOrPercentSize, memory::MemoryLimiter, sys::SysQuota, time::Instant,
+    config::AbsoluteOrPercentSize,
+    memory::{MemoryLimiter, MemoryQuota},
+    sys::SysQuota,
+    time::Instant,
 };
 use tipb::ColumnInfo;
 
@@ -767,6 +770,8 @@ async fn request_snapshot_from_leader(
                     read_columnar: true,
                     columnar_meta_cache: ColumnarMetaCache::default(),
                     encryption_key_manager: Arc::new(cloud_encryption::EncryptionKeyManager::new()),
+                    strict_file_memory_quota_wait_timeout: Duration::from_secs(30),
+                    strict_file_memory_quota: Arc::new(MemoryQuota::new(usize::MAX)),
                 };
                 let memory_limiter = MemoryLimiter::new(u64::MAX, None);
                 let (snap, _) = SnapAccess::construct_snapshot(
