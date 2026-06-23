@@ -18,10 +18,9 @@ use std::{
 };
 
 fn main() {
-    let workspace_dir = PathBuf::from(
-        std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string()),
-    )
-    .join("..");
+    let workspace_dir =
+        PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string()))
+            .join("..");
     let lock_path = workspace_dir.join("Cargo.lock");
     let cloud_storage_engine_repo = workspace_dir.join("../cloud-storage-engine");
 

@@ -255,5 +255,6 @@ pub unsafe extern "C" fn ffi_physical_table_id(mut reader: ColumnarReaderPtr) ->
 
 pub unsafe extern "C" fn ffi_columnar_scan_stats(
     mut reader: ColumnarReaderPtr,
-) -> ColumnarScanStats
-{ reader.as_mut().runtime_stats().into() }
+) -> ColumnarScanStats {
+    reader.as_mut().runtime_stats().into()
+}
