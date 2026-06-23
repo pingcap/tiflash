@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Inc.
+// Copyright 2026 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <Common/RedactHelpers.h>
 #include <Common/Stopwatch.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Interpreters/Context.h>
 #include <Storages/Columnar/ColumnarSourceOp.h>
 
