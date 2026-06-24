@@ -743,7 +743,7 @@ try
     };
     for (const auto & [k, v] : kvs)
     {
-        region->insertDebug("write", TiKVKey(bytesFromHexString(k)), TiKVValue(bytesFromHexString(v)));
+        region->insert(ColumnFamilyType::Write, TiKVKey(bytesFromHexString(k)), TiKVValue(bytesFromHexString(v)));
     }
 
     auto data_list_read = ReadRegionCommitCache(region, true);
