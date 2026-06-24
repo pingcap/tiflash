@@ -172,7 +172,6 @@ public:
     TablePtr getTableByName(const String & database_name, const String & table_name);
 
     TiDB::TableInfoPtr getTableInfoByID(TableID table_id);
-    TiDB::TableInfoPtr getDroppedTableInfoByID(TableID table_id);
 
     TiDB::DBInfoPtr getDBInfoByID(DatabaseID db_id);
 
@@ -213,7 +212,6 @@ private:
     std::unordered_map<String, DatabaseID> databases;
     std::unordered_map<String, TablePtr> tables_by_name;
     std::unordered_map<TableID, TablePtr> tables_by_id;
-    std::unordered_map<TableID, TablePtr> dropped_tables_by_id;
 
     std::unordered_map<Int64, SchemaDiff> version_diff;
 

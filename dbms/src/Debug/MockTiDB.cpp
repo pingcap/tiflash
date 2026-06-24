@@ -133,21 +133,6 @@ TablePtr MockTiDB::dropTableInternal(Context & context, const TablePtr & table, 
     }
     tables_by_id.erase(table->id());
 
-    if (!drop_regions)
-    {
-        auto dropped_table_info = table->table_info;
-        dropped_table_info.state = TiDB::StateDeleteOnly;
-        dropped_tables_by_id[table->id()] = std::make_shared<Table>(
-            table->database_name,
-            table->database_id,
-            table->table_name,
-            std::move(dropped_table_info));
-    }
-    else
-    {
-        dropped_tables_by_id.erase(table->id());
-    }
-
     if (drop_regions)
     {
         for (auto & e : region_table.getRegionsByTable(NullspaceID, table->id()))
@@ -170,14 +155,6 @@ void MockTiDB::dropDB(Context & context, const String & database_name, bool drop
 
     for (const auto & table_name : table_names)
         dropTableByNameImpl(context, database_name, table_name, drop_regions);
-
-    for (auto iter = dropped_tables_by_id.begin(); iter != dropped_tables_by_id.end();)
-    {
-        if (iter->second->database_name == database_name)
-            iter = dropped_tables_by_id.erase(iter);
-        else
-            ++iter;
-    }
 
     version++;
 
@@ -957,16 +934,6 @@ TiDB::TableInfoPtr MockTiDB::getTableInfoByID(TableID table_id)
 {
     auto it = tables_by_id.find(table_id);
     if (it == tables_by_id.end())
-    {
-        return nullptr;
-    }
-    return std::make_shared<TiDB::TableInfo>(TiDB::TableInfo(it->second->table_info));
-}
-
-TiDB::TableInfoPtr MockTiDB::getDroppedTableInfoByID(TableID table_id)
-{
-    auto it = dropped_tables_by_id.find(table_id);
-    if (it == dropped_tables_by_id.end())
     {
         return nullptr;
     }

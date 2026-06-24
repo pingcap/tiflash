@@ -49,6 +49,7 @@ namespace FailPoints
 {
 extern const char exception_before_rename_table_old_meta_removed[];
 extern const char force_context_path[];
+extern const char force_get_dropped_table_info_in_schema_sync[];
 extern const char force_set_num_regions_for_table[];
 extern const char random_ddl_fail_when_rename_partitions[];
 } // namespace FailPoints
@@ -417,6 +418,11 @@ CATCH
 TEST_F(SchemaSyncTest, SyncDroppedTableSchemaAfterDropBeforeStorageCreated)
 try
 {
+    // Mock the case that:
+    // 1. create table and add tiflash replica
+    // 2. drop table
+    // 3. raft command is sync to tiflash after the table is dropped
+
     auto pd_client = global_ctx.getTMTContext().getPDClient();
 
     const String db_name = "mock_db";
@@ -436,8 +442,16 @@ try
     refreshSchema();
     ASSERT_EQ(global_ctx.getTMTContext().getStorages().get(NullspaceID, table_id), nullptr);
 
-    // Mimic DROP TABLE before a raft command creates local storage. Keep the dropped table info so that
-    // the later table-level schema sync can fetch it through the mock MVCC path.
+    auto dropped_table_info = MockTiDB::instance().getTableInfoByID(table_id);
+    ASSERT_NE(dropped_table_info, nullptr);
+    dropped_table_info->state = TiDB::StateDeleteOnly;
+    FailPointHelper::enableFailPoint(FailPoints::force_get_dropped_table_info_in_schema_sync, dropped_table_info);
+    SCOPE_EXIT({
+        FailPointHelper::disableFailPoint(FailPoints::force_get_dropped_table_info_in_schema_sync);
+    });
+
+    // Mimic DROP TABLE before a raft command creates local storage. The failpoint above injects the
+    // dropped table info for the later table-level schema sync, matching the real MVCC path.
     MockTiDB::instance().dropTable(global_ctx, db_name, "t4", /*drop_regions=*/false);
 
     // Mimic `__refresh_schemas()` after DROP TABLE. Since the local storage does not exist yet,
@@ -446,7 +460,7 @@ try
     ASSERT_EQ(global_ctx.getTMTContext().getStorages().get(NullspaceID, table_id), nullptr);
 
     // Mimic a raft command arriving after DROP TABLE. The first non-MVCC table lookup fails, then
-    // syncTableSchema retries with MVCC and creates a tombstone storage for the dropped table.
+    // syncTableSchema retries with the injected dropped table info and creates a tombstone storage.
     refreshTableSchema(table_id);
 
     auto storage = mustGetSyncedTable(table_id);

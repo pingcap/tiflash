@@ -46,6 +46,7 @@
 #include <common/logger_useful.h>
 #include <fmt/format.h>
 
+#include <any>
 #include <boost/algorithm/string/join.hpp>
 #include <magic_enum.hpp>
 #include <mutex>
@@ -64,6 +65,7 @@ extern const int SYNTAX_ERROR;
 namespace FailPoints
 {
 extern const char random_ddl_fail_when_rename_partitions[];
+extern const char force_get_dropped_table_info_in_schema_sync[];
 } // namespace FailPoints
 
 bool isReservedDatabase(Context & context, const String & database_name)
@@ -1635,6 +1637,18 @@ bool SchemaBuilder<Getter, NameMapper>::applyTable(
     {
         std::tie(table_info, get_by_mvcc) = getter.getTableInfoAndCheckMvcc(database_id, logical_table_id);
     }
+#ifdef FIU_ENABLE
+    if (force && table_info == nullptr)
+    {
+        fiu_do_on(FailPoints::force_get_dropped_table_info_in_schema_sync, {
+            if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_get_dropped_table_info_in_schema_sync); v)
+            {
+                table_info = std::any_cast<TiDB::TableInfoPtr>(v.value());
+                get_by_mvcc = true;
+            }
+        });
+    }
+#endif
     if (table_info == nullptr)
     {
         LOG_WARNING(
