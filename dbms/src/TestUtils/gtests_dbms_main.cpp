@@ -78,13 +78,13 @@ int main(int argc, char ** argv)
     DB::DM::SegmentReaderPoolManager::instance().init(4, 1.0);
     DB::DM::SegmentReadTaskScheduler::instance();
 
-    DB::GlobalThreadPool::initialize(/*max_threads*/ 100, /*max_free_threds*/ 10, /*queue_size*/ 1000);
-    DB::S3FileCachePool::initialize(/*max_threads*/ 20, /*max_free_threds*/ 10, /*queue_size*/ 1000);
-    DB::DataStoreS3Pool::initialize(/*max_threads*/ 20, /*max_free_threds*/ 10, /*queue_size*/ 1000);
-    DB::BuildReadTaskForWNPool::initialize(/*max_threads*/ 20, /*max_free_threds*/ 10, /*queue_size*/ 1000);
-    DB::BuildReadTaskForWNTablePool::initialize(/*max_threads*/ 20, /*max_free_threds*/ 10, /*queue_size*/ 1000);
-    DB::BuildReadTaskPool::initialize(/*max_threads*/ 20, /*max_free_threds*/ 10, /*queue_size*/ 1000);
-    DB::RNWritePageCachePool::initialize(/*max_threads*/ 20, /*max_free_threds*/ 10, /*queue_size*/ 1000);
+    DB::GlobalThreadPool::initialize(/*max_threads*/ 100, /*max_free_threads*/ 10, /*queue_size*/ 1000);
+    DB::S3FileCachePool::initialize(/*max_threads*/ 20, /*max_free_threads*/ 10, /*queue_size*/ 1000);
+    DB::DataStoreS3Pool::initialize(/*max_threads*/ 20, /*max_free_threads*/ 10, /*queue_size*/ 1000);
+    DB::BuildReadTaskForWNPool::initialize(/*max_threads*/ 20, /*max_free_threads*/ 10, /*queue_size*/ 1000);
+    DB::BuildReadTaskForWNTablePool::initialize(/*max_threads*/ 20, /*max_free_threads*/ 10, /*queue_size*/ 1000);
+    DB::BuildReadTaskPool::initialize(/*max_threads*/ 20, /*max_free_threads*/ 10, /*queue_size*/ 1000);
+    DB::RNWritePageCachePool::initialize(/*max_threads*/ 20, /*max_free_threads*/ 10, /*queue_size*/ 1000);
     const auto s3_endpoint = Poco::Environment::get("S3_ENDPOINT", "");
     const auto s3_bucket = Poco::Environment::get("S3_BUCKET", "mockbucket");
     const auto s3_root = Poco::Environment::get("S3_ROOT", "tiflash_ut/");
@@ -117,6 +117,9 @@ int main(int argc, char ** argv)
 
     auto ret = RUN_ALL_TESTS();
 
+    // Stop scheduler first to avoid use-after-free: schedLoop may try to
+    // push MergedTask to already-destroyed reader_pools.
+    DB::DM::SegmentReadTaskScheduler::instance().stop();
     // `SegmentReader` threads may hold a segment and its delta-index for read.
     // `TiFlashTestEnv::shutdown()` will destroy `DeltaIndexManager`.
     // Stop threads explicitly before `TiFlashTestEnv::shutdown()`.
