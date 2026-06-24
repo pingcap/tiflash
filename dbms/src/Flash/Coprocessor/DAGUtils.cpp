@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
-#include <Common/ThresholdUtils.h>
 #include <Common/TiFlashException.h>
 #include <Core/Types.h>
 #include <DataTypes/DataTypeNullable.h>
