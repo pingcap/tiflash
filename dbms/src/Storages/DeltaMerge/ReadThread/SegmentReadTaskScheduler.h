@@ -33,7 +33,7 @@ class SegmentReadTasksPoolTest;
 //
 // - `sched_thread` will scheduling read tasks.
 // - Call path: schedLoop -> schedule -> reapPendingPools -> scheduleOneRound
-// - reapPeningPools will swap the `pending_pools` and add these pools to `read_pools` and `merging_segments`.
+// - reapPendingPools will swap the `pending_pools` and add these pools to `read_pools` and `merging_segments`.
 // - scheduleOneRound will scan `read_pools` and choose segments to read.
 class SegmentReadTaskScheduler
 {
@@ -45,12 +45,17 @@ public:
     }
 
     ~SegmentReadTaskScheduler();
+
+    // Must be called before SegmentReaderPoolManager::stop() during shutdown to avoid
+    // use-after-free: schedLoop may still try to push MergedTask to destroyed reader_pools.
+    void stop();
+
     DISALLOW_COPY_AND_MOVE(SegmentReadTaskScheduler);
 
     // Add `pool` to `pending_pools`.
     void add(const SegmentReadTaskPoolPtr & pool);
 
-    void pushMergedTask(const MergedTaskPtr & p) { merged_task_pool.push(p); }
+    void pushMergedTask(const MergedTaskPtr & p);
 
     void updateConfig(const Settings & settings);
 
@@ -96,7 +101,7 @@ private:
 
     MergedTaskPool merged_task_pool;
 
-    std::atomic<bool> stop{false};
+    std::atomic<bool> stop_flag{false};
     bool enable_data_sharing{true};
     std::thread sched_thread;
 
