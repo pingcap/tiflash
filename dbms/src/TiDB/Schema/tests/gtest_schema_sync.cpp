@@ -414,6 +414,48 @@ try
 }
 CATCH
 
+TEST_F(SchemaSyncTest, SyncDroppedTableSchemaAfterDropBeforeStorageCreated)
+try
+{
+    auto pd_client = global_ctx.getTMTContext().getPDClient();
+
+    const String db_name = "mock_db";
+    MockTiDB::instance().newDataBase(db_name);
+    refreshSchema();
+
+    auto cols = ColumnsDescription({
+        {"a", typeFromString("Int32")},
+        {"b", typeFromString("Decimal(5,2)")},
+        {"c", typeFromString("Nullable(String)")},
+        {"d", typeFromString("Nullable(Int32)")},
+    });
+    auto table_id = MockTiDB::instance().newTable(db_name, "t4", cols, pd_client->getTS(), "a");
+
+    // Mimic `__refresh_schemas()` after CREATE TABLE / SET TiFlash replica. For a non-partition table,
+    // this only registers table_id mapping; it does not create the StorageDeltaMerge instance yet.
+    refreshSchema();
+    ASSERT_EQ(global_ctx.getTMTContext().getStorages().get(NullspaceID, table_id), nullptr);
+
+    // Mimic DROP TABLE before a raft command creates local storage. Keep the dropped table info so that
+    // the later table-level schema sync can fetch it through the mock MVCC path.
+    MockTiDB::instance().dropTable(global_ctx, db_name, "t4", /*drop_regions=*/false);
+
+    // Mimic `__refresh_schemas()` after DROP TABLE. Since the local storage does not exist yet,
+    // applyDropTable should ignore the diff and still leave no local storage.
+    refreshSchema();
+    ASSERT_EQ(global_ctx.getTMTContext().getStorages().get(NullspaceID, table_id), nullptr);
+
+    // Mimic a raft command arriving after DROP TABLE. The first non-MVCC table lookup fails, then
+    // syncTableSchema retries with MVCC and creates a tombstone storage for the dropped table.
+    refreshTableSchema(table_id);
+
+    auto storage = mustGetSyncedTable(table_id);
+    ASSERT_TRUE(storage->isTombstone());
+    ASSERT_GT(storage->getTombstone(), 0);
+    ASSERT_EQ(storage->getTableInfo().name, "t4");
+}
+CATCH
+
 TEST_F(SchemaSyncTest, RenamePartitionTable)
 try
 {
