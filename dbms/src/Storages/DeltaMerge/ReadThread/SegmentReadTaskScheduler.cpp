@@ -31,6 +31,11 @@ SegmentReadTaskScheduler::SegmentReadTaskScheduler(bool run_sched_thread)
 
 SegmentReadTaskScheduler::~SegmentReadTaskScheduler()
 {
+    stop();
+}
+
+void SegmentReadTaskScheduler::stop()
+{
     setStop();
     if (likely(sched_thread.joinable()))
     {
@@ -223,12 +228,12 @@ std::optional<std::pair<GlobalSegmentID, std::vector<UInt64>>> SegmentReadTaskSc
 
 void SegmentReadTaskScheduler::setStop()
 {
-    stop.store(true, std::memory_order_relaxed);
+    stop_flag.store(true, std::memory_order_relaxed);
 }
 
 bool SegmentReadTaskScheduler::isStop() const
 {
-    return stop.load(std::memory_order_relaxed);
+    return stop_flag.load(std::memory_order_relaxed);
 }
 
 std::tuple<UInt64, UInt64, UInt64> SegmentReadTaskScheduler::scheduleOneRound()
