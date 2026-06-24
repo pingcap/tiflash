@@ -43,6 +43,15 @@ void SegmentReadTaskScheduler::stop()
     }
 }
 
+void SegmentReadTaskScheduler::pushMergedTask(const MergedTaskPtr & p)
+{
+    // After stop(), the schedLoop is no longer running and merged_task_pool
+    // will never be drained. Discard re-queued tasks to avoid resource leak.
+    if (isStop())
+        return;
+    merged_task_pool.push(p);
+}
+
 void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
 {
     // To avoid schedule from always failing to acquire the pending_mtx.

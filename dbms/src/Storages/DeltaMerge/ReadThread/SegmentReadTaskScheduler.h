@@ -55,7 +55,7 @@ public:
     // Add `pool` to `pending_pools`.
     void add(const SegmentReadTaskPoolPtr & pool);
 
-    void pushMergedTask(const MergedTaskPtr & p) { merged_task_pool.push(p); }
+    void pushMergedTask(const MergedTaskPtr & p);
 
     void updateConfig(const Settings & settings);
 
