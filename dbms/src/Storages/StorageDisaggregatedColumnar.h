@@ -223,6 +223,7 @@ public:
 
 private:
     bool ensureReader();
+    void mergeReaderStats();
     void releaseReader();
 
     const Context & context;
