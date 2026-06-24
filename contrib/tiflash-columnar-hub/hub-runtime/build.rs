@@ -15,7 +15,16 @@
 use std::path::PathBuf;
 
 fn main() {
+<<<<<<< HEAD
     let lock_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../Cargo.lock");
+=======
+    let workspace_dir =
+        PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string()))
+            .join("..");
+    let lock_path = workspace_dir.join("Cargo.lock");
+    let cloud_storage_engine_repo = workspace_dir.join("../cloud-storage-engine");
+
+>>>>>>> 96e3ff3a49 (columnar: remove duplicated store id from pd and retry put new store (#10913))
     println!("cargo:rerun-if-changed={}", lock_path.display());
 
     let hash = std::fs::read_to_string(&lock_path)

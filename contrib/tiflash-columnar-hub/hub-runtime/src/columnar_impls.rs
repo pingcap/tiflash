@@ -232,3 +232,12 @@ pub unsafe extern "C" fn ffi_read_column(
 pub unsafe extern "C" fn ffi_physical_table_id(mut reader: ColumnarReaderPtr) -> i64 {
     reader.as_mut().ffi_physical_table_id()
 }
+<<<<<<< HEAD
+=======
+
+pub unsafe extern "C" fn ffi_columnar_scan_stats(
+    mut reader: ColumnarReaderPtr,
+) -> ColumnarScanStats {
+    reader.as_mut().runtime_stats().into()
+}
+>>>>>>> 96e3ff3a49 (columnar: remove duplicated store id from pd and retry put new store (#10913))
