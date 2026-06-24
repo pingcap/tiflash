@@ -35,3 +35,8 @@ tidb_service_scope = "dxf_service"
 tcp-keep-alive = true
 [security]
 enable-sem = false
+
+# Turn on the experimental feature to allow related testing
+# Related PR: https://github.com/pingcap/tidb/pull/69167
+[experimental]
+allow-enable-foreign-key-check-in-shared-lock = true
