@@ -276,7 +276,7 @@ ExecutorBinderPtr compileAggregation(
             }
             else if (
                 func->name == "max" || func->name == "min" || func->name == "first_row" || func->name == "sum"
-                || func->name == "avg")
+                || func->name == "sum_int" || func->name == "avg")
             {
                 ci = children_ci[0];
                 ci.flag &= ~TiDB::ColumnFlagNotNull;
