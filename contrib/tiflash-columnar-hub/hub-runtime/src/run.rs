@@ -43,8 +43,8 @@ use kvengine::{
     txn_chunk_manager::{with_pool_size, TxnChunkManager, TxnChunkManagerConfig},
 };
 use kvproto::{metapb, pdpb};
-use pd_client::{Config as PdConfig, PdClient, RpcClient};
-use security::{SecurityConfig, SecurityManager};
+use pd_client::{Config as PdConfig, Error as PdError, PdClient, RpcClient};
+use security::{RestfulClient, SecurityConfig, SecurityManager};
 use serde::{Deserialize, Serialize};
 use tikv_util::{
     config::{AbsoluteOrPercentSize, LogFormat, ReadableSize},
@@ -238,6 +238,8 @@ struct HubConfigSummary<'a> {
 
 const STORE_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(10);
 const HEARTBEAT_SHUTDOWN_POLL_INTERVAL: Duration = Duration::from_millis(200);
+const STORE_TOMBSTONE_WAIT_TIMEOUT: Duration = Duration::from_secs(30);
+const STORE_TOMBSTONE_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
 fn load_config(path: Option<&OsStr>) -> ConfigFile {
     path.map_or_else(ConfigFile::default, |path| {
@@ -770,6 +772,126 @@ fn build_store(config: &ConfigFile, store_id: u64) -> metapb::Store {
     store.set_start_timestamp(start_timestamp);
     store.set_labels(build_store_labels(config));
     store
+}
+
+fn is_tiflash_compute_store(store: &metapb::Store) -> bool {
+    store
+        .get_labels()
+        .iter()
+        .any(|label| label.get_key() == "engine" && label.get_value() == "tiflash_compute")
+}
+
+fn extract_duplicated_store_id(err_msg: &str) -> Option<u64> {
+    lazy_static::lazy_static! {
+        static ref DUPLICATED_STORE_RE: regex::Regex =
+            regex::Regex::new(r"already registered by id:(\d+)").unwrap();
+    }
+    DUPLICATED_STORE_RE
+        .captures(err_msg)
+        .and_then(|caps| caps.get(1))
+        .and_then(|matched| matched.as_str().parse::<u64>().ok())
+}
+
+fn wait_for_store_tombstone(
+    pd_client: &dyn PdClient,
+    conflict_store_id: u64,
+    timeout: Duration,
+) -> Result<(), String> {
+    let start = SystemTime::now();
+    loop {
+        match pd_client.get_store(conflict_store_id) {
+            Err(PdError::StoreTombstone(_)) => return Ok(()),
+            Ok(_) => {}
+            Err(err) => {
+                return Err(format!(
+                    "failed to confirm store {} tombstone state: {}",
+                    conflict_store_id, err
+                ))
+            }
+        }
+
+        let elapsed = start.elapsed().unwrap_or_default();
+        if elapsed >= timeout {
+            return Err(format!(
+                "timed out waiting {}s for store {} to become tombstone",
+                timeout.as_secs(),
+                conflict_store_id
+            ));
+        }
+        thread::sleep(STORE_TOMBSTONE_POLL_INTERVAL);
+    }
+}
+
+fn try_remove_duplicated_compute_store(
+    pd_client: &dyn PdClient,
+    pd_config: &PdConfig,
+    store: &metapb::Store,
+    err_msg: &str,
+) -> Result<bool, String> {
+    let Some(conflict_store_id) = extract_duplicated_store_id(err_msg) else {
+        return Ok(false);
+    };
+    if !is_tiflash_compute_store(store) {
+        return Ok(false);
+    }
+
+    info!(
+        "detected duplicated TiFlash compute store registration, removing conflicting store from PD";
+        "current_store_id" => store.get_id(),
+        "conflict_store_id" => conflict_store_id,
+        "status_address" => store.get_status_address().to_owned()
+    );
+
+    let pd_control = RestfulClient::new(
+        "tiflash-columnar-hub-store-cleanup",
+        pd_config.endpoints.clone(),
+        pd_client.get_security_mgr(),
+    )
+    .map_err(|err| format!("failed to initialize PD control client: {}", err))?;
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|err| format!("failed to build PD control runtime: {}", err))?;
+    runtime
+        .block_on(pd_control.delete(format!("pd/api/v1/store/{conflict_store_id}")))
+        .map_err(|err| {
+            format!(
+                "failed to delete duplicated store {} from PD: {}",
+                conflict_store_id, err
+            )
+        })?;
+    wait_for_store_tombstone(pd_client, conflict_store_id, STORE_TOMBSTONE_WAIT_TIMEOUT)?;
+    Ok(true)
+}
+
+fn register_store_to_pd(
+    pd_client: &dyn PdClient,
+    pd_config: &PdConfig,
+    store: metapb::Store,
+) -> Result<(), String> {
+    let store_id = store.get_id();
+    match pd_client.put_store(store.clone()) {
+        Ok(_) => Ok(()),
+        Err(err) => {
+            let err_msg = err.to_string();
+            match try_remove_duplicated_compute_store(pd_client, pd_config, &store, &err_msg) {
+                Ok(true) => pd_client.put_store(store).map(|_| ()).map_err(|retry_err| {
+                    format!(
+                        "failed to register TiFlash Columnar Hub store {} to PD after removing duplicated store: {}",
+                        store_id, retry_err
+                    )
+                }),
+                Ok(false) => Err(format!(
+                    "failed to register TiFlash Columnar Hub store {} to PD: {}",
+                    store_id, err_msg
+                )),
+                Err(remove_err) => Err(format!(
+                    "failed to register TiFlash Columnar Hub store {} to PD: {}; duplicated-store cleanup failed: {}",
+                    store_id, err_msg, remove_err
+                )),
+            }
+        }
+    }
 }
 
 fn current_unix_timestamp_secs() -> u64 {
@@ -1305,12 +1427,8 @@ pub unsafe fn run_proxy(argc: c_int, argv: *const *const c_char, helper_ptr: *co
         // Only register the store and start the heartbeat loop after the engine-store server is running. This ensures that TiFlash does not register itself before the PD successfully bootstrapped the cluster with init TiKV servers.
         if let Some((store, start_time)) = store_registration.take() {
             let store_id = store.get_id();
-            pd_client.put_store(store).unwrap_or_else(|err| {
-                panic!(
-                    "failed to register TiFlash Columnar Hub store {} to PD: {}",
-                    store_id, err
-                )
-            });
+            register_store_to_pd(pd_client.as_ref(), &config.pd, store)
+                .unwrap_or_else(|err| panic!("{}", err));
             heartbeat_context = Some((store_id, start_time));
         }
 
@@ -1579,6 +1697,37 @@ log-rotation-size = "1024MiB"
         assert_eq!(store.get_version(), "v9");
         assert_eq!(store.get_git_hash(), "abcd");
         assert_eq!(store.get_labels().len(), 2);
+    }
+
+    #[test]
+    fn test_is_tiflash_compute_store_detects_engine_label() {
+        let mut config = ConfigFile::default();
+        config
+            .server
+            .labels
+            .insert("engine".to_owned(), "tiflash_compute".to_owned());
+        let store = build_store(&config, 42);
+        assert!(is_tiflash_compute_store(&store));
+    }
+
+    #[test]
+    fn test_is_tiflash_compute_store_rejects_other_labels() {
+        let mut config = ConfigFile::default();
+        config
+            .server
+            .labels
+            .insert("engine".to_owned(), "tiflash".to_owned());
+        let store = build_store(&config, 42);
+        assert!(!is_tiflash_compute_store(&store));
+    }
+
+    #[test]
+    fn test_extract_duplicated_store_id() {
+        assert_eq!(
+            extract_duplicated_store_id("store address is already registered by id:9527"),
+            Some(9527)
+        );
+        assert_eq!(extract_duplicated_store_id("other pd error"), None);
     }
 
     #[test]

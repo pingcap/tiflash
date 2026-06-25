@@ -31,11 +31,25 @@ SegmentReadTaskScheduler::SegmentReadTaskScheduler(bool run_sched_thread)
 
 SegmentReadTaskScheduler::~SegmentReadTaskScheduler()
 {
+    stop();
+}
+
+void SegmentReadTaskScheduler::stop()
+{
     setStop();
     if (likely(sched_thread.joinable()))
     {
         sched_thread.join();
     }
+}
+
+void SegmentReadTaskScheduler::pushMergedTask(const MergedTaskPtr & p)
+{
+    // After stop(), the schedLoop is no longer running and merged_task_pool
+    // will never be drained. Discard re-queued tasks to avoid resource leak.
+    if (isStop())
+        return;
+    merged_task_pool.push(p);
 }
 
 void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
@@ -223,12 +237,12 @@ std::optional<std::pair<GlobalSegmentID, std::vector<UInt64>>> SegmentReadTaskSc
 
 void SegmentReadTaskScheduler::setStop()
 {
-    stop.store(true, std::memory_order_relaxed);
+    stop_flag.store(true, std::memory_order_relaxed);
 }
 
 bool SegmentReadTaskScheduler::isStop() const
 {
-    return stop.load(std::memory_order_relaxed);
+    return stop_flag.load(std::memory_order_relaxed);
 }
 
 std::tuple<UInt64, UInt64, UInt64> SegmentReadTaskScheduler::scheduleOneRound()
