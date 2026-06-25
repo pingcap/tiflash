@@ -446,9 +446,7 @@ try
     ASSERT_NE(dropped_table_info, nullptr);
     dropped_table_info->state = TiDB::StateDeleteOnly;
     FailPointHelper::enableFailPoint(FailPoints::force_get_dropped_table_info_in_schema_sync, dropped_table_info);
-    SCOPE_EXIT({
-        FailPointHelper::disableFailPoint(FailPoints::force_get_dropped_table_info_in_schema_sync);
-    });
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_get_dropped_table_info_in_schema_sync); });
 
     // Mimic DROP TABLE before a raft command creates local storage. The failpoint above injects the
     // dropped table info for the later table-level schema sync, matching the real MVCC path.
