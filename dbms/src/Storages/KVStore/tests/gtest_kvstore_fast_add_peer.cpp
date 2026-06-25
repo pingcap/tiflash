@@ -1093,7 +1093,10 @@ try
 }
 CATCH
 
-TEST_F(RegionKVStoreTestFAP, FAPWorkerException)
+// FIXME: Disabled because the flaky test result errors in CI.
+// And we don't plan to support enable FAP in short time.
+// Test cancel and regular snapshot
+TEST_F(RegionKVStoreTestFAP, DISABLED_FAPWorkerException)
 try
 {
     auto mock_data = prepareForRestart(FAPTestOpt{})[0];

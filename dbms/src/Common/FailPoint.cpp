@@ -110,6 +110,7 @@ namespace DB
     M(force_syncpoint_on_s3_upload)                          \
     M(force_stop_background_checkpoint_upload)               \
     M(force_schema_sync_diff_fail)                           \
+    M(force_get_dropped_table_info_in_schema_sync)           \
     M(exception_after_large_write_exceed)                    \
     M(proactive_flush_force_set_type)                        \
     M(exception_when_fetch_disagg_pages)                     \

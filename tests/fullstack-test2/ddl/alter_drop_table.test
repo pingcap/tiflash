@@ -63,25 +63,5 @@ mysql> drop table test.t3;
 => DBGInvoke __refresh_schemas()
 >> select tidb_database,tidb_name from system.tables where tidb_database = 'test' and tidb_name = 't3' and is_tombstone = 0
 
-# create table -> add tiflash replica -> drop table -> raft command is send to tiflash
->> DBGInvoke __enable_schema_sync_service('false')
-mysql> drop table if exists test.t4;
-mysql> create table test.t4(a int primary key, b decimal(5,2) not NULL, c varchar(10), d int default 0);
-mysql> alter table test.t4 set tiflash replica 1; 
-func> wait_table test t4
-
->> DBGInvoke __enable_fail_point(pause_before_apply_raft_cmd)
-mysql> insert into test.t4 values(1, 1.2, 'v', 2);
-=> DBGInvoke __refresh_schemas()
-mysql> drop table test.t4;
->> DBGInvoke __disable_fail_point(pause_before_apply_raft_cmd)
-=> DBGInvoke __refresh_schemas()
-# ensure t4 is tombstone
->> select tidb_database,tidb_name,tidb_table_id from system.tables where tidb_database = 'test' and tidb_name = 't4' and is_tombstone = 0
->> select count(*) from system.tables where tidb_database = 'test' and tidb_name = 't4' and is_tombstone != 0
-┌─count()─┐
-│       1 │
-└─────────┘
-
 # re-enable
 >> DBGInvoke __enable_schema_sync_service('true')
