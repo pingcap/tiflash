@@ -29,6 +29,7 @@
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
 #include <Storages/Transaction/TiDB.h>
 
+#include <magic_enum.hpp>
 #include <queue>
 
 namespace DB
@@ -645,3 +646,11 @@ using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
 
 } // namespace DM
 } // namespace DB
+
+template <>
+struct magic_enum::customize::enum_range<DB::DM::DeltaMergeStore::TaskType>
+{
+    static constexpr int min = static_cast<int>(DB::DM::DeltaMergeStore::TaskType::Split);
+    static constexpr int max = static_cast<int>(DB::DM::DeltaMergeStore::TaskType::PlaceIndex);
+    static constexpr bool is_flags = false;
+};
