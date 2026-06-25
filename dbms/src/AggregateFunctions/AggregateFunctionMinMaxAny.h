@@ -1002,6 +1002,8 @@ public:
     }
 
     const char * getHeaderFilePath() const override { return __FILE__; }
+
+    bool allocatesMemoryInArena() const override { return Data::needArena(); }
 };
 
 } // namespace DB
