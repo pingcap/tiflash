@@ -13,8 +13,11 @@
 // limitations under the License.
 
 #include <AggregateFunctions/AggregateFunctionSum.h>
+#include <Columns/ColumnsNumber.h>
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <TestUtils/AggregationTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/mockExecutor.h>
@@ -67,6 +70,31 @@ public:
 
         return ::testing::AssertionSuccess();
     }
+
+    UInt64 evalCountAgg(const String & agg_name, const DataTypePtr & data_type, const std::vector<Field> & values)
+    {
+        AggregateFunctionPtr agg_ptr = getCountAgg(agg_name, data_type);
+        auto data_col = data_type->createColumn();
+        for (const auto & value : values)
+            data_col->insert(value);
+
+        Arena arena;
+        auto * place = arena.alignedAlloc(agg_ptr->sizeOfData(), agg_ptr->alignOfData());
+        agg_ptr->create(place);
+        const IColumn * cols[] = {data_col.get()};
+        for (size_t i = 0; i < values.size(); ++i)
+            agg_ptr->add(place, cols, i, &arena);
+
+        auto result_col = agg_ptr->getReturnType()->createColumn();
+        agg_ptr->insertResultInto(place, *result_col, &arena);
+        agg_ptr->destroy(place);
+        return typeid_cast<const ColumnUInt64 &>(*result_col).getData()[0];
+    }
+
+    AggregateFunctionPtr getCountAgg(const String & agg_name, const DataTypePtr & data_type)
+    {
+        return DB::AggregateFunctionFactory::instance().get(*TiFlashTestEnv::getContext(), agg_name, {data_type}, {});
+    }
 };
 
 TEST_F(ExecutorAggFuncReturnTypeTestRunner, AggregationSum)
@@ -77,6 +105,46 @@ try
     ASSERT_TRUE(testSumOnPartialResult<Decimal64>());
     ASSERT_TRUE(testSumOnPartialResult<Decimal128>());
     ASSERT_TRUE(testSumOnPartialResult<Decimal256>());
+}
+CATCH
+
+TEST_F(ExecutorAggFuncReturnTypeTestRunner, AggregationMinMaxCount)
+try
+{
+    auto int_type = std::make_shared<DataTypeInt64>();
+    auto nullable_int_type = makeNullable(int_type);
+    auto string_type = std::make_shared<DataTypeString>();
+    const String long_min(128, 'a');
+    const String long_max(128, 'z');
+
+    ASSERT_FALSE(getCountAgg("max_count", int_type)->allocatesMemoryInArena());
+    ASSERT_FALSE(getCountAgg("min_count", int_type)->allocatesMemoryInArena());
+    ASSERT_TRUE(getCountAgg("max_count", string_type)->allocatesMemoryInArena());
+    ASSERT_TRUE(getCountAgg("min_count", string_type)->allocatesMemoryInArena());
+
+    ASSERT_EQ(
+        evalCountAgg("max_count", int_type, {Field(Int64(1)), Field(Int64(3)), Field(Int64(3)), Field(Int64(2))}),
+        2);
+    ASSERT_EQ(
+        evalCountAgg(
+            "min_count",
+            nullable_int_type,
+            {Field(), Field(Int64(2)), Field(Int64(1)), Field(Int64(1)), Field()}),
+        2);
+    ASSERT_EQ(evalCountAgg("max_count", nullable_int_type, {Field(), Field(), Field()}), 0);
+    ASSERT_EQ(evalCountAgg("min_count", nullable_int_type, {Field(), Field(), Field()}), 0);
+    ASSERT_EQ(
+        evalCountAgg(
+            "max_count",
+            string_type,
+            {Field(long_min), Field(long_max), Field(long_max), Field(String("middle"))}),
+        2);
+    ASSERT_EQ(
+        evalCountAgg(
+            "min_count",
+            string_type,
+            {Field(long_max), Field(long_min), Field(String("middle")), Field(long_min)}),
+        2);
 }
 CATCH
 

@@ -89,6 +89,8 @@ std::unordered_map<String, tipb::ExprType> agg_func_name_to_sig({
     {"max", tipb::ExprType::Max},
     {"min_for_window", tipb::ExprType::Min},
     {"max_for_window", tipb::ExprType::Max},
+    {"min_count", tipb::ExprType::MinCount},
+    {"max_count", tipb::ExprType::MaxCount},
     {"count", tipb::ExprType::Count},
     {"sum", tipb::ExprType::Sum},
     {"sum_int", tipb::ExprType::SumInt},
