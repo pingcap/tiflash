@@ -378,6 +378,10 @@ void AsynchronousMetrics::update()
         set("jemalloc." NAME, value);                         \
     } while (0);
 
+        uint64_t epoch = 1;
+        size_t sz = sizeof(epoch);
+        // Call epoch to refresh jemalloc stats
+        je_mallctl("epoch", &epoch, &sz, &epoch, sz);
         FOR_EACH_METRIC(GET_JEMALLOC_METRIC);
 
 #undef GET_JEMALLOC_METRIC

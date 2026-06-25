@@ -15,6 +15,7 @@
 #include <Common/config.h> // for ENABLE_NEXT_GEN_COLUMNAR
 #if ENABLE_NEXT_GEN_COLUMNAR
 #include <Common/Exception.h>
+#include <Common/MemoryTracker.h>
 #include <Common/MyTime.h>
 #include <Common/RedactHelpers.h>
 #include <Common/Stopwatch.h>
@@ -1473,6 +1474,10 @@ Block RNColumnarInputStream::readImpl([[maybe_unused]] FilterPtr & res_filter, [
             }
             continue;
         }
+
+        // Check RSS pressure once the columnar reader has materialized a non-empty block,
+        // before deserializing more column data into TiFlash memory.
+        CurrentMemoryTracker::checkRssLimit();
 
         TableID physical_table_id = -1;
         Block header = getHeader();
