@@ -92,3 +92,11 @@ CoverageReport
 # installation and sysroot path
 release-linux-llvm/tiflash
 release-linux-llvm/build-release
+release-linux-llvm/build-release-columnar
+release-linux-llvm/.cargo/
+
+
+gtest_10x_workdir/
+second_opinion*
+
+license-eye
