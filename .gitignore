@@ -97,3 +97,6 @@ release-linux-llvm/.cargo/
 gtest_10x_workdir/
 
 license-eye
+
+# generated review files
+second_opinion*

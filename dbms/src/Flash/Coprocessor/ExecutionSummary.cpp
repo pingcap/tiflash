@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <Flash/Coprocessor/ColumnarScanContext.h>
 #include <Flash/Coprocessor/ExecutionSummary.h>
 #include <Flash/Statistics/BaseRuntimeStatistics.h>
+#include <Storages/Columnar/ColumnarScanContext.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <common/likely.h>
 

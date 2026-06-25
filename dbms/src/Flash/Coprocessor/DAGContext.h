@@ -32,7 +32,6 @@
 #include <Core/TaskOperatorSpillContexts.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/IBlockInputStream.h>
-#include <Flash/Coprocessor/ColumnarScanContext_fwd.h>
 #include <Flash/Coprocessor/DAGRequest.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Coprocessor/RuntimeFilterMgr.h>
@@ -43,6 +42,7 @@
 #include <Operators/IOProfileInfo.h>
 #include <Operators/OperatorProfileInfo.h>
 #include <Parsers/makeDummyQuery.h>
+#include <Storages/Columnar/ColumnarScanContext_fwd.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 

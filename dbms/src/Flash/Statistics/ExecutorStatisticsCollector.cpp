@@ -14,7 +14,6 @@
 
 #include <Common/FmtUtils.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
-#include <Flash/Coprocessor/ColumnarScanContext.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/RemoteExecutionSummary.h>
 #include <Flash/Statistics/CommonExecutorImpl.h>
@@ -25,6 +24,7 @@
 #include <Flash/Statistics/JoinImpl.h>
 #include <Flash/Statistics/TableScanImpl.h>
 #include <Flash/Statistics/traverseExecutors.h>
+#include <Storages/Columnar/ColumnarScanContext.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
 namespace DB
