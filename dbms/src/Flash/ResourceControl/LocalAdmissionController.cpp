@@ -59,6 +59,9 @@ uint64_t ResourceGroup::getPriority(uint64_t max_ru_per_sec) const
 
 std::optional<GACRequestInfo> ResourceGroup::buildRequestInfoIfNecessary(const SteadyClock::time_point & now)
 {
+    if (!enable_gac)
+        return {};
+
     std::lock_guard lock(mu);
     if (!beginRequestWithoutLock(now))
     {
@@ -292,6 +295,24 @@ LACRUConsumptionDeltaInfo ResourceGroup::updateRUConsumptionDeltaInfoWithoutLock
     return info;
 }
 
+resource_manager::ResourceGroup LocalAdmissionController::buildReservedDefaultResourceGroup(const KeyspaceID & keyspace_id)
+{
+    resource_manager::ResourceGroup group_pb;
+    group_pb.set_name("default");
+    group_pb.set_mode(resource_manager::GroupMode::RUMode);
+    group_pb.set_priority(ResourceGroup::UserMediumPriority);
+    group_pb.mutable_keyspace_id()->set_value(keyspace_id);
+    auto * settings = group_pb.mutable_r_u_settings()->mutable_r_u()->mutable_settings();
+    settings->set_fill_rate(RESERVED_DEFAULT_RESOURCE_GROUP_RU_PER_SEC);
+    settings->set_burst_limit(-1);
+    return group_pb;
+}
+
+void LocalAdmissionController::addReservedDefaultResourceGroup(const KeyspaceID & keyspace_id)
+{
+    addResourceGroup(keyspace_id, buildReservedDefaultResourceGroup(keyspace_id), false);
+}
+
 void LocalAdmissionController::warmupResourceGroupInfoCache(const KeyspaceID & keyspace_id, const std::string & name)
 {
     if (unlikely(stopped))
@@ -300,9 +321,11 @@ void LocalAdmissionController::warmupResourceGroupInfoCache(const KeyspaceID & k
     if (name.empty())
         return;
 
-    ResourceGroupPtr group = findResourceGroup(keyspace_id, name);
-    if (group != nullptr)
-        return;
+    {
+        std::lock_guard lock(mu);
+        if (findResourceGroupWithCompatWithoutLock(keyspace_id, name).group != nullptr)
+            return;
+    }
 
     resource_manager::GetResourceGroupRequest req;
     req.mutable_keyspace_id()->set_value(keyspace_id);
@@ -323,12 +346,54 @@ void LocalAdmissionController::warmupResourceGroupInfoCache(const KeyspaceID & k
             getCurrentExceptionMessage(false));
     }
 
-    RUNTIME_CHECK_MSG(
-        !resp.has_error(),
-        "warmupResourceGroupInfoCache: {}(keyspace={}) failed: {}",
-        name,
-        keyspace_id,
-        resp.error().message());
+    if (resp.has_error())
+    {
+        resource_manager::GetResourceGroupRequest legacy_req;
+        legacy_req.set_resource_group_name(name);
+        resource_manager::GetResourceGroupResponse legacy_resp;
+        try
+        {
+            legacy_resp = cluster->pd_client->getResourceGroup(legacy_req);
+        }
+        catch (...)
+        {
+            LOG_WARNING(
+                log,
+                "warmupResourceGroupInfoCache failed to fetch legacy rg for keyspace={}, rg={}, err={}",
+                keyspace_id,
+                name,
+                getCurrentExceptionMessage(false));
+        }
+        if (!legacy_resp.has_error())
+        {
+            checkGACRespValid(legacy_resp.group());
+            const auto rg_keyspace_id
+                = legacy_resp.group().has_keyspace_id() ? legacy_resp.group().keyspace_id().value() : NullspaceID;
+            addResourceGroup(rg_keyspace_id, legacy_resp.group());
+            return;
+        }
+        if (isReservedDefaultResourceGroup(name))
+        {
+            {
+                std::lock_guard lock(mu);
+                if (findResourceGroupWithoutLock(NullspaceID, name) != nullptr)
+                    return;
+            }
+            LOG_WARNING(
+                log,
+                "warmupResourceGroupInfoCache fallback to reserved default rg for keyspace={}, err={}",
+                keyspace_id,
+                resp.error().message());
+            addReservedDefaultResourceGroup(keyspace_id);
+            return;
+        }
+        RUNTIME_CHECK_MSG(
+            false,
+            "warmupResourceGroupInfoCache: {}(keyspace={}) failed: {}",
+            name,
+            keyspace_id,
+            resp.error().message());
+    }
 
     checkGACRespValid(resp.group());
 
@@ -470,7 +535,8 @@ std::optional<resource_manager::TokenBucketsRequest> LocalAdmissionController::b
     for (const auto & info : request_infos)
     {
         auto * group_request = gac_req.add_requests();
-        group_request->mutable_keyspace_id()->set_value(info.keyspace_id);
+        if (info.keyspace_id != NullspaceID)
+            group_request->mutable_keyspace_id()->set_value(info.keyspace_id);
         group_request->set_resource_group_name(info.resource_group_name);
         assert(info.acquire_tokens > 0.0 || info.ru_consumption_delta > 0.0 || is_final_report);
         if (info.acquire_tokens > 0.0 || is_final_report)
@@ -535,7 +601,7 @@ static std::vector<std::pair<KeyspaceID, std::string>> extractGACReqNames(
     std::vector<std::pair<KeyspaceID, std::string>> res;
     res.reserve(gac_req.requests_size());
     for (const auto & req : gac_req.requests())
-        res.push_back({req.keyspace_id().value(), req.resource_group_name()});
+        res.push_back({req.has_keyspace_id() ? req.keyspace_id().value() : NullspaceID, req.resource_group_name()});
     return res;
 }
 
