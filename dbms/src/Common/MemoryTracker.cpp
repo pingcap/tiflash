@@ -196,6 +196,7 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
         }
         try
         {
+            // Check the process level memory usage
             checkRssLimitImpl(/* require_tracked_growth */ true, will_be, size);
         }
         catch (...)
@@ -203,6 +204,7 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
             rollback_current_alloc();
             throw;
         }
+        // Check the memory usage of *this
         if (unlikely(current_limit && will_be > current_limit))
         {
             DB::GET_METRIC(tiflash_memory_exceed_quota_count).Increment();
