@@ -15,9 +15,11 @@
 #include <IO/Encryption/MockKeyManager.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
+#include <DataTypes/DataTypeFactory.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
+#include <Storages/DeltaMerge/File/DMFileLocalStaging.h>
 #include <Storages/DeltaMerge/File/DMFileV3IncrementWriter.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
@@ -25,10 +27,12 @@
 #include <Storages/PathPool.h>
 #include <Storages/S3/FileCache.h>
 #include <Storages/S3/S3Common.h>
+#include <Storages/S3/S3Filename.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
 #include <gtest/gtest.h>
 
 #include <memory>
+#include <unordered_set>
 
 
 namespace DB::DM::tests
@@ -528,6 +532,108 @@ try
     ASSERT_STREQ("test", cn_dmf->meta->getColumnStats()[MutSup::extra_handle_id].additional_data_for_test.c_str());
 
     SCOPE_EXIT({ FileCache::shutdown(); });
+}
+CATCH
+
+namespace
+{
+std::unordered_set<String> collectObjectKeys(
+    const DMFilePtr & dmfile,
+    const ColumnDefines & read_columns,
+    const LoggerPtr & log)
+{
+    const auto objects = collectMetaV2MergedFilesForLocalRead(dmfile, read_columns, log, "DMFileLocalStagingTest");
+    std::unordered_set<String> keys;
+    for (const auto & object : objects)
+        keys.insert(object.s3_key);
+    return keys;
+}
+} // namespace
+
+TEST_P(LocalDMFile, LocalStagingNonMetaV2Noop)
+try
+{
+    auto log = Logger::get("DMFileLocalStagingTest");
+    auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
+    auto dm_file = DMFile::create(
+        /*file_id=*/2,
+        parent_path,
+        std::make_optional<DMChecksumConfig>(),
+        /*small_file_size_threshold=*/0,
+        16 * 1024 * 1024,
+        DMFileFormat::V2);
+    ASSERT_FALSE(dm_file->useMetaV2());
+    ASSERT_TRUE(collectMetaV2MergedFilesForLocalRead(dm_file, *cols, log, "DMFileLocalStagingTest").empty());
+}
+CATCH
+
+TEST_P(LocalDMFile, LocalStagingInvalidS3PathNoop)
+try
+{
+    auto log = Logger::get("DMFileLocalStagingTest");
+    auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
+    auto dm_file = prepareDMFile(/* file_id= */ 3);
+    ASSERT_TRUE(dm_file->useMetaV2());
+    ASSERT_TRUE(collectMetaV2MergedFilesForLocalRead(dm_file, *cols, log, "DMFileLocalStagingTest").empty());
+}
+CATCH
+
+TEST_P(S3DMFile, LocalStagingDedupMergedFiles)
+try
+{
+    auto log = Logger::get("DMFileLocalStagingTest");
+    auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
+    auto dm_file = prepareDMFileRemote(/* file_id= */ 10);
+    const auto * dmfile_meta = typeid_cast<const DMFileMetaV2 *>(dm_file->meta.get());
+    ASSERT_NE(dmfile_meta, nullptr);
+
+    const auto objects = collectMetaV2MergedFilesForLocalRead(dm_file, *cols, log, "DMFileLocalStagingTest");
+    ASSERT_FALSE(objects.empty());
+    ASSERT_EQ(objects.size(), dmfile_meta->merged_files.size());
+
+    std::unordered_set<String> keys;
+    for (const auto & object : objects)
+    {
+        EXPECT_TRUE(S3::S3FilenameView::fromKey(object.s3_key).isValid());
+        EXPECT_TRUE(object.s3_key.ends_with(".merged"));
+        EXPECT_GT(object.file_size, 0);
+        EXPECT_TRUE(keys.insert(object.s3_key).second);
+    }
+}
+CATCH
+
+TEST_P(S3DMFile, LocalStagingOnlyReadColumns)
+try
+{
+    auto log = Logger::get("DMFileLocalStagingTest");
+    auto all_cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
+    auto dm_file = prepareDMFileRemote(/* file_id= */ 11);
+
+    const ColumnDefines handle_only{getExtraHandleColumnDefine(/*is_common_handle=*/false)};
+    const ColumnDefines nullable_only{ColumnDefine{
+        1,
+        "Nullable(UInt64)",
+        DataTypeFactory::instance().get("Nullable(UInt64)"),
+    }};
+
+    const auto all_keys = collectObjectKeys(dm_file, *all_cols, log);
+    const auto handle_keys = collectObjectKeys(dm_file, handle_only, log);
+    const auto nullable_keys = collectObjectKeys(dm_file, nullable_only, log);
+
+    ASSERT_FALSE(all_keys.empty());
+    ASSERT_FALSE(handle_keys.empty());
+    ASSERT_FALSE(nullable_keys.empty());
+    for (const auto & key : handle_keys)
+        ASSERT_TRUE(all_keys.contains(key));
+    for (const auto & key : nullable_keys)
+        ASSERT_TRUE(all_keys.contains(key));
+
+    ColumnDefines missing_column{ColumnDefine{
+        9999,
+        "missing",
+        DataTypeFactory::instance().get("Int64"),
+    }};
+    ASSERT_TRUE(collectObjectKeys(dm_file, missing_column, log).empty());
 }
 CATCH
 
