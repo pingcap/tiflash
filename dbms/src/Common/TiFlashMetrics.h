@@ -940,6 +940,17 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       Gauge,                                                                                                                        \
       F(type_bg_downloading_count, {{"type", "bg_downloading_count"}}),                                                             \
       F(type_bg_download_queue_count, {{"type", "bg_download_queue_count"}}))                                                       \
+    M(tiflash_storage_write_filecache_staging,                                                                                      \
+      "Write-side FileCache local staging for background DMFile reads",                                                             \
+      Counter,                                                                                                                      \
+      F(type_attempt, {"type", "attempt"}),                                                                                         \
+      F(type_object, {"type", "object"}),                                                                                           \
+      F(type_download_ok, {"type", "download_ok"}),                                                                                 \
+      F(type_download_failed, {"type", "download_failed"}))                                                                         \
+    M(tiflash_storage_write_filecache_staging_bytes,                                                                                \
+      "Bytes staged by write FileCache local staging",                                                                              \
+      Counter,                                                                                                                      \
+      F(type_staged, {"type", "staged"}))                                                                                           \
     M(tiflash_system_seconds,                                                                                                       \
       "system calls duration in seconds",                                                                                           \
       Histogram,                                                                                                                    \
