@@ -15,6 +15,7 @@
 #include <Common/config.h> // for ENABLE_NEXT_GEN_COLUMNAR
 #if ENABLE_NEXT_GEN_COLUMNAR
 #include <Common/Exception.h>
+#include <Common/FailPoint.h>
 #include <Common/MyTime.h>
 #include <Common/RedactHelpers.h>
 #include <Common/Stopwatch.h>
@@ -67,14 +68,17 @@ namespace ErrorCodes
 extern const int COLUMNAR_SNAPSHOT_ERROR;
 } // namespace ErrorCodes
 
-namespace
+namespace FailPoints
+{
+extern const char force_return_columnar_region_bucket_keys[];
+} // namespace FailPoints
+
+namespace ColumnarReaderPlanDetail
 {
 using ColumnarPhysicalTableRanges = std::vector<std::tuple<TableID, pingcap::coprocessor::KeyRanges>>;
 using BucketSplitUnit = std::pair<TableID, pingcap::coprocessor::KeyRange>;
 
-void normalizeTimestampCompareDateTimeLiteralToUTC(tipb::Expr & expr, const TimezoneInfo & timezone_info);
-
-struct BucketSplitResult
+struct InternalBucketSplitResult
 {
     bool has_bucket_split = false;
     std::vector<BucketSplitUnit> units;
@@ -99,11 +103,26 @@ bool isBucketBoundaryInsideRange(const String & bucket_key, const pingcap::copro
     return true;
 }
 
-BucketSplitResult splitRangesByBucketKeys(
+#ifdef FIU_ENABLE
+std::optional<std::vector<String>> tryGetRegionBucketKeysFromFailPoint(RegionID region_id)
+{
+    if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_return_columnar_region_bucket_keys); v)
+    {
+        using BucketKeysByRegionMap = std::unordered_map<RegionID, std::vector<String>>;
+        const auto & bucket_keys_by_region = std::any_cast<const BucketKeysByRegionMap &>(v.value());
+        if (auto it = bucket_keys_by_region.find(region_id); it != bucket_keys_by_region.end())
+            return it->second;
+        return std::vector<String>{};
+    }
+    return std::nullopt;
+}
+#endif
+
+InternalBucketSplitResult splitRangesByBucketKeys(
     const ColumnarPhysicalTableRanges & physical_table_ranges,
     const std::vector<String> & bucket_keys)
 {
-    BucketSplitResult result;
+    InternalBucketSplitResult result;
     if (bucket_keys.size() <= 2)
         return result;
 
@@ -150,6 +169,11 @@ BucketSplitResult splitRangesByBucketKeys(
 
 std::vector<String> getRegionBucketKeysFromColumnar(const Context & context, RegionID region_id, UInt64 region_ver)
 {
+#ifdef FIU_ENABLE
+    if (auto bucket_keys = tryGetRegionBucketKeysFromFailPoint(region_id); bucket_keys.has_value())
+        return bucket_keys.value();
+#endif
+
     const Context & global_ctx = context.getGlobalContext();
     const TiFlashRaftProxyHelper * proxy_helper = global_ctx.getSharedContextDisagg()->getColumnarProxyHelper();
     if (proxy_helper == nullptr || proxy_helper->cloud_storage_engine_interfaces.fn_get_region_bucket_keys == nullptr)
@@ -244,6 +268,12 @@ std::vector<ColumnarReaderPlan> buildReaderPlansFromRegionReaderPlans(
     }
     return reader_plans;
 }
+
+} // namespace ColumnarReaderPlanDetail
+
+namespace
+{
+void normalizeTimestampCompareDateTimeLiteralToUTC(tipb::Expr & expr, const TimezoneInfo & timezone_info);
 
 std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedReadThroughColumnar(
     const TiDBTableScan & table_scan)
@@ -707,11 +737,11 @@ ColumnarReaderPtr ColumnarReadTaskPool::createColumnarReaderWithBackoff(const Co
                     // Replan only the key ranges owned by this failed work. Dropping the stale
                     // region cache happens before this exception, so this locate pass can pick up
                     // the latest region epoch and split layout.
-                    auto replanned_region_reader_plans = buildRegionReaderPlansFromPhysicalTableRanges(
+                    auto replanned_region_reader_plans = ColumnarReaderPlanDetail::buildRegionReaderPlansFromPhysicalTableRanges(
                         getLog(),
                         getContext(),
                         reader_work->plan.physical_table_ranges);
-                    auto replanned_reader_plans = buildReaderPlansFromRegionReaderPlans(replanned_region_reader_plans);
+                    auto replanned_reader_plans = ColumnarReaderPlanDetail::buildReaderPlansFromRegionReaderPlans(replanned_region_reader_plans);
                     const auto replanned_reader_plan_count = replanned_reader_plans.size();
                     replaceReaderWork(reader_work, std::move(replanned_reader_plans));
                     LOG_WARNING(
@@ -960,12 +990,15 @@ std::vector<ColumnarReadTaskPoolPtr> ColumnarReadTaskPool::build(
         = buildColumnarReaderSharedContext(log, context, start_ts, table_scan, filter_conditions);
 
     std::vector<ColumnarReadTaskPoolPtr> tasks;
-    ColumnarPhysicalTableRanges physical_table_ranges;
+    ColumnarReaderPlanDetail::ColumnarPhysicalTableRanges physical_table_ranges;
     physical_table_ranges.reserve(remote_table_ranges.size());
     for (const auto & remote_table_range : remote_table_ranges)
         physical_table_ranges.emplace_back(remote_table_range.first, remote_table_range.second);
 
-    auto region_reader_plans = buildRegionReaderPlansFromPhysicalTableRanges(log, context, physical_table_ranges);
+    auto region_reader_plans = ColumnarReaderPlanDetail::buildRegionReaderPlansFromPhysicalTableRanges(
+        log,
+        context,
+        physical_table_ranges);
     const auto region_num = static_cast<unsigned>(region_reader_plans.size());
     const auto physical_table_num = static_cast<unsigned>(physical_table_ranges.size());
     const bool enable_bucket_parallel = !table_scan.keepOrder() && num_streams > region_num;
@@ -974,8 +1007,13 @@ std::vector<ColumnarReadTaskPoolPtr> ColumnarReadTaskPool::build(
     {
         if (enable_bucket_parallel)
         {
-            auto bucket_keys = getRegionBucketKeysFromColumnar(context, plan.region_id, plan.region_ver_id.ver);
-            auto split_result = splitRangesByBucketKeys(plan.physical_table_ranges, bucket_keys);
+            auto bucket_keys = ColumnarReaderPlanDetail::getRegionBucketKeysFromColumnar(
+                context,
+                plan.region_id,
+                plan.region_ver_id.ver);
+            auto split_result = ColumnarReaderPlanDetail::splitRangesByBucketKeys(
+                plan.physical_table_ranges,
+                bucket_keys);
             if (split_result.has_bucket_split && split_result.units.size() > 1)
             {
                 total_max_reader_num += split_result.units.size() - 1;
@@ -1024,7 +1062,8 @@ std::vector<ColumnarReadTaskPoolPtr> ColumnarReadTaskPool::build(
                     .region_ver = plan.region_ver_id.ver,
                     .region_conf_ver = plan.region_ver_id.conf_ver,
                     .physical_table_ranges
-                    = ColumnarPhysicalTableRanges{std::make_tuple(table_id, pingcap::coprocessor::KeyRanges{range})},
+                    = ColumnarReaderPlanDetail::ColumnarPhysicalTableRanges{
+                        std::make_tuple(table_id, pingcap::coprocessor::KeyRanges{range})},
                 });
             }
         }
@@ -1048,6 +1087,117 @@ BlockInputStreams ColumnarReadTaskPool::getInputStreams()
     }
     return streams;
 }
+
+#ifdef DBMS_PUBLIC_GTEST
+bool isBucketBoundaryInsideRange(const String & bucket_key, const pingcap::coprocessor::KeyRange & range)
+{
+    return ColumnarReaderPlanDetail::isBucketBoundaryInsideRange(bucket_key, range);
+}
+
+BucketSplitResult splitRangesByBucketKeys(
+    const ColumnarPhysicalTableRanges & physical_table_ranges,
+    const std::vector<String> & bucket_keys)
+{
+    const auto result = ColumnarReaderPlanDetail::splitRangesByBucketKeys(physical_table_ranges, bucket_keys);
+    return BucketSplitResult{
+        .has_bucket_split = result.has_bucket_split,
+        .units = result.units,
+    };
+}
+
+std::vector<ColumnarReaderPlan> flattenColumnarRegionReaderPlans(
+    const std::vector<ColumnarRegionReaderPlan> & region_reader_plans)
+{
+    std::vector<ColumnarReaderPlan> all_reader_plans;
+    all_reader_plans.reserve(region_reader_plans.size());
+    for (const auto & plan : region_reader_plans)
+    {
+        if (plan.bucket_units.empty())
+        {
+            all_reader_plans.push_back(ColumnarReaderPlan{
+                .region_id = plan.region_id,
+                .region_ver = plan.region_ver_id.ver,
+                .region_conf_ver = plan.region_ver_id.conf_ver,
+                .physical_table_ranges = plan.physical_table_ranges,
+            });
+        }
+        else
+        {
+            all_reader_plans.reserve(all_reader_plans.size() + plan.bucket_units.size());
+            for (const auto & [table_id, range] : plan.bucket_units)
+            {
+                all_reader_plans.push_back(ColumnarReaderPlan{
+                    .region_id = plan.region_id,
+                    .region_ver = plan.region_ver_id.ver,
+                    .region_conf_ver = plan.region_ver_id.conf_ver,
+                    .physical_table_ranges
+                    = ColumnarReaderPlanDetail::ColumnarPhysicalTableRanges{
+                        std::make_tuple(table_id, pingcap::coprocessor::KeyRanges{range})},
+                });
+            }
+        }
+    }
+    return all_reader_plans;
+}
+
+ColumnarRegionReaderPlansOutput buildColumnarRegionReaderPlans(
+    const Context & context,
+    const std::unordered_map<RegionID, ColumnarPhysicalTableRanges> & all_remote_regions_by_region,
+    const std::unordered_map<RegionID, pingcap::kv::RegionVerID> & region_ver_ids,
+    bool enable_bucket_parallel)
+{
+    std::vector<ColumnarReaderPlanDetail::RegionReaderPlan> region_reader_plans;
+    region_reader_plans.reserve(all_remote_regions_by_region.size());
+    for (const auto & [region_id, physical_table_ranges] : all_remote_regions_by_region)
+    {
+        const auto ver_it = region_ver_ids.find(region_id);
+        RUNTIME_CHECK(ver_it != region_ver_ids.end(), region_id);
+        region_reader_plans.push_back(ColumnarReaderPlanDetail::RegionReaderPlan{
+            .region_id = region_id,
+            .region_ver_id = ver_it->second,
+            .physical_table_ranges = physical_table_ranges,
+        });
+    }
+
+    const auto region_num = region_reader_plans.size();
+    size_t planned_reader_num = region_num;
+    size_t total_split_bucket_num = 0;
+    for (auto & plan : region_reader_plans)
+    {
+        if (!enable_bucket_parallel)
+            continue;
+
+        auto bucket_keys = ColumnarReaderPlanDetail::getRegionBucketKeysFromColumnar(
+            context,
+            plan.region_id,
+            plan.region_ver_id.ver);
+        auto split_result = ColumnarReaderPlanDetail::splitRangesByBucketKeys(
+            plan.physical_table_ranges,
+            bucket_keys);
+        if (split_result.has_bucket_split && split_result.units.size() > 1)
+        {
+            planned_reader_num += split_result.units.size() - 1;
+            total_split_bucket_num += split_result.units.size();
+            plan.bucket_units = std::move(split_result.units);
+        }
+    }
+
+    ColumnarRegionReaderPlansOutput output;
+    output.planned_reader_num = planned_reader_num;
+    output.total_split_bucket_num = total_split_bucket_num;
+    output.region_reader_plans.reserve(region_reader_plans.size());
+    for (auto & plan : region_reader_plans)
+    {
+        output.region_reader_plans.push_back(ColumnarRegionReaderPlan{
+            .region_id = plan.region_id,
+            .region_ver_id = plan.region_ver_id,
+            .physical_table_ranges = std::move(plan.physical_table_ranges),
+            .bucket_units = std::move(plan.bucket_units),
+        });
+    }
+    return output;
+}
+#endif
 
 } // namespace DB
 #endif

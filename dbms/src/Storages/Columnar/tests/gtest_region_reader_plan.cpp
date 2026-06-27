@@ -83,7 +83,7 @@ std::unordered_map<RegionID, pingcap::kv::RegionVerID> makeRegionVerIDs(RegionID
     return {{region_id, pingcap::kv::RegionVerID(region_id, /*conf_ver=*/1, /*ver=*/2)}};
 }
 
-void sortFlattenedPlansByRangeStart(std::vector<RNProxyReaderPlan> & plans)
+void sortFlattenedPlansByRangeStart(std::vector<ColumnarReaderPlan> & plans)
 {
     std::sort(plans.begin(), plans.end(), [](const auto & lhs, const auto & rhs) {
         const auto & lhs_range = std::get<1>(lhs.physical_table_ranges.front()).front();

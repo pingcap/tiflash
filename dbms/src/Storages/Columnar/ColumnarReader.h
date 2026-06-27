@@ -288,5 +288,46 @@ ColumnarReaderPtr createColumnarReader(
     const ColumnarReaderSharedContext & shared_context,
     const ColumnarReaderPlan & reader_plan);
 
+#ifdef DBMS_PUBLIC_GTEST
+using ColumnarPhysicalTableRanges = std::vector<std::tuple<TableID, pingcap::coprocessor::KeyRanges>>;
+using BucketSplitUnit = std::pair<TableID, pingcap::coprocessor::KeyRange>;
+
+struct BucketSplitResult
+{
+    bool has_bucket_split = false;
+    std::vector<BucketSplitUnit> units;
+};
+
+struct ColumnarRegionReaderPlan
+{
+    RegionID region_id;
+    pingcap::kv::RegionVerID region_ver_id;
+    ColumnarPhysicalTableRanges physical_table_ranges;
+    std::vector<BucketSplitUnit> bucket_units;
+};
+
+struct ColumnarRegionReaderPlansOutput
+{
+    size_t planned_reader_num = 0;
+    size_t total_split_bucket_num = 0;
+    std::vector<ColumnarRegionReaderPlan> region_reader_plans;
+};
+
+bool isBucketBoundaryInsideRange(const String & bucket_key, const pingcap::coprocessor::KeyRange & range);
+
+BucketSplitResult splitRangesByBucketKeys(
+    const ColumnarPhysicalTableRanges & physical_table_ranges,
+    const std::vector<String> & bucket_keys);
+
+std::vector<ColumnarReaderPlan> flattenColumnarRegionReaderPlans(
+    const std::vector<ColumnarRegionReaderPlan> & region_reader_plans);
+
+ColumnarRegionReaderPlansOutput buildColumnarRegionReaderPlans(
+    const Context & context,
+    const std::unordered_map<RegionID, ColumnarPhysicalTableRanges> & all_remote_regions_by_region,
+    const std::unordered_map<RegionID, pingcap::kv::RegionVerID> & region_ver_ids,
+    bool enable_bucket_parallel);
+#endif
+
 } // namespace DB
 #endif

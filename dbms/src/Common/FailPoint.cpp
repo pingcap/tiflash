@@ -76,7 +76,8 @@ namespace DB
     M(force_not_support_local_index)                              \
     M(sync_schema_request_failure)                                \
     M(force_set_lifecycle_resp)                                   \
-    M(force_return_store_status)
+    M(force_return_store_status)                              \
+    M(force_return_columnar_region_bucket_keys)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(skip_check_segment_update)                             \
