@@ -114,11 +114,6 @@
     M(DMFileFilterNoFilter)                    \
     M(DMFileFilterAftPKAndPackSet)             \
     M(DMFileFilterAftRoughSet)                 \
-    M(DMFileWriteCacheStagingAttempt)          \
-    M(DMFileWriteCacheStagingObjects)        \
-    M(DMFileWriteCacheStagingDownloaded)       \
-    M(DMFileWriteCacheStagingFailed)           \
-    M(DMFileWriteCacheStagingFallback)         \
                                                \
     M(ChecksumDigestBytes)                     \
                                                \

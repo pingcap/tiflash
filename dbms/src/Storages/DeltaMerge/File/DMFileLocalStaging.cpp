@@ -19,7 +19,7 @@
 #include <Storages/S3/FileCache.h>
 #include <Storages/S3/S3Filename.h>
 #include <Common/Exception.h>
-#include <Common/ProfileEvents.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/typeid_cast.h>
 #include <common/logger_useful.h>
 
@@ -163,8 +163,8 @@ std::vector<FileSegmentPtr> tryDownloadMetaV2MergedFilesForLocalRead(
     if (objects.empty())
         return {};
 
-    ProfileEvents::increment(ProfileEvents::DMFileWriteCacheStagingAttempt);
-    ProfileEvents::increment(ProfileEvents::DMFileWriteCacheStagingObjects, objects.size());
+    GET_METRIC(tiflash_storage_write_filecache_staging, type_attempt).Increment();
+    GET_METRIC(tiflash_storage_write_filecache_staging, type_object).Increment(objects.size());
 
     std::vector<FileSegmentPtr> local_read_files;
     local_read_files.reserve(objects.size());
@@ -205,6 +205,11 @@ std::vector<FileSegmentPtr> tryDownloadMetaV2MergedFilesForLocalRead(
                 continue;
             }
             local_read_files.emplace_back(std::move(file_seg));
+            GET_METRIC(tiflash_storage_write_filecache_staging, type_download_ok).Increment();
+            // Cumulative bytes of physical `.merged` objects successfully staged (metadata file_size).
+            // Counter only increases; reader pin release does not decrement it. For live FileCache
+            // occupancy, use tiflash_storage_remote_cache_bytes instead.
+            GET_METRIC(tiflash_storage_write_filecache_staging_bytes, type_staged).Increment(object.file_size);
             ++downloaded_count;
         }
         catch (...)
@@ -220,13 +225,8 @@ std::vector<FileSegmentPtr> tryDownloadMetaV2MergedFilesForLocalRead(
         }
     }
 
-    if (downloaded_count > 0)
-        ProfileEvents::increment(ProfileEvents::DMFileWriteCacheStagingDownloaded, downloaded_count);
     if (failed_count > 0)
-    {
-        ProfileEvents::increment(ProfileEvents::DMFileWriteCacheStagingFailed, failed_count);
-        ProfileEvents::increment(ProfileEvents::DMFileWriteCacheStagingFallback, failed_count);
-    }
+        GET_METRIC(tiflash_storage_write_filecache_staging, type_download_failed).Increment(failed_count);
 
     LOG_DEBUG(
         log,

@@ -31,7 +31,7 @@
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
-#include <Common/ProfileEvents.h>
+#include <Common/TiFlashMetrics.h>
 #include <gtest/gtest.h>
 
 #include <memory>
@@ -682,16 +682,19 @@ try
     auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
     auto dm_file = prepareDMFileRemote(/* file_id= */ 14);
 
-    const auto attempt_before = ProfileEvents::get(ProfileEvents::DMFileWriteCacheStagingAttempt);
+    const auto attempt_before = GET_METRIC(tiflash_storage_write_filecache_staging, type_attempt).Value();
     const auto local_read_files
         = tryDownloadMetaV2MergedFilesForLocalRead(dm_file, *cols, /*enable=*/true, log, "DMFileLocalStagingTest");
     ASSERT_FALSE(local_read_files.empty());
     ASSERT_EQ(
         attempt_before + 1,
-        ProfileEvents::get(ProfileEvents::DMFileWriteCacheStagingAttempt));
+        GET_METRIC(tiflash_storage_write_filecache_staging, type_attempt).Value());
     ASSERT_GE(
-        ProfileEvents::get(ProfileEvents::DMFileWriteCacheStagingDownloaded),
+        GET_METRIC(tiflash_storage_write_filecache_staging, type_download_ok).Value(),
         local_read_files.size());
+    ASSERT_GT(
+        GET_METRIC(tiflash_storage_write_filecache_staging_bytes, type_staged).Value(),
+        0);
 
     auto * file_cache = FileCache::instance();
     ASSERT_NE(file_cache, nullptr);

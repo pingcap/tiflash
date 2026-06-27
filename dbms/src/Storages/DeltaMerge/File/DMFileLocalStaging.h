@@ -21,15 +21,6 @@
 #include <memory>
 #include <vector>
 
-namespace ProfileEvents
-{
-extern const Event DMFileWriteCacheStagingAttempt;
-extern const Event DMFileWriteCacheStagingObjects;
-extern const Event DMFileWriteCacheStagingDownloaded;
-extern const Event DMFileWriteCacheStagingFailed;
-extern const Event DMFileWriteCacheStagingFallback;
-} // namespace ProfileEvents
-
 namespace DB
 {
 class FileSegment;
