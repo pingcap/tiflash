@@ -16,9 +16,14 @@
 #include <Storages/DeltaMerge/File/DMFileLocalStaging.h>
 #include <Storages/DeltaMerge/File/DMFileMetaV2.h>
 #include <Storages/DeltaMerge/File/DMFileUtil.h>
+#include <Storages/S3/FileCache.h>
 #include <Storages/S3/S3Filename.h>
+#include <Common/Exception.h>
+#include <Common/ProfileEvents.h>
 #include <Common/typeid_cast.h>
 #include <common/logger_useful.h>
+
+#include <fmt/format.h>
 
 #include <optional>
 #include <unordered_map>
@@ -133,6 +138,106 @@ std::vector<LocalReadObject> collectMetaV2MergedFilesForLocalRead(
     for (auto & [_, object] : objects_by_key)
         objects.emplace_back(std::move(object));
     return objects;
+}
+
+namespace
+{
+constexpr Int32 local_staging_download_retry_count = 3;
+} // namespace
+
+std::vector<FileSegmentPtr> tryDownloadMetaV2MergedFilesForLocalRead(
+    const DMFilePtr & dmfile,
+    const ColumnDefines & read_columns,
+    bool enable_write_filecache_local_read,
+    const LoggerPtr & log,
+    const String & tracing_id)
+{
+    if (!enable_write_filecache_local_read)
+        return {};
+
+    auto * file_cache = FileCache::instance();
+    if (file_cache == nullptr)
+        return {};
+
+    const auto objects = collectMetaV2MergedFilesForLocalRead(dmfile, read_columns, log, tracing_id);
+    if (objects.empty())
+        return {};
+
+    ProfileEvents::increment(ProfileEvents::DMFileWriteCacheStagingAttempt);
+    ProfileEvents::increment(ProfileEvents::DMFileWriteCacheStagingObjects, objects.size());
+
+    std::vector<FileSegmentPtr> local_read_files;
+    local_read_files.reserve(objects.size());
+
+    size_t downloaded_count = 0;
+    size_t failed_count = 0;
+    for (const auto & object : objects)
+    {
+        const auto s3_fname = S3::S3FilenameView::fromKey(object.s3_key);
+        if (!s3_fname.isValid())
+        {
+            ++failed_count;
+            LOG_DEBUG(
+                log,
+                "Skip write FileCache local staging for invalid S3 key, tracing_id={} dmfile={} key={}",
+                tracing_id,
+                dmfile->parentPath(),
+                object.s3_key);
+            continue;
+        }
+
+        try
+        {
+            auto [file_seg, has_s3_download] = file_cache->downloadFileForLocalReadWithRetry(
+                s3_fname,
+                object.file_size,
+                local_staging_download_retry_count);
+            (void)has_s3_download;
+            if (!file_seg)
+            {
+                ++failed_count;
+                LOG_WARNING(
+                    log,
+                    "Write FileCache local staging download returned empty segment, tracing_id={} dmfile={} key={}",
+                    tracing_id,
+                    dmfile->parentPath(),
+                    object.s3_key);
+                continue;
+            }
+            local_read_files.emplace_back(std::move(file_seg));
+            ++downloaded_count;
+        }
+        catch (...)
+        {
+            ++failed_count;
+            tryLogCurrentException(
+                log,
+                fmt::format(
+                    "Write FileCache local staging download failed, tracing_id={} dmfile={} key={}",
+                    tracing_id,
+                    dmfile->parentPath(),
+                    object.s3_key));
+        }
+    }
+
+    if (downloaded_count > 0)
+        ProfileEvents::increment(ProfileEvents::DMFileWriteCacheStagingDownloaded, downloaded_count);
+    if (failed_count > 0)
+    {
+        ProfileEvents::increment(ProfileEvents::DMFileWriteCacheStagingFailed, failed_count);
+        ProfileEvents::increment(ProfileEvents::DMFileWriteCacheStagingFallback, failed_count);
+    }
+
+    LOG_DEBUG(
+        log,
+        "Write FileCache local staging finished, tracing_id={} dmfile={} objects={} downloaded={} failed={}",
+        tracing_id,
+        dmfile->parentPath(),
+        objects.size(),
+        downloaded_count,
+        failed_count);
+
+    return local_read_files;
 }
 
 } // namespace DB::DM

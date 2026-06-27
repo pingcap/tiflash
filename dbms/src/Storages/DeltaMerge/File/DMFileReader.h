@@ -29,6 +29,15 @@
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <Storages/MarkCache.h>
 
+#include <memory>
+#include <vector>
+
+namespace DB
+{
+class FileSegment;
+using FileSegmentPtr = std::shared_ptr<FileSegment>;
+} // namespace DB
+
 namespace DB::DM
 {
 
@@ -69,7 +78,8 @@ public:
         const String & tracing_id_,
         size_t max_sharing_column_bytes_,
         const ScanContextPtr & scan_context_,
-        ReadTag read_tag_);
+        ReadTag read_tag_,
+        std::vector<FileSegmentPtr> local_read_files_ = {});
 
     Block getHeader() const { return toEmptyBlock(read_columns); }
 
@@ -190,6 +200,9 @@ private:
 
     // DataSharing
     ColumnCachePtr data_sharing_col_data_cache;
+
+    // Pin FileCache local files for reader lifetime. Not used in read logic directly.
+    std::vector<FileSegmentPtr> local_read_files;
 
     std::deque<ReadBlockInfo> read_block_infos;
     // row_offset of the given pack_id

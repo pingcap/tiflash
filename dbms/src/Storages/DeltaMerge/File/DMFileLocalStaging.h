@@ -18,6 +18,24 @@
 #include <Storages/DeltaMerge/File/DMFile_fwd.h>
 #include <common/logger_useful.h>
 
+#include <memory>
+#include <vector>
+
+namespace ProfileEvents
+{
+extern const Event DMFileWriteCacheStagingAttempt;
+extern const Event DMFileWriteCacheStagingObjects;
+extern const Event DMFileWriteCacheStagingDownloaded;
+extern const Event DMFileWriteCacheStagingFailed;
+extern const Event DMFileWriteCacheStagingFallback;
+} // namespace ProfileEvents
+
+namespace DB
+{
+class FileSegment;
+using FileSegmentPtr = std::shared_ptr<FileSegment>;
+} // namespace DB
+
 namespace DB::DM
 {
 
@@ -41,6 +59,16 @@ struct LocalReadObject
 std::vector<LocalReadObject> collectMetaV2MergedFilesForLocalRead(
     const DMFilePtr & dmfile,
     const ColumnDefines & read_columns,
+    const LoggerPtr & log,
+    const String & tracing_id);
+
+/// Download collected `.merged` objects into FileCache and return pins for reader lifetime.
+/// Returns empty when staging is disabled, FileCache is unavailable, or nothing to stage.
+/// Per-object download failures are logged and counted; successful pins are still returned.
+std::vector<FileSegmentPtr> tryDownloadMetaV2MergedFilesForLocalRead(
+    const DMFilePtr & dmfile,
+    const ColumnDefines & read_columns,
+    bool enable_write_filecache_local_read,
     const LoggerPtr & log,
     const String & tracing_id);
 

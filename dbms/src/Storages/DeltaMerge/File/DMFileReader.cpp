@@ -73,7 +73,8 @@ DMFileReader::DMFileReader(
     const String & tracing_id_,
     size_t max_sharing_column_bytes_,
     const ScanContextPtr & scan_context_,
-    const ReadTag read_tag_)
+    const ReadTag read_tag_,
+    std::vector<FileSegmentPtr> local_read_files_)
     : dmfile(dmfile_)
     , read_columns(read_columns_)
     , is_common_handle(is_common_handle_)
@@ -92,6 +93,7 @@ DMFileReader::DMFileReader(
     , max_sharing_column_bytes(max_sharing_column_bytes_)
     , file_provider(file_provider_)
     , log(Logger::get(tracing_id_))
+    , local_read_files(std::move(local_read_files_))
     , read_block_infos(ReadBlockInfo::create(
           pack_filter->getPackRes(),
           dmfile->getPackStats(),

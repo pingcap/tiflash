@@ -15,6 +15,7 @@
 #include <Common/config.h> // For ENABLE_CLARA
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
+#include <Storages/DeltaMerge/File/DMFileLocalStaging.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Perf.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Reader.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Stream/Ctx.h>
@@ -91,6 +92,13 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::buildNoLocalIndex(
             tracing_id);
     }
 
+    auto local_read_files = tryDownloadMetaV2MergedFilesForLocalRead(
+        dmfile,
+        read_columns,
+        enable_write_filecache_local_read,
+        Logger::get(tracing_id),
+        tracing_id);
+
     DMFileReader reader(
         dmfile,
         read_columns,
@@ -111,7 +119,8 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::buildNoLocalIndex(
         tracing_id,
         max_sharing_column_bytes_for_all,
         scan_context,
-        read_tag);
+        read_tag,
+        std::move(local_read_files));
 
     return std::make_shared<DMFileBlockInputStream>(std::move(reader), max_sharing_column_bytes_for_all > 0);
 }
