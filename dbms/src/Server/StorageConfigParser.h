@@ -78,7 +78,8 @@ struct StorageRemoteCacheConfig
     UInt64 getReservedCapacity() const;
     void parse(const String & content, const LoggerPtr & log);
 
-    std::pair<Strings, std::vector<size_t>> getCacheDirInfos(bool is_compute_mode) const;
+    // `is_disagg_mode` is true when the process is a disaggregated compute or storage node that may use remote cache.
+    std::pair<Strings, std::vector<size_t>> getCacheDirInfos(bool is_disagg_mode) const;
 };
 
 struct TiFlashStorageConfig

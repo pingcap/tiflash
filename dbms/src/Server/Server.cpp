@@ -673,8 +673,9 @@ try
     const auto is_disagg_compute_mode = global_context->getSharedContextDisagg()->isDisaggregatedComputeMode();
     const auto is_disagg_storage_mode = global_context->getSharedContextDisagg()->isDisaggregatedStorageMode();
     const auto not_disagg_mode = global_context->getSharedContextDisagg()->notDisaggregatedMode();
+    const bool enable_remote_cache = is_disagg_compute_mode || is_disagg_storage_mode;
     const auto [remote_cache_paths, remote_cache_capacity_quota]
-        = storage_config.remote_cache_config.getCacheDirInfos(is_disagg_compute_mode);
+        = storage_config.remote_cache_config.getCacheDirInfos(enable_remote_cache);
     global_context->initializePathCapacityMetric( //
         global_capacity_quota, //
         storage_config.main_data_paths,
@@ -690,7 +691,7 @@ try
         storage_config.kvstore_data_path, //
         global_context->getPathCapacity(),
         global_context->getFileProvider());
-    if (const auto & config = storage_config.remote_cache_config; config.isCacheEnabled() && is_disagg_compute_mode)
+    if (const auto & config = storage_config.remote_cache_config; config.isCacheEnabled() && enable_remote_cache)
     {
         config.initCacheDir();
         FileCache::initialize(
@@ -702,6 +703,11 @@ try
         // here so startup-time values like dt_filecache_wait_on_downloading_ms take effect immediately
         // instead of waiting for a later config reload.
         FileCache::instance()->updateConfig(global_context->getSettingsRef());
+        LOG_INFO(
+            log,
+            "Initialized FileCache for disaggregated remote cache (compute_mode={} storage_mode={})",
+            is_disagg_compute_mode,
+            is_disagg_storage_mode);
     }
 
     /// Determining PageStorage run mode based on current files on disk and storage config.
