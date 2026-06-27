@@ -33,6 +33,8 @@
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointInfo.h>
 #include <Storages/KVStore/MultiRaft/Disagg/fast_add_peer.pb.h>
 
+#include <functional>
+
 #if ENABLE_CLARA
 #include <Storages/DeltaMerge/Index/FullTextIndex/Reader_fwd.h>
 #endif
@@ -251,19 +253,6 @@ public:
         const DMFilePackFilterResults & pack_filter_results = {},
         UInt64 start_ts = std::numeric_limits<UInt64>::max(),
         size_t expected_block_size = DEFAULT_BLOCK_SIZE);
-
-    /**
-     * Return a sorted stream which is suitable for exporting data. Unlike `getInputStream`, deletes will be preserved.
-     * But outdated versions (exceeds GC safe point) will still be removed.
-     * @param reorganize_block  put those rows with the same pk rows into the same block or not.
-     */
-    BlockInputStreamPtr getInputStreamForDataExport(
-        const DMContext & dm_context,
-        const ColumnDefines & columns_to_read,
-        const SegmentSnapshotPtr & segment_snap,
-        const RowKeyRange & data_range,
-        size_t expected_block_size = DEFAULT_BLOCK_SIZE,
-        bool reorganize_block = true) const;
 
     BlockInputStreamPtr getInputStreamModeRaw(
         const DMContext & dm_context,
@@ -697,7 +686,8 @@ public:
         ReadTag read_tag,
         const DMFilePackFilterResults & pack_filter_results = {},
         UInt64 start_ts = std::numeric_limits<UInt64>::max(),
-        bool need_row_id = false);
+        bool need_row_id = false,
+        std::function<void(DMFileBlockInputStreamBuilder &)> additional_builder_opt = nullptr);
 
     /// Make sure that all delta packs have been placed.
     /// Note that the index returned could be partial index, and cannot be updated to shared index.

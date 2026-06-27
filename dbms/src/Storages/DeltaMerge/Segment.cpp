@@ -76,6 +76,7 @@
 
 #include <algorithm>
 #include <ext/scope_guard.h>
+#include <functional>
 #include <memory>
 
 #if ENABLE_CLARA
@@ -147,6 +148,7 @@ extern const char pause_when_building_fap_segments[];
 } // namespace FailPoints
 namespace DM
 {
+
 String SegmentSnapshot::detailInfo() const
 {
     return fmt::format(
@@ -1202,18 +1204,33 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(
         expected_block_size);
 }
 
-BlockInputStreamPtr Segment::getInputStreamForDataExport(
+namespace
+{
+/**
+ * Return a sorted stream which is suitable for exporting data. Unlike `getInputStream`, deletes will be preserved.
+ * But outdated versions (exceeds GC safe point) will still be removed.
+ * When `dt_enable_write_filecache` is true, the underlying `DMFileBlockInputStreamBuilder` is configured to try
+ * local FileCache staging for stable reads. The actual staging is performed in the builder/read path when enabled.
+ *
+ * - `read_info` must be prepared by the caller via `getReadInfo`. It controls delta place/index
+ * - `data_range` controls which rows are read from stable+delta
+ *
+ * The returned stream also reorganizes block boundaries via `PKSquashingBlockInputStream`, so rows with the same
+ * primary key are placed in the same block.
+ */
+BlockInputStreamPtr getInputStreamForDataExport(
     const DMContext & dm_context,
-    const ColumnDefines & columns_to_read,
+    const Segment::ReadInfo & read_info,
     const SegmentSnapshotPtr & segment_snap,
-    const RowKeyRange & data_range,
-    size_t expected_block_size,
-    bool reorganize_block) const
+    const RowKeyRange & data_range)
 {
     RowKeyRanges data_ranges{data_range};
-    auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, data_ranges, ReadTag::Internal);
+    const bool enable_write_filecache_local_read = dm_context.global_context.getSettingsRef().dt_enable_write_filecache;
+    auto additional_builder_opt = [enable_write_filecache_local_read](DMFileBlockInputStreamBuilder & builder) {
+        builder.enableWriteFileCacheLocalRead(enable_write_filecache_local_read);
+    };
 
-    BlockInputStreamPtr data_stream = getPlacedStream(
+    BlockInputStreamPtr data_stream = Segment::getPlacedStream(
         dm_context,
         *read_info.read_columns,
         data_ranges,
@@ -1221,26 +1238,27 @@ BlockInputStreamPtr Segment::getInputStreamForDataExport(
         read_info.getDeltaReader(ReadTag::Internal),
         read_info.index_begin,
         read_info.index_end,
-        expected_block_size,
-        ReadTag::Internal);
-
+        dm_context.stable_pack_rows,
+        ReadTag::Internal,
+        {},
+        std::numeric_limits<UInt64>::max(),
+        false,
+        additional_builder_opt);
 
     data_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(data_stream, data_ranges, 0);
-    if (reorganize_block)
-    {
-        data_stream = std::make_shared<PKSquashingBlockInputStream<false>>(
-            data_stream,
-            MutSup::extra_handle_id,
-            is_common_handle);
-    }
+    data_stream = std::make_shared<PKSquashingBlockInputStream<false>>(
+        data_stream,
+        MutSup::extra_handle_id,
+        dm_context.is_common_handle);
     data_stream = std::make_shared<DMVersionFilterBlockInputStream<DMVersionFilterMode::COMPACT>>(
         data_stream,
         *read_info.read_columns,
         dm_context.min_version,
-        is_common_handle);
+        dm_context.is_common_handle);
 
     return data_stream;
 }
+} // namespace
 
 /// We call getInputStreamModeRaw in 'selraw xxxx' statement, which is always in test for debug.
 /// In this case, we will read all the data without mvcc filtering and sorted merge.
@@ -1349,13 +1367,8 @@ StableValueSpacePtr Segment::prepareMergeDelta(
 
     EventRecorder recorder(ProfileEvents::DMDeltaMerge, ProfileEvents::DMDeltaMergeNS);
 
-    auto data_stream = getInputStreamForDataExport(
-        dm_context,
-        *schema_snap,
-        segment_snap,
-        rowkey_range,
-        dm_context.stable_pack_rows,
-        /*reorganize_block*/ true);
+    const auto read_info = getReadInfo(dm_context, *schema_snap, segment_snap, {rowkey_range}, ReadTag::Internal);
+    auto data_stream = getInputStreamForDataExport(dm_context, read_info, segment_snap, rowkey_range);
 
     auto new_stable = createNewStable(dm_context, schema_snap, data_stream, segment_snap->stable->getId(), wbs);
 
@@ -2092,29 +2105,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical( //
     StableValueSpacePtr other_stable;
 
     {
-        auto my_delta_reader = read_info.getDeltaReader(schema_snap, ReadTag::Internal);
-
-        RowKeyRanges my_ranges{my_range};
-        BlockInputStreamPtr my_data = getPlacedStream(
-            dm_context,
-            *read_info.read_columns,
-            my_ranges,
-            segment_snap->stable,
-            my_delta_reader,
-            read_info.index_begin,
-            read_info.index_end,
-            dm_context.stable_pack_rows,
-            ReadTag::Internal);
-
-
-        my_data = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(my_data, my_ranges, 0);
-        my_data
-            = std::make_shared<PKSquashingBlockInputStream<false>>(my_data, MutSup::extra_handle_id, is_common_handle);
-        my_data = std::make_shared<DMVersionFilterBlockInputStream<DMVersionFilterMode::COMPACT>>(
-            my_data,
-            *read_info.read_columns,
-            dm_context.min_version,
-            is_common_handle);
+        auto my_data = getInputStreamForDataExport(dm_context, read_info, segment_snap, my_range);
         auto my_stable_id = segment_snap->stable->getId();
         my_new_stable = createNewStable(dm_context, schema_snap, my_data, my_stable_id, wbs);
     }
@@ -2122,31 +2113,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical( //
     LOG_DEBUG(log, "Split - SplitPhysical - Finish prepare my_new_stable");
 
     {
-        // Write new segment's data
-        auto other_delta_reader = read_info.getDeltaReader(schema_snap, ReadTag::Internal);
-
-        RowKeyRanges other_ranges{other_range};
-        BlockInputStreamPtr other_data = getPlacedStream(
-            dm_context,
-            *read_info.read_columns,
-            other_ranges,
-            segment_snap->stable,
-            other_delta_reader,
-            read_info.index_begin,
-            read_info.index_end,
-            dm_context.stable_pack_rows,
-            ReadTag::Internal);
-
-        other_data = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(other_data, other_ranges, 0);
-        other_data = std::make_shared<PKSquashingBlockInputStream<false>>(
-            other_data,
-            MutSup::extra_handle_id,
-            is_common_handle);
-        other_data = std::make_shared<DMVersionFilterBlockInputStream<DMVersionFilterMode::COMPACT>>(
-            other_data,
-            *read_info.read_columns,
-            dm_context.min_version,
-            is_common_handle);
+        auto other_data = getInputStreamForDataExport(dm_context, read_info, segment_snap, other_range);
         auto other_stable_id = dm_context.storage_pool->newMetaPageId();
         other_stable = createNewStable(dm_context, schema_snap, other_data, other_stable_id, wbs);
     }
@@ -2319,43 +2286,22 @@ StableValueSpacePtr Segment::prepareMerge(
             ordered_segments[i]->info());
     }
 
-    auto get_stream = [&](const SegmentPtr & segment, const SegmentSnapshotPtr & segment_snap) {
-        auto read_info = segment->getReadInfo(
+    std::vector<BlockInputStreamPtr> input_streams;
+    input_streams.reserve(ordered_segments.size());
+    for (size_t i = 0; i < ordered_segments.size(); ++i)
+    {
+        const auto & segment = ordered_segments[i];
+        const auto & segment_snap = ordered_snapshots[i];
+        const auto read_info = segment->getReadInfo(
             dm_context,
             *schema_snap,
             segment_snap,
+            // place all rows in the segment
             {RowKeyRange::newAll(segment->is_common_handle, segment->rowkey_column_size)},
             ReadTag::Internal);
-        RowKeyRanges rowkey_ranges{segment->rowkey_range};
-        BlockInputStreamPtr stream = getPlacedStream(
-            dm_context,
-            *read_info.read_columns,
-            rowkey_ranges,
-            segment_snap->stable,
-            read_info.getDeltaReader(ReadTag::Internal),
-            read_info.index_begin,
-            read_info.index_end,
-            dm_context.stable_pack_rows,
-            ReadTag::Internal);
-
-        stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stream, rowkey_ranges, 0);
-        stream = std::make_shared<PKSquashingBlockInputStream<false>>(
-            stream,
-            MutSup::extra_handle_id,
-            dm_context.is_common_handle);
-        stream = std::make_shared<DMVersionFilterBlockInputStream<DMVersionFilterMode::COMPACT>>(
-            stream,
-            *read_info.read_columns,
-            dm_context.min_version,
-            dm_context.is_common_handle);
-
-        return stream;
-    };
-
-    std::vector<BlockInputStreamPtr> input_streams;
-    input_streams.reserve(ordered_segments.size());
-    for (size_t i = 0; i < ordered_segments.size(); i++)
-        input_streams.emplace_back(get_stream(ordered_segments[i], ordered_snapshots[i]));
+        input_streams.emplace_back(
+            getInputStreamForDataExport(dm_context, read_info, segment_snap, segment->rowkey_range));
+    }
 
     BlockInputStreamPtr merged_stream = std::make_shared<ConcatBlockInputStream>(input_streams, /*req_id=*/"");
     // for the purpose to calculate StableProperty of the new segment
@@ -2717,7 +2663,8 @@ SkippableBlockInputStreamPtr Segment::getPlacedStream(
     ReadTag read_tag,
     const DMFilePackFilterResults & pack_filter_results,
     UInt64 start_ts,
-    bool need_row_id)
+    bool need_row_id,
+    std::function<void(DMFileBlockInputStreamBuilder &)> additional_builder_opt)
 {
     if (unlikely(rowkey_ranges.empty()))
         throw Exception("rowkey ranges shouldn't be empty", ErrorCodes::LOGICAL_ERROR);
@@ -2732,7 +2679,9 @@ SkippableBlockInputStreamPtr Segment::getPlacedStream(
         read_tag,
         pack_filter_results,
         /* is_fast_scan */ false,
-        /* enable_del_clean_read */ false);
+        /* enable_del_clean_read */ false,
+        /* read_packs */ {},
+        additional_builder_opt);
     RowKeyRange rowkey_range = rowkey_ranges.size() == 1
         ? rowkey_ranges[0]
         : mergeRanges(rowkey_ranges, rowkey_ranges[0].is_common_handle, rowkey_ranges[0].rowkey_column_size);
