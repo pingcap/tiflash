@@ -279,8 +279,13 @@ SegmentPair DeltaMergeStore::segmentSplit(
 
         LOG_INFO(
             log,
-            "Split - {} - Finish, segment is split into two, old_segment={} new_left={} new_right={}",
+            "Split - {} - Finish, segment is split into two, reason={} "
+            "prepare_seconds={:.3f} remote_upload_seconds={:.3f} "
+            "old_segment={} new_left={} new_right={}",
             split_info.is_logical ? "SplitLogical" : "SplitPhysical",
+            magic_enum::enum_name(reason),
+            split_info.prepare_seconds,
+            split_info.remote_upload_seconds,
             segment->info(),
             new_left->info(),
             new_right->info());

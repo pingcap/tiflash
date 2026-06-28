@@ -1982,6 +1982,8 @@ Segment::prepareSplitLogical( //
     std::optional<RowKeyValue> opt_split_point,
     WriteBatches & wbs) const
 {
+    Stopwatch watch;
+
     LOG_DEBUG(
         log,
         "Split - SplitLogical - Begin prepare, opt_split_point={}",
@@ -2075,18 +2077,23 @@ Segment::prepareSplitLogical( //
     my_stable->setFiles(my_stable_files, my_range, &dm_context);
     other_stable->setFiles(other_stable_files, other_range, &dm_context);
 
+    const auto prepare_seconds = watch.elapsedSeconds();
+
     LOG_DEBUG(
         log,
-        "Split - SplitLogical - Finish prepare, segment={} split_point={}",
+        "Split - SplitLogical - Finish prepare, segment={} split_point={} prepare_seconds={:.3f}",
         info(),
-        opt_split_point->toDebugString());
+        opt_split_point->toDebugString(),
+        prepare_seconds);
 
     return {
         SplitInfo{
             .is_logical = true,
             .split_point = opt_split_point.value(),
             .my_stable = my_stable,
-            .other_stable = other_stable},
+            .other_stable = other_stable,
+            .prepare_seconds = prepare_seconds,
+            .remote_upload_seconds = 0},
         PrepareSplitLogicalStatus::Success};
 }
 
@@ -2099,10 +2106,6 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical( //
 {
     GET_METRIC(tiflash_storage_subtask_count, type_prepare_split_physical).Increment();
     Stopwatch watch;
-    SCOPE_EXIT({
-        GET_METRIC(tiflash_storage_subtask_duration_seconds, type_prepare_split_physical)
-            .Observe(watch.elapsedSeconds());
-    });
 
     LOG_DEBUG(
         log,
@@ -2170,11 +2173,15 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical( //
         wbs.removed_data.delPage(file->pageId());
     }
 
+    const auto prepare_seconds = watch.elapsedSeconds();
+    GET_METRIC(tiflash_storage_subtask_duration_seconds, type_prepare_split_physical).Observe(prepare_seconds);
+
     LOG_DEBUG(
         log,
-        "Split - SplitPhysical - Finish prepare, segment={} split_point={} remote_upload_seconds={:.3f}",
+        "Split - SplitPhysical - Finish prepare, segment={} split_point={} prepare_seconds={:.3f} remote_upload_seconds={:.3f}",
         info(),
         split_point.toDebugString(),
+        prepare_seconds,
         remote_upload_seconds);
 
     return SplitInfo{
@@ -2182,6 +2189,8 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical( //
         .split_point = split_point,
         .my_stable = my_new_stable,
         .other_stable = other_stable,
+        .prepare_seconds = prepare_seconds,
+        .remote_upload_seconds = remote_upload_seconds,
     };
 }
 

@@ -130,6 +130,11 @@ public:
 
         StableValueSpacePtr my_stable;
         StableValueSpacePtr other_stable;
+
+        /// Wall-clock seconds spent in prepareSplit (logical or physical).
+        double prepare_seconds = 0;
+        /// Seconds spent uploading DMFiles to remote store in createNewStable. Zero when writing locally or logical split.
+        double remote_upload_seconds = 0;
     };
 
     DISALLOW_COPY_AND_MOVE(Segment);
@@ -675,21 +680,6 @@ public:
         const DMFilePackFilterResults & pack_filter_results,
         UInt64 start_ts);
 
-#ifndef DBMS_PUBLIC_GTEST
-private:
-#else
-public:
-#endif
-    ReadInfo getReadInfo(
-        const DMContext & dm_context,
-        const ColumnDefines & read_columns,
-        const SegmentSnapshotPtr & segment_snap,
-        const RowKeyRanges & read_ranges,
-        ReadTag read_tag,
-        UInt64 start_ts = std::numeric_limits<UInt64>::max()) const;
-
-    static ColumnDefinesPtr arrangeReadColumns(const ColumnDefine & handle, const ColumnDefines & columns_to_read);
-
     /// Create a stream which merged delta and stable streams together.
     template <bool skippable_place = false>
     static SkippableBlockInputStreamPtr getPlacedStream(
@@ -706,6 +696,21 @@ public:
         UInt64 start_ts = std::numeric_limits<UInt64>::max(),
         bool need_row_id = false,
         std::function<void(DMFileBlockInputStreamBuilder &)> additional_builder_opt = nullptr);
+
+#ifndef DBMS_PUBLIC_GTEST
+private:
+#else
+public:
+#endif
+    ReadInfo getReadInfo(
+        const DMContext & dm_context,
+        const ColumnDefines & read_columns,
+        const SegmentSnapshotPtr & segment_snap,
+        const RowKeyRanges & read_ranges,
+        ReadTag read_tag,
+        UInt64 start_ts = std::numeric_limits<UInt64>::max()) const;
+
+    static ColumnDefinesPtr arrangeReadColumns(const ColumnDefine & handle, const ColumnDefines & columns_to_read);
 
     /// Make sure that all delta packs have been placed.
     /// Note that the index returned could be partial index, and cannot be updated to shared index.
