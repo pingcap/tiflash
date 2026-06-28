@@ -30,6 +30,7 @@
 #include <Storages/S3/FileCache.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
+#include <IO/IOThreadPools.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
 #include <Common/TiFlashMetrics.h>
 #include <gtest/gtest.h>
@@ -40,6 +41,43 @@
 
 namespace DB::DM::tests
 {
+
+namespace
+{
+// Keep in sync with gtests_dbms_main.cpp.
+constexpr size_t s3_file_cache_pool_max_threads = 20;
+constexpr size_t s3_file_cache_pool_max_free_threads = 10;
+constexpr size_t s3_file_cache_pool_queue_size = 1000;
+
+void reinitS3FileCachePool()
+{
+    S3FileCachePool::initialize(
+        s3_file_cache_pool_max_threads,
+        s3_file_cache_pool_max_free_threads,
+        s3_file_cache_pool_queue_size);
+}
+
+void shutdownWriteFileCache()
+{
+    if (FileCache::instance() == nullptr)
+        return;
+    FileCache::shutdown();
+    // FileCache::shutdown() tears down S3FileCachePool; restore it for other tests.
+    reinitS3FileCachePool();
+}
+
+void initWriteFileCache(
+    PathCapacityMetricsPtr capacity_metrics,
+    IORateLimiter & rate_limiter,
+    String cache_dir)
+{
+    StorageRemoteCacheConfig file_cache_config{
+        .dir = std::move(cache_dir),
+        .capacity = 1 * 1000 * 1000 * 1000,
+    };
+    FileCache::initialize(capacity_metrics, file_cache_config, /*logical_cores=*/8, rate_limiter);
+}
+} // namespace
 
 class DMFileMetaVersionTestBase : public DB::base::TiFlashStorageTestBasic
 {
@@ -360,6 +398,8 @@ public:
 
     void TearDown() override
     {
+        shutdownWriteFileCache();
+
         DMFileMetaVersionTestBase::TearDown();
 
         auto & global_context = db_context->getGlobalContext();
@@ -476,16 +516,10 @@ CATCH
 TEST_P(S3DMFile, WithFileCache)
 try
 {
-    StorageRemoteCacheConfig file_cache_config{
-        .dir = fmt::format("{}/fs_cache", getTemporaryPath()),
-        .capacity = 1 * 1000 * 1000 * 1000,
-    };
-    UInt16 vcores = 8;
-    FileCache::initialize(
+    initWriteFileCache(
         db_context->getGlobalContext().getPathCapacity(),
-        file_cache_config,
-        vcores,
-        db_context->getGlobalContext().getIORateLimiter());
+        db_context->getGlobalContext().getIORateLimiter(),
+        fmt::format("{}/fs_cache", getTemporaryPath()));
 
     auto dm_file = prepareDMFileRemote(/* file_id= */ 1);
     ASSERT_TRUE(dm_file->path().starts_with("s3://"));
@@ -533,8 +567,6 @@ try
     cn_dmf = token->restore(DMFileMeta::ReadMode::all(), 1);
     ASSERT_EQ(1, cn_dmf->metaVersion());
     ASSERT_STREQ("test", cn_dmf->meta->getColumnStats()[MutSup::extra_handle_id].additional_data_for_test.c_str());
-
-    SCOPE_EXIT({ FileCache::shutdown(); });
 }
 CATCH
 
@@ -666,17 +698,10 @@ CATCH
 TEST_P(S3DMFile, LocalStagingDownloadMergedFiles)
 try
 {
-    StorageRemoteCacheConfig file_cache_config{
-        .dir = fmt::format("{}/write_filecache_staging", getTemporaryPath()),
-        .capacity = 1 * 1000 * 1000 * 1000,
-    };
-    UInt16 vcores = 8;
-    FileCache::initialize(
+    initWriteFileCache(
         db_context->getGlobalContext().getPathCapacity(),
-        file_cache_config,
-        vcores,
-        db_context->getGlobalContext().getIORateLimiter());
-    SCOPE_EXIT({ FileCache::shutdown(); });
+        db_context->getGlobalContext().getIORateLimiter(),
+        fmt::format("{}/write_filecache_staging", getTemporaryPath()));
 
     auto log = Logger::get("DMFileLocalStagingTest");
     auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
@@ -705,17 +730,10 @@ CATCH
 TEST_P(S3DMFile, LocalStagingBuildWithWriteFileCache)
 try
 {
-    StorageRemoteCacheConfig file_cache_config{
-        .dir = fmt::format("{}/write_filecache_build", getTemporaryPath()),
-        .capacity = 1 * 1000 * 1000 * 1000,
-    };
-    UInt16 vcores = 8;
-    FileCache::initialize(
+    initWriteFileCache(
         db_context->getGlobalContext().getPathCapacity(),
-        file_cache_config,
-        vcores,
-        db_context->getGlobalContext().getIORateLimiter());
-    SCOPE_EXIT({ FileCache::shutdown(); });
+        db_context->getGlobalContext().getIORateLimiter(),
+        fmt::format("{}/write_filecache_build", getTemporaryPath()));
 
     auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
     auto dm_file = prepareDMFileRemote(/* file_id= */ 15);
