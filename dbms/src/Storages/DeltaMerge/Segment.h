@@ -365,7 +365,16 @@ public:
         const ColumnDefinesPtr & schema_snap,
         const std::vector<SegmentPtr> & ordered_segments);
 
-    static StableValueSpacePtr prepareMerge(
+    struct PrepareMergeResult
+    {
+        StableValueSpacePtr stable;
+        /// Wall-clock seconds spent in prepareMerge.
+        double prepare_seconds = 0;
+        /// Seconds spent uploading DMFile to remote store in createNewStable. Zero when writing locally.
+        double remote_upload_seconds = 0;
+    };
+
+    static PrepareMergeResult prepareMerge(
         DMContext & dm_context,
         const ColumnDefinesPtr & schema_snap,
         const std::vector<SegmentPtr> & ordered_segments,
@@ -389,7 +398,16 @@ public:
      */
     [[nodiscard]] SegmentPtr mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
 
-    StableValueSpacePtr prepareMergeDelta(
+    struct PrepareMergeDeltaResult
+    {
+        StableValueSpacePtr stable;
+        /// Wall-clock seconds spent in prepareMergeDelta.
+        double prepare_seconds = 0;
+        /// Seconds spent uploading DMFile to remote store in createNewStable. Zero when writing locally.
+        double remote_upload_seconds = 0;
+    };
+
+    PrepareMergeDeltaResult prepareMergeDelta(
         DMContext & dm_context,
         const ColumnDefinesPtr & schema_snap,
         const SegmentSnapshotPtr & segment_snap,

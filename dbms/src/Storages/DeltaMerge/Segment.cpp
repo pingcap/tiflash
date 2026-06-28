@@ -1351,7 +1351,8 @@ SegmentPtr Segment::mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & 
     if (!segment_snap)
         return {};
 
-    auto new_stable = prepareMergeDelta(dm_context, schema_snap, segment_snap, wbs);
+    auto prepare_result = prepareMergeDelta(dm_context, schema_snap, segment_snap, wbs);
+    auto new_stable = prepare_result.stable;
 
     wbs.writeLogAndData();
     new_stable->enableDMFilesGC(dm_context);
@@ -1365,7 +1366,7 @@ SegmentPtr Segment::mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & 
     return new_segment;
 }
 
-StableValueSpacePtr Segment::prepareMergeDelta(
+Segment::PrepareMergeDeltaResult Segment::prepareMergeDelta(
     DMContext & dm_context,
     const ColumnDefinesPtr & schema_snap,
     const SegmentSnapshotPtr & segment_snap,
@@ -1373,10 +1374,6 @@ StableValueSpacePtr Segment::prepareMergeDelta(
 {
     GET_METRIC(tiflash_storage_subtask_count, type_prepare_merge_delta).Increment();
     Stopwatch watch;
-    SCOPE_EXIT({
-        GET_METRIC(tiflash_storage_subtask_duration_seconds, type_prepare_merge_delta)
-            .Observe(watch.elapsedSeconds());
-    });
 
     LOG_DEBUG(
         log,
@@ -1393,13 +1390,21 @@ StableValueSpacePtr Segment::prepareMergeDelta(
     const auto create_result
         = createNewStable(dm_context, schema_snap, data_stream, segment_snap->stable->getId(), wbs);
 
+    const auto prepare_seconds = watch.elapsedSeconds();
+    GET_METRIC(tiflash_storage_subtask_duration_seconds, type_prepare_merge_delta).Observe(prepare_seconds);
+
     LOG_DEBUG(
         log,
-        "MergeDelta - Finish prepare, segment={} remote_upload_seconds={:.3f}",
+        "MergeDelta - Finish prepare, segment={} prepare_seconds={:.3f} remote_upload_seconds={:.3f}",
         info(),
+        prepare_seconds,
         create_result.remote_upload_seconds);
 
-    return create_result.stable;
+    return {
+        .stable = create_result.stable,
+        .prepare_seconds = prepare_seconds,
+        .remote_upload_seconds = create_result.remote_upload_seconds,
+    };
 }
 
 SegmentPtr Segment::applyMergeDelta(
@@ -2276,7 +2281,8 @@ SegmentPtr Segment::merge(
         ordered_snapshots.emplace_back(snap);
     }
 
-    auto merged_stable = prepareMerge(dm_context, schema_snap, ordered_segments, ordered_snapshots, wbs);
+    const auto prepare_result = prepareMerge(dm_context, schema_snap, ordered_segments, ordered_snapshots, wbs);
+    auto merged_stable = prepare_result.stable;
 
     wbs.writeLogAndData();
     merged_stable->enableDMFilesGC(dm_context);
@@ -2294,7 +2300,7 @@ SegmentPtr Segment::merge(
     return merged;
 }
 
-StableValueSpacePtr Segment::prepareMerge(
+Segment::PrepareMergeResult Segment::prepareMerge(
     DMContext & dm_context, //
     const ColumnDefinesPtr & schema_snap,
     const std::vector<SegmentPtr> & ordered_segments,
@@ -2303,9 +2309,6 @@ StableValueSpacePtr Segment::prepareMerge(
 {
     GET_METRIC(tiflash_storage_subtask_count, type_prepare_merge).Increment();
     Stopwatch watch;
-    SCOPE_EXIT({
-        GET_METRIC(tiflash_storage_subtask_duration_seconds, type_prepare_merge).Observe(watch.elapsedSeconds());
-    });
 
     RUNTIME_CHECK(ordered_segments.size() >= 2, ordered_snapshots.size());
     RUNTIME_CHECK(
@@ -2359,13 +2362,21 @@ StableValueSpacePtr Segment::prepareMerge(
     const auto create_result
         = createNewStable(dm_context, schema_snap, merged_stream, merged_stable_id, wbs);
 
+    const auto prepare_seconds = watch.elapsedSeconds();
+    GET_METRIC(tiflash_storage_subtask_duration_seconds, type_prepare_merge).Observe(prepare_seconds);
+
     LOG_DEBUG(
         log,
-        "Merge - Finish prepare, segments_to_merge={} remote_upload_seconds={:.3f}",
+        "Merge - Finish prepare, segments_to_merge={} prepare_seconds={:.3f} remote_upload_seconds={:.3f}",
         info(ordered_segments),
+        prepare_seconds,
         create_result.remote_upload_seconds);
 
-    return create_result.stable;
+    return {
+        .stable = create_result.stable,
+        .prepare_seconds = prepare_seconds,
+        .remote_upload_seconds = create_result.remote_upload_seconds,
+    };
 }
 
 SegmentPtr Segment::applyMerge(

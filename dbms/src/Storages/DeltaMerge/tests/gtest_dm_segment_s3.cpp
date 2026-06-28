@@ -440,7 +440,8 @@ try
         tableColumns(),
         {left, right},
         {left_snap, right_snap},
-        wbs);
+        wbs)
+                         .stable;
     ASSERT_NE(merged_stable, nullptr);
     ASSERT_GT(stagingAttempt(), attempt_before);
     ASSERT_TRUE(fileCacheHasMergedFile());

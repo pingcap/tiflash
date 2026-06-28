@@ -1622,7 +1622,8 @@ try
             tableColumns(),
             {segment, other_segment},
             {left_snap, right_snap},
-            wbs);
+            wbs)
+                                 .stable;
 
         wbs.writeLogAndData();
         merged_stable->enableDMFilesGC(dmContext());
