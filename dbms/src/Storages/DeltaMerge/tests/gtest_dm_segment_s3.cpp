@@ -15,7 +15,8 @@
 #include <DataStreams/OneBlockInputStream.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
-#include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/File/DMFileLocalStaging.h>
+#include <Storages/DeltaMerge/File/DMFileMetaV2.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/Segment_fwd.h>
@@ -28,7 +29,11 @@
 #include <Storages/Page/PageConstants.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/PathPool.h>
+#include <Storages/S3/FileCache.h>
 #include <Storages/S3/S3Common.h>
+#include <IO/IOThreadPools.h>
+#include <Common/CurrentMetrics.h>
+#include <Common/TiFlashMetrics.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
@@ -38,6 +43,12 @@
 
 #include <ctime>
 #include <memory>
+
+namespace CurrentMetrics
+{
+extern const Metric DT_SnapshotOfSegmentSplit;
+extern const Metric DT_SnapshotOfSegmentMerge;
+} // namespace CurrentMetrics
 
 namespace DB
 {
@@ -49,6 +60,22 @@ namespace DM
 {
 namespace tests
 {
+namespace
+{
+// Keep in sync with gtests_dbms_main.cpp.
+constexpr size_t s3_file_cache_pool_max_threads = 20;
+constexpr size_t s3_file_cache_pool_max_free_threads = 10;
+constexpr size_t s3_file_cache_pool_queue_size = 1000;
+
+void reinitS3FileCachePool()
+{
+    S3FileCachePool::initialize(
+        s3_file_cache_pool_max_threads,
+        s3_file_cache_pool_max_free_threads,
+        s3_file_cache_pool_queue_size);
+}
+} // namespace
+
 class SegmentTestS3 : public DB::base::TiFlashStorageTestBasic
 {
 public:
@@ -105,6 +132,8 @@ public:
 
     void TearDown() override
     {
+        shutdownWriteFileCache();
+
         FailPointHelper::disableFailPoint(FailPoints::force_use_dmfile_format_v3);
         auto & global_context = TiFlashTestEnv::getGlobalContext();
         if (!already_initialize_data_store)
@@ -170,6 +199,98 @@ protected:
 
     DMContext & dmContext() { return *dm_context; }
 
+    void initWriteFileCache()
+    {
+        StorageRemoteCacheConfig file_cache_config{
+            .dir = fmt::format("{}/wn_filecache", getTemporaryPath()),
+            .capacity = 1 * 1000 * 1000 * 1000,
+        };
+        UInt16 vcores = 8;
+        FileCache::initialize(
+            db_context->getGlobalContext().getPathCapacity(),
+            file_cache_config,
+            vcores,
+            db_context->getGlobalContext().getIORateLimiter());
+    }
+
+    static void shutdownWriteFileCache()
+    {
+        if (FileCache::instance() == nullptr)
+            return;
+        FileCache::shutdown();
+        // FileCache::shutdown() tears down S3FileCachePool; restore it for other tests.
+        reinitS3FileCachePool();
+    }
+
+    void setDtEnableWriteFileCache(bool enabled)
+    {
+        // DMContext stores global context, not session context.
+        db_context->getGlobalContext().getSettingsRef().dt_enable_write_filecache = enabled;
+    }
+
+    static double stagingAttempt()
+    {
+        return GET_METRIC(tiflash_storage_write_filecache_staging, type_attempt).Value();
+    }
+
+    static bool fileCacheHasMergedFile()
+    {
+        auto * file_cache = FileCache::instance();
+        if (file_cache == nullptr)
+            return false;
+        for (const auto & file_seg : file_cache->getAll())
+        {
+            if (file_seg->getLocalFileName().contains(".merged"))
+                return true;
+        }
+        return false;
+    }
+
+    void writeRows(size_t start, size_t end)
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(start, end, false);
+        segment->write(dmContext(), std::move(block), /* flush */ true);
+    }
+
+    void assertRemoteStableHasMergedSubFiles(const SegmentPtr & seg)
+    {
+        const auto files = seg->stable->getDMFiles();
+        ASSERT_FALSE(files.empty());
+        const auto & dmfile = files[0];
+        ASSERT_TRUE(dmfile->useMetaV2());
+        ASSERT_TRUE(dmfile->path().starts_with("s3://"));
+        const auto * dmfile_meta = typeid_cast<const DMFileMetaV2 *>(dmfile->meta.get());
+        ASSERT_NE(dmfile_meta, nullptr);
+        ASSERT_FALSE(dmfile_meta->merged_sub_file_infos.empty());
+        const auto objects = collectMetaV2MergedFilesForLocalRead(
+            dmfile,
+            *table_columns,
+            Logger::get("SegmentTestS3"),
+            "SegmentTestS3");
+        ASSERT_FALSE(objects.empty());
+    }
+
+    /// Create a remote MetaV2 stable on S3, then leave delta data for a follow-up mergeDelta.
+    void writeRemoteStableWithDelta(size_t stable_end, size_t delta_end)
+    {
+        writeRows(0, stable_end);
+        segment = segment->mergeDelta(dmContext(), tableColumns());
+        if (delta_end > stable_end)
+            writeRows(stable_end, delta_end);
+    }
+
+    SegmentPtr mergeDeltaToRemoteStable()
+    {
+        writeRemoteStableWithDelta(100, 100);
+        return segment;
+    }
+
+    size_t readRows(const SegmentPtr & seg)
+    {
+        auto in = seg->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        return getInputStreamNRows(in);
+    }
+
 protected:
     /// all these var lives as ref in dm_context
     GlobalPageIdAllocatorPtr page_id_allocator;
@@ -233,6 +354,124 @@ try
         auto all_dt_file_ids = storage_path_pool->getStableDiskDelegator().getAllRemoteDTFilesForGC();
         ASSERT_EQ(all_dt_file_ids.size(), 3);
     }
+}
+CATCH
+
+TEST_F(SegmentTestS3, WriteFileCacheDisabledWithFileCache)
+try
+{
+    initWriteFileCache();
+
+    setDtEnableWriteFileCache(false);
+    ASSERT_TRUE(FileCache::instance()->getAll().empty());
+
+    const auto attempt_before = stagingAttempt();
+    segment = mergeDeltaToRemoteStable();
+    ASSERT_EQ(attempt_before, stagingAttempt());
+    ASSERT_EQ(100, readRows(segment));
+}
+CATCH
+
+TEST_F(SegmentTestS3, WriteFileCacheEnabledWithoutFileCache)
+try
+{
+    ASSERT_EQ(FileCache::instance(), nullptr);
+    setDtEnableWriteFileCache(true);
+
+    segment = mergeDeltaToRemoteStable();
+    ASSERT_EQ(0, stagingAttempt());
+    ASSERT_EQ(100, readRows(segment));
+}
+CATCH
+
+TEST_F(SegmentTestS3, WriteFileCacheMergeDeltaStaging)
+try
+{
+    initWriteFileCache();
+
+    setDtEnableWriteFileCache(true);
+    ASSERT_TRUE(FileCache::instance()->getAll().empty());
+
+    // Staging reads the existing remote stable; the first mergeDelta only creates stable.
+    writeRemoteStableWithDelta(100, 200);
+    assertRemoteStableHasMergedSubFiles(segment);
+
+    const auto attempt_before = stagingAttempt();
+    segment = segment->mergeDelta(dmContext(), tableColumns());
+
+    ASSERT_GT(stagingAttempt(), attempt_before);
+    ASSERT_TRUE(fileCacheHasMergedFile());
+    ASSERT_EQ(200, readRows(segment));
+}
+CATCH
+
+TEST_F(SegmentTestS3, WriteFileCachePrepareMergeStaging)
+try
+{
+    initWriteFileCache();
+
+    setDtEnableWriteFileCache(true);
+    segment = mergeDeltaToRemoteStable();
+    assertRemoteStableHasMergedSubFiles(segment);
+
+    auto [left, right] = segment->split(
+        dmContext(),
+        tableColumns(),
+        /*opt_split_at=*/std::nullopt,
+        Segment::SplitMode::Logical);
+    ASSERT_NE(left, nullptr);
+    ASSERT_NE(right, nullptr);
+
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(100, 200, false);
+        right->write(dmContext(), std::move(block), /* flush */ true);
+        right->flushCache(dmContext());
+    }
+
+    WriteBatches wbs(*storage_pool);
+    auto left_snap = left->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
+    auto right_snap = right->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
+    ASSERT_NE(left_snap, nullptr);
+    ASSERT_NE(right_snap, nullptr);
+
+    const auto attempt_before = stagingAttempt();
+    auto merged_stable = Segment::prepareMerge(
+        dmContext(),
+        tableColumns(),
+        {left, right},
+        {left_snap, right_snap},
+        wbs);
+    ASSERT_NE(merged_stable, nullptr);
+    ASSERT_GT(stagingAttempt(), attempt_before);
+    ASSERT_TRUE(fileCacheHasMergedFile());
+}
+CATCH
+
+TEST_F(SegmentTestS3, WriteFileCachePhysicalSplitStaging)
+try
+{
+    initWriteFileCache();
+
+    setDtEnableWriteFileCache(true);
+    segment = mergeDeltaToRemoteStable();
+    assertRemoteStableHasMergedSubFiles(segment);
+
+    WriteBatches wbs(*storage_pool);
+    auto segment_snap = segment->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfSegmentSplit);
+    ASSERT_NE(segment_snap, nullptr);
+
+    const auto split_at = RowKeyValue::fromIntHandle(50);
+    const auto attempt_before = stagingAttempt();
+    auto split_info = segment->prepareSplit(
+        dmContext(),
+        tableColumns(),
+        segment_snap,
+        split_at,
+        Segment::SplitMode::Physical,
+        wbs);
+    ASSERT_TRUE(split_info.has_value());
+    ASSERT_GT(stagingAttempt(), attempt_before);
+    ASSERT_TRUE(fileCacheHasMergedFile());
 }
 CATCH
 
