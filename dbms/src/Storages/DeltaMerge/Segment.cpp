@@ -280,8 +280,7 @@ CreateNewStableResult createNewStable( //
             data_store->putDMFile(dtfile, oid, /*switch_to_remote*/ true);
             remote_upload_seconds = upload_watch.elapsedSeconds();
             GET_METRIC(tiflash_storage_subtask_count, type_remote_upload).Increment();
-            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_remote_upload)
-                .Observe(remote_upload_seconds);
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_remote_upload).Observe(remote_upload_seconds);
             PS::V3::CheckpointLocation loc{
                 .data_file_id = std::make_shared<String>(S3::S3Filename::fromDMFileOID(oid).toFullKey()),
                 .offset_in_file = 0,
@@ -346,8 +345,9 @@ SegmentPtr Segment::newSegment( //
     WriteBatches wbs(*context.storage_pool, context.getWriteLimiter());
 
     auto delta = std::make_shared<DeltaValueSpace>(delta_id);
-    auto stable = createNewStable(context, schema, std::make_shared<EmptySkippableBlockInputStream>(*schema), stable_id, wbs)
-                      .stable;
+    auto stable
+        = createNewStable(context, schema, std::make_shared<EmptySkippableBlockInputStream>(*schema), stable_id, wbs)
+              .stable;
 
     auto segment
         = std::make_shared<Segment>(parent_log, INITIAL_EPOCH, range, segment_id, next_segment_id, delta, stable);
@@ -2178,7 +2178,8 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical( //
 
     LOG_DEBUG(
         log,
-        "Split - SplitPhysical - Finish prepare, segment={} split_point={} prepare_seconds={:.3f} remote_upload_seconds={:.3f}",
+        "Split - SplitPhysical - Finish prepare, segment={} split_point={} prepare_seconds={:.3f} "
+        "remote_upload_seconds={:.3f}",
         info(),
         split_point.toDebugString(),
         prepare_seconds,
@@ -2368,8 +2369,7 @@ Segment::PrepareMergeResult Segment::prepareMerge(
         dm_context.is_common_handle);
 
     auto merged_stable_id = ordered_segments[0]->stable->getId();
-    const auto create_result
-        = createNewStable(dm_context, schema_snap, merged_stream, merged_stable_id, wbs);
+    const auto create_result = createNewStable(dm_context, schema_snap, merged_stream, merged_stable_id, wbs);
 
     const auto prepare_seconds = watch.elapsedSeconds();
     GET_METRIC(tiflash_storage_subtask_duration_seconds, type_prepare_merge).Observe(prepare_seconds);

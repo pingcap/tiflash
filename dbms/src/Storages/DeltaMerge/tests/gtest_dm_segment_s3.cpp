@@ -12,12 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/CurrentMetrics.h>
+#include <Common/TiFlashMetrics.h>
 #include <DataStreams/OneBlockInputStream.h>
+#include <IO/IOThreadPools.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
+#include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileLocalStaging.h>
 #include <Storages/DeltaMerge/File/DMFileMetaV2.h>
-#include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/Segment_fwd.h>
 #include <Storages/DeltaMerge/StoragePool/GlobalPageIdAllocator.h>
@@ -31,9 +34,6 @@
 #include <Storages/PathPool.h>
 #include <Storages/S3/FileCache.h>
 #include <Storages/S3/S3Common.h>
-#include <IO/IOThreadPools.h>
-#include <Common/CurrentMetrics.h>
-#include <Common/TiFlashMetrics.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
@@ -228,10 +228,7 @@ protected:
         db_context->getGlobalContext().getSettingsRef().dt_enable_write_filecache = enabled;
     }
 
-    static double stagingAttempt()
-    {
-        return GET_METRIC(tiflash_storage_write_filecache_staging, type_attempt).Value();
-    }
+    static double stagingAttempt() { return GET_METRIC(tiflash_storage_write_filecache_staging, type_attempt).Value(); }
 
     static bool fileCacheHasMergedFile()
     {
@@ -435,13 +432,8 @@ try
     ASSERT_NE(right_snap, nullptr);
 
     const auto attempt_before = stagingAttempt();
-    auto merged_stable = Segment::prepareMerge(
-        dmContext(),
-        tableColumns(),
-        {left, right},
-        {left_snap, right_snap},
-        wbs)
-                         .stable;
+    auto merged_stable
+        = Segment::prepareMerge(dmContext(), tableColumns(), {left, right}, {left_snap, right_snap}, wbs).stable;
     ASSERT_NE(merged_stable, nullptr);
     ASSERT_GT(stagingAttempt(), attempt_before);
     ASSERT_TRUE(fileCacheHasMergedFile());
@@ -463,13 +455,8 @@ try
 
     const auto split_at = RowKeyValue::fromIntHandle(50);
     const auto attempt_before = stagingAttempt();
-    auto split_info = segment->prepareSplit(
-        dmContext(),
-        tableColumns(),
-        segment_snap,
-        split_at,
-        Segment::SplitMode::Physical,
-        wbs);
+    auto split_info
+        = segment->prepareSplit(dmContext(), tableColumns(), segment_snap, split_at, Segment::SplitMode::Physical, wbs);
     ASSERT_TRUE(split_info.has_value());
     ASSERT_GT(stagingAttempt(), attempt_before);
     ASSERT_TRUE(fileCacheHasMergedFile());
