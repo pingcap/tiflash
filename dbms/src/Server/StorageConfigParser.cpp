@@ -738,7 +738,8 @@ std::pair<Strings, std::vector<size_t>> StorageRemoteCacheConfig::getCacheDirInf
     {
         return {
             Strings{getDTFileCacheDir(), getPageCacheDir()},
-            std::vector<size_t>{getDTFileCapacity(), getPageCapacity()}};
+            std::vector<size_t>{getDTFileCapacity(), getPageCapacity()},
+        };
     }
     else
     {

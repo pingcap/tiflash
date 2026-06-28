@@ -2501,7 +2501,7 @@ String Segment::info() const
         "<segment_id={} epoch={} range={}{} next_segment_id={} "
         "delta_rows={} delta_bytes={} delta_deletes={} "
         "stable_file={} stable_rows={} stable_bytes={} "
-        "dmf_rows={} dmf_bytes={} dmf_packs={}>",
+        "dmf_rows={} dmf_bytes={} dmf_disk_bytes={} dmf_packs={}>",
         segment_id,
         epoch,
         rowkey_range.toDebugString(),
@@ -2518,6 +2518,7 @@ String Segment::info() const
 
         stable->getDMFilesRows(),
         stable->getDMFilesBytes(),
+        stable->getDMFilesBytesOnDisk(),
         stable->getDMFilesPacks());
 }
 
