@@ -87,6 +87,11 @@ public:
     String getDMFilesString();
 
     /**
+     * Return the number of columns of the underlying DTFiles.
+     */
+    size_t getDMFilesNumColumns() const;
+
+    /**
      * Return the total on-disk size of the underlying DTFiles.
      * DTFiles are not fully included in the segment range will be also counted in.
      * Note: Out-of-range DTFiles may be produced by logical split.

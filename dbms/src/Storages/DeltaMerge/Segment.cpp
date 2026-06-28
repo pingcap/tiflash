@@ -234,9 +234,16 @@ DMFilePtr writeIntoNewDMFile(
     return dmfile;
 }
 
+struct CreateNewStableResult
+{
+    StableValueSpacePtr stable;
+    /// Seconds spent uploading DMFile to remote store. Zero when writing locally.
+    double remote_upload_seconds = 0;
+};
+
 // Create a new stable, the DMFile will write as External Page to disk, but the meta will not be written to disk.
 // The caller should write the meta to disk if needed.
-StableValueSpacePtr createNewStable( //
+CreateNewStableResult createNewStable( //
     DMContext & dm_context,
     const ColumnDefinesPtr & schema_snap,
     const BlockInputStreamPtr & input_stream,
@@ -254,6 +261,7 @@ StableValueSpacePtr createNewStable( //
 
         auto stable = std::make_shared<StableValueSpace>(stable_id);
         stable->setFiles({dtfile}, RowKeyRange::newAll(dm_context.is_common_handle, dm_context.rowkey_column_size));
+        double remote_upload_seconds = 0;
         if (auto data_store = dm_context.global_context.getSharedContextDisagg()->remote_data_store; !data_store)
         {
             wbs.data.putExternal(dtfile_id, 0);
@@ -268,7 +276,12 @@ StableValueSpacePtr createNewStable( //
                 .table_id = dm_context.physical_table_id,
                 .file_id = dtfile_id,
             };
+            Stopwatch upload_watch;
             data_store->putDMFile(dtfile, oid, /*switch_to_remote*/ true);
+            remote_upload_seconds = upload_watch.elapsedSeconds();
+            GET_METRIC(tiflash_storage_subtask_count, type_remote_upload).Increment();
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_remote_upload)
+                .Observe(remote_upload_seconds);
             PS::V3::CheckpointLocation loc{
                 .data_file_id = std::make_shared<String>(S3::S3Filename::fromDMFileOID(oid).toFullKey()),
                 .offset_in_file = 0,
@@ -277,7 +290,7 @@ StableValueSpacePtr createNewStable( //
             delegator.addRemoteDTFileWithGCDisabled(dtfile_id, dtfile->getBytesOnDisk());
             wbs.data.putRemoteExternal(dtfile_id, loc);
         }
-        return stable;
+        return {.stable = stable, .remote_upload_seconds = remote_upload_seconds};
     }
     catch (...)
     {
@@ -333,8 +346,8 @@ SegmentPtr Segment::newSegment( //
     WriteBatches wbs(*context.storage_pool, context.getWriteLimiter());
 
     auto delta = std::make_shared<DeltaValueSpace>(delta_id);
-    auto stable
-        = createNewStable(context, schema, std::make_shared<EmptySkippableBlockInputStream>(*schema), stable_id, wbs);
+    auto stable = createNewStable(context, schema, std::make_shared<EmptySkippableBlockInputStream>(*schema), stable_id, wbs)
+                      .stable;
 
     auto segment
         = std::make_shared<Segment>(parent_log, INITIAL_EPOCH, range, segment_id, next_segment_id, delta, stable);
@@ -1358,6 +1371,13 @@ StableValueSpacePtr Segment::prepareMergeDelta(
     const SegmentSnapshotPtr & segment_snap,
     WriteBatches & wbs) const
 {
+    GET_METRIC(tiflash_storage_subtask_count, type_prepare_merge_delta).Increment();
+    Stopwatch watch;
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_storage_subtask_duration_seconds, type_prepare_merge_delta)
+            .Observe(watch.elapsedSeconds());
+    });
+
     LOG_DEBUG(
         log,
         "MergeDelta - Begin prepare, delta_column_files={} delta_rows={} delta_bytes={}",
@@ -1370,11 +1390,16 @@ StableValueSpacePtr Segment::prepareMergeDelta(
     const auto read_info = getReadInfo(dm_context, *schema_snap, segment_snap, {rowkey_range}, ReadTag::Internal);
     auto data_stream = getInputStreamForDataExport(dm_context, read_info, segment_snap, rowkey_range);
 
-    auto new_stable = createNewStable(dm_context, schema_snap, data_stream, segment_snap->stable->getId(), wbs);
+    const auto create_result
+        = createNewStable(dm_context, schema_snap, data_stream, segment_snap->stable->getId(), wbs);
 
-    LOG_DEBUG(log, "MergeDelta - Finish prepare, segment={}", info());
+    LOG_DEBUG(
+        log,
+        "MergeDelta - Finish prepare, segment={} remote_upload_seconds={:.3f}",
+        info(),
+        create_result.remote_upload_seconds);
 
-    return new_stable;
+    return create_result.stable;
 }
 
 SegmentPtr Segment::applyMergeDelta(
@@ -2067,6 +2092,13 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical( //
     std::optional<RowKeyValue> opt_split_point,
     WriteBatches & wbs) const
 {
+    GET_METRIC(tiflash_storage_subtask_count, type_prepare_split_physical).Increment();
+    Stopwatch watch;
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_storage_subtask_duration_seconds, type_prepare_split_physical)
+            .Observe(watch.elapsedSeconds());
+    });
+
     LOG_DEBUG(
         log,
         "Split - SplitPhysical - Begin prepare, opt_split_point={}",
@@ -2103,11 +2135,14 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical( //
 
     StableValueSpacePtr my_new_stable;
     StableValueSpacePtr other_stable;
+    double remote_upload_seconds = 0;
 
     {
         auto my_data = getInputStreamForDataExport(dm_context, read_info, segment_snap, my_range);
         auto my_stable_id = segment_snap->stable->getId();
-        my_new_stable = createNewStable(dm_context, schema_snap, my_data, my_stable_id, wbs);
+        const auto create_result = createNewStable(dm_context, schema_snap, my_data, my_stable_id, wbs);
+        my_new_stable = create_result.stable;
+        remote_upload_seconds += create_result.remote_upload_seconds;
     }
 
     LOG_DEBUG(log, "Split - SplitPhysical - Finish prepare my_new_stable");
@@ -2115,7 +2150,9 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical( //
     {
         auto other_data = getInputStreamForDataExport(dm_context, read_info, segment_snap, other_range);
         auto other_stable_id = dm_context.storage_pool->newMetaPageId();
-        other_stable = createNewStable(dm_context, schema_snap, other_data, other_stable_id, wbs);
+        const auto create_result = createNewStable(dm_context, schema_snap, other_data, other_stable_id, wbs);
+        other_stable = create_result.stable;
+        remote_upload_seconds += create_result.remote_upload_seconds;
     }
 
     LOG_DEBUG(log, "Split - SplitPhysical - Finish prepare other_stable");
@@ -2130,9 +2167,10 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical( //
 
     LOG_DEBUG(
         log,
-        "Split - SplitPhysical - Finish prepare, segment={} split_point={}",
+        "Split - SplitPhysical - Finish prepare, segment={} split_point={} remote_upload_seconds={:.3f}",
         info(),
-        split_point.toDebugString());
+        split_point.toDebugString(),
+        remote_upload_seconds);
 
     return SplitInfo{
         .is_logical = false,
@@ -2263,6 +2301,12 @@ StableValueSpacePtr Segment::prepareMerge(
     const std::vector<SegmentSnapshotPtr> & ordered_snapshots,
     WriteBatches & wbs)
 {
+    GET_METRIC(tiflash_storage_subtask_count, type_prepare_merge).Increment();
+    Stopwatch watch;
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_storage_subtask_duration_seconds, type_prepare_merge).Observe(watch.elapsedSeconds());
+    });
+
     RUNTIME_CHECK(ordered_segments.size() >= 2, ordered_snapshots.size());
     RUNTIME_CHECK(
         ordered_segments.size() == ordered_snapshots.size(),
@@ -2312,11 +2356,16 @@ StableValueSpacePtr Segment::prepareMerge(
         dm_context.is_common_handle);
 
     auto merged_stable_id = ordered_segments[0]->stable->getId();
-    auto merged_stable = createNewStable(dm_context, schema_snap, merged_stream, merged_stable_id, wbs);
+    const auto create_result
+        = createNewStable(dm_context, schema_snap, merged_stream, merged_stable_id, wbs);
 
-    LOG_DEBUG(log, "Merge - Finish prepare, segments_to_merge={}", info(ordered_segments));
+    LOG_DEBUG(
+        log,
+        "Merge - Finish prepare, segments_to_merge={} remote_upload_seconds={:.3f}",
+        info(ordered_segments),
+        create_result.remote_upload_seconds);
 
-    return merged_stable;
+    return create_result.stable;
 }
 
 SegmentPtr Segment::applyMerge(
@@ -2501,6 +2550,7 @@ String Segment::info() const
         "<segment_id={} epoch={} range={}{} next_segment_id={} "
         "delta_rows={} delta_bytes={} delta_deletes={} "
         "stable_file={} stable_rows={} stable_bytes={} "
+        "stable_cols={} "
         "dmf_rows={} dmf_bytes={} dmf_disk_bytes={} dmf_packs={}>",
         segment_id,
         epoch,
@@ -2515,6 +2565,7 @@ String Segment::info() const
         stable->getDMFilesString(),
         stable->getRows(),
         stable->getBytes(),
+        stable->getDMFilesNumColumns(),
 
         stable->getDMFilesRows(),
         stable->getDMFilesBytes(),
