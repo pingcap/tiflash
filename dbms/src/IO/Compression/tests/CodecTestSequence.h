@@ -72,18 +72,25 @@ DataTypePtr makeDataType()
     return nullptr;
 }
 
+template <typename T>
+std::string bin(const T & value, size_t bits = sizeof(T) * 8)
+{
+    static const uint8_t MAX_BITS = sizeof(T) * 8;
+    assert(bits <= MAX_BITS);
+
+    return std::bitset<sizeof(T) * 8>(static_cast<uint64_t>(value)).to_string().substr(MAX_BITS - bits, bits);
+}
+
 struct CodecTestSequence
 {
     std::string name;
     std::vector<char> serialized_data;
     DataTypePtr data_type;
-    UInt8 type_byte;
 
-    CodecTestSequence(std::string name_, std::vector<char> serialized_data_, DataTypePtr data_type_, UInt8 type_byte_)
+    CodecTestSequence(std::string name_, std::vector<char> serialized_data_, DataTypePtr data_type_)
         : name(name_)
         , serialized_data(serialized_data_)
         , data_type(data_type_)
-        , type_byte(type_byte_)
     {}
 
     CodecTestSequence & append(const CodecTestSequence & other)
@@ -122,7 +129,7 @@ CodecTestSequence operator*(CodecTestSequence && left, T times)
         left.name + " x " + std::to_string(times),
         std::move(data),
         std::move(left.data_type),
-        sizeof(T)};
+    };
 }
 
 std::ostream & operator<<(std::ostream & ostr, const CompressionMethodByte method_byte)
@@ -156,7 +163,7 @@ CodecTestSequence makeSeq(Args &&... args)
         (fmt::format("{} values of {}", std::size(vals), type_name<T>())),
         std::move(data),
         makeDataType<T>(),
-        sizeof(T)};
+    };
 }
 
 template <typename T, typename Generator>
@@ -178,7 +185,7 @@ CodecTestSequence generateSeq(Generator gen, const char * gen_name, int Begin = 
         (fmt::format("{} values of {} from {}", (End - Begin), type_name<T>(), gen_name)),
         std::move(data),
         makeDataType<T>(),
-        sizeof(T)};
+    };
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

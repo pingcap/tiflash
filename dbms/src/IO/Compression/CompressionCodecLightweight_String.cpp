@@ -26,7 +26,7 @@ extern const int CANNOT_COMPRESS;
 extern const int CANNOT_DECOMPRESS;
 } // namespace ErrorCodes
 
-size_t CompressionCodecLightweight::compressDataForNonInteger(const char * source, UInt32 source_size, char * dest)
+size_t CompressionCodecLightweight::compressDataForString(const char * source, UInt32 source_size, char * dest)
 {
     auto success = LZ4_compress_fast(
         source,
@@ -40,7 +40,7 @@ size_t CompressionCodecLightweight::compressDataForNonInteger(const char * sourc
 }
 
 
-void CompressionCodecLightweight::decompressDataForNonInteger(
+void CompressionCodecLightweight::decompressDataForString(
     const char * source,
     UInt32 source_size,
     char * dest,
