@@ -395,7 +395,9 @@ SegmentPtr DeltaMergeStore::segmentMerge(
     });
 
     WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
-    auto merged_stable = Segment::prepareMerge(dm_context, schema_snap, ordered_segments, ordered_snapshots, wbs);
+    const auto prepare_result
+        = Segment::prepareMerge(dm_context, schema_snap, ordered_segments, ordered_snapshots, wbs);
+    auto merged_stable = prepare_result.stable;
     wbs.writeLogAndData();
     merged_stable->enableDMFilesGC(dm_context);
 
@@ -437,9 +439,13 @@ SegmentPtr DeltaMergeStore::segmentMerge(
 
         LOG_INFO(
             log,
-            "Merge - Finish, {} segments are merged into one, reason={} merged={} segments_to_merge={}",
+            "Merge - Finish, {} segments are merged into one, reason={} "
+            "prepare_seconds={:.3f} remote_upload_seconds={:.3f} "
+            "merged={} segments_to_merge={}",
             ordered_segments.size(),
             magic_enum::enum_name(reason),
+            prepare_result.prepare_seconds,
+            prepare_result.remote_upload_seconds,
             merged->info(),
             Segment::info(ordered_segments));
     }
@@ -1273,7 +1279,8 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
 
     WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
 
-    auto new_stable = segment->prepareMergeDelta(dm_context, schema_snap, segment_snap, wbs);
+    const auto prepare_result = segment->prepareMergeDelta(dm_context, schema_snap, segment_snap, wbs);
+    auto new_stable = prepare_result.stable;
     wbs.writeLogAndData();
     new_stable->enableDMFilesGC(dm_context);
 
@@ -1307,7 +1314,12 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
 
         LOG_INFO(
             log,
-            "MergeDelta - Finish, delta is merged, old_segment={} new_segment={}",
+            "MergeDelta - Finish, delta is merged, reason={} "
+            "prepare_seconds={:.3f} remote_upload_seconds={:.3f} "
+            "old_segment={} new_segment={}",
+            magic_enum::enum_name(reason),
+            prepare_result.prepare_seconds,
+            prepare_result.remote_upload_seconds,
             segment->info(),
             new_segment->info());
     }
