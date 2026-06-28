@@ -12,17 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
+#include <Common/TiFlashMetrics.h>
+#include <Common/typeid_cast.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileLocalStaging.h>
 #include <Storages/DeltaMerge/File/DMFileMetaV2.h>
 #include <Storages/DeltaMerge/File/DMFileUtil.h>
 #include <Storages/S3/FileCache.h>
 #include <Storages/S3/S3Filename.h>
-#include <Common/Exception.h>
-#include <Common/TiFlashMetrics.h>
-#include <Common/typeid_cast.h>
 #include <common/logger_useful.h>
-
 #include <fmt/format.h>
 
 #include <optional>

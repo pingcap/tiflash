@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TiFlashMetrics.h>
+#include <DataTypes/DataTypeFactory.h>
 #include <IO/Encryption/MockKeyManager.h>
+#include <IO/IOThreadPools.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
-#include <DataTypes/DataTypeFactory.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
@@ -30,9 +32,7 @@
 #include <Storages/S3/FileCache.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
-#include <IO/IOThreadPools.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
-#include <Common/TiFlashMetrics.h>
 #include <gtest/gtest.h>
 
 #include <memory>
@@ -66,10 +66,7 @@ void shutdownWriteFileCache()
     reinitS3FileCachePool();
 }
 
-void initWriteFileCache(
-    PathCapacityMetricsPtr capacity_metrics,
-    IORateLimiter & rate_limiter,
-    String cache_dir)
+void initWriteFileCache(PathCapacityMetricsPtr capacity_metrics, IORateLimiter & rate_limiter, String cache_dir)
 {
     StorageRemoteCacheConfig file_cache_config{
         .dir = std::move(cache_dir),
@@ -678,8 +675,9 @@ try
     auto log = Logger::get("DMFileLocalStagingTest");
     auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
     auto dm_file = prepareDMFileRemote(/* file_id= */ 12);
-    ASSERT_TRUE(tryDownloadMetaV2MergedFilesForLocalRead(dm_file, *cols, /*enable=*/false, log, "DMFileLocalStagingTest")
-                    .empty());
+    ASSERT_TRUE(
+        tryDownloadMetaV2MergedFilesForLocalRead(dm_file, *cols, /*enable=*/false, log, "DMFileLocalStagingTest")
+            .empty());
 }
 CATCH
 
@@ -711,15 +709,9 @@ try
     const auto local_read_files
         = tryDownloadMetaV2MergedFilesForLocalRead(dm_file, *cols, /*enable=*/true, log, "DMFileLocalStagingTest");
     ASSERT_FALSE(local_read_files.empty());
-    ASSERT_EQ(
-        attempt_before + 1,
-        GET_METRIC(tiflash_storage_write_filecache_staging, type_attempt).Value());
-    ASSERT_GE(
-        GET_METRIC(tiflash_storage_write_filecache_staging, type_download_ok).Value(),
-        local_read_files.size());
-    ASSERT_GT(
-        GET_METRIC(tiflash_storage_write_filecache_staging_bytes, type_staged).Value(),
-        0);
+    ASSERT_EQ(attempt_before + 1, GET_METRIC(tiflash_storage_write_filecache_staging, type_attempt).Value());
+    ASSERT_GE(GET_METRIC(tiflash_storage_write_filecache_staging, type_download_ok).Value(), local_read_files.size());
+    ASSERT_GT(GET_METRIC(tiflash_storage_write_filecache_staging_bytes, type_staged).Value(), 0);
 
     auto * file_cache = FileCache::instance();
     ASSERT_NE(file_cache, nullptr);
@@ -740,11 +732,8 @@ try
     ASSERT_TRUE(FileCache::instance()->getAll().empty());
 
     DMFileBlockInputStreamBuilder builder(*db_context);
-    auto stream = builder.enableWriteFileCacheLocalRead(true).build(
-        dm_file,
-        *cols,
-        {RowKeyRange::newAll(false, 1)},
-        std::make_shared<ScanContext>());
+    auto stream = builder.enableWriteFileCacheLocalRead(true)
+                      .build(dm_file, *cols, {RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
     ASSERT_FALSE(FileCache::instance()->getAll().empty());
 
     auto block = stream->read();

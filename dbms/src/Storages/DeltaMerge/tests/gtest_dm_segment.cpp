@@ -1617,13 +1617,9 @@ try
         write_100_rows(other_segment);
         segment->flushCache(dmContext());
 
-        auto merged_stable = Segment::prepareMerge(
-            dmContext(),
-            tableColumns(),
-            {segment, other_segment},
-            {left_snap, right_snap},
-            wbs)
-                                 .stable;
+        auto merged_stable
+            = Segment::prepareMerge(dmContext(), tableColumns(), {segment, other_segment}, {left_snap, right_snap}, wbs)
+                  .stable;
 
         wbs.writeLogAndData();
         merged_stable->enableDMFilesGC(dmContext());
