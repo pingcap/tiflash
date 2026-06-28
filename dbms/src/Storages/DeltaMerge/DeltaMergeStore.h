@@ -170,10 +170,9 @@ public:
 #endif
 
         using TaskQueue = std::queue<BackgroundTask, std::list<BackgroundTask>>;
+        std::mutex mutex;
         TaskQueue light_tasks;
         TaskQueue heavy_tasks;
-
-        std::mutex mutex;
 
     public:
         size_t length()
