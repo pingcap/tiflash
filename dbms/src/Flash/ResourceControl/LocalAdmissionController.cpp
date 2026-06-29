@@ -633,7 +633,7 @@ void LocalAdmissionController::doRequestGAC()
             const auto resp = cluster->pd_client->acquireTokenBuckets(req);
             LOG_DEBUG(log, "request to GAC done, req: {}. resp: {}", req.ShortDebugString(), resp.ShortDebugString());
 
-            auto handled = handleTokenBucketsResp(resp);
+            auto handled = handleTokenBucketsResp(resp, req_rg_names);
 
             std::vector<std::pair<KeyspaceID, std::string>> not_found;
             // not_found includes resource group names that appears in gac_req but not found in resp.
@@ -673,7 +673,8 @@ void LocalAdmissionController::checkDegradeMode()
 }
 
 std::vector<std::pair<KeyspaceID, std::string>> LocalAdmissionController::handleTokenBucketsResp(
-    const resource_manager::TokenBucketsResponse & resp)
+    const resource_manager::TokenBucketsResponse & resp,
+    const std::vector<std::pair<KeyspaceID, std::string>> & req_rg_names)
 {
     if unlikely (resp.has_error())
     {
@@ -683,6 +684,13 @@ std::vector<std::pair<KeyspaceID, std::string>> LocalAdmissionController::handle
 
     std::vector<std::pair<KeyspaceID, std::string>> handled_resource_group_names;
     handled_resource_group_names.reserve(resp.responses_size());
+
+    // Older PD may omit keyspace_id in TokenBucketResponse. Keep request order per resource-group name so
+    // duplicate names across keyspaces can still be matched to the corresponding requests in order.
+    std::unordered_map<std::string, std::vector<KeyspaceID>> pending_req_keyspaces_by_name;
+    for (const auto & [req_keyspace_id, req_name] : req_rg_names)
+        pending_req_keyspaces_by_name[req_name].push_back(req_keyspace_id);
+
     if (resp.responses().empty())
     {
         LOG_ERROR(log, "got empty TokenBuckets resp from GAC, {}", resp.ShortDebugString());
@@ -699,19 +707,61 @@ std::vector<std::pair<KeyspaceID, std::string>> LocalAdmissionController::handle
         }
 
         const auto & name = one_resp.resource_group_name();
-        KeyspaceID keyspace_id = NullspaceID;
+        KeyspaceID resp_keyspace_id = NullspaceID;
         if (one_resp.has_keyspace_id())
-            keyspace_id = one_resp.keyspace_id().value();
-        auto resource_group = findResourceGroup(keyspace_id, name);
+            resp_keyspace_id = one_resp.keyspace_id().value();
+
+        std::optional<KeyspaceID> matched_req_keyspace_id;
+        ResourceGroupPtr resource_group = nullptr;
+        if (one_resp.has_keyspace_id())
+        {
+            resource_group = findResourceGroup(resp_keyspace_id, name);
+        }
+        else
+        {
+            auto iter = pending_req_keyspaces_by_name.find(name);
+            if (iter != pending_req_keyspaces_by_name.end())
+            {
+                for (const auto req_keyspace_id : iter->second)
+                {
+                    resource_group = findResourceGroup(req_keyspace_id, name);
+                    if (resource_group != nullptr)
+                    {
+                        matched_req_keyspace_id = req_keyspace_id;
+                        break;
+                    }
+                }
+            }
+            if (resource_group == nullptr)
+                resource_group = findResourceGroup(resp_keyspace_id, name);
+        }
         if (resource_group == nullptr)
         {
-            LOG_ERROR(log, "cannot find resource group: {}(keyspace={})", name, keyspace_id);
+            LOG_ERROR(log, "cannot find resource group: {}(keyspace={})", name, resp_keyspace_id);
             continue;
         }
 
-        handled_resource_group_names.emplace_back(keyspace_id, name);
+        const KeyspaceID handled_keyspace_id = matched_req_keyspace_id.value_or(resp_keyspace_id);
+        handled_resource_group_names.emplace_back(handled_keyspace_id, name);
+        if (auto iter = pending_req_keyspaces_by_name.find(name); iter != pending_req_keyspaces_by_name.end())
+        {
+            auto & pending_keyspaces = iter->second;
+            if (const auto matched_iter
+                = std::find(pending_keyspaces.begin(), pending_keyspaces.end(), handled_keyspace_id);
+                matched_iter != pending_keyspaces.end())
+            {
+                pending_keyspaces.erase(matched_iter);
+                if (pending_keyspaces.empty())
+                    pending_req_keyspaces_by_name.erase(iter);
+            }
+        }
 
-        const String err_msg = fmt::format("handle acquire token resp failed: rg: {}(keyspace={})", name, keyspace_id);
+        const auto metric_keyspace_id = resource_group->getKeyspaceID();
+        const String err_msg = fmt::format(
+            "handle acquire token resp failed: rg: {}(keyspace={}, cached_keyspace={})",
+            name,
+            handled_keyspace_id,
+            metric_keyspace_id);
         // It's possible for one_resp.granted_r_u_tokens() to be empty
         // when the acquire_token_req is only for report RU consumption or GAC got error(like nan token).
         if (one_resp.granted_r_u_tokens().empty())
@@ -785,7 +835,7 @@ std::vector<std::pair<KeyspaceID, std::string>> LocalAdmissionController::handle
         // https://github.com/tikv/pd/blob/e9757fbe03260775262763c67f62296fcb26b3c2/pkg/mcs/resourcemanager/server/token_buckets.go#L47
         int64_t capacity = granted_token_bucket.granted_tokens().settings().burst_limit();
 
-        const auto name_with_keyspace_id = getResourceGroupMetricName(keyspace_id, name);
+        const auto name_with_keyspace_id = getResourceGroupMetricName(metric_keyspace_id, name);
         if (added_tokens > 0)
             GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_gac_resp_tokens, name_with_keyspace_id)
                 .Set(added_tokens);
@@ -823,11 +873,21 @@ std::vector<std::pair<KeyspaceID, std::string>> LocalAdmissionController::handle
 
 void LocalAdmissionController::watchGACLoop(const std::string & etcd_path)
 {
+    auto grpc_context = std::make_unique<grpc::ClientContext>();
+    {
+        std::lock_guard lock(mu);
+        active_watch_gac_grpc_contexts.insert(grpc_context.get());
+    }
+    SCOPE_EXIT({
+        std::lock_guard lock(mu);
+        active_watch_gac_grpc_contexts.erase(grpc_context.get());
+    });
+
     while (!stopped.load())
     {
         try
         {
-            doWatch(etcd_path);
+            doWatch(etcd_path, grpc_context.get());
         }
         catch (...)
         {
@@ -848,15 +908,16 @@ void LocalAdmissionController::watchGACLoop(const std::string & etcd_path)
                 }))
                 return;
 
-            // Create new grpc_context for each reader/writer.
-            watch_gac_grpc_context = std::make_unique<grpc::ClientContext>();
+            active_watch_gac_grpc_contexts.erase(grpc_context.get());
+            grpc_context = std::make_unique<grpc::ClientContext>();
+            active_watch_gac_grpc_contexts.insert(grpc_context.get());
         }
     }
 }
 
-void LocalAdmissionController::doWatch(const std::string & etcd_path)
+void LocalAdmissionController::doWatch(const std::string & etcd_path, grpc::ClientContext * grpc_context)
 {
-    auto stream = etcd_client->watch(watch_gac_grpc_context.get());
+    auto stream = etcd_client->watch(grpc_context);
     auto watch_req = setupWatchReq(etcd_path);
     LOG_DEBUG(log, "watchGAC req: {}", watch_req.ShortDebugString());
     const bool write_ok = stream->Write(watch_req);
@@ -1039,7 +1100,8 @@ void LocalAdmissionController::stop()
     // So still need to lock.
     {
         std::lock_guard lock(mu);
-        watch_gac_grpc_context->TryCancel();
+        for (auto * grpc_context : active_watch_gac_grpc_contexts)
+            grpc_context->TryCancel();
         cv.notify_all();
     }
     {
