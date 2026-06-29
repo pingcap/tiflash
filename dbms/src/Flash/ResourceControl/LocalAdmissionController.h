@@ -371,7 +371,6 @@ public:
         bool start_background_threads = true)
         : cluster(cluster_)
         , etcd_client(etcd_client_)
-        , watch_gac_grpc_context(std::make_unique<grpc::ClientContext>())
     {
         if (start_background_threads)
         {
@@ -648,7 +647,8 @@ private:
     }
 
     std::vector<std::pair<KeyspaceID, std::string>> handleTokenBucketsResp(
-        const resource_manager::TokenBucketsResponse & resp);
+        const resource_manager::TokenBucketsResponse & resp,
+        const std::vector<std::pair<KeyspaceID, std::string>> & req_rg_names);
 
     static void checkGACRespValid(const resource_manager::ResourceGroup & new_group_pb);
 
@@ -673,7 +673,7 @@ private:
     void addReservedDefaultResourceGroup(const KeyspaceID & keyspace_id);
 
     // watchGACLoop related methods.
-    void doWatch(const std::string & etcd_path);
+    void doWatch(const std::string & etcd_path, grpc::ClientContext * grpc_context);
     static etcdserverpb::WatchRequest setupWatchReq(const std::string & etcd_path);
     bool handleDeleteEvent(const std::string & etcd_path, const mvccpb::KeyValue & kv, std::string & err_msg);
     bool handlePutEvent(const std::string & etcd_path, const mvccpb::KeyValue & kv, std::string & err_msg);
@@ -725,7 +725,7 @@ private:
     std::atomic<bool> need_reset_unique_client_id{false};
     uint64_t unique_client_id = 0;
     Etcd::ClientPtr etcd_client = nullptr;
-    std::unique_ptr<grpc::ClientContext> watch_gac_grpc_context = nullptr;
+    std::unordered_set<grpc::ClientContext *> active_watch_gac_grpc_contexts{};
     std::vector<std::thread> background_threads;
 
     SteadyClock::time_point current_tick = SteadyClock::time_point::min();
