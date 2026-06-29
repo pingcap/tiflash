@@ -27,11 +27,18 @@
 #include <optional>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 namespace DB::DM
 {
 namespace
 {
+struct LogicalReadFile
+{
+    ColId col_id;
+    String filename;
+};
+
 std::optional<UInt64> getMergedFileSize(const DMFileMetaV2 & dmfile_meta, UInt32 number)
 {
     for (const auto & merged_file : dmfile_meta.merged_files)
@@ -40,6 +47,39 @@ std::optional<UInt64> getMergedFileSize(const DMFileMetaV2 & dmfile_meta, UInt32
             return merged_file.size;
     }
     return std::nullopt;
+}
+
+void tryCollectS3Object(
+    std::unordered_map<String, LocalReadObject> & objects_by_key,
+    const String & file_path,
+    UInt64 file_size,
+    const DMFilePtr & dmfile,
+    const LoggerPtr & log,
+    const String & tracing_id,
+    const String & logical_filename)
+{
+    if (file_size == 0)
+        return;
+
+    const auto s3_fname = S3::S3FilenameView::fromKeyWithPrefix(file_path);
+    if (!s3_fname.isValid())
+    {
+        LOG_DEBUG(
+            log,
+            "Skip local staging collection for non-S3 path, tracing_id={} dmfile={} logical_file={} path={}",
+            tracing_id,
+            dmfile->parentPath(),
+            logical_filename,
+            file_path);
+        return;
+    }
+
+    objects_by_key.emplace(
+        s3_fname.toFullKey(),
+        LocalReadObject{
+            .s3_key = s3_fname.toFullKey(),
+            .file_size = file_size,
+        });
 }
 } // namespace
 
@@ -57,9 +97,9 @@ std::vector<LocalReadObject> collectMetaV2MergedFilesForLocalRead(
         return {};
 
     // Logical subfile names (e.g. `c1.dat`, `c1.mrk`) required by read_columns.
-    // MetaV2 stores many logical files inside physical `.merged` blobs; this set is
-    // the per-column/substream view before resolving to merged file numbers.
-    std::unordered_set<String> logical_filenames;
+    // MetaV2 stores many logical files inside physical `.merged` blobs; this list is
+    // the per-column/substream view before resolving to merged file numbers or standalone paths.
+    std::vector<LogicalReadFile> logical_files;
     for (const auto & cd : read_columns)
     {
         if (!dmfile->isColumnExist(cd.id))
@@ -69,28 +109,33 @@ std::vector<LocalReadObject> collectMetaV2MergedFilesForLocalRead(
         data_type->enumerateStreams(
             [&](const IDataType::SubstreamPath & substream) {
                 const auto stream_name = DMFile::getFileNameBase(cd.id, substream);
-                logical_filenames.insert(colDataFileName(stream_name));
-                logical_filenames.insert(colMarkFileName(stream_name));
+                logical_files.push_back({cd.id, colDataFileName(stream_name)});
+                logical_files.push_back({cd.id, colMarkFileName(stream_name)});
             },
             {});
     }
 
-    // Physical `.merged` S3 objects to stage locally, keyed by full S3 key.
+    // Physical S3 objects to stage locally, keyed by full S3 key.
     // Multiple logical subfiles may map to the same merged blob; dedup here so
     // each object is downloaded at most once.
     std::unordered_map<String, LocalReadObject> objects_by_key;
-    for (const auto & logical_filename : logical_filenames)
+    for (const auto & logical_file : logical_files)
     {
+        const auto & logical_filename = logical_file.filename;
         const auto info_iter = dmfile_meta->merged_sub_file_infos.find(logical_filename);
         if (info_iter == dmfile_meta->merged_sub_file_infos.end())
         {
-            // Standalone column subfile (not merged into `.merged`). Direct read for now.
-            // TODO: collect `dmfile->colDataPath` / `colMarkPath` and pre-download via FileCache.
-            LOG_DEBUG(
+            // Large column subfiles (e.g. `.dat`) are kept as standalone S3 objects when they
+            // exceed `small_file_size_threshold`; only their marks/indexes may live in `.merged`.
+            const auto file_path = dmfile->subFilePath(logical_filename);
+            const auto file_size = dmfile->getReadFileSize(logical_file.col_id, logical_filename);
+            tryCollectS3Object(
+                objects_by_key,
+                file_path,
+                file_size,
+                dmfile,
                 log,
-                "Skip local staging collection for unknown logical file, tracing_id={} dmfile={} logical_file={}",
                 tracing_id,
-                dmfile->parentPath(),
                 logical_filename);
             continue;
         }
@@ -111,25 +156,14 @@ std::vector<LocalReadObject> collectMetaV2MergedFilesForLocalRead(
         }
 
         const auto merged_path = dmfile_meta->mergedPath(merged_file_info.number);
-        const auto s3_fname = S3::S3FilenameView::fromKeyWithPrefix(merged_path);
-        if (!s3_fname.isValid())
-        {
-            LOG_DEBUG(
-                log,
-                "Skip local staging collection for non-S3 merged path, tracing_id={} dmfile={} logical_file={} path={}",
-                tracing_id,
-                dmfile->parentPath(),
-                logical_filename,
-                merged_path);
-            continue;
-        }
-
-        objects_by_key.emplace(
-            s3_fname.toFullKey(),
-            LocalReadObject{
-                .s3_key = s3_fname.toFullKey(),
-                .file_size = merged_file_size.value(),
-            });
+        tryCollectS3Object(
+            objects_by_key,
+            merged_path,
+            merged_file_size.value(),
+            dmfile,
+            log,
+            tracing_id,
+            logical_filename);
     }
 
     std::vector<LocalReadObject> objects;
@@ -205,7 +239,7 @@ std::vector<FileSegmentPtr> tryDownloadMetaV2MergedFilesForLocalRead(
             }
             local_read_files.emplace_back(std::move(file_seg));
             GET_METRIC(tiflash_storage_write_filecache_staging, type_download_ok).Increment();
-            // Cumulative bytes of physical `.merged` objects successfully staged (metadata file_size).
+            // Cumulative bytes of physical objects successfully staged (metadata file_size).
             // Counter only increases; reader pin release does not decrement it. For live FileCache
             // occupancy, use tiflash_storage_remote_cache_bytes instead.
             GET_METRIC(tiflash_storage_write_filecache_staging_bytes, type_staged).Increment(object.file_size);

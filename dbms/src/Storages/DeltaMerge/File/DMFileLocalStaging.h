@@ -38,13 +38,8 @@ struct LocalReadObject
 
 /// Collect S3 objects to stage locally before reading a MetaV2 DMFile.
 ///
-/// Currently only collects physical `.merged` blobs referenced by `read_columns`.
-/// Logical subfiles not merged into `.merged` (e.g. large standalone column `.dat`
-/// files) are skipped; the read path falls back to direct S3 read for them.
-///
-/// TODO: Also collect standalone column subfiles (via `colDataPath` / `colMarkPath`)
-/// when they are not present in `merged_sub_file_infos`, so FileCache can
-/// pre-download them as independent S3 objects.
+/// Collects physical `.merged` blobs referenced by `read_columns`, as well as
+/// standalone column subfiles (e.g. large `.dat` files not merged into `.merged`).
 ///
 /// Returns empty for non-MetaV2 DMFiles or when paths are not valid remote S3 keys.
 std::vector<LocalReadObject> collectMetaV2MergedFilesForLocalRead(
@@ -53,7 +48,7 @@ std::vector<LocalReadObject> collectMetaV2MergedFilesForLocalRead(
     const LoggerPtr & log,
     const String & tracing_id);
 
-/// Download collected `.merged` objects into FileCache and return pins for reader lifetime.
+/// Download collected MetaV2 objects into FileCache and return pins for reader lifetime.
 /// Returns empty when staging is disabled, FileCache is unavailable, or nothing to stage.
 /// Per-object download failures are logged and counted; successful pins are still returned.
 std::vector<FileSegmentPtr> tryDownloadMetaV2MergedFilesForLocalRead(
