@@ -14,6 +14,7 @@
 
 #include <Common/TiFlashMetrics.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/IDataType.h>
 #include <IO/Encryption/MockKeyManager.h>
 #include <IO/IOThreadPools.h>
 #include <Interpreters/Context.h>
@@ -23,6 +24,8 @@
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/File/DMFileLocalStaging.h>
+#include <Storages/DeltaMerge/File/DMFileMetaV2.h>
+#include <Storages/DeltaMerge/File/DMFileUtil.h>
 #include <Storages/DeltaMerge/File/DMFileV3IncrementWriter.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/DeltaMerge/ScanContext.h>
@@ -429,6 +432,54 @@ protected:
         return dm_file;
     }
 
+    DMFilePtr prepareDMFileWithStandaloneColumnData(UInt64 file_id)
+    {
+        constexpr UInt64 small_file_size_threshold = 4096;
+        auto dm_file = DMFile::create(
+            file_id,
+            parent_path,
+            std::make_optional<DMChecksumConfig>(),
+            small_file_size_threshold,
+            16 * 1024 * 1024,
+            DMFileFormat::V3);
+
+        auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
+        constexpr size_t num_rows = 20000;
+        Block block = DMTestEnv::prepareSimpleWriteBlockWithNullable(0, num_rows);
+
+        auto writer = DMFileWriter(
+            dm_file,
+            *cols,
+            file_provider_maybe_encrypted,
+            db_context->getWriteLimiter(),
+            DMFileWriter::Options());
+        writer.write(block, DMFileBlockOutputStream::BlockProperty{0, 0, 0, 0});
+        writer.finalize();
+
+        const auto * dmfile_meta = typeid_cast<const DMFileMetaV2 *>(dm_file->meta.get());
+        RUNTIME_CHECK(dmfile_meta != nullptr);
+        const auto handle_stream_name
+            = IDataType::getFileNameForStream(DB::toString(MutSup::extra_handle_id), {});
+        const auto handle_dat_fname = colDataFileName(handle_stream_name);
+        RUNTIME_CHECK(
+            dm_file->getColumnStat(MutSup::extra_handle_id).data_bytes > small_file_size_threshold,
+            dm_file->getColumnStat(MutSup::extra_handle_id).data_bytes);
+        RUNTIME_CHECK(
+            dmfile_meta->merged_sub_file_infos.find(handle_dat_fname) == dmfile_meta->merged_sub_file_infos.end(),
+            handle_dat_fname);
+
+        dataStore()->putDMFile(
+            dm_file,
+            S3::DMFileOID{
+                .store_id = store_id,
+                .keyspace_id = keyspace_id,
+                .table_id = table_id,
+                .file_id = dm_file->fileId(),
+            },
+            true);
+        return dm_file;
+    }
+
 protected:
     const StoreID store_id = 17;
 
@@ -630,6 +681,46 @@ try
         EXPECT_TRUE(object.s3_key.ends_with(".merged"));
         EXPECT_GT(object.file_size, 0);
         EXPECT_TRUE(keys.insert(object.s3_key).second);
+    }
+}
+CATCH
+
+TEST_P(S3DMFile, LocalStagingCollectStandaloneDatFiles)
+try
+{
+    auto log = Logger::get("DMFileLocalStagingTest");
+    auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
+    auto dm_file = prepareDMFileWithStandaloneColumnData(/* file_id= */ 16);
+    const auto * dmfile_meta = typeid_cast<const DMFileMetaV2 *>(dm_file->meta.get());
+    ASSERT_NE(dmfile_meta, nullptr);
+
+    const auto handle_stream_name = IDataType::getFileNameForStream(DB::toString(MutSup::extra_handle_id), {});
+    const auto handle_dat_fname = colDataFileName(handle_stream_name);
+    ASSERT_EQ(dmfile_meta->merged_sub_file_infos.find(handle_dat_fname), dmfile_meta->merged_sub_file_infos.end());
+
+    const auto objects = collectMetaV2MergedFilesForLocalRead(dm_file, *cols, log, "DMFileLocalStagingTest");
+    ASSERT_FALSE(objects.empty());
+
+    bool has_merged = false;
+    bool has_standalone_dat = false;
+    for (const auto & object : objects)
+    {
+        EXPECT_TRUE(S3::S3FilenameView::fromKey(object.s3_key).isValid());
+        EXPECT_GT(object.file_size, 0);
+        if (object.s3_key.ends_with(".merged"))
+            has_merged = true;
+        if (object.s3_key.ends_with(handle_dat_fname))
+            has_standalone_dat = true;
+    }
+    EXPECT_TRUE(has_merged);
+    EXPECT_TRUE(has_standalone_dat);
+
+    const ColumnDefines handle_only{getExtraHandleColumnDefine(/*is_common_handle=*/false)};
+    const auto handle_objects = collectMetaV2MergedFilesForLocalRead(dm_file, handle_only, log, "DMFileLocalStagingTest");
+    ASSERT_FALSE(handle_objects.empty());
+    for (const auto & object : handle_objects)
+    {
+        EXPECT_TRUE(object.s3_key.ends_with(".merged") || object.s3_key.ends_with(handle_dat_fname));
     }
 }
 CATCH
