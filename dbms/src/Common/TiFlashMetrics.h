@@ -264,7 +264,8 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_prepare_merge_delta, {"type", "prepare_merge_delta"}),                                                                 \
       F(type_prepare_merge, {"type", "prepare_merge"}),                                                                             \
       F(type_prepare_split_physical, {"type", "prepare_split_physical"}),                                                           \
-      F(type_remote_upload, {"type", "remote_upload"}))                                                                             \
+      F(type_remote_upload, {"type", "remote_upload"}),                                                                             \
+      F(type_ingest, {"type", "ingest"}))                                                                                           \
     M(tiflash_storage_subtask_duration_seconds,                                                                                     \
       "Bucketed histogram of storage's sub task duration",                                                                          \
       Histogram, /* increase the bucket from 10ms to 87 minutes */                                                                  \
@@ -282,7 +283,8 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_prepare_merge_delta, {{"type", "prepare_merge_delta"}}, ExpBuckets{0.010, 2, 20}),                                     \
       F(type_prepare_merge, {{"type", "prepare_merge"}}, ExpBuckets{0.010, 2, 20}),                                                 \
       F(type_prepare_split_physical, {{"type", "prepare_split_physical"}}, ExpBuckets{0.010, 2, 20}),                               \
-      F(type_remote_upload, {{"type", "remote_upload"}}, ExpBuckets{0.010, 2, 20}))                                                 \
+      F(type_remote_upload, {{"type", "remote_upload"}}, ExpBuckets{0.010, 2, 20}),                                                 \
+      F(type_ingest, {{"type", "ingest"}}, ExpBuckets{0.010, 2, 20}))                                                               \
     M(tiflash_storage_subtask_throughput_bytes,                                                                                     \
       "Calculate the throughput of (maybe foreground) tasks of storage in bytes",                                                   \
       Counter, /**/                                                                                                                 \

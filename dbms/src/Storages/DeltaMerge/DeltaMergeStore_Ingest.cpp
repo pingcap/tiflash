@@ -621,6 +621,13 @@ UInt64 DeltaMergeStore::ingestFiles(
         throw Exception(msg);
     }
 
+    GET_METRIC(tiflash_storage_subtask_count, type_ingest).Increment();
+    Stopwatch watch_ingest;
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_storage_subtask_duration_seconds, type_ingest)
+            .Observe(watch_ingest.elapsedSeconds());
+    });
+
     {
         // `ingestDTFilesUsingSplit` requires external_files to be not overlapped. Otherwise the results will be incorrect.
         // Here we verify the external_files are ordered and not overlapped.
@@ -679,8 +686,6 @@ UInt64 DeltaMergeStore::ingestFiles(
             }
         }
     }
-
-    EventRecorder write_block_recorder(ProfileEvents::DMWriteFile, ProfileEvents::DMWriteFileNS);
 
     auto delegate = dm_context->path_pool->getStableDiskDelegator();
     auto file_provider = dm_context->global_context.getFileProvider();
@@ -877,7 +882,8 @@ UInt64 DeltaMergeStore::ingestFiles(
 
         LOG_INFO(
             log,
-            "Table ingest files - finished ingested files into segments, {} clear={}",
+            "Table ingest files - finished ingested files into segments, elapsed_seconds={:.3f} {} clear={}",
+            watch_ingest.elapsedSeconds(),
             get_ingest_info(),
             clear_data_in_range);
     }
