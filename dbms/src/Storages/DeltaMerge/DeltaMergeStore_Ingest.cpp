@@ -623,10 +623,8 @@ UInt64 DeltaMergeStore::ingestFiles(
 
     GET_METRIC(tiflash_storage_subtask_count, type_ingest).Increment();
     Stopwatch watch_ingest;
-    SCOPE_EXIT({
-        GET_METRIC(tiflash_storage_subtask_duration_seconds, type_ingest)
-            .Observe(watch_ingest.elapsedSeconds());
-    });
+    SCOPE_EXIT(
+        { GET_METRIC(tiflash_storage_subtask_duration_seconds, type_ingest).Observe(watch_ingest.elapsedSeconds()); });
 
     {
         // `ingestDTFilesUsingSplit` requires external_files to be not overlapped. Otherwise the results will be incorrect.
