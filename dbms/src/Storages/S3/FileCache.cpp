@@ -1302,7 +1302,11 @@ void downloadToLocal(
     wbuf.sync();
 }
 
-void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg, const WriteLimiterPtr & write_limiter)
+void FileCache::downloadImpl(
+    const String & s3_key,
+    FileSegmentPtr & file_seg,
+    const WriteLimiterPtr & write_limiter,
+    DownloadType download_type)
 {
     Stopwatch sw;
     auto client = S3::ClientFactory::instance().sharedTiFlashClient();
@@ -1368,7 +1372,8 @@ void FileCache::downloadImpl(const String & s3_key, FileSegmentPtr & file_seg, c
     file_seg->setComplete(content_length);
     LOG_INFO(
         log,
-        "Download success, s3_key={} local={} size={} cost={}ms",
+        "Download success, type={} s3_key={} local={} size={} cost={}ms",
+        magic_enum::enum_name(download_type),
         s3_key,
         local_fname,
         content_length,
@@ -1393,7 +1398,7 @@ void FileCache::bgDownloadExecutor(
         SYNC_FOR("before_FileCache::bgDownloadExecutor_fail_point");
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::file_cache_bg_download_fail);
         GET_METRIC(tiflash_storage_remote_cache, type_dtfile_download).Increment();
-        downloadImpl(s3_key, file_seg, write_limiter);
+        downloadImpl(s3_key, file_seg, write_limiter, DownloadType::Background);
     }
     catch (...)
     {
@@ -1481,7 +1486,7 @@ void FileCache::fgDownload(const String & s3_key, FileSegmentPtr & file_seg)
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::file_cache_fg_download_fail);
         GET_METRIC(tiflash_storage_remote_cache, type_dtfile_download).Increment();
         // not limit write speed for foreground download now
-        downloadImpl(s3_key, file_seg, nullptr);
+        downloadImpl(s3_key, file_seg, nullptr, DownloadType::Foreground);
     }
     catch (...)
     {
