@@ -336,6 +336,7 @@ SegmentPtr DeltaMergeStore::segmentMerge(
         dm_context.min_version,
         Segment::simpleInfo(ordered_segments));
 
+    // keep "for_update=true" snapshot for all related segments
     std::vector<SegmentSnapshotPtr> ordered_snapshots;
     ordered_snapshots.reserve(ordered_segments.size());
     ColumnDefinesPtr schema_snap;
@@ -786,7 +787,7 @@ void DeltaMergeStore::segmentEnsureStableLocalIndex(
         DMFile::info(index_build_info.dm_files));
 
     // 3. Update the meta version of the segments to the latest one.
-    // To avoid logical split between step 2 and 3, get lastest segments to update again.
+    // To avoid logical split between step 2 and 3, get latest segments to update again.
     // If TiFlash crashes during updating the meta version, some segments' meta are updated and some are not.
     // So after TiFlash restarts, we will update meta versions to latest versions again.
     {
