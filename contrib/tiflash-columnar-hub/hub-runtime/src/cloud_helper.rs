@@ -77,6 +77,87 @@ const SNAPSHOT_CACHE_SIZE: usize = 10240; // 10k shards
 const SNAPSHOT_CACHE_CAP: u64 = 1024 * 1024 * 1024; // 1GB snapshot size with memtable
 const SNAPSHOT_CACHE_CAPABILITY_HEADER: &str = "x-cse-snapshot-cache-version";
 
+#[derive(Clone)]
+struct RefreshingHttpClient {
+    inner: Arc<RefreshingHttpClientInner>,
+}
+
+struct RefreshingHttpClientInner {
+    security_mgr: Arc<SecurityManager>,
+    client: Mutex<security::HttpClient>,
+    #[cfg(test)]
+    refresh_count: std::sync::atomic::AtomicUsize,
+}
+
+impl RefreshingHttpClient {
+    fn new(security_mgr: Arc<SecurityManager>) -> Self {
+        let client = security_mgr.http_client(hyper::Client::builder()).unwrap();
+        Self {
+            inner: Arc::new(RefreshingHttpClientInner {
+                security_mgr,
+                client: Mutex::new(client),
+                #[cfg(test)]
+                refresh_count: std::sync::atomic::AtomicUsize::new(0),
+            }),
+        }
+    }
+
+    async fn request(&self, req: Request<Body>) -> Result<hyper::Response<Body>, hyper::Error> {
+        let uri = req.uri().clone();
+        let client = self.inner.client.lock().unwrap().clone();
+        let resp = client.request(req).await;
+        if let Err(err) = resp.as_ref() {
+            self.maybe_refresh_on_tls_error(&uri, &err.to_string());
+        }
+        resp
+    }
+
+    fn maybe_refresh_on_tls_error(&self, uri: &hyper::Uri, err: &str) {
+        if is_tls_certificate_error(err) {
+            warn!(
+                "snapshot request hit tls certificate error, refresh http client";
+                "uri" => uri.to_string(),
+                "err" => err,
+            );
+            self.refresh();
+        }
+    }
+
+    fn refresh(&self) {
+        match self
+            .inner
+            .security_mgr
+            .http_client(hyper::Client::builder())
+        {
+            Ok(client) => {
+                info!("refreshed snapshot http client"; "reason" => "tls_error");
+                let mut current = self.inner.client.lock().unwrap();
+                *current = client;
+                #[cfg(test)]
+                self.inner.refresh_count.fetch_add(1, Ordering::Relaxed);
+            }
+            Err(err) => {
+                warn!(
+                    "failed to refresh snapshot http client";
+                    "reason" => "tls_error",
+                    "err" => err.to_string(),
+                );
+            }
+        }
+    }
+
+    #[cfg(test)]
+    fn refresh_count(&self) -> usize {
+        self.inner.refresh_count.load(Ordering::Relaxed)
+    }
+}
+
+fn is_tls_certificate_error(err: &str) -> bool {
+    err.contains("CertificateExpired")
+        || err.contains("InvalidCertificate")
+        || err.to_ascii_lowercase().contains("certificate")
+}
+
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("pd client error {0}")]
@@ -246,7 +327,7 @@ pub struct CloudHelper {
     runtime: Arc<tokio::runtime::Runtime>,
     read_concurrency: usize,
     ia_ctx: IaCtx,
-    http_client: security::HttpClient,
+    http_client: RefreshingHttpClient,
 }
 
 impl CloudHelper {
@@ -290,11 +371,8 @@ impl CloudHelper {
         let snapshot_cache_capable_stores = Arc::new(DashMap::new());
         let shared_snap_access_cache = SharedSnapAccessCache::new();
 
-        // Create a long-lived HTTP client for connection reuse
-        let http_client = {
-            let security_mgr = backends.pd_client.get_security_mgr();
-            security_mgr.http_client(hyper::Client::builder()).unwrap()
-        };
+        // Reuse HTTP connections, but rebuild the client when TLS certs rotate.
+        let http_client = RefreshingHttpClient::new(backends.pd_client.get_security_mgr());
 
         Self {
             dfs: backends.dfs,
@@ -589,7 +667,7 @@ fn build_ia_mgr(
 
 async fn request_snapshot_from_leader(
     pd_client: Arc<PdClientWithCache>,
-    http_client: security::HttpClient,
+    http_client: RefreshingHttpClient,
     dfs: Arc<dyn dfs::Dfs>,
     ia_ctx: IaCtx,
     vector_index_cache: VectorIndexCache,
@@ -814,7 +892,7 @@ async fn request_snapshot_from_leader(
 }
 
 async fn send_req_to_store(
-    http_client: &security::HttpClient,
+    http_client: &RefreshingHttpClient,
     req: Request<Body>,
 ) -> Result<
     (
@@ -1137,7 +1215,7 @@ fn upgrade_shared_snap_access(
 async fn get_or_request_shared_snapshot(
     shared_snap_access_cache: SharedSnapAccessCache,
     pd_client: Arc<PdClientWithCache>,
-    http_client: security::HttpClient,
+    http_client: RefreshingHttpClient,
     dfs: Arc<dyn dfs::Dfs>,
     ia_ctx: IaCtx,
     vector_index_cache: VectorIndexCache,
@@ -1228,6 +1306,7 @@ async fn get_or_request_shared_snapshot(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use security::SecurityConfig;
 
     #[test]
     fn shared_snap_access_eviction_is_sticky_for_in_flight_loader() {
@@ -1258,5 +1337,19 @@ mod tests {
         drop(loader);
         assert!(cache.remove_loader(&key));
         assert!(cache.groups.get(&key.start_ts).is_none());
+    }
+
+    #[test]
+    fn refreshing_http_client_refreshes_on_certificate_expired_error() {
+        let security_mgr = Arc::new(SecurityManager::new(&SecurityConfig::default()).unwrap());
+        let http_client = RefreshingHttpClient::new(security_mgr);
+        let uri = hyper::Uri::from_static("http://127.0.0.1/test");
+
+        http_client.maybe_refresh_on_tls_error(
+            &uri,
+            "connection error: received fatal alert: CertificateExpired",
+        );
+
+        assert_eq!(http_client.refresh_count(), 1);
     }
 }
