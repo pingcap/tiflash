@@ -129,14 +129,7 @@ std::vector<LocalReadObject> collectMetaV2MergedFilesForLocalRead(
             // exceed `small_file_size_threshold`; only their marks/indexes may live in `.merged`.
             const auto file_path = dmfile->subFilePath(logical_filename);
             const auto file_size = dmfile->getReadFileSize(logical_file.col_id, logical_filename);
-            tryCollectS3Object(
-                objects_by_key,
-                file_path,
-                file_size,
-                dmfile,
-                log,
-                tracing_id,
-                logical_filename);
+            tryCollectS3Object(objects_by_key, file_path, file_size, dmfile, log, tracing_id, logical_filename);
             continue;
         }
 
