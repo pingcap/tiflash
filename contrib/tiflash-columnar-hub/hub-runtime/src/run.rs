@@ -21,7 +21,7 @@ use std::{
     process,
     sync::{
         atomic::{AtomicBool, AtomicU8, Ordering},
-        Arc,
+        Arc, Once,
     },
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -240,6 +240,27 @@ const STORE_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(10);
 const HEARTBEAT_SHUTDOWN_POLL_INTERVAL: Duration = Duration::from_millis(200);
 const STORE_TOMBSTONE_WAIT_TIMEOUT: Duration = Duration::from_secs(30);
 const STORE_TOMBSTONE_POLL_INTERVAL: Duration = Duration::from_secs(1);
+const METRICS_PREFIX: &str = "tiflash_proxy";
+
+fn init_metrics() {
+    static INIT: Once = Once::new();
+
+    INIT.call_once(|| {
+        tikv_util::metrics::monitor_process().unwrap_or_else(|err| {
+            panic!("failed to start process monitor: {}", err);
+        });
+        tikv_util::metrics::warn_if_kernel_metrics_disabled();
+        tikv_util::metrics::monitor_threads(METRICS_PREFIX).unwrap_or_else(|err| {
+            panic!("failed to start thread monitor: {}", err);
+        });
+        tikv_util::metrics::monitor_system_psi(METRICS_PREFIX).unwrap_or_else(|err| {
+            panic!("failed to start PSI monitor: {}", err);
+        });
+        tikv_util::metrics::monitor_allocator_stats(METRICS_PREFIX).unwrap_or_else(|err| {
+            panic!("failed to monitor allocator stats: {}", err);
+        });
+    });
+}
 
 fn load_config(path: Option<&OsStr>) -> ConfigFile {
     path.map_or_else(ConfigFile::default, |path| {
@@ -1320,6 +1341,8 @@ pub unsafe fn run_proxy(argc: c_int, argv: *const *const c_char, helper_ptr: *co
         println!("config check successful");
         process::exit(0);
     }
+
+    init_metrics();
 
     let security_mgr = Arc::new(SecurityManager::new(&config.security).unwrap());
     let env = Arc::new(EnvBuilder::new().cq_count(1).name_prefix("pd").build());
