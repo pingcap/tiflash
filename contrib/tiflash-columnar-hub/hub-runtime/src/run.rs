@@ -937,6 +937,14 @@ fn collect_store_space_stats(data_dir: &Path) -> Option<(u64, u64)> {
     }
 }
 
+fn collect_store_space_stats_from_engine_store() -> Option<(u64, u64)> {
+    let stats = get_engine_store_server_helper().handle_compute_store_stats();
+    if stats.fs_stats.ok == 0 {
+        return None;
+    }
+    Some((stats.fs_stats.capacity_size, stats.fs_stats.avail_size))
+}
+
 fn build_store_heartbeat_stats_from_space(
     store_id: u64,
     start_time: u32,
@@ -967,7 +975,8 @@ fn build_store_heartbeat_stats(
     last_report_ts: u64,
     data_dir: &Path,
 ) -> Option<pdpb::StoreStats> {
-    let (capacity, available) = collect_store_space_stats(data_dir)?;
+    let (capacity, available) = collect_store_space_stats_from_engine_store()
+        .or_else(|| collect_store_space_stats(data_dir))?;
     if capacity == 0 {
         warn!(
             "skip store heartbeat because disk capacity is unavailable";
@@ -1820,7 +1829,15 @@ log-rotation-size = "1024MiB"
         ));
         fs::create_dir_all(&temp_dir).unwrap();
 
-        let stats = build_store_heartbeat_stats(9527, 123, 456, &temp_dir).unwrap();
+        let (capacity, available) = collect_store_space_stats(&temp_dir).unwrap();
+        let stats = build_store_heartbeat_stats_from_space(
+            9527,
+            123,
+            456,
+            capacity,
+            available,
+        )
+        .unwrap();
         assert_eq!(stats.get_store_id(), 9527);
         assert_eq!(stats.get_start_time(), 123);
         assert!(stats.get_capacity() > 0);

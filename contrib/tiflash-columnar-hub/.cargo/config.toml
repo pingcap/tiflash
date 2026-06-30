@@ -1,0 +1,2 @@
+[target.'cfg(not(target_os = "macos"))']
+rustflags = ["-C", "link-arg=-Wl,--allow-multiple-definition"]
