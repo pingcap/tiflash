@@ -240,8 +240,6 @@ const STORE_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(10);
 const HEARTBEAT_SHUTDOWN_POLL_INTERVAL: Duration = Duration::from_millis(200);
 const STORE_TOMBSTONE_WAIT_TIMEOUT: Duration = Duration::from_secs(30);
 const STORE_TOMBSTONE_POLL_INTERVAL: Duration = Duration::from_secs(1);
-const METRICS_PREFIX: &str = "tiflash_proxy";
-
 fn init_metrics() {
     static INIT: Once = Once::new();
 
@@ -250,13 +248,13 @@ fn init_metrics() {
             panic!("failed to start process monitor: {}", err);
         });
         tikv_util::metrics::warn_if_kernel_metrics_disabled();
-        tikv_util::metrics::monitor_threads(METRICS_PREFIX).unwrap_or_else(|err| {
+        tikv_util::metrics::monitor_threads("").unwrap_or_else(|err| {
             panic!("failed to start thread monitor: {}", err);
         });
-        tikv_util::metrics::monitor_system_psi(METRICS_PREFIX).unwrap_or_else(|err| {
+        tikv_util::metrics::monitor_system_psi("").unwrap_or_else(|err| {
             panic!("failed to start PSI monitor: {}", err);
         });
-        tikv_util::metrics::monitor_allocator_stats(METRICS_PREFIX).unwrap_or_else(|err| {
+        tikv_util::metrics::monitor_allocator_stats("").unwrap_or_else(|err| {
             panic!("failed to monitor allocator stats: {}", err);
         });
     });
@@ -1830,14 +1828,8 @@ log-rotation-size = "1024MiB"
         fs::create_dir_all(&temp_dir).unwrap();
 
         let (capacity, available) = collect_store_space_stats(&temp_dir).unwrap();
-        let stats = build_store_heartbeat_stats_from_space(
-            9527,
-            123,
-            456,
-            capacity,
-            available,
-        )
-        .unwrap();
+        let stats =
+            build_store_heartbeat_stats_from_space(9527, 123, 456, capacity, available).unwrap();
         assert_eq!(stats.get_store_id(), 9527);
         assert_eq!(stats.get_start_time(), 123);
         assert!(stats.get_capacity() > 0);

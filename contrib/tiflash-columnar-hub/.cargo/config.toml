@@ -1,2 +1,5 @@
 [target.'cfg(not(target_os = "macos"))']
 rustflags = ["-C", "link-arg=-Wl,--allow-multiple-definition"]
+
+[env]
+PROMETHEUS_METRIC_NAME_PREFIX = "tiflash_proxy_"
