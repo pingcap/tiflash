@@ -680,6 +680,31 @@ TEST_F(StringMatch, IlikeConstWithConst)
     }
 }
 
+TEST_F(StringMatch, Latin1SwedishCI)
+{
+    const auto * collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::LATIN1_SWEDISH_CI);
+
+    ASSERT_COLUMN_EQ(
+        toConst(1),
+        executeFunction(func_like_name, {toConst("Äta"), toConst("æ__"), escape}, collator));
+
+    ASSERT_COLUMN_EQ(
+        toConst(1),
+        executeFunction(func_like_name, {toConst("æta"), toConst("Ä__"), escape}, collator));
+
+    ASSERT_COLUMN_EQ(
+        toConst(0),
+        executeFunction(func_like_name, {toConst("åka"), toConst("Ä__"), escape}, collator));
+
+    ASSERT_COLUMN_EQ(
+        toConst(0),
+        executeFunction(func_like_name, {toConst("Œ"), toConst("œ"), escape}, collator));
+
+    ASSERT_COLUMN_EQ(
+        toConst(0),
+        executeFunction(func_ilike_name, {toConst("Äta"), toConst("æ__"), escape}, collator));
+}
+
 TEST_F(StringMatch, CheckEscape)
 {
     std::vector<TiDB::TiDBCollatorPtr> collators{
