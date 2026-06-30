@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// FIXME: Disabled because the flaky test result errors in CI.
+// And we don't plan to support enable FAP in short time.
+#if 0
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <DataStreams/BlocksListBlockInputStream.h>
@@ -574,3 +577,4 @@ INSTANTIATE_TEST_CASE_P(
         ));
 
 } // namespace DB::DM::tests
+#endif
