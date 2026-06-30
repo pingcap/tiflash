@@ -26,7 +26,9 @@
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
 
+#include <algorithm>
 #include <unordered_map>
+
 namespace DB
 {
 const Int8 VAR_SIZE = 0;
@@ -1446,6 +1448,21 @@ tipb::ScalarFuncSig reverseGetFuncSigByFuncName(const String & name)
     if (func_name_sig_map.find(name) == func_name_sig_map.end())
         throw Exception(fmt::format("Unsupported function {}", name));
     return func_name_sig_map[name];
+}
+
+constexpr UInt64 MAX_BATCH_SEND_MIN_LIMIT_MEM_SIZE
+    = 1024 * 1024 * 32; // 32MB (8192 Rows * 256 Byte/row * 16 partitions)
+
+UInt64 getMaxBufferedBytesInResponseWriter(Int64 max_buffered_bytes_in_executor, size_t concurrency)
+{
+    UInt64 max_buffered_bytes = MAX_BATCH_SEND_MIN_LIMIT_MEM_SIZE;
+    if (max_buffered_bytes_in_executor > 0)
+    {
+        const auto per_writer_limit = static_cast<UInt64>(max_buffered_bytes_in_executor)
+            / static_cast<UInt64>(std::max<size_t>(concurrency, 1));
+        max_buffered_bytes = std::max(max_buffered_bytes, per_writer_limit);
+    }
+    return max_buffered_bytes;
 }
 
 } // namespace DB

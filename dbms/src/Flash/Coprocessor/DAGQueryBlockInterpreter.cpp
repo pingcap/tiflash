@@ -772,6 +772,7 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
         RUNTIME_CHECK(exchange_sender.tp() == tipb::ExchangeType::Hash, ExchangeType_Name(exchange_sender.tp()));
         RUNTIME_CHECK(stream_count <= 1024, stream_count);
     }
+    const auto concurrency = pipeline.streams.size();
     pipeline.transform([&](auto & stream) {
         // construct writer
         std::unique_ptr<DAGResponseWriter> response_writer = newMPPExchangeWriter(
@@ -781,6 +782,9 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
             exchange_sender.tp(),
             context.getSettingsRef().dag_records_per_chunk,
             context.getSettingsRef().batch_send_min_limit,
+            getMaxBufferedBytesInResponseWriter(
+                context.getSettingsRef().max_buffered_bytes_in_executor,
+                concurrency),
             dagContext(),
             enable_fine_grained_shuffle,
             stream_count,
