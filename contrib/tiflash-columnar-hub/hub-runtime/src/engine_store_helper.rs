@@ -17,8 +17,8 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 use crate::{
     interfaces_ffi::{
         BaseBuffView, EngineStoreServerHelper, EngineStoreServerStatus, HttpRequestRes, MsgPBType,
-        RaftStoreProxyFFIHelper, RawCppStringPtr, RawVoidPtr, RAFT_STORE_PROXY_MAGIC_NUMBER,
-        RAFT_STORE_PROXY_VERSION,
+        RaftStoreProxyFFIHelper, RawCppStringPtr, RawVoidPtr, StoreStats,
+        RAFT_STORE_PROXY_MAGIC_NUMBER, RAFT_STORE_PROXY_VERSION,
     },
     UnwrapExternCFunc,
 };
@@ -41,6 +41,7 @@ unsafe impl Sync for EngineStoreServerHelper {}
 pub trait EngineStoreServerHelperExt {
     fn check(&self);
     fn set_proxy(&self, proxy: &mut RaftStoreProxyFFIHelper);
+    fn handle_compute_store_stats(&self) -> StoreStats;
     fn handle_get_engine_store_server_status(&self) -> EngineStoreServerStatus;
     fn handle_http_request(
         &self,
@@ -64,6 +65,10 @@ impl EngineStoreServerHelperExt for EngineStoreServerHelper {
         unsafe {
             self.fn_atomic_update_proxy.into_inner()(self.inner, proxy as *mut _);
         }
+    }
+
+    fn handle_compute_store_stats(&self) -> StoreStats {
+        unsafe { self.fn_handle_compute_store_stats.into_inner()(self.inner) }
     }
 
     fn handle_get_engine_store_server_status(&self) -> EngineStoreServerStatus {
