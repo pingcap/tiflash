@@ -44,6 +44,12 @@ class DMFileMetaV2Test;
 class DMStoreForSegmentReadTaskTest;
 } // namespace tests
 
+struct LocalReadObject;
+std::vector<LocalReadObject> collectMetaV2MergedFilesForLocalRead(
+    const DMFilePtr & dmfile,
+    const ColumnDefines & read_columns,
+    const LoggerPtr & log,
+    const String & tracing_id);
 
 class DMFile : private boost::noncopyable
 {
@@ -132,6 +138,7 @@ public:
     const DMFileMeta::PackProperties & getPackProperties() const { return meta->pack_properties; }
     const ColumnStats & getColumnStats() const { return meta->column_stats; }
     const std::unordered_set<ColId> & getColumnIndices() const { return meta->column_indices; }
+    size_t getNumColumns() const { return meta->column_stats.size(); }
 
     // only used in gtest
     void clearPackProperties() const { meta->pack_properties.clear_property(); }
@@ -361,6 +368,11 @@ public:
     friend class ColumnReadStream;
     friend class DMFilePackFilter;
     friend class DMFileBlockInputStreamBuilder;
+    friend std::vector<LocalReadObject> collectMetaV2MergedFilesForLocalRead(
+        const DMFilePtr & dmfile,
+        const ColumnDefines & read_columns,
+        const LoggerPtr & log,
+        const String & tracing_id);
     friend class tests::DMFileTest;
     friend class tests::DMFileMetaV2Test;
     friend class tests::DMStoreForSegmentReadTaskTest;

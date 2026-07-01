@@ -192,6 +192,12 @@ public:
         return *this;
     }
 
+    DMFileBlockInputStreamBuilder & enableWriteFileCacheLocalRead(bool enable)
+    {
+        enable_write_filecache_local_read = enable;
+        return *this;
+    }
+
 private:
     DMFileBlockInputStreamPtr buildNoLocalIndex(
         const DMFilePtr & dmfile,
@@ -234,8 +240,8 @@ private:
 private:
     FileProviderPtr file_provider;
 
+    bool enable_write_filecache_local_read = false;
     // clean read
-
     bool enable_handle_clean_read = false;
     bool is_fast_scan = false;
     bool enable_del_clean_read = false;

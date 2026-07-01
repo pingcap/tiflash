@@ -12,27 +12,72 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TiFlashMetrics.h>
+#include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/IDataType.h>
 #include <IO/Encryption/MockKeyManager.h>
+#include <IO/IOThreadPools.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
+#include <Storages/DeltaMerge/File/DMFileLocalStaging.h>
+#include <Storages/DeltaMerge/File/DMFileMetaV2.h>
+#include <Storages/DeltaMerge/File/DMFileUtil.h>
 #include <Storages/DeltaMerge/File/DMFileV3IncrementWriter.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/PathPool.h>
 #include <Storages/S3/FileCache.h>
 #include <Storages/S3/S3Common.h>
+#include <Storages/S3/S3Filename.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
 #include <gtest/gtest.h>
 
 #include <memory>
+#include <unordered_set>
 
 
 namespace DB::DM::tests
 {
+
+namespace
+{
+// Keep in sync with gtests_dbms_main.cpp.
+constexpr size_t s3_file_cache_pool_max_threads = 20;
+constexpr size_t s3_file_cache_pool_max_free_threads = 10;
+constexpr size_t s3_file_cache_pool_queue_size = 1000;
+
+void reinitS3FileCachePool()
+{
+    S3FileCachePool::initialize(
+        s3_file_cache_pool_max_threads,
+        s3_file_cache_pool_max_free_threads,
+        s3_file_cache_pool_queue_size);
+}
+
+void shutdownWriteFileCache()
+{
+    if (FileCache::instance() == nullptr)
+        return;
+    FileCache::shutdown();
+    // FileCache::shutdown() tears down S3FileCachePool; restore it for other tests.
+    reinitS3FileCachePool();
+}
+
+void initWriteFileCache(PathCapacityMetricsPtr capacity_metrics, IORateLimiter & rate_limiter, String cache_dir)
+{
+    StorageRemoteCacheConfig file_cache_config{
+        .dir = std::move(cache_dir),
+        .capacity = 1 * 1000 * 1000 * 1000,
+    };
+    FileCache::initialize(capacity_metrics, file_cache_config, /*logical_cores=*/8, rate_limiter);
+}
+} // namespace
 
 class DMFileMetaVersionTestBase : public DB::base::TiFlashStorageTestBasic
 {
@@ -353,6 +398,8 @@ public:
 
     void TearDown() override
     {
+        shutdownWriteFileCache();
+
         DMFileMetaVersionTestBase::TearDown();
 
         auto & global_context = db_context->getGlobalContext();
@@ -373,6 +420,53 @@ protected:
     DMFilePtr prepareDMFileRemote(UInt64 file_id)
     {
         auto dm_file = prepareDMFile(file_id);
+        dataStore()->putDMFile(
+            dm_file,
+            S3::DMFileOID{
+                .store_id = store_id,
+                .keyspace_id = keyspace_id,
+                .table_id = table_id,
+                .file_id = dm_file->fileId(),
+            },
+            true);
+        return dm_file;
+    }
+
+    DMFilePtr prepareDMFileWithStandaloneColumnData(UInt64 file_id)
+    {
+        constexpr UInt64 small_file_size_threshold = 4096;
+        auto dm_file = DMFile::create(
+            file_id,
+            parent_path,
+            std::make_optional<DMChecksumConfig>(),
+            small_file_size_threshold,
+            16 * 1024 * 1024,
+            DMFileFormat::V3);
+
+        auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
+        constexpr size_t num_rows = 20000;
+        Block block = DMTestEnv::prepareSimpleWriteBlockWithNullable(0, num_rows);
+
+        auto writer = DMFileWriter(
+            dm_file,
+            *cols,
+            file_provider_maybe_encrypted,
+            db_context->getWriteLimiter(),
+            DMFileWriter::Options());
+        writer.write(block, DMFileBlockOutputStream::BlockProperty{0, 0, 0, 0});
+        writer.finalize();
+
+        const auto * dmfile_meta = typeid_cast<const DMFileMetaV2 *>(dm_file->meta.get());
+        RUNTIME_CHECK(dmfile_meta != nullptr);
+        const auto handle_stream_name = IDataType::getFileNameForStream(DB::toString(MutSup::extra_handle_id), {});
+        const auto handle_dat_fname = colDataFileName(handle_stream_name);
+        RUNTIME_CHECK(
+            dm_file->getColumnStat(MutSup::extra_handle_id).data_bytes > small_file_size_threshold,
+            dm_file->getColumnStat(MutSup::extra_handle_id).data_bytes);
+        RUNTIME_CHECK(
+            dmfile_meta->merged_sub_file_infos.find(handle_dat_fname) == dmfile_meta->merged_sub_file_infos.end(),
+            handle_dat_fname);
+
         dataStore()->putDMFile(
             dm_file,
             S3::DMFileOID{
@@ -469,16 +563,10 @@ CATCH
 TEST_P(S3DMFile, WithFileCache)
 try
 {
-    StorageRemoteCacheConfig file_cache_config{
-        .dir = fmt::format("{}/fs_cache", getTemporaryPath()),
-        .capacity = 1 * 1000 * 1000 * 1000,
-    };
-    UInt16 vcores = 8;
-    FileCache::initialize(
+    initWriteFileCache(
         db_context->getGlobalContext().getPathCapacity(),
-        file_cache_config,
-        vcores,
-        db_context->getGlobalContext().getIORateLimiter());
+        db_context->getGlobalContext().getIORateLimiter(),
+        fmt::format("{}/fs_cache", getTemporaryPath()));
 
     auto dm_file = prepareDMFileRemote(/* file_id= */ 1);
     ASSERT_TRUE(dm_file->path().starts_with("s3://"));
@@ -526,8 +614,221 @@ try
     cn_dmf = token->restore(DMFileMeta::ReadMode::all(), 1);
     ASSERT_EQ(1, cn_dmf->metaVersion());
     ASSERT_STREQ("test", cn_dmf->meta->getColumnStats()[MutSup::extra_handle_id].additional_data_for_test.c_str());
+}
+CATCH
 
-    SCOPE_EXIT({ FileCache::shutdown(); });
+namespace
+{
+std::unordered_set<String> collectObjectKeys(
+    const DMFilePtr & dmfile,
+    const ColumnDefines & read_columns,
+    const LoggerPtr & log)
+{
+    const auto objects = collectMetaV2MergedFilesForLocalRead(dmfile, read_columns, log, "DMFileLocalStagingTest");
+    std::unordered_set<String> keys;
+    for (const auto & object : objects)
+        keys.insert(object.s3_key);
+    return keys;
+}
+} // namespace
+
+TEST_P(LocalDMFile, LocalStagingNonMetaV2Noop)
+try
+{
+    auto log = Logger::get("DMFileLocalStagingTest");
+    auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
+    auto dm_file = DMFile::create(
+        /*file_id=*/2,
+        parent_path,
+        std::make_optional<DMChecksumConfig>(),
+        /*small_file_size_threshold=*/0,
+        16 * 1024 * 1024,
+        DMFileFormat::V2);
+    ASSERT_FALSE(dm_file->useMetaV2());
+    ASSERT_TRUE(collectMetaV2MergedFilesForLocalRead(dm_file, *cols, log, "DMFileLocalStagingTest").empty());
+}
+CATCH
+
+TEST_P(LocalDMFile, LocalStagingInvalidS3PathNoop)
+try
+{
+    auto log = Logger::get("DMFileLocalStagingTest");
+    auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
+    auto dm_file = prepareDMFile(/* file_id= */ 3);
+    ASSERT_TRUE(dm_file->useMetaV2());
+    ASSERT_TRUE(collectMetaV2MergedFilesForLocalRead(dm_file, *cols, log, "DMFileLocalStagingTest").empty());
+}
+CATCH
+
+TEST_P(S3DMFile, LocalStagingDedupMergedFiles)
+try
+{
+    auto log = Logger::get("DMFileLocalStagingTest");
+    auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
+    auto dm_file = prepareDMFileRemote(/* file_id= */ 10);
+    const auto * dmfile_meta = typeid_cast<const DMFileMetaV2 *>(dm_file->meta.get());
+    ASSERT_NE(dmfile_meta, nullptr);
+
+    const auto objects = collectMetaV2MergedFilesForLocalRead(dm_file, *cols, log, "DMFileLocalStagingTest");
+    ASSERT_FALSE(objects.empty());
+    ASSERT_EQ(objects.size(), dmfile_meta->merged_files.size());
+
+    std::unordered_set<String> keys;
+    for (const auto & object : objects)
+    {
+        EXPECT_TRUE(S3::S3FilenameView::fromKey(object.s3_key).isValid());
+        EXPECT_TRUE(object.s3_key.ends_with(".merged"));
+        EXPECT_GT(object.file_size, 0);
+        EXPECT_TRUE(keys.insert(object.s3_key).second);
+    }
+}
+CATCH
+
+TEST_P(S3DMFile, LocalStagingCollectStandaloneDatFiles)
+try
+{
+    auto log = Logger::get("DMFileLocalStagingTest");
+    auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
+    auto dm_file = prepareDMFileWithStandaloneColumnData(/* file_id= */ 16);
+    const auto * dmfile_meta = typeid_cast<const DMFileMetaV2 *>(dm_file->meta.get());
+    ASSERT_NE(dmfile_meta, nullptr);
+
+    const auto handle_stream_name = IDataType::getFileNameForStream(DB::toString(MutSup::extra_handle_id), {});
+    const auto handle_dat_fname = colDataFileName(handle_stream_name);
+    ASSERT_EQ(dmfile_meta->merged_sub_file_infos.find(handle_dat_fname), dmfile_meta->merged_sub_file_infos.end());
+
+    const auto objects = collectMetaV2MergedFilesForLocalRead(dm_file, *cols, log, "DMFileLocalStagingTest");
+    ASSERT_FALSE(objects.empty());
+
+    bool has_merged = false;
+    bool has_standalone_dat = false;
+    for (const auto & object : objects)
+    {
+        EXPECT_TRUE(S3::S3FilenameView::fromKey(object.s3_key).isValid());
+        EXPECT_GT(object.file_size, 0);
+        if (object.s3_key.ends_with(".merged"))
+            has_merged = true;
+        if (object.s3_key.ends_with(handle_dat_fname))
+            has_standalone_dat = true;
+    }
+    EXPECT_TRUE(has_merged);
+    EXPECT_TRUE(has_standalone_dat);
+
+    const ColumnDefines handle_only{getExtraHandleColumnDefine(/*is_common_handle=*/false)};
+    const auto handle_objects
+        = collectMetaV2MergedFilesForLocalRead(dm_file, handle_only, log, "DMFileLocalStagingTest");
+    ASSERT_FALSE(handle_objects.empty());
+    for (const auto & object : handle_objects)
+    {
+        EXPECT_TRUE(object.s3_key.ends_with(".merged") || object.s3_key.ends_with(handle_dat_fname));
+    }
+}
+CATCH
+
+TEST_P(S3DMFile, LocalStagingOnlyReadColumns)
+try
+{
+    auto log = Logger::get("DMFileLocalStagingTest");
+    auto all_cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
+    auto dm_file = prepareDMFileRemote(/* file_id= */ 11);
+
+    const ColumnDefines handle_only{getExtraHandleColumnDefine(/*is_common_handle=*/false)};
+    const ColumnDefines nullable_only{ColumnDefine{
+        1,
+        "Nullable(UInt64)",
+        DataTypeFactory::instance().get("Nullable(UInt64)"),
+    }};
+
+    const auto all_keys = collectObjectKeys(dm_file, *all_cols, log);
+    const auto handle_keys = collectObjectKeys(dm_file, handle_only, log);
+    const auto nullable_keys = collectObjectKeys(dm_file, nullable_only, log);
+
+    ASSERT_FALSE(all_keys.empty());
+    ASSERT_FALSE(handle_keys.empty());
+    ASSERT_FALSE(nullable_keys.empty());
+    for (const auto & key : handle_keys)
+        ASSERT_TRUE(all_keys.contains(key));
+    for (const auto & key : nullable_keys)
+        ASSERT_TRUE(all_keys.contains(key));
+
+    ColumnDefines missing_column{ColumnDefine{
+        9999,
+        "missing",
+        DataTypeFactory::instance().get("Int64"),
+    }};
+    ASSERT_TRUE(collectObjectKeys(dm_file, missing_column, log).empty());
+}
+CATCH
+
+TEST_P(S3DMFile, LocalStagingDownloadDisabled)
+try
+{
+    auto log = Logger::get("DMFileLocalStagingTest");
+    auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
+    auto dm_file = prepareDMFileRemote(/* file_id= */ 12);
+    ASSERT_TRUE(
+        tryDownloadMetaV2MergedFilesForLocalRead(dm_file, *cols, /*enable=*/false, log, "DMFileLocalStagingTest")
+            .empty());
+}
+CATCH
+
+TEST_P(S3DMFile, LocalStagingDownloadWithoutFileCache)
+try
+{
+    auto log = Logger::get("DMFileLocalStagingTest");
+    auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
+    auto dm_file = prepareDMFileRemote(/* file_id= */ 13);
+    ASSERT_EQ(FileCache::instance(), nullptr);
+    ASSERT_TRUE(tryDownloadMetaV2MergedFilesForLocalRead(dm_file, *cols, /*enable=*/true, log, "DMFileLocalStagingTest")
+                    .empty());
+}
+CATCH
+
+TEST_P(S3DMFile, LocalStagingDownloadMergedFiles)
+try
+{
+    initWriteFileCache(
+        db_context->getGlobalContext().getPathCapacity(),
+        db_context->getGlobalContext().getIORateLimiter(),
+        fmt::format("{}/write_filecache_staging", getTemporaryPath()));
+
+    auto log = Logger::get("DMFileLocalStagingTest");
+    auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
+    auto dm_file = prepareDMFileRemote(/* file_id= */ 14);
+
+    const auto attempt_before = GET_METRIC(tiflash_storage_write_filecache_staging, type_attempt).Value();
+    const auto local_read_files
+        = tryDownloadMetaV2MergedFilesForLocalRead(dm_file, *cols, /*enable=*/true, log, "DMFileLocalStagingTest");
+    ASSERT_FALSE(local_read_files.empty());
+    ASSERT_EQ(attempt_before + 1, GET_METRIC(tiflash_storage_write_filecache_staging, type_attempt).Value());
+    ASSERT_GE(GET_METRIC(tiflash_storage_write_filecache_staging, type_download_ok).Value(), local_read_files.size());
+    ASSERT_GT(GET_METRIC(tiflash_storage_write_filecache_staging_bytes, type_staged).Value(), 0);
+
+    auto * file_cache = FileCache::instance();
+    ASSERT_NE(file_cache, nullptr);
+    ASSERT_FALSE(file_cache->getAll().empty());
+}
+CATCH
+
+TEST_P(S3DMFile, LocalStagingBuildWithWriteFileCache)
+try
+{
+    initWriteFileCache(
+        db_context->getGlobalContext().getPathCapacity(),
+        db_context->getGlobalContext().getIORateLimiter(),
+        fmt::format("{}/write_filecache_build", getTemporaryPath()));
+
+    auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
+    auto dm_file = prepareDMFileRemote(/* file_id= */ 15);
+    ASSERT_TRUE(FileCache::instance()->getAll().empty());
+
+    DMFileBlockInputStreamBuilder builder(*db_context);
+    auto stream = builder.enableWriteFileCacheLocalRead(true)
+                      .build(dm_file, *cols, {RowKeyRange::newAll(false, 1)}, std::make_shared<ScanContext>());
+    ASSERT_FALSE(FileCache::instance()->getAll().empty());
+
+    auto block = stream->read();
+    ASSERT_GT(block.rows(), 0);
 }
 CATCH
 

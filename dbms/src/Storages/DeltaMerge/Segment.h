@@ -33,6 +33,8 @@
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointInfo.h>
 #include <Storages/KVStore/MultiRaft/Disagg/fast_add_peer.pb.h>
 
+#include <functional>
+
 #if ENABLE_CLARA
 #include <Storages/DeltaMerge/Index/FullTextIndex/Reader_fwd.h>
 #endif
@@ -128,6 +130,11 @@ public:
 
         StableValueSpacePtr my_stable;
         StableValueSpacePtr other_stable;
+
+        /// Wall-clock seconds spent in prepareSplit (logical or physical).
+        double prepare_seconds = 0;
+        /// Seconds spent uploading DMFiles to remote store in createNewStable. Zero when writing locally or logical split.
+        double remote_upload_seconds = 0;
     };
 
     DISALLOW_COPY_AND_MOVE(Segment);
@@ -252,19 +259,6 @@ public:
         UInt64 start_ts = std::numeric_limits<UInt64>::max(),
         size_t expected_block_size = DEFAULT_BLOCK_SIZE);
 
-    /**
-     * Return a sorted stream which is suitable for exporting data. Unlike `getInputStream`, deletes will be preserved.
-     * But outdated versions (exceeds GC safe point) will still be removed.
-     * @param reorganize_block  put those rows with the same pk rows into the same block or not.
-     */
-    BlockInputStreamPtr getInputStreamForDataExport(
-        const DMContext & dm_context,
-        const ColumnDefines & columns_to_read,
-        const SegmentSnapshotPtr & segment_snap,
-        const RowKeyRange & data_range,
-        size_t expected_block_size = DEFAULT_BLOCK_SIZE,
-        bool reorganize_block = true) const;
-
     BlockInputStreamPtr getInputStreamModeRaw(
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
@@ -376,7 +370,16 @@ public:
         const ColumnDefinesPtr & schema_snap,
         const std::vector<SegmentPtr> & ordered_segments);
 
-    static StableValueSpacePtr prepareMerge(
+    struct PrepareMergeResult
+    {
+        StableValueSpacePtr stable;
+        /// Wall-clock seconds spent in prepareMerge.
+        double prepare_seconds = 0;
+        /// Seconds spent uploading DMFile to remote store in createNewStable. Zero when writing locally.
+        double remote_upload_seconds = 0;
+    };
+
+    static PrepareMergeResult prepareMerge(
         DMContext & dm_context,
         const ColumnDefinesPtr & schema_snap,
         const std::vector<SegmentPtr> & ordered_segments,
@@ -400,7 +403,16 @@ public:
      */
     [[nodiscard]] SegmentPtr mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
 
-    StableValueSpacePtr prepareMergeDelta(
+    struct PrepareMergeDeltaResult
+    {
+        StableValueSpacePtr stable;
+        /// Wall-clock seconds spent in prepareMergeDelta.
+        double prepare_seconds = 0;
+        /// Seconds spent uploading DMFile to remote store in createNewStable. Zero when writing locally.
+        double remote_upload_seconds = 0;
+    };
+
+    PrepareMergeDeltaResult prepareMergeDelta(
         DMContext & dm_context,
         const ColumnDefinesPtr & schema_snap,
         const SegmentSnapshotPtr & segment_snap,
@@ -668,21 +680,6 @@ public:
         const DMFilePackFilterResults & pack_filter_results,
         UInt64 start_ts);
 
-#ifndef DBMS_PUBLIC_GTEST
-private:
-#else
-public:
-#endif
-    ReadInfo getReadInfo(
-        const DMContext & dm_context,
-        const ColumnDefines & read_columns,
-        const SegmentSnapshotPtr & segment_snap,
-        const RowKeyRanges & read_ranges,
-        ReadTag read_tag,
-        UInt64 start_ts = std::numeric_limits<UInt64>::max()) const;
-
-    static ColumnDefinesPtr arrangeReadColumns(const ColumnDefine & handle, const ColumnDefines & columns_to_read);
-
     /// Create a stream which merged delta and stable streams together.
     template <bool skippable_place = false>
     static SkippableBlockInputStreamPtr getPlacedStream(
@@ -697,7 +694,23 @@ public:
         ReadTag read_tag,
         const DMFilePackFilterResults & pack_filter_results = {},
         UInt64 start_ts = std::numeric_limits<UInt64>::max(),
-        bool need_row_id = false);
+        bool need_row_id = false,
+        std::function<void(DMFileBlockInputStreamBuilder &)> additional_builder_opt = nullptr);
+
+#ifndef DBMS_PUBLIC_GTEST
+private:
+#else
+public:
+#endif
+    ReadInfo getReadInfo(
+        const DMContext & dm_context,
+        const ColumnDefines & read_columns,
+        const SegmentSnapshotPtr & segment_snap,
+        const RowKeyRanges & read_ranges,
+        ReadTag read_tag,
+        UInt64 start_ts = std::numeric_limits<UInt64>::max()) const;
+
+    static ColumnDefinesPtr arrangeReadColumns(const ColumnDefine & handle, const ColumnDefines & columns_to_read);
 
     /// Make sure that all delta packs have been placed.
     /// Note that the index returned could be partial index, and cannot be updated to shared index.

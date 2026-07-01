@@ -274,7 +274,12 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_seg_split_fg, {"type", "seg_split_fg"}),                                                                               \
       F(type_seg_split_ingest, {"type", "seg_split_ingest"}),                                                                       \
       F(type_seg_merge_bg_gc, {"type", "seg_merge_bg_gc"}),                                                                         \
-      F(type_place_index_update, {"type", "place_index_update"}))                                                                   \
+      F(type_place_index_update, {"type", "place_index_update"}),                                                                   \
+      F(type_prepare_merge_delta, {"type", "prepare_merge_delta"}),                                                                 \
+      F(type_prepare_merge, {"type", "prepare_merge"}),                                                                             \
+      F(type_prepare_split_physical, {"type", "prepare_split_physical"}),                                                           \
+      F(type_remote_upload, {"type", "remote_upload"}),                                                                             \
+      F(type_ingest, {"type", "ingest"}))                                                                                           \
     M(tiflash_storage_subtask_duration_seconds,                                                                                     \
       "Bucketed histogram of storage's sub task duration",                                                                          \
       Histogram, /* increase the bucket from 10ms to 87 minutes */                                                                  \
@@ -288,7 +293,12 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_seg_split_fg, {{"type", "seg_split_fg"}}, ExpBuckets{0.010, 2, 20}),                                                   \
       F(type_seg_split_ingest, {{"type", "seg_split_ingest"}}, ExpBuckets{0.010, 2, 20}),                                           \
       F(type_seg_merge_bg_gc, {{"type", "seg_merge_bg_gc"}}, ExpBuckets{0.010, 2, 20}),                                             \
-      F(type_place_index_update, {{"type", "place_index_update"}}, ExpBuckets{0.010, 2, 20}))                                       \
+      F(type_place_index_update, {{"type", "place_index_update"}}, ExpBuckets{0.010, 2, 20}),                                       \
+      F(type_prepare_merge_delta, {{"type", "prepare_merge_delta"}}, ExpBuckets{0.010, 2, 20}),                                     \
+      F(type_prepare_merge, {{"type", "prepare_merge"}}, ExpBuckets{0.010, 2, 20}),                                                 \
+      F(type_prepare_split_physical, {{"type", "prepare_split_physical"}}, ExpBuckets{0.010, 2, 20}),                               \
+      F(type_remote_upload, {{"type", "remote_upload"}}, ExpBuckets{0.010, 2, 20}),                                                 \
+      F(type_ingest, {{"type", "ingest"}}, ExpBuckets{0.010, 2, 20}))                                                               \
     M(tiflash_storage_subtask_throughput_bytes,                                                                                     \
       "Calculate the throughput of (maybe foreground) tasks of storage in bytes",                                                   \
       Counter, /**/                                                                                                                 \
@@ -940,6 +950,17 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       Gauge,                                                                                                                        \
       F(type_bg_downloading_count, {{"type", "bg_downloading_count"}}),                                                             \
       F(type_bg_download_queue_count, {{"type", "bg_download_queue_count"}}))                                                       \
+    M(tiflash_storage_write_filecache_staging,                                                                                      \
+      "Write-side FileCache local staging for background DMFile reads",                                                             \
+      Counter,                                                                                                                      \
+      F(type_attempt, {"type", "attempt"}),                                                                                         \
+      F(type_object, {"type", "object"}),                                                                                           \
+      F(type_download_ok, {"type", "download_ok"}),                                                                                 \
+      F(type_download_failed, {"type", "download_failed"}))                                                                         \
+    M(tiflash_storage_write_filecache_staging_bytes,                                                                                \
+      "Bytes staged by write FileCache local staging",                                                                              \
+      Counter,                                                                                                                      \
+      F(type_staged, {"type", "staged"}))                                                                                           \
     M(tiflash_system_seconds,                                                                                                       \
       "system calls duration in seconds",                                                                                           \
       Histogram,                                                                                                                    \

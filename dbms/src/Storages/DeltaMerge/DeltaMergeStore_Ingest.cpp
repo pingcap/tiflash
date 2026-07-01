@@ -14,6 +14,7 @@
 
 #include <Common/EventRecorder.h>
 #include <Common/FailPoint.h>
+#include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
@@ -228,6 +229,25 @@ Segments DeltaMergeStore::ingestDTFilesUsingColumnFile(
     return updated_segments;
 }
 
+namespace
+{
+constexpr double slow_split_ingest_log_threshold_seconds = 10.0;
+
+struct SplitIngestLogContext
+{
+    const Stopwatch & watch;
+
+    bool isSlow() const { return watch.elapsedSeconds() > slow_split_ingest_log_threshold_seconds; }
+
+    double elapsedSeconds() const { return watch.elapsedSeconds(); }
+
+    Poco::Message::Priority debugOrInfoLevel() const
+    {
+        return isSlow() ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;
+    }
+};
+} // namespace
+
 /**
  * Accept a target ingest range and a vector of DTFiles, ingest these DTFiles (clipped by the target ingest range)
  * using logical split.
@@ -245,6 +265,9 @@ Segments DeltaMergeStore::ingestDTFilesUsingSplit(
     const DMFiles & files,
     bool clear_data_in_range)
 {
+    Stopwatch watch;
+    SplitIngestLogContext split_ingest_log{watch};
+
     {
         RUNTIME_CHECK(files.size() == external_files.size(), files.size(), external_files.size());
         for (size_t i = 0; i < files.size(); ++i)
@@ -331,9 +354,11 @@ Segments DeltaMergeStore::ingestDTFilesUsingSplit(
      *                                  ↑ The segment we ingest DMFile into
      */
 
-    LOG_DEBUG(
+    LOG_IMPL(
         log,
-        "Table ingest using split - split ingest phase - begin, ingest_range={}, files_n={}",
+        split_ingest_log.debugOrInfoLevel(),
+        "Table ingest using split - split ingest phase - begin, elapsed_seconds={:.3f} ingest_range={} files_n={}",
+        split_ingest_log.elapsedSeconds(),
         ingest_range.toDebugString(),
         files.size());
 
@@ -389,8 +414,10 @@ Segments DeltaMergeStore::ingestDTFilesUsingSplit(
 
             LOG_INFO(
                 log,
-                "Table ingest using split - split ingest phase - Try to ingest file into segment, file_idx={} "
+                "Table ingest using split - split ingest phase - Try to ingest file into segment, "
+                "elapsed_seconds={:.3f} file_idx={} "
                 "file_id=dmf_{} file_ingest_range={} segment={} segment_ingest_range={}",
+                split_ingest_log.elapsedSeconds(),
                 file_idx,
                 files[file_idx]->fileId(),
                 file_ingest_range.toDebugString(),
@@ -412,15 +439,17 @@ Segments DeltaMergeStore::ingestDTFilesUsingSplit(
             }
             else
             {
-                // this segment is abandoned, or may be split into multiples.
+                // this segment is abandoned, or may be split into multiples, or running segmentMerge/segmentMergeDelta, etc.
                 // retry with current range and file and find segment again.
             }
         }
     }
 
-    LOG_DEBUG(
+    LOG_IMPL(
         log,
-        "Table ingest using split - split ingest phase - finished, updated_segments_n={}",
+        split_ingest_log.debugOrInfoLevel(),
+        "Table ingest using split - split ingest phase - finished, elapsed_seconds={:.3f} updated_segments_n={}",
+        split_ingest_log.elapsedSeconds(),
         updated_segments.size());
 
     return std::vector<SegmentPtr>(updated_segments.begin(), updated_segments.end());
@@ -592,6 +621,11 @@ UInt64 DeltaMergeStore::ingestFiles(
         throw Exception(msg);
     }
 
+    GET_METRIC(tiflash_storage_subtask_count, type_ingest).Increment();
+    Stopwatch watch_ingest;
+    SCOPE_EXIT(
+        { GET_METRIC(tiflash_storage_subtask_duration_seconds, type_ingest).Observe(watch_ingest.elapsedSeconds()); });
+
     {
         // `ingestDTFilesUsingSplit` requires external_files to be not overlapped. Otherwise the results will be incorrect.
         // Here we verify the external_files are ordered and not overlapped.
@@ -650,8 +684,6 @@ UInt64 DeltaMergeStore::ingestFiles(
             }
         }
     }
-
-    EventRecorder write_block_recorder(ProfileEvents::DMWriteFile, ProfileEvents::DMWriteFileNS);
 
     auto delegate = dm_context->path_pool->getStableDiskDelegator();
     auto file_provider = dm_context->global_context.getFileProvider();
@@ -787,10 +819,21 @@ UInt64 DeltaMergeStore::ingestFiles(
         if (has_segments || !external_files.empty())
         {
             if (use_split_replace)
-                updated_segments
-                    = ingestDTFilesUsingSplit(dm_context, range, external_files, files, clear_data_in_range);
+            {
+                // For large files, we use split+replace to ingest the files into stable layer directly.
+                // Check the `ingestDTFilesUsingSplit` for the details steps.
+                updated_segments = ingestDTFilesUsingSplit( //
+                    dm_context,
+                    range,
+                    external_files,
+                    files,
+                    clear_data_in_range);
+            }
             else
+            {
+                // For small files, we ingest them into the delta layer directly, which is more efficient than split+replace.
                 updated_segments = ingestDTFilesUsingColumnFile(dm_context, range, files, clear_data_in_range);
+            }
         }
     }
 
@@ -837,7 +880,8 @@ UInt64 DeltaMergeStore::ingestFiles(
 
         LOG_INFO(
             log,
-            "Table ingest files - finished ingested files into segments, {} clear={}",
+            "Table ingest files - finished ingested files into segments, elapsed_seconds={:.3f} {} clear={}",
+            watch_ingest.elapsedSeconds(),
             get_ingest_info(),
             clear_data_in_range);
     }

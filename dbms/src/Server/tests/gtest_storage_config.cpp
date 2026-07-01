@@ -1000,6 +1000,47 @@ delta_rate = 1.1
 }
 CATCH
 
+TEST_F(StorageConfigTest, RemoteCacheDirInfosForDisaggMode)
+try
+{
+    auto log = Logger::get("StorageConfigTest.RemoteCacheDirInfosForDisaggMode");
+    const String config_str = R"(
+[storage]
+[storage.main]
+dir = ["123"]
+[storage.remote.cache]
+dir = "/tmp/StorageConfigTest/RemoteCacheDirInfosForDisaggMode"
+capacity = 10000000
+dtfile_level = 11
+delta_rate = 0.33
+    )";
+
+    auto config = loadConfigFromString(config_str);
+    size_t global_capacity_quota = 0;
+    TiFlashStorageConfig storage;
+    std::tie(global_capacity_quota, storage) = TiFlashStorageConfig::parseSettings(*config, log);
+
+    const auto & cache_config = storage.remote_cache_config;
+    ASSERT_TRUE(cache_config.isCacheEnabled());
+
+    {
+        const auto [paths, capacities] = cache_config.getCacheDirInfos(false);
+        ASSERT_TRUE(paths.empty());
+        ASSERT_TRUE(capacities.empty());
+    }
+
+    {
+        const auto [paths, capacities] = cache_config.getCacheDirInfos(true);
+        ASSERT_EQ(paths.size(), 2);
+        ASSERT_EQ(capacities.size(), 2);
+        ASSERT_EQ(paths[0], cache_config.getDTFileCacheDir());
+        ASSERT_EQ(paths[1], cache_config.getPageCacheDir());
+        ASSERT_EQ(capacities[0], cache_config.getDTFileCapacity());
+        ASSERT_EQ(capacities[1], cache_config.getPageCapacity());
+    }
+}
+CATCH
+
 TEST_F(StorageConfigTest, TempPath)
 try
 {

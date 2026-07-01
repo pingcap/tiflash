@@ -279,8 +279,13 @@ SegmentPair DeltaMergeStore::segmentSplit(
 
         LOG_INFO(
             log,
-            "Split - {} - Finish, segment is split into two, old_segment={} new_left={} new_right={}",
+            "Split - {} - Finish, segment is split into two, reason={} "
+            "prepare_seconds={:.3f} remote_upload_seconds={:.3f} "
+            "old_segment={} new_left={} new_right={}",
             split_info.is_logical ? "SplitLogical" : "SplitPhysical",
+            magic_enum::enum_name(reason),
+            split_info.prepare_seconds,
+            split_info.remote_upload_seconds,
             segment->info(),
             new_left->info(),
             new_right->info());
@@ -331,6 +336,7 @@ SegmentPtr DeltaMergeStore::segmentMerge(
         dm_context.min_version,
         Segment::simpleInfo(ordered_segments));
 
+    // keep "for_update=true" snapshot for all related segments
     std::vector<SegmentSnapshotPtr> ordered_snapshots;
     ordered_snapshots.reserve(ordered_segments.size());
     ColumnDefinesPtr schema_snap;
@@ -395,7 +401,9 @@ SegmentPtr DeltaMergeStore::segmentMerge(
     });
 
     WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
-    auto merged_stable = Segment::prepareMerge(dm_context, schema_snap, ordered_segments, ordered_snapshots, wbs);
+    const auto prepare_result
+        = Segment::prepareMerge(dm_context, schema_snap, ordered_segments, ordered_snapshots, wbs);
+    auto merged_stable = prepare_result.stable;
     wbs.writeLogAndData();
     merged_stable->enableDMFilesGC(dm_context);
 
@@ -437,9 +445,13 @@ SegmentPtr DeltaMergeStore::segmentMerge(
 
         LOG_INFO(
             log,
-            "Merge - Finish, {} segments are merged into one, reason={} merged={} segments_to_merge={}",
+            "Merge - Finish, {} segments are merged into one, reason={} "
+            "prepare_seconds={:.3f} remote_upload_seconds={:.3f} "
+            "merged={} segments_to_merge={}",
             ordered_segments.size(),
             magic_enum::enum_name(reason),
+            prepare_result.prepare_seconds,
+            prepare_result.remote_upload_seconds,
             merged->info(),
             Segment::info(ordered_segments));
     }
@@ -775,7 +787,7 @@ void DeltaMergeStore::segmentEnsureStableLocalIndex(
         DMFile::info(index_build_info.dm_files));
 
     // 3. Update the meta version of the segments to the latest one.
-    // To avoid logical split between step 2 and 3, get lastest segments to update again.
+    // To avoid logical split between step 2 and 3, get latest segments to update again.
     // If TiFlash crashes during updating the meta version, some segments' meta are updated and some are not.
     // So after TiFlash restarts, we will update meta versions to latest versions again.
     {
@@ -1273,7 +1285,8 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
 
     WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
 
-    auto new_stable = segment->prepareMergeDelta(dm_context, schema_snap, segment_snap, wbs);
+    const auto prepare_result = segment->prepareMergeDelta(dm_context, schema_snap, segment_snap, wbs);
+    auto new_stable = prepare_result.stable;
     wbs.writeLogAndData();
     new_stable->enableDMFilesGC(dm_context);
 
@@ -1307,7 +1320,12 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
 
         LOG_INFO(
             log,
-            "MergeDelta - Finish, delta is merged, old_segment={} new_segment={}",
+            "MergeDelta - Finish, delta is merged, reason={} "
+            "prepare_seconds={:.3f} remote_upload_seconds={:.3f} "
+            "old_segment={} new_segment={}",
+            magic_enum::enum_name(reason),
+            prepare_result.prepare_seconds,
+            prepare_result.remote_upload_seconds,
             segment->info(),
             new_segment->info());
     }

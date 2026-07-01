@@ -732,13 +732,14 @@ UInt64 StorageRemoteCacheConfig::getReservedCapacity() const
     return capacity * reserved_rate;
 }
 
-std::pair<Strings, std::vector<size_t>> StorageRemoteCacheConfig::getCacheDirInfos(bool is_compute_mode) const
+std::pair<Strings, std::vector<size_t>> StorageRemoteCacheConfig::getCacheDirInfos(bool is_disagg_mode) const
 {
-    if (is_compute_mode && isCacheEnabled())
+    if (is_disagg_mode && isCacheEnabled())
     {
         return {
             Strings{getDTFileCacheDir(), getPageCacheDir()},
-            std::vector<size_t>{getDTFileCapacity(), getPageCapacity()}};
+            std::vector<size_t>{getDTFileCapacity(), getPageCapacity()},
+        };
     }
     else
     {
