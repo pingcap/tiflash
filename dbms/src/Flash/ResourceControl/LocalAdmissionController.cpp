@@ -19,6 +19,23 @@
 
 namespace DB
 {
+namespace
+{
+resource_manager::ResourceGroup normalizeResourceGroupKeyspace(
+    const resource_manager::ResourceGroup & group_pb,
+    KeyspaceID keyspace_id)
+{
+    auto normalized = group_pb;
+    normalized.mutable_keyspace_id()->set_value(keyspace_id);
+    return normalized;
+}
+
+KeyspaceID resolveResourceGroupKeyspace(const resource_manager::ResourceGroup & group_pb)
+{
+    return group_pb.has_keyspace_id() ? group_pb.keyspace_id().value() : NullspaceID;
+}
+} // namespace
+
 void ResourceGroup::initStaticTokenBucket(int64_t capacity)
 {
     std::lock_guard lock(mu);
@@ -310,7 +327,8 @@ resource_manager::ResourceGroup LocalAdmissionController::buildReservedDefaultRe
 
 void LocalAdmissionController::addReservedDefaultResourceGroup(const KeyspaceID & keyspace_id)
 {
-    addResourceGroup(keyspace_id, buildReservedDefaultResourceGroup(keyspace_id), false);
+    static_cast<void>(keyspace_id);
+    addResourceGroup(NullspaceID, buildReservedDefaultResourceGroup(NullspaceID), false);
 }
 
 void LocalAdmissionController::warmupResourceGroupInfoCache(const KeyspaceID & keyspace_id, const std::string & name)
@@ -367,9 +385,10 @@ void LocalAdmissionController::warmupResourceGroupInfoCache(const KeyspaceID & k
         if (!legacy_resp.has_error())
         {
             checkGACRespValid(legacy_resp.group());
-            const auto rg_keyspace_id
-                = legacy_resp.group().has_keyspace_id() ? legacy_resp.group().keyspace_id().value() : NullspaceID;
-            addResourceGroup(rg_keyspace_id, legacy_resp.group());
+            const auto resolved_keyspace_id = resolveResourceGroupKeyspace(legacy_resp.group());
+            addResourceGroup(
+                resolved_keyspace_id,
+                normalizeResourceGroupKeyspace(legacy_resp.group(), resolved_keyspace_id));
             return;
         }
         if (isReservedDefaultResourceGroup(name))
@@ -396,8 +415,8 @@ void LocalAdmissionController::warmupResourceGroupInfoCache(const KeyspaceID & k
     }
 
     checkGACRespValid(resp.group());
-
-    addResourceGroup(keyspace_id, resp.group());
+    const auto resolved_keyspace_id = resolveResourceGroupKeyspace(resp.group());
+    addResourceGroup(resolved_keyspace_id, normalizeResourceGroupKeyspace(resp.group(), resolved_keyspace_id));
 }
 
 void LocalAdmissionController::mainLoop()
@@ -633,7 +652,7 @@ void LocalAdmissionController::doRequestGAC()
             const auto resp = cluster->pd_client->acquireTokenBuckets(req);
             LOG_DEBUG(log, "request to GAC done, req: {}. resp: {}", req.ShortDebugString(), resp.ShortDebugString());
 
-            auto handled = handleTokenBucketsResp(resp, req_rg_names);
+            auto handled = handleTokenBucketsResp(resp);
 
             std::vector<std::pair<KeyspaceID, std::string>> not_found;
             // not_found includes resource group names that appears in gac_req but not found in resp.
@@ -673,8 +692,7 @@ void LocalAdmissionController::checkDegradeMode()
 }
 
 std::vector<std::pair<KeyspaceID, std::string>> LocalAdmissionController::handleTokenBucketsResp(
-    const resource_manager::TokenBucketsResponse & resp,
-    const std::vector<std::pair<KeyspaceID, std::string>> & req_rg_names)
+    const resource_manager::TokenBucketsResponse & resp)
 {
     if unlikely (resp.has_error())
     {
@@ -684,13 +702,6 @@ std::vector<std::pair<KeyspaceID, std::string>> LocalAdmissionController::handle
 
     std::vector<std::pair<KeyspaceID, std::string>> handled_resource_group_names;
     handled_resource_group_names.reserve(resp.responses_size());
-
-    // Older PD may omit keyspace_id in TokenBucketResponse. Keep request order per resource-group name so
-    // duplicate names across keyspaces can still be matched to the corresponding requests in order.
-    std::unordered_map<std::string, std::vector<KeyspaceID>> pending_req_keyspaces_by_name;
-    for (const auto & [req_keyspace_id, req_name] : req_rg_names)
-        pending_req_keyspaces_by_name[req_name].push_back(req_keyspace_id);
-
     if (resp.responses().empty())
     {
         LOG_ERROR(log, "got empty TokenBuckets resp from GAC, {}", resp.ShortDebugString());
@@ -707,61 +718,19 @@ std::vector<std::pair<KeyspaceID, std::string>> LocalAdmissionController::handle
         }
 
         const auto & name = one_resp.resource_group_name();
-        KeyspaceID resp_keyspace_id = NullspaceID;
+        KeyspaceID keyspace_id = NullspaceID;
         if (one_resp.has_keyspace_id())
-            resp_keyspace_id = one_resp.keyspace_id().value();
-
-        std::optional<KeyspaceID> matched_req_keyspace_id;
-        ResourceGroupPtr resource_group = nullptr;
-        if (one_resp.has_keyspace_id())
-        {
-            resource_group = findResourceGroup(resp_keyspace_id, name);
-        }
-        else
-        {
-            auto iter = pending_req_keyspaces_by_name.find(name);
-            if (iter != pending_req_keyspaces_by_name.end())
-            {
-                for (const auto req_keyspace_id : iter->second)
-                {
-                    resource_group = findResourceGroup(req_keyspace_id, name);
-                    if (resource_group != nullptr)
-                    {
-                        matched_req_keyspace_id = req_keyspace_id;
-                        break;
-                    }
-                }
-            }
-            if (resource_group == nullptr)
-                resource_group = findResourceGroup(resp_keyspace_id, name);
-        }
+            keyspace_id = one_resp.keyspace_id().value();
+        auto resource_group = findResourceGroup(keyspace_id, name);
         if (resource_group == nullptr)
         {
-            LOG_ERROR(log, "cannot find resource group: {}(keyspace={})", name, resp_keyspace_id);
+            LOG_ERROR(log, "cannot find resource group: {}(keyspace={})", name, keyspace_id);
             continue;
         }
 
-        const KeyspaceID handled_keyspace_id = matched_req_keyspace_id.value_or(resp_keyspace_id);
-        handled_resource_group_names.emplace_back(handled_keyspace_id, name);
-        if (auto iter = pending_req_keyspaces_by_name.find(name); iter != pending_req_keyspaces_by_name.end())
-        {
-            auto & pending_keyspaces = iter->second;
-            if (const auto matched_iter
-                = std::find(pending_keyspaces.begin(), pending_keyspaces.end(), handled_keyspace_id);
-                matched_iter != pending_keyspaces.end())
-            {
-                pending_keyspaces.erase(matched_iter);
-                if (pending_keyspaces.empty())
-                    pending_req_keyspaces_by_name.erase(iter);
-            }
-        }
+        handled_resource_group_names.emplace_back(resource_group->getKeyspaceID(), name);
 
-        const auto metric_keyspace_id = resource_group->getKeyspaceID();
-        const String err_msg = fmt::format(
-            "handle acquire token resp failed: rg: {}(keyspace={}, cached_keyspace={})",
-            name,
-            handled_keyspace_id,
-            metric_keyspace_id);
+        const String err_msg = fmt::format("handle acquire token resp failed: rg: {}(keyspace={})", name, keyspace_id);
         // It's possible for one_resp.granted_r_u_tokens() to be empty
         // when the acquire_token_req is only for report RU consumption or GAC got error(like nan token).
         if (one_resp.granted_r_u_tokens().empty())
@@ -835,7 +804,7 @@ std::vector<std::pair<KeyspaceID, std::string>> LocalAdmissionController::handle
         // https://github.com/tikv/pd/blob/e9757fbe03260775262763c67f62296fcb26b3c2/pkg/mcs/resourcemanager/server/token_buckets.go#L47
         int64_t capacity = granted_token_bucket.granted_tokens().settings().burst_limit();
 
-        const auto name_with_keyspace_id = getResourceGroupMetricName(metric_keyspace_id, name);
+        const auto name_with_keyspace_id = getResourceGroupMetricName(resource_group->getKeyspaceID(), name);
         if (added_tokens > 0)
             GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_gac_resp_tokens, name_with_keyspace_id)
                 .Set(added_tokens);
@@ -1012,6 +981,8 @@ bool LocalAdmissionController::handlePutEvent(
         err_msg = "parse pb from etcd value failed";
         return false;
     }
+    if (keyspace_id == NullspaceID)
+        group_pb = normalizeResourceGroupKeyspace(group_pb, NullspaceID);
     {
         std::lock_guard lock(mu);
         auto rg = findResourceGroupWithoutLock(keyspace_id, name);

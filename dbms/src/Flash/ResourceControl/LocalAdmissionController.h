@@ -647,8 +647,7 @@ private:
     }
 
     std::vector<std::pair<KeyspaceID, std::string>> handleTokenBucketsResp(
-        const resource_manager::TokenBucketsResponse & resp,
-        const std::vector<std::pair<KeyspaceID, std::string>> & req_rg_names);
+        const resource_manager::TokenBucketsResponse & resp);
 
     static void checkGACRespValid(const resource_manager::ResourceGroup & new_group_pb);
 
