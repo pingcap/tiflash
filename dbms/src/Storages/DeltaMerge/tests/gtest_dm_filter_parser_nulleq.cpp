@@ -82,28 +82,27 @@ String parseToDebugString(Context & context, const tipb::Expr & filter_expr)
     TiDB::ColumnInfos column_infos = {col};
 
     const ColumnDefines columns_to_read = {ColumnDefine{1, "a", std::make_shared<DataTypeInt64>()}};
-    auto create_attr_by_column_id = [&columns_to_read](ColumnID column_id) -> Attr {
-        auto iter
-            = std::find_if(columns_to_read.begin(), columns_to_read.end(), [column_id](const ColumnDefine & d) -> bool {
-                  return d.id == column_id;
-              });
-        if (iter != columns_to_read.end())
-            return Attr{.col_name = iter->name, .col_id = iter->id, .type = iter->type};
-        return Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
-    };
+    FilterParser::ColumnIDToAttrMap column_id_to_attr;
+    for (const auto & cd : columns_to_read)
+    {
+        column_id_to_attr[cd.id] = Attr{.col_name = cd.name, .col_id = cd.id, .type = cd.type};
+    }
 
     const auto ann_query_info = tipb::ANNQueryInfo{};
+    const auto fts_query_info = tipb::FTSQueryInfo{};
+    static const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> empty_used_indexes{};
     auto dag_query = std::make_unique<DAGQueryInfo>(
         filters,
         ann_query_info,
+        fts_query_info,
         pushed_down_filters,
+        empty_used_indexes,
         column_infos,
         std::vector<int>{},
         0,
         context.getTimezoneInfo());
 
-    const auto op
-        = DB::DM::FilterParser::parseDAGQuery(*dag_query, column_infos, create_attr_by_column_id, Logger::get());
+    const auto op = DB::DM::FilterParser::parseDAGQuery(*dag_query, column_infos, column_id_to_attr, Logger::get());
     return op->toDebugString();
 }
 } // namespace
