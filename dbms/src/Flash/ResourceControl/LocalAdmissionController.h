@@ -597,6 +597,10 @@ private:
         }
         return {};
     }
+    bool hasExactResourceGroupWithoutLock(const KeyspaceID & keyspace_id, const std::string & name) const
+    {
+        return findResourceGroupWithoutLock(keyspace_id, name) != nullptr;
+    }
 
     void addResourceGroup(const KeyspaceID & keyspace_id, const resource_manager::ResourceGroup & new_group_pb)
     {
@@ -619,8 +623,9 @@ private:
             if (iter->second->enable_gac || !enable_gac)
                 return;
 
-            updateMaxRUPerSecAfterDeleteWithoutLock(iter->second->user_ru_per_sec);
+            const auto deletedUserRUPerSec = iter->second->user_ru_per_sec;
             keyspace_resource_groups.erase(iter);
+            updateMaxRUPerSecAfterDeleteWithoutLock(deletedUserRUPerSec);
         }
 
         LOG_INFO(
@@ -668,8 +673,9 @@ private:
     // requestGACLoop related methods.
     void doRequestGAC();
     static bool isReservedDefaultResourceGroup(const std::string & name) { return name == "default"; }
+    static bool shouldFallbackToLegacyLookup(const resource_manager::GetResourceGroupResponse & resp);
     static resource_manager::ResourceGroup buildReservedDefaultResourceGroup(const KeyspaceID & keyspace_id);
-    void addReservedDefaultResourceGroup(const KeyspaceID & keyspace_id);
+    void addReservedDefaultResourceGroup();
 
     // watchGACLoop related methods.
     void doWatch(const std::string & etcd_path, grpc::ClientContext * grpc_context);

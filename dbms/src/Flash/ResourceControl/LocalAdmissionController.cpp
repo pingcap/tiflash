@@ -15,7 +15,10 @@
 #include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <etcd/rpc.pb.h>
 
+#include <algorithm>
+#include <cctype>
 #include <magic_enum.hpp>
+#include <string_view>
 
 namespace DB
 {
@@ -33,6 +36,20 @@ resource_manager::ResourceGroup normalizeResourceGroupKeyspace(
 KeyspaceID resolveResourceGroupKeyspace(const resource_manager::ResourceGroup & group_pb)
 {
     return group_pb.has_keyspace_id() ? group_pb.keyspace_id().value() : NullspaceID;
+}
+
+bool containsIgnoreCase(std::string_view haystack, std::string_view needle)
+{
+    return std::search(
+               haystack.begin(),
+               haystack.end(),
+               needle.begin(),
+               needle.end(),
+               [](char lhs, char rhs) {
+                   return std::tolower(static_cast<unsigned char>(lhs))
+                       == std::tolower(static_cast<unsigned char>(rhs));
+               })
+        != haystack.end();
 }
 } // namespace
 
@@ -326,10 +343,19 @@ resource_manager::ResourceGroup LocalAdmissionController::buildReservedDefaultRe
     return group_pb;
 }
 
-void LocalAdmissionController::addReservedDefaultResourceGroup(const KeyspaceID & keyspace_id)
+void LocalAdmissionController::addReservedDefaultResourceGroup()
 {
-    static_cast<void>(keyspace_id);
     addResourceGroup(NullspaceID, buildReservedDefaultResourceGroup(NullspaceID), false);
+}
+
+bool LocalAdmissionController::shouldFallbackToLegacyLookup(const resource_manager::GetResourceGroupResponse & resp)
+{
+    if (!resp.has_error())
+        return false;
+
+    const auto & err_msg = resp.error().message();
+    return containsIgnoreCase(err_msg, "resource group")
+        && (containsIgnoreCase(err_msg, "not found") || containsIgnoreCase(err_msg, "does not exist"));
 }
 
 void LocalAdmissionController::warmupResourceGroupInfoCache(const KeyspaceID & keyspace_id, const std::string & name)
@@ -342,7 +368,7 @@ void LocalAdmissionController::warmupResourceGroupInfoCache(const KeyspaceID & k
 
     {
         std::lock_guard lock(mu);
-        if (findResourceGroupWithCompatWithoutLock(keyspace_id, name).group != nullptr)
+        if (hasExactResourceGroupWithoutLock(keyspace_id, name))
             return;
     }
 
@@ -367,23 +393,35 @@ void LocalAdmissionController::warmupResourceGroupInfoCache(const KeyspaceID & k
 
     if (resp.has_error())
     {
+        if (!shouldFallbackToLegacyLookup(resp))
+        {
+            RUNTIME_CHECK_MSG(
+                false,
+                "warmupResourceGroupInfoCache: {}(keyspace={}) failed: {}",
+                name,
+                keyspace_id,
+                resp.error().message());
+        }
+
         resource_manager::GetResourceGroupRequest legacy_req;
         legacy_req.set_resource_group_name(name);
         resource_manager::GetResourceGroupResponse legacy_resp;
+        bool legacy_lookup_failed = false;
         try
         {
             legacy_resp = cluster->pd_client->getResourceGroup(legacy_req);
         }
         catch (...)
         {
-            LOG_WARNING(
+            legacy_lookup_failed = true;
+            tryLogCurrentException(
                 log,
-                "warmupResourceGroupInfoCache failed to fetch legacy rg for keyspace={}, rg={}, err={}",
-                keyspace_id,
-                name,
-                getCurrentExceptionMessage(false));
+                fmt::format(
+                    "warmupResourceGroupInfoCache failed to fetch legacy rg for keyspace={}, rg={}",
+                    keyspace_id,
+                    name));
         }
-        if (!legacy_resp.has_error())
+        if (!legacy_lookup_failed && !legacy_resp.has_error())
         {
             checkGACRespValid(legacy_resp.group());
             const auto resolved_keyspace_id = resolveResourceGroupKeyspace(legacy_resp.group());
@@ -396,7 +434,7 @@ void LocalAdmissionController::warmupResourceGroupInfoCache(const KeyspaceID & k
         {
             {
                 std::lock_guard lock(mu);
-                if (findResourceGroupWithoutLock(NullspaceID, name) != nullptr)
+                if (findResourceGroupWithCompatWithoutLock(keyspace_id, name).group != nullptr)
                     return;
             }
             LOG_WARNING(
@@ -404,7 +442,7 @@ void LocalAdmissionController::warmupResourceGroupInfoCache(const KeyspaceID & k
                 "warmupResourceGroupInfoCache fallback to reserved default rg for keyspace={}, err={}",
                 keyspace_id,
                 resp.error().message());
-            addReservedDefaultResourceGroup(keyspace_id);
+            addReservedDefaultResourceGroup();
             return;
         }
         RUNTIME_CHECK_MSG(
@@ -984,24 +1022,50 @@ bool LocalAdmissionController::handlePutEvent(
     }
     if (keyspace_id == NullspaceID)
         group_pb = normalizeResourceGroupKeyspace(group_pb, NullspaceID);
+    bool need_refill = false;
     {
         std::lock_guard lock(mu);
         auto rg = findResourceGroupWithoutLock(keyspace_id, name);
+        bool inserted_new_exact_group = false;
         if (rg == nullptr)
         {
-            // It happens when query of this resource group has not came.
-            LOG_DEBUG(
-                log,
-                "trying to modify resource group config({}), but cannot find its info",
-                group_pb.ShortDebugString());
-            return true;
+            const auto compat_rg = findResourceGroupWithCompatWithoutLock(keyspace_id, name);
+            if (keyspace_id != NullspaceID && compat_rg.group != nullptr && compat_rg.is_fallback)
+            {
+                const auto new_user_ru_per_sec = group_pb.r_u_settings().r_u().settings().fill_rate();
+                if (max_ru_per_sec < new_user_ru_per_sec)
+                    max_ru_per_sec = new_user_ru_per_sec;
+
+                // A keyspace-scoped watch event comes from PD-managed state, so it should always re-enable GAC
+                // even if the previous compatibility entry was the local reserved default fallback.
+                rg = std::make_shared<ResourceGroup>(keyspace_id, group_pb, current_tick, true);
+                keyspace_resource_groups.insert({{keyspace_id, name}, rg});
+                inserted_new_exact_group = true;
+                need_refill = refill_token_callback != nullptr;
+            }
+            else
+            {
+                // It happens when query of this resource group has not came.
+                LOG_DEBUG(
+                    log,
+                    "trying to modify resource group config({}), but cannot find its info",
+                    group_pb.ShortDebugString());
+                return true;
+            }
         }
-        else
+
+        if (!inserted_new_exact_group)
         {
+            const auto old_user_ru_per_sec = rg->user_ru_per_sec;
             rg->resetResourceGroup(group_pb);
-            updateMaxRUPerSecAfterDeleteWithoutLock(rg->user_ru_per_sec);
+            updateMaxRUPerSecAfterDeleteWithoutLock(old_user_ru_per_sec);
+            if (max_ru_per_sec < rg->user_ru_per_sec)
+                max_ru_per_sec = rg->user_ru_per_sec;
         }
+        if (need_refill)
+            refill_token_callback();
     }
+
     LOG_INFO(log, "modify resource group {}(keyspace={}) to: {}", name, keyspace_id, group_pb.ShortDebugString());
     return true;
 }
