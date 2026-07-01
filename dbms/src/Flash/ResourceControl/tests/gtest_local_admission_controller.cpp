@@ -68,21 +68,22 @@ TEST(LocalAdmissionControllerTest, ReservedDefaultGroupFallsBackToLocalCacheWhen
 
     ASSERT_NO_THROW(lac.warmupResourceGroupInfoCache(keyspace_id, "default"));
     ASSERT_EQ(lac.cachedResourceGroupCount(), 1);
+    ASSERT_EQ(lac.getCachedResourceGroupForTest(keyspace_id, "default"), nullptr);
 
     auto priority = lac.getPriority(keyspace_id, "default");
     ASSERT_TRUE(priority.has_value());
 
-    auto group = lac.getCachedResourceGroupForTest(keyspace_id, "default");
+    auto group = lac.getCachedResourceGroupForTest(NullspaceID, "default");
     ASSERT_NE(group, nullptr);
     EXPECT_FALSE(group->enable_gac);
     EXPECT_EQ(group->user_ru_per_sec, LocalAdmissionController::RESERVED_DEFAULT_RESOURCE_GROUP_RU_PER_SEC);
     EXPECT_EQ(group->group_pb.priority(), ResourceGroup::UserMediumPriority);
     EXPECT_TRUE(group->group_pb.has_keyspace_id());
-    EXPECT_EQ(group->group_pb.keyspace_id().value(), keyspace_id);
+    EXPECT_EQ(group->group_pb.keyspace_id().value(), NullspaceID);
     EXPECT_FALSE(group->buildRequestInfoIfNecessary(SteadyClock::now()).has_value());
 }
 
-TEST(LocalAdmissionControllerTest, ReservedDefaultGroupUsesPDConfigWhenPresent)
+TEST(LocalAdmissionControllerTest, KeyspaceGroupUsesPDConfigWhenPresent)
 {
     constexpr KeyspaceID keyspace_id = 9;
     pingcap::kv::Cluster cluster;
@@ -108,6 +109,37 @@ TEST(LocalAdmissionControllerTest, ReservedDefaultGroupUsesPDConfigWhenPresent)
     EXPECT_TRUE(group->enable_gac);
     EXPECT_EQ(group->user_ru_per_sec, 1024);
     EXPECT_EQ(group->group_pb.priority(), ResourceGroup::UserLowPriority);
+
+    auto priority = lac.getPriority(keyspace_id, "default");
+    ASSERT_TRUE(priority.has_value());
+}
+
+TEST(LocalAdmissionControllerTest, KeyspaceRequestWithoutKeyspaceInPDResponseFallsBackToNullspaceGroup)
+{
+    constexpr KeyspaceID keyspace_id = 9;
+    pingcap::kv::Cluster cluster;
+    cluster.pd_client = std::make_shared<TestPDClient>([](const resource_manager::GetResourceGroupRequest & req) {
+        resource_manager::GetResourceGroupResponse resp;
+        auto * group = resp.mutable_group();
+        group->set_name(req.resource_group_name());
+        group->set_mode(resource_manager::GroupMode::RUMode);
+        group->set_priority(ResourceGroup::UserLowPriority);
+        auto * settings = group->mutable_r_u_settings()->mutable_r_u()->mutable_settings();
+        settings->set_fill_rate(1024);
+        settings->set_burst_limit(1024);
+        return resp;
+    });
+
+    LocalAdmissionController lac(&cluster, nullptr, false, false);
+
+    ASSERT_NO_THROW(lac.warmupResourceGroupInfoCache(keyspace_id, "default"));
+    ASSERT_EQ(lac.getCachedResourceGroupForTest(keyspace_id, "default"), nullptr);
+
+    auto group = lac.getCachedResourceGroupForTest(NullspaceID, "default");
+    ASSERT_NE(group, nullptr);
+    EXPECT_TRUE(group->enable_gac);
+    EXPECT_TRUE(group->group_pb.has_keyspace_id());
+    EXPECT_EQ(group->group_pb.keyspace_id().value(), NullspaceID);
 
     auto priority = lac.getPriority(keyspace_id, "default");
     ASSERT_TRUE(priority.has_value());
@@ -150,75 +182,57 @@ TEST(LocalAdmissionControllerTest, KeyspaceLookupFallsBackToLegacyCachedGroup)
     auto priority = lac.getPriority(keyspace_id, "default");
     ASSERT_TRUE(priority.has_value());
     EXPECT_EQ(lac.cachedResourceGroupCount(), 1);
+
+    auto request_info = legacy_group->buildRequestInfoIfNecessary(SteadyClock::now());
+    ASSERT_TRUE(request_info.has_value());
+    EXPECT_EQ(request_info->keyspace_id, NullspaceID);
 }
 
-TEST(LocalAdmissionControllerTest, TokenBucketResponseWithoutKeyspaceMatchesKeyspaceRequest)
+TEST(LocalAdmissionControllerTest, LegacyWatchUpdateNormalizesGroupKeyspaceToNullspace)
 {
-    constexpr KeyspaceID keyspace_id = 13;
+    constexpr KeyspaceID keyspace_id = 17;
     pingcap::kv::Cluster cluster;
-    cluster.pd_client = std::make_shared<TestPDClient>(
-        [](const resource_manager::GetResourceGroupRequest & req) {
-            resource_manager::GetResourceGroupResponse resp;
-            if (req.has_keyspace_id())
-            {
-                resp.mutable_error()->set_message("resource group default not found");
-                return resp;
-            }
-
-            auto * group = resp.mutable_group();
-            group->set_name(req.resource_group_name());
-            group->set_mode(resource_manager::GroupMode::RUMode);
-            group->set_priority(ResourceGroup::UserHighPriority);
-            auto * settings = group->mutable_r_u_settings()->mutable_r_u()->mutable_settings();
-            settings->set_fill_rate(2048);
-            settings->set_burst_limit(2048);
+    cluster.pd_client = std::make_shared<TestPDClient>([](const resource_manager::GetResourceGroupRequest & req) {
+        resource_manager::GetResourceGroupResponse resp;
+        if (req.has_keyspace_id())
+        {
+            resp.mutable_error()->set_message("resource group default not found");
             return resp;
-        },
-        [](const resource_manager::TokenBucketsRequest & req) {
-            resource_manager::TokenBucketsResponse resp;
-            EXPECT_EQ(req.requests_size(), 1);
-            if (req.requests_size() != 1)
-                return resp;
-            EXPECT_EQ(req.requests(0).resource_group_name(), "default");
-            EXPECT_TRUE(req.requests(0).has_keyspace_id());
-            if (!req.requests(0).has_keyspace_id())
-                return resp;
-            EXPECT_EQ(req.requests(0).keyspace_id().value(), keyspace_id);
+        }
 
-            auto * one_resp = resp.add_responses();
-            one_resp->set_resource_group_name("default");
-            auto * granted = one_resp->add_granted_r_u_tokens();
-            granted->set_type(resource_manager::RequestUnitType::RU);
-            granted->set_trickle_time_ms(0);
-            granted->mutable_granted_tokens()->set_tokens(512);
-            granted->mutable_granted_tokens()->mutable_settings()->set_burst_limit(2048);
-            return resp;
-        });
+        auto * group = resp.mutable_group();
+        group->set_name(req.resource_group_name());
+        group->set_mode(resource_manager::GroupMode::RUMode);
+        group->set_priority(ResourceGroup::UserMediumPriority);
+        auto * settings = group->mutable_r_u_settings()->mutable_r_u()->mutable_settings();
+        settings->set_fill_rate(1024);
+        settings->set_burst_limit(1024);
+        return resp;
+    });
 
     LocalAdmissionController lac(&cluster, nullptr, false, false);
     ASSERT_NO_THROW(lac.warmupResourceGroupInfoCache(keyspace_id, "default"));
 
+    mvccpb::KeyValue kv;
+    kv.set_key("resource_group/settings/default");
+    resource_manager::ResourceGroup updated_group;
+    updated_group.set_name("default");
+    updated_group.set_mode(resource_manager::GroupMode::RUMode);
+    updated_group.set_priority(ResourceGroup::UserHighPriority);
+    updated_group.mutable_keyspace_id()->set_value(keyspace_id);
+    auto * settings = updated_group.mutable_r_u_settings()->mutable_r_u()->mutable_settings();
+    settings->set_fill_rate(4096);
+    settings->set_burst_limit(4096);
+    kv.set_value(updated_group.SerializeAsString());
+
+    std::string err_msg;
+    ASSERT_TRUE(lac.handlePutEvent(LocalAdmissionController::GAC_RESOURCE_GROUP_ETCD_PATH, kv, err_msg)) << err_msg;
+
     auto group = lac.getCachedResourceGroupForTest(NullspaceID, "default");
     ASSERT_NE(group, nullptr);
-    ASSERT_TRUE(group->enable_gac);
-    EXPECT_EQ(lac.getCachedResourceGroupForTest(keyspace_id, "default"), nullptr);
-
-    resource_manager::TokenBucketsRequest req;
-    auto * group_request = req.add_requests();
-    group_request->set_resource_group_name("default");
-    group_request->mutable_keyspace_id()->set_value(keyspace_id);
-    auto * ru_items = group_request->mutable_ru_items();
-    auto * request_ru = ru_items->add_request_r_u();
-    request_ru->set_type(resource_manager::RequestUnitType::RU);
-    request_ru->set_value(512);
-
-    const auto req_rg_names = std::vector<std::pair<KeyspaceID, std::string>>{{keyspace_id, "default"}};
-    auto handled = lac.handleTokenBucketsResp(cluster.pd_client->acquireTokenBuckets(req), req_rg_names);
-    ASSERT_EQ(handled.size(), 1);
-    EXPECT_EQ(handled[0], std::make_pair(keyspace_id, std::string("default")));
-
-    auto priority = lac.getPriority(keyspace_id, "default");
-    ASSERT_TRUE(priority.has_value());
-    EXPECT_EQ(lac.cachedResourceGroupCount(), 1);
+    EXPECT_EQ(group->user_ru_per_sec, 4096);
+    EXPECT_TRUE(group->group_pb.has_keyspace_id());
+    EXPECT_EQ(group->group_pb.keyspace_id().value(), NullspaceID);
 }
+
 } // namespace DB::tests
