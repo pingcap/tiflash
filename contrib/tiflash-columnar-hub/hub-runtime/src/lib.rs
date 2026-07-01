@@ -53,9 +53,10 @@ use std::os::raw::{c_char, c_int};
 pub(crate) fn proxy_version_info() -> String {
     let fallback = "Unknown";
     format!(
-        "Git Commit Hash:   {}\nRust Version:      {}\nProfile:           {}",
+        "Git Commit Hash:   {}\nRust Version:      {}\nPrometheus Prefix: {}\nProfile:           {}",
         option_env!("CLOUD_STORAGE_ENGINE_GIT_HASH").unwrap_or(fallback),
         option_env!("PROXY_BUILD_RUSTC_VERSION").unwrap_or(fallback),
+        option_env!("PROMETHEUS_METRIC_NAME_PREFIX").unwrap_or(fallback),
         option_env!("PROXY_PROFILE").unwrap_or(fallback),
     )
 }

@@ -11,6 +11,7 @@ export PROXY_BUILD_RUSTC_VERSION := $(shell rustc --version 2> /dev/null || echo
 export PROXY_BUILD_GIT_HASH ?= $(shell git -C $(PROJECT_DIR) rev-parse HEAD 2> /dev/null || echo ${BUILD_INFO_GIT_FALLBACK})
 export PROXY_BUILD_GIT_BRANCH ?= $(shell git -C $(PROJECT_DIR) rev-parse --abbrev-ref HEAD 2> /dev/null || echo ${BUILD_INFO_GIT_FALLBACK})
 export PROXY_PROFILE ?= debug
+export PROMETHEUS_METRIC_NAME_PREFIX ?= tiflash_proxy_
 
 # `kvengine` pulls in both `usearch` and the standalone `simsimd` crate from
 # cloud-storage-engine. They currently export the same C symbols, so allow the

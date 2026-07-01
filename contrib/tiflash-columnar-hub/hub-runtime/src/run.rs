@@ -21,7 +21,7 @@ use std::{
     process,
     sync::{
         atomic::{AtomicBool, AtomicU8, Ordering},
-        Arc,
+        Arc, Once,
     },
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -240,6 +240,25 @@ const STORE_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(10);
 const HEARTBEAT_SHUTDOWN_POLL_INTERVAL: Duration = Duration::from_millis(200);
 const STORE_TOMBSTONE_WAIT_TIMEOUT: Duration = Duration::from_secs(30);
 const STORE_TOMBSTONE_POLL_INTERVAL: Duration = Duration::from_secs(1);
+fn init_metrics() {
+    static INIT: Once = Once::new();
+
+    INIT.call_once(|| {
+        tikv_util::metrics::monitor_process().unwrap_or_else(|err| {
+            panic!("failed to start process monitor: {}", err);
+        });
+        tikv_util::metrics::warn_if_kernel_metrics_disabled();
+        tikv_util::metrics::monitor_threads("").unwrap_or_else(|err| {
+            panic!("failed to start thread monitor: {}", err);
+        });
+        tikv_util::metrics::monitor_system_psi("").unwrap_or_else(|err| {
+            panic!("failed to start PSI monitor: {}", err);
+        });
+        tikv_util::metrics::monitor_allocator_stats("").unwrap_or_else(|err| {
+            panic!("failed to monitor allocator stats: {}", err);
+        });
+    });
+}
 
 fn load_config(path: Option<&OsStr>) -> ConfigFile {
     path.map_or_else(ConfigFile::default, |path| {
@@ -916,6 +935,14 @@ fn collect_store_space_stats(data_dir: &Path) -> Option<(u64, u64)> {
     }
 }
 
+fn collect_store_space_stats_from_engine_store() -> Option<(u64, u64)> {
+    let stats = get_engine_store_server_helper().handle_compute_store_stats();
+    if stats.fs_stats.ok == 0 {
+        return None;
+    }
+    Some((stats.fs_stats.capacity_size, stats.fs_stats.avail_size))
+}
+
 fn build_store_heartbeat_stats_from_space(
     store_id: u64,
     start_time: u32,
@@ -946,7 +973,8 @@ fn build_store_heartbeat_stats(
     last_report_ts: u64,
     data_dir: &Path,
 ) -> Option<pdpb::StoreStats> {
-    let (capacity, available) = collect_store_space_stats(data_dir)?;
+    let (capacity, available) = collect_store_space_stats_from_engine_store()
+        .or_else(|| collect_store_space_stats(data_dir))?;
     if capacity == 0 {
         warn!(
             "skip store heartbeat because disk capacity is unavailable";
@@ -1320,6 +1348,8 @@ pub unsafe fn run_proxy(argc: c_int, argv: *const *const c_char, helper_ptr: *co
         println!("config check successful");
         process::exit(0);
     }
+
+    init_metrics();
 
     let security_mgr = Arc::new(SecurityManager::new(&config.security).unwrap());
     let env = Arc::new(EnvBuilder::new().cq_count(1).name_prefix("pd").build());
@@ -1797,7 +1827,9 @@ log-rotation-size = "1024MiB"
         ));
         fs::create_dir_all(&temp_dir).unwrap();
 
-        let stats = build_store_heartbeat_stats(9527, 123, 456, &temp_dir).unwrap();
+        let (capacity, available) = collect_store_space_stats(&temp_dir).unwrap();
+        let stats =
+            build_store_heartbeat_stats_from_space(9527, 123, 456, capacity, available).unwrap();
         assert_eq!(stats.get_store_id(), 9527);
         assert_eq!(stats.get_start_time(), 123);
         assert!(stats.get_capacity() > 0);
