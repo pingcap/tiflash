@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #include <TestUtils/ExecutorTestUtils.h>
+
+#include <limits>
 namespace DB
 {
 namespace tests
@@ -83,7 +85,20 @@ public:
         context.addMockTable(
             {"default", "u64"},
             {{"a", TiDB::TP::TypeBit}},
-            {toNullableVec<UInt64>("a", {0, 4, 5, 4999999999999999999, 5000000000000000000, {}})});
+            {toNullableVec<UInt64>(
+                "a",
+                {0,
+                 4,
+                 5,
+                 4999999999999999999,
+                 5000000000000000000,
+                 static_cast<UInt64>(std::numeric_limits<Int64>::max()) + 1,
+                 {}})});
+
+        context.addMockTable(
+            {"default", "f64"},
+            {{"a", TiDB::TP::TypeDouble}},
+            {toNullableVec<Float64>("a", {0.0, 1.25, -3.5, {}})});
 
 
         // table t for round_with_frac tests
@@ -314,6 +329,63 @@ try
 }
 CATCH
 
+TEST_F(QueryExprTestRunner, unaryMinus)
+try
+{
+    {
+        auto cols = {
+            toNullableVec<Int64>(
+                {0,
+                 4,
+                 5,
+                 -4,
+                 -5,
+                 499999999999999999,
+                 500000000000000000,
+                 -499999999999999999,
+                 -500000000000000000,
+                 {}}),
+            toNullableVec<Int64>(
+                {0,
+                 -4,
+                 -5,
+                 4,
+                 5,
+                 -499999999999999999,
+                 -500000000000000000,
+                 499999999999999999,
+                 500000000000000000,
+                 {}}),
+        };
+        ASSERT_COLUMNS_EQ_UR(cols, executeRawQuery("select a, -a from default.i64"));
+    }
+
+    {
+        auto cols = {
+            toNullableVec<Float64>({0.0, 1.25, -3.5, {}}),
+            toNullableVec<Float64>({-0.0, -1.25, 3.5, {}}),
+        };
+        ASSERT_COLUMNS_EQ_UR(cols, executeRawQuery("select a, -a from default.f64"));
+    }
+
+    {
+        auto cols = {
+            toNullableVec<UInt64>(
+                {0,
+                 4,
+                 5,
+                 4999999999999999999,
+                 5000000000000000000,
+                 static_cast<UInt64>(std::numeric_limits<Int64>::max()) + 1,
+                 {}}),
+            toNullableVec<Int64>(
+                {0, -4, -5, -4999999999999999999, -5000000000000000000, std::numeric_limits<Int64>::min(), {}}),
+        };
+        ASSERT_COLUMNS_EQ_UR(cols, executeRawQuery("select a, -a from default.u64"));
+    }
+}
+CATCH
+
 TEST_F(QueryExprTestRunner, roundWithFrac)
 try
 {
@@ -460,15 +532,15 @@ try
     // u64
     {
         auto cols
-            = {toNullableVec<UInt64>({0, 4, 5, 4999999999999999999, 5000000000000000000, {}}),
-               toNullableVec<UInt64>({0, 4, 5, 4999999999999999999, 5000000000000000000, {}}),
-               toNullableVec<UInt64>({0, 4, 5, 4999999999999999999, 5000000000000000000, {}}),
-               toNullableVec<UInt64>({0, 0, 10, 5000000000000000000, 5000000000000000000, {}}),
-               toNullableVec<UInt64>({0, 0, 0, 5000000000000000000, 5000000000000000000, {}}),
-               toNullableVec<UInt64>({0, 0, 0, 5000000000000000000, 5000000000000000000, {}}),
-               toNullableVec<UInt64>({0, 0, 0, 5000000000000000000, 5000000000000000000, {}}),
-               toNullableVec<UInt64>({0, 0, 0, 0, 10000000000000000000ul, {}}),
-               toNullableVec<UInt64>({0, 0, 0, 0, 0, {}})};
+            = {toNullableVec<UInt64>({0, 4, 5, 4999999999999999999, 5000000000000000000, 9223372036854775808ul, {}}),
+               toNullableVec<UInt64>({0, 4, 5, 4999999999999999999, 5000000000000000000, 9223372036854775808ul, {}}),
+               toNullableVec<UInt64>({0, 4, 5, 4999999999999999999, 5000000000000000000, 9223372036854775808ul, {}}),
+               toNullableVec<UInt64>({0, 0, 10, 5000000000000000000, 5000000000000000000, 9223372036854775810ul, {}}),
+               toNullableVec<UInt64>({0, 0, 0, 5000000000000000000, 5000000000000000000, 9223372036854775800ul, {}}),
+               toNullableVec<UInt64>({0, 0, 0, 5000000000000000000, 5000000000000000000, 9220000000000000000ul, {}}),
+               toNullableVec<UInt64>({0, 0, 0, 5000000000000000000, 5000000000000000000, 9000000000000000000ul, {}}),
+               toNullableVec<UInt64>({0, 0, 0, 0, 10000000000000000000ul, 10000000000000000000ul, {}}),
+               toNullableVec<UInt64>({0, 0, 0, 0, 0, 0, {}})};
         ASSERT_COLUMNS_EQ_UR(
             cols,
             executeRawQuery("select a, round_with_frac_uint(a, 1), round_with_frac_uint(a, 0), round_with_frac_uint(a, "
