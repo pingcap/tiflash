@@ -28,7 +28,8 @@ public:
         std::function<resource_manager::GetResourceGroupResponse(const resource_manager::GetResourceGroupRequest &)>
             get_resource_group_,
         std::function<resource_manager::TokenBucketsResponse(const resource_manager::TokenBucketsRequest &)>
-            acquire_token_buckets_ = {})
+            acquire_token_buckets_
+        = {})
         : get_resource_group(std::move(get_resource_group_))
         , acquire_token_buckets(std::move(acquire_token_buckets_))
     {}
@@ -39,7 +40,8 @@ public:
         return get_resource_group(req);
     }
 
-    resource_manager::TokenBucketsResponse acquireTokenBuckets(const resource_manager::TokenBucketsRequest & req) override
+    resource_manager::TokenBucketsResponse acquireTokenBuckets(
+        const resource_manager::TokenBucketsRequest & req) override
     {
         if (acquire_token_buckets)
             return acquire_token_buckets(req);

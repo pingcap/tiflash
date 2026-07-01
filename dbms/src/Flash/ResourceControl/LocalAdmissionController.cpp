@@ -312,7 +312,8 @@ LACRUConsumptionDeltaInfo ResourceGroup::updateRUConsumptionDeltaInfoWithoutLock
     return info;
 }
 
-resource_manager::ResourceGroup LocalAdmissionController::buildReservedDefaultResourceGroup(const KeyspaceID & keyspace_id)
+resource_manager::ResourceGroup LocalAdmissionController::buildReservedDefaultResourceGroup(
+    const KeyspaceID & keyspace_id)
 {
     resource_manager::ResourceGroup group_pb;
     group_pb.set_name("default");
