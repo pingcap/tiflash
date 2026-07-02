@@ -213,6 +213,10 @@ inline RSOperatorPtr parseTiCompareExpr( //
     {
     case FilterParser::RSFilterType::Equal:
         return createEqual(attr, values[0]);
+    case FilterParser::RSFilterType::NullEqual:
+        if (values[0].isNull())
+            return createIsNull(attr);
+        return createNullEqual(attr, values[0]);
     case FilterParser::RSFilterType::NotEqual:
         return createNotEqual(attr, values[0]);
     case FilterParser::RSFilterType::Greater:
@@ -302,6 +306,7 @@ RSOperatorPtr parseTiExpr(
         }
 
         case FilterParser::RSFilterType::Equal:
+        case FilterParser::RSFilterType::NullEqual:
         case FilterParser::RSFilterType::NotEqual:
         case FilterParser::RSFilterType::Greater:
         case FilterParser::RSFilterType::GreaterEqual:
@@ -583,13 +588,14 @@ std::unordered_map<tipb::ScalarFuncSig, FilterParser::RSFilterType> FilterParser
     {tipb::ScalarFuncSig::NEDuration, FilterParser::RSFilterType::NotEqual},
     {tipb::ScalarFuncSig::NEJson, FilterParser::RSFilterType::NotEqual},
 
-    //{tipb::ScalarFuncSig::NullEQInt, "cast"},
-    //{tipb::ScalarFuncSig::NullEQReal, "cast"},
-    //{tipb::ScalarFuncSig::NullEQString, "cast"},
-    //{tipb::ScalarFuncSig::NullEQDecimal, "cast"},
-    //{tipb::ScalarFuncSig::NullEQTime, "cast"},
-    //{tipb::ScalarFuncSig::NullEQDuration, "cast"},
-    //{tipb::ScalarFuncSig::NullEQJson, "cast"},
+    {tipb::ScalarFuncSig::NullEQInt, FilterParser::RSFilterType::NullEqual},
+    {tipb::ScalarFuncSig::NullEQReal, FilterParser::RSFilterType::NullEqual},
+    {tipb::ScalarFuncSig::NullEQString, FilterParser::RSFilterType::NullEqual},
+    {tipb::ScalarFuncSig::NullEQDecimal, FilterParser::RSFilterType::NullEqual},
+    {tipb::ScalarFuncSig::NullEQTime, FilterParser::RSFilterType::NullEqual},
+    {tipb::ScalarFuncSig::NullEQDuration, FilterParser::RSFilterType::NullEqual},
+    {tipb::ScalarFuncSig::NullEQJson, FilterParser::RSFilterType::NullEqual},
+    {tipb::ScalarFuncSig::NullEQVectorFloat32, FilterParser::RSFilterType::NullEqual},
 
     // {tipb::ScalarFuncSig::PlusReal, "plus"},
     // {tipb::ScalarFuncSig::PlusDecimal, "plus"},
