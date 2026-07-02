@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Coprocessor/collectOutputFieldTypes.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
@@ -41,6 +42,18 @@ public:
             {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
     }
 };
+
+namespace
+{
+void collectColumnRefs(const tipb::Expr & expr, std::vector<const tipb::Expr *> & column_refs)
+{
+    if (expr.tp() == tipb::ExprType::ColumnRef)
+        column_refs.push_back(&expr);
+
+    for (const auto & child : expr.children())
+        collectColumnRefs(child, column_refs);
+}
+} // namespace
 
 TEST_F(MockDAGRequestTest, MockTable)
 try
@@ -260,6 +273,75 @@ try
                   "     selection_1 | equals(<0, Long>, <1, String>) and equals(<0, Long>, <1, String>)}\n"
                   "      table_scan_0 | {<0, Long>, <1, String>, <2, String>}\n";
             ASSERT_DAGREQUEST_EQAUL(expected, request);
+        }
+    }
+}
+CATCH
+
+TEST_F(MockDAGRequestTest, FullOuterJoinSchemaIsNullable)
+try
+{
+    context.addMockTable(
+        {"full_outer_test", "l"},
+        {{"a", TiDB::TP::TypeLong, false}, {"b", TiDB::TP::TypeLong, false}});
+    context.addMockTable(
+        {"full_outer_test", "r"},
+        {{"a", TiDB::TP::TypeLong, false}, {"c", TiDB::TP::TypeLong, false}});
+
+    auto request = context.scan("full_outer_test", "l")
+                       .join(
+                           context.scan("full_outer_test", "r"),
+                           tipb::JoinType::TypeFullOuterJoin,
+                           {col("a")},
+                           {},
+                           {},
+                           {gt(col("b"), col("c"))},
+                           {})
+                       .build(context);
+
+    ASSERT_EQ(request->root_executor().tp(), tipb::ExecType::TypeJoin);
+    const auto & join = request->root_executor().join();
+    ASSERT_EQ(join.other_conditions_size(), 1);
+
+    std::vector<const tipb::Expr *> column_refs;
+    collectColumnRefs(join.other_conditions(0), column_refs);
+    ASSERT_EQ(column_refs.size(), 2);
+    for (const auto * column_ref : column_refs)
+        ASSERT_EQ(column_ref->field_type().flag() & TiDB::ColumnFlagNotNull, 0);
+
+    auto output_field_types = collectOutputFieldTypes(*request);
+    ASSERT_EQ(output_field_types.size(), 4);
+    for (const auto & field_type : output_field_types)
+        ASSERT_EQ(field_type.flag() & TiDB::ColumnFlagNotNull, 0);
+}
+CATCH
+
+TEST_F(MockDAGRequestTest, SemiJoinColumnPruneKeepsJoinOutputSchema)
+try
+{
+    const std::vector<std::pair<tipb::JoinType, size_t>> test_cases = {
+        {tipb::JoinType::TypeSemiJoin, 3},
+        {tipb::JoinType::TypeAntiSemiJoin, 3},
+        {tipb::JoinType::TypeLeftOuterSemiJoin, 4},
+        {tipb::JoinType::TypeAntiLeftOuterSemiJoin, 4},
+    };
+
+    for (const auto & [join_type, expected_size] : test_cases)
+    {
+        auto request = context.scan("test_db", "l_table")
+                           .join(context.scan("test_db", "r_table"), join_type, {col("join_c")})
+                           .build(context);
+
+        auto output_field_types = collectOutputFieldTypes(*request);
+        ASSERT_EQ(output_field_types.size(), expected_size) << fmt::underlying(join_type);
+        ASSERT_EQ(output_field_types[0].tp(), TiDB::TypeLong);
+        ASSERT_EQ(output_field_types[1].tp(), TiDB::TypeString);
+        ASSERT_EQ(output_field_types[2].tp(), TiDB::TypeString);
+
+        if (expected_size == 4)
+        {
+            ASSERT_EQ(output_field_types[3].tp(), TiDB::TypeTiny);
+            ASSERT_EQ(output_field_types[3].flag() & TiDB::ColumnFlagNotNull, 0);
         }
     }
 }
