@@ -155,7 +155,7 @@ public:
     StressTimeout(size_t timeout_s, const LoggerPtr & log)
         : logger(log)
     {
-        StressEnvStatus::getInstance().setStat(STATUS_LOOP);
+        StressEnvStatus::getInstance().setStat(StressEnvStat::STATUS_LOOP);
         LOG_INFO(logger, "Timeout: {}s", timeout_s);
         timeout_timer.setStartInterval(timeout_s * 1000);
     }
