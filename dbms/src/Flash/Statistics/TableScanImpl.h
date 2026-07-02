@@ -76,5 +76,7 @@ protected:
 private:
     void updateTableScanDetail(const std::vector<ConnectionProfileInfo> & connection_profile_infos);
     void updateTableScanDetailForDisaggIfNecessary(const IProfilingBlockInputStream * stream);
+
+    bool is_partition_table_scan = false;
 };
 } // namespace DB
