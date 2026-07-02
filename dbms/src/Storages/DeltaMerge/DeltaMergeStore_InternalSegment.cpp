@@ -279,8 +279,10 @@ SegmentPair DeltaMergeStore::segmentSplit(
 
         LOG_INFO(
             log,
-            "Split - {} - Finish, segment is split into two, old_segment={} new_left={} new_right={}",
+            "Split - {} - Finish, segment is split into two, reason={} "
+            ", old_segment={} new_left={} new_right={}",
             split_info.is_logical ? "SplitLogical" : "SplitPhysical",
+            magic_enum::enum_name(reason),
             segment->info(),
             new_left->info(),
             new_right->info());
@@ -331,6 +333,7 @@ SegmentPtr DeltaMergeStore::segmentMerge(
         dm_context.min_version,
         Segment::simpleInfo(ordered_segments));
 
+    // keep "for_update=true" snapshot for all related segments
     std::vector<SegmentSnapshotPtr> ordered_snapshots;
     ordered_snapshots.reserve(ordered_segments.size());
     ColumnDefinesPtr schema_snap;
@@ -775,7 +778,7 @@ void DeltaMergeStore::segmentEnsureStableLocalIndex(
         DMFile::info(index_build_info.dm_files));
 
     // 3. Update the meta version of the segments to the latest one.
-    // To avoid logical split between step 2 and 3, get lastest segments to update again.
+    // To avoid logical split between step 2 and 3, get latest segments to update again.
     // If TiFlash crashes during updating the meta version, some segments' meta are updated and some are not.
     // So after TiFlash restarts, we will update meta versions to latest versions again.
     {
@@ -1307,7 +1310,9 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
 
         LOG_INFO(
             log,
-            "MergeDelta - Finish, delta is merged, old_segment={} new_segment={}",
+            "MergeDelta - Finish, delta is merged, reason={} "
+            "old_segment={} new_segment={}",
+            magic_enum::enum_name(reason),
             segment->info(),
             new_segment->info());
     }
