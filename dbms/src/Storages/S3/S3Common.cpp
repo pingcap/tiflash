@@ -49,6 +49,7 @@
 #include <aws/s3/model/DeleteObjectRequest.h>
 #include <aws/s3/model/ExpirationStatus.h>
 #include <aws/s3/model/GetObjectRequest.h>
+#include <aws/s3/model/GetObjectTaggingRequest.h>
 #include <aws/s3/model/HeadObjectRequest.h>
 #include <aws/s3/model/ListObjectsRequest.h>
 #include <aws/s3/model/ListObjectsV2Request.h>
@@ -852,6 +853,23 @@ void rewriteObjectWithTagging(const TiFlashS3Client & client, const String & key
     auto elapsed_seconds = sw.elapsedSeconds();
     GET_METRIC(tiflash_storage_s3_request_seconds, type_copy_object).Observe(elapsed_seconds);
     LOG_DEBUG(client.log, "rewrite object key={} cost={:.2f}s", key, elapsed_seconds);
+}
+
+Aws::S3::Model::GetObjectTaggingResult getObjectTagging(const TiFlashS3Client & client, const String & key)
+{
+    Aws::S3::Model::GetObjectTaggingRequest req;
+    client.setBucketAndKeyWithRoot(req, key);
+    auto outcome = client.GetObjectTagging(req);
+    if (!outcome.IsSuccess())
+    {
+        throw fromS3Error(
+            outcome.GetError(),
+            "S3 GetObjectTagging failed, bucket={} root={} key={}",
+            client.bucket(),
+            client.root(),
+            key);
+    }
+    return outcome.GetResult();
 }
 
 void listPrefix(

@@ -1961,7 +1961,8 @@ public:
         global_context.setPageStorageRunMode(orig_mode);
 
         auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
-        ::DB::tests::TiFlashTestEnv::deleteBucket(*s3_client);
+        if (DB::tests::TiFlashTestEnv::isMockedS3Client())
+            ::DB::tests::TiFlashTestEnv::deleteBucket(*s3_client);
         DB::tests::TiFlashTestEnv::disableS3Config();
     }
 
