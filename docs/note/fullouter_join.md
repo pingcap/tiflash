@@ -1,272 +1,272 @@
-# TiFlash 支持 FULL OUTER JOIN 改动点梳理（本轮仅等值 Join）
+# TiFlash FULL OUTER JOIN Support Change List (Equi Join Only in This Round)
 
-## 背景
+## Background
 
-TiFlash 内核（继承自 ClickHouse 的 Join 架构）本身有 `ASTTableJoin::Kind::Full` 的基础能力，但在 TiDB 长期不下推 full outer join 的情况下，这条路径没有被持续覆盖，尤其是后续补上的 `other condition` 逻辑基本只覆盖了 left/right outer。
+The TiFlash kernel, which inherits the Join architecture from ClickHouse, already has basic support for `ASTTableJoin::Kind::Full`. However, because TiDB has not pushed down full outer join for a long time, this path has not been continuously covered. In particular, the `other condition` logic added later mostly covered left/right outer joins only.
 
-现在 TiDB 侧准备支持 full outer join，下推到 TiFlash 后，需要把协议映射、输出 schema、执行语义和测试覆盖一起补齐。
+TiDB is now preparing to support full outer join. After it is pushed down to TiFlash, we need to complete the protocol mapping, output schema, execution semantics, and test coverage together.
 
-本文档本轮 scope 明确限定为：`FULL OUTER JOIN` 且 `left_join_keys/right_join_keys` 非空（即有等值 join key 的 hash join 路径）。
+The scope of this round is explicitly limited to `FULL OUTER JOIN` with non-empty `left_join_keys/right_join_keys`, which means the hash join path with equi join keys.
 
-## 现状结论
+## Current Conclusions
 
-### 已有能力（可复用）
+### Existing Capabilities That Can Be Reused
 
-1. SQL/AST 层已识别 Full。
+1. The SQL/AST layer already recognizes Full.
 - `dbms/src/Parsers/ParserTablesInSelectQuery.cpp:117`
 - `dbms/src/Parsers/ASTTablesInSelectQuery.cpp:165`
 
-2. Hash Join 框架里，`Full` 已被视为需要“probe 后扫描 build 侧未匹配行”的 join。
+2. In the hash join framework, `Full` is already treated as a join that needs to scan unmatched build-side rows after probing.
 - `dbms/src/Interpreters/JoinUtils.h:26`
 - `dbms/src/Interpreters/JoinUtils.h:84`
 
-3. 不带 `other condition` 的 full 基础路径基本存在。
-- probe 侧列 nullable 处理：`dbms/src/Interpreters/ProbeProcessInfo.cpp:71`
-- build 侧样本列 nullable 处理：`dbms/src/Interpreters/Join.cpp:346`
-- build block nullable 处理：`dbms/src/Interpreters/Join.cpp:696`
-- full 在 probe 时走 `MapsAllFull`：`dbms/src/Interpreters/JoinPartition.cpp:2124`
+3. The basic full path without `other condition` mostly exists.
+- Nullable handling for probe-side columns: `dbms/src/Interpreters/ProbeProcessInfo.cpp:71`
+- Nullable handling for build-side sample columns: `dbms/src/Interpreters/Join.cpp:346`
+- Nullable handling for build blocks: `dbms/src/Interpreters/Join.cpp:696`
+- Full uses `MapsAllFull` during probing: `dbms/src/Interpreters/JoinPartition.cpp:2124`
 
-### 主要缺口（必须补）
+### Main Gaps That Must Be Filled
 
-1. TiDB DAG 协议和 TiFlash JoinType 映射还没有 full。
+1. The TiDB DAG protocol and TiFlash JoinType mapping do not have full yet.
 - `contrib/tipb/proto/executor.proto:184`
 - `dbms/src/Flash/Coprocessor/JoinInterpreterHelper.cpp:68`
 
-2. Full 的输出/中间 schema nullable 规则没有补齐（只处理 left/right outer）。
+2. The nullable rules for Full output/intermediate schemas are incomplete. They currently only handle left/right outer joins.
 - `dbms/src/Flash/Coprocessor/JoinInterpreterHelper.cpp:298`
 - `dbms/src/Flash/Coprocessor/JoinInterpreterHelper.cpp:333`
 - `dbms/src/Flash/Coprocessor/collectOutputFieldTypes.cpp:175`
 
-3. `full + other condition` correctness 当前不成立。
-- `handleOtherConditions` 没有 full 分支，可能直接抛逻辑错误：`dbms/src/Interpreters/Join.cpp:1032`
-- full 当前走 `MapsAllFull`，key 命中时会提前 `setUsed()`，other condition 过滤后无法恢复“未匹配右行”状态：`dbms/src/Interpreters/JoinPartition.cpp:1601`
+3. Correctness for `full + other condition` is currently broken.
+- `handleOtherConditions` has no full branch and may directly throw a logical error: `dbms/src/Interpreters/Join.cpp:1032`
+- Full currently uses `MapsAllFull`. When a key is hit, it calls `setUsed()` too early. If `other condition` filters the row out later, TiFlash cannot restore the "unmatched right row" state: `dbms/src/Interpreters/JoinPartition.cpp:1601`
 
-4. left/right condition 校验目前不允许 full。
+4. The current left/right condition validation does not allow full.
 - `dbms/src/Flash/Coprocessor/JoinInterpreterHelper.h:97`
 
-5. 无等值键（join keys 为空）的 full 当前不在本轮范围内（本轮先不打通 cartesian full）。
+5. Full with no equi key, where join keys are empty, is out of scope for this round. Cartesian full join will not be enabled in this round.
 
-## 具体改动点
+## Detailed Changes
 
-## 1. 协议与 JoinType 映射
+## 1. Protocol and JoinType Mapping
 
-1. 在 tipb 加 `TypeFullOuterJoin`（按 TiDB 最终协议值同步）。
-- 位置：`contrib/tipb/proto/executor.proto`
+1. Add `TypeFullOuterJoin` to tipb, synchronized with the final protocol value from TiDB.
+- Location: `contrib/tipb/proto/executor.proto`
 
-2. `JoinInterpreterHelper::getJoinKindAndBuildSideIndex` 增加 full 映射。
-- equal join（有 key）至少支持：
+2. Add the full mapping in `JoinInterpreterHelper::getJoinKindAndBuildSideIndex`.
+- Equal join with keys should at least support:
   - `{TypeFullOuterJoin, 0} -> {ASTTableJoin::Kind::Full, 0}`
   - `{TypeFullOuterJoin, 1} -> {ASTTableJoin::Kind::Full, 1}`
-- 约定（与 TiDB 测试一致）：`FULL OUTER JOIN` 的 build side 由 `inner_idx` 直接指定（即 `build_side_index == inner_idx`）。
-- 说明：full 场景不需要像 left/right outer 那样改 `join kind`；但执行层仍会按 `build_side_index` 做 probe/build 角色接线，以满足 TiFlash 内部 right-build 约定。
+- Convention, consistent with TiDB tests: the build side of `FULL OUTER JOIN` is specified directly by `inner_idx`, that is, `build_side_index == inner_idx`.
+- Note: the full case does not need to adjust `join kind` like left/right outer join does. The execution layer will still wire the probe/build roles according to `build_side_index` to satisfy TiFlash's internal right-build convention.
 
-3. 字符串化/日志分支补 full，避免默认分支报错。
+3. Add full to stringification/logging branches to avoid falling into the default error path.
 - `dbms/src/Flash/Coprocessor/DAGUtils.cpp:837`
 
-## 2. Full 的 nullable/schema 规则
+## 2. Nullable/Schema Rules for Full
 
-1. Join 输出 schema：full 需要左右两侧都 nullable。
+1. Join output schema: both left-side and right-side columns must be nullable for full.
 - `dbms/src/Flash/Coprocessor/JoinInterpreterHelper.cpp:333`
 
-2. other condition 编译输入 schema：full 需要左右两侧（以及 probe prepare 新增列）按 full 语义 nullable。
+2. Input schema for compiling `other condition`: for full, both sides, plus the extra columns added during probe preparation, must follow full semantics and become nullable as needed.
 - `dbms/src/Flash/Coprocessor/JoinInterpreterHelper.cpp:298`
 - `dbms/src/Flash/Coprocessor/JoinInterpreterHelper.cpp:313`
 
-3. `collectOutputFieldTypes` 对外字段类型同样要把左右都改为 nullable。
+3. `collectOutputFieldTypes` must also make both sides nullable for externally visible field types.
 - `dbms/src/Flash/Coprocessor/collectOutputFieldTypes.cpp:175`
 - `dbms/src/Flash/Coprocessor/collectOutputFieldTypes.cpp:213`
 
-## 3. left/right condition 在 full 下的校验
+## 3. Validation for Left/Right Conditions Under Full
 
-`JoinNonEqualConditions::validate` 当前把 left condition 只限定在 left outer，把 right condition 只限定在 right outer；full 下这两类都可能出现，应允许。
+`JoinNonEqualConditions::validate` currently limits left condition to left outer join and right condition to right outer join. Under full, both kinds of conditions may appear and should be allowed.
 
-- 位置：`dbms/src/Flash/Coprocessor/JoinInterpreterHelper.h:95`
+- Location: `dbms/src/Flash/Coprocessor/JoinInterpreterHelper.h:95`
 
-## 4. 核心正确性：full + other condition
+## 4. Core Correctness: Full + Other Condition
 
-这是本次最关键的改动。
+This is the most important change in this round.
 
-当前问题：
+Current problem:
 
-1. full 在 probe 阶段使用 `MapsAllFull`，命中 key 就先 `setUsed()`。
-2. 后续 `other condition` 再过滤时，可能把这些行过滤掉。
-3. 但 build 侧“已使用”标记已经被置位，probe 后扫描阶段不会再输出这些本应作为“未匹配右行”的记录。
+1. During probing, full uses `MapsAllFull` and calls `setUsed()` as soon as the key is hit.
+2. `other condition` may filter out those rows afterward.
+3. However, the build-side "used" mark has already been set, so the post-probe scan will no longer output those records, even though they should be output as "unmatched right rows".
 
-需要改成：`used` 只能在 `other condition` 通过后再设置。
+The required behavior is: `used` can only be set after `other condition` passes.
 
-实现上，下面 1-6 点虽然可以按职责拆成“标记时机 / `handleOtherConditions` 语义 / probe 后扫描联动”三个子问题，但当前代码路径存在强耦合：
+Implementation-wise, the following items 1-6 can conceptually be split into "mark timing", "`handleOtherConditions` semantics", and "post-probe scan integration". However, the current code paths are tightly coupled:
 
-1. 只切 row-flagged map，而不同时补 full 的 `handleOtherConditions` 分支，`full + other condition` 仍可能落到运行时错误分支。
-2. 只切 probe 侧 map，而不同时补 probe 后扫描分支，后扫阶段仍会读取错误的 hash map 类型。
+1. If we only switch to row-flagged maps without adding a full branch in `handleOtherConditions`, `full + other condition` may still hit a runtime error branch.
+2. If we only switch the probe-side map without updating the post-probe scan branch, the scan phase will still read the wrong hash map type.
 
-因此建议把下面 1-6 点至少作为同一个 review/提交单元交付；文档后面的第 6/7/8 步保留为概念拆分，便于逐项验收，但不建议机械地拆成三个互相独立、可单独合入的 patch。
+Therefore, the following items 1-6 should at least be delivered as one review/commit unit. Steps 6/7/8 later in this document remain as conceptual decomposition for easier verification, but they should not be mechanically split into three independent patches that can be merged separately.
 
-建议实现方向：
+Suggested implementation direction:
 
-1. 让 full 在 `has_other_condition=true` 时也走 row-flagged map（`MapsAllFullWithRowFlag`）。
-- 受影响点：
+1. Make full use row-flagged maps (`MapsAllFullWithRowFlag`) when `has_other_condition=true`.
+- Affected locations:
   - `dbms/src/Interpreters/JoinUtils.h:89`
   - `dbms/src/Interpreters/JoinPartition.cpp:281`
   - `dbms/src/Interpreters/JoinPartition.cpp:971`
   - `dbms/src/Interpreters/JoinPartition.cpp:1037`
 
-2. `JoinPartition::probeBlock` 增加 full + row_flagged 的 dispatch 分支。
-- 当前 full 固定走 `MapsAllFull`：`dbms/src/Interpreters/JoinPartition.cpp:2124`
+2. Add a full + row_flagged dispatch branch in `JoinPartition::probeBlock`.
+- Full currently always uses `MapsAllFull`: `dbms/src/Interpreters/JoinPartition.cpp:2124`
 
-3. row-flagged probe adder 需要支持 full 的“左侧保底输出”语义。
-- 现在 `RowFlaggedHashMapAdder::addNotFound` 不补默认行：`dbms/src/Interpreters/JoinPartition.cpp:1450`
-- full 需要 not-found 时仍输出 1 行（右侧默认值）并给 helper 列写可判空值。
+3. The row-flagged probe adder needs to support the "fallback left output" semantics of full.
+- Currently `RowFlaggedHashMapAdder::addNotFound` does not append a default row: `dbms/src/Interpreters/JoinPartition.cpp:1450`
+- For full, when not-found happens, it still needs to output one row with right-side defaults and write nullable values into the helper column.
 
-4. `Join::handleOtherConditions` 增加 full 分支，语义对齐 left outer 的保底行为。
-- 当前只在 `isLeftOuterJoin(kind)` 时做“至少保留一行 + 右侧置 null”逻辑：
+4. Add a full branch in `Join::handleOtherConditions` with semantics aligned to the fallback behavior of left outer join.
+- Currently the "keep at least one row + set right side to null" logic only runs when `isLeftOuterJoin(kind)`:
   - `dbms/src/Interpreters/Join.cpp:999`
   - `dbms/src/Interpreters/Join.cpp:1017`
 
-5. `Join::doJoinBlockHash` 在 full+row_flagged 下：
-- 根据 helper 指针给 build row 打 used 标记时要跳过空指针。
-- 结果输出前移除 helper 临时列。
-- 相关位置：`dbms/src/Interpreters/Join.cpp:1325`
+5. In `Join::doJoinBlockHash` for full+row_flagged:
+- When marking build rows as used according to helper pointers, skip null pointers.
+- Remove helper temporary columns before outputting the result.
+- Related location: `dbms/src/Interpreters/Join.cpp:1325`
 
-6. probe 后扫描阶段对 full+other_condition 要切到 row_flagged 分支。
+6. Switch the post-probe scan phase to the row_flagged branch for full+other_condition.
 - `dbms/src/DataStreams/ScanHashMapAfterProbeBlockInputStream.cpp:256`
 
-## 5. 无等值键 full（cartesian full）本轮不做
+## 5. Full Without Equi Keys (Cartesian Full) Is Out of Scope
 
-当前代码对 full 无 key 没有成型执行路径，但本轮按 scope 不打通该路径。建议只做明确保护，避免误走：
+The current code does not have a complete execution path for full without keys, and this round does not enable that path. It is recommended to add an explicit guard to avoid accidentally taking an invalid path:
 
-1. 若收到 `TypeFullOuterJoin` 且 join keys 为空，TiFlash 显式报 `Unimplemented/BadRequest`，错误信息写清楚“cartesian full 不支持”。
-2. 后续如需支持，再单独立项实现 cross full 路径（工作量明显高于 equal full）。
+1. If TiFlash receives `TypeFullOuterJoin` with empty join keys, explicitly return `Unimplemented/BadRequest`, and make the error message clear that "cartesian full is not supported".
+2. If support is needed later, implement the cross full path as a separate task. The workload is clearly larger than equal full.
 
-建议在 `getJoinKindAndBuildSideIndex`（或更上游）就明确拦截，避免落到“Unknown join type”这类难排查报错。
+It is recommended to reject this case in `getJoinKindAndBuildSideIndex` or further upstream, instead of letting it fall into unclear errors such as "Unknown join type".
 
-## 6. Debug/Mock 与测试构造链路
+## 6. Debug/Mock and Test Construction Path
 
-为保证 gtest 能构造 full join DAG，需要同步补 mock binder。
+To make gtests able to construct full join DAGs, the mock binder also needs to be updated.
 
-1. mock schema nullable 规则补 full（左右都 nullable）。
+1. Add full to mock schema nullable rules, making both sides nullable.
 - `dbms/src/Debug/MockExecutor/JoinBinder.cpp:99`
 - `dbms/src/Debug/MockExecutor/JoinBinder.cpp:296`
 
-2. AST -> tipb 的旧测试编译路径补 full。
+2. Add full to the old AST -> tipb test compilation path.
 - `dbms/src/Debug/MockExecutor/JoinBinder.cpp:384`
 
-## 7. 测试改动建议
+## 7. Test Change Suggestions
 
-最低覆盖建议：
+Minimum recommended coverage:
 
-1. Coprocessor 映射测试
+1. Coprocessor mapping tests
 - `dbms/src/Flash/Coprocessor/tests/gtest_join_get_kind_and_build_index.cpp`
-- 新增 full + `inner_idx=0/1`（有 key）
-- 明确断言 `build_side_index == inner_idx`（full 场景）
-- 可补 1 个无 key 的拒绝用例（验证报错信息），但不实现执行逻辑
+- Add full + `inner_idx=0/1` with keys.
+- Explicitly assert `build_side_index == inner_idx` for full.
+- Optionally add one no-key rejection case to verify the error message, without implementing the execution logic.
 
 2. Join Executor correctness
-- 参考现有 `RightOuterJoin` 的构造模式：`dbms/src/Flash/tests/gtest_join_executor.cpp:4031`
-- 重点新增 full 场景：
-  - 有 key、无 other condition
-  - 有 key、有 other condition
-  - key 命中但 other condition 全失败（必须同时输出 left-unmatched 和 right-unmatched）
-  - 含 left/right conditions
-  - 含 null key
+- Refer to the existing construction pattern for `RightOuterJoin`: `dbms/src/Flash/tests/gtest_join_executor.cpp:4031`
+- Focus on adding full cases:
+  - With keys, without other condition
+  - With keys, with other condition
+  - Key hit but all rows fail `other condition` (must output both left-unmatched and right-unmatched rows)
+  - With left/right conditions
+  - With null keys
 
-3. Spill / Fine-grained shuffle
-- 至少补 1 组 full + other condition 的 spill case
-- 现有 join type 数组都还是 7 种：
+3. Spill / fine-grained shuffle
+- Add at least one full + other condition spill case.
+- Existing join type arrays still contain only seven join types:
   - `dbms/src/Flash/tests/gtest_join.h:184`
   - `dbms/src/Flash/tests/gtest_compute_server.cpp:1248`
-- 不建议直接把全量数组扩成 8 再重写大批 expected，可先加 targeted full 用例。
+- It is not recommended to expand all full arrays to eight join types and rewrite many expected results immediately. Add targeted full cases first.
 
-## 建议落地顺序
+## Suggested Implementation Order
 
-1. 同步 tipb（拿到 `TypeFullOuterJoin`）。
-2. 打通 JoinType 映射 + schema nullable + `getJoinTypeName`。
-3. 放开 full 的 left/right condition 校验。
-4. 把 `full + other condition` 的 correctness 主链路一起打通（row-flagged 路径 + `handleOtherConditions` + probe 后扫描联动）。
-5. 增加无等值键 full 的显式拒绝（本轮不实现）。
-6. 补 gtest（先 targeted，再考虑扩大 join type 矩阵）。
+1. Sync tipb and get `TypeFullOuterJoin`.
+2. Enable JoinType mapping, schema nullable handling, and `getJoinTypeName`.
+3. Allow left/right condition validation for full.
+4. Implement the main correctness path for `full + other condition` together: row-flagged path, `handleOtherConditions`, and post-probe scan integration.
+5. Add an explicit rejection for full without equi keys, which is not implemented in this round.
+6. Add gtests, starting with targeted cases before considering expanding the join type matrix.
 
-## 开发步骤（可执行 checklist）
+## Development Steps (Executable Checklist)
 
-1. 第 1 步：协议枚举打通（仅 full，且仅等值 key）
-- 目标：TiFlash 能识别 `TypeFullOuterJoin`。
-- 修改：
-  - `contrib/tipb/proto/executor.proto` 增加 `TypeFullOuterJoin`。
-  - 生成/同步对应 protobuf 代码（按仓库现有流程）。
-- 验收：
-  - 编译无 `JoinType` 相关 enum 错误。
-  - `TypeFullOuterJoin` 可在 TiFlash 代码中引用。
+1. Step 1: enable the protocol enum, only full and only with equi keys
+- Goal: TiFlash can recognize `TypeFullOuterJoin`.
+- Changes:
+  - Add `TypeFullOuterJoin` to `contrib/tipb/proto/executor.proto`.
+  - Generate/sync the corresponding protobuf code according to the repository's existing workflow.
+- Acceptance:
+  - The code compiles without `JoinType` enum errors.
+  - `TypeFullOuterJoin` can be referenced in TiFlash code.
 
-2. 第 2 步：JoinType 映射与 build side 约定
-- 目标：full 映射到 `ASTTableJoin::Kind::Full`，并满足 `build_side_index == inner_idx`。
-- 修改：
+2. Step 2: JoinType mapping and build-side convention
+- Goal: map full to `ASTTableJoin::Kind::Full`, with `build_side_index == inner_idx`.
+- Changes:
   - `dbms/src/Flash/Coprocessor/JoinInterpreterHelper.cpp`
-  - `dbms/src/Flash/Coprocessor/DAGUtils.cpp`（`getJoinTypeName`）
-  - 若需要，`dbms/src/Flash/Coprocessor/tests/gtest_join_get_kind_and_build_index.cpp`
-- 验收：
-  - full + `inner_idx=0/1` 都能返回 `kind=Full` 且 `build_side_index` 与 `inner_idx` 一致。
+  - `dbms/src/Flash/Coprocessor/DAGUtils.cpp` (`getJoinTypeName`)
+  - `dbms/src/Flash/Coprocessor/tests/gtest_join_get_kind_and_build_index.cpp`, if needed
+- Acceptance:
+  - full + `inner_idx=0/1` both return `kind=Full`, and `build_side_index` is equal to `inner_idx`.
 
-3. 第 3 步：等值 key scope 保护（无 key 显式拒绝）
-- 目标：本轮不实现 cartesian full，收到此类请求时报清晰错误。
-- 修改：
-  - 建议在 `JoinInterpreterHelper::getJoinKindAndBuildSideIndex(...)` 或更上游添加 guard。
-- 验收：
-  - `TypeFullOuterJoin` 且 `join_keys_size==0` 时，报错信息明确包含“不支持 cartesian full”。
+3. Step 3: equi-key scope guard, explicitly reject no-key full
+- Goal: cartesian full is not implemented in this round, and TiFlash returns a clear error for this request.
+- Changes:
+  - Prefer adding the guard in `JoinInterpreterHelper::getJoinKindAndBuildSideIndex(...)` or further upstream.
+- Acceptance:
+  - When `TypeFullOuterJoin` has `join_keys_size==0`, the error message clearly says cartesian full is not supported.
 
-4. 第 4 步：full 的输出与 other-condition 输入 schema 全量 nullable
-- 目标：full 下左右输出列、other-condition 编译输入列都按 nullable 处理。
-- 修改：
+4. Step 4: make output and other-condition input schemas fully nullable for full
+- Goal: under full, both left-side and right-side output columns, and the columns used to compile other-condition, are treated as nullable.
+- Changes:
   - `dbms/src/Flash/Coprocessor/JoinInterpreterHelper.cpp`
   - `dbms/src/Flash/Coprocessor/collectOutputFieldTypes.cpp`
-  - `dbms/src/Debug/MockExecutor/JoinBinder.cpp`（测试构造链路）
-- 验收：
-  - full 输出 schema 中左右列都是 nullable（不影响 semi 系列）。
+  - `dbms/src/Debug/MockExecutor/JoinBinder.cpp` for the test construction path
+- Acceptance:
+  - In full output schema, columns from both sides are nullable, without affecting the semi join family.
 
-5. 第 5 步：放开 full 的 left/right conditions 校验
-- 目标：full 可带 left/right condition，不被 `validate` 拦截。
-- 修改：
-  - `dbms/src/Flash/Coprocessor/JoinInterpreterHelper.h`（`JoinNonEqualConditions::validate`）
-- 验收：
-  - full + left_condition、full + right_condition 的构造阶段不报 “non left/right join with ... conditions”。
+5. Step 5: allow left/right condition validation for full
+- Goal: full can carry left/right conditions and will not be rejected by `validate`.
+- Changes:
+  - `dbms/src/Flash/Coprocessor/JoinInterpreterHelper.h` (`JoinNonEqualConditions::validate`)
+- Acceptance:
+  - Constructing full + left_condition and full + right_condition does not report "non left/right join with ... conditions".
 
-6. 第 6 步：核心改造 A - full + other condition 的 used 标记时机（建议与第 7、8 步合并交付）
-- 目标：只有当 `other condition` 通过时，build 行才标记 used，避免漏输出未匹配右行。
-- 说明：
-  - 当前代码上，row-flagged map 选择、`handleOtherConditions` 的 full 语义、probe 后扫描分支是强耦合的。
-  - 如果只落本步、不同时补第 7 和第 8 步，代码可能虽然能部分编译，但 `full + other condition` 仍无法形成可运行、可验证的完整链路。
-- 修改：
-  - `dbms/src/Interpreters/JoinUtils.h`（让 full+other_condition 进入 row-flagged 路径）
-  - `dbms/src/Interpreters/JoinPartition.cpp`（map 初始化、probe dispatch、adder not-found 行为）
-  - `dbms/src/Interpreters/Join.cpp`（`doJoinBlockHash` 标记 used 时跳过空指针）
-- 验收：
-  - 场景：key 命中但 `other condition` 全失败时，右侧行仍能在 probe 后扫描阶段输出。
+6. Step 6: core change A - used mark timing for full + other condition (recommended to deliver together with steps 7 and 8)
+- Goal: mark build rows as used only after `other condition` passes, so unmatched right rows are not lost.
+- Notes:
+  - In the current code, row-flagged map selection, full semantics in `handleOtherConditions`, and the post-probe scan branch are tightly coupled.
+  - If only this step is applied without steps 7 and 8, the code may partially compile, but `full + other condition` still cannot form a runnable and verifiable complete path.
+- Changes:
+  - `dbms/src/Interpreters/JoinUtils.h` to make full+other_condition enter the row-flagged path
+  - `dbms/src/Interpreters/JoinPartition.cpp` for map initialization, probe dispatch, and adder not-found behavior
+  - `dbms/src/Interpreters/Join.cpp` to skip null pointers when marking used rows in `doJoinBlockHash`
+- Acceptance:
+  - In the case where keys hit but all rows fail `other condition`, right-side rows can still be output during the post-probe scan.
 
-7. 第 7 步：核心改造 B - `handleOtherConditions` full 语义（通常在第 6 步一并落地）
-- 目标：full 下也要有“外连接至少保留一行 + 右侧置 null”的正确行为。
-- 修改：
-  - `dbms/src/Interpreters/Join.cpp`（`handleOtherConditions` 分支）
-- 验收：
-  - full + other_condition 返回结果与“left/right outer 的对称组合语义”一致。
+7. Step 7: core change B - full semantics in `handleOtherConditions` (usually delivered together with step 6)
+- Goal: full also needs the correct "outer join keeps at least one row + set right side to null" behavior.
+- Changes:
+  - `dbms/src/Interpreters/Join.cpp` (`handleOtherConditions` branch)
+- Acceptance:
+  - Results of full + other_condition are consistent with the symmetric combination semantics of left/right outer join.
 
-8. 第 8 步：probe 后扫描阶段联动（通常在第 6 步一并落地）
-- 目标：full+other_condition 使用 row-flagged map 扫描未匹配右行。
-- 修改：
+8. Step 8: integrate the post-probe scan phase (usually delivered together with step 6)
+- Goal: full+other_condition uses the row-flagged map to scan unmatched right rows.
+- Changes:
   - `dbms/src/DataStreams/ScanHashMapAfterProbeBlockInputStream.cpp`
-- 验收：
-  - full+other_condition 能正确输出 build 侧未匹配行，不丢行、不重复。
+- Acceptance:
+  - full+other_condition can correctly output unmatched build-side rows without missing or duplicating rows.
 
-9. 第 9 步：测试补齐（先 targeted）
-- 目标：先保证 correctness，再扩矩阵。
-- 修改建议：
+9. Step 9: add tests, starting with targeted cases
+- Goal: guarantee correctness first, then expand matrices if needed.
+- Suggested changes:
   - `dbms/src/Flash/Coprocessor/tests/gtest_join_get_kind_and_build_index.cpp`
   - `dbms/src/Flash/tests/gtest_join_executor.cpp`
-  - `dbms/src/Flash/tests/gtest_spill_join.cpp`（至少 1 组）
-- 验收最小集：
-  - full + key + 无 other_condition
-  - full + key + 有 other_condition
-  - full + key 命中但 other_condition 全失败（关键回归）
+  - `dbms/src/Flash/tests/gtest_spill_join.cpp` (at least one case)
+- Minimum acceptance set:
+  - full + key + no other_condition
+  - full + key + with other_condition
+  - full + key hit but all rows fail other_condition (critical regression)
   - full + left/right conditions
   - full + null key
 
-## 一句话风险提示
+## One-Line Risk Summary
 
-如果只做“JoinType 映射 + 输出 nullable”而不改 row-flagged 逻辑，`FULL OUTER JOIN ... ON eq_key AND other_condition` 会出现右侧漏行，属于结果错误而非性能问题，必须和协议打通一起完成。
+If we only implement "JoinType mapping + nullable output" without changing the row-flagged logic, `FULL OUTER JOIN ... ON eq_key AND other_condition` will miss right-side rows. This is a result-correctness bug, not a performance issue, and must be completed together with protocol enablement.
