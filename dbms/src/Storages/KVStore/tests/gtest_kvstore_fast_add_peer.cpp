@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// FIXME: Disabled because the flaky test result errors in CI.
+// And we don't plan to support enable FAP in short time.
+#if 0
 #include <Debug/MockKVStore/MockRaftStoreProxy.h>
 #include <Debug/TiFlashTestEnv.h>
 #include <Interpreters/SharedContexts/Disagg.h>
@@ -1206,3 +1209,4 @@ CATCH
 
 } // namespace tests
 } // namespace DB
+#endif

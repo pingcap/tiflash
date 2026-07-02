@@ -374,7 +374,18 @@ public:
         Int64 running_limit);
     void finishBgDownload(const String & s3_key, Int64 running_limit);
     void cleanupFailedDownload(const String & s3_key, FileSegmentPtr & file_seg);
-    void downloadImpl(const String & s3_key, FileSegmentPtr & file_seg, const WriteLimiterPtr & write_limiter);
+
+    enum class DownloadType
+    {
+        Foreground,
+        Background,
+    };
+
+    void downloadImpl(
+        const String & s3_key,
+        FileSegmentPtr & file_seg,
+        const WriteLimiterPtr & write_limiter,
+        DownloadType download_type);
 
     static String toTemporaryFilename(const String & fname);
     static bool isTemporaryFilename(const String & fname);
