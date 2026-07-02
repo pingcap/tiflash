@@ -132,6 +132,7 @@ public:
     const DMFileMeta::PackProperties & getPackProperties() const { return meta->pack_properties; }
     const ColumnStats & getColumnStats() const { return meta->column_stats; }
     const std::unordered_set<ColId> & getColumnIndices() const { return meta->column_indices; }
+    size_t getNumColumns() const { return meta->column_stats.size(); }
 
     // only used in gtest
     void clearPackProperties() const { meta->pack_properties.clear_property(); }
