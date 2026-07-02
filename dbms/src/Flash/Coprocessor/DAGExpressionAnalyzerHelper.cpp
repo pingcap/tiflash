@@ -124,6 +124,39 @@ String DAGExpressionAnalyzerHelper::buildIfNullFunction(
     return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
 }
 
+String DAGExpressionAnalyzerHelper::buildNullEqFunction(
+    DAGExpressionAnalyzer * analyzer,
+    const tipb::Expr & expr,
+    const ExpressionActionsPtr & actions)
+{
+    if (expr.children_size() != 2)
+    {
+        throw TiFlashException("Invalid arguments of nullEq function", Errors::Coprocessor::BadRequest);
+    }
+
+    String col1 = analyzer->getActions(expr.children(0), actions, false);
+    String col2 = analyzer->getActions(expr.children(1), actions, false);
+
+    const Block & sample_block = actions->getSampleBlock();
+    bool col1_nullable = sample_block.getByName(col1).type->isNullable();
+    bool col2_nullable = sample_block.getByName(col2).type->isNullable();
+
+    if (!col1_nullable && !col2_nullable)
+    {
+        return analyzer->applyFunction("equals", {col1, col2}, actions, getCollatorFromExpr(expr));
+    }
+
+    String equals = analyzer->applyFunction("equals", {col1, col2}, actions, getCollatorFromExpr(expr));
+    String name = analyzer->getActions(constructInt64LiteralTiExpr(0), actions);    
+
+    String is_null_col1 = analyzer->applyFunction("isNull", {col1}, actions, getCollatorFromExpr(expr));
+    String is_null_col2 = analyzer->applyFunction("isNull", {col2}, actions, getCollatorFromExpr(expr));
+    String and_is_null = analyzer->applyFunction("and", {is_null_col1, is_null_col2}, actions, nullptr);
+    String not_null_equals = analyzer->applyFunction("coalesce", {equals, name}, actions, nullptr);
+
+    return analyzer->applyFunction("or", {and_is_null, not_null_equals}, actions, nullptr);
+}
+
 String DAGExpressionAnalyzerHelper::buildInFunction(
     DAGExpressionAnalyzer * analyzer,
     const tipb::Expr & expr,
@@ -547,6 +580,7 @@ DAGExpressionAnalyzerHelper::FunctionBuilderMap DAGExpressionAnalyzerHelper::fun
      {"tidbIn", DAGExpressionAnalyzerHelper::buildInFunction},
      {"tidbNotIn", DAGExpressionAnalyzerHelper::buildInFunction},
      {"ifNull", DAGExpressionAnalyzerHelper::buildIfNullFunction},
+     {"nullEq", DAGExpressionAnalyzerHelper::buildNullEqFunction},
      {"multiIf", DAGExpressionAnalyzerHelper::buildMultiIfFunction},
      {"tidb_cast", DAGExpressionAnalyzerHelper::buildCastFunction},
      {"cast_int_as_json", DAGExpressionAnalyzerHelper::buildSingleParamJsonRelatedFunctions},
