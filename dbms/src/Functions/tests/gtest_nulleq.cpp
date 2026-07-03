@@ -15,7 +15,10 @@
 #include <Columns/ColumnConst.h>
 #include <Common/Exception.h>
 #include <Common/MyDuration.h>
+#include <Core/DecimalComparison.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/getLeastSupertype.h>
+#include <Functions/FunctionsComparison.h>
 #include <Functions/FunctionsDateTime.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/convertFieldToType.h>
@@ -104,42 +107,30 @@ protected:
                     }
                     else
                     {
-                        /// Both not Null. Make a comparison then.
-                        Field col1_field;
-                        col_1.column->get(i, col1_field);
-                        Field col2_field;
-                        col_2.column->get(i, col2_field);
-                        bool equals = (col1_field == col2_field);
-                        if (col1_field.getType() == Field::Types::Which::Decimal32 && col2_field.getType() == Field::Types::Which::Decimal32)
-                        {
-                            auto v1 = safeGet<DecimalField<Decimal32>>(col1_field);
-                            auto v2 = safeGet<DecimalField<Decimal32>>(col2_field);
-                            equals = decimalEqual(v1.getValue(), v2.getValue(), v1.getScale(), v2.getScale());
-                        }
-                        else if (col1_field.getType() == Field::Types::Which::Decimal64 && col2_field.getType() == Field::Types::Which::Decimal64)
-                        {
-                            auto v1 = safeGet<DecimalField<Decimal64>>(col1_field);
-                            auto v2 = safeGet<DecimalField<Decimal64>>(col2_field);
-                            equals = decimalEqual(v1.getValue(), v2.getValue(), v1.getScale(), v2.getScale());
-                        }
-                        else if (col1_field.getType() == Field::Types::Which::Decimal128 && col2_field.getType() == Field::Types::Which::Decimal128)
-                        {
-                            auto v1 = safeGet<DecimalField<Decimal128>>(col1_field);
-                            auto v2 = safeGet<DecimalField<Decimal128>>(col2_field);
-                            equals = decimalEqual(v1.getValue(), v2.getValue(), v1.getScale(), v2.getScale());
-                        }
-                        else if (col1_field.getType() == Field::Types::Which::Decimal256 && col2_field.getType() == Field::Types::Which::Decimal256)
-                        {
-                            auto v1 = safeGet<DecimalField<Decimal256>>(col1_field);
-                            auto v2 = safeGet<DecimalField<Decimal256>>(col2_field);
-                            equals = decimalEqual(v1.getValue(), v2.getValue(), v1.getScale(), v2.getScale());
-                        }
-                        col_result.column->get(equals, result);
+                        Field field1;
+                        Field field2;
+                        col_1.column->get(i, field1);
+                        col_2.column->get(i, field2);
+
+                        DataTypePtr type1 = col_1.type;
+                        DataTypePtr type2 = col_2.type;
+                        if (type1->isNullable())
+                            type1 = removeNullable(type1);
+                        if (type2->isNullable())
+                            type2 = removeNullable(type2);
+
+                        DataTypePtr super_type = getLeastSupertype({type1, type2});
+                        field1 = convertFieldToType(field1, *super_type, type1.get());
+                        field2 = convertFieldToType(field2, *super_type, type2.get());
+
+                        bool equal = field1 == field2;
+                        col_result.column->get(equal, result);
                         result_column->insert(result);
                     }
                 }
                 ColumnWithTypeAndName expected{std::move(result_column), result_type, ""};
-                ASSERT_COLUMN_EQ(expected, executeNullEq(col_1, col_2));
+                auto actual = executeNullEq(col_1, col_2);
+                ASSERT_COLUMN_EQ(expected, actual);
             }
         }
     }
