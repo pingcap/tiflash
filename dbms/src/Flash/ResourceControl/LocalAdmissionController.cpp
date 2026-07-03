@@ -18,38 +18,14 @@
 #include <algorithm>
 #include <cctype>
 #include <magic_enum.hpp>
-#include <string_view>
 
 namespace DB
 {
 namespace
 {
-resource_manager::ResourceGroup normalizeResourceGroupKeyspace(
-    const resource_manager::ResourceGroup & group_pb,
-    KeyspaceID keyspace_id)
-{
-    auto normalized = group_pb;
-    normalized.mutable_keyspace_id()->set_value(keyspace_id);
-    return normalized;
-}
-
 KeyspaceID resolveResourceGroupKeyspace(const resource_manager::ResourceGroup & group_pb)
 {
     return group_pb.has_keyspace_id() ? group_pb.keyspace_id().value() : NullspaceID;
-}
-
-bool containsIgnoreCase(std::string_view haystack, std::string_view needle)
-{
-    return std::search(
-               haystack.begin(),
-               haystack.end(),
-               needle.begin(),
-               needle.end(),
-               [](char lhs, char rhs) {
-                   return std::tolower(static_cast<unsigned char>(lhs))
-                       == std::tolower(static_cast<unsigned char>(rhs));
-               })
-        != haystack.end();
 }
 } // namespace
 
@@ -93,9 +69,6 @@ uint64_t ResourceGroup::getPriority(uint64_t max_ru_per_sec) const
 
 std::optional<GACRequestInfo> ResourceGroup::buildRequestInfoIfNecessary(const SteadyClock::time_point & now)
 {
-    if (!enable_gac)
-        return {};
-
     std::lock_guard lock(mu);
     if (!beginRequestWithoutLock(now))
     {
@@ -329,35 +302,6 @@ LACRUConsumptionDeltaInfo ResourceGroup::updateRUConsumptionDeltaInfoWithoutLock
     return info;
 }
 
-resource_manager::ResourceGroup LocalAdmissionController::buildReservedDefaultResourceGroup(
-    const KeyspaceID & keyspace_id)
-{
-    resource_manager::ResourceGroup group_pb;
-    group_pb.set_name("default");
-    group_pb.set_mode(resource_manager::GroupMode::RUMode);
-    group_pb.set_priority(ResourceGroup::UserMediumPriority);
-    group_pb.mutable_keyspace_id()->set_value(keyspace_id);
-    auto * settings = group_pb.mutable_r_u_settings()->mutable_r_u()->mutable_settings();
-    settings->set_fill_rate(RESERVED_DEFAULT_RESOURCE_GROUP_RU_PER_SEC);
-    settings->set_burst_limit(-1);
-    return group_pb;
-}
-
-void LocalAdmissionController::addReservedDefaultResourceGroup()
-{
-    addResourceGroup(NullspaceID, buildReservedDefaultResourceGroup(NullspaceID), false);
-}
-
-bool LocalAdmissionController::shouldFallbackToLegacyLookup(const resource_manager::GetResourceGroupResponse & resp)
-{
-    if (!resp.has_error())
-        return false;
-
-    const auto & err_msg = resp.error().message();
-    return containsIgnoreCase(err_msg, "resource group")
-        && (containsIgnoreCase(err_msg, "not found") || containsIgnoreCase(err_msg, "does not exist"));
-}
-
 void LocalAdmissionController::warmupResourceGroupInfoCache(const KeyspaceID & keyspace_id, const std::string & name)
 {
     if (unlikely(stopped))
@@ -368,12 +312,19 @@ void LocalAdmissionController::warmupResourceGroupInfoCache(const KeyspaceID & k
 
     {
         std::lock_guard lock(mu);
-        if (hasExactResourceGroupWithoutLock(keyspace_id, name))
+        if (findResourceGroupWithCompatWithoutLock(keyspace_id, name) != nullptr)
             return;
     }
 
     resource_manager::GetResourceGroupRequest req;
-    req.mutable_keyspace_id()->set_value(keyspace_id);
+    {
+        std::lock_guard lock(mu);
+        // Until the backend is identified, try the keyspace-aware request shape first. pd-cse
+        // ignores the field and still returns the shared legacy definition, while new PD returns
+        // a keyspace-scoped group with keyspace_id set.
+        if (with_keyspace && resource_group_backend_mode != ResourceGroupBackendMode::LegacyGlobal)
+            req.mutable_keyspace_id()->set_value(keyspace_id);
+    }
     req.set_resource_group_name(name);
     resource_manager::GetResourceGroupResponse resp;
 
@@ -392,70 +343,23 @@ void LocalAdmissionController::warmupResourceGroupInfoCache(const KeyspaceID & k
     }
 
     if (resp.has_error())
-    {
-        if (!shouldFallbackToLegacyLookup(resp))
-        {
-            RUNTIME_CHECK_MSG(
-                false,
-                "warmupResourceGroupInfoCache: {}(keyspace={}) failed: {}",
-                name,
-                keyspace_id,
-                resp.error().message());
-        }
-
-        resource_manager::GetResourceGroupRequest legacy_req;
-        legacy_req.set_resource_group_name(name);
-        resource_manager::GetResourceGroupResponse legacy_resp;
-        bool legacy_lookup_failed = false;
-        try
-        {
-            legacy_resp = cluster->pd_client->getResourceGroup(legacy_req);
-        }
-        catch (...)
-        {
-            legacy_lookup_failed = true;
-            tryLogCurrentException(
-                log,
-                fmt::format(
-                    "warmupResourceGroupInfoCache failed to fetch legacy rg for keyspace={}, rg={}",
-                    keyspace_id,
-                    name));
-        }
-        if (!legacy_lookup_failed && !legacy_resp.has_error())
-        {
-            checkGACRespValid(legacy_resp.group());
-            const auto resolved_keyspace_id = resolveResourceGroupKeyspace(legacy_resp.group());
-            addResourceGroup(
-                resolved_keyspace_id,
-                normalizeResourceGroupKeyspace(legacy_resp.group(), resolved_keyspace_id));
-            return;
-        }
-        if (isReservedDefaultResourceGroup(name))
-        {
-            {
-                std::lock_guard lock(mu);
-                if (findResourceGroupWithCompatWithoutLock(keyspace_id, name).group != nullptr)
-                    return;
-            }
-            LOG_WARNING(
-                log,
-                "warmupResourceGroupInfoCache fallback to reserved default rg for keyspace={}, err={}",
-                keyspace_id,
-                resp.error().message());
-            addReservedDefaultResourceGroup();
-            return;
-        }
         RUNTIME_CHECK_MSG(
             false,
             "warmupResourceGroupInfoCache: {}(keyspace={}) failed: {}",
             name,
             keyspace_id,
             resp.error().message());
-    }
 
     checkGACRespValid(resp.group());
-    const auto resolved_keyspace_id = resolveResourceGroupKeyspace(resp.group());
-    addResourceGroup(resolved_keyspace_id, normalizeResourceGroupKeyspace(resp.group(), resolved_keyspace_id));
+    const auto detected_mode
+        = with_keyspace ? detectBackendMode(resp.group()) : ResourceGroupBackendMode::LegacyGlobal;
+    // pd-cse returns a group without keyspace_id and keeps using the shared legacy namespace.
+    // New PD returns the concrete keyspace-scoped definition. TiFlash only needs this one bit to
+    // choose its cache key shape and which watch prefix to keep following afterwards.
+    updateBackendMode(detected_mode);
+    const auto resolved_keyspace_id
+        = detected_mode == ResourceGroupBackendMode::LegacyGlobal ? NullspaceID : resolveResourceGroupKeyspace(resp.group());
+    addResourceGroup(resolved_keyspace_id, resp.group());
 }
 
 void LocalAdmissionController::mainLoop()
@@ -593,6 +497,8 @@ std::optional<resource_manager::TokenBucketsRequest> LocalAdmissionController::b
     for (const auto & info : request_infos)
     {
         auto * group_request = gac_req.add_requests();
+        // Nullspace/legacy requests were encoded without keyspace_id. Preserve that wire format so
+        // the request can still be understood by older PD/GAC deployments.
         if (info.keyspace_id != NullspaceID)
             group_request->mutable_keyspace_id()->set_value(info.keyspace_id);
         group_request->set_resource_group_name(info.resource_group_name);
@@ -659,6 +565,7 @@ static std::vector<std::pair<KeyspaceID, std::string>> extractGACReqNames(
     std::vector<std::pair<KeyspaceID, std::string>> res;
     res.reserve(gac_req.requests_size());
     for (const auto & req : gac_req.requests())
+        // Must mirror buildGACRequest(): a missing field means the logical key is NullspaceID.
         res.push_back({req.has_keyspace_id() ? req.keyspace_id().value() : NullspaceID, req.resource_group_name()});
     return res;
 }
@@ -884,11 +791,12 @@ void LocalAdmissionController::watchGACLoop(const std::string & etcd_path)
     auto grpc_context = std::make_unique<grpc::ClientContext>();
     {
         std::lock_guard lock(mu);
-        active_watch_gac_grpc_contexts.insert(grpc_context.get());
+        active_watch_gac_grpc_context = grpc_context.get();
     }
     SCOPE_EXIT({
         std::lock_guard lock(mu);
-        active_watch_gac_grpc_contexts.erase(grpc_context.get());
+        if (active_watch_gac_grpc_context == grpc_context.get())
+            active_watch_gac_grpc_context = nullptr;
     });
 
     while (!stopped.load())
@@ -916,9 +824,10 @@ void LocalAdmissionController::watchGACLoop(const std::string & etcd_path)
                 }))
                 return;
 
-            active_watch_gac_grpc_contexts.erase(grpc_context.get());
+            if (active_watch_gac_grpc_context == grpc_context.get())
+                active_watch_gac_grpc_context = nullptr;
             grpc_context = std::make_unique<grpc::ClientContext>();
-            active_watch_gac_grpc_contexts.insert(grpc_context.get());
+            active_watch_gac_grpc_context = grpc_context.get();
         }
     }
 }
@@ -1020,49 +929,21 @@ bool LocalAdmissionController::handlePutEvent(
         err_msg = "parse pb from etcd value failed";
         return false;
     }
-    if (keyspace_id == NullspaceID)
-        group_pb = normalizeResourceGroupKeyspace(group_pb, NullspaceID);
-    bool need_refill = false;
     {
         std::lock_guard lock(mu);
         auto rg = findResourceGroupWithoutLock(keyspace_id, name);
-        bool inserted_new_exact_group = false;
         if (rg == nullptr)
         {
-            const auto compat_rg = findResourceGroupWithCompatWithoutLock(keyspace_id, name);
-            if (keyspace_id != NullspaceID && compat_rg.group != nullptr && compat_rg.is_fallback)
-            {
-                const auto new_user_ru_per_sec = group_pb.r_u_settings().r_u().settings().fill_rate();
-                if (max_ru_per_sec < new_user_ru_per_sec)
-                    max_ru_per_sec = new_user_ru_per_sec;
-
-                // A keyspace-scoped watch event comes from PD-managed state, so it should always re-enable GAC
-                // even if the previous compatibility entry was the local reserved default fallback.
-                rg = std::make_shared<ResourceGroup>(keyspace_id, group_pb, current_tick, true);
-                keyspace_resource_groups.insert({{keyspace_id, name}, rg});
-                inserted_new_exact_group = true;
-                need_refill = refill_token_callback != nullptr;
-            }
-            else
-            {
-                // It happens when query of this resource group has not came.
-                LOG_DEBUG(
-                    log,
-                    "trying to modify resource group config({}), but cannot find its info",
-                    group_pb.ShortDebugString());
-                return true;
-            }
+            // Ignore updates for groups that have never been warmed into the local cache yet.
+            LOG_DEBUG(log, "trying to modify resource group config({}), but cannot find its info", group_pb.ShortDebugString());
+            return true;
         }
-
-        if (!inserted_new_exact_group)
-        {
-            const auto old_user_ru_per_sec = rg->user_ru_per_sec;
-            rg->resetResourceGroup(group_pb);
-            updateMaxRUPerSecAfterDeleteWithoutLock(old_user_ru_per_sec);
-            if (max_ru_per_sec < rg->user_ru_per_sec)
-                max_ru_per_sec = rg->user_ru_per_sec;
-        }
-        if (need_refill)
+        const auto old_user_ru_per_sec = rg->user_ru_per_sec;
+        rg->resetResourceGroup(group_pb);
+        updateMaxRUPerSecAfterDeleteWithoutLock(old_user_ru_per_sec);
+        if (max_ru_per_sec < rg->user_ru_per_sec)
+            max_ru_per_sec = rg->user_ru_per_sec;
+        if (refill_token_callback)
             refill_token_callback();
     }
 
@@ -1077,8 +958,9 @@ bool LocalAdmissionController::parseResourceGroupNameFromWatchKey(
     std::string & parsed_rg_name,
     std::string & err_msg)
 {
-    // Expect etcd_key: resource_group/settings/rg_name OR resource_group/settings/keyspace_id/rg_name
-    // etcd_key_prefix is resource_group/settings
+    // Expect:
+    // 1. resource_group/settings/<rg_name>
+    // 2. resource_group/keyspace/settings/<keyspace_id>/<rg_name>
     if (etcd_key.length() <= etcd_key_prefix.length() + 1)
     {
         err_msg = fmt::format("expect etcd key: {}/resource_group_name, but got {}", etcd_key_prefix, etcd_key);
@@ -1136,15 +1018,20 @@ void LocalAdmissionController::stop()
     // So still need to lock.
     {
         std::lock_guard lock(mu);
-        for (auto * grpc_context : active_watch_gac_grpc_contexts)
-            grpc_context->TryCancel();
+        if (active_watch_gac_grpc_context != nullptr)
+            active_watch_gac_grpc_context->TryCancel();
         cv.notify_all();
     }
     {
         std::lock_guard lock(gac_requests_mu);
         gac_requests_cv.notify_all();
     }
-    for (auto & thread : background_threads)
+    std::vector<std::thread> threads_to_join;
+    {
+        std::lock_guard lock(mu);
+        threads_to_join = std::move(background_threads);
+    }
+    for (auto & thread : threads_to_join)
     {
         if (thread.joinable())
             thread.join();
@@ -1191,6 +1078,59 @@ std::unique_ptr<LocalAdmissionController> LocalAdmissionController::global_insta
 const std::string LocalAdmissionController::GAC_RESOURCE_GROUP_ETCD_PATH = "resource_group/settings";
 const std::string LocalAdmissionController::GAC_KEYSPACE_RESOURCE_GROUP_ETCD_PATH = "resource_group/keyspace/settings";
 
+ResourceGroupBackendMode LocalAdmissionController::detectBackendMode(const resource_manager::ResourceGroup & group_pb)
+{
+    return group_pb.has_keyspace_id() ? ResourceGroupBackendMode::KeyspaceScoped
+                                      : ResourceGroupBackendMode::LegacyGlobal;
+}
+
+const std::string & LocalAdmissionController::getWatchEtcdPath(ResourceGroupBackendMode mode)
+{
+    switch (mode)
+    {
+    case ResourceGroupBackendMode::LegacyGlobal:
+        return GAC_RESOURCE_GROUP_ETCD_PATH;
+    case ResourceGroupBackendMode::KeyspaceScoped:
+        return GAC_KEYSPACE_RESOURCE_GROUP_ETCD_PATH;
+    case ResourceGroupBackendMode::Unknown:
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "watch path is unavailable for unknown backend mode");
+    }
+
+    throw Exception(ErrorCodes::LOGICAL_ERROR, "unexpected backend mode {}", magic_enum::enum_name(mode));
+}
+
+void LocalAdmissionController::updateBackendMode(ResourceGroupBackendMode detected_mode)
+{
+    std::lock_guard lock(mu);
+    if (detected_mode == ResourceGroupBackendMode::Unknown)
+        return;
+
+    if (resource_group_backend_mode == detected_mode)
+        return;
+
+    if (resource_group_backend_mode != ResourceGroupBackendMode::Unknown)
+    {
+        LOG_WARNING(
+            log,
+            "keep resource-group backend mode {} and ignore newly detected mode {}",
+            magic_enum::enum_name(resource_group_backend_mode),
+            magic_enum::enum_name(detected_mode));
+        return;
+    }
+
+    resource_group_backend_mode = detected_mode;
+    LOG_INFO(log, "resource-group backend mode resolved to {}", magic_enum::enum_name(resource_group_backend_mode));
+
+    if (start_background_threads && !watch_thread_started && !stopped.load())
+    {
+        // Only keep one watch path alive. After the backend mode is known there is no need to
+        // continue listening on both legacy and keyspace prefixes at the same time.
+        const auto etcd_path = getWatchEtcdPath(resource_group_backend_mode);
+        background_threads.emplace_back([this, etcd_path] { this->watchGACLoop(etcd_path); });
+        watch_thread_started = true;
+    }
+}
+
 bool LocalAdmissionController::parseKeyspaceEtcdKey(
     const std::string & etcd_key_prefix,
     const std::string & etcd_key,
@@ -1198,7 +1138,7 @@ bool LocalAdmissionController::parseKeyspaceEtcdKey(
     std::string & parsed_rg_name,
     std::string & err_msg)
 {
-    // resource_group/settings/keyspace_id/rg_name -> keyspace_id/rg_name
+    // resource_group/keyspace/settings/<keyspace_id>/<rg_name> -> <keyspace_id>/<rg_name>
     auto tmp_str = std::string(etcd_key.begin() + etcd_key_prefix.length() + 1, etcd_key.end());
     size_t slash_pos = tmp_str.find('/');
     if (slash_pos == std::string::npos)

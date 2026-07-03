@@ -13,10 +13,11 @@
 // limitations under the License.
 
 #include <Flash/ResourceControl/LocalAdmissionController.h>
-#include <Storages/KVStore/Types.h>
 #include <gtest/gtest.h>
-#include <pingcap/Exception.h>
 #include <pingcap/kv/Cluster.h>
+
+#include <functional>
+#include <vector>
 
 namespace DB::tests
 {
@@ -46,111 +47,110 @@ private:
     std::function<resource_manager::GetResourceGroupResponse(const resource_manager::GetResourceGroupRequest &)>
         get_resource_group;
 };
+
+resource_manager::GetResourceGroupResponse buildResourceGroupResp(
+    const resource_manager::GetResourceGroupRequest & req,
+    uint64_t fill_rate,
+    bool with_keyspace_id)
+{
+    resource_manager::GetResourceGroupResponse resp;
+    auto * group = resp.mutable_group();
+    group->set_name(req.resource_group_name());
+    group->set_mode(resource_manager::GroupMode::RUMode);
+    group->set_priority(ResourceGroup::UserLowPriority);
+    if (with_keyspace_id)
+        group->mutable_keyspace_id()->set_value(req.keyspace_id().value());
+    auto * settings = group->mutable_r_u_settings()->mutable_r_u()->mutable_settings();
+    settings->set_fill_rate(fill_rate);
+    settings->set_burst_limit(fill_rate);
+    return resp;
+}
 } // namespace
 
-TEST(LocalAdmissionControllerTest, KeyspaceWatchUpdatePromotesLegacyFallbackToExactGroup)
+TEST(LocalAdmissionControllerTest, LegacyBackendCachesSharedGroupAndOmitsKeyspaceAfterDetection)
 {
     constexpr KeyspaceID keyspace_id = 23;
+    std::vector<bool> request_has_keyspace;
     pingcap::kv::Cluster cluster;
-    cluster.pd_client = std::make_shared<TestPDClient>([](const resource_manager::GetResourceGroupRequest & req) {
-        resource_manager::GetResourceGroupResponse resp;
-        if (req.has_keyspace_id())
-        {
-            resp.mutable_error()->set_message("resource group default not found");
-            return resp;
-        }
+    cluster.pd_client = std::make_shared<TestPDClient>(
+        [&request_has_keyspace](const resource_manager::GetResourceGroupRequest & req) {
+            request_has_keyspace.push_back(req.has_keyspace_id());
+            const auto fill_rate = req.resource_group_name() == "default" ? 1024 : 2048;
+            return buildResourceGroupResp(req, fill_rate, false);
+        });
 
-        auto * group = resp.mutable_group();
-        group->set_name(req.resource_group_name());
-        group->set_mode(resource_manager::GroupMode::RUMode);
-        group->set_priority(ResourceGroup::UserLowPriority);
-        auto * settings = group->mutable_r_u_settings()->mutable_r_u()->mutable_settings();
-        settings->set_fill_rate(1024);
-        settings->set_burst_limit(1024);
-        return resp;
-    });
+    LocalAdmissionController lac(&cluster, nullptr, true, false);
 
-    LocalAdmissionController lac(&cluster, nullptr, false, false);
     ASSERT_NO_THROW(lac.warmupResourceGroupInfoCache(keyspace_id, "default"));
+    ASSERT_NO_THROW(lac.warmupResourceGroupInfoCache(keyspace_id + 1, "analytics"));
 
-    ASSERT_EQ(lac.getCachedResourceGroupForTest(keyspace_id, "default"), nullptr);
-    ASSERT_NE(lac.getCachedResourceGroupForTest(NullspaceID, "default"), nullptr);
+    ASSERT_EQ(request_has_keyspace.size(), 2);
+    EXPECT_TRUE(request_has_keyspace[0]);
+    EXPECT_FALSE(request_has_keyspace[1]);
 
-    mvccpb::KeyValue kv;
-    kv.set_key("resource_group/keyspace/settings/23/default");
-    resource_manager::ResourceGroup updated_group;
-    updated_group.set_name("default");
-    updated_group.set_mode(resource_manager::GroupMode::RUMode);
-    updated_group.set_priority(ResourceGroup::UserHighPriority);
-    updated_group.mutable_keyspace_id()->set_value(keyspace_id);
-    auto * settings = updated_group.mutable_r_u_settings()->mutable_r_u()->mutable_settings();
-    settings->set_fill_rate(4096);
-    settings->set_burst_limit(4096);
-    kv.set_value(updated_group.SerializeAsString());
+    EXPECT_EQ(lac.getCachedResourceGroupForTest(keyspace_id, "default"), nullptr);
+    auto default_group = lac.getCachedResourceGroupForTest(NullspaceID, "default");
+    ASSERT_NE(default_group, nullptr);
+    EXPECT_TRUE(lac.getPriority(keyspace_id, "default").has_value());
 
-    std::string err_msg;
-    ASSERT_TRUE(lac.handlePutEvent(LocalAdmissionController::GAC_KEYSPACE_RESOURCE_GROUP_ETCD_PATH, kv, err_msg))
-        << err_msg;
-
-    auto exact_group = lac.getCachedResourceGroupForTest(keyspace_id, "default");
-    ASSERT_NE(exact_group, nullptr);
-    EXPECT_TRUE(exact_group->enable_gac);
-    EXPECT_EQ(exact_group->user_ru_per_sec, 4096);
-    EXPECT_EQ(exact_group->group_pb.priority(), ResourceGroup::UserHighPriority);
-
-    auto request_info = exact_group->buildRequestInfoIfNecessary(SteadyClock::now());
+    auto request_info = default_group->buildRequestInfoIfNecessary(SteadyClock::now());
     ASSERT_TRUE(request_info.has_value());
-    EXPECT_EQ(request_info->keyspace_id, keyspace_id);
+    EXPECT_EQ(request_info->keyspace_id, NullspaceID);
+
+    auto analytics_group = lac.getCachedResourceGroupForTest(NullspaceID, "analytics");
+    ASSERT_NE(analytics_group, nullptr);
+    EXPECT_EQ(analytics_group->user_ru_per_sec, 2048);
 }
 
-TEST(LocalAdmissionControllerTest, KeyspaceLookupDoesNotFallbackForNonNotFoundError)
+TEST(LocalAdmissionControllerTest, KeyspaceScopedBackendCachesExactGroupAndKeepsKeyspaceRequests)
 {
     constexpr KeyspaceID keyspace_id = 29;
+    std::vector<bool> request_has_keyspace;
     pingcap::kv::Cluster cluster;
-    cluster.pd_client = std::make_shared<TestPDClient>([](const resource_manager::GetResourceGroupRequest & req) {
-        resource_manager::GetResourceGroupResponse resp;
-        if (req.has_keyspace_id())
-        {
-            resp.mutable_error()->set_message("keyspace metadata is unavailable");
-            return resp;
-        }
+    cluster.pd_client = std::make_shared<TestPDClient>(
+        [&request_has_keyspace](const resource_manager::GetResourceGroupRequest & req) {
+            request_has_keyspace.push_back(req.has_keyspace_id());
+            return buildResourceGroupResp(req, 4096, true);
+        });
 
-        auto * group = resp.mutable_group();
-        group->set_name(req.resource_group_name());
-        group->set_mode(resource_manager::GroupMode::RUMode);
-        group->set_priority(ResourceGroup::UserMediumPriority);
-        auto * settings = group->mutable_r_u_settings()->mutable_r_u()->mutable_settings();
-        settings->set_fill_rate(1024);
-        settings->set_burst_limit(1024);
-        return resp;
-    });
+    LocalAdmissionController lac(&cluster, nullptr, true, false);
 
-    LocalAdmissionController lac(&cluster, nullptr, false, false);
+    ASSERT_NO_THROW(lac.warmupResourceGroupInfoCache(keyspace_id, "default"));
+    ASSERT_NO_THROW(lac.warmupResourceGroupInfoCache(keyspace_id + 1, "analytics"));
 
-    EXPECT_THROW(lac.warmupResourceGroupInfoCache(keyspace_id, "default"), DB::Exception);
-    EXPECT_EQ(lac.cachedResourceGroupCount(), 0);
+    ASSERT_EQ(request_has_keyspace.size(), 2);
+    EXPECT_TRUE(request_has_keyspace[0]);
+    EXPECT_TRUE(request_has_keyspace[1]);
+
+    EXPECT_EQ(lac.getCachedResourceGroupForTest(NullspaceID, "default"), nullptr);
+    auto default_group = lac.getCachedResourceGroupForTest(keyspace_id, "default");
+    ASSERT_NE(default_group, nullptr);
+    auto request_info = default_group->buildRequestInfoIfNecessary(SteadyClock::now());
+    ASSERT_TRUE(request_info.has_value());
+    EXPECT_EQ(request_info->keyspace_id, keyspace_id);
+
+    auto analytics_group = lac.getCachedResourceGroupForTest(keyspace_id + 1, "analytics");
+    ASSERT_NE(analytics_group, nullptr);
+    EXPECT_EQ(analytics_group->group_pb.keyspace_id().value(), keyspace_id + 1);
 }
 
-TEST(LocalAdmissionControllerTest, ReservedDefaultGroupStillFallbacksWhenLegacyLookupThrows)
+TEST(LocalAdmissionControllerTest, WarmupErrorPropagatesWithoutCompatibilityFallback)
 {
     constexpr KeyspaceID keyspace_id = 31;
+    size_t request_count = 0;
     pingcap::kv::Cluster cluster;
-    cluster.pd_client = std::make_shared<TestPDClient>([](const resource_manager::GetResourceGroupRequest & req) {
-        if (!req.has_keyspace_id())
-            throw pingcap::Exception("legacy lookup failed", pingcap::ErrorCodes::UnknownError);
-
+    cluster.pd_client = std::make_shared<TestPDClient>([&request_count](const resource_manager::GetResourceGroupRequest &) {
+        ++request_count;
         resource_manager::GetResourceGroupResponse resp;
         resp.mutable_error()->set_message("resource group default not found");
         return resp;
     });
 
-    LocalAdmissionController lac(&cluster, nullptr, false, false);
+    LocalAdmissionController lac(&cluster, nullptr, true, false);
 
-    ASSERT_NO_THROW(lac.warmupResourceGroupInfoCache(keyspace_id, "default"));
-    auto group = lac.getCachedResourceGroupForTest(NullspaceID, "default");
-    ASSERT_NE(group, nullptr);
-    EXPECT_FALSE(group->enable_gac);
-    EXPECT_EQ(group->user_ru_per_sec, LocalAdmissionController::RESERVED_DEFAULT_RESOURCE_GROUP_RU_PER_SEC);
+    EXPECT_THROW(lac.warmupResourceGroupInfoCache(keyspace_id, "default"), DB::Exception);
+    EXPECT_EQ(request_count, 1);
+    EXPECT_EQ(lac.cachedResourceGroupCount(), 0);
 }
 
 } // namespace DB::tests
