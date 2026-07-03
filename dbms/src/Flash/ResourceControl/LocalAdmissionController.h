@@ -371,7 +371,8 @@ public:
         , etcd_client(etcd_client_)
         , with_keyspace(with_keyspace)
         , start_background_threads(start_background_threads)
-        , resource_group_backend_mode(with_keyspace ? ResourceGroupBackendMode::Unknown : ResourceGroupBackendMode::LegacyGlobal)
+        , resource_group_backend_mode(
+              with_keyspace ? ResourceGroupBackendMode::Unknown : ResourceGroupBackendMode::LegacyGlobal)
     {
         current_tick = SteadyClock::now();
         last_clear_cpu_time = current_tick;
@@ -577,7 +578,8 @@ private:
             return nullptr;
         return iter->second;
     }
-    ResourceGroupPtr findResourceGroupWithCompatWithoutLock(const KeyspaceID & keyspace_id, const std::string & name) const
+    ResourceGroupPtr findResourceGroupWithCompatWithoutLock(const KeyspaceID & keyspace_id, const std::string & name)
+        const
     {
         if (auto group = findResourceGroupWithoutLock(keyspace_id, name); likely(group != nullptr))
             return group;
@@ -604,11 +606,7 @@ private:
         if (iter != keyspace_resource_groups.end())
             return;
 
-        LOG_INFO(
-            log,
-            "add new resource group, keyspace={} info: {}",
-            keyspace_id,
-            new_group_pb.ShortDebugString());
+        LOG_INFO(log, "add new resource group, keyspace={} info: {}", keyspace_id, new_group_pb.ShortDebugString());
         auto new_group = std::make_shared<ResourceGroup>(keyspace_id, new_group_pb, current_tick);
         keyspace_resource_groups.insert({{keyspace_id, new_group_pb.name()}, new_group});
 
