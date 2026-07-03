@@ -83,6 +83,8 @@ public:
         // NotLike, TiDB will convert it to Not(Like)
 
         IsNull,
+
+        NullEqual,
     };
 
     static std::unordered_map<tipb::ScalarFuncSig, RSFilterType> scalar_func_rs_filter_map;

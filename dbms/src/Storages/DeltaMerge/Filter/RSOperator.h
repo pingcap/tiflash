@@ -181,6 +181,7 @@ RSOperatorPtr createAnd(const RSOperators & children);
 // compare
 RSOperatorPtr createEqual(const Attr & attr, const Field & value);
 RSOperatorPtr createNotEqual(const Attr & attr, const Field & value);
+RSOperatorPtr createNullEqual(const Attr & attr, const Field & value);
 RSOperatorPtr createGreater(const Attr & attr, const Field & value);
 RSOperatorPtr createGreaterEqual(const Attr & attr, const Field & value);
 RSOperatorPtr createLess(const Attr & attr, const Field & value);

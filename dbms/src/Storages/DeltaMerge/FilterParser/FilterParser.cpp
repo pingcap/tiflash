@@ -237,6 +237,8 @@ inline RSOperatorPtr parseTiCompareExpr( //
             return createLessEqual(attr, values[0]);
     case FilterParser::RSFilterType::In:
         return createIn(attr, values);
+    case FilterParser::RSFilterType::NullEqual:
+        return createNullEqual(attr, values[0]);
     default:
         return createUnsupported(fmt::format("Unknown compare type: {}", tipb::ExprType_Name(expr.tp())));
     }
@@ -308,6 +310,7 @@ RSOperatorPtr parseTiExpr(
         case FilterParser::RSFilterType::Less:
         case FilterParser::RSFilterType::LessEqual:
         case FilterParser::RSFilterType::In:
+        case FilterParser::RSFilterType::NullEqual:
             return parseTiCompareExpr(expr, filter_type, scan_column_infos, id_to_attr, timezone_info);
 
         case FilterParser::RSFilterType::IsNull:
@@ -583,13 +586,14 @@ std::unordered_map<tipb::ScalarFuncSig, FilterParser::RSFilterType> FilterParser
     {tipb::ScalarFuncSig::NEDuration, FilterParser::RSFilterType::NotEqual},
     {tipb::ScalarFuncSig::NEJson, FilterParser::RSFilterType::NotEqual},
 
-    //{tipb::ScalarFuncSig::NullEQInt, "cast"},
-    //{tipb::ScalarFuncSig::NullEQReal, "cast"},
-    //{tipb::ScalarFuncSig::NullEQString, "cast"},
-    //{tipb::ScalarFuncSig::NullEQDecimal, "cast"},
-    //{tipb::ScalarFuncSig::NullEQTime, "cast"},
-    //{tipb::ScalarFuncSig::NullEQDuration, "cast"},
-    //{tipb::ScalarFuncSig::NullEQJson, "cast"},
+    {tipb::ScalarFuncSig::NullEQInt, FilterParser::RSFilterType::NullEqual},
+    {tipb::ScalarFuncSig::NullEQReal, FilterParser::RSFilterType::NullEqual},
+    {tipb::ScalarFuncSig::NullEQString, FilterParser::RSFilterType::NullEqual},
+    {tipb::ScalarFuncSig::NullEQDecimal, FilterParser::RSFilterType::NullEqual},
+    {tipb::ScalarFuncSig::NullEQTime, FilterParser::RSFilterType::NullEqual},
+    {tipb::ScalarFuncSig::NullEQDuration, FilterParser::RSFilterType::NullEqual},
+    {tipb::ScalarFuncSig::NullEQJson, FilterParser::RSFilterType::NullEqual},
+
 
     // {tipb::ScalarFuncSig::PlusReal, "plus"},
     // {tipb::ScalarFuncSig::PlusDecimal, "plus"},

@@ -25,6 +25,7 @@
 #include <Storages/DeltaMerge/Filter/Like.h>
 #include <Storages/DeltaMerge/Filter/Not.h>
 #include <Storages/DeltaMerge/Filter/NotEqual.h>
+#include <Storages/DeltaMerge/Filter/NullEqual.h>
 #include <Storages/DeltaMerge/Filter/Or.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Filter/Unsupported.h>
@@ -45,6 +46,7 @@ RSOperatorPtr createLess(const Attr & attr, const Field & value)                
 RSOperatorPtr createLessEqual(const Attr & attr, const Field & value)           { return std::make_shared<LessEqual>(attr, value); }
 RSOperatorPtr createLike(const Attr & attr, const Field & value)                { return std::make_shared<Like>(attr, value); }
 RSOperatorPtr createNot(const RSOperatorPtr & op)                               { return std::make_shared<Not>(op); }
+RSOperatorPtr createNullEqual(const Attr & attr, const Field & value)            { return std::make_shared<NullEqual>(attr, value); }
 RSOperatorPtr createNotEqual(const Attr & attr, const Field & value)            { return std::make_shared<NotEqual>(attr, value); }
 RSOperatorPtr createOr(const RSOperators & children)                            { return std::make_shared<Or>(children); }
 RSOperatorPtr createIsNull(const Attr & attr)                                   { return std::make_shared<IsNull>(attr);}
