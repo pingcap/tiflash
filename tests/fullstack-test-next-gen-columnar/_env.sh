@@ -28,19 +28,19 @@ export LOCAL_TIDB_BIN_DIR="${LOCAL_TIDB_BIN_DIR:-}"
 
 export HUB_ADDR="${HUB_ADDR:-us-docker.pkg.dev/pingcap-testing-account/tidbx}"
 
-export PD_BRANCH="${PD_BRANCH:-master-next-gen}"
+export PD_BRANCH="${PD_BRANCH:-master-nextgen}"
 if [[ "${PD_BRANCH}" == "master" ]]; then
-  export PD_BRANCH="master-next-gen"
+  export PD_BRANCH="master-nextgen"
 fi
 
-export TIKV_BRANCH="${TIKV_BRANCH:-cloud-engine-next-gen}"
+export TIKV_BRANCH="${TIKV_BRANCH:-cloud-engine-nextgen}"
 if [[ "${TIKV_BRANCH}" == "cloud-engine" ]]; then
-  export TIKV_BRANCH="cloud-engine-next-gen"
+  export TIKV_BRANCH="cloud-engine-nextgen"
 fi
 
-export TIDB_BRANCH="${TIDB_BRANCH:-master-next-gen}"
+export TIDB_BRANCH="${TIDB_BRANCH:-master-nextgen}"
 if [[ "${TIDB_BRANCH}" == "master" ]]; then
-  export TIDB_BRANCH="master-next-gen"
+  export TIDB_BRANCH="master-nextgen"
 fi
 
 export PD_IMAGE="${PD_IMAGE:-${HUB_ADDR}/tikv/pd/image:${PD_BRANCH}}"
