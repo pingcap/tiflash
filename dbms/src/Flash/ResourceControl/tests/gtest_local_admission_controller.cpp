@@ -139,12 +139,13 @@ TEST(LocalAdmissionControllerTest, WarmupErrorPropagatesWithoutCompatibilityFall
     constexpr KeyspaceID keyspace_id = 31;
     size_t request_count = 0;
     pingcap::kv::Cluster cluster;
-    cluster.pd_client = std::make_shared<TestPDClient>([&request_count](const resource_manager::GetResourceGroupRequest &) {
-        ++request_count;
-        resource_manager::GetResourceGroupResponse resp;
-        resp.mutable_error()->set_message("resource group default not found");
-        return resp;
-    });
+    cluster.pd_client
+        = std::make_shared<TestPDClient>([&request_count](const resource_manager::GetResourceGroupRequest &) {
+              ++request_count;
+              resource_manager::GetResourceGroupResponse resp;
+              resp.mutable_error()->set_message("resource group default not found");
+              return resp;
+          });
 
     LocalAdmissionController lac(&cluster, nullptr, true, false);
 

@@ -351,14 +351,14 @@ void LocalAdmissionController::warmupResourceGroupInfoCache(const KeyspaceID & k
             resp.error().message());
 
     checkGACRespValid(resp.group());
-    const auto detected_mode
-        = with_keyspace ? detectBackendMode(resp.group()) : ResourceGroupBackendMode::LegacyGlobal;
+    const auto detected_mode = with_keyspace ? detectBackendMode(resp.group()) : ResourceGroupBackendMode::LegacyGlobal;
     // pd-cse returns a group without keyspace_id and keeps using the shared legacy namespace.
     // New PD returns the concrete keyspace-scoped definition. TiFlash only needs this one bit to
     // choose its cache key shape and which watch prefix to keep following afterwards.
     updateBackendMode(detected_mode);
-    const auto resolved_keyspace_id
-        = detected_mode == ResourceGroupBackendMode::LegacyGlobal ? NullspaceID : resolveResourceGroupKeyspace(resp.group());
+    const auto resolved_keyspace_id = detected_mode == ResourceGroupBackendMode::LegacyGlobal
+        ? NullspaceID
+        : resolveResourceGroupKeyspace(resp.group());
     addResourceGroup(resolved_keyspace_id, resp.group());
 }
 
@@ -935,7 +935,10 @@ bool LocalAdmissionController::handlePutEvent(
         if (rg == nullptr)
         {
             // Ignore updates for groups that have never been warmed into the local cache yet.
-            LOG_DEBUG(log, "trying to modify resource group config({}), but cannot find its info", group_pb.ShortDebugString());
+            LOG_DEBUG(
+                log,
+                "trying to modify resource group config({}), but cannot find its info",
+                group_pb.ShortDebugString());
             return true;
         }
         const auto old_user_ru_per_sec = rg->user_ru_per_sec;
