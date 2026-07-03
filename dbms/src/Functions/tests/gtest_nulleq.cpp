@@ -112,47 +112,27 @@ protected:
                         bool equals = (col1_field == col2_field);
                         if (col1_field.toString().find("Decimal") != std::string::npos && col2_field.toString().find("Decimal") != std::string::npos)
                         {
-                            /// Ugly Fix of Decimal.
-                            auto decimal_string = [&](const Field & value) -> DB::String {
-                                switch (value.getType())
-                                {
-                                case Field::Types::Which::Decimal32:
-                                {
-                                    auto v = safeGet<DecimalField<Decimal32>>(value);
-                                    return v.toString();
-                                }
-                                case Field::Types::Which::Decimal64:
-                                {
-                                    auto v = safeGet<DecimalField<Decimal64>>(value);
-                                    return v.toString();
-                                }
-                                case Field::Types::Which::Decimal128:
-                                {
-                                    auto v = safeGet<DecimalField<Decimal128>>(value);
-                                    return v.toString();
-                                }
-                                case Field::Types::Which::Decimal256:
-                                {
-                                    auto v = safeGet<DecimalField<Decimal256>>(value);
-                                    return v.toString();
-                                }
-                                default:
-                                    throw Exception("Unsupported with data type.");
-                                }
-                            };
-
-                            /// I know all the tested decimal have actually the scale of 2.
-                            /// So they are just substring-relationship.
-                            const auto decimal_string_col1 = decimal_string(col1_field);
-                            const auto decimal_string_col2 = decimal_string(col2_field);
-                            if (decimal_string_col1.size() > decimal_string_col2.size())
-                            {
-                                equals = (decimal_string_col1.find(decimal_string_col2) != std::string::npos);
-                            }
-                            else
-                            {
-                                equals = (decimal_string_col2.find(decimal_string_col1) != std::string::npos);
-                            }
+                            auto v1 = safeGet<DecimalField<Decimal32>>(col1_field);
+                            auto v2 = safeGet<DecimalField<Decimal32>>(col2_field);
+                            equals = decimalEqual(v1.getValue(), v2.getValue(), v1.getScale(), v2.getScale());
+                        }
+                        else if (col1_field.getType() == Field::Types::Which::Decimal64 && col2_field.getType() == Field::Types::Which::Decimal64)
+                        {
+                            auto v1 = safeGet<DecimalField<Decimal64>>(col1_field);
+                            auto v2 = safeGet<DecimalField<Decimal64>>(col2_field);
+                            equals = decimalEqual(v1.getValue(), v2.getValue(), v1.getScale(), v2.getScale());
+                        }
+                        else if (col1_field.getType() == Field::Types::Which::Decimal128 && col2_field.getType() == Field::Types::Which::Decimal128)
+                        {
+                            auto v1 = safeGet<DecimalField<Decimal128>>(col1_field);
+                            auto v2 = safeGet<DecimalField<Decimal128>>(col2_field);
+                            equals = decimalEqual(v1.getValue(), v2.getValue(), v1.getScale(), v2.getScale());
+                        }
+                        else if (col1_field.getType() == Field::Types::Which::Decimal256 && col2_field.getType() == Field::Types::Which::Decimal256)
+                        {
+                            auto v1 = safeGet<DecimalField<Decimal256>>(col1_field);
+                            auto v2 = safeGet<DecimalField<Decimal256>>(col2_field);
+                            equals = decimalEqual(v1.getValue(), v2.getValue(), v1.getScale(), v2.getScale());
                         }
                         col_result.column->get(equals, result);
                         result_column->insert(result);
