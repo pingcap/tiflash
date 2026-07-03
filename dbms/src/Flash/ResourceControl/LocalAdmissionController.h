@@ -46,12 +46,6 @@ struct GACRequestInfo
     double ru_consumption_delta;
 };
 
-struct ResourceGroupCompatLookupResult
-{
-    std::shared_ptr<class ResourceGroup> group;
-    bool is_fallback = false;
-};
-
 inline std::string getResourceGroupMetricName(const KeyspaceID & keyspace_id, const std::string & name)
 {
     return fmt::format("{}-{}", keyspace_id, name);
@@ -80,12 +74,10 @@ public:
     explicit ResourceGroup(
         const KeyspaceID & keyspace_id_,
         const resource_manager::ResourceGroup & group_pb_,
-        const SteadyClock::time_point & tp,
-        bool enable_gac_ = true)
+        const SteadyClock::time_point & tp)
         : keyspace_id(keyspace_id_)
         , name(group_pb_.name())
         , name_with_keyspace_id(getResourceGroupMetricName(keyspace_id_, group_pb_.name()))
-        , enable_gac(enable_gac_)
         , group_pb(group_pb_)
         , log(Logger::get("resource group:" + group_pb_.name()))
     {
@@ -307,7 +299,6 @@ private:
     const KeyspaceID keyspace_id;
     const std::string name;
     const std::string name_with_keyspace_id; // For metrics.
-    bool enable_gac = true;
     uint32_t user_priority_val = 0;
     uint64_t user_ru_per_sec = 0;
     bool burstable = false;
@@ -356,6 +347,13 @@ struct LACPairHash
     }
 };
 
+enum class ResourceGroupBackendMode
+{
+    Unknown,
+    LegacyGlobal,
+    KeyspaceScoped,
+};
+
 // LocalAdmissionController is the local(tiflash) part of the distributed token bucket algorithm.
 // It manages all resource groups:
 // 1. Creation, deletion and config updates of resource group.
@@ -371,24 +369,21 @@ public:
         bool start_background_threads = true)
         : cluster(cluster_)
         , etcd_client(etcd_client_)
+        , with_keyspace(with_keyspace)
+        , start_background_threads(start_background_threads)
+        , resource_group_backend_mode(with_keyspace ? ResourceGroupBackendMode::Unknown : ResourceGroupBackendMode::LegacyGlobal)
     {
+        current_tick = SteadyClock::now();
+        last_clear_cpu_time = current_tick;
+
         if (start_background_threads)
         {
             background_threads.emplace_back([this] { this->mainLoop(); });
             background_threads.emplace_back([this] { this->requestGACLoop(); });
-            if (with_keyspace)
-            {
-                background_threads.emplace_back([this] { this->watchGACLoop(GAC_KEYSPACE_RESOURCE_GROUP_ETCD_PATH); });
+            if (resource_group_backend_mode == ResourceGroupBackendMode::LegacyGlobal)
                 background_threads.emplace_back([this] { this->watchGACLoop(GAC_RESOURCE_GROUP_ETCD_PATH); });
-            }
-            else
-            {
-                background_threads.emplace_back([this] { this->watchGACLoop(GAC_RESOURCE_GROUP_ETCD_PATH); });
-            }
+            watch_thread_started = (resource_group_backend_mode != ResourceGroupBackendMode::Unknown);
         }
-
-        current_tick = SteadyClock::now();
-        last_clear_cpu_time = current_tick;
     }
 
     ~LocalAdmissionController() { safeStop(); }
@@ -510,7 +505,6 @@ public:
     static constexpr auto DEGRADE_MODE_DURATION = std::chrono::seconds(120);
     static constexpr double ACQUIRE_RU_AMPLIFICATION = 1.1;
     static constexpr auto DEFAULT_MAX_EST_WAIT_DURATION = std::chrono::milliseconds(1000);
-    static constexpr uint64_t RESERVED_DEFAULT_RESOURCE_GROUP_RU_PER_SEC = std::numeric_limits<int32_t>::max();
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
@@ -566,14 +560,14 @@ private:
     ResourceGroupPtr findResourceGroup(const KeyspaceID & keyspace_id, const std::string & name) const
     {
         std::lock_guard lock(mu);
-        return findResourceGroupWithCompatWithoutLock(keyspace_id, name).group;
+        return findResourceGroupWithCompatWithoutLock(keyspace_id, name);
     }
     std::pair<ResourceGroupPtr, uint64_t> findResourceGroupAndMaxRUPerSec(
         const KeyspaceID & keyspace_id,
         const std::string & name) const
     {
         std::lock_guard lock(mu);
-        auto rg = findResourceGroupWithCompatWithoutLock(keyspace_id, name).group;
+        auto rg = findResourceGroupWithCompatWithoutLock(keyspace_id, name);
         return {rg, max_ru_per_sec};
     }
     ResourceGroupPtr findResourceGroupWithoutLock(const KeyspaceID & keyspace_id, const std::string & name) const
@@ -583,33 +577,22 @@ private:
             return nullptr;
         return iter->second;
     }
-    ResourceGroupCompatLookupResult findResourceGroupWithCompatWithoutLock(
-        const KeyspaceID & keyspace_id,
-        const std::string & name) const
+    ResourceGroupPtr findResourceGroupWithCompatWithoutLock(const KeyspaceID & keyspace_id, const std::string & name) const
     {
         if (auto group = findResourceGroupWithoutLock(keyspace_id, name); likely(group != nullptr))
-            return {.group = group, .is_fallback = false};
+            return group;
 
-        if (keyspace_id != NullspaceID)
+        // pd-cse only has one shared resource-group namespace, so keyed requests must fall back
+        // to the Nullspace cache once we know we are talking to that backend.
+        if (resource_group_backend_mode == ResourceGroupBackendMode::LegacyGlobal && keyspace_id != NullspaceID)
         {
             if (auto group = findResourceGroupWithoutLock(NullspaceID, name); likely(group != nullptr))
-                return {.group = group, .is_fallback = true};
+                return group;
         }
-        return {};
-    }
-    bool hasExactResourceGroupWithoutLock(const KeyspaceID & keyspace_id, const std::string & name) const
-    {
-        return findResourceGroupWithoutLock(keyspace_id, name) != nullptr;
+        return nullptr;
     }
 
     void addResourceGroup(const KeyspaceID & keyspace_id, const resource_manager::ResourceGroup & new_group_pb)
-    {
-        addResourceGroup(keyspace_id, new_group_pb, true);
-    }
-    void addResourceGroup(
-        const KeyspaceID & keyspace_id,
-        const resource_manager::ResourceGroup & new_group_pb,
-        bool enable_gac)
     {
         uint64_t user_ru_per_sec = new_group_pb.r_u_settings().r_u().settings().fill_rate();
         std::lock_guard lock(mu);
@@ -619,22 +602,14 @@ private:
 
         auto iter = keyspace_resource_groups.find({keyspace_id, new_group_pb.name()});
         if (iter != keyspace_resource_groups.end())
-        {
-            if (iter->second->enable_gac || !enable_gac)
-                return;
-
-            const auto deletedUserRUPerSec = iter->second->user_ru_per_sec;
-            keyspace_resource_groups.erase(iter);
-            updateMaxRUPerSecAfterDeleteWithoutLock(deletedUserRUPerSec);
-        }
+            return;
 
         LOG_INFO(
             log,
-            "add new resource group, keyspace={} enable_gac={} info: {}",
+            "add new resource group, keyspace={} info: {}",
             keyspace_id,
-            enable_gac,
             new_group_pb.ShortDebugString());
-        auto new_group = std::make_shared<ResourceGroup>(keyspace_id, new_group_pb, current_tick, enable_gac);
+        auto new_group = std::make_shared<ResourceGroup>(keyspace_id, new_group_pb, current_tick);
         keyspace_resource_groups.insert({{keyspace_id, new_group_pb.name()}, new_group});
 
         if (refill_token_callback)
@@ -672,10 +647,9 @@ private:
 
     // requestGACLoop related methods.
     void doRequestGAC();
-    static bool isReservedDefaultResourceGroup(const std::string & name) { return name == "default"; }
-    static bool shouldFallbackToLegacyLookup(const resource_manager::GetResourceGroupResponse & resp);
-    static resource_manager::ResourceGroup buildReservedDefaultResourceGroup(const KeyspaceID & keyspace_id);
-    void addReservedDefaultResourceGroup();
+    void updateBackendMode(ResourceGroupBackendMode detected_mode);
+    static ResourceGroupBackendMode detectBackendMode(const resource_manager::ResourceGroup & group_pb);
+    static const std::string & getWatchEtcdPath(ResourceGroupBackendMode mode);
 
     // watchGACLoop related methods.
     void doWatch(const std::string & etcd_path, grpc::ClientContext * grpc_context);
@@ -730,7 +704,14 @@ private:
     std::atomic<bool> need_reset_unique_client_id{false};
     uint64_t unique_client_id = 0;
     Etcd::ClientPtr etcd_client = nullptr;
-    std::unordered_set<grpc::ClientContext *> active_watch_gac_grpc_contexts{};
+    const bool with_keyspace;
+    const bool start_background_threads;
+    // Unknown means TiFlash has not seen any successful GetResourceGroup response yet. Once a
+    // response arrives, its keyspace_id presence decides whether we should operate in pd-cse's
+    // shared namespace or PD's keyspace-scoped namespace.
+    ResourceGroupBackendMode resource_group_backend_mode;
+    grpc::ClientContext * active_watch_gac_grpc_context = nullptr;
+    bool watch_thread_started = false;
     std::vector<std::thread> background_threads;
 
     SteadyClock::time_point current_tick = SteadyClock::time_point::min();
