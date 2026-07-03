@@ -110,7 +110,7 @@ protected:
                         Field col2_field;
                         col_2.column->get(i, col2_field);
                         bool equals = (col1_field == col2_field);
-                        if (col1_field.toString().find("Decimal") != std::string::npos && col2_field.toString().find("Decimal") != std::string::npos)
+                        if (col1_field.getType() == Field::Types::Which::Decimal32 && col2_field.getType() == Field::Types::Which::Decimal32)
                         {
                             auto v1 = safeGet<DecimalField<Decimal32>>(col1_field);
                             auto v2 = safeGet<DecimalField<Decimal32>>(col2_field);
