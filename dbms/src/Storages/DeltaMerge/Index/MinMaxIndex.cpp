@@ -490,6 +490,11 @@ template RSResults MinMaxIndex::checkCmp<RoughCheck::CheckGreaterEqual>(
     const Field & value,
     const DataTypePtr & type);
 
+/// Rough-check `col <=> value` for a nullable column using per-pack min/max.
+/// `value` must be non-null; `col <=> NULL` is handled by `checkIsNull` before reaching here.
+///
+/// Unlike `checkNullableCmp` (SQL `=`), null-safe equal treats `NULL <=> value` as definitely false
+/// rather than unknown, so we never tag results with `has_null` (no `*Null` RSResult variants).
 template <typename T>
 RSResults MinMaxIndex::checkNullableNullEqualImpl(
     const DB::ColumnNullable & column_nullable,
