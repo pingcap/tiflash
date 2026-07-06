@@ -218,7 +218,6 @@ public:
     }
 
 private:
-    TiDB::TiDBCollatorPtr collator = nullptr;
     std::shared_ptr<FunctionEquals> equals_function = std::make_shared<FunctionEquals>();
 };
 
