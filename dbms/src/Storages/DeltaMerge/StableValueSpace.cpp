@@ -267,6 +267,14 @@ size_t StableValueSpace::getDMFilesBytes() const
     return bytes;
 }
 
+size_t StableValueSpace::getDMFilesNumColumns() const
+{
+    size_t num_columns = 0;
+    for (const auto & file : files)
+        num_columns = std::max(num_columns, file->getNumColumns());
+    return num_columns;
+}
+
 String StableValueSpace::getDMFilesString()
 {
     return DMFile::info(files);
