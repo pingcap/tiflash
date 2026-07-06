@@ -51,10 +51,7 @@ public:
     bool useDefaultImplementationForNulls() const override { return false; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override
-    {
-        equals_function->setCollator(collator_);
-    }
+    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override { equals_function->setCollator(collator_); }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {

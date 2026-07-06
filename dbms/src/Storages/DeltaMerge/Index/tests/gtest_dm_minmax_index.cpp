@@ -2058,10 +2058,7 @@ try
                     *context,
                     type_value_pair.first,
                     type_value_pair.second,
-                    generateNullEqualOperator(
-                        static_cast<MinMaxTestDatatype>(datatype),
-                        true,
-                        false)));
+                    generateNullEqualOperator(static_cast<MinMaxTestDatatype>(datatype), true, false)));
         }
         {
             // not null data, compare with value (not match)
@@ -2073,10 +2070,7 @@ try
                     *context,
                     type_value_pair.first,
                     type_value_pair.second,
-                    generateNullEqualOperator(
-                        static_cast<MinMaxTestDatatype>(datatype),
-                        false,
-                        false)));
+                    generateNullEqualOperator(static_cast<MinMaxTestDatatype>(datatype), false, false)));
         }
         {
             // not null data, compare with null (not match)
@@ -2088,10 +2082,7 @@ try
                     *context,
                     type_value_pair.first,
                     type_value_pair.second,
-                    generateNullEqualOperator(
-                        static_cast<MinMaxTestDatatype>(datatype),
-                        true,
-                        true)));
+                    generateNullEqualOperator(static_cast<MinMaxTestDatatype>(datatype), true, true)));
         }
         {
             if (!isNullableDateType(static_cast<MinMaxTestDatatype>(datatype)))
@@ -2107,10 +2098,7 @@ try
                     *context,
                     type_value_pair.first,
                     type_value_pair.second,
-                    generateNullEqualOperator(
-                        static_cast<MinMaxTestDatatype>(datatype),
-                        true,
-                        true)));
+                    generateNullEqualOperator(static_cast<MinMaxTestDatatype>(datatype), true, true)));
         }
         {
             // has null data, compare with value (match)
@@ -2122,10 +2110,7 @@ try
                     *context,
                     type_value_pair.first,
                     type_value_pair.second,
-                    generateNullEqualOperator(
-                        static_cast<MinMaxTestDatatype>(datatype),
-                        true,
-                        false)));
+                    generateNullEqualOperator(static_cast<MinMaxTestDatatype>(datatype), true, false)));
         }
         {
             // has null data, compare with value (not match)
@@ -2137,10 +2122,7 @@ try
                     *context,
                     type_value_pair.first,
                     type_value_pair.second,
-                    generateNullEqualOperator(
-                        static_cast<MinMaxTestDatatype>(datatype),
-                        false,
-                        false)));
+                    generateNullEqualOperator(static_cast<MinMaxTestDatatype>(datatype), false, false)));
         }
     }
 
@@ -2157,10 +2139,7 @@ try
                     *context,
                     type_value_pair.first,
                     type_value_pair.second,
-                    generateNullEqualOperator(
-                        static_cast<MinMaxTestDatatype>(datatype),
-                        true,
-                        false)));
+                    generateNullEqualOperator(static_cast<MinMaxTestDatatype>(datatype), true, false)));
         }
         {
             // not null data, compare with value (not match) - should still return true
@@ -2173,10 +2152,7 @@ try
                     *context,
                     type_value_pair.first,
                     type_value_pair.second,
-                    generateNullEqualOperator(
-                        static_cast<MinMaxTestDatatype>(datatype),
-                        false,
-                        false)));
+                    generateNullEqualOperator(static_cast<MinMaxTestDatatype>(datatype), false, false)));
         }
         {
             // not null data, compare with null - should still return true
@@ -2189,10 +2165,7 @@ try
                     *context,
                     type_value_pair.first,
                     type_value_pair.second,
-                    generateNullEqualOperator(
-                        static_cast<MinMaxTestDatatype>(datatype),
-                        true,
-                        true)));
+                    generateNullEqualOperator(static_cast<MinMaxTestDatatype>(datatype), true, true)));
         }
         {
             // has null data, compare with value (match) - should still return true
@@ -2209,10 +2182,7 @@ try
                     *context,
                     type_value_pair.first,
                     type_value_pair.second,
-                    generateNullEqualOperator(
-                        static_cast<MinMaxTestDatatype>(datatype),
-                        true,
-                        false)));
+                    generateNullEqualOperator(static_cast<MinMaxTestDatatype>(datatype), true, false)));
         }
         {
             // has null data, compare with value (not match) - should still return true
@@ -2225,10 +2195,7 @@ try
                     *context,
                     type_value_pair.first,
                     type_value_pair.second,
-                    generateNullEqualOperator(
-                        static_cast<MinMaxTestDatatype>(datatype),
-                        false,
-                        false)));
+                    generateNullEqualOperator(static_cast<MinMaxTestDatatype>(datatype), false, false)));
         }
         {
             // has null data, compare with null (match) - should still return true
@@ -2241,10 +2208,7 @@ try
                     *context,
                     type_value_pair.first,
                     type_value_pair.second,
-                    generateNullEqualOperator(
-                        static_cast<MinMaxTestDatatype>(datatype),
-                        true,
-                        true)));
+                    generateNullEqualOperator(static_cast<MinMaxTestDatatype>(datatype), true, true)));
         }
     }
 }
