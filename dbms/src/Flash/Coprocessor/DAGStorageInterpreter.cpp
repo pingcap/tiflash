@@ -91,7 +91,16 @@ RegionException::RegionReadStatus GetRegionReadStatus(
         return RegionException::RegionReadStatus::NOT_FOUND;
     auto meta_snap = current_region->dumpRegionMetaSnapshot();
     if (meta_snap.ver != check_info.region_version)
+    {
+        LOG_INFO(
+            &Poco::Logger::get("GetRegionReadStatus"),
+            "region epoch not match with snapshot, snap ver={}, check_info ver {}, region_id={}, region info={}",
+            meta_snap.ver,
+            check_info.region_version,
+            current_region->id(),
+            current_region->getDebugString());
         return RegionException::RegionReadStatus::EPOCH_NOT_MATCH;
+    }
     // No need to check conf_version if its peer state is normal
     if (current_region->peerState() != raft_serverpb::PeerState::Normal)
         return RegionException::RegionReadStatus::NOT_FOUND;
