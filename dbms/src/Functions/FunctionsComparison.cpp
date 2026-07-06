@@ -45,7 +45,6 @@ public:
 
     void setCollator(const TiDB::TiDBCollatorPtr & collator_) override
     {
-        collator = collator_;
         equals_function->setCollator(collator_);
     }
 
