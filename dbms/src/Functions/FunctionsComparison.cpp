@@ -29,6 +29,14 @@ extern const int ILLEGAL_COLUMN;
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
+/// TiDB null-safe equal (`<=>`, mapped as `tidbNullEQ`).
+///
+/// Difference from `equals`:
+/// - `equals` only compares nested values and does not interpret NULL markers. For nullable
+///   inputs, rows with NULL may still get 0/1 from placeholder nested data instead of SQL `=`
+///   semantics (where `NULL = x` is unknown/NULL).
+/// - `tidbNullEQ` applies TiDB `<=>` rules: `NULL <=> NULL` => 1, `NULL <=> x` => 0, and defers
+///   to `equals` only when neither side is NULL. The result is always non-nullable UInt8.
 class FunctionTiDBNullEQ : public IFunction
 {
 public:
