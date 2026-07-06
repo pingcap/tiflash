@@ -504,10 +504,13 @@ RSResults MinMaxIndex::checkNullableNullEqualImpl(
     const Field & value,
     const DataTypePtr & type)
 {
+    /// Default to Some: conservative when min/max cannot prove a tighter bound.
     RSResults results(pack_count, RSResult::Some);
     const auto & minmaxes_data = toColumnVectorData<T>(column_nullable.getNestedColumnPtr());
     for (size_t i = start_pack; i < start_pack + pack_count; ++i)
     {
+        /// Min slot is NULL on indexes built before v6.4.0. For a pure-NULL pack,
+        /// `NULL <=> value` is false for every row, so the pack can be skipped.
         if (details::minIsNull(null_map, i))
         {
             if (has_null_marks[i] && !has_value_marks[i])
@@ -518,6 +521,8 @@ RSResults MinMaxIndex::checkNullableNullEqualImpl(
         auto min = minmaxes_data[i * 2];
         auto max = minmaxes_data[i * 2 + 1];
         auto value_result = RoughCheck::CheckEqual::check<T>(value, type, min, max);
+        /// Non-null values may all equal `value`, but NULL rows still make `col <=> value` false.
+        /// Downgrade All => Some so the pack is read and filtered row by row.
         if (has_null_marks[i] && value_result == RSResult::All)
             results[i - start_pack] = RSResult::Some;
         else
