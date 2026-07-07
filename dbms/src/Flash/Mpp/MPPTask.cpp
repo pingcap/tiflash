@@ -155,7 +155,7 @@ MPPTask::~MPPTask()
     if (query_memory_tracker != nullptr && current_memory_tracker != query_memory_tracker)
         current_memory_tracker = query_memory_tracker;
     abortTunnels("", true);
-    LOG_INFO(log, "finish MPPTask: {}, total run time is {} ms", id.toString(), total_run_time_ms);
+    LOG_DEBUG(log, "finish MPPTask: {}", id.toString());
 }
 
 bool MPPTask::isRootMPPTask() const
@@ -452,11 +452,16 @@ void MPPTask::unregisterTask()
 {
     if (is_registered)
     {
+        Stopwatch watch;
         auto [result, reason] = manager->unregisterTask(id, getErrString());
+        auto elapsed_ms = watch.elapsedMilliseconds();
         if (result)
-            LOG_DEBUG(log, "task unregistered");
+        {
+            auto log_level = elapsed_ms > 1000 ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;
+            LOG_IMPL(log, log_level, "task unregistered, time cost is {} ms", elapsed_ms);
+        }
         else
-            LOG_WARNING(log, "task failed to unregister, reason: {}", reason);
+            LOG_WARNING(log, "task failed to unregister, time cost is {} ms, reason: {}", elapsed_ms, reason);
     }
 }
 
@@ -643,8 +648,12 @@ void MPPTask::runImpl()
         auto time_cost_in_schedule_ns = stopwatch.elapsed() - time_cost_in_preprocess_ns;
         dag_context->minTSO_wait_time_ns = time_cost_in_schedule_ns;
         auto time_cost_in_schedule_ms = time_cost_in_schedule_ns / MILLISECOND_TO_NANO;
-        LOG_INFO(
+        auto time_cost_before_running_ms = time_cost_in_schedule_ms + time_cost_in_preprocess_ms;
+        auto log_level
+            = time_cost_before_running_ms > 1000 ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;
+        LOG_IMPL(
             log,
+            log_level,
             "task starts running, time cost in schedule: {} ms, time cost in preprocess: {} ms",
             time_cost_in_schedule_ms,
             time_cost_in_preprocess_ms);
@@ -671,7 +680,7 @@ void MPPTask::runImpl()
 
         auto result = query_executor_holder->execute();
 
-        auto log_level = Poco::Message::PRIO_DEBUG;
+        log_level = Poco::Message::PRIO_DEBUG;
         if (!result.is_success || status != RUNNING)
             log_level = Poco::Message::PRIO_INFORMATION;
         LOG_IMPL(
