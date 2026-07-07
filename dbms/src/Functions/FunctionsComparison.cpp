@@ -110,7 +110,7 @@ public:
             }
             else
             {
-                block.getByPosition(result).column = ColumnUInt8::create(rows, 0);
+                block.getByPosition(result).column = DataTypeUInt8().createColumnConst(rows, static_cast<UInt64>(0));
             }
             return;
         }
