@@ -95,7 +95,7 @@ public:
         {
             if (left_col->onlyNull() && right_col->onlyNull())
             {
-                block.getByPosition(result).column = ColumnUInt8::create(rows, 1);
+                block.getByPosition(result).column = DataTypeUInt8().createColumnConst(rows, static_cast<UInt64>(1));
                 return;
             }
 
