@@ -1147,6 +1147,173 @@ RSOperatorPtr generateIsNullOperator(MinMaxTestDatatype data_type)
     }
 }
 
+RSOperatorPtr generateNullEqualOperator(MinMaxTestDatatype data_type, bool is_match, bool compare_with_null)
+{
+    switch (data_type)
+    {
+    case Test_Int64:
+    {
+        if (compare_with_null)
+        {
+            return createNullEqual(attr("Int64"), Field{});
+        }
+        if (is_match)
+        {
+            return createNullEqual(attr("Int64"), Field(Int64_Match_DATA));
+        }
+        else
+        {
+            return createNullEqual(attr("Int64"), Field(Int64_Smaller_DATA));
+        }
+    }
+    case Test_Nullable_Int64:
+    {
+        if (compare_with_null)
+        {
+            return createNullEqual(attr("Nullable(Int64)"), Field{});
+        }
+        if (is_match)
+        {
+            return createNullEqual(attr("Nullable(Int64)"), Field(Int64_Match_DATA));
+        }
+        else
+        {
+            return createNullEqual(attr("Nullable(Int64)"), Field(Int64_Smaller_DATA));
+        }
+    }
+    case Test_Date:
+    {
+        if (compare_with_null)
+        {
+            return createNullEqual(attr("Date"), Field{});
+        }
+        if (is_match)
+        {
+            return createNullEqual(attr("Date"), Field(Date_Match_DATA));
+        }
+        else
+        {
+            return createNullEqual(attr("Date"), Field(Date_Smaller_DATA));
+        }
+    }
+    case Test_Nullable_Date:
+    {
+        if (compare_with_null)
+        {
+            return createNullEqual(attr("Nullable(Date)"), Field{});
+        }
+        if (is_match)
+        {
+            return createNullEqual(attr("Nullable(Date)"), Field(Date_Match_DATA));
+        }
+        else
+        {
+            return createNullEqual(attr("Nullable(Date)"), Field(Date_Smaller_DATA));
+        }
+    }
+    case Test_DateTime:
+    {
+        if (compare_with_null)
+        {
+            return createNullEqual(attr("DateTime"), Field{});
+        }
+        if (is_match)
+        {
+            return createNullEqual(attr("DateTime"), Field(DateTime_Match_DATA));
+        }
+        else
+        {
+            return createNullEqual(attr("DateTime"), Field(DateTime_Smaller_DATA));
+        }
+    }
+    case Test_Nullable_DateTime:
+    {
+        if (compare_with_null)
+        {
+            return createNullEqual(attr("Nullable(DateTime)"), Field{});
+        }
+        if (is_match)
+        {
+            return createNullEqual(attr("Nullable(DateTime)"), Field(DateTime_Match_DATA));
+        }
+        else
+        {
+            return createNullEqual(attr("Nullable(DateTime)"), Field(DateTime_Smaller_DATA));
+        }
+    }
+    case Test_MyDateTime:
+    {
+        if (compare_with_null)
+        {
+            return createNullEqual(attr("MyDateTime"), Field{});
+        }
+        if (is_match)
+        {
+            return createNullEqual(attr("MyDateTime"), Field(parseMyDateTime(MyDateTime_Match_DATE)));
+        }
+        else
+        {
+            return createNullEqual(attr("MyDateTime"), Field(parseMyDateTime(MyDateTime_Smaller_DATE)));
+        }
+    }
+    case Test_Nullable_MyDateTime:
+    {
+        if (compare_with_null)
+        {
+            return createNullEqual(attr("Nullable(MyDateTime)"), Field{});
+        }
+        if (is_match)
+        {
+            return createNullEqual(attr("Nullable(MyDateTime)"), Field(parseMyDateTime(MyDateTime_Match_DATE)));
+        }
+        else
+        {
+            return createNullEqual(attr("Nullable(MyDateTime)"), Field(parseMyDateTime(MyDateTime_Smaller_DATE)));
+        }
+    }
+    case Test_Decimal64:
+    {
+        if (compare_with_null)
+        {
+            return createNullEqual(attr("Decimal(20,5)"), Field{});
+        }
+        if (is_match)
+        {
+            return createNullEqual(
+                attr("Decimal(20,5)"),
+                Field(DecimalField<Decimal64>(getDecimal64(Decimal_Match_DATA), 5)));
+        }
+        else
+        {
+            return createNullEqual(
+                attr("Decimal(20,5)"),
+                Field(DecimalField<Decimal64>(getDecimal64(Decimal_UnMatch_DATA), 5)));
+        }
+    }
+    case Test_Nullable_Decimal64:
+    {
+        if (compare_with_null)
+        {
+            return createNullEqual(attr("Nullable(Decimal(20,5))"), Field{});
+        }
+        if (is_match)
+        {
+            return createNullEqual(
+                attr("Nullable(Decimal(20,5))"),
+                Field(DecimalField<Decimal64>(getDecimal64(Decimal_Match_DATA), 5)));
+        }
+        else
+        {
+            return createNullEqual(
+                attr("Nullable(Decimal(20,5))"),
+                Field(DecimalField<Decimal64>(getDecimal64(Decimal_UnMatch_DATA), 5)));
+        }
+    }
+    default:
+        throw Exception("Unknown data type");
+    }
+}
+
 RSOperatorPtr generateRSOperator(MinMaxTestDatatype data_type, MinMaxTestOperator rs_operator, bool is_match)
 {
     switch (rs_operator)
@@ -1874,6 +2041,178 @@ try
 }
 CATCH
 
+TEST_F(MinMaxIndexTest, NullEqual)
+try
+{
+    const auto * case_name = ::testing::UnitTest::GetInstance()->current_test_info()->name();
+
+    for (size_t datatype = Test_Int64; datatype < Test_Decimal64; datatype++)
+    {
+        {
+            // not null data, compare with value (match)
+            auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), false);
+            ASSERT_EQ(
+                true,
+                checkMatch(
+                    case_name,
+                    *context,
+                    type_value_pair.first,
+                    type_value_pair.second,
+                    generateNullEqualOperator(static_cast<MinMaxTestDatatype>(datatype), true, false)));
+        }
+        {
+            // not null data, compare with value (not match)
+            auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), false);
+            ASSERT_EQ(
+                false,
+                checkMatch(
+                    case_name,
+                    *context,
+                    type_value_pair.first,
+                    type_value_pair.second,
+                    generateNullEqualOperator(static_cast<MinMaxTestDatatype>(datatype), false, false)));
+        }
+        {
+            // not null data, compare with null (not match)
+            auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), false);
+            ASSERT_EQ(
+                false,
+                checkMatch(
+                    case_name,
+                    *context,
+                    type_value_pair.first,
+                    type_value_pair.second,
+                    generateNullEqualOperator(static_cast<MinMaxTestDatatype>(datatype), true, true)));
+        }
+        {
+            if (!isNullableDateType(static_cast<MinMaxTestDatatype>(datatype)))
+            {
+                continue;
+            }
+            // has null data, compare with null (match)
+            auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), true);
+            ASSERT_EQ(
+                true,
+                checkMatch(
+                    case_name,
+                    *context,
+                    type_value_pair.first,
+                    type_value_pair.second,
+                    generateNullEqualOperator(static_cast<MinMaxTestDatatype>(datatype), true, true)));
+        }
+        {
+            // has null data, compare with value (match)
+            auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), true);
+            ASSERT_EQ(
+                true,
+                checkMatch(
+                    case_name,
+                    *context,
+                    type_value_pair.first,
+                    type_value_pair.second,
+                    generateNullEqualOperator(static_cast<MinMaxTestDatatype>(datatype), true, false)));
+        }
+        {
+            // has null data, compare with value (not match)
+            auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), true);
+            ASSERT_EQ(
+                false,
+                checkMatch(
+                    case_name,
+                    *context,
+                    type_value_pair.first,
+                    type_value_pair.second,
+                    generateNullEqualOperator(static_cast<MinMaxTestDatatype>(datatype), false, false)));
+        }
+    }
+
+    // datatypes which not support minmax index
+    for (size_t datatype = Test_Decimal64; datatype < Test_Max; datatype++)
+    {
+        {
+            // not null data, compare with value (match)
+            auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), false);
+            ASSERT_EQ(
+                true,
+                checkMatch(
+                    case_name,
+                    *context,
+                    type_value_pair.first,
+                    type_value_pair.second,
+                    generateNullEqualOperator(static_cast<MinMaxTestDatatype>(datatype), true, false)));
+        }
+        {
+            // not null data, compare with value (not match) - should still return true
+            // because no minmax index is available
+            auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), false);
+            ASSERT_EQ(
+                true,
+                checkMatch(
+                    case_name,
+                    *context,
+                    type_value_pair.first,
+                    type_value_pair.second,
+                    generateNullEqualOperator(static_cast<MinMaxTestDatatype>(datatype), false, false)));
+        }
+        {
+            // not null data, compare with null - should still return true
+            // because no minmax index is available
+            auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), false);
+            ASSERT_EQ(
+                true,
+                checkMatch(
+                    case_name,
+                    *context,
+                    type_value_pair.first,
+                    type_value_pair.second,
+                    generateNullEqualOperator(static_cast<MinMaxTestDatatype>(datatype), true, true)));
+        }
+        {
+            // has null data, compare with value (match) - should still return true
+            // because no minmax index is available
+            if (!isNullableDateType(static_cast<MinMaxTestDatatype>(datatype)))
+            {
+                continue;
+            }
+            auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), true);
+            ASSERT_EQ(
+                true,
+                checkMatch(
+                    case_name,
+                    *context,
+                    type_value_pair.first,
+                    type_value_pair.second,
+                    generateNullEqualOperator(static_cast<MinMaxTestDatatype>(datatype), true, false)));
+        }
+        {
+            // has null data, compare with value (not match) - should still return true
+            // because no minmax index is available
+            auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), true);
+            ASSERT_EQ(
+                true,
+                checkMatch(
+                    case_name,
+                    *context,
+                    type_value_pair.first,
+                    type_value_pair.second,
+                    generateNullEqualOperator(static_cast<MinMaxTestDatatype>(datatype), false, false)));
+        }
+        {
+            // has null data, compare with null (match) - should still return true
+            // because no minmax index is available
+            auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), true);
+            ASSERT_EQ(
+                true,
+                checkMatch(
+                    case_name,
+                    *context,
+                    type_value_pair.first,
+                    type_value_pair.second,
+                    generateNullEqualOperator(static_cast<MinMaxTestDatatype>(datatype), true, true)));
+        }
+    }
+}
+CATCH
 
 TEST_F(MinMaxIndexTest, checkPKMatch)
 try
@@ -2057,6 +2396,115 @@ try
     auto filter = createEqual(attr("Nullable(Int64)"), Field(static_cast<Int64>(1)));
 
     ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::SomeNull);
+
+    // make a null-equal filter, keep the compatibility path conservative.
+    auto null_eq_filter = createNullEqual(attr("Nullable(Int64)"), Field(static_cast<Int64>(1)));
+
+    ASSERT_EQ(null_eq_filter->roughCheck(0, 1, param)[0], RSResult::Some);
+}
+CATCH
+
+TEST_F(MinMaxIndexTest, NullEQOrNotNullEQWithNullPack)
+try
+{
+    RSCheckParam param;
+
+    auto type = std::make_shared<DataTypeInt64>();
+    auto data_type = makeNullable(type);
+
+    PaddedPODArray<UInt8> has_null_marks(3);
+    PaddedPODArray<UInt8> has_value_marks(3);
+    MutableColumnPtr minmaxes = data_type->createColumn();
+
+    // pack 0: {1, NULL}
+    has_null_marks[0] = 1;
+    has_value_marks[0] = 1;
+    minmaxes->insert(Field(static_cast<Int64>(1)));
+    minmaxes->insert(Field(static_cast<Int64>(1)));
+
+    // pack 1: {2, NULL}
+    has_null_marks[1] = 1;
+    has_value_marks[1] = 1;
+    minmaxes->insert(Field(static_cast<Int64>(2)));
+    minmaxes->insert(Field(static_cast<Int64>(2)));
+
+    // pack 2: {NULL}
+    has_null_marks[2] = 1;
+    has_value_marks[2] = 0;
+    minmaxes->insertDefault();
+    minmaxes->insertDefault();
+
+    auto minmax
+        = std::make_shared<MinMaxIndex>(std::move(has_null_marks), std::move(has_value_marks), std::move(minmaxes));
+
+    auto index = RSIndex(data_type, minmax);
+    param.indexes.emplace(DEFAULT_COL_ID, index);
+
+    auto null_eq = createNullEqual(attr("Nullable(Int64)"), Field(static_cast<Int64>(1)));
+    auto not_null_eq = createNot(null_eq);
+    auto results = null_eq->roughCheck(0, 3, param);
+    auto not_results = not_null_eq->roughCheck(0, 3, param);
+
+    ASSERT_EQ(results[0], RSResult::Some);
+    ASSERT_EQ(results[1], RSResult::None);
+    ASSERT_EQ(results[2], RSResult::None);
+
+    ASSERT_EQ(not_results[0], RSResult::Some);
+    ASSERT_EQ(not_results[1], RSResult::All);
+    ASSERT_EQ(not_results[2], RSResult::All);
+}
+CATCH
+
+TEST_F(MinMaxIndexTest, NullableStringCmpInAndNullEQ)
+try
+{
+    struct NullableStringTestCase
+    {
+        std::vector<std::optional<String>> column_data;
+        std::vector<UInt64> del_mark;
+    };
+
+    std::vector<NullableStringTestCase> cases = {
+        {{String("aa"), std::nullopt}, {0, 0}},
+        {{String("bb"), std::nullopt}, {0, 0}},
+        {{std::nullopt}, {0}},
+    };
+
+    auto col_type = makeNullable(std::make_shared<DataTypeString>());
+    auto minmax_index = std::make_shared<MinMaxIndex>(*col_type);
+    for (const auto & c : cases)
+    {
+        RUNTIME_CHECK(c.column_data.size(), c.del_mark.size());
+        auto col_data = createColumn<Nullable<String>>(c.column_data).column;
+        auto del_mark_col = createColumn<UInt8>(c.del_mark).column;
+        minmax_index->addPack(*col_data, static_cast<const ColumnVector<UInt8> *>(del_mark_col.get()));
+    }
+
+    auto eq_results = minmax_index->checkCmp<RoughCheck::CheckEqual>(0, cases.size(), Field(String("aa")), col_type);
+    ASSERT_EQ(eq_results[0], RSResult::AllNull);
+    ASSERT_EQ(eq_results[1], RSResult::NoneNull);
+    ASSERT_EQ(eq_results[2], RSResult::SomeNull);
+
+    auto in_results = minmax_index->checkIn(0, cases.size(), {Field(String("aa"))}, col_type);
+    ASSERT_EQ(in_results[0], RSResult::AllNull);
+    ASSERT_EQ(in_results[1], RSResult::NoneNull);
+    ASSERT_EQ(in_results[2], RSResult::SomeNull);
+
+    RSCheckParam param;
+    param.indexes.emplace(DEFAULT_COL_ID, RSIndex(col_type, minmax_index));
+
+    auto null_eq = createNullEqual(attr("Nullable(String)"), Field(String("aa")));
+    auto not_null_eq = createNot(null_eq);
+    auto null_eq_results = null_eq->roughCheck(0, cases.size(), param);
+    auto not_null_eq_results = not_null_eq->roughCheck(0, cases.size(), param);
+
+    ASSERT_EQ(null_eq_results[0], RSResult::Some);
+    ASSERT_EQ(null_eq_results[1], RSResult::None);
+    ASSERT_EQ(null_eq_results[2], RSResult::None);
+
+    ASSERT_EQ(not_null_eq_results[0], RSResult::Some);
+    ASSERT_EQ(not_null_eq_results[1], RSResult::All);
+    ASSERT_EQ(not_null_eq_results[2], RSResult::All);
 }
 CATCH
 
@@ -2267,6 +2715,97 @@ try
     EXPECT_EQ(
         op->toDebugString(),
         R"raw({"op":"and","children":[{"op":"in","col":"b","value":"["1","2"]},{"op":"unsupported","reason":"Multiple ColumnRef in expression is not supported, sig=InInt"},{"op":"unsupported","reason":"Multiple ColumnRef in expression is not supported, sig=InInt"}]})raw");
+}
+CATCH
+
+TEST_F(MinMaxIndexTest, ParseNullEQ)
+try
+{
+    const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
+    google::protobuf::RepeatedPtrField<tipb::Expr> filters;
+
+    auto build_column_ref = [](Int64 column_index) {
+        tipb::Expr expr;
+        expr.set_tp(tipb::ExprType::ColumnRef);
+        WriteBufferFromOwnString ss;
+        encodeDAGInt64(column_index, ss);
+        expr.set_val(ss.releaseStr());
+        auto * field_type = expr.mutable_field_type();
+        field_type->set_tp(tipb::ExprType::Int64);
+        field_type->set_flag(0);
+        return expr;
+    };
+    auto build_int_literal = [](Int64 value) {
+        tipb::Expr expr;
+        expr.set_tp(tipb::ExprType::Int64);
+        WriteBufferFromOwnString ss;
+        encodeDAGInt64(value, ss);
+        expr.set_val(ss.releaseStr());
+        return expr;
+    };
+    auto build_null_literal = [] {
+        tipb::Expr expr;
+        expr.set_tp(tipb::ExprType::Null);
+        return expr;
+    };
+
+    {
+        tipb::Expr expr;
+        expr.set_sig(tipb::ScalarFuncSig::NullEQInt);
+        expr.set_tp(tipb::ExprType::ScalarFunc);
+        expr.add_children()->CopyFrom(build_column_ref(0));
+        expr.add_children()->CopyFrom(build_int_literal(1));
+        filters.Add()->CopyFrom(expr);
+    }
+    {
+        tipb::Expr expr;
+        expr.set_sig(tipb::ScalarFuncSig::NullEQInt);
+        expr.set_tp(tipb::ExprType::ScalarFunc);
+        expr.add_children()->CopyFrom(build_column_ref(0));
+        expr.add_children()->CopyFrom(build_null_literal());
+        filters.Add()->CopyFrom(expr);
+    }
+    {
+        tipb::Expr child;
+        child.set_sig(tipb::ScalarFuncSig::NullEQInt);
+        child.set_tp(tipb::ExprType::ScalarFunc);
+        child.add_children()->CopyFrom(build_column_ref(0));
+        child.add_children()->CopyFrom(build_int_literal(1));
+
+        tipb::Expr expr;
+        expr.set_sig(tipb::ScalarFuncSig::UnaryNotInt);
+        expr.set_tp(tipb::ExprType::ScalarFunc);
+        expr.add_children()->CopyFrom(child);
+        filters.Add()->CopyFrom(expr);
+    }
+
+    const ColumnDefines columns_to_read = {ColumnDefine{1, "a", std::make_shared<DataTypeInt64>()}};
+    TiDB::ColumnInfo a;
+    a.id = 1;
+    TiDB::ColumnInfos column_infos = {a};
+    const auto ann_query_info = tipb::ANNQueryInfo{};
+    const auto fts_query_info = tipb::FTSQueryInfo{};
+    static const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> empty_used_indexes{};
+    auto dag_query = std::make_unique<DAGQueryInfo>(
+        filters,
+        ann_query_info,
+        fts_query_info,
+        pushed_down_filters,
+        empty_used_indexes,
+        column_infos,
+        std::vector<int>{},
+        0,
+        context->getTimezoneInfo());
+    FilterParser::ColumnIDToAttrMap column_id_to_attr;
+    for (const auto & cd : columns_to_read)
+    {
+        column_id_to_attr[cd.id] = Attr{.col_name = cd.name, .col_id = cd.id, .type = cd.type};
+    }
+
+    const auto op = DB::DM::FilterParser::parseDAGQuery(*dag_query, column_infos, column_id_to_attr, Logger::get());
+    EXPECT_EQ(
+        op->toDebugString(),
+        R"raw({"op":"and","children":[{"op":"null_equal","col":"a","value":"1"},{"op":"isnull","col":"a"},{"op":"not","children":[{"op":"null_equal","col":"a","value":"1"}]}]})raw");
 }
 CATCH
 

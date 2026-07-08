@@ -292,10 +292,10 @@ RSResults MinMaxIndex::checkNullableIn(
             size_t pos = i * 2;
             size_t prev_offset = pos == 0 ? 0 : offsets[pos - 1];
             // todo use StringRef instead of String
-            auto min = String(chars[prev_offset], offsets[pos] - prev_offset - 1);
+            auto min = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
             pos = i * 2 + 1;
             prev_offset = offsets[pos - 1];
-            auto max = String(chars[prev_offset], offsets[pos] - prev_offset - 1);
+            auto max = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
             auto value_result = RoughCheck::CheckIn::check<String>(values, type, min, max);
             results[i - start_pack] = addNullIfHasNull(value_result, i);
         }
@@ -490,6 +490,144 @@ template RSResults MinMaxIndex::checkCmp<RoughCheck::CheckGreaterEqual>(
     const Field & value,
     const DataTypePtr & type);
 
+/// Rough-check `col <=> value` for a nullable column using per-pack min/max.
+/// `value` must be non-null; `col <=> NULL` is handled by `checkIsNull` before reaching here.
+///
+/// Unlike `checkNullableCmp` (SQL `=`), null-safe equal treats `NULL <=> value` as definitely false
+/// rather than unknown, so we never tag results with `has_null` (no `*Null` RSResult variants).
+template <typename T>
+RSResults MinMaxIndex::checkNullableNullEqualImpl(
+    const DB::ColumnNullable & column_nullable,
+    const DB::ColumnUInt8 & null_map,
+    size_t start_pack,
+    size_t pack_count,
+    const Field & value,
+    const DataTypePtr & type)
+{
+    /// Default to Some: conservative when min/max cannot prove a tighter bound.
+    RSResults results(pack_count, RSResult::Some);
+    const auto & minmaxes_data = toColumnVectorData<T>(column_nullable.getNestedColumnPtr());
+    for (size_t i = start_pack; i < start_pack + pack_count; ++i)
+    {
+        /// Min slot is NULL on indexes built before v6.4.0. For a pure-NULL pack,
+        /// `NULL <=> value` is false for every row, so the pack can be skipped.
+        if (details::minIsNull(null_map, i))
+        {
+            if (has_null_marks[i] && !has_value_marks[i])
+                results[i - start_pack] = RSResult::None;
+            continue;
+        }
+
+        auto min = minmaxes_data[i * 2];
+        auto max = minmaxes_data[i * 2 + 1];
+        auto value_result = RoughCheck::CheckEqual::check<T>(value, type, min, max);
+        /// Non-null values may all equal `value`, but NULL rows still make `col <=> value` false.
+        /// Downgrade All => Some so the pack is read and filtered row by row.
+        if (has_null_marks[i] && value_result == RSResult::All)
+            results[i - start_pack] = RSResult::Some;
+        else
+            results[i - start_pack] = value_result;
+    }
+    return results;
+}
+
+RSResults MinMaxIndex::checkNullableNullEqual(
+    size_t start_pack,
+    size_t pack_count,
+    const Field & value,
+    const DataTypePtr & type)
+{
+    const auto & column_nullable = static_cast<const ColumnNullable &>(*minmaxes);
+    const auto & null_map = column_nullable.getNullMapColumn();
+    const auto * raw_type = type.get();
+
+#define DISPATCH(TYPE)                                 \
+    if (typeid_cast<const DataType##TYPE *>(raw_type)) \
+        return checkNullableNullEqualImpl<TYPE>(column_nullable, null_map, start_pack, pack_count, value, type);
+    FOR_NUMERIC_TYPES(DISPATCH)
+#undef DISPATCH
+    if (typeid_cast<const DataTypeMyDateTime *>(raw_type) || typeid_cast<const DataTypeMyDate *>(raw_type))
+    {
+        // For DataTypeMyDateTime / DataTypeMyDate, simply compare them as comparing UInt64 is OK.
+        // Check `struct MyTimeBase` for more details.
+        return checkNullableNullEqualImpl<DataTypeMyTimeBase::FieldType>(
+            column_nullable,
+            null_map,
+            start_pack,
+            pack_count,
+            value,
+            type);
+    }
+    if (typeid_cast<const DataTypeString *>(raw_type))
+    {
+        const auto * string_column = checkAndGetColumn<ColumnString>(column_nullable.getNestedColumnPtr().get());
+        const auto & chars = string_column->getChars();
+        const auto & offsets = string_column->getOffsets();
+        RSResults results(pack_count, RSResult::Some);
+        for (size_t i = start_pack; i < start_pack + pack_count; ++i)
+        {
+            if (details::minIsNull(null_map, i))
+            {
+                if (has_null_marks[i] && !has_value_marks[i])
+                    results[i - start_pack] = RSResult::None;
+                continue;
+            }
+
+            size_t pos = i * 2;
+            size_t prev_offset = pos == 0 ? 0 : offsets[pos - 1];
+            // todo use StringRef instead of String
+            auto min = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
+            pos = i * 2 + 1;
+            prev_offset = offsets[pos - 1];
+            auto max = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
+            auto value_result = RoughCheck::CheckEqual::check<String>(value, type, min, max);
+            if (has_null_marks[i] && value_result == RSResult::All)
+                results[i - start_pack] = RSResult::Some;
+            else
+                results[i - start_pack] = value_result;
+        }
+        return results;
+    }
+    // Should not happen, because TiDB use DataTypeMyDateTime and DataTypeMyDate
+    if (typeid_cast<const DataTypeDate *>(raw_type))
+    {
+        return checkNullableNullEqualImpl<DataTypeDate::FieldType>(
+            column_nullable,
+            null_map,
+            start_pack,
+            pack_count,
+            value,
+            type);
+    }
+    if (typeid_cast<const DataTypeDateTime *>(raw_type))
+    {
+        return checkNullableNullEqualImpl<DataTypeDateTime::FieldType>(
+            column_nullable,
+            null_map,
+            start_pack,
+            pack_count,
+            value,
+            type);
+    }
+    return RSResults(pack_count, RSResult::Some);
+}
+
+RSResults MinMaxIndex::checkNullEqual(
+    size_t start_pack,
+    size_t pack_count,
+    const Field & value,
+    const DataTypePtr & type)
+{
+    if (value.isNull())
+        return checkIsNull(start_pack, pack_count);
+
+    const auto * raw_type = type.get();
+    if (typeid_cast<const DataTypeNullable *>(raw_type))
+        return checkNullableNullEqual(start_pack, pack_count, value, removeNullable(type));
+
+    return checkCmp<RoughCheck::CheckEqual>(start_pack, pack_count, value, type);
+}
+
 template <typename Op, typename T>
 RSResults MinMaxIndex::checkNullableCmpImpl(
     const DB::ColumnNullable & column_nullable,
@@ -554,10 +692,10 @@ RSResults MinMaxIndex::checkNullableCmp(
             size_t pos = i * 2;
             size_t prev_offset = pos == 0 ? 0 : offsets[pos - 1];
             // todo use StringRef instead of String
-            auto min = String(chars[prev_offset], offsets[pos] - prev_offset - 1);
+            auto min = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
             pos = i * 2 + 1;
             prev_offset = offsets[pos - 1];
-            auto max = String(chars[prev_offset], offsets[pos] - prev_offset - 1);
+            auto max = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
             auto value_result = Op::template check<String>(value, type, min, max);
             results[i - start_pack] = addNullIfHasNull(value_result, i);
         }
