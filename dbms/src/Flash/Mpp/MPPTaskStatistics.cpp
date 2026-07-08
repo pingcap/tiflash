@@ -95,11 +95,13 @@ void MPPTaskStatistics::collectRuntimeStatistics()
 
 tipb::SelectResponse MPPTaskStatistics::genExecutionSummaryResponse()
 {
+    syncRUInfoToExecutorStatisticsCollector();
     return executor_statistics_collector.genExecutionSummaryResponse();
 }
 
 tipb::TiFlashExecutionInfo MPPTaskStatistics::genTiFlashExecutionInfo()
 {
+    syncRUInfoToExecutorStatisticsCollector();
     return executor_statistics_collector.genTiFlashExecutionInfo();
 }
 
@@ -144,10 +146,15 @@ void MPPTaskStatistics::setMemoryPeak(Int64 memory_peak_)
     memory_peak = memory_peak_;
 }
 
+void MPPTaskStatistics::syncRUInfoToExecutorStatisticsCollector()
+{
+    executor_statistics_collector.setLocalRUConsumption(ru_info);
+}
+
 void MPPTaskStatistics::setRUInfo(const RUConsumption & ru_info_)
 {
     ru_info = ru_info_;
-    executor_statistics_collector.setLocalRUConsumption(ru_info_);
+    syncRUInfoToExecutorStatisticsCollector();
 }
 
 void MPPTaskStatistics::setCompileTimestamp(const Timestamp & start_timestamp, const Timestamp & end_timestamp)
