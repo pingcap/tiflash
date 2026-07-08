@@ -74,7 +74,8 @@ void TableScanStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
         scan_details = scan_details_buf.c_str();
     }
     fmt_buffer.fmtAppend(
-        R"("connection_details":[{},{}],"scan_details":{})",
+        R"("is_partition_table_scan":{},"connection_details":[{},{}],"scan_details":{})",
+        is_partition_table_scan,
         local_table_scan_detail.toJson(),
         remote_table_scan_detail.toJson(),
         scan_details);
@@ -233,5 +234,6 @@ void TableScanStatistics::collectExtraRuntimeDetail()
 
 TableScanStatistics::TableScanStatistics(const tipb::Executor * executor, DAGContext & dag_context_)
     : TableScanStatisticsBase(executor, dag_context_)
+    , is_partition_table_scan(executor->has_partition_table_scan())
 {}
 } // namespace DB
