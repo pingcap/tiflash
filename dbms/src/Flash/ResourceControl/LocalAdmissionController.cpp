@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Flash/ResourceControl/LocalAdmissionController.h>
+#include <common/logger_useful.h>
 #include <etcd/rpc.pb.h>
 
 #include <algorithm>
@@ -1045,12 +1046,14 @@ void LocalAdmissionController::stop()
     // 2. clear GAC's unique_client_id by setting acquire_tokens as zero to avoid affecting burst limit calculation.
     // This can happen when disagg CN is scaled-in/out frequently.
     // NOTE: Make sure all threads have been joined before call buildGACRequest().
-    const auto gac_req = buildGACRequest(/*is_final_report=*/true);
-    RUNTIME_CHECK(keyspace_resource_groups.empty() || gac_req.has_value());
-    auto resp = cluster->pd_client->acquireTokenBuckets(gac_req.value());
-
-    if (resp.has_error())
-        LOG_ERROR(log, "LAC stop got error: {}", resp.error().message());
+    if (const auto gac_req = buildGACRequest(/*is_final_report=*/true); //
+        gac_req.has_value())
+    {
+        LOG_INFO(log, "LAC({}) stop final report to GAC: {}", unique_client_id, gac_req->ShortDebugString());
+        auto resp = cluster->pd_client->acquireTokenBuckets(gac_req.value());
+        if (resp.has_error())
+            LOG_WARNING(log, "LAC stop got error: {}", resp.error().message());
+    }
 
     if (need_reset_unique_client_id.load())
     {
