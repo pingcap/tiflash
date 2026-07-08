@@ -48,7 +48,7 @@ tempfile = "3"
 thiserror = "1.0.44"
 tikv_util = { workspace = true }
 tipb = { git = "https://github.com/pingcap/tipb.git" }
-tokio = { version = "=1.26.0", features = ["fs", "full", "macros", "net", "process", "rt", "rt-multi-thread", "sync", "time"], default-features = true }
+tokio = { version = "=1.41.1", features = ["fs", "full", "macros", "net", "process", "rt", "rt-multi-thread", "sync", "time"], default-features = true }
 # Keep tokio-executor aligned with the tokio-timer hotfix used by tikv_util.
 tokio-executor = "=0.1.9"
 toml = "0.5"
