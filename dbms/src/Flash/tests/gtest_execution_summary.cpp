@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Mpp/MPPTaskStatistics.h>
+#include <Flash/Mpp/MPPTunnelSet.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
@@ -167,6 +168,8 @@ try
     meta.set_start_ts(1);
 
     DAGContext dag_context(*request, meta, false);
+    // ExchangeSenderStatistics reads tunnel_set while initializing the mock MPP DAG.
+    dag_context.tunnel_set = std::make_shared<MPPTunnelSet>("test-host");
     MPPTaskStatistics task_statistics(MPPTaskId(meta), "test-host");
     task_statistics.initializeExecutorDAG(&dag_context);
 
