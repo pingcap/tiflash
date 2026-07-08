@@ -51,13 +51,14 @@ private:
 resource_manager::GetResourceGroupResponse buildResourceGroupResp(
     const resource_manager::GetResourceGroupRequest & req,
     uint64_t fill_rate,
-    bool with_keyspace_id)
+    bool with_keyspace_id,
+    uint32_t priority = ResourceGroup::UserLowPriority)
 {
     resource_manager::GetResourceGroupResponse resp;
     auto * group = resp.mutable_group();
     group->set_name(req.resource_group_name());
     group->set_mode(resource_manager::GroupMode::RUMode);
-    group->set_priority(ResourceGroup::UserLowPriority);
+    group->set_priority(priority);
     if (with_keyspace_id)
         group->mutable_keyspace_id()->set_value(req.keyspace_id().value());
     auto * settings = group->mutable_r_u_settings()->mutable_r_u()->mutable_settings();
@@ -152,6 +153,29 @@ TEST(LocalAdmissionControllerTest, WarmupErrorPropagatesWithoutCompatibilityFall
     EXPECT_THROW(lac.warmupResourceGroupInfoCache(keyspace_id, "default"), DB::Exception);
     EXPECT_EQ(request_count, 1);
     EXPECT_EQ(lac.cachedResourceGroupCount(), 0);
+}
+
+TEST(LocalAdmissionControllerTest, UnexpectedPriorityFallsBackToMedium)
+{
+    constexpr KeyspaceID keyspace_id = 37;
+    pingcap::kv::Cluster cluster;
+    cluster.pd_client = std::make_shared<TestPDClient>([](const resource_manager::GetResourceGroupRequest & req) {
+        const auto priority = req.resource_group_name() == "default" ? 0U : 9U;
+        return buildResourceGroupResp(req, 2048, false, priority);
+    });
+
+    LocalAdmissionController lac(&cluster, nullptr, true, false);
+
+    ASSERT_NO_THROW(lac.warmupResourceGroupInfoCache(keyspace_id, "default"));
+    ASSERT_NO_THROW(lac.warmupResourceGroupInfoCache(keyspace_id, "analytics"));
+
+    auto default_group = lac.getCachedResourceGroupForTest(NullspaceID, "default");
+    ASSERT_NE(default_group, nullptr);
+    EXPECT_EQ(default_group->user_priority_val, ResourceGroup::MediumPriorityValue);
+
+    auto analytics_group = lac.getCachedResourceGroupForTest(NullspaceID, "analytics");
+    ASSERT_NE(analytics_group, nullptr);
+    EXPECT_EQ(analytics_group->user_priority_val, ResourceGroup::MediumPriorityValue);
 }
 
 } // namespace DB::tests
