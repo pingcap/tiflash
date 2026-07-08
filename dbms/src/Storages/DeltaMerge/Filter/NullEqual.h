@@ -35,7 +35,8 @@ public:
                         : RSResults(pack_count, RSResult::Some);
     }
 
-    ColumnRangePtr buildSets(const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> & /*index_infos*/) override
+    ColumnRangePtr buildSets(
+        const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> & /*index_infos*/) override
     {
         return UnsupportedColumnRange::create();
     }

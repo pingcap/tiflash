@@ -50,7 +50,7 @@ try
     auto b = createOnlyNullColumn(5);
     auto res = executeFunction("tidbNullEQ", a, b);
     ASSERT_EQ(res.type->getName(), "UInt8");
-    ASSERT_COLUMN_EQ(createColumn<UInt8>({1, 1, 1, 1, 1}), res);
+    ASSERT_COLUMN_EQ(createConstColumn<UInt8>(5, 1), res);
 }
 CATCH
 
