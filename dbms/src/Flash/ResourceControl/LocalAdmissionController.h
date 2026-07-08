@@ -286,7 +286,8 @@ private:
         case UserHighPriority:
             return HighPriorityValue;
         default:
-            throw Exception(fmt::format("unexpected user priority: {}", user_priority_from_pb));
+            // Keep compatibility with upstreams that may send values outside LOW/MEDIUM/HIGH.
+            return MediumPriorityValue;
         }
     }
 
