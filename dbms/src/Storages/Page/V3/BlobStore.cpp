@@ -926,7 +926,7 @@ typename BlobStore<Trait>::PageMap BlobStore<Trait>::read(FieldReadInfos & to_re
         while (field_idx < fields.size())
         {
             size_t start_field_index = fields[field_idx];
-            const auto [beg_offset, _1] = entry.getFieldOffsets(start_field_index);
+            const auto beg_offset = entry.getFieldOffsets(start_field_index).first;
 
             size_t end_field_index = start_field_index;
             while (field_idx + 1 < fields.size() && fields[field_idx + 1] == fields[field_idx] + 1)
@@ -935,7 +935,7 @@ typename BlobStore<Trait>::PageMap BlobStore<Trait>::read(FieldReadInfos & to_re
                 end_field_index = fields[field_idx];
             }
 
-            const auto [_2, end_offset] = entry.getFieldOffsets(end_field_index);
+            const auto end_offset = entry.getFieldOffsets(end_field_index).second;
             const auto size_to_read = end_offset - beg_offset;
 
             read(page_id_v3, entry.file_id, entry.offset + beg_offset, write_offset, size_to_read, read_limiter);
