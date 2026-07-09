@@ -910,7 +910,6 @@ typename BlobStore<Trait>::PageMap BlobStore<Trait>::read(FieldReadInfos & to_re
         return page_map;
     }
 
-
     // Allocate one for holding all pages data
     char * shared_data_buf = static_cast<char *>(alloc(buf_size));
     MemHolder shared_mem_holder = createMemHolder(shared_data_buf, [&, buf_size](char * p) { free(p, buf_size); });
@@ -921,40 +920,63 @@ typename BlobStore<Trait>::PageMap BlobStore<Trait>::read(FieldReadInfos & to_re
     {
         size_t read_size_this_entry = 0;
         char * write_offset = pos;
-        for (const auto field_index : fields)
+        size_t field_idx = 0;
+        while (field_idx < fields.size())
         {
-            // TODO: Continuously fields can read by one system call.
-            const auto [beg_offset, end_offset] = entry.getFieldOffsets(field_index);
-            const auto size_to_read = end_offset - beg_offset;
-            read(page_id_v3, entry.file_id, entry.offset + beg_offset, write_offset, size_to_read, read_limiter);
-            fields_offset_in_page.emplace(field_index, read_size_this_entry);
+            size_t start_field_index = fields[field_idx];
+            const auto [beg_offset, _1] = entry.getFieldOffsets(start_field_index);
 
-            if constexpr (BLOBSTORE_CHECKSUM_ON_READ)
+            size_t end_field_index = start_field_index;
+            while (field_idx + 1 < fields.size() && fields[field_idx + 1] == fields[field_idx] + 1)
             {
-                const auto expect_checksum = entry.field_offsets[field_index].second;
-                ChecksumClass digest;
-                digest.update(write_offset, size_to_read);
-                auto field_checksum = digest.checksum();
-                if (unlikely(entry.size != 0 && field_checksum != expect_checksum))
-                {
-                    throw Exception(
-                        ErrorCodes::CHECKSUM_DOESNT_MATCH,
-                        "Reading with fields meet checksum not match "
-                        "page_id={} expected=0x{:X} actual=0x{:X} "
-                        "field_index={} field_offset={} field_size={} "
-                        "entry={}",
-                        page_id_v3,
-                        expect_checksum,
-                        field_checksum,
-                        field_index,
-                        beg_offset,
-                        size_to_read,
-                        entry);
-                }
+                ++field_idx;
+                end_field_index = fields[field_idx];
             }
 
-            read_size_this_entry += size_to_read;
+            const auto [_2, end_offset] = entry.getFieldOffsets(end_field_index);
+            const auto size_to_read = end_offset - beg_offset;
+
+            read(page_id_v3, entry.file_id, entry.offset + beg_offset, write_offset, size_to_read, read_limiter);
+
+            size_t field_offset_in_buffer = 0;
+            for (size_t i = start_field_index; i <= end_field_index; ++i)
+            {
+                const auto [field_beg, field_end] = entry.getFieldOffsets(i);
+                const auto field_size = field_end - field_beg;
+                const auto field_offset_in_entry = field_beg - beg_offset;
+
+                fields_offset_in_page.emplace(i, read_size_this_entry);
+
+                if constexpr (BLOBSTORE_CHECKSUM_ON_READ)
+                {
+                    const auto expect_checksum = entry.field_offsets[i].second;
+                    ChecksumClass digest;
+                    digest.update(write_offset + field_offset_in_entry, field_size);
+                    auto field_checksum = digest.checksum();
+                    if (unlikely(entry.size != 0 && field_checksum != expect_checksum))
+                    {
+                        throw Exception(
+                            ErrorCodes::CHECKSUM_DOESNT_MATCH,
+                            "Reading with fields meet checksum not match "
+                            "page_id={} expected=0x{:X} actual=0x{:X} "
+                            "field_index={} field_offset={} field_size={} "
+                            "entry={}",
+                            page_id_v3,
+                            expect_checksum,
+                            field_checksum,
+                            i,
+                            field_beg,
+                            field_size,
+                            entry);
+                    }
+                }
+
+                read_size_this_entry += field_size;
+                field_offset_in_buffer += field_size;
+            }
+
             write_offset += size_to_read;
+            ++field_idx;
         }
 
         Page page(Trait::PageIdTrait::getU64ID(page_id_v3));
@@ -985,6 +1007,7 @@ typename BlobStore<Trait>::PageMap BlobStore<Trait>::read(FieldReadInfos & to_re
             pos,
             buf.toString());
     }
+
     return page_map;
 }
 
