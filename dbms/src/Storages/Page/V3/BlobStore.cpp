@@ -847,6 +847,7 @@ void BlobStore<Trait>::removePosFromStats(BlobFileId blob_id, BlobFileOffset off
 template <typename Trait>
 typename BlobStore<Trait>::PageMap BlobStore<Trait>::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_limiter)
 {
+    
     if (to_read.empty())
     {
         return {};
@@ -860,6 +861,7 @@ typename BlobStore<Trait>::PageMap BlobStore<Trait>::read(FieldReadInfos & to_re
     });
 
     // allocate data_buf that can hold all pages with specify fields
+
 
     size_t buf_size = 0;
     for (auto & [page_id, entry, fields] : to_read)
@@ -938,6 +940,9 @@ typename BlobStore<Trait>::PageMap BlobStore<Trait>::read(FieldReadInfos & to_re
 
             read(page_id_v3, entry.file_id, entry.offset + beg_offset, write_offset, size_to_read, read_limiter);
 
+
+
+
             size_t field_offset_in_buffer = 0;
             for (size_t i = start_field_index; i <= end_field_index; ++i)
             {
@@ -1007,6 +1012,8 @@ typename BlobStore<Trait>::PageMap BlobStore<Trait>::read(FieldReadInfos & to_re
             pos,
             buf.toString());
     }
+
+   
 
     return page_map;
 }
