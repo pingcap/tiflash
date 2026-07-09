@@ -52,7 +52,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1775402037950,
+  "iteration": 1783577500370,
   "links": [],
   "panels": [
     {
@@ -25347,7 +25347,7 @@
         "allValue": null,
         "current": {},
         "datasource": "${DS_TEST-CLUSTER}",
-        "definition": "label_values(tiflash_proxy_tikv_engine_size_bytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\"}, instance)",
+        "definition": "label_values(tiflash_proxy_process_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\"}, instance)",
         "description": null,
         "error": null,
         "hide": 0,
@@ -25357,7 +25357,7 @@
         "name": "proxy_instance",
         "options": [],
         "query": {
-          "query": "label_values(tiflash_proxy_tikv_engine_size_bytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\"}, instance)",
+          "query": "label_values(tiflash_proxy_process_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\"}, instance)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 1,
