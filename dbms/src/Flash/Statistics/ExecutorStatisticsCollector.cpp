@@ -153,7 +153,14 @@ tipb::TiFlashExecutionInfo ExecutorStatisticsCollector::genTiFlashExecutionInfo(
 
 void ExecutorStatisticsCollector::setLocalRUConsumption(const RUConsumption & ru_info)
 {
-    local_ru = std::make_optional<resource_manager::Consumption>();
+    if (!local_ru)
+    {
+        local_ru.emplace();
+    }
+    else
+    {
+        local_ru->Clear();
+    }
     local_ru->set_r_r_u(ru_info.cpu_ru + ru_info.read_ru);
     local_ru->set_total_cpu_time_ms(toCPUTimeMillisecond(ru_info.cpu_time_ns));
     local_ru->set_read_bytes(ru_info.read_bytes);

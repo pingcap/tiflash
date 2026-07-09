@@ -1051,6 +1051,9 @@ try
           *  table engines could use Context on destroy.
           */
         LOG_INFO(log, "Shutting down storages.");
+        // Stop scheduler first to avoid use-after-free: schedLoop may try to
+        // push MergedTask to already-destroyed reader_pools.
+        DB::DM::SegmentReadTaskScheduler::instance().stop();
         // `SegmentReader` threads may hold a segment and its delta-index for read.
         // `Context::shutdown()` will destroy `DeltaIndexManager`.
         // So, stop threads explicitly before `TiFlashTestEnv::shutdown()`.

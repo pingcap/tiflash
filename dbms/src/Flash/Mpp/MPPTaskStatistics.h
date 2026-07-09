@@ -62,6 +62,8 @@ public:
     tipb::TiFlashExecutionInfo genTiFlashExecutionInfo();
 
 private:
+    void syncRUInfoToExecutorStatisticsCollector();
+
     void recordInputBytes(DAGContext & dag_context);
 
     const LoggerPtr log;
