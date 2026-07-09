@@ -145,12 +145,12 @@ String normalizeNgramGranularity(const Poco::JSON::Object::Ptr & json)
     return granularity;
 }
 
-bool normalizeNgramCaseInsensitive(const Poco::JSON::Object::Ptr & json)
+bool normalizeNgramLowerCase(const Poco::JSON::Object::Ptr & json)
 {
-    if (!json->has("case_insensitive"))
+    if (!json->has("lower_case"))
         return true;
 
-    return json->getValue<bool>("case_insensitive");
+    return json->getValue<bool>("lower_case");
 }
 
 void validateNgramFullTextParser(UInt64 min_gram, UInt64 max_gram)
@@ -206,7 +206,7 @@ FullTextIndexDefinitionPtr parseFullTextIndexFromJSON(const Poco::JSON::Object::
     const bool has_min_gram = json->has("min_gram");
     const bool has_max_gram = json->has("max_gram");
     const bool has_granularity = json->has("granularity");
-    const bool has_case_insensitive = json->has("case_insensitive");
+    const bool has_lower_case = json->has("lower_case");
     if (isNgramFullTextParserType(parser_type_field))
     {
         RUNTIME_CHECK_MSG(
@@ -215,28 +215,28 @@ FullTextIndexDefinitionPtr parseFullTextIndexFromJSON(const Poco::JSON::Object::
         auto min_gram = json->getValue<UInt64>("min_gram");
         auto max_gram = json->getValue<UInt64>("max_gram");
         auto granularity = normalizeNgramGranularity(json);
-        auto case_insensitive = normalizeNgramCaseInsensitive(json);
+        auto lower_case = normalizeNgramLowerCase(json);
         validateNgramFullTextParser(min_gram, max_gram);
         LOG_INFO(
             Logger::get("TiDBSchemaFullText"),
             "Parsed fulltext ngram index metadata, parser_type={}, min_gram={}, max_gram={}, granularity={}, "
-            "case_insensitive={}",
+            "lower_case={}",
             parser_type_field,
             min_gram,
             max_gram,
             granularity,
-            case_insensitive);
+            lower_case);
         return std::make_shared<const FullTextIndexDefinition>(FullTextIndexDefinition{
             .parser_type = parser_type_field,
             .min_gram = min_gram,
             .max_gram = max_gram,
             .granularity = granularity,
-            .case_insensitive = case_insensitive,
+            .lower_case = lower_case,
         });
     }
 
     RUNTIME_CHECK_MSG(
-        !has_min_gram && !has_max_gram && !has_granularity && !has_case_insensitive,
+        !has_min_gram && !has_max_gram && !has_granularity && !has_lower_case,
         "Invalid FullTextIndex definition, parser_type `{}` does not support ngram parameters",
         parser_type_field);
 
@@ -257,19 +257,19 @@ Poco::JSON::Object::Ptr fullTextIndexToJSON(const FullTextIndexDefinitionPtr & f
         RUNTIME_CHECK(full_text_index->min_gram.has_value());
         RUNTIME_CHECK(full_text_index->max_gram.has_value());
         RUNTIME_CHECK(full_text_index->granularity.has_value());
-        RUNTIME_CHECK(full_text_index->case_insensitive.has_value());
+        RUNTIME_CHECK(full_text_index->lower_case.has_value());
         validateNgramFullTextParser(*full_text_index->min_gram, *full_text_index->max_gram);
         json->set("min_gram", *full_text_index->min_gram);
         json->set("max_gram", *full_text_index->max_gram);
         json->set("granularity", *full_text_index->granularity);
-        json->set("case_insensitive", *full_text_index->case_insensitive);
+        json->set("lower_case", *full_text_index->lower_case);
     }
     else
     {
         RUNTIME_CHECK(!full_text_index->min_gram.has_value());
         RUNTIME_CHECK(!full_text_index->max_gram.has_value());
         RUNTIME_CHECK(!full_text_index->granularity.has_value());
-        RUNTIME_CHECK(!full_text_index->case_insensitive.has_value());
+        RUNTIME_CHECK(!full_text_index->lower_case.has_value());
     }
     return json;
 }

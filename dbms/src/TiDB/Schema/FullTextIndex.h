@@ -31,7 +31,7 @@ struct FullTextIndexDefinition
     std::optional<UInt64> min_gram;
     std::optional<UInt64> max_gram;
     std::optional<String> granularity;
-    std::optional<bool> case_insensitive;
+    std::optional<bool> lower_case;
 };
 
 // As this is constructed from TiDB's table definition, we should not
@@ -50,7 +50,7 @@ struct fmt::formatter<TiDB::FullTextIndexDefinition>
     {
         if (vi.parser_type == "NGRAM_V1" && vi.min_gram && vi.max_gram)
         {
-            auto case_sensitivity = vi.case_insensitive.value_or(true) ? "CI" : "CS";
+            auto case_sensitivity = vi.lower_case.value_or(true) ? "CI" : "CS";
             return fmt::format_to(
                 ctx.out(), //
                 "PARSER_{}_MIN_{}_MAX_{}_GRANULARITY_{}_{}",
