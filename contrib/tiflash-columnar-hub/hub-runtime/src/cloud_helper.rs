@@ -57,7 +57,7 @@ use quick_cache::{
     sync::{Cache, DefaultLifecycle},
     DefaultHashBuilder,
 };
-use security::SecurityManager;
+use security::{HttpClientError, SecurityManager};
 use thiserror::Error;
 use tikv_util::{
     config::AbsoluteOrPercentSize,
@@ -102,7 +102,7 @@ impl RefreshingHttpClient {
         }
     }
 
-    async fn request(&self, req: Request<Body>) -> Result<hyper::Response<Body>, hyper::Error> {
+    async fn request(&self, req: Request<Body>) -> Result<hyper::Response<Body>, HttpClientError> {
         let uri = req.uri().clone();
         let client = self.inner.client.lock().unwrap().clone();
         let resp = client.request(req).await;
@@ -184,6 +184,12 @@ impl From<&str> for Error {
 
 impl From<hyper::Error> for Error {
     fn from(error: hyper::Error) -> Self {
+        Error::Other(error.to_string())
+    }
+}
+
+impl From<HttpClientError> for Error {
+    fn from(error: HttpClientError) -> Self {
         Error::Other(error.to_string())
     }
 }
