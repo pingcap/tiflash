@@ -847,7 +847,6 @@ void BlobStore<Trait>::removePosFromStats(BlobFileId blob_id, BlobFileOffset off
 template <typename Trait>
 typename BlobStore<Trait>::PageMap BlobStore<Trait>::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_limiter)
 {
-    
     if (to_read.empty())
     {
         return {};
@@ -1010,7 +1009,6 @@ typename BlobStore<Trait>::PageMap BlobStore<Trait>::read(FieldReadInfos & to_re
             buf.toString());
     }
 
-   
 
     return page_map;
 }

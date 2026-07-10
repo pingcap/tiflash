@@ -1931,12 +1931,7 @@ try
     PageIdU64 page_id = 50;
     size_t buff_size = 20;
 
-    auto blob_store = BlobStore(
-        getCurrentTestName(),
-        file_provider,
-        delegator,
-        BlobConfig{},
-        page_type_and_config);
+    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, BlobConfig{}, page_type_and_config);
 
     std::vector<char> c_buff(buff_size);
     for (size_t j = 0; j < buff_size; ++j)
@@ -1957,7 +1952,8 @@ try
     {
         blob_store.resetFieldReadCallCount();
         BlobStore::FieldReadInfos read_infos;
-        read_infos.emplace_back(BlobStore::FieldReadInfo(buildV3Id(TEST_NAMESPACE_ID, page_id), entry, {0, 1, 2, 3, 4}));
+        read_infos.emplace_back(
+            BlobStore::FieldReadInfo(buildV3Id(TEST_NAMESPACE_ID, page_id), entry, {0, 1, 2, 3, 4}));
         auto page_map = blob_store.read(read_infos);
         Page page = page_map.at(page_id);
         ASSERT_EQ(page.fieldSize(), 5);
