@@ -181,7 +181,7 @@ private:
     std::unordered_map<BlobFileId, BlobFilePtr> blob_files;
 
 #ifdef DBMS_PUBLIC_GTEST
-   size_t field_read_call_count;
+   size_t field_read_call_count = 0;
 #endif
 
 };

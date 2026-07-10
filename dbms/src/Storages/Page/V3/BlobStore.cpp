@@ -942,8 +942,6 @@ typename BlobStore<Trait>::PageMap BlobStore<Trait>::read(FieldReadInfos & to_re
 #ifdef DBMS_PUBLIC_GTEST
             ++field_read_call_count;
 #endif
-
-            size_t field_offset_in_buffer = 0;
             for (size_t i = start_field_index; i <= end_field_index; ++i)
             {
                 const auto [field_beg, field_end] = entry.getFieldOffsets(i);
@@ -977,7 +975,6 @@ typename BlobStore<Trait>::PageMap BlobStore<Trait>::read(FieldReadInfos & to_re
                 }
 
                 read_size_this_entry += field_size;
-                field_offset_in_buffer += field_size;
             }
 
             write_offset += size_to_read;
