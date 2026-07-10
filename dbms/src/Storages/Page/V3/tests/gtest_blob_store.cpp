@@ -1953,31 +1953,37 @@ try
     ASSERT_EQ(records.size(), 1);
     auto entry = records[0].entry;
 
-    std::cout << "=== Test 1: Continuous fields {0,1,2,3,4} ===" << std::endl;
+    // Test 1: Continuous fields {0,1,2,3,4}
     {
+        blob_store.resetFieldReadCallCount();
         BlobStore::FieldReadInfos read_infos;
         read_infos.emplace_back(BlobStore::FieldReadInfo(buildV3Id(TEST_NAMESPACE_ID, page_id), entry, {0, 1, 2, 3, 4}));
         auto page_map = blob_store.read(read_infos);
         Page page = page_map.at(page_id);
         ASSERT_EQ(page.fieldSize(), 5);
+        ASSERT_EQ(blob_store.getFieldReadCallCount(), 1);
     }
 
-    std::cout << "=== Test 2: Fields with hole {0,1,3,4} ===" << std::endl;
+    // Test 2: Fields with hole {0,1,3,4}
     {
+        blob_store.resetFieldReadCallCount();
         BlobStore::FieldReadInfos read_infos;
         read_infos.emplace_back(BlobStore::FieldReadInfo(buildV3Id(TEST_NAMESPACE_ID, page_id), entry, {0, 1, 3, 4}));
         auto page_map = blob_store.read(read_infos);
         Page page = page_map.at(page_id);
         ASSERT_EQ(page.fieldSize(), 4);
+        ASSERT_EQ(blob_store.getFieldReadCallCount(), 2);
     }
 
-    std::cout << "=== Test 3: Scattered fields {0,2,4} ===" << std::endl;
+    // Test 3: Scattered fields {0,2,4}
     {
+        blob_store.resetFieldReadCallCount();
         BlobStore::FieldReadInfos read_infos;
         read_infos.emplace_back(BlobStore::FieldReadInfo(buildV3Id(TEST_NAMESPACE_ID, page_id), entry, {0, 2, 4}));
         auto page_map = blob_store.read(read_infos);
         Page page = page_map.at(page_id);
         ASSERT_EQ(page.fieldSize(), 3);
+        ASSERT_EQ(blob_store.getFieldReadCallCount(), 3);
     }
 }
 CATCH

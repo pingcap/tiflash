@@ -939,9 +939,9 @@ typename BlobStore<Trait>::PageMap BlobStore<Trait>::read(FieldReadInfos & to_re
             const auto size_to_read = end_offset - beg_offset;
 
             read(page_id_v3, entry.file_id, entry.offset + beg_offset, write_offset, size_to_read, read_limiter);
-
-
-
+#ifdef DBMS_PUBLIC_GTEST
+            ++field_read_call_count;
+#endif
 
             size_t field_offset_in_buffer = 0;
             for (size_t i = start_field_index; i <= end_field_index; ++i)
