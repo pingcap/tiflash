@@ -939,7 +939,7 @@ typename BlobStore<Trait>::PageMap BlobStore<Trait>::read(FieldReadInfos & to_re
 
             read(page_id_v3, entry.file_id, entry.offset + beg_offset, write_offset, size_to_read, read_limiter);
 #ifdef DBMS_PUBLIC_GTEST
-            ++field_read_call_count;
+            field_read_call_count.fetch_add(1, std::memory_order_relaxed);
 #endif
             for (size_t i = start_field_index; i <= end_field_index; ++i)
             {

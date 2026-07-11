@@ -118,8 +118,8 @@ public:
     PageMap read(FieldReadInfos & to_read, const ReadLimiterPtr & read_limiter = nullptr);
 
 #ifdef DBMS_PUBLIC_GTEST
-    void resetFieldReadCallCount() { field_read_call_count = 0; }
-    size_t getFieldReadCallCount() { return field_read_call_count; }
+    void resetFieldReadCallCount() { field_read_call_count.store(0, std::memory_order_relaxed); }
+    size_t getFieldReadCallCount() { return field_read_call_count.load(std::memory_order_relaxed); }
 
 #endif
 
@@ -181,7 +181,7 @@ private:
     std::unordered_map<BlobFileId, BlobFilePtr> blob_files;
 
 #ifdef DBMS_PUBLIC_GTEST
-    size_t field_read_call_count = 0;
+    std::atomic<size_t> field_read_call_count{0};
 #endif
 };
 namespace u128
