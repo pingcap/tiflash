@@ -19,6 +19,7 @@
 #include <Columns/ColumnString.h>
 #include <Common/Arena.h>
 #include <Common/ColumnsHashingImpl.h>
+#include <Common/HashTable/HashMap.h>
 #include <Common/HashTable/HashTable.h>
 #include <Common/HashTable/HashTableKeyHolder.h>
 #include <Common/assert_cast.h>
@@ -38,6 +39,9 @@ extern const int LOGICAL_ERROR;
 
 namespace ColumnsHashing
 {
+static constexpr size_t min_rows_to_use_collation_sort_key_cache = 1024;
+static constexpr size_t max_collation_sort_key_cache_distinct_ratio = 32;
+
 /// For the case when there is one numeric key.
 /// UInt8/16/32/64 for any type with corresponding bit width.
 template <typename Value, typename Mapped, typename FieldType, bool use_cache = true>
@@ -95,6 +99,67 @@ private:
     size_t processed_row_idx = 0;
     std::vector<String> sort_key_containers{};
     std::vector<StringRef> batch_rows{};
+    bool collation_sort_key_cache_active = false;
+    bool collation_sort_key_cache_fallback = false;
+    size_t collation_sort_key_cache_distinct_limit = 0;
+    HashMap<StringRef, size_t, StringRefHash> raw_to_sort_key_index;
+    std::vector<String> cached_sort_keys{};
+
+    template <typename DerivedCollator>
+    StringRef getSortKeyWithCache(
+        const DerivedCollator & collator,
+        const StringRef & raw_key,
+        std::string & sort_key_container)
+    {
+        if (!collation_sort_key_cache_active)
+            return collator.sortKey(raw_key.data, raw_key.size, sort_key_container);
+
+        if (auto it = raw_to_sort_key_index.find(raw_key); it != nullptr)
+        {
+            const auto & sort_key = cached_sort_keys[it->getMapped()];
+            return {sort_key.data(), sort_key.size()};
+        }
+
+        if (raw_to_sort_key_index.size() >= collation_sort_key_cache_distinct_limit)
+        {
+            collation_sort_key_cache_active = false;
+            collation_sort_key_cache_fallback = true;
+            return collator.sortKey(raw_key.data, raw_key.size, sort_key_container);
+        }
+
+        const auto sort_key_index = cached_sort_keys.size();
+        cached_sort_keys.emplace_back();
+        auto sort_key = collator.sortKey(raw_key.data, raw_key.size, cached_sort_keys.back());
+
+        typename decltype(raw_to_sort_key_index)::LookupResult it;
+        bool inserted = false;
+        raw_to_sort_key_index.emplace(raw_key, it, inserted);
+        RUNTIME_CHECK(inserted);
+        it->getMapped() = sort_key_index;
+
+        return sort_key;
+    }
+
+    template <typename DerivedCollator, bool use_cache>
+    void prepareNextBatchWithCollator(
+        const UInt8 * chars,
+        const IColumn::Offsets & offsets,
+        size_t cur_batch_size,
+        const DerivedCollator & collator)
+    {
+        for (size_t i = 0; i < cur_batch_size; ++i)
+        {
+            const auto row = processed_row_idx + i;
+            const auto last_offset = offsets[row - 1];
+            // Remove last zero byte.
+            StringRef key(chars + last_offset, offsets[row] - last_offset - 1);
+            if constexpr (use_cache)
+                key = getSortKeyWithCache(collator, key, sort_key_containers[i]);
+            else
+                key = collator.sortKey(key.data, key.size, sort_key_containers[i]);
+            batch_rows[i] = key;
+        }
+    }
 
     template <typename DerivedCollator, bool has_collator>
     void prepareNextBatchType(
@@ -108,23 +173,48 @@ private:
 
         batch_rows.resize(cur_batch_size);
 
-        const auto * derived_collator = static_cast<const DerivedCollator *>(collator);
-        for (size_t i = 0; i < cur_batch_size; ++i)
+        if constexpr (has_collator)
         {
-            const auto row = processed_row_idx + i;
-            const auto last_offset = offsets[row - 1];
-            // Remove last zero byte.
-            StringRef key(chars + last_offset, offsets[row] - last_offset - 1);
-            if constexpr (has_collator)
-                key = derived_collator->sortKey(key.data, key.size, sort_key_containers[i]);
-
-            batch_rows[i] = key;
+            const auto & derived_collator = *static_cast<const DerivedCollator *>(collator);
+            if (collation_sort_key_cache_active)
+                prepareNextBatchWithCollator<DerivedCollator, true>(
+                    chars,
+                    offsets,
+                    cur_batch_size,
+                    derived_collator);
+            else
+                prepareNextBatchWithCollator<DerivedCollator, false>(
+                    chars,
+                    offsets,
+                    cur_batch_size,
+                    derived_collator);
+        }
+        else
+        {
+            for (size_t i = 0; i < cur_batch_size; ++i)
+            {
+                const auto row = processed_row_idx + i;
+                const auto last_offset = offsets[row - 1];
+                // Remove last zero byte.
+                batch_rows[i] = StringRef(chars + last_offset, offsets[row] - last_offset - 1);
+            }
         }
         processed_row_idx += cur_batch_size;
     }
 
 protected:
     bool inited() const { return !sort_key_containers.empty(); }
+    bool hasCollationSortKeyCacheFallback() const { return collation_sort_key_cache_fallback; }
+
+    void initCollationSortKeyCache(size_t rows)
+    {
+        if (rows < min_rows_to_use_collation_sort_key_cache)
+            return;
+
+        collation_sort_key_cache_active = true;
+        collation_sort_key_cache_distinct_limit = rows / max_collation_sort_key_cache_distinct_ratio;
+        cached_sort_keys.reserve(collation_sort_key_cache_distinct_limit + 1);
+    }
 
     void init(size_t start_row, size_t max_batch_size)
     {
@@ -206,6 +296,14 @@ struct HashMethodString
         if (!collators.empty())
             collator = collators[0];
     }
+
+    void initCollationSortKeyCache(size_t rows)
+    {
+        if (collator != nullptr && collator->isCI())
+            BatchHandlerBase::initCollationSortKeyCache(rows);
+    }
+
+    bool hasCollationSortKeyCacheFallback() const { return BatchHandlerBase::hasCollationSortKeyCacheFallback(); }
 
     void initBatchHandler(size_t start_row, size_t max_batch_size)
     {

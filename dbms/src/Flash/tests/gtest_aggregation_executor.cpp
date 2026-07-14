@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #include <Core/BlockUtils.h>
+#include <DataTypes/DataTypeString.h>
+#include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/ExecutorTestUtils.h>
@@ -1253,6 +1255,189 @@ try
     }
     FailPointHelper::disableFailPoint(FailPoints::force_agg_prefetch);
 #undef WRAP_FOR_AGG_CHANGE_SETTINGS
+}
+CATCH
+
+TEST_F(AggExecutorTestRunner, StringCollationKeyCacheGeneralCISemantics)
+try
+{
+    const String db_name = "test_db";
+    constexpr size_t rows = 1024;
+    DB::MockColumnInfoVec table_column_infos{
+        {"key", TiDB::TP::TypeString, false, Poco::Dynamic::Var("utf8mb4_general_ci")}};
+
+    context.setCollation(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI);
+    context.context->setSetting("group_by_collation_sensitive", Field(static_cast<UInt64>(1)));
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(rows)));
+    context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
+
+    const String tbl_name = "string_collation_key_cache_general_ci_semantics";
+    std::vector<String> keys(rows);
+    for (size_t i = 0; i < rows; ++i)
+    {
+        switch (i % 4)
+        {
+        case 0:
+            keys[i] = "AAA";
+            break;
+        case 1:
+            keys[i] = "aaa";
+            break;
+        case 2:
+            keys[i] = "BBB";
+            break;
+        default:
+            keys[i] = "bbb";
+            break;
+        }
+    }
+    context.addMockTable({db_name, tbl_name}, table_column_infos, {toVec<String>("key", keys)});
+
+    auto request
+        = buildDAGRequest({db_name, tbl_name}, {Count(lit(Field(static_cast<UInt64>(1))))}, {col("key")}, {"count(1)"});
+    executeAndAssertColumnsEqual(request, {toVec<UInt64>("count(1)", ColumnWithUInt64{rows / 2, rows / 2})});
+}
+CATCH
+
+TEST_F(AggExecutorTestRunner, StringCollationKeyCacheGeneralCILowAndHighNDV)
+try
+{
+    const String db_name = "test_db";
+    constexpr size_t rows = 1024;
+    DB::MockColumnInfoVec table_column_infos{
+        {"key", TiDB::TP::TypeString, false, Poco::Dynamic::Var("utf8mb4_general_ci")}};
+
+    context.setCollation(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI);
+    context.context->setSetting("group_by_collation_sensitive", Field(static_cast<UInt64>(1)));
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(rows)));
+    context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
+
+    {
+        const String tbl_name = "string_collation_key_cache_low_ndv";
+        std::vector<String> keys(rows);
+        for (size_t i = 0; i < rows; ++i)
+        {
+            switch (i % 4)
+            {
+            case 0:
+                keys[i] = "AAA";
+                break;
+            case 1:
+                keys[i] = "BBB";
+                break;
+            case 2:
+                keys[i] = "CCC";
+                break;
+            default:
+                keys[i] = "DDD";
+                break;
+            }
+        }
+        context.addMockTable({db_name, tbl_name}, table_column_infos, {toVec<String>("key", keys)});
+
+        auto request = buildDAGRequest(
+            {db_name, tbl_name},
+            {Count(lit(Field(static_cast<UInt64>(1))))},
+            {col("key")},
+            {"count(1)"});
+        executeAndAssertColumnsEqual(
+            request,
+            {toVec<UInt64>("count(1)", ColumnWithUInt64{rows / 4, rows / 4, rows / 4, rows / 4})});
+    }
+
+    {
+        const String tbl_name = "string_collation_key_cache_high_ndv";
+        std::vector<String> keys(rows);
+        ColumnWithUInt64 counts(rows, 1);
+        for (size_t i = 0; i < rows; ++i)
+            keys[i] = fmt::format("key_{:04}", i);
+        context.addMockTable({db_name, tbl_name}, table_column_infos, {toVec<String>("key", keys)});
+
+        auto request = buildDAGRequest(
+            {db_name, tbl_name},
+            {Count(lit(Field(static_cast<UInt64>(1))))},
+            {col("key")},
+            {"count(1)"});
+        executeAndAssertColumnsEqual(request, {toVec<UInt64>("count(1)", counts)});
+    }
+}
+CATCH
+
+TEST_F(AggExecutorTestRunner, StringCollationKeyCacheWorkerLevelOnceFallback)
+try
+{
+    constexpr size_t rows = 1024;
+    const String key_column_name = "key";
+    auto data_type_string = std::make_shared<DataTypeString>();
+    Block src_header(NamesAndTypes{{key_column_name, data_type_string}});
+
+    context.context->setSetting("group_by_two_level_threshold", Field(static_cast<UInt64>(0)));
+    context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
+    context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(0)));
+
+    const auto & settings = context.context->getSettingsRef();
+    SpillConfig spill_config(
+        context.context->getTemporaryPath(),
+        "StringCollationKeyCacheWorkerLevelOnceFallback",
+        settings.max_cached_data_bytes_in_spiller,
+        settings.max_spilled_rows_per_file,
+        settings.max_spilled_bytes_per_file,
+        context.context->getFileProvider(),
+        settings.max_threads,
+        settings.max_block_size);
+    std::unordered_map<String, TiDB::TiDBCollatorPtr> collators{
+        {key_column_name, TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI)}};
+    auto params = AggregationInterpreterHelper::buildParams(
+        *context.context,
+        src_header,
+        /*before_agg_streams_size=*/2,
+        /*agg_streams_size=*/2,
+        {key_column_name},
+        {},
+        {},
+        collators,
+        {},
+        /*is_final_agg=*/true,
+        spill_config);
+
+    RegisterOperatorSpillContext register_operator_spill_context;
+    auto aggregator = std::make_shared<Aggregator>(
+        *params,
+        "StringCollationKeyCacheWorkerLevelOnceFallback",
+        /*concurrency=*/2,
+        register_operator_spill_context,
+        /*is_auto_pass_through=*/false,
+        params->use_magic_hash);
+
+    auto execute_block = [&](AggregatedDataVariants & data_variants, size_t distinct_keys, size_t thread_num) {
+        auto column = data_type_string->createColumn();
+        column->reserve(rows);
+        for (size_t row = 0; row < rows; ++row)
+        {
+            const auto key = fmt::format("key_{:04}", row % distinct_keys);
+            column->insertData(key.data(), key.size());
+        }
+        Block block(ColumnsWithTypeAndName{
+            ColumnWithTypeAndName(std::move(column), data_type_string, key_column_name),
+        });
+        Aggregator::AggProcessInfo agg_process_info(aggregator.get());
+        agg_process_info.resetBlock(block);
+        do
+        {
+            ASSERT_TRUE(aggregator->executeOnBlock(agg_process_info, data_variants, thread_num));
+        } while (!agg_process_info.allBlockDataHandled());
+    };
+
+    AggregatedDataVariants high_ndv_worker;
+    execute_block(high_ndv_worker, rows, /*thread_num=*/0);
+    EXPECT_TRUE(high_ndv_worker.string_collation_key_cache_fallback);
+
+    execute_block(high_ndv_worker, /*distinct_keys=*/4, /*thread_num=*/0);
+    EXPECT_TRUE(high_ndv_worker.string_collation_key_cache_fallback);
+
+    AggregatedDataVariants low_ndv_worker;
+    execute_block(low_ndv_worker, /*distinct_keys=*/4, /*thread_num=*/1);
+    EXPECT_FALSE(low_ndv_worker.string_collation_key_cache_fallback);
 }
 CATCH
 

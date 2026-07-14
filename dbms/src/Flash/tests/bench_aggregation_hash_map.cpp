@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Columns/ColumnDecimal.h>
+#include <Common/ColumnsHashing.h>
 #include <Common/Stopwatch.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDecimal.h>
@@ -27,6 +29,7 @@
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TiDB/Collation/Collator.h>
 #include <benchmark/benchmark.h>
 #include <google/protobuf/util/json_util.h>
 #include <tipb/executor.pb.h>
@@ -338,6 +341,240 @@ try
 }
 CATCH
 BENCHMARK_REGISTER_F(BenchProbeAggHashMap, basic);
+
+class BenchStringCollationKeyCache : public ::benchmark::Fixture
+{
+public:
+    void SetUp(const ::benchmark::State &) override
+    try
+    {
+        if (!AggregateFunctionFactory::instance().isAggregateFunctionName("count"))
+            DB::registerAggregateFunctions();
+
+        context = TiFlashTestEnv::getContext();
+        params = buildParams();
+    }
+    CATCH
+
+    void TearDown(benchmark::State &) override { context.reset(); }
+
+protected:
+    static constexpr size_t rows_per_block = DEFAULT_BLOCK_SIZE;
+    static constexpr size_t block_num = 128;
+    static constexpr size_t total_rows = rows_per_block * block_num;
+    static constexpr size_t low_ndv = 64;
+    static constexpr size_t high_ndv = rows_per_block;
+    static constexpr size_t cache_distinct_limit
+        = rows_per_block / ColumnsHashing::max_collation_sort_key_cache_distinct_ratio;
+    static constexpr size_t ndv_transition_block = block_num / 2;
+    static constexpr const char * key_column_name = "key";
+    static constexpr const char * count_column_name = "count(key)";
+
+    static std::vector<String> generateKeys(size_t distinct_keys)
+    {
+        std::vector<String> keys;
+        keys.reserve(distinct_keys);
+        for (size_t i = 0; i < distinct_keys; ++i)
+        {
+            if (i % 2 == 0)
+                keys.push_back(fmt::format("customer-region-{:05}-AlphaBetaGamma", i));
+            else
+                keys.push_back(fmt::format("CUSTOMER-REGION-{:05}-alphabetagamma", i));
+        }
+        return keys;
+    }
+
+    static BlockPtr generateBlock(
+        const std::shared_ptr<DataTypeString> & data_type_string,
+        const std::vector<String> & keys,
+        size_t block_index)
+    {
+        auto col_key = data_type_string->createColumn();
+        col_key->reserve(rows_per_block);
+        for (size_t row = 0; row < rows_per_block; ++row)
+        {
+            const auto & key = keys[(block_index * rows_per_block + row) % keys.size()];
+            col_key->insertData(key.data(), key.size());
+        }
+
+        ColumnsWithTypeAndName cols{
+            ColumnWithTypeAndName(std::move(col_key), data_type_string, String(key_column_name)),
+        };
+        return std::make_shared<Block>(cols);
+    }
+
+    static std::vector<BlockPtr> generateData(size_t distinct_keys)
+    {
+        auto data_type_string = std::make_shared<DataTypeString>();
+        auto keys = generateKeys(distinct_keys);
+        std::vector<BlockPtr> blocks;
+        blocks.reserve(block_num);
+        for (size_t block_index = 0; block_index < block_num; ++block_index)
+            blocks.push_back(generateBlock(data_type_string, keys, block_index));
+        return blocks;
+    }
+
+    static std::vector<BlockPtr> generateDataWithNDVTransition(
+        size_t first_distinct_keys,
+        size_t second_distinct_keys,
+        size_t transition_block)
+    {
+        RUNTIME_CHECK(transition_block < block_num);
+        auto data_type_string = std::make_shared<DataTypeString>();
+        auto first_keys = generateKeys(first_distinct_keys);
+        auto second_keys = generateKeys(second_distinct_keys);
+
+        std::vector<BlockPtr> blocks;
+        blocks.reserve(block_num);
+        for (size_t block_index = 0; block_index < block_num; ++block_index)
+        {
+            const auto & keys = block_index < transition_block ? first_keys : second_keys;
+            blocks.push_back(generateBlock(data_type_string, keys, block_index));
+        }
+        return blocks;
+    }
+
+    std::unique_ptr<Aggregator::Params> buildParams()
+    {
+        auto data_type_string = std::make_shared<DataTypeString>();
+        Block src_header(NamesAndTypes{{String(key_column_name), data_type_string}});
+
+        AggregateDescription count_desc;
+        count_desc.function
+            = AggregateFunctionFactory::instance().get(*context, "count", {data_type_string}, {}, 0, false);
+        count_desc.arguments = {0};
+        count_desc.argument_names = {String(key_column_name)};
+        count_desc.column_name = String(count_column_name);
+        AggregateDescriptions aggregate_desc{std::move(count_desc)};
+
+        const auto & settings = context->getSettingsRef();
+        SpillConfig spill_config(
+            context->getTemporaryPath(),
+            "BenchStringCollationKeyCache",
+            settings.max_cached_data_bytes_in_spiller,
+            settings.max_spilled_rows_per_file,
+            settings.max_spilled_bytes_per_file,
+            context->getFileProvider(),
+            /*for_all_constant_max_streams=*/1,
+            /*for_all_constant_block_size=*/rows_per_block);
+        TiDB::TiDBCollators collators{TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI)};
+
+        return std::make_unique<Aggregator::Params>(
+            src_header,
+            ColumnNumbers{0},
+            KeyRefAggFuncMap{},
+            AggFuncRefKeyMap{},
+            aggregate_desc,
+            /*group_by_two_level_threshold=*/0,
+            /*group_by_two_level_threshold_bytes=*/0,
+            /*max_bytes_before_external_group_by=*/0,
+            /*empty_result_for_aggregation_by_empty_set=*/false,
+            spill_config,
+            /*max_block_size=*/rows_per_block,
+            /*use_magic_hash=*/false,
+            collators);
+    }
+
+    static size_t runAggregation(const Aggregator::Params & params, const std::vector<BlockPtr> & blocks)
+    {
+        std::shared_ptr<Aggregator> aggregator;
+        auto data_variants = std::make_shared<AggregatedDataVariants>();
+        RegisterOperatorSpillContext register_operator_spill_context;
+        aggregator = std::make_shared<Aggregator>(
+            params,
+            "BenchStringCollationKeyCache",
+            /*concurrency=*/1,
+            register_operator_spill_context,
+            /*is_auto_pass_through=*/false,
+            params.use_magic_hash);
+        data_variants->aggregator = aggregator.get();
+
+        Aggregator::AggProcessInfo agg_process_info(aggregator.get());
+        for (const auto & block : blocks)
+        {
+            agg_process_info.resetBlock(*block);
+            do
+            {
+                aggregator->executeOnBlock(agg_process_info, *data_variants, 1);
+            } while (!agg_process_info.allBlockDataHandled());
+        }
+
+        std::vector<AggregatedDataVariantsPtr> variants{data_variants};
+        auto merging_buckets = aggregator->mergeAndConvertToBlocks(variants, /*final=*/true, /*max_threads=*/1);
+
+        size_t output_rows = 0;
+        for (;;)
+        {
+            auto block = merging_buckets->getData(0);
+            if (!block)
+                break;
+            output_rows += block.rows();
+        }
+        return output_rows;
+    }
+
+    void run(benchmark::State & state, const std::vector<BlockPtr> & blocks, const Aggregator::Params & params)
+    {
+        size_t output_rows = 0;
+        for (const auto & _ : state)
+            output_rows = runAggregation(params, blocks);
+
+        benchmark::DoNotOptimize(output_rows);
+        state.SetItemsProcessed(static_cast<int64_t>(state.iterations() * total_rows));
+        state.counters["rows_per_second"]
+            = benchmark::Counter(static_cast<double>(state.iterations() * total_rows), benchmark::Counter::kIsRate);
+        state.counters["output_rows"] = static_cast<double>(output_rows);
+    }
+
+    ContextPtr context;
+    std::unique_ptr<Aggregator::Params> params;
+};
+
+BENCHMARK_DEFINE_F(BenchStringCollationKeyCache, low_ndv)(benchmark::State & state)
+try
+{
+    auto blocks = generateData(low_ndv);
+    run(state, blocks, *params);
+}
+CATCH
+
+BENCHMARK_DEFINE_F(BenchStringCollationKeyCache, ndv_at_cache_limit)(benchmark::State & state)
+try
+{
+    auto blocks = generateData(cache_distinct_limit);
+    run(state, blocks, *params);
+}
+CATCH
+
+BENCHMARK_DEFINE_F(BenchStringCollationKeyCache, ndv_over_cache_limit)(benchmark::State & state)
+try
+{
+    auto blocks = generateData(cache_distinct_limit + 1);
+    run(state, blocks, *params);
+}
+CATCH
+
+BENCHMARK_DEFINE_F(BenchStringCollationKeyCache, high_ndv)(benchmark::State & state)
+try
+{
+    auto blocks = generateData(high_ndv);
+    run(state, blocks, *params);
+}
+CATCH
+
+BENCHMARK_DEFINE_F(BenchStringCollationKeyCache, low_then_high_ndv)(benchmark::State & state)
+try
+{
+    auto blocks = generateDataWithNDVTransition(low_ndv, high_ndv, ndv_transition_block);
+    run(state, blocks, *params);
+}
+CATCH
+
+BENCHMARK_REGISTER_F(BenchStringCollationKeyCache, low_ndv);
+BENCHMARK_REGISTER_F(BenchStringCollationKeyCache, ndv_at_cache_limit);
+BENCHMARK_REGISTER_F(BenchStringCollationKeyCache, ndv_over_cache_limit);
+BENCHMARK_REGISTER_F(BenchStringCollationKeyCache, high_ndv);
+BENCHMARK_REGISTER_F(BenchStringCollationKeyCache, low_then_high_ndv);
 
 } // namespace tests
 } // namespace DB
