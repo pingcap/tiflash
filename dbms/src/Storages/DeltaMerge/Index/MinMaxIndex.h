@@ -95,6 +95,9 @@ public:
 
     size_t size() const { return has_value_marks.size(); }
 
+    /// Whether this pack has at least one non-NULL, non-deleted value in the index domain.
+    bool hasValue(size_t pack_index) const { return has_value_marks[pack_index] != 0; }
+
     /// Raw per-pack mark byte. Prefer hasNull() / hasTrimmedLow() / hasTrimmedHigh().
     UInt8 packMark(size_t pack_index) const { return pack_marks[pack_index]; }
     bool hasNull(size_t pack_index) const;

@@ -14,10 +14,22 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/Stopwatch.h>
+#include <Common/TiFlashMetrics.h>
+#include <DataTypes/IDataType.h>
+#include <IO/FileProvider/ChecksumReadBufferBuilder.h>
+#include <IO/FileProvider/ReadBufferFromRandomAccessFileBuilder.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/File/DMFileMetaV2.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilterResult.h>
+#include <Storages/DeltaMerge/File/DMFileUtil.h>
+#include <Storages/DeltaMerge/Filter/DateQueryDomain.h>
+#include <Storages/DeltaMerge/Filter/FilterHelper.h>
+#include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/Index/RSResult.h>
+#include <Storages/DeltaMerge/Index/TrimMinMaxIndex.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
@@ -103,12 +115,9 @@ DMFilePackFilterResultPtr DMFilePackFilter::load(ReadTag read_tag)
     /// Check packs by filter in where clause
     if (filter)
     {
-        // Load index based on filter.
-        ColIds ids = filter->getColumnIDs();
-        for (const auto & id : ids)
-        {
-            tryLoadIndex(result.param, id);
-        }
+        // Load index based on filter requests (normal and/or PreferTrim).
+        for (const auto & request : filter->getIndexRequests())
+            tryLoadIndexByRequest(result.param, request);
 
         const auto check_results = filter->roughCheck(0, pack_count, result.param);
         std::transform(
@@ -362,6 +371,106 @@ void DMFilePackFilter::tryLoadIndex(RSCheckParam & param, ColId col_id)
     loadIndex(param.indexes, dmfile, file_provider, index_cache, set_cache_if_miss, col_id, read_limiter, scan_context);
 }
 
+void DMFilePackFilter::tryLoadIndexByRequest(RSCheckParam & param, const RSIndexRequest & request)
+{
+    if (request.preferred_kind == RSIndexKind::PreferTrim && request.query_domain.has_value())
+    {
+        if (tryLoadTrimIndex(param, request.col_id, *request.query_domain))
+            return;
+    }
+    tryLoadIndex(param, request.col_id);
+}
+
+bool DMFilePackFilter::tryLoadTrimIndex(RSCheckParam & param, ColId col_id, const DateQueryDomain & query_domain)
+{
+    if (param.trim_indexes.count(col_id))
+        return true;
+
+    if (!enable_trim_minmax_read || !dmfile->useMetaV2())
+        return false;
+
+    if (!dmfile->isColumnExist(col_id))
+        return false;
+
+    const auto & col_stat = dmfile->getColumnStat(col_id);
+    const auto * dmfile_meta = typeid_cast<const DMFileMetaV2 *>(dmfile->meta.get());
+    if (!dmfile_meta)
+        return false;
+
+    const auto file_name_base = DMFile::getFileNameBase(col_id);
+    const auto trim_fname = colTrimIndexFileName(file_name_base);
+
+    TrimMinMaxIndexMeta meta;
+    auto reason = TrimMinMax::trySelectTrimMeta(
+        /*read_enabled*/ true,
+        col_stat.trim_minmax_index,
+        *col_stat.type,
+        dmfile->getPacks(),
+        dmfile_meta->merged_sub_file_infos,
+        trim_fname,
+        &meta);
+    if (reason != TrimMinMaxFallbackReason::None)
+        return false;
+
+    if (!query_domain.isTrimEligible(meta.lower_bound, meta.upper_bound))
+        return false;
+
+    auto load_trim = [&]() -> MinMaxIndexPtr {
+        const auto file_path = dmfile->meta->mergedPath(meta.merged_file_number);
+        const auto offset = meta.merged_file_offset;
+        const auto data_size = meta.file_size;
+
+        auto index_guard = S3::S3RandomAccessFile::setReadFileInfo({
+            .size = dmfile->getReadFileSize(col_id, trim_fname),
+            .scan_context = scan_context,
+        });
+
+        auto buffer = ReadBufferFromRandomAccessFileBuilder::build(
+            file_provider,
+            file_path,
+            dmfile_meta->encryptionMergedPath(meta.merged_file_number),
+            std::min(data_size, dmfile->getConfiguration()->getChecksumFrameLength()),
+            read_limiter);
+        auto ret = buffer.seek(offset);
+        RUNTIME_CHECK_MSG(
+            ret >= 0,
+            "Failed to seek in merged file for trim index, ret={} file_path={} offset={}",
+            ret,
+            file_path,
+            offset);
+
+        String raw_data(data_size, '\0');
+        buffer.read(reinterpret_cast<char *>(raw_data.data()), data_size);
+
+        auto buf = ChecksumReadBufferBuilder::build(
+            std::move(raw_data),
+            file_path,
+            dmfile->getConfiguration()->getChecksumAlgorithm(),
+            dmfile->getConfiguration()->getChecksumFrameLength());
+
+        auto header_size = dmfile->getConfiguration()->getChecksumHeaderLength();
+        auto frame_total_size = dmfile->getConfiguration()->getChecksumFrameLength() + header_size;
+        auto frame_count = data_size / frame_total_size + (data_size % frame_total_size != 0);
+        return MinMaxIndex::read(*col_stat.type, *buf, data_size - header_size * frame_count);
+    };
+
+    MinMaxIndexPtr minmax_index;
+    if (index_cache && set_cache_if_miss)
+        minmax_index = index_cache->getOrSet(dmfile->colTrimIndexCacheKey(file_name_base), load_trim);
+    else
+    {
+        if (index_cache)
+            minmax_index = index_cache->get(dmfile->colTrimIndexCacheKey(file_name_base));
+        if (minmax_index == nullptr)
+            minmax_index = load_trim();
+    }
+
+    if (!minmax_index || !TrimMinMax::validateTrimPackMarks(minmax_index->packMarks(), meta.pack_count))
+        return false;
+
+    param.trim_indexes.emplace(col_id, TrimRSIndex{.type = col_stat.type, .minmax = minmax_index, .meta = meta});
+    return true;
+}
 
 std::pair<std::vector<DMFilePackFilter::Range>, DMFilePackFilterResults> //
 DMFilePackFilter::getSkippedRangeAndFilterForBitmapNormal(

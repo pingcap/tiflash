@@ -965,7 +965,8 @@ DMFilePackFilterResults Segment::loadDMFilePackFilters(
     const ReadLimiterPtr & read_limiter,
     const ScanContextPtr & scan_context,
     const String & tracing_id,
-    const ReadTag & read_tag)
+    const ReadTag & read_tag,
+    bool enable_trim_minmax_read)
 {
     DMFilePackFilterResults pack_filters;
     pack_filters.reserve(dmfiles.size());
@@ -982,7 +983,8 @@ DMFilePackFilterResults Segment::loadDMFilePackFilters(
             read_limiter,
             scan_context,
             tracing_id,
-            read_tag);
+            read_tag,
+            enable_trim_minmax_read);
         pack_filters.emplace_back(std::move(pack_filter));
     }
     return pack_filters;
@@ -1052,7 +1054,8 @@ BlockInputStreamPtr Segment::getInputStream(
                 dm_context.global_context.getReadLimiter(),
                 dm_context.scan_context,
                 dm_context.tracing_id,
-                ReadTag::MVCC);
+                ReadTag::MVCC,
+                dm_context.global_context.getSettingsRef().dt_enable_trim_minmax_read);
             auto bytes = estimatedBytesOfInternalColumns(dm_context, segment_snap, pack_filters, start_ts);
             TiFlashMetrics::instance()
                 .getStorageRUReadBytesCounter(NullspaceID, res_group_name, ReadRUType::MVCC_ESTIMATE)
@@ -3255,7 +3258,8 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(
             dm_context.global_context.getReadLimiter(),
             dm_context.scan_context,
             dm_context.tracing_id,
-            read_tag);
+            read_tag,
+            dm_context.global_context.getSettingsRef().dt_enable_trim_minmax_read);
         pack_filter_results.emplace_back(pack_filter);
     }
 
@@ -3391,7 +3395,8 @@ std::pair<std::vector<Range>, std::vector<IdSetPtr>> parseDMFilePackInfo(
             dm_context.global_context.getReadLimiter(),
             dm_context.scan_context,
             dm_context.tracing_id,
-            ReadTag::MVCC);
+            ReadTag::MVCC,
+            dm_context.global_context.getSettingsRef().dt_enable_trim_minmax_read);
         const auto & pack_res = pack_filter->getPackResConst();
         const auto & handle_res = pack_filter->getHandleRes();
         const auto & pack_stats = dmfile->getPackStats();

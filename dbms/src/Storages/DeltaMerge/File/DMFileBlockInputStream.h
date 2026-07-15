@@ -235,6 +235,7 @@ private:
     MinMaxIndexCachePtr index_cache;
     // column cache
     bool enable_column_cache = false;
+    bool enable_trim_minmax_read = false;
     ColumnCachePtr column_cache;
     ReadLimiterPtr read_limiter;
     size_t max_read_buffer_size{};

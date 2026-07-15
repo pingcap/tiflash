@@ -57,7 +57,8 @@ public:
         const ReadLimiterPtr & read_limiter,
         const ScanContextPtr & scan_context,
         const String & tracing_id,
-        const ReadTag read_tag)
+        const ReadTag read_tag,
+        bool enable_trim_minmax_read = false)
     {
         auto f = DMFilePackFilter(
             dmfile,
@@ -69,7 +70,8 @@ public:
             file_provider,
             read_limiter,
             scan_context,
-            tracing_id);
+            tracing_id,
+            enable_trim_minmax_read);
         return f.load(read_tag);
     }
 
@@ -124,7 +126,8 @@ private:
         const FileProviderPtr & file_provider_,
         const ReadLimiterPtr & read_limiter_,
         const ScanContextPtr & scan_context_,
-        const String & tracing_id)
+        const String & tracing_id,
+        bool enable_trim_minmax_read_)
         : dmfile(dmfile_)
         , index_cache(index_cache_)
         , set_cache_if_miss(set_cache_if_miss_)
@@ -135,6 +138,7 @@ private:
         , scan_context(scan_context_)
         , log(Logger::get(tracing_id))
         , read_limiter(read_limiter_)
+        , enable_trim_minmax_read(enable_trim_minmax_read_)
     {}
 
     DMFilePackFilterResultPtr load(ReadTag read_tag);
@@ -150,6 +154,8 @@ private:
         const ScanContextPtr & scan_context);
 
     void tryLoadIndex(RSCheckParam & param, ColId col_id);
+    void tryLoadIndexByRequest(RSCheckParam & param, const RSIndexRequest & request);
+    bool tryLoadTrimIndex(RSCheckParam & param, ColId col_id, const DateQueryDomain & query_domain);
 
 private:
     DMFilePtr dmfile;
@@ -164,6 +170,7 @@ private:
 
     LoggerPtr log;
     ReadLimiterPtr read_limiter;
+    bool enable_trim_minmax_read = false;
 };
 
 } // namespace DM

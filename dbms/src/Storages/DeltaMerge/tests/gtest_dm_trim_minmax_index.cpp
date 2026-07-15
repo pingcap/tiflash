@@ -26,11 +26,16 @@
 #include <Storages/DeltaMerge/File/ColumnStat.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileMetaV2.h>
+#include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/File/DMFileUtil.h>
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
 #include <Storages/DeltaMerge/File/MergedFile.h>
+#include <Storages/DeltaMerge/Filter/DateQueryDomain.h>
+#include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
+#include <Storages/DeltaMerge/Index/RSIndex.h>
 #include <Storages/DeltaMerge/Index/TrimMinMaxIndex.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
@@ -496,6 +501,184 @@ try
     ASSERT_NE(meta, nullptr);
     const auto fname = colTrimIndexFileName(DB::toString(settle_col_id));
     EXPECT_EQ(meta->merged_sub_file_infos.find(fname), meta->merged_sub_file_infos.end());
+}
+CATCH
+
+TEST(TrimMinMaxIndexPhaseC, DateQueryDomainEligibility)
+{
+    const UInt64 e_lo = MyDateTime(1900, 1, 1, 0, 0, 0, 0).toPackedUInt();
+    const UInt64 e_hi = MyDateTime(2100, 1, 1, 0, 0, 0, 0).toPackedUInt();
+    const UInt64 in_e = MyDateTime(2020, 1, 1, 0, 0, 0, 0).toPackedUInt();
+    const UInt64 below = MyDateTime(1800, 1, 1, 0, 0, 0, 0).toPackedUInt();
+    const UInt64 above = MyDateTime(2200, 1, 1, 0, 0, 0, 0).toPackedUInt();
+
+    {
+        DateQueryDomain d;
+        d.predicate_class = TrimPredicateClass::EqualityOrInOrBounded;
+        d.values = {Field(in_e)};
+        EXPECT_TRUE(d.isTrimEligible(e_lo, e_hi));
+        d.values = {Field(above)};
+        EXPECT_FALSE(d.isTrimEligible(e_lo, e_hi));
+    }
+    {
+        DateQueryDomain d;
+        d.predicate_class = TrimPredicateClass::EqualityOrInOrBounded;
+        d.lower = Field(in_e);
+        d.upper = Field(in_e + 1);
+        EXPECT_TRUE(d.isTrimEligible(e_lo, e_hi));
+        d.upper = Field(above);
+        EXPECT_FALSE(d.isTrimEligible(e_lo, e_hi));
+    }
+    {
+        DateQueryDomain d;
+        d.predicate_class = TrimPredicateClass::LowerBounded;
+        d.lower = Field(in_e);
+        EXPECT_TRUE(d.isTrimEligible(e_lo, e_hi));
+        d.lower = Field(above);
+        EXPECT_FALSE(d.isTrimEligible(e_lo, e_hi));
+    }
+    {
+        DateQueryDomain d;
+        d.predicate_class = TrimPredicateClass::UpperBounded;
+        d.upper = Field(in_e);
+        EXPECT_TRUE(d.isTrimEligible(e_lo, e_hi));
+        d.upper = Field(below);
+        EXPECT_FALSE(d.isTrimEligible(e_lo, e_hi));
+    }
+}
+
+TEST(TrimMinMaxIndexPhaseC, NormalizeMergesTemporalRange)
+{
+    auto type = std::make_shared<DataTypeMyDateTime>(0);
+    Attr attr{.col_name = "t", .col_id = 7, .type = type};
+    const UInt64 lo = MyDateTime(2020, 1, 1, 0, 0, 0, 0).toPackedUInt();
+    const UInt64 hi = MyDateTime(2020, 1, 2, 0, 0, 0, 0).toPackedUInt();
+
+    auto op = normalizeTemporalRangesForTrim(
+        createAnd({createGreaterEqual(attr, Field(lo)), createLessEqual(attr, Field(hi))}));
+    ASSERT_NE(op, nullptr);
+    EXPECT_EQ(op->name(), "date_range");
+    auto reqs = op->getIndexRequests();
+    ASSERT_EQ(reqs.size(), 1u);
+    EXPECT_EQ(reqs[0].preferred_kind, RSIndexKind::PreferTrim);
+    ASSERT_TRUE(reqs[0].query_domain.has_value());
+    EXPECT_EQ(reqs[0].query_domain->predicate_class, TrimPredicateClass::EqualityOrInOrBounded);
+
+    // OR must not rewrite children into PreferTrim DateRange.
+    auto or_op = createOr({createGreaterEqual(attr, Field(lo)), createEqual(attr, Field(hi))});
+    auto normalized_or = normalizeTemporalRangesForTrim(or_op);
+    EXPECT_EQ(normalized_or->name(), "or");
+}
+
+TEST(TrimMinMaxIndexPhaseC, RoughCheckCorrectionMatrix)
+try
+{
+    auto type = std::make_shared<DataTypeMyDateTime>(0);
+    Attr attr{.col_name = "t", .col_id = 1, .type = type};
+    const UInt64 e_lo = TrimMinMax::defaultLowerBoundPacked(*type);
+    const UInt64 e_hi = TrimMinMax::defaultUpperBoundPacked(*type);
+    const UInt64 v2021 = MyDateTime(2021, 1, 1, 0, 0, 0, 0).toPackedUInt();
+    const UInt64 v2020 = MyDateTime(2020, 1, 1, 0, 0, 0, 0).toPackedUInt();
+    const UInt64 v2022 = MyDateTime(2022, 1, 1, 0, 0, 0, 0).toPackedUInt();
+    const UInt64 v2100 = MyDateTime(2100, 1, 1, 0, 0, 0, 0).toPackedUInt();
+    const UInt64 v1800 = MyDateTime(1800, 1, 1, 0, 0, 0, 0).toPackedUInt();
+
+    auto make_col = [&](const std::vector<UInt64> & vals) {
+        auto col = type->createColumn();
+        for (auto v : vals)
+            col->insert(Field(v));
+        return col;
+    };
+
+    MinMaxIndex ordinary(*type);
+    MinMaxIndex trim(*type);
+    // pack0: {2021, 2100}
+    TrimMinMax::addOrdinaryAndTrimPack(ordinary, trim, *make_col({v2021, v2100}), nullptr, e_lo, e_hi);
+    // pack1: {2100}
+    TrimMinMax::addOrdinaryAndTrimPack(ordinary, trim, *make_col({v2100}), nullptr, e_lo, e_hi);
+    // pack2: {2021}
+    TrimMinMax::addOrdinaryAndTrimPack(ordinary, trim, *make_col({v2021}), nullptr, e_lo, e_hi);
+    // pack3: {1800}
+    TrimMinMax::addOrdinaryAndTrimPack(ordinary, trim, *make_col({v1800}), nullptr, e_lo, e_hi);
+    // pack4: {1800, 2100}
+    TrimMinMax::addOrdinaryAndTrimPack(ordinary, trim, *make_col({v1800, v2100}), nullptr, e_lo, e_hi);
+
+    auto trim_ptr = std::make_shared<MinMaxIndex>(std::move(trim));
+    RSCheckParam param;
+    param.trim_indexes.emplace(
+        attr.col_id,
+        TrimRSIndex{
+            .type = type,
+            .minmax = trim_ptr,
+            .meta = TrimMinMaxIndexMeta{.format_version = 1, .lower_bound = e_lo, .upper_bound = e_hi, .pack_count = 5}});
+
+    DateQueryDomain bounded;
+    bounded.predicate_class = TrimPredicateClass::EqualityOrInOrBounded;
+    bounded.lower = Field(v2020);
+    bounded.upper = Field(v2022);
+    auto range_op = createDateRange(attr, bounded);
+    auto bounded_res = range_op->roughCheck(0, 5, param);
+    EXPECT_EQ(bounded_res[0], RSResult::Some); // {2021,2100}
+    EXPECT_EQ(bounded_res[1], RSResult::None); // {2100}
+    EXPECT_EQ(bounded_res[2], RSResult::All); // {2021}
+
+    DateQueryDomain lower_b;
+    lower_b.predicate_class = TrimPredicateClass::LowerBounded;
+    lower_b.lower = Field(v2020);
+    lower_b.lower_inclusive = true;
+    auto ge_op = createDateRange(attr, lower_b);
+    auto ge_res = ge_op->roughCheck(0, 5, param);
+    EXPECT_EQ(ge_res[1], RSResult::Some); // {2100} must not be None
+    EXPECT_EQ(ge_res[3], RSResult::None); // {1800}
+    EXPECT_EQ(ge_res[4], RSResult::Some); // {1800,2100}
+
+    DateQueryDomain upper_b;
+    upper_b.predicate_class = TrimPredicateClass::UpperBounded;
+    upper_b.upper = Field(v2020);
+    upper_b.upper_inclusive = true;
+    auto le_op = createDateRange(attr, upper_b);
+    auto le_res = le_op->roughCheck(0, 5, param);
+    EXPECT_EQ(le_res[3], RSResult::Some); // {1800} must not be None
+    EXPECT_EQ(le_res[1], RSResult::None); // {2100}
+}
+CATCH
+
+TEST_F(TrimMinMaxIndexWriteTest, PackFilterUsesTrimWhenReadEnabled)
+try
+{
+    auto dm_file = writeDMFile(makeBlockWithOutlier(/*rows*/ 8), /*enable_trim_write*/ true);
+    ASSERT_TRUE(dm_file->getColumnStat(settle_col_id).trim_minmax_index.has_value());
+
+    auto type = std::make_shared<DataTypeMyDateTime>(0);
+    Attr attr{.col_name = "settle_time", .col_id = settle_col_id, .type = type};
+    const UInt64 lo = MyDateTime(2020, 1, 1, 0, 0, 0, 0).toPackedUInt();
+    const UInt64 hi = MyDateTime(2021, 1, 1, 0, 0, 0, 0).toPackedUInt();
+    DateQueryDomain domain;
+    domain.predicate_class = TrimPredicateClass::EqualityOrInOrBounded;
+    domain.lower = Field(lo);
+    domain.upper = Field(hi);
+    auto filter = createDateRange(attr, domain);
+
+    auto scan_context = std::make_shared<ScanContext>();
+    auto pack_result = DMFilePackFilter::loadFrom(
+        dm_file,
+        /*index_cache*/ nullptr,
+        /*set_cache_if_miss*/ false,
+        /*rowkey_ranges*/ {},
+        filter,
+        /*read_packs*/ {},
+        file_provider,
+        /*read_limiter*/ nullptr,
+        scan_context,
+        /*tracing_id*/ "trim_phase_c",
+        ReadTag::Query,
+        /*enable_trim_minmax_read*/ true);
+
+    // Sentinel-only values are trimmed out of min-max; bounded query must not be All.
+    const auto & pack_res = pack_result->getPackRes();
+    ASSERT_FALSE(pack_res.empty());
+    for (auto r : pack_res)
+        EXPECT_NE(r, RSResult::All);
 }
 CATCH
 

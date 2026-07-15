@@ -21,6 +21,7 @@
 
 #include <Common/FieldVisitors.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/Filter/DateQueryDomain.h>
 #include <Storages/DeltaMerge/Index/RSIndex.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
 #include <Storages/DeltaMerge/Index/VectorIndex_fwd.h>
@@ -42,7 +43,10 @@ inline static const RSOperatorPtr EMPTY_RS_OPERATOR{};
 
 struct RSCheckParam
 {
+    /// Ordinary min-max indexes (existing field name kept for compatibility).
     ColumnIndexes indexes;
+    /// Trim min-max indexes selected for PreferTrim requests.
+    TrimColumnIndexes trim_indexes;
 };
 
 class RSOperator
@@ -60,6 +64,15 @@ public:
     virtual RSResults roughCheck(size_t start_pack, size_t pack_count, const RSCheckParam & param) = 0;
 
     virtual ColIds getColumnIDs() = 0;
+
+    /// Index load requests. Default maps getColumnIDs() to Normal requests.
+    virtual RSIndexRequests getIndexRequests()
+    {
+        RSIndexRequests reqs;
+        for (const auto id : getColumnIDs())
+            reqs.push_back(RSIndexRequest{.col_id = id, .preferred_kind = RSIndexKind::Normal, .query_domain = {}});
+        return reqs;
+    }
 
     static RSOperatorPtr build(
         const std::unique_ptr<DAGQueryInfo> & dag_query,
@@ -80,6 +93,9 @@ public:
         : attr(attr_)
         , value(value_)
     {}
+
+    const Attr & getAttr() const { return attr; }
+    const Field & getValue() const { return value; }
 
     ColIds getColumnIDs() override { return {attr.col_id}; }
 
@@ -112,6 +128,8 @@ public:
         : children(children_)
     {}
 
+    const RSOperators & getChildren() const { return children; }
+
     ColIds getColumnIDs() override
     {
         ColIds col_ids;
@@ -121,6 +139,17 @@ public:
             col_ids.insert(col_ids.end(), child_col_ids.begin(), child_col_ids.end());
         }
         return col_ids;
+    }
+
+    RSIndexRequests getIndexRequests() override
+    {
+        RSIndexRequests reqs;
+        for (const auto & child : children)
+        {
+            auto child_reqs = child->getIndexRequests();
+            reqs.insert(reqs.end(), child_reqs.begin(), child_reqs.end());
+        }
+        return reqs;
     }
 
     String toDebugString() override
@@ -156,6 +185,14 @@ inline std::optional<RSIndex> getRSIndex(const RSCheckParam & param, const Attr 
     {
         return it->second;
     }
+    return std::nullopt;
+}
+
+inline std::optional<TrimRSIndex> getTrimRSIndex(const RSCheckParam & param, const Attr & attr)
+{
+    auto it = param.trim_indexes.find(attr.col_id);
+    if (it != param.trim_indexes.end() && it->second.type->equals(*attr.type))
+        return it->second;
     return std::nullopt;
 }
 
@@ -198,5 +235,7 @@ RSOperatorPtr wrapWithANNQueryInfo(const RSOperatorPtr & op, const ANNQueryInfoP
 
 // Get ANNQueryInfo from RSOperator
 ANNQueryInfoPtr getANNQueryInfo(const RSOperatorPtr & op);
+
+RSOperatorPtr createDateRange(const Attr & attr, DateQueryDomain domain);
 
 } // namespace DB::DM

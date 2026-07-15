@@ -14,8 +14,10 @@
 
 #pragma once
 
+#include <Storages/DeltaMerge/Filter/DateQueryDomain.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Index/RoughCheck.h>
+#include <Storages/DeltaMerge/Index/TrimMinMaxIndex.h>
 
 namespace DB::DM
 {
@@ -29,8 +31,33 @@ public:
 
     String name() override { return "equal"; }
 
+    RSIndexRequests getIndexRequests() override
+    {
+        if (TrimMinMax::isSupportedTemporalType(*attr.type))
+        {
+            DateQueryDomain domain;
+            domain.predicate_class = TrimPredicateClass::EqualityOrInOrBounded;
+            domain.values = {value};
+            return {RSIndexRequest{
+                .col_id = attr.col_id,
+                .preferred_kind = RSIndexKind::PreferTrim,
+                .query_domain = std::move(domain),
+            }};
+        }
+        return RSOperator::getIndexRequests();
+    }
+
     RSResults roughCheck(size_t start_pack, size_t pack_count, const RSCheckParam & param) override
     {
+        if (auto trim = getTrimRSIndex(param, attr))
+        {
+            auto raw = trim->minmax->checkCmp<RoughCheck::CheckEqual>(start_pack, pack_count, value, trim->type);
+            return applyTrimRoughCheckCorrection(
+                raw,
+                start_pack,
+                *trim->minmax,
+                TrimPredicateClass::EqualityOrInOrBounded);
+        }
         return minMaxCheckCmp<RoughCheck::CheckEqual>(start_pack, pack_count, param, attr, value);
     }
 };

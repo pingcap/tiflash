@@ -15,6 +15,7 @@
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/Filter/And.h>
+#include <Storages/DeltaMerge/Filter/DateRange.h>
 #include <Storages/DeltaMerge/Filter/Equal.h>
 #include <Storages/DeltaMerge/Filter/Greater.h>
 #include <Storages/DeltaMerge/Filter/GreaterEqual.h>
@@ -52,6 +53,7 @@ RSOperatorPtr createNotEqual(const Attr & attr, const Field & value)            
 RSOperatorPtr createOr(const RSOperators & children)                            { return std::make_shared<Or>(children); }
 RSOperatorPtr createIsNull(const Attr & attr)                                   { return std::make_shared<IsNull>(attr);}
 RSOperatorPtr createUnsupported(const String & reason)                          { return std::make_shared<Unsupported>(reason); }
+RSOperatorPtr createDateRange(const Attr & attr, DateQueryDomain domain)        { return std::make_shared<DateRange>(attr, std::move(domain)); }
 // clang-format on
 
 RSOperatorPtr RSOperator::build(
