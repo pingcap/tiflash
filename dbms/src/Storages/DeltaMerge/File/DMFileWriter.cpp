@@ -114,7 +114,7 @@ DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createMetaFile()
 void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
 {
     const auto nested_type = removeNullable(type);
-    const bool can_trim = options.enable_trim_minmax_write && dmfile->useMetaV2()
+    const bool can_trim = options.enable_trim_minmax && dmfile->useMetaV2()
         && col_id != MutSup::extra_handle_id && col_id != MutSup::version_col_id && col_id != MutSup::delmark_col_id
         && TrimMinMax::isSupportedTemporalType(*nested_type);
 
@@ -390,8 +390,7 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
                 merged_file.file_info.size += trim_index_bytes;
                 buffer->next();
 
-                col_stat.trim_minmax_index
-                    = TrimMinMax::makeDefaultProps(*removeNullable(type), dmfile->getPacks());
+                col_stat.trim_minmax_index = TrimMinMax::makeDefaultProps(*removeNullable(type), dmfile->getPacks());
             }
 
             // write mark into merged_file_writer

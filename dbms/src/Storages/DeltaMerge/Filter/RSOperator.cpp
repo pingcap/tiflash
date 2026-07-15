@@ -60,7 +60,8 @@ RSOperatorPtr RSOperator::build(
     const TiDB::ColumnInfos & scan_column_infos,
     const ColumnDefines & table_column_defines,
     bool enable_rs_filter,
-    const LoggerPtr & tracing_logger)
+    const LoggerPtr & tracing_logger,
+    bool enable_trim_minmax)
 {
     RUNTIME_CHECK(dag_query != nullptr);
     // build rough set operator
@@ -98,7 +99,8 @@ RSOperatorPtr RSOperator::build(
             column_id_to_attr[col_info.id] = attr;
     }
 
-    auto rs_operator = FilterParser::parseDAGQuery(*dag_query, scan_column_infos, column_id_to_attr, tracing_logger);
+    auto rs_operator = FilterParser::parseDAGQuery(
+        *dag_query, scan_column_infos, column_id_to_attr, tracing_logger, enable_trim_minmax);
     if (likely(rs_operator != DM::EMPTY_RS_OPERATOR))
         LOG_DEBUG(tracing_logger, "Rough set filter: {}", rs_operator->toDebugString());
 

@@ -28,9 +28,29 @@ public:
 
     String name() override { return "not"; }
 
+    /// Design excludes NOT / NOT IN from trim support. Do not forward PreferTrim from children.
+    RSIndexRequests getIndexRequests() override
+    {
+        auto reqs = LogicalOp::getIndexRequests();
+        for (auto & req : reqs)
+        {
+            if (req.preferred_kind == RSIndexKind::PreferTrim)
+            {
+                req.preferred_kind = RSIndexKind::Normal;
+                req.query_domain.reset();
+            }
+        }
+        return reqs;
+    }
+
     RSResults roughCheck(size_t start_pack, size_t pack_count, const RSCheckParam & param) override
     {
-        auto results = children[0]->roughCheck(start_pack, pack_count, param);
+        // Clear trim indexes so the child cannot reuse a trim loaded by a sibling PreferTrim
+        // leaf (e.g. Equal AND Not(In(...))). Empty trim packs skip CheckIn's NULL handling
+        // and would turn In(...NULL...) into None, then !None => All and skip row filters.
+        RSCheckParam child_param = param;
+        child_param.trim_indexes.clear();
+        auto results = children[0]->roughCheck(start_pack, pack_count, child_param);
         std::transform(results.begin(), results.end(), results.begin(), [](const auto result) { return !result; });
         return results;
     }

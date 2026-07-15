@@ -32,7 +32,8 @@ DMFileBlockOutputStream::DMFileBlockOutputStream(
                 context.getSettingsRef().dt_compression_level),
             context.getSettingsRef().min_compress_block_size,
             context.getSettingsRef().max_compress_block_size,
-            context.getSettingsRef().dt_enable_trim_minmax_write})
+            context.getSettingsRef().dt_enable_trim_minmax,
+        })
 {}
 
 } // namespace DB::DM

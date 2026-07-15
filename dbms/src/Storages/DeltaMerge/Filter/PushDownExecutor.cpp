@@ -207,7 +207,8 @@ PushDownExecutorPtr PushDownExecutor::build(
         columns_to_read_info,
         table_column_defines,
         context.getSettingsRef().dt_enable_rough_set_filter,
-        tracing_logger);
+        tracing_logger,
+        context.getSettingsRef().dt_enable_trim_minmax);
     // build column_range
     const auto column_range = rs_operator && !used_indexes.empty() ? rs_operator->buildSets(used_indexes) : nullptr;
     // build ann_query_info

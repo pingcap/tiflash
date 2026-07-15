@@ -9,7 +9,7 @@ This document proposes an optional pack-level `trim_minmax` index for `DATETIME`
 
 The first version adopts the following key decisions:
 
-1. The effective date range is the half-open interval `[1900-01-01 00:00:00, 2100-01-01 00:00:00)`.
+1. The effective date range is the half-open interval `[1900-01-01 00:00:00, 2099-12-01 00:00:00)`.
 2. `trim_minmax` stores the min/max of values inside this interval. The ordinary min-max remains unchanged and continues to serve queries that do not satisfy the trim eligibility conditions.
 3. The actual bounds, format version, and pack count used by each trim index are persisted directly through `ColumnStat.trim_minmax_index: TrimMinMaxIndexProps`. The `MergedSubFileInfo` associated with the deterministic file name is the sole source of the file location and size. Per-pack low/high flags are merged into the trim index's existing `has_null_marks` byte array, whose on-disk semantics are generalized as `pack_marks`.
 4. A reader may select the trim index only according to the actual interval stored in the DMFile. It must not interpret a historical index using the current version's global default interval.
@@ -149,6 +149,8 @@ If normal timestamps are themselves distributed completely at random within each
 
 ## Correctness Foundation
 
+### Pack-Level Trim Semantics
+
 Let `D` be the set of all values in a pack that participate in the ordinary min-max, and let `E` be the effective date range. The set represented by the trim index is:
 
 ```text
@@ -186,7 +188,7 @@ Consequently, if the raw trim result is `None` but a trimmed value that must mat
 The following counterexample shows why checking only whether the SQL literal is inside the effective interval is insufficient:
 
 ```text
-E = [1900, 2100)
+E = [1900, 2099-12)
 pack = {2100-01-01}
 predicate = col >= 2020-01-01
 ```
@@ -196,12 +198,70 @@ The literal 2020 is inside `E`, but the query domain is `[2020, +∞)` and inclu
 Another counterexample demonstrates why low/high pack marks are necessary:
 
 ```text
-E = [1900, 2100)
+E = [1900, 2099-12)
 pack = {2021-01-01, 2100-01-01}
 predicate = col BETWEEN 2020-01-01 AND 2022-01-01
 ```
 
 After trimming, `min=max=2021-01-01`, but the 2100 value in the pack does not match. The trim rough check must return `Some` rather than `All`.
+
+### AND + OR Composition Correctness
+
+Rough Set composition for `And` / `Or` is independent of which physical index each leaf uses. Correctness does **not** require the whole tree to select trim or ordinary uniformly. It requires each leaf's `roughCheck` to be individually sound and conservative; `And` then combines results with `&&` and `Or` with `||`.
+
+#### Per-predicate index selection
+
+Trim indexes may be cached per column in `RSCheckParam.trim_indexes`, but a leaf must not use that trim index unless **its own** `DateQueryDomain` is trim-eligible for the stored `E`. This check is enforced at use time by `getTrimRSIndex(param, attr, query_domain)`:
+
+1. Look up the column's loaded trim index (if any).
+2. Call `query_domain.isTrimEligible(stored_lower, stored_upper)`.
+3. If ineligible, return no trim index so the leaf falls back to ordinary min-max (when loaded) or `Some`.
+
+Therefore two leaves on the same column may legally use different indexes in one query:
+
+```text
+DateRange(t, [L, U]) AND Or(t = A, t = B)
+```
+
+| Leaf | Index choice |
+| --- | --- |
+| `DateRange` | Trim iff `[L, U]` is eligible for stored `E` |
+| `Equal(A)` | Trim iff `A ∈ E` |
+| `Equal(B)` | Trim iff `B ∈ E` (independent of `A`) |
+
+A dangerous anti-pattern, and the reason eligibility must be per predicate rather than per column, is:
+
+```text
+E = [1900, 2099-12)
+pack = {2200-01-01}
+predicate = (t = 2020-01-01) OR (t = 2200-01-01)
+```
+
+If both equals shared a column-level trim selection without re-checking eligibility, `t = 2200` would consult an empty `D_trim` and could return `None`, causing the whole `Or` to drop a matching pack. With per-predicate eligibility, `t = 2200` must use the ordinary min-max and keep the pack.
+
+#### Normalize interaction with AND / OR
+
+`normalizeTemporalRangesForTrim` only flattens **top-level** `And` nodes and merges exposed temporal `GE` / `GT` / `LE` / `LT` leaves into `DateRange`. It does not rewrite children under `Or` / `Not`.
+
+| Shape | Rewrite behavior | Correctness implication |
+| --- | --- | --- |
+| `t >= L AND t <= U` | Becomes `DateRange` PreferTrim | Covered by pack-level trim semantics above |
+| `t >= L OR t = X` | Unchanged `Or` | No incorrect DateRange merge |
+| `t >= L AND t <= U AND (t = A OR t = B)` | Outer bounds → `DateRange`; `Or` kept as a leaf | `DateRange` and each `Equal` still select indexes independently |
+| `(t >= L AND t <= U) OR t = X` | Unchanged top-level `Or` | Inner `And` is not rewritten; `Greater`/`Less` leaves continue to use ordinary min-max (they do not request PreferTrim) |
+
+Not rewriting under `Or` is an intentional conservative choice: it may forgo trim benefit, but it must not invent a single range whose match set is not equivalent to the original disjunction.
+
+#### Soundness checklist for mixed trees
+
+For any `And` / `Or` tree that mixes trim-capable and ordinary leaves:
+
+1. Each PreferTrim leaf must re-validate eligibility against stored `E` at `roughCheck` time, not only at load time.
+2. Every trim-path result must still apply pack-mark correction (`None`/`All` downgrades for matching / non-matching trimmed values).
+3. `All` remains the only RSResult that may skip row-level filtering, so a trim-derived `All` must remain sound after correction.
+4. If any leaf cannot prove a safe trim result, it must degrade to ordinary min-max or `Some`; logical composition then stays conservative.
+
+Under these rules, shapes such as `DateRange AND Or(Equal, Equal)` do not introduce an additional correctness hazard beyond the single-predicate trim foundation: composition preserves leaf soundness, and index choice is decided per leaf rather than per column or per logical operator.
 
 ## Design
 
@@ -239,10 +299,10 @@ Query DAG
 The default interval for the first version is:
 
 ```text
-[1900-01-01 00:00:00, 2100-01-01 00:00:00)
+[1900-01-01 00:00:00, 2099-12-01 00:00:00)
 ```
 
-A half-open interval is used instead of the closed interval `2099-12-31 23:59:59` because it unambiguously covers fractional seconds in `DATETIME(1..6)`, such as `2099-12-31 23:59:59.999999`.
+A half-open interval is used so fractional seconds in `DATETIME(1..6)` remain unambiguous, for example `2099-11-30 23:59:59.999999` is inside `E` while `2099-12-01 00:00:00` is not. The exclusive upper bound is `2099-12-01` rather than `2100-01-01` to leave a buffer before the common `2100-01-01` sentinel: `TIMESTAMP` literals converted across time zones or DST must not accidentally move the exclusive edge onto an unexpected calendar day and weaken outlier classification around that sentinel.
 
 The bounds are persisted using the column's internal encoding rather than as time strings:
 
@@ -349,9 +409,10 @@ Metadata constraints:
 5. The counts of decoded `pack_marks`, `has_value_marks`, and min/max cells must agree and equal `pack_count`.
 6. Bits 3 through 7 of the trim index's `pack_marks` must be zero.
 7. The `ColumnStat` metadata, `MergedSubFileInfo`, and index payload must be generated and published atomically as part of the same immutable DMFile generation. A reader must not reuse or combine them across DMFiles.
-8. The trim index must not be used if the metadata, `MergedSubFileInfo`, or subfile is missing; the version is unknown; or any structural validation fails.
+8. Soft fallback to the ordinary min-max (do not use trim) when any of the following holds: trim metadata is absent; the format version is unknown; props fail logical checks such as undecodable bounds, `lower_bound >= upper_bound`, or `pack_count` mismatch; or the deterministic `.trim.idx` entry is simply missing from `MergedSubFileInfo` (including the orphan-subfile case after an old node rewrote ColumnStat and dropped field 105). Soft fallback must not invent a speculative result other than what the ordinary path would produce.
+9. Hard failure (throw / existing DMFile corruption policy), not soft fallback, when trim is selected but the on-disk location is structurally impossible or the payload is definitively corrupt. Examples: a present `MergedSubFileInfo` with an invalid merged-file number, or with `offset`/`size` that cannot fit the merged file; checksum mismatch on the trim subfile; decoded pack-mark reserved bits nonzero after load. Invalid `MergedSubFileInfo` geometry must not be rewritten into a silent ordinary-minmax fallback in selection.
 
-The ColumnStat protobuf is protected by the DMFileMetaV2 checksum, while the trim index subfile uses the existing DMFile checksum mechanism. These checks are combined with structural validation of the pack count, pack marks, and subfile location and size to detect physical corruption.
+The ColumnStat protobuf is protected by the DMFileMetaV2 checksum, while the trim index subfile uses the existing DMFile checksum mechanism. Logical metadata mismatches soft-fallback; physical corruption of a selected trim subfile or an impossible `MergedSubFileInfo` is surfaced as corruption rather than hidden behind soft fallback.
 
 The compatibility-critical property is that field 105 does not belong to `indexes = 104`, which old versions iterate over and validate strictly. Old readers treat all of field 105 as an unknown protobuf field. It does not trigger `ColumnStat::integrityCheckIndexInfoV2` and does not require recognition of a new `IndexFileKind`. Old readers continue to read the ordinary min-max.
 
@@ -406,7 +467,7 @@ No trim index is generated for:
 - `TIME` and duration.
 - Nested types other than `MyDate` / `MyDateTime`.
 - Empty DMFiles.
-- Any column when the write switch is disabled.
+- Any column when `dt_enable_trim_minmax` is disabled.
 
 During finalization, the writer may check whether a column has any trimmed value anywhere in the DMFile. If all `pack_marks & 0x06` values are zero, the ordinary and trim min-max indexes are equivalent for non-NULL values. The trim subfile and metadata may then be omitted, avoiding storage overhead for files without abnormal values. The bit-0 NULL mark does not affect this decision.
 
@@ -488,12 +549,12 @@ else
 Selection must use `trim_meta.range` rather than the current process's default range. This safely supports:
 
 ```text
-DMFile A: E=[1900, 2100), use trim
+DMFile A: E=[1900, 2099-12), use trim
 DMFile B: no trim, use normal
 DMFile C: future version E=[1800, 2200), decide according to C's metadata
 ```
 
-If the reader does not support the metadata version or validation fails, it falls back to the ordinary min-max rather than returning a speculative result other than `Some`. If the underlying index payload checksum is definitively corrupted, the existing DMFile data-corruption policy still applies; physical corruption is not silently hidden.
+If the reader does not support the metadata version, or logical selection checks fail (missing meta, missing `.trim.idx` entry, undecodable/invalid bounds, `pack_count` mismatch, ineligible query domain), it soft-falls back to the ordinary min-max rather than returning a speculative result other than `Some`. Soft fallback deliberately does **not** apply to a present but structurally invalid `MergedSubFileInfo` (impossible number/offset/size) or to a definitive trim-subfile checksum / pack-mark corruption: those follow the existing DMFile data-corruption policy and must throw rather than be rewritten as an ordinary-minmax soft fallback.
 
 ### Trim Rough Check and `pack_marks`
 
@@ -544,17 +605,15 @@ This keeps the trim and ordinary min-max indexes consistent in their three-value
 
 ### Configuration and Switches
 
-The first version provides two internal settings:
+The first version provides one internal setting:
 
 ```text
-dt_enable_trim_minmax_write
-dt_enable_trim_minmax_read
+dt_enable_trim_minmax
 ```
 
-- The write switch controls whether new DMFiles generate trim indexes.
-- The read switch controls whether readers select trim.
-- Both are initially disabled by default and are enabled gradually through canaries.
-- Disabling reads makes existing trim metadata and subfiles ignored and immediately falls back to the ordinary min-max.
+- When enabled, new DMFiles may generate trim indexes, and readers may select trim (including temporal-range normalize for PreferTrim).
+- When disabled, writers skip trim generation, and readers ignore existing trim metadata/subfiles and fall back to the ordinary min-max.
+- Default is disabled; enable gradually through canaries. Note that a single switch means write and read are rolled out together.
 - The effective interval is not dynamically configurable in the first version, avoiding configuration drift within a process. It is still persisted in metadata to preserve correctness during future format evolution.
 
 ### Observability
@@ -599,7 +658,7 @@ Debug logs record the DMFile, column ID, stored range, query domain, selected in
 1. A trim index must not make any originally matching row disappear.
 2. A trim index must not allow a non-matching trimmed value into the result through `All`.
 3. Equality, IN, and bounded ranges may select trim only when `Q ⊆ stored E`. A one-sided range may select trim only when its finite bound is within stored `E` and the low/high matching semantics are known.
-4. A reader must not use trim if it cannot verify consistency between the metadata and index payload.
+4. A reader must not use trim when logical selection checks fail (missing or unsupported meta, missing `.trim.idx` entry, ineligible domain). A present but structurally invalid `MergedSubFileInfo` or a corrupt trim payload is not a soft-fallback case; it follows the DMFile corruption policy.
 5. The row-level filter is always retained and may be skipped only when the final RSResult is a strictly correct `All`.
 6. Boundary semantics for `format_version = 1` are always `[lower_bound, upper_bound)` and must not be reinterpreted by runtime configuration.
 7. NULL semantics read only `pack_marks & 0x01`. Low/high bits must not affect NULL checks for the ordinary min-max.
@@ -619,12 +678,12 @@ Debug logs record the DMFile, column ID, stored range, query domain, selected in
 
 Recommended sequence:
 
-1. First deploy new readers capable of parsing `ColumnStat.trim_minmax_index`, with both read and write disabled.
-2. Enable writes on a small number of nodes to generate new DMFiles, while reads remain disabled.
-3. Verify that old readers ignore field 105 and read the ordinary min-max. Also verify that, if an old node rewrites metadata and loses trim information, a new reader safely falls back. Then enable reads as a canary.
-4. Expand the read/write rollout.
+1. First deploy new binaries capable of parsing `ColumnStat.trim_minmax_index`, with `dt_enable_trim_minmax` disabled (default).
+2. Enable `dt_enable_trim_minmax` on a small canary so those nodes both generate trim on new DMFiles and select trim when eligible.
+3. Verify that old readers ignore field 105 and read the ordinary min-max. Also verify that, if an old node rewrites metadata and loses trim information, a new reader safely falls back.
+4. Expand the rollout.
 
-For downgrade, disable reads first and then writes. Existing trim subfiles and field 105 do not affect the ordinary min-max. Compatibility tests must verify both "new write, old read" and "old-version metadata rewrite." If the target old version cannot safely ignore field 105 or an additional merged subfile, the write switch must remain disabled during mixed-version operation. Losing trim metadata during an old-version rewrite is an allowed safe degradation, but it must be recorded in metrics and the corresponding loss of trim benefit must be accepted for that DMFile.
+For downgrade, disable `dt_enable_trim_minmax` first. Existing trim subfiles and field 105 do not affect the ordinary min-max. Compatibility tests must verify both "new write, old read" and "old-version metadata rewrite." If the target old version cannot safely ignore field 105 or an additional merged subfile, the switch must remain disabled during mixed-version operation. Losing trim metadata during an old-version rewrite is an allowed safe degradation, but it must be recorded in metrics and the corresponding loss of trim benefit must be accepted for that DMFile.
 
 ## Performance and Resource Overhead
 
@@ -758,8 +817,8 @@ CAST(col AS ...) = ...
 - `DATE`, `DATETIME(0)`, `DATETIME(3)`, and `DATETIME(6)`.
 - `TIMESTAMP` in UTC, fixed-offset, and named time zones, including DST boundaries.
 - The lower and upper bounds themselves.
-- `2099-12-31 23:59:59.999999`.
-- `2100-01-01 00:00:00`.
+- `2099-11-30 23:59:59.999999` (inside `E`).
+- `2099-12-01 00:00:00` and `2100-01-01 00:00:00` (outside `E`).
 - Zero dates, invalid-date compatibility values, and other out-of-range packed values.
 - Nullable and NotNull.
 
@@ -767,14 +826,14 @@ CAST(col AS ...) = ...
 
 - Old DMFile -> new reader.
 - New DMFile -> old reader within the supported compatibility range.
-- Missing `ColumnStat.trim_minmax_index`, unknown version, and incorrect `pack_count`.
+- Missing `ColumnStat.trim_minmax_index`, unknown version, incorrect `pack_count`, undecodable bounds, or `lower_bound >= upper_bound` soft-falls back to ordinary.
+- Missing `MergedSubFileInfo` for the deterministic `.trim.idx` file name soft-falls back to ordinary (including orphan residual after meta loss).
+- Present `MergedSubFileInfo` with invalid number/offset/size must hard-fail under the DMFile corruption policy; it must not soft-fallback in selection.
 - Field 105 must not appear in `indexes = 104`, and an old reader must not enter `integrityCheckIndexInfoV2` for it.
-- Missing `MergedSubFileInfo` for the deterministic `.trim.idx` file name, or invalid number/offset/size.
 - An old reader rewrites ColumnStat and drops field 105; a new reader must fall back to normal when reopening it.
 - A residual `.trim.idx` must not be used after trim metadata is lost, and its space should be reclaimed after the DMFile is naturally rewritten.
-- The trim index's pack-mark count does not equal `pack_count`, or bits 3 through 7 are nonzero.
-- Bounds cannot be decoded, or `lower_bound >= upper_bound`.
-- Metadata or index-subfile checksum mismatch.
+- The trim index's pack-mark count does not equal `pack_count`, or bits 3 through 7 are nonzero after load (hard-fail / reject payload).
+- Metadata or index-subfile checksum mismatch (hard-fail; not soft-fallback).
 - Local disk and disaggregated storage.
 - Reopening merged subfiles, clone, restore, GC, and segment replacement.
 - Online switching and fallback of the read/write settings.
@@ -908,11 +967,12 @@ This would let trim share a unified registry with vector, inverted, and full-tex
 
 ## Established Design Boundaries
 
-- The effective interval is the half-open interval `[1900-01-01, 2100-01-01)`.
+- The effective interval is the half-open interval `[1900-01-01, 2099-12-01)`.
 - Actual bounds are persisted per column and per DMFile. Readers do not use the current default configuration to interpret old indexes.
 - The trim index defines the original `has_null_marks` byte array as `pack_marks`: bit 0 is NULL, bit 1 is low, bit 2 is high, and bits 3 through 7 must be zero in V1.
 - Trim metadata uses `ColumnStat.trim_minmax_index = 105`, whose type is directly the self-contained `TrimMinMaxIndexProps`. It is not added to `indexes = 104` and does not modify `DMFileIndexInfo`, `IndexFilePropsV2`, or `IndexFileKind`.
 - The `MergedSubFileInfo` associated with the deterministic `.trim.idx` file name is the sole source of its location and size; the props do not duplicate the file size.
+- Soft fallback covers expected absence and logical meta mismatch. A present but structurally invalid `MergedSubFileInfo`, or a corrupt trim payload/checksum, hard-fails under the existing DMFile corruption policy and must not be converted into a silent ordinary-minmax soft fallback.
 - Field 105 stores no per-pack flags. Low/high flags reside in the trim index payload together with min/max.
 - The trim min-max uses a separate subfile and does not extend the ordinary `.idx`.
 - `TrimMinMaxIndex` uses composition rather than inheritance. Generic `MinMaxIndex` produces the raw result, and the trim wrapper/operator applies directional adjustments.

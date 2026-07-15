@@ -46,6 +46,8 @@ struct RSCheckParam
     ColumnIndexes indexes;
     /// Trim min-max indexes selected for PreferTrim requests.
     TrimColumnIndexes trim_indexes;
+    /// Prometheus trim metrics are recorded only for the query read pass, avoiding duplicate counts from MVCC/LM passes.
+    bool record_trim_metrics = false;
 };
 
 class RSOperator
@@ -81,7 +83,8 @@ public:
         const TiDB::ColumnInfos & scan_column_infos,
         const ColumnDefines & table_column_defines,
         bool enable_rs_filter,
-        const LoggerPtr & tracing_logger);
+        const LoggerPtr & tracing_logger,
+        bool enable_trim_minmax = false);
 };
 
 class ColCmpVal : public RSOperator
@@ -182,6 +185,8 @@ public:
 
 inline std::optional<RSIndex> getRSIndex(const RSCheckParam & param, const Attr & attr)
 {
+    if (!attr.type)
+        return std::nullopt;
     auto it = param.indexes.find(attr.col_id);
     if (it != param.indexes.end() && it->second.type->equals(*attr.type))
     {
@@ -198,6 +203,8 @@ inline std::optional<TrimRSIndex> getTrimRSIndex(
     const Attr & attr,
     const DateQueryDomain & query_domain)
 {
+    if (!attr.type)
+        return std::nullopt;
     auto it = param.trim_indexes.find(attr.col_id);
     if (it == param.trim_indexes.end() || !it->second.type->equals(*attr.type))
         return std::nullopt;

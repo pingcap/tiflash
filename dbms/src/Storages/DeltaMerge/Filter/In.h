@@ -50,7 +50,8 @@ public:
 
     RSIndexRequests getIndexRequests() override
     {
-        if (TrimMinMax::isSupportedTemporalType(*attr.type))
+        // attr.type can be empty when column id is missing from table defines.
+        if (attr.type && TrimMinMax::isSupportedTemporalType(*attr.type))
         {
             return {RSIndexRequest{
                 .col_id = attr.col_id,
@@ -104,7 +105,8 @@ public:
                 raw,
                 start_pack,
                 *trim->minmax,
-                TrimPredicateClass::EqualityOrInOrBounded);
+                TrimPredicateClass::EqualityOrInOrBounded,
+                param.record_trim_metrics);
         }
 
         auto rs_index = getRSIndex(param, attr);
