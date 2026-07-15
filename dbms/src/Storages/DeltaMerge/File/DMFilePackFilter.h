@@ -72,7 +72,8 @@ public:
             dm_context.global_context.getFileProvider(),
             dm_context.global_context.getReadLimiter(),
             dm_context.scan_context,
-            dm_context.tracing_id);
+            dm_context.tracing_id,
+            dm_context.global_context.getSettingsRef().dt_enable_trim_minmax_read);
         return pack_filter.load();
     }
 
@@ -86,7 +87,8 @@ public:
         const RowKeyRanges & rowkey_ranges,
         const RSOperatorPtr & filter,
         const IdSetPtr & read_packs,
-        const String & tracing_id)
+        const String & tracing_id,
+        bool enable_trim_minmax_read = false)
     {
         DMFilePackFilter pack_filter(
             dmfile,
@@ -98,7 +100,8 @@ public:
             file_provider_,
             read_limiter_,
             scan_context,
-            tracing_id);
+            tracing_id,
+            enable_trim_minmax_read);
         return pack_filter.load();
     }
 
@@ -170,7 +173,8 @@ private:
         const FileProviderPtr & file_provider_,
         const ReadLimiterPtr & read_limiter_,
         const ScanContextPtr & scan_context_,
-        const String & tracing_id)
+        const String & tracing_id,
+        bool enable_trim_minmax_read_)
         : dmfile(dmfile_)
         , index_cache(index_cache_)
         , set_cache_if_miss(set_cache_if_miss_)
@@ -181,6 +185,7 @@ private:
         , scan_context(scan_context_)
         , log(Logger::get(tracing_id))
         , read_limiter(read_limiter_)
+        , enable_trim_minmax_read(enable_trim_minmax_read_)
     {}
 
     DMFilePackFilterResultPtr load();
@@ -196,6 +201,8 @@ private:
         const ScanContextPtr & scan_context);
 
     void tryLoadIndex(RSCheckParam & param, ColId col_id);
+    void tryLoadIndexByRequest(RSCheckParam & param, const RSIndexRequest & request);
+    bool tryLoadTrimIndex(RSCheckParam & param, ColId col_id, const DateQueryDomain & query_domain);
 
 private:
     DMFilePtr dmfile;
@@ -211,6 +218,7 @@ private:
 
     LoggerPtr log;
     ReadLimiterPtr read_limiter;
+    bool enable_trim_minmax_read = false;
 };
 
 } // namespace DB::DM

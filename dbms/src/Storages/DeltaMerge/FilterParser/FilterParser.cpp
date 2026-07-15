@@ -16,6 +16,7 @@
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Storages/DeltaMerge/Filter/DateQueryDomain.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <TiDB/Schema/TiDB.h>
@@ -383,9 +384,9 @@ RSOperatorPtr FilterParser::parseDAGQuery(
     if (children.empty())
         return EMPTY_RS_OPERATOR;
     else if (children.size() == 1)
-        return children[0];
+        return normalizeTemporalRangesForTrim(children[0]);
     else
-        return createAnd(children);
+        return normalizeTemporalRangesForTrim(createAnd(children));
 }
 
 RSOperatorPtr FilterParser::parseRFInExpr(
