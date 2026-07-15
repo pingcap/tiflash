@@ -128,8 +128,10 @@ private:
         }
 
         const auto sort_key_index = cached_sort_keys.size();
-        cached_sort_keys.emplace_back();
-        auto sort_key = collator.sortKey(raw_key.data, raw_key.size, cached_sort_keys.back());
+        auto & cached_sort_key = cached_sort_keys.emplace_back();
+        const auto sort_key_size = collator.sortKey(raw_key.data, raw_key.size, cached_sort_key).size;
+        // Collators may resize the container to their worst-case output size.
+        cached_sort_key.resize(sort_key_size);
 
         typename decltype(raw_to_sort_key_index)::LookupResult it;
         bool inserted = false;
@@ -137,7 +139,7 @@ private:
         RUNTIME_CHECK(inserted);
         it->getMapped() = sort_key_index;
 
-        return sort_key;
+        return {cached_sort_key.data(), cached_sort_key.size()};
     }
 
     template <typename DerivedCollator, bool use_cache>
@@ -177,17 +179,9 @@ private:
         {
             const auto & derived_collator = *static_cast<const DerivedCollator *>(collator);
             if (collation_sort_key_cache_active)
-                prepareNextBatchWithCollator<DerivedCollator, true>(
-                    chars,
-                    offsets,
-                    cur_batch_size,
-                    derived_collator);
+                prepareNextBatchWithCollator<DerivedCollator, true>(chars, offsets, cur_batch_size, derived_collator);
             else
-                prepareNextBatchWithCollator<DerivedCollator, false>(
-                    chars,
-                    offsets,
-                    cur_batch_size,
-                    derived_collator);
+                prepareNextBatchWithCollator<DerivedCollator, false>(chars, offsets, cur_batch_size, derived_collator);
         }
         else
         {

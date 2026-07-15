@@ -21,6 +21,8 @@
 #include <TestUtils/mockExecutor.h>
 #include <TiDB/Decode/TypeMapping.h>
 
+#include <array>
+
 namespace DB
 {
 namespace FailPoints
@@ -1296,6 +1298,53 @@ try
     auto request
         = buildDAGRequest({db_name, tbl_name}, {Count(lit(Field(static_cast<UInt64>(1))))}, {col("key")}, {"count(1)"});
     executeAndAssertColumnsEqual(request, {toVec<UInt64>("count(1)", ColumnWithUInt64{rows / 2, rows / 2})});
+}
+CATCH
+
+TEST_F(AggExecutorTestRunner, StringCollationKeyCacheEffectiveSortKeySize)
+try
+{
+    const String db_name = "test_db";
+    constexpr size_t rows = 1024;
+
+    auto execute_case = [&](Int64 collator_id,
+                            const String & collation_name,
+                            const String & tbl_name,
+                            const std::array<String, 2> & raw_keys) {
+        DB::MockColumnInfoVec table_column_infos{
+            {"key", TiDB::TP::TypeString, false, Poco::Dynamic::Var(collation_name)}};
+        std::vector<String> keys(rows);
+        for (size_t i = 0; i < rows; ++i)
+            keys[i] = raw_keys[i % raw_keys.size()];
+
+        context.setCollation(collator_id);
+        context.context->setSetting("group_by_collation_sensitive", Field(static_cast<UInt64>(1)));
+        context.context->setSetting("max_block_size", Field(static_cast<UInt64>(rows)));
+        context.addMockTable({db_name, tbl_name}, table_column_infos, {toVec<String>("key", keys)});
+
+        auto request = buildDAGRequest(
+            {db_name, tbl_name},
+            {Count(lit(Field(static_cast<UInt64>(1))))},
+            {col("key")},
+            {"count(1)"});
+        executeAndAssertColumnsEqual(request, {toVec<UInt64>("count(1)", ColumnWithUInt64{rows / 2, rows / 2})});
+    };
+
+    execute_case(
+        TiDB::ITiDBCollator::UTF8_UNICODE_CI,
+        "utf8_unicode_ci",
+        "string_collation_key_cache_unicode_ci_effective_size",
+        {"Alpha", "Beta"});
+    execute_case(
+        TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI,
+        "utf8mb4_general_ci",
+        "string_collation_key_cache_general_ci_effective_size",
+        {"Alpha ", "Beta  "});
+    execute_case(
+        TiDB::ITiDBCollator::UTF8MB4_0900_AI_CI,
+        "utf8mb4_0900_ai_ci",
+        "string_collation_key_cache_0900_ai_ci_effective_size",
+        {"Alpha", "Alpha "});
 }
 CATCH
 
