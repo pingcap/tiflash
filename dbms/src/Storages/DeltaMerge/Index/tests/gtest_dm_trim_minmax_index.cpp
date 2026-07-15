@@ -505,6 +505,7 @@ CATCH
 
 TEST(TrimMinMaxIndexPhaseC, DateQueryDomainEligibility)
 {
+    // E = {date| date ∈ [1900-01-01 00:00:00, 2100-01-01 00:00:00)}
     const UInt64 e_lo = MyDateTime(1900, 1, 1, 0, 0, 0, 0).toPackedUInt();
     const UInt64 e_hi = MyDateTime(2100, 1, 1, 0, 0, 0, 0).toPackedUInt();
     const UInt64 in_e = MyDateTime(2020, 1, 1, 0, 0, 0, 0).toPackedUInt();
@@ -512,35 +513,47 @@ TEST(TrimMinMaxIndexPhaseC, DateQueryDomainEligibility)
     const UInt64 above = MyDateTime(2200, 1, 1, 0, 0, 0, 0).toPackedUInt();
 
     {
+        // isTrimEligible == true when Q = {date | date ∈ {in_e}} (equality)
         DateQueryDomain d;
         d.predicate_class = TrimPredicateClass::EqualityOrInOrBounded;
         d.values = {Field(in_e)};
         EXPECT_TRUE(d.isTrimEligible(e_lo, e_hi));
         d.values = {Field(above)};
         EXPECT_FALSE(d.isTrimEligible(e_lo, e_hi));
+        // lower bound is inclusive, upper bound is exclusive.
+        d.values = {Field(e_lo)};
+        EXPECT_TRUE(d.isTrimEligible(e_lo, e_hi));
+        d.values = {Field(e_hi)};
+        EXPECT_FALSE(d.isTrimEligible(e_lo, e_hi));
     }
     {
+        // isTrimEligible == true when Q = {date | date ∈ [in_e, in_e + 1]} (bounded range)
         DateQueryDomain d;
         d.predicate_class = TrimPredicateClass::EqualityOrInOrBounded;
         d.lower = Field(in_e);
         d.upper = Field(in_e + 1);
         EXPECT_TRUE(d.isTrimEligible(e_lo, e_hi));
+        // isTrimEligible == false when Q = {date | date ∈ [ine_e, above]} (bounded range)
         d.upper = Field(above);
         EXPECT_FALSE(d.isTrimEligible(e_lo, e_hi));
     }
     {
+        // isTrimEligible == true when Q = {date | date ∈ [in_e, ∞)} (lower-bounded)
         DateQueryDomain d;
         d.predicate_class = TrimPredicateClass::LowerBounded;
         d.lower = Field(in_e);
         EXPECT_TRUE(d.isTrimEligible(e_lo, e_hi));
+        // isTrimEligible == false when Q = {date | date ∈ [above, ∞)} (lower-bounded)
         d.lower = Field(above);
         EXPECT_FALSE(d.isTrimEligible(e_lo, e_hi));
     }
     {
+        // isTrimEligible == true when Q = {date | date ∈ (-∞, in_e]} (upper-bounded)
         DateQueryDomain d;
         d.predicate_class = TrimPredicateClass::UpperBounded;
         d.upper = Field(in_e);
         EXPECT_TRUE(d.isTrimEligible(e_lo, e_hi));
+        // isTrimEligible == false when Q = {date | date ∈ (-∞, below]} (upper-bounded)
         d.upper = Field(below);
         EXPECT_FALSE(d.isTrimEligible(e_lo, e_hi));
     }
@@ -642,6 +655,75 @@ try
 }
 CATCH
 
+// P1-1: trim eligibility is per-predicate, not per-column.
+// pack={2200}, predicate: col=2020 OR col=2200 must not be None.
+TEST(TrimMinMaxIndexPhaseC, OrDoesNotShareTrimEligibilityAcrossPredicates)
+try
+{
+    auto type = std::make_shared<DataTypeMyDateTime>(0);
+    Attr attr{.col_name = "t", .col_id = 1, .type = type};
+    const UInt64 e_lo = TrimMinMax::defaultLowerBoundPacked(*type);
+    const UInt64 e_hi = TrimMinMax::defaultUpperBoundPacked(*type);
+    const UInt64 v2020 = MyDateTime(2020, 1, 1, 0, 0, 0, 0).toPackedUInt();
+    const UInt64 v2200 = MyDateTime(2200, 1, 1, 0, 0, 0, 0).toPackedUInt();
+
+    auto make_col = [&](const std::vector<UInt64> & vals) {
+        auto col = type->createColumn();
+        for (auto v : vals)
+            col->insert(Field(v));
+        return col;
+    };
+
+    MinMaxIndex ordinary(*type);
+    MinMaxIndex trim(*type);
+    // pack0: {2200} only — trim has no in-range value, has_trimmed_high
+    TrimMinMax::addOrdinaryAndTrimPack(ordinary, trim, *make_col({v2200}), nullptr, e_lo, e_hi);
+    // pack1: {2020} only
+    TrimMinMax::addOrdinaryAndTrimPack(ordinary, trim, *make_col({v2020}), nullptr, e_lo, e_hi);
+
+    auto ordinary_ptr = std::make_shared<MinMaxIndex>(std::move(ordinary));
+    auto trim_ptr = std::make_shared<MinMaxIndex>(std::move(trim));
+    RSCheckParam param;
+    param.indexes.emplace(attr.col_id, RSIndex(type, ordinary_ptr));
+    param.trim_indexes.emplace(
+        attr.col_id,
+        TrimRSIndex{
+            .type = type,
+            .minmax = trim_ptr,
+            .meta = TrimMinMaxIndexMeta{.format_version = 1, .lower_bound = e_lo, .upper_bound = e_hi, .pack_count = 2}});
+
+    auto eq_in_e = createEqual(attr, Field(v2020));
+    auto eq_out_e = createEqual(attr, Field(v2200));
+
+    // Non-eligible Equal must ignore the column's loaded trim and use ordinary.
+    auto out_res = eq_out_e->roughCheck(0, 2, param);
+    EXPECT_EQ(out_res[0], RSResult::All); // {2200} matches
+    EXPECT_EQ(out_res[1], RSResult::None); // {2020}
+
+    // Eligible Equal may use trim.
+    auto in_res = eq_in_e->roughCheck(0, 2, param);
+    EXPECT_EQ(in_res[0], RSResult::None); // {2200} trimmed out
+    EXPECT_EQ(in_res[1], RSResult::All); // {2020}
+
+    const RSOperators or_ops = {
+        createOr({eq_in_e, eq_out_e}),
+        createOr({eq_out_e, eq_in_e}),
+    };
+    for (const auto & or_op : or_ops)
+    {
+        auto or_res = or_op->roughCheck(0, 2, param);
+        EXPECT_NE(or_res[0], RSResult::None); // must keep pack with 2200
+        EXPECT_NE(or_res[1], RSResult::None); // must keep pack with 2020
+    }
+
+    // IN containing an out-of-E value is not trim-eligible either.
+    auto in_mixed = createIn(attr, {Field(v2020), Field(v2200)});
+    auto in_mixed_res = in_mixed->roughCheck(0, 2, param);
+    EXPECT_EQ(in_mixed_res[0], RSResult::All);
+    EXPECT_EQ(in_mixed_res[1], RSResult::All);
+}
+CATCH
+
 TEST_F(TrimMinMaxIndexWriteTest, PackFilterUsesTrimWhenReadEnabled)
 try
 {
@@ -677,6 +759,54 @@ try
     ASSERT_FALSE(pack_res.empty());
     for (auto r : pack_res)
         EXPECT_NE(r, RSResult::All);
+}
+CATCH
+
+// P1-1 end-to-end: after an in-E Equal loads trim, an out-of-E Equal under OR must
+// still load ordinary and keep packs that only contain the out-of-E value.
+TEST_F(TrimMinMaxIndexWriteTest, PackFilterOrMixedEligibilityLoadsOrdinary)
+try
+{
+    auto type = std::make_shared<DataTypeMyDateTime>(0);
+    Block block = DMTestEnv::prepareSimpleWriteBlock(0, 8, /*reversed*/ false);
+    auto col = type->createColumn();
+    const UInt64 out_e = MyDateTime(2200, 1, 1, 0, 0, 0, 0).toPackedUInt();
+    for (size_t i = 0; i < 8; ++i)
+        col->insert(Field(out_e));
+    block.insert(ColumnWithTypeAndName(std::move(col), type, "settle_time", settle_col_id));
+
+    auto dm_file = writeDMFile(block, /*enable_trim_write*/ true);
+    ASSERT_TRUE(dm_file->getColumnStat(settle_col_id).trim_minmax_index.has_value());
+
+    Attr attr{.col_name = "settle_time", .col_id = settle_col_id, .type = type};
+    const UInt64 in_e = MyDateTime(2020, 1, 1, 0, 0, 0, 0).toPackedUInt();
+
+    const RSOperators filters = {
+        createOr({createEqual(attr, Field(in_e)), createEqual(attr, Field(out_e))}),
+        createOr({createEqual(attr, Field(out_e)), createEqual(attr, Field(in_e))}),
+    };
+    for (const auto & filter : filters)
+    {
+        auto scan_context = std::make_shared<ScanContext>();
+        auto pack_result = DMFilePackFilter::loadFrom(
+            dm_file,
+            /*index_cache*/ nullptr,
+            /*set_cache_if_miss*/ false,
+            /*rowkey_ranges*/ {},
+            filter,
+            /*read_packs*/ {},
+            file_provider,
+            /*read_limiter*/ nullptr,
+            scan_context,
+            /*tracing_id*/ "trim_phase_c_or",
+            ReadTag::Query,
+            /*enable_trim_minmax_read*/ true);
+
+        const auto & pack_res = pack_result->getPackRes();
+        ASSERT_FALSE(pack_res.empty());
+        for (auto r : pack_res)
+            EXPECT_NE(r, RSResult::None) << "out-of-E OR branch must keep packs with 2200";
+    }
 }
 CATCH
 
