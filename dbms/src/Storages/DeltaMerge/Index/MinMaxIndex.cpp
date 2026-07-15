@@ -29,6 +29,7 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 #include <Storages/DeltaMerge/Index/RoughCheck.h>
+#include <Storages/DeltaMerge/Index/TrimMinMaxIndex.h>
 namespace DB::DM
 {
 
@@ -142,14 +143,15 @@ void MinMaxIndex::addPack(const IColumn & column, const ColumnVector<UInt8> * de
 
     if (min_index != NONE_EXIST)
     {
-        has_null_marks.push_back(has_null);
+        // Ordinary min-max only sets the NULL bit; reserved / trim bits must stay 0.
+        pack_marks.push_back(has_null ? PackMarkBits::Null : 0);
         has_value_marks.push_back(1);
         minmaxes->insertFrom(column, min_index);
         minmaxes->insertFrom(column, max_index);
     }
     else
     {
-        has_null_marks.push_back(has_null);
+        pack_marks.push_back(has_null ? PackMarkBits::Null : 0);
         has_value_marks.push_back(0);
         minmaxes->insertDefault();
         minmaxes->insertDefault();
@@ -158,9 +160,9 @@ void MinMaxIndex::addPack(const IColumn & column, const ColumnVector<UInt8> * de
 
 void MinMaxIndex::write(const IDataType & type, WriteBuffer & buf)
 {
-    UInt64 size = has_null_marks.size();
+    UInt64 size = pack_marks.size();
     DB::writeIntBinary(size, buf);
-    buf.write(reinterpret_cast<const char *>(has_null_marks.data()), sizeof(UInt8) * size);
+    buf.write(reinterpret_cast<const char *>(pack_marks.data()), sizeof(UInt8) * size);
     buf.write(reinterpret_cast<const char *>(has_value_marks.data()), sizeof(UInt8) * size);
     type.serializeBinaryBulkWithMultipleStreams(
         *minmaxes, //
@@ -179,10 +181,10 @@ MinMaxIndexPtr MinMaxIndex::read(const IDataType & type, ReadBuffer & buf, size_
     {
         DB::readIntBinary(size, buf);
     }
-    PaddedPODArray<UInt8> has_null_marks(size);
+    PaddedPODArray<UInt8> pack_marks(size);
     PaddedPODArray<UInt8> has_value_marks(size);
     auto minmaxes = type.createColumn();
-    buf.read(reinterpret_cast<char *>(has_null_marks.data()), sizeof(UInt8) * size);
+    buf.read(reinterpret_cast<char *>(pack_marks.data()), sizeof(UInt8) * size);
     buf.read(reinterpret_cast<char *>(has_value_marks.data()), sizeof(UInt8) * size);
     type.deserializeBinaryBulkWithMultipleStreams(
         *minmaxes, //
@@ -200,7 +202,22 @@ MinMaxIndexPtr MinMaxIndex::read(const IDataType & type, ReadBuffer & buf, size_
             bytes_limit,
             bytes_read);
     }
-    return std::make_shared<MinMaxIndex>(std::move(has_null_marks), std::move(has_value_marks), std::move(minmaxes));
+    return std::make_shared<MinMaxIndex>(std::move(pack_marks), std::move(has_value_marks), std::move(minmaxes));
+}
+
+bool MinMaxIndex::hasNull(size_t pack_index) const
+{
+    return hasNullMark(pack_marks[pack_index]);
+}
+
+bool MinMaxIndex::hasTrimmedLow(size_t pack_index) const
+{
+    return hasTrimmedLowMark(pack_marks[pack_index]);
+}
+
+bool MinMaxIndex::hasTrimmedHigh(size_t pack_index) const
+{
+    return hasTrimmedHighMark(pack_marks[pack_index]);
 }
 
 std::pair<Int64, Int64> MinMaxIndex::getIntMinMax(size_t pack_index) const
@@ -513,7 +530,7 @@ RSResults MinMaxIndex::checkNullableNullEqualImpl(
         /// `NULL <=> value` is false for every row, so the pack can be skipped.
         if (details::minIsNull(null_map, i))
         {
-            if (has_null_marks[i] && !has_value_marks[i])
+            if (hasNull(i) && !has_value_marks[i])
                 results[i - start_pack] = RSResult::None;
             continue;
         }
@@ -523,7 +540,7 @@ RSResults MinMaxIndex::checkNullableNullEqualImpl(
         auto value_result = RoughCheck::CheckEqual::check<T>(value, type, min, max);
         /// Non-null values may all equal `value`, but NULL rows still make `col <=> value` false.
         /// Downgrade All => Some so the pack is read and filtered row by row.
-        if (has_null_marks[i] && value_result == RSResult::All)
+        if (hasNull(i) && value_result == RSResult::All)
             results[i - start_pack] = RSResult::Some;
         else
             results[i - start_pack] = value_result;
@@ -568,7 +585,7 @@ RSResults MinMaxIndex::checkNullableNullEqual(
         {
             if (details::minIsNull(null_map, i))
             {
-                if (has_null_marks[i] && !has_value_marks[i])
+                if (hasNull(i) && !has_value_marks[i])
                     results[i - start_pack] = RSResult::None;
                 continue;
             }
@@ -581,7 +598,7 @@ RSResults MinMaxIndex::checkNullableNullEqual(
             prev_offset = offsets[pos - 1];
             auto max = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
             auto value_result = RoughCheck::CheckEqual::check<String>(value, type, min, max);
-            if (has_null_marks[i] && value_result == RSResult::All)
+            if (hasNull(i) && value_result == RSResult::All)
                 results[i - start_pack] = RSResult::Some;
             else
                 results[i - start_pack] = value_result;
@@ -732,7 +749,7 @@ RSResults MinMaxIndex::checkIsNull(size_t start_pack, size_t pack_count)
     RSResults results(pack_count, RSResult::None);
     for (size_t i = start_pack; i < start_pack + pack_count; ++i)
     {
-        if (has_null_marks[i])
+        if (hasNull(i))
         {
             results[i - start_pack] = has_value_marks[i] ? RSResult::Some : RSResult::All;
         }
@@ -742,7 +759,7 @@ RSResults MinMaxIndex::checkIsNull(size_t start_pack, size_t pack_count)
 
 RSResult MinMaxIndex::addNullIfHasNull(RSResult value_result, size_t i) const
 {
-    if (has_null_marks[i])
+    if (hasNull(i))
         value_result.setHasNull();
     return value_result;
 }
@@ -750,7 +767,7 @@ RSResult MinMaxIndex::addNullIfHasNull(RSResult value_result, size_t i) const
 MinMaxIndex::Cell MinMaxIndex::getCell(size_t pack_index) const
 {
     Cell cell;
-    if (has_null_marks[pack_index])
+    if (hasNull(pack_index))
         cell.has_null = true;
     if (has_value_marks[pack_index])
     {
