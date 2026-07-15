@@ -18,12 +18,22 @@
 #include <DataTypes/DataTypeMyDate.h>
 #include <DataTypes/DataTypeMyDateTime.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <IO/Buffer/ReadBufferFromString.h>
+#include <IO/Buffer/WriteBufferFromString.h>
+#include <IO/Encryption/MockKeyManager.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/File/ColumnStat.h>
+#include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/File/DMFileMetaV2.h>
 #include <Storages/DeltaMerge/File/DMFileUtil.h>
+#include <Storages/DeltaMerge/File/DMFileWriter.h>
 #include <Storages/DeltaMerge/File/MergedFile.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 #include <Storages/DeltaMerge/Index/TrimMinMaxIndex.h>
+#include <Storages/DeltaMerge/tests/DMTestEnv.h>
+#include <TestUtils/FunctionTestUtils.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
@@ -260,5 +270,233 @@ TEST(TrimMinMaxIndexPhaseA, SettingsDefaultOff)
     EXPECT_FALSE(settings.dt_enable_trim_minmax_write);
     EXPECT_FALSE(settings.dt_enable_trim_minmax_read);
 }
+
+TEST(TrimMinMaxIndexPhaseB, AddOrdinaryAndTrimPack)
+{
+    auto type = std::make_shared<DataTypeMyDateTime>(0);
+    MinMaxIndex ordinary(*type);
+    MinMaxIndex trim(*type);
+
+    const UInt64 lower = TrimMinMax::defaultLowerBoundPacked(*type);
+    const UInt64 upper = TrimMinMax::defaultUpperBoundPacked(*type);
+    const UInt64 in_range = MyDateTime(2020, 1, 1, 0, 0, 0, 0).toPackedUInt();
+    const UInt64 low_out = MyDateTime(1800, 1, 1, 0, 0, 0, 0).toPackedUInt();
+    const UInt64 high_out = MyDateTime(2100, 1, 1, 0, 0, 0, 0).toPackedUInt();
+
+    auto make_col = [&](const std::vector<UInt64> & vals) {
+        auto col = type->createColumn();
+        for (auto v : vals)
+            col->insert(Field(v));
+        return col;
+    };
+
+    // Pack 0: all in range
+    {
+        auto col = make_col({in_range, in_range + 1});
+        TrimMinMax::addOrdinaryAndTrimPack(ordinary, trim, *col, nullptr, lower, upper);
+        EXPECT_FALSE(ordinary.hasNull(0));
+        EXPECT_TRUE(ordinary.getCell(0).has_value);
+        EXPECT_FALSE(trim.hasTrimmedLow(0));
+        EXPECT_FALSE(trim.hasTrimmedHigh(0));
+        EXPECT_TRUE(trim.getCell(0).has_value);
+    }
+
+    // Pack 1: high outlier only
+    {
+        auto col = make_col({high_out});
+        TrimMinMax::addOrdinaryAndTrimPack(ordinary, trim, *col, nullptr, lower, upper);
+        EXPECT_TRUE(ordinary.getCell(1).has_value);
+        EXPECT_FALSE(trim.getCell(1).has_value);
+        EXPECT_FALSE(trim.hasTrimmedLow(1));
+        EXPECT_TRUE(trim.hasTrimmedHigh(1));
+    }
+
+    // Pack 2: low + high + in-range
+    {
+        auto col = make_col({low_out, in_range, high_out});
+        TrimMinMax::addOrdinaryAndTrimPack(ordinary, trim, *col, nullptr, lower, upper);
+        EXPECT_TRUE(trim.getCell(2).has_value);
+        EXPECT_TRUE(trim.hasTrimmedLow(2));
+        EXPECT_TRUE(trim.hasTrimmedHigh(2));
+        EXPECT_EQ(trim.getCell(2).min.safeGet<UInt64>(), in_range);
+        EXPECT_EQ(trim.getCell(2).max.safeGet<UInt64>(), in_range);
+    }
+
+    // Pack 3: nullable NULL + high outlier
+    {
+        auto nullable_type = makeNullable(type);
+        MinMaxIndex ordinary_n(*nullable_type);
+        MinMaxIndex trim_n(*nullable_type);
+        auto col = nullable_type->createColumn();
+        col->insertDefault(); // NULL
+        col->insert(Field(high_out));
+        TrimMinMax::addOrdinaryAndTrimPack(ordinary_n, trim_n, *col, nullptr, lower, upper);
+        EXPECT_TRUE(ordinary_n.hasNull(0));
+        EXPECT_TRUE(trim_n.hasNull(0));
+        EXPECT_TRUE(trim_n.hasTrimmedHigh(0));
+        EXPECT_FALSE(trim_n.getCell(0).has_value);
+        EXPECT_EQ(trim_n.packMark(0), PackMarkBits::Null | PackMarkBits::TrimmedHigh);
+    }
+
+    EXPECT_TRUE(trim.hasAnyTrimmedValue());
+    EXPECT_FALSE(ordinary.hasAnyTrimmedValue());
+
+    // Serialize / deserialize trim payload
+    WriteBufferFromOwnString buf;
+    trim.write(*type, buf);
+    ReadBufferFromString rbuf(buf.str());
+    auto restored = MinMaxIndex::read(*type, rbuf, buf.str().size());
+    ASSERT_TRUE(TrimMinMax::validateTrimPackMarks(restored->packMarks(), 3));
+    EXPECT_TRUE(restored->hasTrimmedHigh(1));
+    EXPECT_TRUE(restored->hasTrimmedLow(2));
+    EXPECT_TRUE(restored->hasTrimmedHigh(2));
+}
+
+TEST(TrimMinMaxIndexPhaseB, AppendPackRejectsInvalidMask)
+{
+    auto type = std::make_shared<DataTypeMyDateTime>(0);
+    MinMaxIndex index(*type);
+    EXPECT_THROW(
+        index.appendPack(/*pack_mark*/ 0x08, /*has_value*/ false, PackMarkBits::TrimAllowedMask),
+        DB::Exception);
+    EXPECT_THROW(
+        index.appendPack(/*pack_mark*/ PackMarkBits::TrimmedLow, /*has_value*/ false, PackMarkBits::OrdinaryAllowedMask),
+        DB::Exception);
+}
+
+class TrimMinMaxIndexWriteTest : public DB::base::TiFlashStorageTestBasic
+{
+protected:
+    void SetUp() override
+    {
+        TiFlashStorageTestBasic::SetUp();
+        parent_path = getTemporaryPath();
+        file_provider = db_context->getFileProvider();
+    }
+
+    static constexpr ColId settle_col_id = 100;
+
+    ColumnDefinesPtr makeColumns()
+    {
+        auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ false);
+        cols->emplace_back(ColumnDefine{
+            settle_col_id,
+            "settle_time",
+            std::make_shared<DataTypeMyDateTime>(0)});
+        return cols;
+    }
+
+    Block makeBlockWithOutlier(size_t rows)
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, rows, /*reversed*/ false);
+        auto type = std::make_shared<DataTypeMyDateTime>(0);
+        auto col = type->createColumn();
+        const UInt64 normal = MyDateTime(2020, 6, 1, 0, 0, 0, 0).toPackedUInt();
+        const UInt64 sentinel = MyDateTime(2100, 1, 1, 0, 0, 0, 0).toPackedUInt();
+        for (size_t i = 0; i < rows; ++i)
+            col->insert(Field(i == 0 ? sentinel : normal));
+        block.insert(ColumnWithTypeAndName(std::move(col), type, "settle_time", settle_col_id));
+        return block;
+    }
+
+    Block makeBlockInRangeOnly(size_t rows)
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, rows, /*reversed*/ false);
+        auto type = std::make_shared<DataTypeMyDateTime>(0);
+        auto col = type->createColumn();
+        const UInt64 normal = MyDateTime(2020, 6, 1, 0, 0, 0, 0).toPackedUInt();
+        for (size_t i = 0; i < rows; ++i)
+            col->insert(Field(normal + i));
+        block.insert(ColumnWithTypeAndName(std::move(col), type, "settle_time", settle_col_id));
+        return block;
+    }
+
+    DMFilePtr writeDMFile(const Block & block, bool enable_trim_write)
+    {
+        auto dm_file = DMFile::create(
+            /*file_id*/ 1,
+            parent_path,
+            std::make_optional<DMChecksumConfig>(),
+            128 * 1024,
+            16 * 1024 * 1024,
+            NullspaceID,
+            DMFileFormat::V3);
+        auto cols = makeColumns();
+        DMFileWriter::Options options;
+        options.enable_trim_minmax_write = enable_trim_write;
+        DMFileWriter writer(dm_file, *cols, file_provider, db_context->getWriteLimiter(), options);
+        writer.write(block, DMFileWriter::BlockProperty{0, 0, 0, 0});
+        writer.finalize();
+        return dm_file;
+    }
+
+    String parent_path;
+    FileProviderPtr file_provider;
+};
+
+TEST_F(TrimMinMaxIndexWriteTest, WriteTrimIndexWhenOutliersExist)
+try
+{
+    auto dm_file = writeDMFile(makeBlockWithOutlier(/*rows*/ 8), /*enable_trim_write*/ true);
+    ASSERT_TRUE(dm_file->getColumnStat(settle_col_id).trim_minmax_index.has_value());
+    EXPECT_EQ(dm_file->getColumnStat(settle_col_id).trim_minmax_index->pack_count(), dm_file->getPacks());
+    EXPECT_EQ(dm_file->getColumnStat(settle_col_id).trim_minmax_index->format_version(), TrimMinMax::FormatVersionV1);
+
+    const auto * meta = typeid_cast<const DMFileMetaV2 *>(dm_file->meta.get());
+    ASSERT_NE(meta, nullptr);
+    const auto fname = colTrimIndexFileName(DB::toString(settle_col_id));
+    auto itr = meta->merged_sub_file_infos.find(fname);
+    ASSERT_NE(itr, meta->merged_sub_file_infos.end());
+    EXPECT_GT(itr->second.size, 0u);
+
+    TrimMinMaxIndexMeta selected;
+    auto reason = TrimMinMax::trySelectTrimMeta(
+        /*read_enabled*/ true,
+        dm_file->getColumnStat(settle_col_id).trim_minmax_index,
+        *dm_file->getColumnStat(settle_col_id).type,
+        dm_file->getPacks(),
+        meta->merged_sub_file_infos,
+        fname,
+        &selected);
+    EXPECT_EQ(reason, TrimMinMaxFallbackReason::None);
+    EXPECT_EQ(selected.file_size, itr->second.size);
+
+    // Restore and verify meta survives MetaV2 round-trip.
+    auto restored = DMFile::restore(
+        file_provider,
+        1,
+        1,
+        parent_path,
+        DMFileMeta::ReadMode::all(),
+        /*meta_version*/ 0);
+    ASSERT_TRUE(restored->getColumnStat(settle_col_id).trim_minmax_index.has_value());
+}
+CATCH
+
+TEST_F(TrimMinMaxIndexWriteTest, SkipPersistWhenNoOutliers)
+try
+{
+    auto dm_file = writeDMFile(makeBlockInRangeOnly(/*rows*/ 8), /*enable_trim_write*/ true);
+    EXPECT_FALSE(dm_file->getColumnStat(settle_col_id).trim_minmax_index.has_value());
+
+    const auto * meta = typeid_cast<const DMFileMetaV2 *>(dm_file->meta.get());
+    ASSERT_NE(meta, nullptr);
+    const auto fname = colTrimIndexFileName(DB::toString(settle_col_id));
+    EXPECT_EQ(meta->merged_sub_file_infos.find(fname), meta->merged_sub_file_infos.end());
+}
+CATCH
+
+TEST_F(TrimMinMaxIndexWriteTest, DisabledWriteSkipsTrim)
+try
+{
+    auto dm_file = writeDMFile(makeBlockWithOutlier(/*rows*/ 8), /*enable_trim_write*/ false);
+    EXPECT_FALSE(dm_file->getColumnStat(settle_col_id).trim_minmax_index.has_value());
+
+    const auto * meta = typeid_cast<const DMFileMetaV2 *>(dm_file->meta.get());
+    ASSERT_NE(meta, nullptr);
+    const auto fname = colTrimIndexFileName(DB::toString(settle_col_id));
+    EXPECT_EQ(meta->merged_sub_file_infos.find(fname), meta->merged_sub_file_infos.end());
+}
+CATCH
 
 } // namespace DB::DM::tests

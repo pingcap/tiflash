@@ -532,7 +532,7 @@ try
 {
     auto dm_file = prepareDMFile(/* file_id= */ 1);
     ASSERT_EQ(0, dm_file->metaVersion());
-    ASSERT_FALSE(dm_file->getColumnStat(MutSup::extra_handle_id).trim_minmax_index.has_value());
+    ASSERT_FALSE(dm_file->getColumnStat(EXTRA_HANDLE_COLUMN_ID).trim_minmax_index.has_value());
 
     dtpb::TrimMinMaxIndexProps props;
     props.set_format_version(TrimMinMax::FormatVersionV1);
@@ -548,7 +548,7 @@ try
             .path_pool = path_pool,
             .disagg_ctx = db_context->getSharedContextDisagg(),
         });
-        dm_file->meta->getColumnStats()[MutSup::extra_handle_id].trim_minmax_index = props;
+        dm_file->meta->getColumnStats()[EXTRA_HANDLE_COLUMN_ID].trim_minmax_index = props;
         ASSERT_EQ(1, dm_file->meta->bumpMetaVersion({}));
         iw->finalize();
     }
@@ -561,9 +561,9 @@ try
         parent_path,
         DMFileMeta::ReadMode::all(),
         /* meta_version= */ 1);
-    ASSERT_TRUE(dm_file->getColumnStat(MutSup::extra_handle_id).trim_minmax_index.has_value());
-    EXPECT_EQ(dm_file->getColumnStat(MutSup::extra_handle_id).trim_minmax_index->pack_count(), dm_file->getPacks());
-    EXPECT_EQ(dm_file->getColumnStat(MutSup::extra_handle_id).trim_minmax_index->format_version(), TrimMinMax::FormatVersionV1);
+    ASSERT_TRUE(dm_file->getColumnStat(EXTRA_HANDLE_COLUMN_ID).trim_minmax_index.has_value());
+    EXPECT_EQ(dm_file->getColumnStat(EXTRA_HANDLE_COLUMN_ID).trim_minmax_index->pack_count(), dm_file->getPacks());
+    EXPECT_EQ(dm_file->getColumnStat(EXTRA_HANDLE_COLUMN_ID).trim_minmax_index->format_version(), TrimMinMax::FormatVersionV1);
 
     // Simulate an old node rewriting ColumnStat without field 105.
     {
@@ -574,7 +574,7 @@ try
             .path_pool = path_pool,
             .disagg_ctx = db_context->getSharedContextDisagg(),
         });
-        dm_file->meta->getColumnStats()[MutSup::extra_handle_id].trim_minmax_index.reset();
+        dm_file->meta->getColumnStats()[EXTRA_HANDLE_COLUMN_ID].trim_minmax_index.reset();
         ASSERT_EQ(2, dm_file->meta->bumpMetaVersion({}));
         iw->finalize();
     }
@@ -586,16 +586,16 @@ try
         parent_path,
         DMFileMeta::ReadMode::all(),
         /* meta_version= */ 2);
-    ASSERT_FALSE(dm_file->getColumnStat(MutSup::extra_handle_id).trim_minmax_index.has_value());
+    ASSERT_FALSE(dm_file->getColumnStat(EXTRA_HANDLE_COLUMN_ID).trim_minmax_index.has_value());
 
     // Without meta, Reader selection must fall back even if a trim fname is presented.
     auto reason = TrimMinMax::trySelectTrimMeta(
         /*read_enabled*/ true,
-        dm_file->getColumnStat(MutSup::extra_handle_id).trim_minmax_index,
-        *dm_file->getColumnStat(MutSup::extra_handle_id).type,
+        dm_file->getColumnStat(EXTRA_HANDLE_COLUMN_ID).trim_minmax_index,
+        *dm_file->getColumnStat(EXTRA_HANDLE_COLUMN_ID).type,
         dm_file->getPacks(),
         /*merged*/ {},
-        colTrimIndexFileName(DB::toString(MutSup::extra_handle_id)),
+        colTrimIndexFileName(DB::toString(EXTRA_HANDLE_COLUMN_ID)),
         nullptr);
     EXPECT_EQ(reason, TrimMinMaxFallbackReason::NoMeta);
 }

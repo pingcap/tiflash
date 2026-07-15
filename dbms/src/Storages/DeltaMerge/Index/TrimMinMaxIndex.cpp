@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Columns/ColumnNullable.h>
+#include <Columns/ColumnVector.h>
 #include <Common/MyTime.h>
 #include <DataTypes/DataTypeMyDate.h>
 #include <DataTypes/DataTypeMyDateTime.h>
@@ -26,7 +28,7 @@ namespace DB::DM
 {
 namespace
 {
-const IDataType * removeNullable(const IDataType & type)
+const IDataType * stripNullable(const IDataType & type)
 {
     if (type.isNullable())
         return static_cast<const DataTypeNullable &>(type).getNestedType().get();
@@ -38,13 +40,28 @@ bool isSupportedTemporalNestedType(const IDataType & nested_type)
     return typeid_cast<const DataTypeMyDate *>(&nested_type)
         || typeid_cast<const DataTypeMyDateTime *>(&nested_type);
 }
+
+const PaddedPODArray<UInt64> & getUInt64Data(const IColumn & column)
+{
+    if (column.isColumnNullable())
+    {
+        const auto & nullable = static_cast<const ColumnNullable &>(column);
+        return static_cast<const ColumnVector<UInt64> &>(nullable.getNestedColumn()).getData();
+    }
+    return static_cast<const ColumnVector<UInt64> &>(column).getData();
+}
 } // namespace
 
 namespace TrimMinMax
 {
+bool isSupportedTemporalType(const IDataType & type)
+{
+    return isSupportedTemporalNestedType(*stripNullable(type));
+}
+
 UInt64 defaultLowerBoundPacked(const IDataType & nested_type)
 {
-    const auto & type = *removeNullable(nested_type);
+    const auto & type = *stripNullable(nested_type);
     if (typeid_cast<const DataTypeMyDate *>(&type))
         return MyDate(1900, 1, 1).toPackedUInt();
     // DATETIME / TIMESTAMP share MyDateTime packing.
@@ -53,7 +70,7 @@ UInt64 defaultLowerBoundPacked(const IDataType & nested_type)
 
 UInt64 defaultUpperBoundPacked(const IDataType & nested_type)
 {
-    const auto & type = *removeNullable(nested_type);
+    const auto & type = *stripNullable(nested_type);
     if (typeid_cast<const DataTypeMyDate *>(&type))
         return MyDate(2100, 1, 1).toPackedUInt();
     return MyDateTime(2100, 1, 1, 0, 0, 0, 0).toPackedUInt();
@@ -88,13 +105,103 @@ dtpb::TrimMinMaxIndexProps makeDefaultProps(const IDataType & nested_type, UInt6
     return props;
 }
 
+void addOrdinaryAndTrimPack(
+    MinMaxIndex & ordinary,
+    MinMaxIndex & trim,
+    const IColumn & column,
+    const ColumnVector<UInt8> * del_mark,
+    UInt64 lower_bound,
+    UInt64 upper_bound)
+{
+    const auto * del_mark_data = del_mark ? &del_mark->getData() : nullptr;
+    const UInt8 * null_mark_data = nullptr;
+    if (column.isColumnNullable())
+        null_mark_data = static_cast<const ColumnNullable &>(column).getNullMapData().data();
+
+    const auto & values = getUInt64Data(column);
+    const size_t size = column.size();
+
+    size_t ordinary_min_idx = size;
+    size_t ordinary_max_idx = size;
+    size_t trim_min_idx = size;
+    size_t trim_max_idx = size;
+    UInt8 trim_pack_mark = 0;
+    bool ordinary_has_null = false;
+
+    for (size_t i = 0; i < size; ++i)
+    {
+        if (del_mark_data && (*del_mark_data)[i])
+            continue;
+
+        if (null_mark_data && null_mark_data[i])
+        {
+            ordinary_has_null = true;
+            trim_pack_mark |= PackMarkBits::Null;
+            continue;
+        }
+
+        const UInt64 value = values[i];
+        if (ordinary_min_idx == size || value < values[ordinary_min_idx])
+            ordinary_min_idx = i;
+        if (ordinary_max_idx == size || value > values[ordinary_max_idx])
+            ordinary_max_idx = i;
+
+        if (value >= lower_bound && value < upper_bound)
+        {
+            if (trim_min_idx == size || value < values[trim_min_idx])
+                trim_min_idx = i;
+            if (trim_max_idx == size || value > values[trim_max_idx])
+                trim_max_idx = i;
+        }
+        else if (value < lower_bound)
+        {
+            trim_pack_mark |= PackMarkBits::TrimmedLow;
+        }
+        else
+        {
+            trim_pack_mark |= PackMarkBits::TrimmedHigh;
+        }
+    }
+
+    const UInt8 ordinary_pack_mark = ordinary_has_null ? PackMarkBits::Null : 0;
+    if (ordinary_min_idx != size)
+    {
+        ordinary.appendPack(
+            ordinary_pack_mark,
+            /*has_value*/ true,
+            PackMarkBits::OrdinaryAllowedMask,
+            &column,
+            ordinary_min_idx,
+            ordinary_max_idx);
+    }
+    else
+    {
+        ordinary.appendPack(ordinary_pack_mark, /*has_value*/ false, PackMarkBits::OrdinaryAllowedMask);
+    }
+
+    if (trim_min_idx != size)
+    {
+        trim.appendPack(
+            trim_pack_mark,
+            /*has_value*/ true,
+            PackMarkBits::TrimAllowedMask,
+            &column,
+            trim_min_idx,
+            trim_max_idx);
+    }
+    else
+    {
+        trim.appendPack(trim_pack_mark, /*has_value*/ false, PackMarkBits::TrimAllowedMask);
+    }
+}
+
 TrimMinMaxFallbackReason validateProps(
     const dtpb::TrimMinMaxIndexProps & props,
     const IDataType & nested_type,
     UInt64 expected_pack_count,
     TrimMinMaxIndexMeta * out_meta)
 {
-    const auto & type = *removeNullable(nested_type);
+    const auto & type = *stripNullable(nested_type);
     if (!isSupportedTemporalNestedType(type))
         return TrimMinMaxFallbackReason::MetadataMismatch;
 

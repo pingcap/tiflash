@@ -16,6 +16,7 @@
 #include <IO/FileProvider/WriteBufferFromWritableFileBuilder.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
+#include <Storages/DeltaMerge/Index/TrimMinMaxIndex.h>
 #include <Storages/S3/S3Common.h>
 #include <sys/stat.h>
 
@@ -73,6 +74,7 @@ DMFileWriter::DMFileWriter(
                 .avg_size = 0,
                 // ... here ignore some fields with default initializers
                 .vector_index = {},
+                .trim_minmax_index = {},
 #ifndef NDEBUG
                 .additional_data_for_test = {},
 #endif
@@ -111,9 +113,15 @@ DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createMetaFile()
 
 void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
 {
+    const auto nested_type = removeNullable(type);
+    const bool can_trim = options.enable_trim_minmax_write && dmfile->useMetaV2()
+        && col_id != EXTRA_HANDLE_COLUMN_ID && col_id != VERSION_COLUMN_ID && col_id != TAG_COLUMN_ID
+        && TrimMinMax::isSupportedTemporalType(*nested_type);
+
     auto callback = [&](const IDataType::SubstreamPath & substream_path) {
         const auto stream_name = DMFile::getFileNameBase(col_id, substream_path);
         bool substream_can_index = !IDataType::isNullMap(substream_path) && !IDataType::isArraySizes(substream_path);
+        const bool do_index_stream = do_index && substream_can_index;
         auto stream = std::make_unique<Stream>(
             dmfile,
             stream_name,
@@ -122,7 +130,13 @@ void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
             options.max_compress_block_size,
             file_provider,
             write_limiter,
-            do_index && substream_can_index);
+            do_index_stream);
+        if (can_trim && do_index_stream)
+        {
+            stream->trim_minmaxes = std::make_shared<MinMaxIndex>(*type);
+            stream->trim_lower = TrimMinMax::defaultLowerBoundPacked(*nested_type);
+            stream->trim_upper = TrimMinMax::defaultUpperBoundPacked(*nested_type);
+        }
         column_streams.emplace(stream_name, std::move(stream));
     };
 
@@ -207,9 +221,22 @@ void DMFileWriter::writeColumn(
                 // For EXTRA_HANDLE_COLUMN_ID, we ignore del_mark when add minmax index.
                 // Because we need all rows which satisfy a certain range when place delta index no matter whether the row is a delete row.
                 // For TAG Column, we also ignore del_mark when add minmax index.
-                stream->minmaxes->addPack(
-                    column,
-                    (col_id == EXTRA_HANDLE_COLUMN_ID || col_id == TAG_COLUMN_ID) ? nullptr : del_mark);
+                const ColumnVector<UInt8> * effective_del_mark
+                    = (col_id == EXTRA_HANDLE_COLUMN_ID || col_id == TAG_COLUMN_ID) ? nullptr : del_mark;
+                if (stream->trim_minmaxes)
+                {
+                    TrimMinMax::addOrdinaryAndTrimPack(
+                        *stream->minmaxes,
+                        *stream->trim_minmaxes,
+                        column,
+                        effective_del_mark,
+                        stream->trim_lower,
+                        stream->trim_upper);
+                }
+                else
+                {
+                    stream->minmaxes->addPack(column, effective_del_mark);
+                }
             }
 
             /// There could already be enough data to compress into the new block.
@@ -334,6 +361,36 @@ void DMFileWriter::finalizeColumn(ColId col_id, DataTypePtr type)
 
                 merged_file.file_info.size += col_stat.index_bytes;
                 buffer->next();
+            }
+
+            // Write trim min-max only when the column actually has trimmed outliers.
+            // Without outliers, ordinary and trim are equivalent for non-NULL values.
+            if (stream->trim_minmaxes && !is_empty_file && stream->trim_minmaxes->hasAnyTrimmedValue())
+            {
+                dmfile_meta->checkMergedFile(merged_file, file_provider, write_limiter);
+
+                auto fname = colTrimIndexFileName(stream_name);
+
+                auto buffer = ChecksumWriteBufferBuilder::build(
+                    merged_file.buffer,
+                    dmfile->getConfiguration()->getChecksumAlgorithm(),
+                    dmfile->getConfiguration()->getChecksumFrameLength());
+
+                stream->trim_minmaxes->write(*type, *buffer);
+
+                const size_t trim_index_bytes = buffer->getMaterializedBytes();
+                MergedSubFileInfo info{
+                    fname,
+                    merged_file.file_info.number,
+                    merged_file.file_info.size,
+                    trim_index_bytes};
+                dmfile_meta->merged_sub_file_infos[fname] = info;
+
+                merged_file.file_info.size += trim_index_bytes;
+                buffer->next();
+
+                col_stat.trim_minmax_index
+                    = TrimMinMax::makeDefaultProps(*removeNullable(type), dmfile->getPacks());
             }
 
             // write mark into merged_file_writer
