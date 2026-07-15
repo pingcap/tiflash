@@ -30,6 +30,7 @@
 #include <Storages/DeltaMerge/File/DMFileUtil.h>
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
 #include <Storages/DeltaMerge/File/MergedFile.h>
+#include <Storages/DeltaMerge/Filter/And.h>
 #include <Storages/DeltaMerge/Filter/DateQueryDomain.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
@@ -582,6 +583,61 @@ TEST(TrimMinMaxIndexPhaseC, NormalizeMergesTemporalRange)
     auto normalized_or = normalizeTemporalRangesForTrim(or_op);
     EXPECT_EQ(normalized_or->name(), "or");
 }
+
+// P1-2: unparseable temporal bounds must not be silently dropped into an empty DateRange.
+TEST(TrimMinMaxIndexPhaseC, NormalizeKeepsUnparseableTemporalBounds)
+{
+    auto type = std::make_shared<DataTypeMyDateTime>(0);
+    Attr attr{.col_name = "t", .col_id = 7, .type = type};
+    const UInt64 hi = MyDateTime(2020, 1, 2, 0, 0, 0, 0).toPackedUInt();
+
+    // NULL literal alone: keep original Greater, never emit empty DateRange.
+    auto null_gt = normalizeTemporalRangesForTrim(createGreater(attr, Field()));
+    ASSERT_NE(null_gt, nullptr);
+    EXPECT_EQ(null_gt->name(), "greater");
+
+    // Negative Int64 is also unparseable as UInt64 bound.
+    auto neg_gt = normalizeTemporalRangesForTrim(createGreater(attr, Field(static_cast<Int64>(-1))));
+    ASSERT_NE(neg_gt, nullptr);
+    EXPECT_EQ(neg_gt->name(), "greater");
+
+    // Mixed: one unparseable bound fails the whole column's DateRange merge.
+    auto mixed = normalizeTemporalRangesForTrim(
+        createAnd({createGreaterEqual(attr, Field()), createLessEqual(attr, Field(hi))}));
+    ASSERT_NE(mixed, nullptr);
+    EXPECT_EQ(mixed->name(), "and");
+    auto and_op = std::dynamic_pointer_cast<And>(mixed);
+    ASSERT_NE(and_op, nullptr);
+    ASSERT_EQ(and_op->getChildren().size(), 2u);
+    EXPECT_EQ(and_op->getChildren()[0]->name(), "greater_equal");
+    EXPECT_EQ(and_op->getChildren()[1]->name(), "less_equal");
+}
+
+// P1-2: empty DateRange domain must return Some, never All.
+TEST(TrimMinMaxIndexPhaseC, EmptyDateRangeDomainReturnsSome)
+try
+{
+    auto type = std::make_shared<DataTypeMyDateTime>(0);
+    Attr attr{.col_name = "t", .col_id = 1, .type = type};
+    const UInt64 v2021 = MyDateTime(2021, 1, 1, 0, 0, 0, 0).toPackedUInt();
+
+    auto col = type->createColumn();
+    col->insert(Field(v2021));
+    MinMaxIndex ordinary(*type);
+    ordinary.addPack(*col, nullptr);
+    auto ordinary_ptr = std::make_shared<MinMaxIndex>(std::move(ordinary));
+
+    RSCheckParam param;
+    param.indexes.emplace(attr.col_id, RSIndex(type, ordinary_ptr));
+
+    DateQueryDomain empty_domain;
+    empty_domain.predicate_class = TrimPredicateClass::UpperBounded; // no lower/upper set
+    auto empty_range = createDateRange(attr, empty_domain);
+    auto res = empty_range->roughCheck(0, 1, param);
+    ASSERT_EQ(res.size(), 1u);
+    EXPECT_EQ(res[0], RSResult::Some);
+}
+CATCH
 
 TEST(TrimMinMaxIndexPhaseC, RoughCheckCorrectionMatrix)
 try

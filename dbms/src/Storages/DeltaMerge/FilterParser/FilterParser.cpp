@@ -367,7 +367,8 @@ RSOperatorPtr FilterParser::parseDAGQuery(
     const DAGQueryInfo & dag_info,
     const TiDB::ColumnInfos & scan_column_infos,
     FilterParser::AttrCreatorByColumnID && creator,
-    const LoggerPtr & log)
+    const LoggerPtr & log,
+    bool enable_trim_minmax)
 {
     /// By default, multiple conditions with operator "and"
     RSOperators children;
@@ -383,10 +384,11 @@ RSOperatorPtr FilterParser::parseDAGQuery(
 
     if (children.empty())
         return EMPTY_RS_OPERATOR;
-    else if (children.size() == 1)
-        return normalizeTemporalRangesForTrim(children[0]);
-    else
-        return normalizeTemporalRangesForTrim(createAnd(children));
+
+    RSOperatorPtr op = children.size() == 1 ? children[0] : createAnd(children);
+    if (enable_trim_minmax)
+        return normalizeTemporalRangesForTrim(op);
+    return op;
 }
 
 RSOperatorPtr FilterParser::parseRFInExpr(

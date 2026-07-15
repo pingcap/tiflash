@@ -493,7 +493,13 @@ DM::RSOperatorPtr StorageDisaggregated::buildRSOperator(
         0,
         db_context.getTimezoneInfo());
 
-    return DM::RSOperator::build(dag_query, table_scan.getColumns(), *columns_to_read, enable_rs_filter, log);
+    return DM::RSOperator::build(
+        dag_query,
+        table_scan.getColumns(),
+        *columns_to_read,
+        enable_rs_filter,
+        log,
+        db_context.getSettingsRef().dt_enable_trim_minmax_read);
 }
 
 std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisaggregated::packSegmentReadTasks(

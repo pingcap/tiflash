@@ -106,13 +106,15 @@ struct BoundAccumulator
     bool lower_inclusive = true;
     std::optional<Field> upper;
     bool upper_inclusive = true;
+    bool failed = false;
+    RSOperators originals;
 };
 
-void applyBound(BoundAccumulator & acc, const TemporalBound & bound)
+bool applyBound(BoundAccumulator & acc, const TemporalBound & bound)
 {
     UInt64 nv = 0;
     if (!tryGetUInt64(bound.value, nv))
-        return;
+        return false;
 
     switch (bound.side)
     {
@@ -124,11 +126,11 @@ void applyBound(BoundAccumulator & acc, const TemporalBound & bound)
         {
             acc.lower = bound.value;
             acc.lower_inclusive = inclusive;
-            return;
+            return true;
         }
         UInt64 ov = 0;
         if (!tryGetUInt64(*acc.lower, ov))
-            return;
+            return false;
         // Stronger lower: larger value; on tie prefer exclusive.
         if (nv > ov || (nv == ov && !inclusive && acc.lower_inclusive))
         {
@@ -145,11 +147,11 @@ void applyBound(BoundAccumulator & acc, const TemporalBound & bound)
         {
             acc.upper = bound.value;
             acc.upper_inclusive = inclusive;
-            return;
+            return true;
         }
         UInt64 ov = 0;
         if (!tryGetUInt64(*acc.upper, ov))
-            return;
+            return false;
         // Stronger upper: smaller value; on tie prefer exclusive.
         if (nv < ov || (nv == ov && !inclusive && acc.upper_inclusive))
         {
@@ -159,6 +161,7 @@ void applyBound(BoundAccumulator & acc, const TemporalBound & bound)
         break;
     }
     }
+    return true;
 }
 } // namespace
 
@@ -263,9 +266,11 @@ RSOperatorPtr normalizeTemporalRangesForTrim(const RSOperatorPtr & op)
         if (auto bound = tryAsTemporalRangeBound(leaf))
         {
             auto & acc = bounds[bound->attr.col_id];
-            if (!acc.lower && !acc.upper)
+            if (acc.originals.empty())
                 acc.attr = bound->attr;
-            applyBound(acc, *bound);
+            acc.originals.push_back(leaf);
+            if (!applyBound(acc, *bound))
+                acc.failed = true;
             continue;
         }
         kept.push_back(leaf);
@@ -274,6 +279,13 @@ RSOperatorPtr normalizeTemporalRangesForTrim(const RSOperatorPtr & op)
     for (auto & [col_id, acc] : bounds)
     {
         (void)col_id;
+        // Any unparseable bound (or no successful bound) abandons DateRange merge for the column.
+        if (acc.failed || (!acc.lower && !acc.upper))
+        {
+            kept.insert(kept.end(), acc.originals.begin(), acc.originals.end());
+            continue;
+        }
+
         DateQueryDomain domain;
         domain.lower = acc.lower;
         domain.lower_inclusive = acc.lower_inclusive;

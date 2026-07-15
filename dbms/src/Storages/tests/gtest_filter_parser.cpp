@@ -65,7 +65,11 @@ protected:
     LoggerPtr log;
     ContextPtr ctx;
     static TimezoneInfo default_timezone_info;
-    DM::RSOperatorPtr generateRsOperator(String table_info_json, const String & query, TimezoneInfo & timezone_info);
+    DM::RSOperatorPtr generateRsOperator(
+        String table_info_json,
+        const String & query,
+        TimezoneInfo & timezone_info = default_timezone_info,
+        bool enable_trim_minmax = false);
 };
 
 TimezoneInfo FilterParserTest::default_timezone_info;
@@ -73,7 +77,8 @@ TimezoneInfo FilterParserTest::default_timezone_info;
 DM::RSOperatorPtr FilterParserTest::generateRsOperator(
     const String table_info_json,
     const String & query,
-    TimezoneInfo & timezone_info = default_timezone_info)
+    TimezoneInfo & timezone_info,
+    bool enable_trim_minmax)
 {
     const TiDB::TableInfo table_info(table_info_json, NullspaceID);
 
@@ -126,7 +131,12 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(
         return DM::Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
     };
 
-    return DM::FilterParser::parseDAGQuery(*dag_query, table_info.columns, std::move(create_attr_by_column_id), log);
+    return DM::FilterParser::parseDAGQuery(
+        *dag_query,
+        table_info.columns,
+        std::move(create_attr_by_column_id),
+        log,
+        enable_trim_minmax);
 }
 
 // Test cases for col and literal
@@ -446,12 +456,15 @@ try
         auto ctx = TiFlashTestEnv::getContext();
         auto & timezone_info = ctx->getTimezoneInfo();
         convertTimeZone(origin_time_stamp, converted_time, *timezone_info.timezone, time_zone_utc);
+        const auto query = String("select * from default.t_111 where col_timestamp > cast_string_datetime('")
+            + datetime + String("')");
 
-        auto rs_operator = generateRsOperator(
-            table_info_json,
-            String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime
-                + String("')"),
-            timezone_info);
+        auto rs_operator = generateRsOperator(table_info_json, query, timezone_info, /*enable_trim_minmax*/ false);
+        EXPECT_EQ(rs_operator->name(), "greater");
+        EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
+        EXPECT_EQ(rs_operator->getColumnIDs()[0], 4);
+
+        rs_operator = generateRsOperator(table_info_json, query, timezone_info, /*enable_trim_minmax*/ true);
         EXPECT_EQ(rs_operator->name(), "date_range");
         EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 4);
@@ -468,12 +481,15 @@ try
         auto & timezone_info = ctx->getTimezoneInfo();
         timezone_info.resetByTimezoneName("America/Chicago");
         convertTimeZone(origin_time_stamp, converted_time, *timezone_info.timezone, time_zone_utc);
+        const auto query = String("select * from default.t_111 where col_timestamp > cast_string_datetime('")
+            + datetime + String("')");
 
-        auto rs_operator = generateRsOperator(
-            table_info_json,
-            String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime
-                + String("')"),
-            timezone_info);
+        auto rs_operator = generateRsOperator(table_info_json, query, timezone_info, /*enable_trim_minmax*/ false);
+        EXPECT_EQ(rs_operator->name(), "greater");
+        EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
+        EXPECT_EQ(rs_operator->getColumnIDs()[0], 4);
+
+        rs_operator = generateRsOperator(table_info_json, query, timezone_info, /*enable_trim_minmax*/ true);
         EXPECT_EQ(rs_operator->name(), "date_range");
         EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 4);
@@ -485,17 +501,20 @@ try
     }
 
     {
-        // Greater between TimeStamp col and Datetime literal, use Chicago timezone
+        // Greater between TimeStamp col and Datetime literal, use timezone offset
         auto ctx = TiFlashTestEnv::getContext();
         auto & timezone_info = ctx->getTimezoneInfo();
         timezone_info.resetByTimezoneOffset(28800);
         convertTimeZoneByOffset(origin_time_stamp, converted_time, false, timezone_info.timezone_offset);
+        const auto query = String("select * from default.t_111 where col_timestamp > cast_string_datetime('")
+            + datetime + String("')");
 
-        auto rs_operator = generateRsOperator(
-            table_info_json,
-            String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime
-                + String("')"),
-            timezone_info);
+        auto rs_operator = generateRsOperator(table_info_json, query, timezone_info, /*enable_trim_minmax*/ false);
+        EXPECT_EQ(rs_operator->name(), "greater");
+        EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
+        EXPECT_EQ(rs_operator->getColumnIDs()[0], 4);
+
+        rs_operator = generateRsOperator(table_info_json, query, timezone_info, /*enable_trim_minmax*/ true);
         EXPECT_EQ(rs_operator->name(), "date_range");
         EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 4);
@@ -508,9 +527,16 @@ try
 
     {
         // Greater between Datetime col and Datetime literal
-        auto rs_operator = generateRsOperator(
-            table_info_json,
-            fmt::format("select * from default.t_111 where col_datetime > cast_string_datetime('{}')", datetime));
+        const auto query
+            = fmt::format("select * from default.t_111 where col_datetime > cast_string_datetime('{}')", datetime);
+
+        auto rs_operator
+            = generateRsOperator(table_info_json, query, default_timezone_info, /*enable_trim_minmax*/ false);
+        EXPECT_EQ(rs_operator->name(), "greater");
+        EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
+        EXPECT_EQ(rs_operator->getColumnIDs()[0], 5);
+
+        rs_operator = generateRsOperator(table_info_json, query, default_timezone_info, /*enable_trim_minmax*/ true);
         EXPECT_EQ(rs_operator->name(), "date_range");
         EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 5);
@@ -523,9 +549,16 @@ try
 
     {
         // Greater between Date col and Datetime literal
-        auto rs_operator = generateRsOperator(
-            table_info_json,
-            fmt::format("select * from default.t_111 where col_date > cast_string_datetime('{}')", datetime));
+        const auto query
+            = fmt::format("select * from default.t_111 where col_date > cast_string_datetime('{}')", datetime);
+
+        auto rs_operator
+            = generateRsOperator(table_info_json, query, default_timezone_info, /*enable_trim_minmax*/ false);
+        EXPECT_EQ(rs_operator->name(), "greater");
+        EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
+        EXPECT_EQ(rs_operator->getColumnIDs()[0], 6);
+
+        rs_operator = generateRsOperator(table_info_json, query, default_timezone_info, /*enable_trim_minmax*/ true);
         EXPECT_EQ(rs_operator->name(), "date_range");
         EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 6);

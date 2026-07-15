@@ -90,12 +90,17 @@ public:
     const Attr & getAttr() const { return attr; }
 
 private:
+    /// Pack-level rough check of the temporal range described by `domain` against `minmax`.
     RSResults checkRange(
         size_t start_pack,
         size_t pack_count,
         const DataTypePtr & type,
         const MinMaxIndexPtr & minmax) const
     {
+        // Empty domain must not advertise All (would skip row-level filtering incorrectly).
+        if (!domain.lower && !domain.upper)
+            return RSResults(pack_count, RSResult::Some);
+
         RSResults results(pack_count, RSResult::All);
         if (domain.lower)
         {
@@ -114,8 +119,7 @@ private:
             RSResults upper_res;
             if (domain.upper_inclusive)
             {
-                // col <= U  <=>  !(col > U), but keep None for empty packs (has_value=false).
-                // Negating empty-pack None into All breaks trim outlier corrections.
+                // col <= U  <=>  !(col > U)
                 upper_res = minmax->checkCmp<RoughCheck::CheckGreater>(start_pack, pack_count, *domain.upper, type);
             }
             else
@@ -126,9 +130,12 @@ private:
             }
             for (size_t i = 0; i < pack_count; ++i)
             {
+                // MinMax only exposes greater/greater-equal checks, so upper bounds are
+                // evaluated as the negation of those results (col <= U <=> !(col > U)).
                 if (minmax->hasValue(start_pack + i))
                     upper_res[i] = !upper_res[i];
-                // else: leave None for empty packs
+                // else: leave None for empty packs (has_value=false).
+                // Negating empty-pack None into All breaks trim outlier corrections.
             }
             std::transform(
                 results.begin(),

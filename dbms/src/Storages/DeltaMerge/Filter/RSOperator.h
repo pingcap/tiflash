@@ -79,7 +79,8 @@ public:
         const TiDB::ColumnInfos & scan_column_infos,
         const ColumnDefines & table_column_defines,
         bool enable_rs_filter,
-        const LoggerPtr & tracing_logger);
+        const LoggerPtr & tracing_logger,
+        bool enable_trim_minmax = false);
 };
 
 class ColCmpVal : public RSOperator
