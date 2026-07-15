@@ -74,7 +74,7 @@ public:
 
     RSResults roughCheck(size_t start_pack, size_t pack_count, const RSCheckParam & param) override
     {
-        if (auto trim = getTrimRSIndex(param, attr))
+        if (auto trim = getTrimRSIndex(param, attr, domain))
         {
             auto raw = checkRange(start_pack, pack_count, trim->type, trim->minmax);
             return applyTrimRoughCheckCorrection(raw, start_pack, *trim->minmax, domain.predicate_class);

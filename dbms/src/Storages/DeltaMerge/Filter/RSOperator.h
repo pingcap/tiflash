@@ -190,12 +190,20 @@ inline std::optional<RSIndex> getRSIndex(const RSCheckParam & param, const Attr 
     return std::nullopt;
 }
 
-inline std::optional<TrimRSIndex> getTrimRSIndex(const RSCheckParam & param, const Attr & attr)
+/// Return the column's trim index only when `query_domain` is trim-eligible for the
+/// stored E. Trim indexes are cached per column, so callers must re-check the
+/// current predicate's domain before using trim.
+inline std::optional<TrimRSIndex> getTrimRSIndex(
+    const RSCheckParam & param,
+    const Attr & attr,
+    const DateQueryDomain & query_domain)
 {
     auto it = param.trim_indexes.find(attr.col_id);
-    if (it != param.trim_indexes.end() && it->second.type->equals(*attr.type))
-        return it->second;
-    return std::nullopt;
+    if (it == param.trim_indexes.end() || !it->second.type->equals(*attr.type))
+        return std::nullopt;
+    if (!query_domain.isTrimEligible(it->second.meta.lower_bound, it->second.meta.upper_bound))
+        return std::nullopt;
+    return it->second;
 }
 
 template <typename Op>

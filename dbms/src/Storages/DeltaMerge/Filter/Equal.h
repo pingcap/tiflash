@@ -31,17 +31,22 @@ public:
 
     String name() override { return "equal"; }
 
+    DateQueryDomain makeQueryDomain() const
+    {
+        DateQueryDomain domain;
+        domain.predicate_class = TrimPredicateClass::EqualityOrInOrBounded;
+        domain.values = {value};
+        return domain;
+    }
+
     RSIndexRequests getIndexRequests() override
     {
         if (TrimMinMax::isSupportedTemporalType(*attr.type))
         {
-            DateQueryDomain domain;
-            domain.predicate_class = TrimPredicateClass::EqualityOrInOrBounded;
-            domain.values = {value};
             return {RSIndexRequest{
                 .col_id = attr.col_id,
                 .preferred_kind = RSIndexKind::PreferTrim,
-                .query_domain = std::move(domain),
+                .query_domain = makeQueryDomain(),
             }};
         }
         return RSOperator::getIndexRequests();
@@ -49,7 +54,7 @@ public:
 
     RSResults roughCheck(size_t start_pack, size_t pack_count, const RSCheckParam & param) override
     {
-        if (auto trim = getTrimRSIndex(param, attr))
+        if (auto trim = getTrimRSIndex(param, attr, makeQueryDomain()))
         {
             auto raw = trim->minmax->checkCmp<RoughCheck::CheckEqual>(start_pack, pack_count, value, trim->type);
             return applyTrimRoughCheckCorrection(
