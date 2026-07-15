@@ -116,6 +116,8 @@ namespace TrimMinMax
 {
 inline constexpr UInt32 FormatVersionV1 = 1;
 
+bool isSupportedTemporalType(const IDataType & type);
+
 /// Default half-open effective range [1900-01-01 00:00:00, 2100-01-01 00:00:00).
 UInt64 defaultLowerBoundPacked(const IDataType & nested_type);
 UInt64 defaultUpperBoundPacked(const IDataType & nested_type);
@@ -124,6 +126,15 @@ String encodeBound(UInt64 packed);
 std::optional<UInt64> decodeBound(std::string_view bytes);
 
 dtpb::TrimMinMaxIndexProps makeDefaultProps(const IDataType & nested_type, UInt64 pack_count);
+
+/// Single-pass update of ordinary + trim min-max for one pack of MyDate/MyDateTime values.
+void addOrdinaryAndTrimPack(
+    MinMaxIndex & ordinary,
+    MinMaxIndex & trim,
+    const IColumn & column,
+    const ColumnVector<UInt8> * del_mark,
+    UInt64 lower_bound,
+    UInt64 upper_bound);
 
 /// Structural validation of protobuf props against the column nested type and DMFile pack count.
 /// Does not look up MergedSubFileInfo.

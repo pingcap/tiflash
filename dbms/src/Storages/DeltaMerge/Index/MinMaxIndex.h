@@ -55,6 +55,19 @@ public:
 
     void addPack(const IColumn & column, const ColumnVector<UInt8> * del_mark);
 
+    /// Append one pack cell. `allowed_mask` restricts which pack-mark bits may be set
+    /// (ordinary: bit0 only; trim: bits 0..2).
+    void appendPack(
+        UInt8 pack_mark,
+        bool has_value,
+        UInt8 allowed_mask,
+        const IColumn * column = nullptr,
+        size_t min_idx = 0,
+        size_t max_idx = 0);
+
+    /// True if any pack has trimmed-low or trimmed-high bits set.
+    bool hasAnyTrimmedValue() const;
+
     void write(const IDataType & type, WriteBuffer & buf);
 
     static MinMaxIndexPtr read(const IDataType & type, ReadBuffer & buf, size_t bytes_limit);

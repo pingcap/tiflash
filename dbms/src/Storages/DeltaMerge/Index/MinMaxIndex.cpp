@@ -15,6 +15,7 @@
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnVector.h>
 #include <Columns/IColumn.h>
+#include <Common/Exception.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeEnum.h>
@@ -105,6 +106,46 @@ ALWAYS_INLINE bool minIsNull(const DB::ColumnUInt8 & null_map, size_t i)
 }
 } // namespace details
 
+void MinMaxIndex::appendPack(
+    UInt8 pack_mark,
+    bool has_value,
+    UInt8 allowed_mask,
+    const IColumn * column,
+    size_t min_idx,
+    size_t max_idx)
+{
+    RUNTIME_CHECK_MSG(
+        (pack_mark & ~allowed_mask) == 0,
+        "invalid pack_mark={:#x} allowed_mask={:#x}",
+        static_cast<UInt32>(pack_mark),
+        static_cast<UInt32>(allowed_mask));
+    RUNTIME_CHECK(!has_value || column != nullptr);
+
+    pack_marks.push_back(pack_mark);
+    has_value_marks.push_back(has_value ? 1 : 0);
+    if (has_value)
+    {
+        minmaxes->insertFrom(*column, min_idx);
+        minmaxes->insertFrom(*column, max_idx);
+    }
+    else
+    {
+        minmaxes->insertDefault();
+        minmaxes->insertDefault();
+    }
+}
+
+bool MinMaxIndex::hasAnyTrimmedValue() const
+{
+    constexpr UInt8 trimmed_mask = PackMarkBits::TrimmedLow | PackMarkBits::TrimmedHigh;
+    for (size_t i = 0; i < pack_marks.size(); ++i)
+    {
+        if ((pack_marks[i] & trimmed_mask) != 0)
+            return true;
+    }
+    return false;
+}
+
 void MinMaxIndex::addPack(const IColumn & column, const ColumnVector<UInt8> * del_mark)
 {
     auto size = column.size();
@@ -141,21 +182,11 @@ void MinMaxIndex::addPack(const IColumn & column, const ColumnVector<UInt8> * de
         std::tie(min_index, max_index) = details::minmax(column, del_mark, 0, column.size());
     }
 
+    const UInt8 pack_mark = has_null ? PackMarkBits::Null : 0;
     if (min_index != NONE_EXIST)
-    {
-        // Ordinary min-max only sets the NULL bit; reserved / trim bits must stay 0.
-        pack_marks.push_back(has_null ? PackMarkBits::Null : 0);
-        has_value_marks.push_back(1);
-        minmaxes->insertFrom(column, min_index);
-        minmaxes->insertFrom(column, max_index);
-    }
+        appendPack(pack_mark, /*has_value*/ true, PackMarkBits::OrdinaryAllowedMask, &column, min_index, max_index);
     else
-    {
-        pack_marks.push_back(has_null ? PackMarkBits::Null : 0);
-        has_value_marks.push_back(0);
-        minmaxes->insertDefault();
-        minmaxes->insertDefault();
-    }
+        appendPack(pack_mark, /*has_value*/ false, PackMarkBits::OrdinaryAllowedMask);
 }
 
 void MinMaxIndex::write(const IDataType & type, WriteBuffer & buf)
