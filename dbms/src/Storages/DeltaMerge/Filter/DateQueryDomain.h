@@ -77,7 +77,8 @@ RSResults applyTrimRoughCheckCorrection(
     const RSResults & raw,
     size_t start_pack,
     const MinMaxIndex & trim_minmax,
-    TrimPredicateClass predicate_class);
+    TrimPredicateClass predicate_class,
+    bool record_metrics = false);
 
 /// Flatten top-level AND and merge temporal GE/GT/LE/LT into DateRange PreferTrim ops.
 /// Does not rewrite children under OR / NOT. Equal / In are left unchanged.

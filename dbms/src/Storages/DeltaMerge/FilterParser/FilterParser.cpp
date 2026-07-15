@@ -167,6 +167,16 @@ inline RSOperatorPtr parseTiCompareExpr( //
 
             auto col_id = getColumnIDForColumnExpr(child, scan_column_infos);
             attr = id_to_attr.at(col_id);
+            // Column ID may be absent from table defines (e.g. function ColumnRef).
+            // Attr.type is then empty; creating Equal/In would crash in getIndexRequests
+            // on *attr.type. Convert to Unsupported so rough check stays conservative Some.
+            if (unlikely(!attr.type))
+            {
+                return createUnsupported(fmt::format(
+                    "ColumnRef with unknown column id is not supported, sig={} col_id={}",
+                    tipb::ScalarFuncSig_Name(expr.sig()),
+                    col_id));
+            }
         }
         else if (isLiteralExpr(child))
         {
@@ -367,7 +377,8 @@ RSOperatorPtr FilterParser::parseDAGQuery(
     const DAGQueryInfo & dag_info,
     const TiDB::ColumnInfos & scan_column_infos,
     const ColumnIDToAttrMap & id_to_attr,
-    const LoggerPtr & log)
+    const LoggerPtr & log,
+    bool enable_trim_minmax)
 {
     /// By default, multiple conditions with operator "and"
     RSOperators children;
@@ -383,10 +394,11 @@ RSOperatorPtr FilterParser::parseDAGQuery(
 
     if (children.empty())
         return EMPTY_RS_OPERATOR;
-    else if (children.size() == 1)
-        return normalizeTemporalRangesForTrim(children[0]);
-    else
-        return normalizeTemporalRangesForTrim(createAnd(children));
+
+    RSOperatorPtr op = children.size() == 1 ? children[0] : createAnd(children);
+    if (enable_trim_minmax)
+        return normalizeTemporalRangesForTrim(op);
+    return op;
 }
 
 RSOperatorPtr FilterParser::parseRFInExpr(

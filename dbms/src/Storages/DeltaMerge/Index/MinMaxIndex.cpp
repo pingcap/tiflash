@@ -138,9 +138,9 @@ void MinMaxIndex::appendPack(
 bool MinMaxIndex::hasAnyTrimmedValue() const
 {
     constexpr UInt8 trimmed_mask = PackMarkBits::TrimmedLow | PackMarkBits::TrimmedHigh;
-    for (size_t i = 0; i < pack_marks.size(); ++i)
+    for (unsigned char pack_mark : pack_marks)
     {
-        if ((pack_marks[i] & trimmed_mask) != 0)
+        if ((pack_mark & trimmed_mask) != 0)
             return true;
     }
     return false;

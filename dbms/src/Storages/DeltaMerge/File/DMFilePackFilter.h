@@ -73,7 +73,7 @@ public:
             dm_context.global_context.getReadLimiter(),
             dm_context.scan_context,
             dm_context.tracing_id,
-            dm_context.global_context.getSettingsRef().dt_enable_trim_minmax_read);
+            dm_context.global_context.getSettingsRef().dt_enable_trim_minmax);
         return pack_filter.load();
     }
 
@@ -88,7 +88,7 @@ public:
         const RSOperatorPtr & filter,
         const IdSetPtr & read_packs,
         const String & tracing_id,
-        bool enable_trim_minmax_read = false)
+        bool enable_trim_minmax = false)
     {
         DMFilePackFilter pack_filter(
             dmfile,
@@ -101,7 +101,7 @@ public:
             read_limiter_,
             scan_context,
             tracing_id,
-            enable_trim_minmax_read);
+            enable_trim_minmax);
         return pack_filter.load();
     }
 
@@ -174,10 +174,11 @@ private:
         const ReadLimiterPtr & read_limiter_,
         const ScanContextPtr & scan_context_,
         const String & tracing_id,
-        bool enable_trim_minmax_read_)
+        bool enable_trim_minmax_)
         : dmfile(dmfile_)
         , index_cache(index_cache_)
         , set_cache_if_miss(set_cache_if_miss_)
+        , enable_trim_minmax(enable_trim_minmax_)
         , rowkey_ranges(rowkey_ranges_)
         , filter(filter_)
         , read_packs(read_packs_)
@@ -185,7 +186,6 @@ private:
         , scan_context(scan_context_)
         , log(Logger::get(tracing_id))
         , read_limiter(read_limiter_)
-        , enable_trim_minmax_read(enable_trim_minmax_read_)
     {}
 
     DMFilePackFilterResultPtr load();
@@ -202,13 +202,14 @@ private:
 
     void tryLoadIndex(RSCheckParam & param, ColId col_id);
     void tryLoadIndexByRequest(RSCheckParam & param, const RSIndexRequest & request);
-    bool tryLoadTrimIndex(RSCheckParam & param, ColId col_id, const DateQueryDomain & query_domain);
+    TrimMinMaxFallbackReason tryLoadTrimIndex(RSCheckParam & param, ColId col_id, const DateQueryDomain & query_domain);
 
 private:
     DMFilePtr dmfile;
 
     MinMaxIndexCachePtr index_cache;
     bool set_cache_if_miss;
+    bool enable_trim_minmax = false;
     RowKeyRanges rowkey_ranges;
     RSOperatorPtr filter;
     IdSetPtr read_packs;
@@ -218,7 +219,6 @@ private:
 
     LoggerPtr log;
     ReadLimiterPtr read_limiter;
-    bool enable_trim_minmax_read = false;
 };
 
 } // namespace DB::DM

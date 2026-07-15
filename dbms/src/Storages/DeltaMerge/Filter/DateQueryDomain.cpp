@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/Filter/And.h>
 #include <Storages/DeltaMerge/Filter/DateQueryDomain.h>
 #include <Storages/DeltaMerge/Filter/DateRange.h>
@@ -23,6 +24,7 @@
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 #include <Storages/DeltaMerge/Index/TrimMinMaxIndex.h>
 
+#include <ranges>
 #include <unordered_map>
 
 namespace DB::DM
@@ -56,13 +58,26 @@ bool inHalfOpenRange(UInt64 value, UInt64 lower, UInt64 upper)
 
 void flattenTopLevelAnd(const RSOperatorPtr & op, RSOperators & out)
 {
-    if (auto and_op = std::dynamic_pointer_cast<And>(op))
-    {
-        for (const auto & child : and_op->getChildren())
-            flattenTopLevelAnd(child, out);
+    if (!op)
         return;
+
+    // Iterative flatten of top-level And nesting to avoid deep call stacks on
+    // left-associated And(And(And(...))) chains.
+    RSOperators stack{op};
+    while (!stack.empty())
+    {
+        auto cur = stack.back();
+        stack.pop_back();
+        if (auto and_op = std::dynamic_pointer_cast<And>(cur))
+        {
+            const auto & children = and_op->getChildren();
+            // Push in reverse so that left-to-right child order is preserved in `out`.
+            for (const auto & it : std::ranges::reverse_view(children))
+                stack.push_back(it);
+            continue;
+        }
+        out.push_back(cur);
     }
-    out.push_back(op);
 }
 
 enum class BoundSide : UInt8
@@ -106,13 +121,15 @@ struct BoundAccumulator
     bool lower_inclusive = true;
     std::optional<Field> upper;
     bool upper_inclusive = true;
+    bool failed = false;
+    RSOperators originals;
 };
 
-void applyBound(BoundAccumulator & acc, const TemporalBound & bound)
+bool applyBound(BoundAccumulator & acc, const TemporalBound & bound)
 {
     UInt64 nv = 0;
     if (!tryGetUInt64(bound.value, nv))
-        return;
+        return false;
 
     switch (bound.side)
     {
@@ -124,11 +141,11 @@ void applyBound(BoundAccumulator & acc, const TemporalBound & bound)
         {
             acc.lower = bound.value;
             acc.lower_inclusive = inclusive;
-            return;
+            return true;
         }
         UInt64 ov = 0;
         if (!tryGetUInt64(*acc.lower, ov))
-            return;
+            return false;
         // Stronger lower: larger value; on tie prefer exclusive.
         if (nv > ov || (nv == ov && !inclusive && acc.lower_inclusive))
         {
@@ -145,11 +162,11 @@ void applyBound(BoundAccumulator & acc, const TemporalBound & bound)
         {
             acc.upper = bound.value;
             acc.upper_inclusive = inclusive;
-            return;
+            return true;
         }
         UInt64 ov = 0;
         if (!tryGetUInt64(*acc.upper, ov))
-            return;
+            return false;
         // Stronger upper: smaller value; on tie prefer exclusive.
         if (nv < ov || (nv == ov && !inclusive && acc.upper_inclusive))
         {
@@ -159,6 +176,7 @@ void applyBound(BoundAccumulator & acc, const TemporalBound & bound)
         break;
     }
     }
+    return true;
 }
 } // namespace
 
@@ -200,48 +218,116 @@ RSResults applyTrimRoughCheckCorrection(
     const RSResults & raw,
     size_t start_pack,
     const MinMaxIndex & trim_minmax,
-    TrimPredicateClass predicate_class)
+    TrimPredicateClass predicate_class,
+    bool record_metrics)
 {
     RSResults results = raw;
+    UInt64 none_count = 0;
+    UInt64 some_count = 0;
+    UInt64 all_count = 0;
+    UInt64 all_null_count = 0;
+    UInt64 none_to_some_count = 0;
+    UInt64 all_to_some_count = 0;
     for (size_t i = 0; i < results.size(); ++i)
     {
         const size_t pack_id = start_pack + i;
         const bool has_trimmed_low = trim_minmax.hasTrimmedLow(pack_id);
         const bool has_trimmed_high = trim_minmax.hasTrimmedHigh(pack_id);
 
+        // Map pack-level low/high outlier flags to "must match" / "must not match"
+        // under the current predicate class. Outliers live in D-E and are invisible
+        // to the trim min-max, so raw None/All may need correction below.
         bool trimmed_match_exists = false;
         bool trimmed_nonmatch_exists = false;
         switch (predicate_class)
         {
         case TrimPredicateClass::EqualityOrInOrBounded:
+        {
+            // Q ⊆ E: any low/high trimmed value is outside Q, so it never matches.
+            // It can only invalidate an All (pack still has a non-matching outlier).
             trimmed_match_exists = false;
             trimmed_nonmatch_exists = has_trimmed_low || has_trimmed_high;
             break;
+        }
         case TrimPredicateClass::LowerBounded:
+        {
+            // col >= T / col > T with T in E: a high outlier always matches,
+            // a low outlier never matches.
             trimmed_match_exists = has_trimmed_high;
             trimmed_nonmatch_exists = has_trimmed_low;
             break;
+        }
         case TrimPredicateClass::UpperBounded:
+        {
+            // col <= T / col < T with T in E: a low outlier always matches,
+            // a high outlier never matches.
             trimmed_match_exists = has_trimmed_low;
             trimmed_nonmatch_exists = has_trimmed_high;
             break;
+        }
         }
 
         auto & r = results[i];
         if (trimmed_match_exists)
         {
             if (r == RSResult::None)
+            {
                 r = RSResult::Some;
+                if (record_metrics)
+                    ++none_to_some_count;
+            }
             else if (r == RSResult::NoneNull)
+            {
                 r = RSResult::SomeNull;
+                if (record_metrics)
+                    ++none_to_some_count;
+            }
         }
         if (trimmed_nonmatch_exists)
         {
             if (r == RSResult::All)
+            {
                 r = RSResult::Some;
+                if (record_metrics)
+                    ++all_to_some_count;
+            }
             else if (r == RSResult::AllNull)
+            {
                 r = RSResult::SomeNull;
+                if (record_metrics)
+                    ++all_to_some_count;
+            }
         }
+
+        if (record_metrics)
+        {
+            if (r == RSResult::None || r == RSResult::NoneNull)
+                ++none_count;
+            else if (r == RSResult::Some || r == RSResult::SomeNull)
+                ++some_count;
+            else if (r == RSResult::All)
+                ++all_count;
+            else if (r == RSResult::AllNull)
+                ++all_null_count;
+        }
+    }
+
+    if (record_metrics)
+    {
+        if (none_count != 0)
+            GET_METRIC(tiflash_storage_trim_minmax_rough_check_pack_count, result_none).Increment(none_count);
+        if (some_count != 0)
+            GET_METRIC(tiflash_storage_trim_minmax_rough_check_pack_count, result_some).Increment(some_count);
+        if (all_count != 0)
+            GET_METRIC(tiflash_storage_trim_minmax_rough_check_pack_count, result_all).Increment(all_count);
+        if (all_null_count != 0)
+            GET_METRIC(tiflash_storage_trim_minmax_rough_check_pack_count, result_all_null).Increment(all_null_count);
+        if (none_to_some_count != 0)
+            GET_METRIC(tiflash_storage_trim_minmax_correction_pack_count, type_none_to_some)
+                .Increment(none_to_some_count);
+        if (all_to_some_count != 0)
+            GET_METRIC(tiflash_storage_trim_minmax_correction_pack_count, type_all_to_some)
+                .Increment(all_to_some_count);
     }
     return results;
 }
@@ -263,9 +349,11 @@ RSOperatorPtr normalizeTemporalRangesForTrim(const RSOperatorPtr & op)
         if (auto bound = tryAsTemporalRangeBound(leaf))
         {
             auto & acc = bounds[bound->attr.col_id];
-            if (!acc.lower && !acc.upper)
+            if (acc.originals.empty())
                 acc.attr = bound->attr;
-            applyBound(acc, *bound);
+            acc.originals.push_back(leaf);
+            if (!applyBound(acc, *bound))
+                acc.failed = true;
             continue;
         }
         kept.push_back(leaf);
@@ -274,6 +362,13 @@ RSOperatorPtr normalizeTemporalRangesForTrim(const RSOperatorPtr & op)
     for (auto & [col_id, acc] : bounds)
     {
         (void)col_id;
+        // Any unparseable bound (or no successful bound) abandons DateRange merge for the column.
+        if (acc.failed || (!acc.lower && !acc.upper))
+        {
+            kept.insert(kept.end(), acc.originals.begin(), acc.originals.end());
+            continue;
+        }
+
         DateQueryDomain domain;
         domain.lower = acc.lower;
         domain.lower_inclusive = acc.lower_inclusive;
