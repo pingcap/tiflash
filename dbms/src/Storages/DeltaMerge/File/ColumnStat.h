@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
@@ -42,6 +44,9 @@ struct ColumnStat
 
     std::vector<dtpb::VectorIndexFileProps> vector_index;
 
+    // Optional trim min-max metadata. Independent from vector_index / local-index lifecycle.
+    std::optional<dtpb::TrimMinMaxIndexProps> trim_minmax_index{};
+
 #ifndef NDEBUG
     // This field is only used for testing
     String additional_data_for_test{};
@@ -67,6 +72,9 @@ struct ColumnStat
             auto * pb_idx = stat.add_vector_indexes();
             pb_idx->CopyFrom(vec_idx);
         }
+
+        if (trim_minmax_index.has_value())
+            *stat.mutable_trim_minmax_index() = *trim_minmax_index;
 
 #ifndef NDEBUG
         stat.set_additional_data_for_test(additional_data_for_test);
@@ -103,6 +111,13 @@ struct ColumnStat
         {
             vector_index.emplace_back(pb_idx);
         }
+
+        // Soft-load only. Structural validation and fallback happen at selection time so a
+        // corrupt / unsupported trim meta never fails DMFile open.
+        if (proto.has_trim_minmax_index())
+            trim_minmax_index = proto.trim_minmax_index();
+        else
+            trim_minmax_index.reset();
 
 #ifndef NDEBUG
         additional_data_for_test = proto.additional_data_for_test();
@@ -185,6 +200,7 @@ readText(ColumnStats & column_sats, DMFileFormat::Version ver, ReadBuffer & buf)
                 .serialized_bytes = serialized_bytes,
                 // ... here ignore some fields with default initializers
                 .vector_index = {},
+                .trim_minmax_index = {},
 #ifndef NDEBUG
                 .additional_data_for_test = {},
 #endif

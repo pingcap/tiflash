@@ -68,6 +68,20 @@ message ColumnStat {
     optional string additional_data_for_test = 101;
     optional VectorIndexFileProps vector_index = 102;
     repeated VectorIndexFileProps vector_indexes = 103;
+
+    // DMFile-internal trim min-max index. At most one per column.
+    // Kept as a standalone optional field (not part of vector_indexes) so old
+    // Readers treat this as an unknown field and continue using ordinary min-max.
+    optional TrimMinMaxIndexProps trim_minmax_index = 105;
+}
+
+// Pack-level trim min-max for DATE / DATETIME / TIMESTAMP columns.
+// Bounds use the column nested type's packed encoding; V1 semantics are [lower, upper).
+message TrimMinMaxIndexProps {
+    optional uint32 format_version = 1;
+    optional bytes lower_bound = 2;
+    optional bytes upper_bound = 3;
+    optional uint64 pack_count = 4;
 }
 
 message ColumnStats {
