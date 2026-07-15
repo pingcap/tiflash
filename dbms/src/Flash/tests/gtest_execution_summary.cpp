@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Mpp/MPPTaskStatistics.h>
+#include <Flash/Mpp/MPPTunnelSet.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
+#include <kvproto/resource_manager.pb.h>
 
 namespace DB
 {
@@ -147,6 +150,48 @@ try
             {"Join_2", {64, concurrency}}};
         testForExecutionSummary(request, expect);
     }
+}
+CATCH
+
+TEST_F(ExecutionSummaryTestRunner, genMPPTaskExecutionInfoWithoutSetRUInfo)
+try
+{
+    auto request = context.scan("test_db", "test_table").limit(1).exchangeSender(tipb::PassThrough).build(context);
+    request->set_collect_execution_summaries(true);
+
+    mpp::TaskMeta meta;
+    meta.set_gather_id(1);
+    meta.set_task_id(1);
+    meta.set_query_ts(1);
+    meta.set_local_query_id(1);
+    meta.set_server_id(1);
+    meta.set_start_ts(1);
+
+    DAGContext dag_context(*request, meta, false);
+    // ExchangeSenderStatistics reads tunnel_set while initializing the mock MPP DAG.
+    dag_context.tunnel_set = std::make_shared<MPPTunnelSet>("test-host");
+    MPPTaskStatistics task_statistics(MPPTaskId(meta), "test-host");
+    task_statistics.initializeExecutorDAG(&dag_context);
+
+    auto execution_info = task_statistics.genTiFlashExecutionInfo();
+    const auto root_executor_id = dag_context.dag_request.rootExecutorID();
+    const tipb::ExecutorExecutionSummary * root_summary = nullptr;
+    for (const auto & summary : execution_info.execution_summaries())
+    {
+        if (summary.executor_id() == root_executor_id)
+        {
+            root_summary = &summary;
+            break;
+        }
+    }
+
+    ASSERT_NE(root_summary, nullptr);
+    ASSERT_TRUE(root_summary->has_ru_consumption());
+    resource_manager::Consumption ru_consumption;
+    ASSERT_TRUE(ru_consumption.ParseFromString(root_summary->ru_consumption()));
+    ASSERT_DOUBLE_EQ(0.0, ru_consumption.r_r_u());
+    ASSERT_DOUBLE_EQ(0.0, ru_consumption.read_bytes());
+    ASSERT_DOUBLE_EQ(0.0, ru_consumption.total_cpu_time_ms());
 }
 CATCH
 
