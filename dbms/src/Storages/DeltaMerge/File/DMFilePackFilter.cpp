@@ -383,9 +383,6 @@ void DMFilePackFilter::tryLoadIndexByRequest(RSCheckParam & param, const RSIndex
 
 bool DMFilePackFilter::tryLoadTrimIndex(RSCheckParam & param, ColId col_id, const DateQueryDomain & query_domain)
 {
-    if (param.trim_indexes.count(col_id))
-        return true;
-
     if (!enable_trim_minmax_read || !dmfile->useMetaV2())
         return false;
 
@@ -399,6 +396,14 @@ bool DMFilePackFilter::tryLoadTrimIndex(RSCheckParam & param, ColId col_id, cons
 
     const auto file_name_base = DMFile::getFileNameBase(col_id);
     const auto trim_fname = colTrimIndexFileName(file_name_base);
+
+    // If trim is already loaded for this column, still require THIS predicate's
+    // query domain to be trim-eligible. Otherwise fall through so the caller
+    // loads the ordinary min-max for the non-eligible request.
+    if (auto it = param.trim_indexes.find(col_id); it != param.trim_indexes.end())
+    {
+        return query_domain.isTrimEligible(it->second.meta.lower_bound, it->second.meta.upper_bound);
+    }
 
     TrimMinMaxIndexMeta meta;
     auto reason = TrimMinMax::trySelectTrimMeta(

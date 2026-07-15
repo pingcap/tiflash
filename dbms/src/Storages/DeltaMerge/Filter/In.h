@@ -36,21 +36,26 @@ public:
 
     ColIds getColumnIDs() override { return {attr.col_id}; }
 
+    DateQueryDomain makeQueryDomain() const
+    {
+        DateQueryDomain domain;
+        domain.predicate_class = TrimPredicateClass::EqualityOrInOrBounded;
+        for (const auto & v : values)
+        {
+            if (!v.isNull())
+                domain.values.push_back(v);
+        }
+        return domain;
+    }
+
     RSIndexRequests getIndexRequests() override
     {
         if (TrimMinMax::isSupportedTemporalType(*attr.type))
         {
-            DateQueryDomain domain;
-            domain.predicate_class = TrimPredicateClass::EqualityOrInOrBounded;
-            for (const auto & v : values)
-            {
-                if (!v.isNull())
-                    domain.values.push_back(v);
-            }
             return {RSIndexRequest{
                 .col_id = attr.col_id,
                 .preferred_kind = RSIndexKind::PreferTrim,
-                .query_domain = std::move(domain),
+                .query_domain = makeQueryDomain(),
             }};
         }
         return RSOperator::getIndexRequests();
@@ -92,7 +97,7 @@ public:
         if (values.empty())
             return RSResults(pack_count, RSResult::None);
 
-        if (auto trim = getTrimRSIndex(param, attr))
+        if (auto trim = getTrimRSIndex(param, attr, makeQueryDomain()))
         {
             auto raw = trim->minmax->checkIn(start_pack, pack_count, values, trim->type);
             return applyTrimRoughCheckCorrection(
