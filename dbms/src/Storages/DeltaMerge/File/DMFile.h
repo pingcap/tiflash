@@ -290,17 +290,23 @@ private:
     {
         return subFilePath(colIndexFileName(file_name_base));
     }
+    String colTrimIndexPath(const FileNameBase & file_name_base) const
+    {
+        return subFilePath(colTrimIndexFileName(file_name_base));
+    }
     String colMarkPath(const FileNameBase & file_name_base) const
     {
         return subFilePath(colMarkFileName(file_name_base));
     }
 
     String colIndexCacheKey(const FileNameBase & file_name_base) const;
+    String colTrimIndexCacheKey(const FileNameBase & file_name_base) const;
     String colMarkCacheKey(const FileNameBase & file_name_base) const;
 
     String encryptionBasePath() const;
     EncryptionPath encryptionDataPath(const FileNameBase & file_name_base) const;
     EncryptionPath encryptionIndexPath(const FileNameBase & file_name_base) const;
+    EncryptionPath encryptionTrimIndexPath(const FileNameBase & file_name_base) const;
     EncryptionPath encryptionMarkPath(const FileNameBase & file_name_base) const;
 
     static FileNameBase getFileNameBase(ColId col_id, const IDataType::SubstreamPath & substream = {})

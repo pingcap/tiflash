@@ -70,6 +70,20 @@ message ColumnStat {
     optional VectorIndexFilePropsV1Deprecated deprecated_vector_index = 102; // deprecated. See field 104.
     repeated VectorIndexFilePropsV1Deprecated deprecated_vector_indexes = 103; // deprecated. See field 104.
     repeated DMFileIndexInfo indexes = 104;
+
+    // DMFile-internal trim min-max index. At most one per column.
+    // Intentionally not part of `indexes = 104` so old Readers treat this as an
+    // unknown field and skip integrityCheckIndexInfoV2 / IndexFileKind checks.
+    optional TrimMinMaxIndexProps trim_minmax_index = 105;
+}
+
+// Pack-level trim min-max for DATE / DATETIME / TIMESTAMP columns.
+// Bounds use the column nested type's packed encoding; V1 semantics are [lower, upper).
+message TrimMinMaxIndexProps {
+    optional uint32 format_version = 1;
+    optional bytes lower_bound = 2;
+    optional bytes upper_bound = 3;
+    optional uint64 pack_count = 4;
 }
 
 message DMFileIndexInfo {

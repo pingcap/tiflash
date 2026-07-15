@@ -32,10 +32,10 @@ class MinMaxIndex
 {
 public:
     MinMaxIndex(
-        PaddedPODArray<UInt8> && has_null_marks_,
+        PaddedPODArray<UInt8> && pack_marks_,
         PaddedPODArray<UInt8> && has_value_marks_,
         MutableColumnPtr && minmaxes_)
-        : has_null_marks(std::move(has_null_marks_))
+        : pack_marks(std::move(pack_marks_))
         , has_value_marks(std::move(has_value_marks_))
         , minmaxes(std::move(minmaxes_))
     {}
@@ -47,9 +47,9 @@ public:
     size_t byteSize() const
     {
         // we add 3 * sizeof(PaddedPODArray<UInt8>)
-        // because has_null_marks/ has_value_marks / minmaxes are all use PaddedPODArray
-        // Thus we need to add the structual memory cost of PaddedPODArray for each of them
-        return sizeof(UInt8) * has_null_marks.size() + sizeof(UInt8) * has_value_marks.size() + minmaxes->byteSize()
+        // because pack_marks / has_value_marks / minmaxes all use PaddedPODArray
+        // Thus we need to add the structural memory cost of PaddedPODArray for each of them
+        return sizeof(UInt8) * pack_marks.size() + sizeof(UInt8) * has_value_marks.size() + minmaxes->byteSize()
             + 3 * sizeof(PaddedPODArray<UInt8>);
     }
 
@@ -81,6 +81,14 @@ public:
     RSResults checkIsNull(size_t start_pack, size_t pack_count);
 
     size_t size() const { return has_value_marks.size(); }
+
+    /// Raw per-pack mark byte. Prefer hasNull() / hasTrimmedLow() / hasTrimmedHigh().
+    UInt8 packMark(size_t pack_index) const { return pack_marks[pack_index]; }
+    bool hasNull(size_t pack_index) const;
+    bool hasTrimmedLow(size_t pack_index) const;
+    bool hasTrimmedHigh(size_t pack_index) const;
+    const PaddedPODArray<UInt8> & packMarks() const { return pack_marks; }
+
     struct Cell
     {
         Field min;
@@ -142,7 +150,9 @@ private:
 
     RSResult addNullIfHasNull(RSResult value_result, size_t i) const;
 
-    PaddedPODArray<UInt8> has_null_marks;
+    // Historically named has_null_marks. Disk layout is unchanged: one UInt8 per pack.
+    // Bit 0 = has_null; trim indexes may also set bits 1/2. Always read NULL via hasNull().
+    PaddedPODArray<UInt8> pack_marks;
     PaddedPODArray<UInt8> has_value_marks;
     MutableColumnPtr minmaxes;
 };
