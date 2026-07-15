@@ -617,12 +617,14 @@ try
             table_info_json,
             fmt::format("select * from default.t_111 where col_timestamp > cast_string_datetime('{}')", datetime),
             timezone_info);
-        EXPECT_EQ(rs_operator->name(), "greater");
+        EXPECT_EQ(rs_operator->name(), "date_range");
         EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 4);
         EXPECT_EQ(
             rs_operator->toDebugString(),
-            fmt::format(R"json({{"op":"greater","col":"col_timestamp","value":"{}"}})json", converted_time));
+            fmt::format(
+                R"json({{"op":"date_range","col":"col_timestamp","class":"LowerBounded","lower":"{}","lower_inclusive":false,"upper":"","upper_inclusive":true}})json",
+                converted_time));
         auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), fmt::format("4: [{}, 18446744073709551615]", converted_time + 1));
@@ -639,12 +641,14 @@ try
             table_info_json,
             fmt::format("select * from default.t_111 where col_timestamp > cast_string_datetime('{}')", datetime),
             timezone_info);
-        EXPECT_EQ(rs_operator->name(), "greater");
+        EXPECT_EQ(rs_operator->name(), "date_range");
         EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 4);
         EXPECT_EQ(
             rs_operator->toDebugString(),
-            fmt::format(R"json({{"op":"greater","col":"col_timestamp","value":"{}"}})json", converted_time));
+            fmt::format(
+                R"json({{"op":"date_range","col":"col_timestamp","class":"LowerBounded","lower":"{}","lower_inclusive":false,"upper":"","upper_inclusive":true}})json",
+                converted_time));
         auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), fmt::format("4: [{}, 18446744073709551615]", converted_time + 1));
@@ -661,12 +665,14 @@ try
             table_info_json,
             fmt::format("select * from default.t_111 where col_timestamp > cast_string_datetime('{}')", datetime),
             timezone_info);
-        EXPECT_EQ(rs_operator->name(), "greater");
+        EXPECT_EQ(rs_operator->name(), "date_range");
         EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 4);
         EXPECT_EQ(
             rs_operator->toDebugString(),
-            fmt::format(R"json({{"op":"greater","col":"col_timestamp","value":"{}"}})json", converted_time));
+            fmt::format(
+                R"json({{"op":"date_range","col":"col_timestamp","class":"LowerBounded","lower":"{}","lower_inclusive":false,"upper":"","upper_inclusive":true}})json",
+                converted_time));
         auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), fmt::format("4: [{}, 18446744073709551615]", converted_time + 1));
@@ -677,12 +683,14 @@ try
         auto rs_operator = generateRsOperator(
             table_info_json,
             fmt::format("select * from default.t_111 where col_datetime > cast_string_datetime('{}')", datetime));
-        EXPECT_EQ(rs_operator->name(), "greater");
+        EXPECT_EQ(rs_operator->name(), "date_range");
         EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 5);
         EXPECT_EQ(
             rs_operator->toDebugString(),
-            fmt::format(R"json({{"op":"greater","col":"col_datetime","value":"{}"}})json", origin_time_stamp));
+            fmt::format(
+                R"json({{"op":"date_range","col":"col_datetime","class":"LowerBounded","lower":"{}","lower_inclusive":false,"upper":"","upper_inclusive":true}})json",
+                origin_time_stamp));
         auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), fmt::format("5: [{}, 18446744073709551615]", origin_time_stamp + 1));
@@ -693,12 +701,14 @@ try
         auto rs_operator = generateRsOperator(
             table_info_json,
             fmt::format("select * from default.t_111 where col_date > cast_string_datetime('{}')", datetime));
-        EXPECT_EQ(rs_operator->name(), "greater");
+        EXPECT_EQ(rs_operator->name(), "date_range");
         EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 6);
         EXPECT_EQ(
             rs_operator->toDebugString(),
-            fmt::format(R"json({{"op":"greater","col":"col_date","value":"{}"}})json", origin_time_stamp));
+            fmt::format(
+                R"json({{"op":"date_range","col":"col_date","class":"LowerBounded","lower":"{}","lower_inclusive":false,"upper":"","upper_inclusive":true}})json",
+                origin_time_stamp));
         auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), fmt::format("6: [{}, 18446744073709551615]", origin_time_stamp + 1));
