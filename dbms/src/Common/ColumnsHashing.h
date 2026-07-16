@@ -207,6 +207,7 @@ protected:
 
         collation_sort_key_cache_active = true;
         collation_sort_key_cache_distinct_limit = rows / max_collation_sort_key_cache_distinct_ratio;
+        raw_to_sort_key_index.reserve(collation_sort_key_cache_distinct_limit + 1);
         cached_sort_keys.reserve(collation_sort_key_cache_distinct_limit + 1);
     }
 
