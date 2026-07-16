@@ -23,6 +23,7 @@
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 #include <Storages/DeltaMerge/Index/TrimMinMaxIndex.h>
 
+#include <ranges>
 #include <unordered_map>
 
 namespace DB::DM
@@ -56,13 +57,26 @@ bool inHalfOpenRange(UInt64 value, UInt64 lower, UInt64 upper)
 
 void flattenTopLevelAnd(const RSOperatorPtr & op, RSOperators & out)
 {
-    if (auto and_op = std::dynamic_pointer_cast<And>(op))
-    {
-        for (const auto & child : and_op->getChildren())
-            flattenTopLevelAnd(child, out);
+    if (!op)
         return;
+
+    // Iterative flatten of top-level And nesting to avoid deep call stacks on
+    // left-associated And(And(And(...))) chains.
+    RSOperators stack{op};
+    while (!stack.empty())
+    {
+        auto cur = stack.back();
+        stack.pop_back();
+        if (auto and_op = std::dynamic_pointer_cast<And>(cur))
+        {
+            const auto & children = and_op->getChildren();
+            // Push in reverse so that left-to-right child order is preserved in `out`.
+            for (const auto & it : std::ranges::reverse_view(children))
+                stack.push_back(it);
+            continue;
+        }
+        out.push_back(cur);
     }
-    out.push_back(op);
 }
 
 enum class BoundSide : UInt8
