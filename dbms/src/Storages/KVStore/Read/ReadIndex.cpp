@@ -341,6 +341,12 @@ BatchReadIndexRes KVStore::batchReadIndex(const std::vector<kvrpcpb::ReadIndexRe
     }
 }
 
+void KVStore::invalidateReadIndexCache(RegionID region_id) const
+{
+    if (read_index_worker_manager)
+        read_index_worker_manager->invalidateReadIndexCache(region_id);
+}
+
 void KVStore::initReadIndexWorkers(
     ReadIndexWorkerManager::FnGetTickTime && fn_min_dur_handle_region,
     size_t runner_cnt,

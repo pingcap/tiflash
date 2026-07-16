@@ -383,11 +383,8 @@ void LearnerReadWorker::waitIndex(
 
         // Wait index timeout is disabled; or timeout is enabled but not happen yet, wait index for
         // a specify Region.
-        const auto [wait_res, time_cost] = region->waitIndex(
-            index_to_wait,
-            timeout_ms,
-            [this]() { return tmt.checkRunning(); },
-            log);
+        const auto [wait_res, time_cost]
+            = region->waitIndex(index_to_wait, timeout_ms, [this]() { return tmt.checkRunning(); }, log);
         if (wait_res != WaitIndexStatus::Finished)
         {
             auto current = region->appliedIndex();
@@ -420,7 +417,11 @@ void LearnerReadWorker::waitIndex(
 
         std::visit(
             variant_op::overloaded{
-                [&](LockInfoPtr & lock) { unavailable_regions.addRegionLock(region->id(), std::move(lock)); },
+                [&](LockInfoPtr & lock) {
+                    kvstore->invalidateReadIndexCache(region_to_query.region_id);
+                    mvcc_query_info.invalidateReadIndexResCache(region_to_query.region_id);
+                    unavailable_regions.addRegionLock(region->id(), std::move(lock));
+                },
                 [&](RegionException::RegionReadStatus & status) {
                     if (status != RegionException::RegionReadStatus::OK)
                     {

@@ -98,6 +98,7 @@ public:
     BatchReadIndexRes batchReadIndex(
         const std::vector<kvrpcpb::ReadIndexRequest> & reqs,
         uint64_t timeout_ms = 10 * 1000);
+    void invalidateReadIndexCache(RegionID region_id);
 
     static std::unique_ptr<ReadIndexWorkerManager> newReadIndexWorkerManager(
         const TiFlashRaftProxyHelper & proxy_helper,
@@ -240,6 +241,8 @@ struct ReadIndexDataNode : MutexLockWrap
 
     void consume(const TiFlashRaftProxyHelper & helper, Timestamp ts);
 
+    void invalidateReadIndexCache();
+
     void runOneRound(const TiFlashRaftProxyHelper & helper, const ReadIndexNotifyCtrlPtr & notify);
 
     ReadIndexFuturePtr insertTask(const kvrpcpb::ReadIndexRequest & req);
@@ -283,6 +286,8 @@ struct ReadIndexWorker
     void consumeRegionNotifies(SteadyClock::duration min_dur);
 
     ReadIndexFuturePtr genReadIndexFuture(const kvrpcpb::ReadIndexRequest & req);
+
+    void invalidateReadIndexCache(RegionID region_id);
 
     // try to consume read-index response notifications & region waiting list
     void runOneRound(SteadyClock::duration min_dur);

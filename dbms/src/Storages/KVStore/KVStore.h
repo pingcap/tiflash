@@ -235,6 +235,7 @@ public: // Raft Read
     void addReadIndexEvent(Int64 f) { read_index_event_flag += f; }
     Int64 getReadIndexEvent() const { return read_index_event_flag; }
     BatchReadIndexRes batchReadIndex(const std::vector<kvrpcpb::ReadIndexRequest> & req, uint64_t timeout_ms) const;
+    void invalidateReadIndexCache(RegionID region_id) const;
     /// Initialize read-index worker context. It only can be invoked once.
     /// `worker_coefficient` means `worker_coefficient * runner_cnt` workers will be created.
     /// `runner_cnt` means number of runner which controls behavior of worker.

@@ -384,6 +384,15 @@ void ReadIndexTest::testNormal()
             ASSERT_EQ(computeCntUseHistoryTasks(*manager), expect_cnt_use_history_tasks);
         }
         {
+            proxy_instance.regions[0]->updateCommitIndex(670);
+            manager->invalidateReadIndexCache(0);
+
+            reqs = {make_read_index_reqs(0, 9)};
+            auto resps = manager->batchReadIndex(reqs);
+            ASSERT_EQ(resps[0].first.read_index(), 670);
+            ASSERT_EQ(computeCntUseHistoryTasks(*manager), expect_cnt_use_history_tasks);
+        }
+        {
             // Set region id to let mock proxy drop all related tasks.
             proxy_instance.unsafeInvokeForTest(
                 [](MockRaftStoreProxy & proxy) { proxy.mock_read_index.region_id_to_drop.emplace(1); });
