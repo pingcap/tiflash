@@ -456,13 +456,16 @@ try
         auto ctx = TiFlashTestEnv::getContext();
         auto & timezone_info = ctx->getTimezoneInfo();
         convertTimeZone(origin_time_stamp, converted_time, *timezone_info.timezone, time_zone_utc);
-        const auto query = String("select * from default.t_111 where col_timestamp > cast_string_datetime('")
-            + datetime + String("')");
+        const auto query = String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime
+            + String("')");
 
         auto rs_operator = generateRsOperator(table_info_json, query, timezone_info, /*enable_trim_minmax*/ false);
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 4);
+        EXPECT_EQ(
+            rs_operator->toDebugString(),
+            fmt::format(R"json({{"op":"greater","col":"col_timestamp","value":"{}"}})json", toString(converted_time)));
 
         rs_operator = generateRsOperator(table_info_json, query, timezone_info, /*enable_trim_minmax*/ true);
         EXPECT_EQ(rs_operator->name(), "date_range");
@@ -481,13 +484,16 @@ try
         auto & timezone_info = ctx->getTimezoneInfo();
         timezone_info.resetByTimezoneName("America/Chicago");
         convertTimeZone(origin_time_stamp, converted_time, *timezone_info.timezone, time_zone_utc);
-        const auto query = String("select * from default.t_111 where col_timestamp > cast_string_datetime('")
-            + datetime + String("')");
+        const auto query = String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime
+            + String("')");
 
         auto rs_operator = generateRsOperator(table_info_json, query, timezone_info, /*enable_trim_minmax*/ false);
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 4);
+        EXPECT_EQ(
+            rs_operator->toDebugString(),
+            fmt::format(R"json({{"op":"greater","col":"col_timestamp","value":"{}"}})json", toString(converted_time)));
 
         rs_operator = generateRsOperator(table_info_json, query, timezone_info, /*enable_trim_minmax*/ true);
         EXPECT_EQ(rs_operator->name(), "date_range");
@@ -506,13 +512,16 @@ try
         auto & timezone_info = ctx->getTimezoneInfo();
         timezone_info.resetByTimezoneOffset(28800);
         convertTimeZoneByOffset(origin_time_stamp, converted_time, false, timezone_info.timezone_offset);
-        const auto query = String("select * from default.t_111 where col_timestamp > cast_string_datetime('")
-            + datetime + String("')");
+        const auto query = String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime
+            + String("')");
 
         auto rs_operator = generateRsOperator(table_info_json, query, timezone_info, /*enable_trim_minmax*/ false);
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 4);
+        EXPECT_EQ(
+            rs_operator->toDebugString(),
+            fmt::format(R"json({{"op":"greater","col":"col_timestamp","value":"{}"}})json", toString(converted_time)));
 
         rs_operator = generateRsOperator(table_info_json, query, timezone_info, /*enable_trim_minmax*/ true);
         EXPECT_EQ(rs_operator->name(), "date_range");
@@ -535,6 +544,11 @@ try
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 5);
+        EXPECT_EQ(
+            rs_operator->toDebugString(),
+            fmt::format(
+                R"json({{"op":"greater","col":"col_datetime","value":"{}"}})json",
+                toString(origin_time_stamp)));
 
         rs_operator = generateRsOperator(table_info_json, query, default_timezone_info, /*enable_trim_minmax*/ true);
         EXPECT_EQ(rs_operator->name(), "date_range");
@@ -557,6 +571,9 @@ try
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 6);
+        EXPECT_EQ(
+            rs_operator->toDebugString(),
+            fmt::format(R"json({{"op":"greater","col":"col_date","value":"{}"}})json", toString(origin_time_stamp)));
 
         rs_operator = generateRsOperator(table_info_json, query, default_timezone_info, /*enable_trim_minmax*/ true);
         EXPECT_EQ(rs_operator->name(), "date_range");

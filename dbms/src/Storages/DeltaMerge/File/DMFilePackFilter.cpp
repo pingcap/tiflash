@@ -383,7 +383,7 @@ void DMFilePackFilter::tryLoadIndexByRequest(RSCheckParam & param, const RSIndex
 
 bool DMFilePackFilter::tryLoadTrimIndex(RSCheckParam & param, ColId col_id, const DateQueryDomain & query_domain)
 {
-    if (!enable_trim_minmax_read || !dmfile->useMetaV2())
+    if (!enable_trim_minmax || !dmfile->useMetaV2())
         return false;
 
     if (!dmfile->isColumnExist(col_id))

@@ -66,9 +66,15 @@ public:
         obj->set("col", attr.col_name);
         obj->set("class", String(magic_enum::enum_name(domain.predicate_class)));
         if (domain.lower)
+        {
             obj->set("lower", applyVisitor(FieldVisitorToDebugString(), *domain.lower));
+            obj->set("lower_inclusive", domain.lower_inclusive);
+        }
         if (domain.upper)
+        {
             obj->set("upper", applyVisitor(FieldVisitorToDebugString(), *domain.upper));
+            obj->set("upper_inclusive", domain.upper_inclusive);
+        }
         return obj;
     }
 
@@ -91,11 +97,8 @@ public:
 
 private:
     /// Pack-level rough check of the temporal range described by `domain` against `minmax`.
-    RSResults checkRange(
-        size_t start_pack,
-        size_t pack_count,
-        const DataTypePtr & type,
-        const MinMaxIndexPtr & minmax) const
+    RSResults checkRange(size_t start_pack, size_t pack_count, const DataTypePtr & type, const MinMaxIndexPtr & minmax)
+        const
     {
         // Empty domain must not advertise All (would skip row-level filtering incorrectly).
         if (!domain.lower && !domain.upper)

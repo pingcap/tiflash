@@ -37,8 +37,7 @@ const IDataType * stripNullable(const IDataType & type)
 
 bool isSupportedTemporalNestedType(const IDataType & nested_type)
 {
-    return typeid_cast<const DataTypeMyDate *>(&nested_type)
-        || typeid_cast<const DataTypeMyDateTime *>(&nested_type);
+    return typeid_cast<const DataTypeMyDate *>(&nested_type) || typeid_cast<const DataTypeMyDateTime *>(&nested_type);
 }
 
 const PaddedPODArray<UInt64> & getUInt64Data(const IColumn & column)
@@ -95,13 +94,13 @@ std::optional<UInt64> decodeBound(std::string_view bytes)
     return value;
 }
 
-dtpb::TrimMinMaxIndexProps makeDefaultProps(const IDataType & nested_type, UInt64 pack_count)
+dtpb::TrimMinMaxIndexProps makeDefaultProps(const IDataType & nested_type, UInt64 /*pack_count*/)
 {
     dtpb::TrimMinMaxIndexProps props;
     props.set_format_version(FormatVersionV1);
     props.set_lower_bound(encodeBound(defaultLowerBoundPacked(nested_type)));
     props.set_upper_bound(encodeBound(defaultUpperBoundPacked(nested_type)));
-    props.set_pack_count(pack_count);
+    // props.set_pack_count(pack_count);
     return props;
 }
 
@@ -280,9 +279,9 @@ bool validateTrimPackMarks(const PaddedPODArray<UInt8> & pack_marks, size_t expe
 {
     if (pack_marks.size() != expected_pack_count)
         return false;
-    for (size_t i = 0; i < pack_marks.size(); ++i)
+    for (unsigned char pack_mark : pack_marks)
     {
-        if ((pack_marks[i] & PackMarkBits::ReservedMask) != 0)
+        if ((pack_mark & PackMarkBits::ReservedMask) != 0)
             return false;
     }
     return true;

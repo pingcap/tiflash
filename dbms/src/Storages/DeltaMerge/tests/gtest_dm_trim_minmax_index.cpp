@@ -270,13 +270,6 @@ TEST(TrimMinMaxIndexPhaseA, FileNamingAndCacheKeyDistinct)
     EXPECT_TRUE(endsWith(colTrimIndexFileName("42"), details::INDEX_FILE_SUFFIX));
 }
 
-TEST(TrimMinMaxIndexPhaseA, SettingsDefaultOff)
-{
-    Settings settings;
-    EXPECT_FALSE(settings.dt_enable_trim_minmax_write);
-    EXPECT_FALSE(settings.dt_enable_trim_minmax_read);
-}
-
 TEST(TrimMinMaxIndexPhaseB, AddOrdinaryAndTrimPack)
 {
     auto type = std::make_shared<DataTypeMyDateTime>(0);
@@ -366,7 +359,8 @@ TEST(TrimMinMaxIndexPhaseB, AppendPackRejectsInvalidMask)
         index.appendPack(/*pack_mark*/ 0x08, /*has_value*/ false, PackMarkBits::TrimAllowedMask),
         DB::Exception);
     EXPECT_THROW(
-        index.appendPack(/*pack_mark*/ PackMarkBits::TrimmedLow, /*has_value*/ false, PackMarkBits::OrdinaryAllowedMask),
+        index
+            .appendPack(/*pack_mark*/ PackMarkBits::TrimmedLow, /*has_value*/ false, PackMarkBits::OrdinaryAllowedMask),
         DB::Exception);
 }
 
@@ -385,10 +379,7 @@ protected:
     ColumnDefinesPtr makeColumns()
     {
         auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ false);
-        cols->emplace_back(ColumnDefine{
-            settle_col_id,
-            "settle_time",
-            std::make_shared<DataTypeMyDateTime>(0)});
+        cols->emplace_back(ColumnDefine{settle_col_id, "settle_time", std::make_shared<DataTypeMyDateTime>(0)});
         return cols;
     }
 
@@ -429,7 +420,7 @@ protected:
             DMFileFormat::V3);
         auto cols = makeColumns();
         DMFileWriter::Options options;
-        options.enable_trim_minmax_write = enable_trim_write;
+        options.enable_trim_minmax = enable_trim_write;
         DMFileWriter writer(dm_file, *cols, file_provider, db_context->getWriteLimiter(), options);
         writer.write(block, DMFileWriter::BlockProperty{0, 0, 0, 0});
         writer.finalize();
@@ -679,7 +670,8 @@ try
         TrimRSIndex{
             .type = type,
             .minmax = trim_ptr,
-            .meta = TrimMinMaxIndexMeta{.format_version = 1, .lower_bound = e_lo, .upper_bound = e_hi, .pack_count = 5}});
+            .meta
+            = TrimMinMaxIndexMeta{.format_version = 1, .lower_bound = e_lo, .upper_bound = e_hi, .pack_count = 5}});
 
     DateQueryDomain bounded;
     bounded.predicate_class = TrimPredicateClass::EqualityOrInOrBounded;
@@ -747,7 +739,8 @@ try
         TrimRSIndex{
             .type = type,
             .minmax = trim_ptr,
-            .meta = TrimMinMaxIndexMeta{.format_version = 1, .lower_bound = e_lo, .upper_bound = e_hi, .pack_count = 2}});
+            .meta
+            = TrimMinMaxIndexMeta{.format_version = 1, .lower_bound = e_lo, .upper_bound = e_hi, .pack_count = 2}});
 
     auto eq_in_e = createEqual(attr, Field(v2020));
     auto eq_out_e = createEqual(attr, Field(v2200));
@@ -810,7 +803,7 @@ try
         scan_context,
         /*tracing_id*/ "trim_phase_c",
         ReadTag::Query,
-        /*enable_trim_minmax_read*/ true);
+        /*enable_trim_minmax*/ true);
 
     // Sentinel-only values are trimmed out of min-max; bounded query must not be All.
     const auto & pack_res = pack_result->getPackRes();
@@ -858,7 +851,7 @@ try
             scan_context,
             /*tracing_id*/ "trim_phase_c_or",
             ReadTag::Query,
-            /*enable_trim_minmax_read*/ true);
+            /*enable_trim_minmax*/ true);
 
         const auto & pack_res = pack_result->getPackRes();
         ASSERT_FALSE(pack_res.empty());

@@ -128,19 +128,17 @@ public:
         CompressionSettings compression_settings;
         size_t min_compress_block_size{};
         size_t max_compress_block_size{};
-        bool enable_trim_minmax_write = false;
+        bool enable_trim_minmax = true;
 
         Options() = default;
 
         Options(
             CompressionSettings compression_settings_,
             size_t min_compress_block_size_,
-            size_t max_compress_block_size_,
-            bool enable_trim_minmax_write_ = false)
+            size_t max_compress_block_size_)
             : compression_settings(compression_settings_)
             , min_compress_block_size(min_compress_block_size_)
             , max_compress_block_size(max_compress_block_size_)
-            , enable_trim_minmax_write(enable_trim_minmax_write_)
         {}
 
         Options(const Options & from) = default;

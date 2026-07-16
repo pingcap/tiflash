@@ -826,7 +826,7 @@ public:
         const ScanContextPtr & scan_context,
         const String & tracing_id,
         const ReadTag & read_tag,
-        bool enable_trim_minmax_read = false);
+        bool enable_trim_minmax = false);
     static UInt64 estimatedBytesOfInternalColumns(
         const DMContext & dm_context,
         const SegmentSnapshotPtr & read_snap,
