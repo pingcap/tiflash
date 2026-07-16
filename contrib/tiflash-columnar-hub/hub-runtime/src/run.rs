@@ -373,9 +373,18 @@ fn overwrite_config_with_cmd_args(config: &mut ConfigFile, matches: &clap::ArgMa
     if let Some(engine_git_hash) = matches.value_of("engine-git-hash") {
         config.server.engine_git_hash = engine_git_hash.to_owned();
     }
-    if let Some(engine_addr) = matches.value_of("engine-addr") {
-        config.server.engine_addr = engine_addr.to_owned();
+    // The special case is engine-addr:
+    // 1. If we have set our own engine-addr (from config file), we just ignore
+    //    what TiFlash gives us.
+    // 2. However, if we have not set our own value, we use what TiFlash gives us.
+    if config.server.engine_addr.is_empty() {
+        if let Some(engine_addr) = matches.value_of("engine-addr") {
+            config.server.engine_addr = engine_addr.to_owned();
+        }
     }
+
+    // advertise-engine-addr always overrides, regardless of what is in the
+    // config file. This is the same behavior as the proxy server path.
     if let Some(engine_addr) = matches.value_of("advertise-engine-addr") {
         config.server.engine_addr = engine_addr.to_owned();
     }
