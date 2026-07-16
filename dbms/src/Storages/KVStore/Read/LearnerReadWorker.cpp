@@ -383,8 +383,11 @@ void LearnerReadWorker::waitIndex(
 
         // Wait index timeout is disabled; or timeout is enabled but not happen yet, wait index for
         // a specify Region.
-        const auto [wait_res, time_cost]
-            = region->waitIndex(index_to_wait, timeout_ms, [this]() { return tmt.checkRunning(); }, log);
+        const auto [wait_res, time_cost] = region->waitIndex(
+            index_to_wait,
+            timeout_ms,
+            [this]() { return tmt.checkRunning(); },
+            log);
         if (wait_res != WaitIndexStatus::Finished)
         {
             auto current = region->appliedIndex();
