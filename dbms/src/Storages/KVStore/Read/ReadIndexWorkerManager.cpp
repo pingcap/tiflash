@@ -78,6 +78,11 @@ void ReadIndexWorkerManager::stop()
         runner->stop();
 }
 
+void ReadIndexWorkerManager::invalidateReadIndexCache(RegionID region_id)
+{
+    getWorkerByRegion(region_id).invalidateReadIndexCache(region_id);
+}
+
 ReadIndexWorkerManager::~ReadIndexWorkerManager()
 {
     stop();

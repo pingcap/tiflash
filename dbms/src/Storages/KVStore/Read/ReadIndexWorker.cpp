@@ -150,6 +150,12 @@ ReadIndexFuturePtr ReadIndexWorker::genReadIndexFuture(const kvrpcpb::ReadIndexR
     return res;
 }
 
+void ReadIndexWorker::invalidateReadIndexCache(RegionID region_id)
+{
+    if (auto data = data_map.tryGetDataNode(region_id); data)
+        data->invalidateReadIndexCache();
+}
+
 
 void ReadIndexWorker::runOneRound(SteadyClock::duration min_dur)
 {
