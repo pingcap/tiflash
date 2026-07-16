@@ -285,6 +285,12 @@ void ReadIndexDataNode::consume(const TiFlashRaftProxyHelper & helper, Timestamp
     }
 }
 
+void ReadIndexDataNode::invalidateReadIndexCache() NO_THREAD_SAFETY_ANALYSIS
+{
+    auto _ = genLockGuard();
+    history_success_tasks.reset();
+}
+
 ReadIndexDataNode::~ReadIndexDataNode() NO_THREAD_SAFETY_ANALYSIS
 {
     auto _ = genLockGuard();
