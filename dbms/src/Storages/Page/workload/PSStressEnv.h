@@ -25,7 +25,7 @@ namespace DB::PS::tests
 {
 using PSPtr = std::shared_ptr<DB::PageStorage>;
 
-enum StressEnvStat
+enum class StressEnvStat
 {
     // Below status are defined as fail
     STATUS_EXCEPTION = -1,
@@ -41,7 +41,7 @@ private:
     StressEnvStatus() = default;
     ~StressEnvStatus() = default;
 
-    std::atomic<StressEnvStat> status = STATUS_LOOP;
+    std::atomic<StressEnvStat> status = StressEnvStat::STATUS_LOOP;
 
 public:
     static StressEnvStatus & getInstance()
@@ -50,14 +50,17 @@ public:
         return instance;
     }
 
-    bool isRunning() const { return status == STATUS_LOOP; }
-    int isSuccess() const
+    bool isRunning() const { return status == StressEnvStat::STATUS_LOOP; }
+
+    // statCode >= 0 -> success
+    // statCode < 0 -> failure
+    Int32 statCode() const
     {
-        auto code = status.load();
-        return code > 0 ? 0 : static_cast<int>(code);
+        return static_cast<Int32>(status.load());
     }
 
-    void setStat(enum StressEnvStat status_) { status = status_; }
+    void setStat(StressEnvStat status_) { status = status_; }
+    StressEnvStat getStat() const { return status.load(); }
 };
 
 struct StressEnv
