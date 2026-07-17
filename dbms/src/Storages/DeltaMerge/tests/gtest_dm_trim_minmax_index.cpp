@@ -1122,6 +1122,55 @@ try
 }
 CATCH
 
+// Operator-level "Must fall back" shapes (no SQL): NotEqual / Not(DateRange) / Or(And range, IsNull).
+TEST(TrimMinMaxIndexPhaseC, MustFallBackOperatorShapesHaveNoPreferTrim)
+{
+    auto type = std::make_shared<DataTypeMyDateTime>(0);
+    Attr attr{.col_name = "t", .col_id = 1, .type = type};
+    const UInt64 v2020 = MyDateTime(2020, 1, 1, 0, 0, 0, 0).toPackedUInt();
+    const UInt64 v2021 = MyDateTime(2021, 1, 1, 0, 0, 0, 0).toPackedUInt();
+    const UInt64 e_lo = TrimMinMax::defaultLowerBoundPacked(*type);
+    const UInt64 e_hi = TrimMinMax::defaultUpperBoundPacked(*type);
+
+    auto has_prefer_trim = [](const RSOperatorPtr & op) {
+        for (const auto & req : op->getIndexRequests())
+        {
+            if (req.preferred_kind == RSIndexKind::PreferTrim)
+                return true;
+        }
+        return false;
+    };
+
+    EXPECT_FALSE(has_prefer_trim(createNotEqual(attr, Field(v2020))));
+
+    DateQueryDomain bounded;
+    bounded.predicate_class = TrimPredicateClass::EqualityOrInOrBounded;
+    bounded.lower = Field(v2020);
+    bounded.upper = Field(v2021);
+    bounded.lower_inclusive = true;
+    bounded.upper_inclusive = true;
+    auto date_range = createDateRange(attr, bounded);
+    EXPECT_TRUE(has_prefer_trim(date_range));
+    EXPECT_FALSE(has_prefer_trim(createNot(date_range)));
+
+    // BETWEEN under OR is not rewritten to DateRange; GE/LE themselves are Normal.
+    auto between_under_or = createOr(
+        {createAnd({createGreaterEqual(attr, Field(v2020)), createLessEqual(attr, Field(v2021))}),
+         createIsNull(attr)});
+    EXPECT_FALSE(has_prefer_trim(between_under_or));
+    EXPECT_EQ(normalizeTemporalRangesForTrim(between_under_or)->name(), "or");
+    EXPECT_FALSE(has_prefer_trim(normalizeTemporalRangesForTrim(between_under_or)));
+
+    // Out-of-E one-sided range remains PreferTrim at request time but is ineligible.
+    DateQueryDomain out_e;
+    out_e.predicate_class = TrimPredicateClass::LowerBounded;
+    out_e.lower = Field(MyDateTime(2200, 1, 1, 0, 0, 0, 0).toPackedUInt());
+    out_e.lower_inclusive = true;
+    auto out_range = createDateRange(attr, out_e);
+    ASSERT_TRUE(has_prefer_trim(out_range));
+    ASSERT_TRUE(out_range->getIndexRequests()[0].query_domain.has_value());
+    EXPECT_FALSE(out_range->getIndexRequests()[0].query_domain->isTrimEligible(e_lo, e_hi));
+}
 
 // NOT / NOT IN are outside trim support. Not must not PreferTrim, and must not let an empty
 // trim pack turn In(..., NULL) into None then !None => All (skipping row filters).

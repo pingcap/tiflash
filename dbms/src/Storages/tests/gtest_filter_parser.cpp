@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/MyTime.h>
+#include <DataTypes/DataTypeMyDateTime.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncCoprocessorUtils.h>
 #include <Debug/dbgQueryCompiler.h>
@@ -30,6 +32,7 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
+#include <Storages/DeltaMerge/Index/TrimMinMaxIndex.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Decode/TypeMapping.h>
@@ -891,6 +894,130 @@ try
         }
         EXPECT_TRUE(found_and);
         EXPECT_TRUE(found_equal);
+    }
+}
+CATCH
+
+// Design "Must fall back": distinguish shape-level (no PreferTrim) vs eligibility-level
+// (PreferTrim DateRange whose domain is outside stored E).
+TEST_F(FilterParserTest, TrimMustFallBackShapes)
+try
+{
+    const String table_info_json = R"json({
+    "cols":[
+        {"comment":"","default":null,"default_bit":null,"id":2,"name":{"L":"col_2","O":"col_2"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":8}},
+        {"comment":"","default":null,"default_bit":null,"id":5,"name":{"L":"col_datetime","O":"col_datetime"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":5,"Elems":null,"Flag":1,"Flen":0,"Tp":12}}
+    ],
+    "pk_is_handle":false,"index_info":[],"is_common_handle":false,
+    "name":{"L":"t_111","O":"t_111"},"partition":null,
+    "comment":"Mocked.","id":30,"schema_version":-1,"state":0,"tiflash_replica":{"Count":0},"update_timestamp":1636471547239654
+})json";
+
+    const String in_e = "2020-01-01 00:00:00.00000";
+    const String out_high = "2200-01-01 00:00:00.00000";
+    const String out_low = "1800-01-01 00:00:00.00000";
+    const String hi_in_e = "2020-01-02 00:00:00.00000";
+
+    auto has_prefer_trim = [](const DM::RSOperatorPtr & op) {
+        for (const auto & req : op->getIndexRequests())
+        {
+            if (req.preferred_kind == DM::RSIndexKind::PreferTrim)
+                return true;
+        }
+        return false;
+    };
+
+    auto expect_no_prefer_trim = [&](const DM::RSOperatorPtr & op, const char * label) {
+        ASSERT_NE(op, nullptr) << label;
+        EXPECT_FALSE(has_prefer_trim(op)) << label << " tree=" << op->toDebugString();
+    };
+
+    auto expect_prefer_trim_ineligible = [&](const DM::RSOperatorPtr & op, const char * label) {
+        ASSERT_NE(op, nullptr) << label;
+        EXPECT_EQ(op->name(), "date_range") << label;
+        ASSERT_TRUE(has_prefer_trim(op)) << label;
+        auto reqs = op->getIndexRequests();
+        ASSERT_EQ(reqs.size(), 1u) << label;
+        ASSERT_TRUE(reqs[0].query_domain.has_value()) << label;
+        auto dt = std::make_shared<DataTypeMyDateTime>(0);
+        const UInt64 e_lo = DM::TrimMinMax::defaultLowerBoundPacked(*dt);
+        const UInt64 e_hi = DM::TrimMinMax::defaultUpperBoundPacked(*dt);
+        EXPECT_FALSE(reqs[0].query_domain->isTrimEligible(e_lo, e_hi)) << label;
+    };
+
+    // Shape: col != ...
+    {
+        const auto query
+            = fmt::format("select * from default.t_111 where col_datetime != cast_string_datetime('{}')", in_e);
+        auto op = generateRsOperator(table_info_json, query, default_timezone_info, /*enable_trim_minmax*/ true);
+        EXPECT_EQ(op->name(), "not_equal");
+        expect_no_prefer_trim(op, "col != literal");
+    }
+
+    // Shape: NOT (BETWEEN ...)  <=>  NOT (GE AND LE)
+    // Tipb may keep Not(...) or rewrite; either way must not PreferTrim / emit DateRange.
+    {
+        const auto query = fmt::format(
+            "select * from default.t_111 where not (col_datetime >= cast_string_datetime('{}') "
+            "and col_datetime <= cast_string_datetime('{}'))",
+            in_e,
+            hi_in_e);
+        auto op = generateRsOperator(table_info_json, query, default_timezone_info, /*enable_trim_minmax*/ true);
+        expect_no_prefer_trim(op, "NOT (BETWEEN)");
+        EXPECT_EQ(op->toDebugString().find("date_range"), String::npos) << op->toDebugString();
+    }
+
+    // Shape: BETWEEN OR status = 1 (non-temporal Equal stays Normal)
+    {
+        const auto query = fmt::format(
+            "select * from default.t_111 where (col_datetime >= cast_string_datetime('{}') "
+            "and col_datetime <= cast_string_datetime('{}')) or col_2 = 1",
+            in_e,
+            hi_in_e);
+        auto op = generateRsOperator(table_info_json, query, default_timezone_info, /*enable_trim_minmax*/ true);
+        EXPECT_EQ(op->name(), "or");
+        expect_no_prefer_trim(op, "BETWEEN OR status=1");
+        EXPECT_EQ(op->toDebugString().find("date_range"), String::npos);
+    }
+
+    // Shape: BETWEEN OR col IS NULL
+    {
+        const auto query = fmt::format(
+            "select * from default.t_111 where (col_datetime >= cast_string_datetime('{}') "
+            "and col_datetime <= cast_string_datetime('{}')) or col_datetime is null",
+            in_e,
+            hi_in_e);
+        auto op = generateRsOperator(table_info_json, query, default_timezone_info, /*enable_trim_minmax*/ true);
+        EXPECT_EQ(op->name(), "or");
+        expect_no_prefer_trim(op, "BETWEEN OR IS NULL");
+        EXPECT_EQ(op->toDebugString().find("date_range"), String::npos);
+    }
+
+    // Shape: CAST(col AS ...) = ...  -> unsupported compare child / no PreferTrim
+    {
+        auto op = generateRsOperator(
+            table_info_json,
+            "select * from default.t_111 where cast(col_datetime as signed) = 1",
+            default_timezone_info,
+            /*enable_trim_minmax*/ true);
+        EXPECT_EQ(op->name(), "unsupported") << op->toDebugString();
+        expect_no_prefer_trim(op, "CAST(col) = literal");
+    }
+
+    // Eligibility: col >= 2200 may PreferTrim, but domain is outside default E.
+    {
+        const auto query
+            = fmt::format("select * from default.t_111 where col_datetime >= cast_string_datetime('{}')", out_high);
+        auto op = generateRsOperator(table_info_json, query, default_timezone_info, /*enable_trim_minmax*/ true);
+        expect_prefer_trim_ineligible(op, "col >= 2200");
+    }
+
+    // Eligibility: col <= 1800
+    {
+        const auto query
+            = fmt::format("select * from default.t_111 where col_datetime <= cast_string_datetime('{}')", out_low);
+        auto op = generateRsOperator(table_info_json, query, default_timezone_info, /*enable_trim_minmax*/ true);
+        expect_prefer_trim_ineligible(op, "col <= 1800");
     }
 }
 CATCH
