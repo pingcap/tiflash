@@ -44,6 +44,8 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
+#include <optional>
+
 namespace DB::DM::tests
 {
 namespace
@@ -983,10 +985,13 @@ try
 }
 CATCH
 
-TEST(TrimMinMaxIndexPhaseC, RoughCheckCorrectionMatrix)
+// Design Validation Strategy RSResult matrix: DateRange + Equal/In on the same packs.
+// Covers all 9 documented scenarios, including pack={NULL,2021} -> AllNull.
+TEST(TrimMinMaxIndexPhaseC, RoughCheckCorrectionDesignMatrix)
 try
 {
-    auto type = std::make_shared<DataTypeMyDateTime>(0);
+    auto nested = std::make_shared<DataTypeMyDateTime>(0);
+    auto type = makeNullable(nested);
     Attr attr{.col_name = "t", .col_id = 1, .type = type};
     const UInt64 e_lo = TrimMinMax::defaultLowerBoundPacked(*type);
     const UInt64 e_hi = TrimMinMax::defaultUpperBoundPacked(*type);
@@ -995,11 +1000,17 @@ try
     const UInt64 v2022 = MyDateTime(2022, 1, 1, 0, 0, 0, 0).toPackedUInt();
     const UInt64 v2100 = MyDateTime(2100, 1, 1, 0, 0, 0, 0).toPackedUInt();
     const UInt64 v1800 = MyDateTime(1800, 1, 1, 0, 0, 0, 0).toPackedUInt();
+    const UInt64 v2021_mid = MyDateTime(2021, 6, 1, 0, 0, 0, 0).toPackedUInt();
 
-    auto make_col = [&](const std::vector<UInt64> & vals) {
+    auto make_col = [&](const std::vector<std::optional<UInt64>> & vals) {
         auto col = type->createColumn();
-        for (auto v : vals)
-            col->insert(Field(v));
+        for (const auto & v : vals)
+        {
+            if (v)
+                col->insert(Field(*v));
+            else
+                col->insertDefault();
+        }
         return col;
     };
 
@@ -1015,7 +1026,14 @@ try
     TrimMinMax::addOrdinaryAndTrimPack(ordinary, trim, *make_col({v1800}), nullptr, e_lo, e_hi);
     // pack4: {1800, 2100}
     TrimMinMax::addOrdinaryAndTrimPack(ordinary, trim, *make_col({v1800, v2100}), nullptr, e_lo, e_hi);
+    // pack5: {NULL, 2021}
+    TrimMinMax::addOrdinaryAndTrimPack(ordinary, trim, *make_col({std::nullopt, v2021}), nullptr, e_lo, e_hi);
+    EXPECT_TRUE(trim.hasNull(5));
+    EXPECT_TRUE(trim.hasValue(5));
+    EXPECT_FALSE(trim.hasTrimmedLow(5));
+    EXPECT_FALSE(trim.hasTrimmedHigh(5));
 
+    constexpr size_t pack_count = 6;
     auto trim_ptr = std::make_shared<MinMaxIndex>(std::move(trim));
     RSCheckParam param;
     param.trim_indexes.emplace(
@@ -1023,107 +1041,84 @@ try
         TrimRSIndex{
             .type = type,
             .minmax = trim_ptr,
-            .meta
-            = TrimMinMaxIndexMeta{.format_version = 1, .lower_bound = e_lo, .upper_bound = e_hi, .pack_count = 5}});
+            .meta = TrimMinMaxIndexMeta{
+                .format_version = 1,
+                .lower_bound = e_lo,
+                .upper_bound = e_hi,
+                .pack_count = pack_count}});
 
-    // Q = {date | date ∈ [2020, 2022]} (bounded range)
+    auto expect_res = [](const RSResults & res, size_t pack, RSResult expected, const char * label) {
+        ASSERT_LT(pack, res.size()) << label;
+        EXPECT_EQ(res[pack], expected) << label;
+        if (expected == RSResult::AllNull || expected == RSResult::SomeNull || expected == RSResult::Some)
+            EXPECT_FALSE(res[pack].allMatch()) << label << " must keep row-level filtering";
+    };
+
+    // --- DateRange bounded: query=[2020, 2022] ---
     DateQueryDomain bounded;
     bounded.predicate_class = TrimPredicateClass::EqualityOrInOrBounded;
     bounded.lower = Field(v2020);
     bounded.upper = Field(v2022);
+    bounded.lower_inclusive = true;
+    bounded.upper_inclusive = true;
     auto range_op = createDateRange(attr, bounded);
-    auto bounded_res = range_op->roughCheck(0, 5, param);
-    EXPECT_EQ(bounded_res[0], RSResult::Some); // {2021,2100} corrected to Some because 2021 ∈ [2020,2022]
-    EXPECT_EQ(bounded_res[1], RSResult::None); // {2100}
-    EXPECT_EQ(bounded_res[2], RSResult::All); // {2021}
+    auto bounded_res = range_op->roughCheck(0, pack_count, param);
+    expect_res(bounded_res, 0, RSResult::Some, "DateRange [2020,2022] pack={2021,2100}");
+    expect_res(bounded_res, 1, RSResult::None, "DateRange [2020,2022] pack={2100}");
+    expect_res(bounded_res, 2, RSResult::All, "DateRange [2020,2022] pack={2021}");
+    expect_res(bounded_res, 5, RSResult::AllNull, "DateRange [2020,2022] pack={NULL,2021}");
+    EXPECT_NE(bounded_res[5], RSResult::All);
 
-    // Q = {date | date ∈ [2020, +∞)}
+    // --- DateRange lower-bounded: query>=2020 ---
     DateQueryDomain lower_b;
     lower_b.predicate_class = TrimPredicateClass::LowerBounded;
     lower_b.lower = Field(v2020);
     lower_b.lower_inclusive = true;
     auto ge_op = createDateRange(attr, lower_b);
-    auto ge_res = ge_op->roughCheck(0, 5, param);
-    EXPECT_EQ(ge_res[1], RSResult::Some); // {2100} must not be None
-    EXPECT_EQ(ge_res[3], RSResult::None); // {1800}
-    EXPECT_EQ(ge_res[4], RSResult::Some); // {1800,2100}
+    auto ge_res = ge_op->roughCheck(0, pack_count, param);
+    expect_res(ge_res, 1, RSResult::Some, "DateRange >=2020 pack={2100}");
+    expect_res(ge_res, 3, RSResult::None, "DateRange >=2020 pack={1800}");
+    expect_res(ge_res, 4, RSResult::Some, "DateRange >=2020 pack={1800,2100}");
 
-    // Q = {date | date ∈ (-∞, 2020]}
+    // --- DateRange upper-bounded: query<=2020 ---
     DateQueryDomain upper_b;
     upper_b.predicate_class = TrimPredicateClass::UpperBounded;
     upper_b.upper = Field(v2020);
     upper_b.upper_inclusive = true;
     auto le_op = createDateRange(attr, upper_b);
-    auto le_res = le_op->roughCheck(0, 5, param);
-    EXPECT_EQ(le_res[3], RSResult::Some); // {1800} must not be None
-    EXPECT_EQ(le_res[1], RSResult::None); // {2100}
-}
-CATCH
+    auto le_res = le_op->roughCheck(0, pack_count, param);
+    expect_res(le_res, 3, RSResult::Some, "DateRange <=2020 pack={1800}");
+    expect_res(le_res, 1, RSResult::None, "DateRange <=2020 pack={2100}");
 
-// Equal / In use EqualityOrInOrBounded correction: outliers never match, so All→Some
-// when any trimmed low/high exists; None stays None (no matching outlier).
-TEST(TrimMinMaxIndexPhaseC, RoughCheckCorrectionEqualAndIn)
-try
-{
-    auto type = std::make_shared<DataTypeMyDateTime>(0);
-    Attr attr{.col_name = "t", .col_id = 1, .type = type};
-    const UInt64 e_lo = TrimMinMax::defaultLowerBoundPacked(*type);
-    const UInt64 e_hi = TrimMinMax::defaultUpperBoundPacked(*type);
-    const UInt64 v2021 = MyDateTime(2021, 1, 1, 0, 0, 0, 0).toPackedUInt();
-    const UInt64 v2100 = MyDateTime(2100, 1, 1, 0, 0, 0, 0).toPackedUInt();
-    const UInt64 v1800 = MyDateTime(1800, 1, 1, 0, 0, 0, 0).toPackedUInt();
-
-    auto make_col = [&](const std::vector<UInt64> & vals) {
-        auto col = type->createColumn();
-        for (auto v : vals)
-            col->insert(Field(v));
-        return col;
-    };
-
-    MinMaxIndex ordinary(*type);
-    MinMaxIndex trim(*type);
-    // pack0: {2021, 2100} — in-range equal match + high outlier => All must become Some
-    TrimMinMax::addOrdinaryAndTrimPack(ordinary, trim, *make_col({v2021, v2100}), nullptr, e_lo, e_hi);
-    // pack1: {2100} — only high outlier => None (outlier never matches equality)
-    TrimMinMax::addOrdinaryAndTrimPack(ordinary, trim, *make_col({v2100}), nullptr, e_lo, e_hi);
-    // pack2: {2021} — pure in-range match => All
-    TrimMinMax::addOrdinaryAndTrimPack(ordinary, trim, *make_col({v2021}), nullptr, e_lo, e_hi);
-    // pack3: {1800} — only low outlier => None
-    TrimMinMax::addOrdinaryAndTrimPack(ordinary, trim, *make_col({v1800}), nullptr, e_lo, e_hi);
-    // pack4: {1800, 2100} — both outliers => None
-    TrimMinMax::addOrdinaryAndTrimPack(ordinary, trim, *make_col({v1800, v2100}), nullptr, e_lo, e_hi);
-
-    auto trim_ptr = std::make_shared<MinMaxIndex>(std::move(trim));
-    RSCheckParam param;
-    param.trim_indexes.emplace(
-        attr.col_id,
-        TrimRSIndex{
-            .type = type,
-            .minmax = trim_ptr,
-            .meta
-            = TrimMinMaxIndexMeta{.format_version = 1, .lower_bound = e_lo, .upper_bound = e_hi, .pack_count = 5}});
-
+    // --- Equal / In share EqualityOrInOrBounded correction on the same packs ---
     auto eq_op = createEqual(attr, Field(v2021));
-    auto eq_res = eq_op->roughCheck(0, 5, param);
-    EXPECT_EQ(eq_res[0], RSResult::Some); // All downgraded by has_trimmed_high
-    EXPECT_EQ(eq_res[1], RSResult::None); // high outlier does not match equal(2021)
-    EXPECT_EQ(eq_res[2], RSResult::All);
-    EXPECT_EQ(eq_res[3], RSResult::None);
-    EXPECT_EQ(eq_res[4], RSResult::None);
+    auto eq_res = eq_op->roughCheck(0, pack_count, param);
+    expect_res(eq_res, 0, RSResult::Some, "Equal(2021) pack={2021,2100}");
+    expect_res(eq_res, 1, RSResult::None, "Equal(2021) pack={2100}");
+    expect_res(eq_res, 2, RSResult::All, "Equal(2021) pack={2021}");
+    expect_res(eq_res, 3, RSResult::None, "Equal(2021) pack={1800}");
+    expect_res(eq_res, 4, RSResult::None, "Equal(2021) pack={1800,2100}");
+    expect_res(eq_res, 5, RSResult::AllNull, "Equal(2021) pack={NULL,2021}");
+    EXPECT_NE(eq_res[5], RSResult::All);
 
-    // Multi-value IN still uses EqualityOrInOrBounded; same All→Some correction on pack0.
-    auto in_op = createIn(attr, {Field(v2021), Field(MyDateTime(2021, 6, 1, 0, 0, 0, 0).toPackedUInt())});
-    auto in_res = in_op->roughCheck(0, 5, param);
-    EXPECT_EQ(in_res[0], RSResult::Some); // match in E + non-matching high outlier
-    EXPECT_EQ(in_res[1], RSResult::None);
-    EXPECT_EQ(in_res[2], RSResult::All);
-    EXPECT_EQ(in_res[3], RSResult::None);
-    EXPECT_EQ(in_res[4], RSResult::None);
+    auto in_op = createIn(attr, {Field(v2021), Field(v2021_mid)});
+    auto in_res = in_op->roughCheck(0, pack_count, param);
+    expect_res(in_res, 0, RSResult::Some, "in(2021,...) pack={2021,2100}");
+    expect_res(in_res, 1, RSResult::None, "in(2021,...) pack={2100}");
+    expect_res(in_res, 2, RSResult::All, "in(2021,...) pack={2021}");
+    expect_res(in_res, 3, RSResult::None, "in(2021,...) pack={1800}");
+    expect_res(in_res, 4, RSResult::None, "in(2021,...) pack={1800,2100}");
+    expect_res(in_res, 5, RSResult::AllNull, "in(2021,...) pack={NULL,2021}");
 
-    // IN of a single in-range value should match Equal's correction matrix.
+    // Single-value IN must match Equal on the shared correction matrix.
     auto in_single = createIn(attr, {Field(v2021)});
-    auto in_single_res = in_single->roughCheck(0, 5, param);
-    EXPECT_EQ(in_single_res, eq_res);
+    EXPECT_EQ(in_single->roughCheck(0, pack_count, param), eq_res);
+
+    // Bounded DateRange and Equal/In agree on the design cases that share EqualityOrInOrBounded.
+    EXPECT_EQ(bounded_res[0], eq_res[0]);
+    EXPECT_EQ(bounded_res[1], eq_res[1]);
+    EXPECT_EQ(bounded_res[2], eq_res[2]);
+    EXPECT_EQ(bounded_res[5], eq_res[5]);
 }
 CATCH
 
