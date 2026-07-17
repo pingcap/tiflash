@@ -50,37 +50,60 @@ void HashJoinV2ProbeTransformOp::operateSuffixImpl()
 
 OperatorStatus HashJoinV2ProbeTransformOp::onOutput(Block & block)
 {
-    assert(!probe_context.isAllFinished());
-    block = join_ptr->probeBlock(probe_context, op_index);
-    size_t rows = block.rows();
-    joined_rows += rows;
-    return OperatorStatus::HAS_OUTPUT;
+    while (true)
+    {
+        switch (status)
+        {
+        case ProbeStatus::PROBE:
+            if unlikely (probe_context.isAllFinished())
+            {
+                join_ptr->finishOneProbe(op_index);
+                status
+                    = join_ptr->needScanBuildSideAfterProbe() ? ProbeStatus::WAIT_PROBE_FINISH : ProbeStatus::FINISHED;
+                block = join_ptr->probeLastResultBlock(op_index);
+                if (block)
+                    return OperatorStatus::HAS_OUTPUT;
+                break;
+            }
+            block = join_ptr->probeBlock(probe_context, op_index);
+            joined_rows += block.rows();
+            return OperatorStatus::HAS_OUTPUT;
+        case ProbeStatus::WAIT_PROBE_FINISH:
+            if (join_ptr->isAllProbeFinished())
+            {
+                status = ProbeStatus::SCAN_BUILD_SIDE;
+                break;
+            }
+            return OperatorStatus::WAIT_FOR_NOTIFY;
+        case ProbeStatus::SCAN_BUILD_SIDE:
+            block = join_ptr->scanBuildSideAfterProbe(op_index);
+            scan_hash_map_rows += block.rows();
+            if unlikely (!block)
+                status = ProbeStatus::FINISHED;
+            return OperatorStatus::HAS_OUTPUT;
+        case ProbeStatus::FINISHED:
+            block = {};
+            return OperatorStatus::HAS_OUTPUT;
+        }
+    }
 }
 
 OperatorStatus HashJoinV2ProbeTransformOp::transformImpl(Block & block)
 {
+    assert(status == ProbeStatus::PROBE);
     assert(probe_context.isAllFinished());
-    if unlikely (!block)
+    if likely (block)
     {
-        join_ptr->finishOneProbe(op_index);
-        probe_context.input_is_finished = true;
-        block = join_ptr->probeLastResultBlock(op_index);
-        return OperatorStatus::HAS_OUTPUT;
+        if unlikely (block.rows() == 0)
+            return OperatorStatus::NEED_INPUT;
+        probe_context.resetBlock(block);
     }
-    if (block.rows() == 0)
-        return OperatorStatus::NEED_INPUT;
-    probe_context.resetBlock(block);
     return onOutput(block);
 }
 
 OperatorStatus HashJoinV2ProbeTransformOp::tryOutputImpl(Block & block)
 {
-    if unlikely (probe_context.input_is_finished)
-    {
-        block = {};
-        return OperatorStatus::HAS_OUTPUT;
-    }
-    if (probe_context.isAllFinished())
+    if (status == ProbeStatus::PROBE && probe_context.isAllFinished())
         return OperatorStatus::NEED_INPUT;
     return onOutput(block);
 }
