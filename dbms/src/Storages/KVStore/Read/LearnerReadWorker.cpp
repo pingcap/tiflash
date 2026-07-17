@@ -37,8 +37,13 @@ void UnavailableRegions::tryThrowRegionException()
     if (!batch_cop && !region_locks.empty())
         throw LockException(std::move(region_locks));
 
-    if (!ids.empty())
-        throw RegionException(std::move(ids), status, extra_msg.c_str());
+    if (!unavailable_region_ids.empty() || !lock_region_ids.empty())
+        throw RegionException(
+            std::move(unavailable_region_ids),
+            std::move(lock_region_ids),
+            std::move(locks),
+            status,
+            extra_msg.c_str());
 }
 
 void UnavailableRegions::addRegionWaitIndexTimeout(
@@ -296,7 +301,7 @@ void LearnerReadWorker::recordReadIndexError(
         else if (resp.has_locked())
         {
             GET_METRIC(tiflash_raft_learner_read_failures_count, type_tikv_lock).Increment();
-            unavailable_regions.addRegionLock(region_id, LockInfoPtr(resp.release_locked()));
+            unavailable_regions.addRegionLockAsUnavailableRegion(region_id, LockInfoPtr(resp.release_locked()));
         }
         else
         {

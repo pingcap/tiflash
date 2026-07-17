@@ -14,6 +14,7 @@
 
 #include <Common/Logger.h>
 #include <Storages/KVStore/Read/LearnerRead.h>
+#include <Storages/KVStore/Read/RegionException.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/RegionQueryInfo_fwd.h>
 
@@ -48,23 +49,36 @@ struct UnavailableRegions
         , is_wn_disagg_read(is_wn_disagg_read_)
     {}
 
-    size_t size() const { return ids.size(); }
+    size_t size() const { return unavailable_region_ids.size() + lock_region_ids.size(); }
 
-    bool empty() const { return ids.empty(); }
+    bool empty() const { return unavailable_region_ids.empty() && lock_region_ids.empty(); }
 
-    bool contains(RegionID region_id) const { return ids.contains(region_id); }
+    bool contains(RegionID region_id) const
+    {
+        return unavailable_region_ids.contains(region_id) || lock_region_ids.contains(region_id);
+    }
 
     void addStatus(RegionID id, RegionException::RegionReadStatus status_, std::string && extra_msg_)
     {
         status = status_;
-        ids.emplace(id);
+        unavailable_region_ids.emplace(id);
         extra_msg = std::move(extra_msg_);
+    }
+
+    void addRegionLockAsUnavailableRegion(RegionID region_id_, LockInfoPtr && region_lock_)
+    {
+        region_locks.emplace_back(region_id_, std::move(region_lock_));
+        unavailable_region_ids.emplace(region_id_);
     }
 
     void addRegionLock(RegionID region_id_, LockInfoPtr && region_lock_)
     {
+        if (region_lock_)
+        {
+            locks[region_lock_->lock_version()].push_back(std::make_shared<pingcap::kv::Lock>(*region_lock_));
+        }
         region_locks.emplace_back(region_id_, std::move(region_lock_));
-        ids.emplace(region_id_);
+        lock_region_ids.emplace(region_id_);
     }
 
     void tryThrowRegionException();
@@ -74,10 +88,16 @@ struct UnavailableRegions
     String toDebugString() const
     {
         FmtBuffer buffer;
-        buffer.append("{ids=[");
+        buffer.append("{unavailable_ids=[");
         buffer.joinStr(
-            ids.begin(),
-            ids.end(),
+            unavailable_region_ids.begin(),
+            unavailable_region_ids.end(),
+            [](const auto & v, FmtBuffer & f) { f.fmtAppend("{}", v); },
+            "|");
+        buffer.append("] lock_ids=[");
+        buffer.joinStr(
+            lock_region_ids.begin(),
+            lock_region_ids.end(),
             [](const auto & v, FmtBuffer & f) { f.fmtAppend("{}", v); },
             "|");
         buffer.append("] locks=");
@@ -95,7 +115,9 @@ private:
     const bool batch_cop;
     const bool is_wn_disagg_read;
 
-    RegionException::UnavailableRegions ids;
+    RegionException::UnavailableRegions unavailable_region_ids;
+    RegionException::UnavailableRegions lock_region_ids;
+    RegionException::LocksByTxn locks;
     std::vector<std::pair<RegionID, LockInfoPtr>> region_locks;
     RegionException::RegionReadStatus status{RegionException::RegionReadStatus::NOT_FOUND};
     std::string extra_msg;

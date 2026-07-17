@@ -41,6 +41,9 @@
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 
+#include <memory>
+#include <unordered_set>
+
 namespace DB
 {
 class Context;
@@ -267,6 +270,17 @@ public:
 
     bool containsRegionsInfoForTable(Int64 table_id) const;
 
+    std::unordered_set<UInt64> & getBypassLockTs()
+    {
+        if (bypass_lock_ts == nullptr)
+            bypass_lock_ts = std::make_unique<std::unordered_set<UInt64>>();
+        return *bypass_lock_ts;
+    }
+    void setBypassLockTs(std::unique_ptr<std::unordered_set<UInt64>> && bypass_lock_ts_)
+    {
+        bypass_lock_ts = std::move(bypass_lock_ts_);
+    }
+
     UInt64 getFlags() const { return flags; }
     void setFlags(UInt64 f) { flags = f; }
     void addFlag(UInt64 f) { flags |= f; }
@@ -378,6 +392,7 @@ public:
     // `tunnel_set` is always set by `MPPTask` and is used later.
     MPPTunnelSetPtr tunnel_set;
     TablesRegionsInfo tables_regions_info;
+    std::unique_ptr<std::unordered_set<UInt64>> bypass_lock_ts;
     // part of regions_for_local_read + regions_for_remote_read, only used for batch-cop
     RegionInfoList retry_regions;
 

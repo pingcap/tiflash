@@ -25,6 +25,8 @@
 #include <TiDB/Schema/SchemaSyncer.h>
 
 #include <ext/scope_guard.h>
+#include <memory>
+#include <unordered_set>
 
 namespace DB
 {
@@ -65,10 +67,12 @@ grpc::Status BatchCoprocessorHandler::execute()
             SCOPE_EXIT({ GET_METRIC(tiflash_coprocessor_handling_request_count, type_batch_executing).Decrement(); });
 
             auto dag_request = getDAGRequestFromStringWithRetry(cop_request->data());
+            auto bypass_lock_ts = std::make_unique<std::unordered_set<UInt64>>();
             auto tables_regions_info = TablesRegionsInfo::create(
                 cop_request->regions(),
                 cop_request->table_regions(),
-                cop_context.db_context.getTMTContext());
+                cop_context.db_context.getTMTContext(),
+                bypass_lock_ts.get());
             LOG_DEBUG(
                 log,
                 "Handling {} regions from {} physical tables in DAG request: {}",
@@ -86,6 +90,7 @@ grpc::Status BatchCoprocessorHandler::execute()
                 cop_request->connection_id(),
                 cop_request->connection_alias(),
                 Logger::get(log->identifier()));
+            dag_context.setBypassLockTs(std::move(bypass_lock_ts));
             cop_context.db_context.setDAGContext(&dag_context);
 
             DAGDriver<DAGRequestKind::BatchCop> driver(

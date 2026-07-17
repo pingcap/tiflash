@@ -28,6 +28,9 @@
 #include <Storages/KVStore/TMTContext.h>
 #include <kvproto/disaggregated.pb.h>
 
+#include <memory>
+#include <unordered_set>
+
 namespace DB
 {
 
@@ -46,8 +49,9 @@ void WNEstablishDisaggTaskHandler::prepare(const disaggregated::EstablishDisaggT
     const auto & meta = request->meta();
 
     auto & tmt_context = context->getTMTContext();
+    auto bypass_lock_ts = std::make_unique<std::unordered_set<UInt64>>();
     TablesRegionsInfo tables_regions_info
-        = TablesRegionsInfo::create(request->regions(), request->table_regions(), tmt_context);
+        = TablesRegionsInfo::create(request->regions(), request->table_regions(), tmt_context, bypass_lock_ts.get());
     LOG_INFO(
         log,
         "DisaggregatedTask handling {} regions from {} physical tables",
@@ -77,6 +81,7 @@ void WNEstablishDisaggTaskHandler::prepare(const disaggregated::EstablishDisaggT
         std::move(tables_regions_info),
         context->getClientInfo().current_address.toString(),
         log);
+    dag_context->setBypassLockTs(std::move(bypass_lock_ts));
     context->setDAGContext(dag_context.get());
 }
 

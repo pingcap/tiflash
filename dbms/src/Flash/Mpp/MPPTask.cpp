@@ -40,6 +40,8 @@
 #include <ext/scope_guard.h>
 #include <magic_enum.hpp>
 #include <map>
+#include <memory>
+#include <unordered_set>
 
 namespace DB
 {
@@ -393,8 +395,12 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     TMTContext & tmt_context = context->getTMTContext();
     /// MPP task will only use key ranges in mpp::DispatchTaskRequest::regions/mpp::DispatchTaskRequest::table_regions.
     /// The ones defined in tipb::TableScan will never be used and can be removed later.
-    TablesRegionsInfo tables_regions_info
-        = TablesRegionsInfo::create(task_request.regions(), task_request.table_regions(), tmt_context);
+    auto bypass_lock_ts = std::make_unique<std::unordered_set<UInt64>>();
+    TablesRegionsInfo tables_regions_info = TablesRegionsInfo::create(
+        task_request.regions(),
+        task_request.table_regions(),
+        tmt_context,
+        bypass_lock_ts.get());
     LOG_DEBUG(
         log,
         "Handling {} regions from {} physical tables in MPP task",
@@ -443,6 +449,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     dag_context = std::make_unique<DAGContext>(dag_req, task_request.meta(), is_root_mpp_task);
     dag_context->log = log;
     dag_context->tables_regions_info = std::move(tables_regions_info);
+    dag_context->setBypassLockTs(std::move(bypass_lock_ts));
     dag_context->tidb_host = context->getClientInfo().current_address.toString();
 
     context->setDAGContext(dag_context.get());
