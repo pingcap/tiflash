@@ -24,6 +24,9 @@
 #include <Interpreters/Context.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/Filter/And.h>
+#include <Storages/DeltaMerge/Filter/DateQueryDomain.h>
+#include <Storages/DeltaMerge/Filter/Or.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
@@ -584,6 +587,229 @@ try
             fmt::format(
                 R"json({{"op":"date_range","col":"col_date","class":"LowerBounded","lower":"{}","lower_inclusive":false,"upper":"","upper_inclusive":true}})json",
                 origin_time_stamp));
+    }
+}
+CATCH
+
+// normalizeTemporalRangesForTrim via FilterParser (gated by enable_trim_minmax).
+TEST_F(FilterParserTest, NormalizeTemporalRangesForTrim)
+try
+{
+    const String table_info_json = R"json({
+    "cols":[
+        {"comment":"","default":null,"default_bit":null,"id":2,"name":{"L":"col_2","O":"col_2"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":8}},
+        {"comment":"","default":null,"default_bit":null,"id":5,"name":{"L":"col_datetime","O":"col_datetime"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":5,"Elems":null,"Flag":1,"Flen":0,"Tp":12}}
+    ],
+    "pk_is_handle":false,"index_info":[],"is_common_handle":false,
+    "name":{"L":"t_111","O":"t_111"},"partition":null,
+    "comment":"Mocked.","id":30,"schema_version":-1,"state":0,"tiflash_replica":{"Count":0},"update_timestamp":1636471547239654
+})json";
+
+    const String lo_str = "2021-10-26 17:00:00.00000";
+    const String hi_str = "2021-10-27 17:00:00.00000";
+    UInt64 lo = 0;
+    UInt64 hi = 0;
+    {
+        ReadBufferFromMemory lo_buf(lo_str.c_str(), lo_str.size());
+        ASSERT_TRUE(tryReadMyDateTimeText(lo, 6, lo_buf));
+        ReadBufferFromMemory hi_buf(hi_str.c_str(), hi_str.size());
+        ASSERT_TRUE(tryReadMyDateTimeText(hi, 6, hi_buf));
+    }
+
+    {
+        // Bounded range: GE+LE merge into a single DateRange only when normalize is enabled.
+        const auto query = fmt::format(
+            "select * from default.t_111 where col_datetime >= cast_string_datetime('{}') "
+            "and col_datetime <= cast_string_datetime('{}')",
+            lo_str,
+            hi_str);
+
+        auto rs_operator
+            = generateRsOperator(table_info_json, query, default_timezone_info, /*enable_trim_minmax*/ false);
+        EXPECT_EQ(rs_operator->name(), "and");
+        auto and_op = std::dynamic_pointer_cast<DM::And>(rs_operator);
+        ASSERT_NE(and_op, nullptr);
+        ASSERT_EQ(and_op->getChildren().size(), 2u);
+        EXPECT_EQ(and_op->getChildren()[0]->name(), "greater_equal");
+        EXPECT_EQ(and_op->getChildren()[1]->name(), "less_equal");
+
+        rs_operator = generateRsOperator(table_info_json, query, default_timezone_info, /*enable_trim_minmax*/ true);
+        EXPECT_EQ(rs_operator->name(), "date_range");
+        EXPECT_EQ(
+            rs_operator->toDebugString(),
+            fmt::format(
+                R"json({{"op":"date_range","col":"col_datetime","class":"EqualityOrInOrBounded","lower":"{}","lower_inclusive":true,"upper":"{}","upper_inclusive":true}})json",
+                lo,
+                hi));
+        auto reqs = rs_operator->getIndexRequests();
+        ASSERT_EQ(reqs.size(), 1u);
+        EXPECT_EQ(reqs[0].preferred_kind, DM::RSIndexKind::PreferTrim);
+        ASSERT_TRUE(reqs[0].query_domain.has_value());
+        EXPECT_EQ(reqs[0].query_domain->predicate_class, DM::TrimPredicateClass::EqualityOrInOrBounded);
+    }
+
+    {
+        // Upper-only bound becomes UpperBounded DateRange when normalize is enabled.
+        const auto query
+            = fmt::format("select * from default.t_111 where col_datetime <= cast_string_datetime('{}')", hi_str);
+
+        auto rs_operator
+            = generateRsOperator(table_info_json, query, default_timezone_info, /*enable_trim_minmax*/ false);
+        EXPECT_EQ(rs_operator->name(), "less_equal");
+
+        rs_operator = generateRsOperator(table_info_json, query, default_timezone_info, /*enable_trim_minmax*/ true);
+        EXPECT_EQ(rs_operator->name(), "date_range");
+        EXPECT_EQ(
+            rs_operator->toDebugString(),
+            fmt::format(
+                R"json({{"op":"date_range","col":"col_datetime","class":"UpperBounded","lower":"","lower_inclusive":true,"upper":"{}","upper_inclusive":true}})json",
+                hi));
+    }
+
+    {
+        // OR must not rewrite children into DateRange, even with normalize enabled.
+        const auto query = fmt::format(
+            "select * from default.t_111 where col_datetime >= cast_string_datetime('{}') "
+            "or col_datetime = cast_string_datetime('{}')",
+            lo_str,
+            hi_str);
+
+        auto rs_operator
+            = generateRsOperator(table_info_json, query, default_timezone_info, /*enable_trim_minmax*/ true);
+        EXPECT_EQ(rs_operator->name(), "or");
+        auto or_op = std::dynamic_pointer_cast<DM::Or>(rs_operator);
+        ASSERT_NE(or_op, nullptr);
+        ASSERT_EQ(or_op->getChildren().size(), 2u);
+        EXPECT_EQ(or_op->getChildren()[0]->name(), "greater_equal");
+        EXPECT_EQ(or_op->getChildren()[1]->name(), "equal");
+    }
+
+    {
+        // Temporal range AND non-temporal predicate: only the temporal part is rewritten.
+        const auto query = fmt::format(
+            "select * from default.t_111 where col_datetime >= cast_string_datetime('{}') "
+            "and col_datetime <= cast_string_datetime('{}') and col_2 = 666",
+            lo_str,
+            hi_str);
+
+        auto rs_operator
+            = generateRsOperator(table_info_json, query, default_timezone_info, /*enable_trim_minmax*/ true);
+        EXPECT_EQ(rs_operator->name(), "and");
+        auto and_op = std::dynamic_pointer_cast<DM::And>(rs_operator);
+        ASSERT_NE(and_op, nullptr);
+        ASSERT_EQ(and_op->getChildren().size(), 2u);
+
+        // Child order follows flatten then rewrite: non-temporal kept first, then DateRange.
+        bool found_date_range = false;
+        bool found_equal = false;
+        for (const auto & child : and_op->getChildren())
+        {
+            if (child->name() == "date_range")
+            {
+                found_date_range = true;
+                EXPECT_EQ(
+                    child->toDebugString(),
+                    fmt::format(
+                        R"json({{"op":"date_range","col":"col_datetime","class":"EqualityOrInOrBounded","lower":"{}","lower_inclusive":true,"upper":"{}","upper_inclusive":true}})json",
+                        lo,
+                        hi));
+            }
+            else if (child->name() == "equal")
+            {
+                found_equal = true;
+                EXPECT_EQ(child->toDebugString(), R"json({"op":"equal","col":"col_2","value":"666"})json");
+            }
+        }
+        EXPECT_TRUE(found_date_range);
+        EXPECT_TRUE(found_equal);
+    }
+
+    {
+        // Top-level AND with an OR leaf: only the exposed GE/LE bounds are rewritten.
+        // t >= L AND t <= U AND (t = L OR t = U)  =>  DateRange AND Or(equal, equal)
+        const auto query = fmt::format(
+            "select * from default.t_111 where col_datetime >= cast_string_datetime('{}') "
+            "and col_datetime <= cast_string_datetime('{}') "
+            "and (col_datetime = cast_string_datetime('{}') or col_datetime = cast_string_datetime('{}'))",
+            lo_str,
+            hi_str,
+            lo_str,
+            hi_str);
+
+        auto rs_operator
+            = generateRsOperator(table_info_json, query, default_timezone_info, /*enable_trim_minmax*/ true);
+        EXPECT_EQ(rs_operator->name(), "and");
+        auto and_op = std::dynamic_pointer_cast<DM::And>(rs_operator);
+        ASSERT_NE(and_op, nullptr);
+        ASSERT_EQ(and_op->getChildren().size(), 2u);
+
+        bool found_date_range = false;
+        bool found_or = false;
+        for (const auto & child : and_op->getChildren())
+        {
+            if (child->name() == "date_range")
+            {
+                found_date_range = true;
+                EXPECT_EQ(
+                    child->toDebugString(),
+                    fmt::format(
+                        R"json({{"op":"date_range","col":"col_datetime","class":"EqualityOrInOrBounded","lower":"{}","lower_inclusive":true,"upper":"{}","upper_inclusive":true}})json",
+                        lo,
+                        hi));
+            }
+            else if (child->name() == "or")
+            {
+                found_or = true;
+                auto or_op = std::dynamic_pointer_cast<DM::Or>(child);
+                ASSERT_NE(or_op, nullptr);
+                ASSERT_EQ(or_op->getChildren().size(), 2u);
+                EXPECT_EQ(or_op->getChildren()[0]->name(), "equal");
+                EXPECT_EQ(or_op->getChildren()[1]->name(), "equal");
+            }
+        }
+        EXPECT_TRUE(found_date_range);
+        EXPECT_TRUE(found_or);
+    }
+
+    {
+        // Top-level OR whose child contains AND: do not rewrite the AND inside OR into DateRange.
+        // (t >= L AND t <= U) OR t = U  =>  still Or(And(...), equal), no date_range
+        const auto query = fmt::format(
+            "select * from default.t_111 where (col_datetime >= cast_string_datetime('{}') "
+            "and col_datetime <= cast_string_datetime('{}')) "
+            "or col_datetime = cast_string_datetime('{}')",
+            lo_str,
+            hi_str,
+            hi_str);
+
+        auto rs_operator
+            = generateRsOperator(table_info_json, query, default_timezone_info, /*enable_trim_minmax*/ true);
+        EXPECT_EQ(rs_operator->name(), "or");
+        auto or_op = std::dynamic_pointer_cast<DM::Or>(rs_operator);
+        ASSERT_NE(or_op, nullptr);
+        ASSERT_EQ(or_op->getChildren().size(), 2u);
+
+        bool found_and = false;
+        bool found_equal = false;
+        for (const auto & child : or_op->getChildren())
+        {
+            EXPECT_NE(child->name(), "date_range");
+            if (child->name() == "and")
+            {
+                found_and = true;
+                auto and_op = std::dynamic_pointer_cast<DM::And>(child);
+                ASSERT_NE(and_op, nullptr);
+                ASSERT_EQ(and_op->getChildren().size(), 2u);
+                EXPECT_EQ(and_op->getChildren()[0]->name(), "greater_equal");
+                EXPECT_EQ(and_op->getChildren()[1]->name(), "less_equal");
+            }
+            else if (child->name() == "equal")
+            {
+                found_equal = true;
+            }
+        }
+        EXPECT_TRUE(found_and);
+        EXPECT_TRUE(found_equal);
     }
 }
 CATCH

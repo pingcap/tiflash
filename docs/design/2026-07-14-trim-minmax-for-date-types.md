@@ -149,6 +149,8 @@ If normal timestamps are themselves distributed completely at random within each
 
 ## Correctness Foundation
 
+### Pack-Level Trim Semantics
+
 Let `D` be the set of all values in a pack that participate in the ordinary min-max, and let `E` be the effective date range. The set represented by the trim index is:
 
 ```text
@@ -202,6 +204,64 @@ predicate = col BETWEEN 2020-01-01 AND 2022-01-01
 ```
 
 After trimming, `min=max=2021-01-01`, but the 2100 value in the pack does not match. The trim rough check must return `Some` rather than `All`.
+
+### AND + OR Composition Correctness
+
+Rough Set composition for `And` / `Or` is independent of which physical index each leaf uses. Correctness does **not** require the whole tree to select trim or ordinary uniformly. It requires each leaf's `roughCheck` to be individually sound and conservative; `And` then combines results with `&&` and `Or` with `||`.
+
+#### Per-predicate index selection
+
+Trim indexes may be cached per column in `RSCheckParam.trim_indexes`, but a leaf must not use that trim index unless **its own** `DateQueryDomain` is trim-eligible for the stored `E`. This check is enforced at use time by `getTrimRSIndex(param, attr, query_domain)`:
+
+1. Look up the column's loaded trim index (if any).
+2. Call `query_domain.isTrimEligible(stored_lower, stored_upper)`.
+3. If ineligible, return no trim index so the leaf falls back to ordinary min-max (when loaded) or `Some`.
+
+Therefore two leaves on the same column may legally use different indexes in one query:
+
+```text
+DateRange(t, [L, U]) AND Or(t = A, t = B)
+```
+
+| Leaf | Index choice |
+| --- | --- |
+| `DateRange` | Trim iff `[L, U]` is eligible for stored `E` |
+| `Equal(A)` | Trim iff `A ∈ E` |
+| `Equal(B)` | Trim iff `B ∈ E` (independent of `A`) |
+
+A dangerous anti-pattern, and the reason eligibility must be per predicate rather than per column, is:
+
+```text
+E = [1900, 2100)
+pack = {2200-01-01}
+predicate = (t = 2020-01-01) OR (t = 2200-01-01)
+```
+
+If both equals shared a column-level trim selection without re-checking eligibility, `t = 2200` would consult an empty `D_trim` and could return `None`, causing the whole `Or` to drop a matching pack. With per-predicate eligibility, `t = 2200` must use the ordinary min-max and keep the pack.
+
+#### Normalize interaction with AND / OR
+
+`normalizeTemporalRangesForTrim` only flattens **top-level** `And` nodes and merges exposed temporal `GE` / `GT` / `LE` / `LT` leaves into `DateRange`. It does not rewrite children under `Or` / `Not`.
+
+| Shape | Rewrite behavior | Correctness implication |
+| --- | --- | --- |
+| `t >= L AND t <= U` | Becomes `DateRange` PreferTrim | Covered by pack-level trim semantics above |
+| `t >= L OR t = X` | Unchanged `Or` | No incorrect DateRange merge |
+| `t >= L AND t <= U AND (t = A OR t = B)` | Outer bounds → `DateRange`; `Or` kept as a leaf | `DateRange` and each `Equal` still select indexes independently |
+| `(t >= L AND t <= U) OR t = X` | Unchanged top-level `Or` | Inner `And` is not rewritten; `Greater`/`Less` leaves continue to use ordinary min-max (they do not request PreferTrim) |
+
+Not rewriting under `Or` is an intentional conservative choice: it may forgo trim benefit, but it must not invent a single range whose match set is not equivalent to the original disjunction.
+
+#### Soundness checklist for mixed trees
+
+For any `And` / `Or` tree that mixes trim-capable and ordinary leaves:
+
+1. Each PreferTrim leaf must re-validate eligibility against stored `E` at `roughCheck` time, not only at load time.
+2. Every trim-path result must still apply pack-mark correction (`None`/`All` downgrades for matching / non-matching trimmed values).
+3. `All` remains the only RSResult that may skip row-level filtering, so a trim-derived `All` must remain sound after correction.
+4. If any leaf cannot prove a safe trim result, it must degrade to ordinary min-max or `Some`; logical composition then stays conservative.
+
+Under these rules, shapes such as `DateRange AND Or(Equal, Equal)` do not introduce an additional correctness hazard beyond the single-predicate trim foundation: composition preserves leaf soundness, and index choice is decided per leaf rather than per column or per logical operator.
 
 ## Design
 
@@ -406,7 +466,7 @@ No trim index is generated for:
 - `TIME` and duration.
 - Nested types other than `MyDate` / `MyDateTime`.
 - Empty DMFiles.
-- Any column when the write switch is disabled.
+- Any column when `dt_enable_trim_minmax` is disabled.
 
 During finalization, the writer may check whether a column has any trimmed value anywhere in the DMFile. If all `pack_marks & 0x06` values are zero, the ordinary and trim min-max indexes are equivalent for non-NULL values. The trim subfile and metadata may then be omitted, avoiding storage overhead for files without abnormal values. The bit-0 NULL mark does not affect this decision.
 
@@ -544,17 +604,15 @@ This keeps the trim and ordinary min-max indexes consistent in their three-value
 
 ### Configuration and Switches
 
-The first version provides two internal settings:
+The first version provides one internal setting:
 
 ```text
-dt_enable_trim_minmax_write
-dt_enable_trim_minmax_read
+dt_enable_trim_minmax
 ```
 
-- The write switch controls whether new DMFiles generate trim indexes.
-- The read switch controls whether readers select trim.
-- Both are initially disabled by default and are enabled gradually through canaries.
-- Disabling reads makes existing trim metadata and subfiles ignored and immediately falls back to the ordinary min-max.
+- When enabled, new DMFiles may generate trim indexes, and readers may select trim (including temporal-range normalize for PreferTrim).
+- When disabled, writers skip trim generation, and readers ignore existing trim metadata/subfiles and fall back to the ordinary min-max.
+- Default is disabled; enable gradually through canaries. Note that a single switch means write and read are rolled out together.
 - The effective interval is not dynamically configurable in the first version, avoiding configuration drift within a process. It is still persisted in metadata to preserve correctness during future format evolution.
 
 ### Observability
@@ -619,12 +677,12 @@ Debug logs record the DMFile, column ID, stored range, query domain, selected in
 
 Recommended sequence:
 
-1. First deploy new readers capable of parsing `ColumnStat.trim_minmax_index`, with both read and write disabled.
-2. Enable writes on a small number of nodes to generate new DMFiles, while reads remain disabled.
-3. Verify that old readers ignore field 105 and read the ordinary min-max. Also verify that, if an old node rewrites metadata and loses trim information, a new reader safely falls back. Then enable reads as a canary.
-4. Expand the read/write rollout.
+1. First deploy new binaries capable of parsing `ColumnStat.trim_minmax_index`, with `dt_enable_trim_minmax` disabled (default).
+2. Enable `dt_enable_trim_minmax` on a small canary so those nodes both generate trim on new DMFiles and select trim when eligible.
+3. Verify that old readers ignore field 105 and read the ordinary min-max. Also verify that, if an old node rewrites metadata and loses trim information, a new reader safely falls back.
+4. Expand the rollout.
 
-For downgrade, disable reads first and then writes. Existing trim subfiles and field 105 do not affect the ordinary min-max. Compatibility tests must verify both "new write, old read" and "old-version metadata rewrite." If the target old version cannot safely ignore field 105 or an additional merged subfile, the write switch must remain disabled during mixed-version operation. Losing trim metadata during an old-version rewrite is an allowed safe degradation, but it must be recorded in metrics and the corresponding loss of trim benefit must be accepted for that DMFile.
+For downgrade, disable `dt_enable_trim_minmax` first. Existing trim subfiles and field 105 do not affect the ordinary min-max. Compatibility tests must verify both "new write, old read" and "old-version metadata rewrite." If the target old version cannot safely ignore field 105 or an additional merged subfile, the switch must remain disabled during mixed-version operation. Losing trim metadata during an old-version rewrite is an allowed safe degradation, but it must be recorded in metrics and the corresponding loss of trim benefit must be accepted for that DMFile.
 
 ## Performance and Resource Overhead
 

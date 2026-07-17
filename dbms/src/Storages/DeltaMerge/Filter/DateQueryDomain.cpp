@@ -234,22 +234,37 @@ RSResults applyTrimRoughCheckCorrection(
         const bool has_trimmed_low = trim_minmax.hasTrimmedLow(pack_id);
         const bool has_trimmed_high = trim_minmax.hasTrimmedHigh(pack_id);
 
+        // Map pack-level low/high outlier flags to "must match" / "must not match"
+        // under the current predicate class. Outliers live in D-E and are invisible
+        // to the trim min-max, so raw None/All may need correction below.
         bool trimmed_match_exists = false;
         bool trimmed_nonmatch_exists = false;
         switch (predicate_class)
         {
         case TrimPredicateClass::EqualityOrInOrBounded:
+        {
+            // Q ⊆ E: any low/high trimmed value is outside Q, so it never matches.
+            // It can only invalidate an All (pack still has a non-matching outlier).
             trimmed_match_exists = false;
             trimmed_nonmatch_exists = has_trimmed_low || has_trimmed_high;
             break;
+        }
         case TrimPredicateClass::LowerBounded:
+        {
+            // col >= T / col > T with T in E: a high outlier always matches,
+            // a low outlier never matches.
             trimmed_match_exists = has_trimmed_high;
             trimmed_nonmatch_exists = has_trimmed_low;
             break;
+        }
         case TrimPredicateClass::UpperBounded:
+        {
+            // col <= T / col < T with T in E: a low outlier always matches,
+            // a high outlier never matches.
             trimmed_match_exists = has_trimmed_low;
             trimmed_nonmatch_exists = has_trimmed_high;
             break;
+        }
         }
 
         auto & r = results[i];

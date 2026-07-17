@@ -94,13 +94,13 @@ std::optional<UInt64> decodeBound(std::string_view bytes)
     return value;
 }
 
-dtpb::TrimMinMaxIndexProps makeDefaultProps(const IDataType & nested_type, UInt64 /*pack_count*/)
+dtpb::TrimMinMaxIndexProps makeDefaultProps(const IDataType & nested_type, UInt64 pack_count)
 {
     dtpb::TrimMinMaxIndexProps props;
     props.set_format_version(FormatVersionV1);
     props.set_lower_bound(encodeBound(defaultLowerBoundPacked(nested_type)));
     props.set_upper_bound(encodeBound(defaultUpperBoundPacked(nested_type)));
-    // props.set_pack_count(pack_count);
+    props.set_pack_count(pack_count);
     return props;
 }
 
