@@ -1017,4 +1017,32 @@ try
 }
 CATCH
 
+// Attr.type may be empty when column id is missing from table defines.
+// Equal/In must not dereference it in getIndexRequests (called unconditionally).
+TEST(TrimMinMaxIndexSafety, EqualInNullAttrTypeDoesNotCrash)
+{
+    Attr attr{.col_name = "", .col_id = 42, .type = DataTypePtr{}};
+    auto eq = createEqual(attr, Field(static_cast<UInt64>(1)));
+    auto in = createIn(attr, {Field(static_cast<UInt64>(1)), Field(static_cast<UInt64>(2))});
+
+    auto eq_reqs = eq->getIndexRequests();
+    ASSERT_EQ(eq_reqs.size(), 1u);
+    EXPECT_EQ(eq_reqs[0].preferred_kind, RSIndexKind::Normal);
+    EXPECT_FALSE(eq_reqs[0].query_domain.has_value());
+
+    auto in_reqs = in->getIndexRequests();
+    ASSERT_EQ(in_reqs.size(), 1u);
+    EXPECT_EQ(in_reqs[0].preferred_kind, RSIndexKind::Normal);
+    EXPECT_FALSE(in_reqs[0].query_domain.has_value());
+
+    RSCheckParam param;
+    auto eq_res = eq->roughCheck(0, 1, param);
+    ASSERT_EQ(eq_res.size(), 1u);
+    EXPECT_EQ(eq_res[0], RSResult::Some);
+
+    auto in_res = in->roughCheck(0, 1, param);
+    ASSERT_EQ(in_res.size(), 1u);
+    EXPECT_EQ(in_res[0], RSResult::Some);
+}
+
 } // namespace DB::DM::tests

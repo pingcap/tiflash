@@ -167,6 +167,16 @@ inline RSOperatorPtr parseTiCompareExpr( //
 
             auto col_id = getColumnIDForColumnExpr(child, scan_column_infos);
             attr = creator(col_id);
+            // Column ID may be absent from table defines (e.g. function ColumnRef).
+            // Attr.type is then empty; creating Equal/In would crash in getIndexRequests
+            // on *attr.type. Convert to Unsupported so rough check stays conservative Some.
+            if (unlikely(!attr.type))
+            {
+                return createUnsupported(fmt::format(
+                    "ColumnRef with unknown column id is not supported, sig={} col_id={}",
+                    tipb::ScalarFuncSig_Name(expr.sig()),
+                    col_id));
+            }
         }
         else if (isLiteralExpr(child))
         {

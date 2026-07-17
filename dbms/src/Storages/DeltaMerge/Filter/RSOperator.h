@@ -183,6 +183,8 @@ public:
 
 inline std::optional<RSIndex> getRSIndex(const RSCheckParam & param, const Attr & attr)
 {
+    if (!attr.type)
+        return std::nullopt;
     auto it = param.indexes.find(attr.col_id);
     if (it != param.indexes.end() && it->second.type->equals(*attr.type))
     {
@@ -199,6 +201,8 @@ inline std::optional<TrimRSIndex> getTrimRSIndex(
     const Attr & attr,
     const DateQueryDomain & query_domain)
 {
+    if (!attr.type)
+        return std::nullopt;
     auto it = param.trim_indexes.find(attr.col_id);
     if (it == param.trim_indexes.end() || !it->second.type->equals(*attr.type))
         return std::nullopt;

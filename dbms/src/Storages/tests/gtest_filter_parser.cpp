@@ -130,7 +130,7 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(
             [column_id](const DM::ColumnDefine & d) -> bool { return d.id == column_id; });
         if (iter != columns_to_read.end())
             return DM::Attr{.col_name = iter->name, .col_id = iter->id, .type = iter->type};
-        // Maybe throw an exception? Or check if `type` is nullptr before creating filter?
+        // Missing column id: FilterParser converts empty Attr.type to Unsupported.
         return DM::Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
     };
 
@@ -853,6 +853,69 @@ try
         auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where not 1");
         EXPECT_EQ(rs_operator->name(), "unsupported");
     }
+}
+CATCH
+
+// AttrCreator may return empty type when column id is absent from defines.
+// parseTiCompareExpr must turn that into Unsupported instead of Equal/In.
+TEST_F(FilterParserTest, MissingAttrTypeBecomesUnsupported)
+try
+{
+    const String table_info_json = R"json({
+    "cols":[
+        {"comment":"","default":null,"default_bit":null,"id":2,"name":{"L":"col_2","O":"col_2"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":8}}
+    ],
+    "pk_is_handle":false,"index_info":[],"is_common_handle":false,
+    "name":{"L":"t_111","O":"t_111"},"partition":null,
+    "comment":"Mocked.","id":30,"schema_version":-1,"state":0,"tiflash_replica":{"Count":0},"update_timestamp":1636471547239654
+})json";
+
+    const TiDB::TableInfo table_info(table_info_json, NullspaceID);
+    QueryTasks query_tasks;
+    std::tie(query_tasks, std::ignore) = compileQuery(
+        *ctx,
+        "select * from default.t_111 where col_2 = 666",
+        [&](const String &, const String &) { return table_info; },
+        getDAGProperties(""));
+    auto & dag_request = *query_tasks[0].dag_request;
+    DAGContext dag_context(dag_request, {}, NullspaceID, "", DAGRequestKind::Cop, "", 0, "", log);
+    ctx->setDAGContext(&dag_context);
+
+    google::protobuf::RepeatedPtrField<tipb::Expr> conditions;
+    traverseExecutors(&dag_request, [&](const tipb::Executor & executor) {
+        if (executor.has_selection())
+        {
+            conditions = executor.selection().conditions();
+            return false;
+        }
+        return true;
+    });
+
+    const auto ann_query_info = tipb::ANNQueryInfo{};
+    const auto runtime_filter_ids = std::vector<int>();
+    const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
+    std::unique_ptr<DAGQueryInfo> dag_query = std::make_unique<DAGQueryInfo>(
+        conditions,
+        ann_query_info,
+        pushed_down_filters,
+        table_info.columns,
+        runtime_filter_ids,
+        0,
+        default_timezone_info);
+
+    auto create_attr_empty_type = [](ColumnID column_id) -> DM::Attr {
+        return DM::Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
+    };
+
+    auto rs_operator = DM::FilterParser::parseDAGQuery(
+        *dag_query,
+        table_info.columns,
+        std::move(create_attr_empty_type),
+        log,
+        /*enable_trim_minmax*/ false);
+    EXPECT_EQ(rs_operator->name(), "unsupported");
+    // getIndexRequests is called by DMFilePackFilter regardless of trim settings.
+    EXPECT_NO_THROW(std::ignore = rs_operator->getIndexRequests());
 }
 CATCH
 
