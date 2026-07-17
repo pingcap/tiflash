@@ -479,6 +479,159 @@ TEST(TrimMinMaxIndexPhaseB, AppendPackRejectsInvalidMask)
         DB::Exception);
 }
 
+// Design Validation Strategy — Temporal-Type Tests:
+// DATE / DATETIME(fsp) bounds, FSP near upper edge, zero/invalid packed values, Nullable.
+TEST(TrimMinMaxIndexTemporalTypes, DateAndDateTimeBoundsFspAndCompatValues)
+{
+    auto expect_classification = [](const DataTypePtr & type,
+                                    UInt64 value,
+                                    bool expect_has_value,
+                                    bool expect_low,
+                                    bool expect_high) {
+        MinMaxIndex ordinary(*type);
+        MinMaxIndex trim(*type);
+        const UInt64 lower = TrimMinMax::defaultLowerBoundPacked(*type);
+        const UInt64 upper = TrimMinMax::defaultUpperBoundPacked(*type);
+        auto col = type->createColumn();
+        col->insert(Field(value));
+        TrimMinMax::addOrdinaryAndTrimPack(ordinary, trim, *col, nullptr, lower, upper);
+        EXPECT_EQ(trim.hasValue(0), expect_has_value) << type->getName() << " value=" << value;
+        EXPECT_EQ(trim.hasTrimmedLow(0), expect_low) << type->getName() << " value=" << value;
+        EXPECT_EQ(trim.hasTrimmedHigh(0), expect_high) << type->getName() << " value=" << value;
+        if (expect_has_value)
+        {
+            EXPECT_EQ(trim.getCell(0).min.safeGet<UInt64>(), value);
+            EXPECT_EQ(trim.getCell(0).max.safeGet<UInt64>(), value);
+        }
+    };
+
+    // Supported types: DATE, DATETIME(0/3/6), Nullable wrappers.
+    EXPECT_TRUE(TrimMinMax::isSupportedTemporalType(*std::make_shared<DataTypeMyDate>()));
+    EXPECT_TRUE(TrimMinMax::isSupportedTemporalType(*std::make_shared<DataTypeMyDateTime>(0)));
+    EXPECT_TRUE(TrimMinMax::isSupportedTemporalType(*std::make_shared<DataTypeMyDateTime>(3)));
+    EXPECT_TRUE(TrimMinMax::isSupportedTemporalType(*std::make_shared<DataTypeMyDateTime>(6)));
+    EXPECT_TRUE(TrimMinMax::isSupportedTemporalType(*makeNullable(std::make_shared<DataTypeMyDate>())));
+    EXPECT_TRUE(TrimMinMax::isSupportedTemporalType(*makeNullable(std::make_shared<DataTypeMyDateTime>(6))));
+
+    // DATE and DATETIME default bounds use type-specific packing (FSPTT differs).
+    auto date_type = std::make_shared<DataTypeMyDate>();
+    auto dt0 = std::make_shared<DataTypeMyDateTime>(0);
+    auto dt3 = std::make_shared<DataTypeMyDateTime>(3);
+    auto dt6 = std::make_shared<DataTypeMyDateTime>(6);
+
+    EXPECT_EQ(TrimMinMax::defaultLowerBoundPacked(*date_type), MyDate(1900, 1, 1).toPackedUInt());
+    EXPECT_EQ(TrimMinMax::defaultUpperBoundPacked(*date_type), MyDate(2100, 1, 1).toPackedUInt());
+    EXPECT_EQ(TrimMinMax::defaultLowerBoundPacked(*dt0), MyDateTime(1900, 1, 1, 0, 0, 0, 0).toPackedUInt());
+    EXPECT_EQ(TrimMinMax::defaultUpperBoundPacked(*dt0), MyDateTime(2100, 1, 1, 0, 0, 0, 0).toPackedUInt());
+    // FSP does not change the persisted default packed bounds.
+    EXPECT_EQ(TrimMinMax::defaultLowerBoundPacked(*dt3), TrimMinMax::defaultLowerBoundPacked(*dt0));
+    EXPECT_EQ(TrimMinMax::defaultUpperBoundPacked(*dt6), TrimMinMax::defaultUpperBoundPacked(*dt0));
+    // TiFlash DATE / DATETIME share the same packed integer layout for midnight values.
+    EXPECT_EQ(TrimMinMax::defaultLowerBoundPacked(*date_type), TrimMinMax::defaultLowerBoundPacked(*dt0));
+    EXPECT_EQ(TrimMinMax::defaultUpperBoundPacked(*date_type), TrimMinMax::defaultUpperBoundPacked(*dt0));
+    EXPECT_EQ(MyDate(2020, 1, 1).toPackedUInt(), MyDateTime(2020, 1, 1, 0, 0, 0, 0).toPackedUInt());
+
+    // DATE: inclusive lower / exclusive upper / zero-date low outlier.
+    expect_classification(date_type, MyDate(1900, 1, 1).toPackedUInt(), /*has*/ true, /*low*/ false, /*high*/ false);
+    expect_classification(date_type, MyDate(2099, 12, 31).toPackedUInt(), true, false, false);
+    expect_classification(date_type, MyDate(2100, 1, 1).toPackedUInt(), false, false, true);
+    expect_classification(date_type, MyDate(0, 0, 0).toPackedUInt(), false, true, false);
+    // Invalid-date compatibility packed value still participates via packed compare (inside E).
+    expect_classification(date_type, MyDate(2020, 2, 30).toPackedUInt(), true, false, false);
+
+    // DATETIME(0/3/6): half-open E covers 2099-12-31 23:59:59.999999; 2100-01-01 is high.
+    const UInt64 just_inside = MyDateTime(2099, 12, 31, 23, 59, 59, 999999).toPackedUInt();
+    const UInt64 upper_edge = MyDateTime(2100, 1, 1, 0, 0, 0, 0).toPackedUInt();
+    const UInt64 lower_edge = MyDateTime(1900, 1, 1, 0, 0, 0, 0).toPackedUInt();
+    const UInt64 zero_dt = MyDateTime(0, 0, 0, 0, 0, 0, 0).toPackedUInt();
+    for (const auto & type : {dt0, dt3, dt6})
+    {
+        expect_classification(type, lower_edge, true, false, false);
+        expect_classification(type, just_inside, true, false, false);
+        expect_classification(type, upper_edge, false, false, true);
+        expect_classification(type, zero_dt, false, true, false);
+        // Fractional second inside a normal day stays in-range for every fsp.
+        expect_classification(type, MyDateTime(2020, 1, 1, 12, 0, 0, 123456).toPackedUInt(), true, false, false);
+    }
+
+    // Nullable DATE: NULL + in-range value.
+    {
+        auto nullable_date = makeNullable(date_type);
+        MinMaxIndex ordinary(*nullable_date);
+        MinMaxIndex trim(*nullable_date);
+        const UInt64 lower = TrimMinMax::defaultLowerBoundPacked(*nullable_date);
+        const UInt64 upper = TrimMinMax::defaultUpperBoundPacked(*nullable_date);
+        auto col = nullable_date->createColumn();
+        col->insertDefault();
+        col->insert(Field(MyDate(2020, 1, 1).toPackedUInt()));
+        TrimMinMax::addOrdinaryAndTrimPack(ordinary, trim, *col, nullptr, lower, upper);
+        EXPECT_TRUE(trim.hasNull(0));
+        EXPECT_TRUE(trim.hasValue(0));
+        EXPECT_FALSE(trim.hasTrimmedLow(0));
+        EXPECT_FALSE(trim.hasTrimmedHigh(0));
+        EXPECT_EQ(trim.getCell(0).min.safeGet<UInt64>(), MyDate(2020, 1, 1).toPackedUInt());
+    }
+
+    // NotNull DATE pack with only in-range values must not set null/low/high.
+    {
+        MinMaxIndex ordinary(*date_type);
+        MinMaxIndex trim(*date_type);
+        const UInt64 lower = TrimMinMax::defaultLowerBoundPacked(*date_type);
+        const UInt64 upper = TrimMinMax::defaultUpperBoundPacked(*date_type);
+        auto col = date_type->createColumn();
+        col->insert(Field(MyDate(2020, 6, 1).toPackedUInt()));
+        col->insert(Field(MyDate(2021, 6, 1).toPackedUInt()));
+        TrimMinMax::addOrdinaryAndTrimPack(ordinary, trim, *col, nullptr, lower, upper);
+        EXPECT_FALSE(ordinary.hasNull(0));
+        EXPECT_FALSE(trim.hasNull(0));
+        EXPECT_TRUE(trim.hasValue(0));
+        EXPECT_FALSE(trim.hasTrimmedLow(0));
+        EXPECT_FALSE(trim.hasTrimmedHigh(0));
+        EXPECT_FALSE(trim.hasAnyTrimmedValue());
+    }
+
+    // Props encode/decode preserves DATE bounds.
+    {
+        auto props = TrimMinMax::makeDefaultProps(*date_type, /*pack_count*/ 4);
+        EXPECT_EQ(props.format_version(), TrimMinMax::FormatVersionV1);
+        EXPECT_EQ(TrimMinMax::decodeBound(props.lower_bound()), MyDate(1900, 1, 1).toPackedUInt());
+        EXPECT_EQ(TrimMinMax::decodeBound(props.upper_bound()), MyDate(2100, 1, 1).toPackedUInt());
+    }
+}
+
+// Eligibility: DATE calendar values and DATETIME FSP edge values against half-open E.
+TEST(TrimMinMaxIndexTemporalTypes, DateQueryDomainUsesTypePackedBounds)
+{
+    const UInt64 date_lo = MyDate(1900, 1, 1).toPackedUInt();
+    const UInt64 date_hi = MyDate(2100, 1, 1).toPackedUInt();
+    const UInt64 dt_lo = MyDateTime(1900, 1, 1, 0, 0, 0, 0).toPackedUInt();
+    const UInt64 dt_hi = MyDateTime(2100, 1, 1, 0, 0, 0, 0).toPackedUInt();
+
+    DateQueryDomain d;
+    d.predicate_class = TrimPredicateClass::EqualityOrInOrBounded;
+
+    d.values = {Field(MyDate(2020, 1, 1).toPackedUInt())};
+    EXPECT_TRUE(d.isTrimEligible(date_lo, date_hi));
+    d.values = {Field(MyDate(2100, 1, 1).toPackedUInt())};
+    EXPECT_FALSE(d.isTrimEligible(date_lo, date_hi));
+    d.values = {Field(MyDate(0, 0, 0).toPackedUInt())};
+    EXPECT_FALSE(d.isTrimEligible(date_lo, date_hi));
+
+    // Half-open E keeps 2099-12-31 23:59:59.999999 eligible; 2100-01-01 is not.
+    d.values = {Field(MyDateTime(2099, 12, 31, 23, 59, 59, 999999).toPackedUInt())};
+    EXPECT_TRUE(d.isTrimEligible(dt_lo, dt_hi));
+    d.values = {Field(MyDateTime(2100, 1, 1, 0, 0, 0, 0).toPackedUInt())};
+    EXPECT_FALSE(d.isTrimEligible(dt_lo, dt_hi));
+
+    // One-sided lower bound at the FSP edge remains eligible.
+    d.predicate_class = TrimPredicateClass::LowerBounded;
+    d.values.clear();
+    d.lower = Field(MyDateTime(2099, 12, 31, 23, 59, 59, 999999).toPackedUInt());
+    EXPECT_TRUE(d.isTrimEligible(dt_lo, dt_hi));
+    d.lower = Field(MyDateTime(2100, 1, 1, 0, 0, 0, 0).toPackedUInt());
+    EXPECT_FALSE(d.isTrimEligible(dt_lo, dt_hi));
+}
+
 class TrimMinMaxIndexWriteTest : public DB::base::TiFlashStorageTestBasic
 {
 protected:

@@ -591,6 +591,87 @@ try
 }
 CATCH
 
+// Temporal-Type Tests: TIMESTAMP DST vs standard time, and DATE PreferTrim equality.
+TEST_F(FilterParserTest, TimestampTrimNormalizeDSTAndDateEqual)
+try
+{
+    const String table_info_json = R"json({
+    "cols":[
+        {"comment":"","default":null,"default_bit":null,"id":4,"name":{"L":"col_timestamp","O":"col_time"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":6,"Elems":null,"Flag":1,"Flen":0,"Tp":7}},
+        {"comment":"","default":null,"default_bit":null,"id":6,"name":{"L":"col_date","O":"col_date"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":1,"Flen":0,"Tp":14}}
+    ],
+    "pk_is_handle":false,"index_info":[],"is_common_handle":false,
+    "name":{"L":"t_111","O":"t_111"},"partition":null,
+    "comment":"Mocked.","id":30,"schema_version":-1,"state":0,"tiflash_replica":{"Count":0},"update_timestamp":1636471547239654
+})json";
+
+    const auto & time_zone_utc = DateLUT::instance("UTC");
+    auto ctx = TiFlashTestEnv::getContext();
+    auto & timezone_info = ctx->getTimezoneInfo();
+    timezone_info.resetByTimezoneName("America/Chicago");
+
+    auto parse_local = [](const String & datetime) {
+        ReadBufferFromMemory read_buffer(datetime.c_str(), datetime.size());
+        UInt64 origin = 0;
+        EXPECT_TRUE(tryReadMyDateTimeText(origin, 6, read_buffer));
+        return origin;
+    };
+
+    const String winter = "2021-01-15 12:00:00.000000"; // CST = UTC-6
+    const String summer = "2021-07-15 12:00:00.000000"; // CDT = UTC-5
+    const UInt64 winter_local = parse_local(winter);
+    const UInt64 summer_local = parse_local(summer);
+
+    UInt64 winter_chicago_utc = 0;
+    UInt64 summer_chicago_utc = 0;
+    convertTimeZone(winter_local, winter_chicago_utc, *timezone_info.timezone, time_zone_utc);
+    convertTimeZone(summer_local, summer_chicago_utc, *timezone_info.timezone, time_zone_utc);
+
+    // Fixed CST offset (-6h): matches Chicago in winter, differs in summer under DST.
+    constexpr Int64 cst_offset = -6 * 3600;
+    UInt64 winter_cst_utc = 0;
+    UInt64 summer_cst_utc = 0;
+    convertTimeZoneByOffset(winter_local, winter_cst_utc, /*from_utc*/ false, cst_offset);
+    convertTimeZoneByOffset(summer_local, summer_cst_utc, /*from_utc*/ false, cst_offset);
+    EXPECT_EQ(winter_chicago_utc, winter_cst_utc);
+    EXPECT_NE(summer_chicago_utc, summer_cst_utc);
+
+    for (const auto & [label, datetime, expected_utc] :
+         {std::tuple<const char *, String, UInt64>{"winter", winter, winter_chicago_utc},
+          {"summer", summer, summer_chicago_utc}})
+    {
+        // Use >= so normalize emits inclusive LowerBounded DateRange.
+        const auto query = String("select * from default.t_111 where col_timestamp >= cast_string_datetime('")
+            + datetime + String("')");
+        auto rs_operator = generateRsOperator(table_info_json, query, timezone_info, /*enable_trim_minmax*/ true);
+        EXPECT_EQ(rs_operator->name(), "date_range") << label;
+        auto reqs = rs_operator->getIndexRequests();
+        ASSERT_EQ(reqs.size(), 1u) << label;
+        EXPECT_EQ(reqs[0].preferred_kind, DM::RSIndexKind::PreferTrim) << label;
+        ASSERT_TRUE(reqs[0].query_domain.has_value()) << label;
+        EXPECT_EQ(reqs[0].query_domain->predicate_class, DM::TrimPredicateClass::LowerBounded) << label;
+        ASSERT_TRUE(reqs[0].query_domain->lower.has_value()) << label;
+        EXPECT_EQ(reqs[0].query_domain->lower->safeGet<UInt64>(), expected_utc) << label;
+        EXPECT_TRUE(reqs[0].query_domain->lower_inclusive) << label;
+    }
+
+    // DATE equality -> PreferTrim (no timezone conversion).
+    {
+        const String date_lit = "2020-01-01";
+        const auto query
+            = fmt::format("select * from default.t_111 where col_date = cast_string_datetime('{}')", date_lit);
+        auto rs_operator
+            = generateRsOperator(table_info_json, query, default_timezone_info, /*enable_trim_minmax*/ true);
+        EXPECT_EQ(rs_operator->name(), "equal");
+        auto reqs = rs_operator->getIndexRequests();
+        ASSERT_EQ(reqs.size(), 1u);
+        EXPECT_EQ(reqs[0].preferred_kind, DM::RSIndexKind::PreferTrim);
+        ASSERT_TRUE(reqs[0].query_domain.has_value());
+        EXPECT_EQ(reqs[0].query_domain->predicate_class, DM::TrimPredicateClass::EqualityOrInOrBounded);
+    }
+}
+CATCH
+
 // normalizeTemporalRangesForTrim via FilterParser (gated by enable_trim_minmax).
 TEST_F(FilterParserTest, NormalizeTemporalRangesForTrim)
 try

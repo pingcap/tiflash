@@ -409,9 +409,10 @@ Metadata constraints:
 5. The counts of decoded `pack_marks`, `has_value_marks`, and min/max cells must agree and equal `pack_count`.
 6. Bits 3 through 7 of the trim index's `pack_marks` must be zero.
 7. The `ColumnStat` metadata, `MergedSubFileInfo`, and index payload must be generated and published atomically as part of the same immutable DMFile generation. A reader must not reuse or combine them across DMFiles.
-8. The trim index must not be used if the metadata, `MergedSubFileInfo`, or subfile is missing; the version is unknown; or any structural validation fails.
+8. Soft fallback to the ordinary min-max (do not use trim) when any of the following holds: trim metadata is absent; the format version is unknown; props fail logical checks such as undecodable bounds, `lower_bound >= upper_bound`, or `pack_count` mismatch; or the deterministic `.trim.idx` entry is simply missing from `MergedSubFileInfo` (including the orphan-subfile case after an old node rewrote ColumnStat and dropped field 105). Soft fallback must not invent a speculative result other than what the ordinary path would produce.
+9. Hard failure (throw / existing DMFile corruption policy), not soft fallback, when trim is selected but the on-disk location is structurally impossible or the payload is definitively corrupt. Examples: a present `MergedSubFileInfo` with an invalid merged-file number, or with `offset`/`size` that cannot fit the merged file; checksum mismatch on the trim subfile; decoded pack-mark reserved bits nonzero after load. Invalid `MergedSubFileInfo` geometry must not be rewritten into a silent ordinary-minmax fallback in selection.
 
-The ColumnStat protobuf is protected by the DMFileMetaV2 checksum, while the trim index subfile uses the existing DMFile checksum mechanism. These checks are combined with structural validation of the pack count, pack marks, and subfile location and size to detect physical corruption.
+The ColumnStat protobuf is protected by the DMFileMetaV2 checksum, while the trim index subfile uses the existing DMFile checksum mechanism. Logical metadata mismatches soft-fallback; physical corruption of a selected trim subfile or an impossible `MergedSubFileInfo` is surfaced as corruption rather than hidden behind soft fallback.
 
 The compatibility-critical property is that field 105 does not belong to `indexes = 104`, which old versions iterate over and validate strictly. Old readers treat all of field 105 as an unknown protobuf field. It does not trigger `ColumnStat::integrityCheckIndexInfoV2` and does not require recognition of a new `IndexFileKind`. Old readers continue to read the ordinary min-max.
 
@@ -553,7 +554,7 @@ DMFile B: no trim, use normal
 DMFile C: future version E=[1800, 2200), decide according to C's metadata
 ```
 
-If the reader does not support the metadata version or validation fails, it falls back to the ordinary min-max rather than returning a speculative result other than `Some`. If the underlying index payload checksum is definitively corrupted, the existing DMFile data-corruption policy still applies; physical corruption is not silently hidden.
+If the reader does not support the metadata version, or logical selection checks fail (missing meta, missing `.trim.idx` entry, undecodable/invalid bounds, `pack_count` mismatch, ineligible query domain), it soft-falls back to the ordinary min-max rather than returning a speculative result other than `Some`. Soft fallback deliberately does **not** apply to a present but structurally invalid `MergedSubFileInfo` (impossible number/offset/size) or to a definitive trim-subfile checksum / pack-mark corruption: those follow the existing DMFile data-corruption policy and must throw rather than be rewritten as an ordinary-minmax soft fallback.
 
 ### Trim Rough Check and `pack_marks`
 
@@ -657,7 +658,7 @@ Debug logs record the DMFile, column ID, stored range, query domain, selected in
 1. A trim index must not make any originally matching row disappear.
 2. A trim index must not allow a non-matching trimmed value into the result through `All`.
 3. Equality, IN, and bounded ranges may select trim only when `Q ⊆ stored E`. A one-sided range may select trim only when its finite bound is within stored `E` and the low/high matching semantics are known.
-4. A reader must not use trim if it cannot verify consistency between the metadata and index payload.
+4. A reader must not use trim when logical selection checks fail (missing or unsupported meta, missing `.trim.idx` entry, ineligible domain). A present but structurally invalid `MergedSubFileInfo` or a corrupt trim payload is not a soft-fallback case; it follows the DMFile corruption policy.
 5. The row-level filter is always retained and may be skipped only when the final RSResult is a strictly correct `All`.
 6. Boundary semantics for `format_version = 1` are always `[lower_bound, upper_bound)` and must not be reinterpreted by runtime configuration.
 7. NULL semantics read only `pack_marks & 0x01`. Low/high bits must not affect NULL checks for the ordinary min-max.
@@ -825,14 +826,14 @@ CAST(col AS ...) = ...
 
 - Old DMFile -> new reader.
 - New DMFile -> old reader within the supported compatibility range.
-- Missing `ColumnStat.trim_minmax_index`, unknown version, and incorrect `pack_count`.
+- Missing `ColumnStat.trim_minmax_index`, unknown version, incorrect `pack_count`, undecodable bounds, or `lower_bound >= upper_bound` soft-falls back to ordinary.
+- Missing `MergedSubFileInfo` for the deterministic `.trim.idx` file name soft-falls back to ordinary (including orphan residual after meta loss).
+- Present `MergedSubFileInfo` with invalid number/offset/size must hard-fail under the DMFile corruption policy; it must not soft-fallback in selection.
 - Field 105 must not appear in `indexes = 104`, and an old reader must not enter `integrityCheckIndexInfoV2` for it.
-- Missing `MergedSubFileInfo` for the deterministic `.trim.idx` file name, or invalid number/offset/size.
 - An old reader rewrites ColumnStat and drops field 105; a new reader must fall back to normal when reopening it.
 - A residual `.trim.idx` must not be used after trim metadata is lost, and its space should be reclaimed after the DMFile is naturally rewritten.
-- The trim index's pack-mark count does not equal `pack_count`, or bits 3 through 7 are nonzero.
-- Bounds cannot be decoded, or `lower_bound >= upper_bound`.
-- Metadata or index-subfile checksum mismatch.
+- The trim index's pack-mark count does not equal `pack_count`, or bits 3 through 7 are nonzero after load (hard-fail / reject payload).
+- Metadata or index-subfile checksum mismatch (hard-fail; not soft-fallback).
 - Local disk and disaggregated storage.
 - Reopening merged subfiles, clone, restore, GC, and segment replacement.
 - Online switching and fallback of the read/write settings.
@@ -971,6 +972,7 @@ This would let trim share a unified registry with vector, inverted, and full-tex
 - The trim index defines the original `has_null_marks` byte array as `pack_marks`: bit 0 is NULL, bit 1 is low, bit 2 is high, and bits 3 through 7 must be zero in V1.
 - Trim metadata uses `ColumnStat.trim_minmax_index = 105`, whose type is directly the self-contained `TrimMinMaxIndexProps`. It is not added to `indexes = 104` and does not modify `DMFileIndexInfo`, `IndexFilePropsV2`, or `IndexFileKind`.
 - The `MergedSubFileInfo` associated with the deterministic `.trim.idx` file name is the sole source of its location and size; the props do not duplicate the file size.
+- Soft fallback covers expected absence and logical meta mismatch. A present but structurally invalid `MergedSubFileInfo`, or a corrupt trim payload/checksum, hard-fails under the existing DMFile corruption policy and must not be converted into a silent ordinary-minmax soft fallback.
 - Field 105 stores no per-pack flags. Low/high flags reside in the trim index payload together with min/max.
 - The trim min-max uses a separate subfile and does not extend the ordinary `.idx`.
 - `TrimMinMaxIndex` uses composition rather than inheritance. Generic `MinMaxIndex` produces the raw result, and the trim wrapper/operator applies directional adjustments.
