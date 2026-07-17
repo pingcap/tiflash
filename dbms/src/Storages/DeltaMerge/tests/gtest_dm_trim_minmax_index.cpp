@@ -352,6 +352,120 @@ TEST(TrimMinMaxIndexPhaseB, AddOrdinaryAndTrimPack)
     EXPECT_TRUE(restored->hasTrimmedHigh(2));
 }
 
+// Design Validation Strategy: NULL-only, delete-mark, and no-valid-value packs.
+TEST(TrimMinMaxIndexPhaseB, AddOrdinaryAndTrimPackNullDeleteAndEmpty)
+{
+    auto type = std::make_shared<DataTypeMyDateTime>(0);
+    auto nullable_type = makeNullable(type);
+    const UInt64 lower = TrimMinMax::defaultLowerBoundPacked(*type);
+    const UInt64 upper = TrimMinMax::defaultUpperBoundPacked(*type);
+    const UInt64 in_range = MyDateTime(2020, 1, 1, 0, 0, 0, 0).toPackedUInt();
+    const UInt64 high_out = MyDateTime(2100, 1, 1, 0, 0, 0, 0).toPackedUInt();
+    const UInt64 low_out = MyDateTime(1800, 1, 1, 0, 0, 0, 0).toPackedUInt();
+
+    // NULL only: has_null, no min/max, no low/high trimmed bits.
+    {
+        MinMaxIndex ordinary(*nullable_type);
+        MinMaxIndex trim(*nullable_type);
+        auto col = nullable_type->createColumn();
+        col->insertDefault();
+        col->insertDefault();
+        TrimMinMax::addOrdinaryAndTrimPack(ordinary, trim, *col, nullptr, lower, upper);
+
+        EXPECT_TRUE(ordinary.hasNull(0));
+        EXPECT_FALSE(ordinary.hasValue(0));
+        EXPECT_TRUE(trim.hasNull(0));
+        EXPECT_FALSE(trim.hasValue(0));
+        EXPECT_FALSE(trim.hasTrimmedLow(0));
+        EXPECT_FALSE(trim.hasTrimmedHigh(0));
+        EXPECT_EQ(trim.packMark(0), PackMarkBits::Null);
+        EXPECT_FALSE(trim.hasAnyTrimmedValue());
+    }
+
+    // Delete mark + normal + outlier: deleted rows must not participate in min/max or flags.
+    {
+        MinMaxIndex ordinary(*type);
+        MinMaxIndex trim(*type);
+        auto col = type->createColumn();
+        col->insert(Field(high_out)); // deleted high outlier
+        col->insert(Field(in_range)); // live in-range
+        col->insert(Field(low_out)); // deleted low outlier
+        auto del_mark_col = createColumn<UInt8>({1, 0, 1}).column;
+        const auto * del_mark = static_cast<const ColumnVector<UInt8> *>(del_mark_col.get());
+
+        TrimMinMax::addOrdinaryAndTrimPack(ordinary, trim, *col, del_mark, lower, upper);
+
+        EXPECT_TRUE(ordinary.hasValue(0));
+        EXPECT_EQ(ordinary.getCell(0).min.safeGet<UInt64>(), in_range);
+        EXPECT_EQ(ordinary.getCell(0).max.safeGet<UInt64>(), in_range);
+        EXPECT_TRUE(trim.hasValue(0));
+        EXPECT_EQ(trim.getCell(0).min.safeGet<UInt64>(), in_range);
+        EXPECT_EQ(trim.getCell(0).max.safeGet<UInt64>(), in_range);
+        EXPECT_FALSE(trim.hasTrimmedLow(0));
+        EXPECT_FALSE(trim.hasTrimmedHigh(0));
+        EXPECT_EQ(trim.packMark(0), 0);
+        EXPECT_FALSE(trim.hasAnyTrimmedValue());
+    }
+
+    // No valid values: empty column.
+    {
+        MinMaxIndex ordinary(*type);
+        MinMaxIndex trim(*type);
+        auto col = type->createColumn();
+        TrimMinMax::addOrdinaryAndTrimPack(ordinary, trim, *col, nullptr, lower, upper);
+
+        EXPECT_FALSE(ordinary.hasValue(0));
+        EXPECT_FALSE(ordinary.hasNull(0));
+        EXPECT_FALSE(trim.hasValue(0));
+        EXPECT_FALSE(trim.hasNull(0));
+        EXPECT_FALSE(trim.hasTrimmedLow(0));
+        EXPECT_FALSE(trim.hasTrimmedHigh(0));
+        EXPECT_EQ(trim.packMark(0), 0);
+        EXPECT_FALSE(trim.hasAnyTrimmedValue());
+    }
+
+    // No valid values: all rows deleted (including outliers that must be ignored).
+    {
+        MinMaxIndex ordinary(*type);
+        MinMaxIndex trim(*type);
+        auto col = type->createColumn();
+        col->insert(Field(high_out));
+        col->insert(Field(low_out));
+        auto del_mark_col = createColumn<UInt8>({1, 1}).column;
+        const auto * del_mark = static_cast<const ColumnVector<UInt8> *>(del_mark_col.get());
+
+        TrimMinMax::addOrdinaryAndTrimPack(ordinary, trim, *col, del_mark, lower, upper);
+
+        EXPECT_FALSE(ordinary.hasValue(0));
+        EXPECT_FALSE(trim.hasValue(0));
+        EXPECT_FALSE(trim.hasTrimmedLow(0));
+        EXPECT_FALSE(trim.hasTrimmedHigh(0));
+        EXPECT_EQ(trim.packMark(0), 0);
+        EXPECT_FALSE(trim.hasAnyTrimmedValue());
+    }
+
+    // Deleted NULL must not set has_null; live outlier still sets trim flags.
+    {
+        MinMaxIndex ordinary(*nullable_type);
+        MinMaxIndex trim(*nullable_type);
+        auto col = nullable_type->createColumn();
+        col->insertDefault(); // deleted NULL
+        col->insert(Field(high_out)); // live high outlier
+        auto del_mark_col = createColumn<UInt8>({1, 0}).column;
+        const auto * del_mark = static_cast<const ColumnVector<UInt8> *>(del_mark_col.get());
+
+        TrimMinMax::addOrdinaryAndTrimPack(ordinary, trim, *col, del_mark, lower, upper);
+
+        EXPECT_FALSE(ordinary.hasNull(0));
+        EXPECT_TRUE(ordinary.hasValue(0));
+        EXPECT_FALSE(trim.hasNull(0));
+        EXPECT_FALSE(trim.hasValue(0));
+        EXPECT_TRUE(trim.hasTrimmedHigh(0));
+        EXPECT_EQ(trim.packMark(0), PackMarkBits::TrimmedHigh);
+        EXPECT_TRUE(trim.hasAnyTrimmedValue());
+    }
+}
+
 TEST(TrimMinMaxIndexPhaseB, AppendPackRejectsInvalidMask)
 {
     auto type = std::make_shared<DataTypeMyDateTime>(0);
@@ -857,6 +971,78 @@ try
     auto in_single = createIn(attr, {Field(v2021)});
     auto in_single_res = in_single->roughCheck(0, 5, param);
     EXPECT_EQ(in_single_res, eq_res);
+}
+CATCH
+
+
+// NOT / NOT IN are outside trim support. Not must not PreferTrim, and must not let an empty
+// trim pack turn In(..., NULL) into None then !None => All (skipping row filters).
+TEST(TrimMinMaxIndexPhaseC, NotInWithNullDoesNotUseTrimToAdvertiseAll)
+try
+{
+    auto type = std::make_shared<DataTypeMyDateTime>(0);
+    Attr attr{.col_name = "t", .col_id = 1, .type = type};
+    const UInt64 e_lo = TrimMinMax::defaultLowerBoundPacked(*type);
+    const UInt64 e_hi = TrimMinMax::defaultUpperBoundPacked(*type);
+    const UInt64 v2020 = MyDateTime(2020, 1, 1, 0, 0, 0, 0).toPackedUInt();
+    const UInt64 v2200 = MyDateTime(2200, 1, 1, 0, 0, 0, 0).toPackedUInt();
+
+    auto make_col = [&](const std::vector<UInt64> & vals) {
+        auto col = type->createColumn();
+        for (auto v : vals)
+            col->insert(Field(v));
+        return col;
+    };
+
+    MinMaxIndex ordinary(*type);
+    MinMaxIndex trim(*type);
+    // pack0: only out-of-E value — trim has_value=false, has_trimmed_high
+    TrimMinMax::addOrdinaryAndTrimPack(ordinary, trim, *make_col({v2200}), nullptr, e_lo, e_hi);
+    EXPECT_FALSE(trim.hasValue(0));
+    EXPECT_TRUE(trim.hasTrimmedHigh(0));
+
+    auto ordinary_ptr = std::make_shared<MinMaxIndex>(std::move(ordinary));
+    auto trim_ptr = std::make_shared<MinMaxIndex>(std::move(trim));
+
+    RSCheckParam param;
+    param.indexes.emplace(attr.col_id, RSIndex(type, ordinary_ptr));
+    param.trim_indexes.emplace(
+        attr.col_id,
+        TrimRSIndex{
+            .type = type,
+            .minmax = trim_ptr,
+            .meta
+            = TrimMinMaxIndexMeta{.format_version = 1, .lower_bound = e_lo, .upper_bound = e_hi, .pack_count = 1}});
+
+    auto not_in_with_null = createNot(createIn(attr, {Field(v2020), Field()}));
+
+    // Not must demote PreferTrim from In to Normal.
+    auto reqs = not_in_with_null->getIndexRequests();
+    ASSERT_EQ(reqs.size(), 1u);
+    EXPECT_EQ(reqs[0].preferred_kind, RSIndexKind::Normal);
+    EXPECT_FALSE(reqs[0].query_domain.has_value());
+
+    // Ordinary semantics: In(2020, NULL) on {2200} => NoneNull, Not => AllNull (not All).
+    // AllNull does not allMatch(), so row-level filter is retained.
+    auto ordinary_only = param;
+    ordinary_only.trim_indexes.clear();
+    auto ordinary_res = not_in_with_null->roughCheck(0, 1, ordinary_only);
+    ASSERT_EQ(ordinary_res.size(), 1u);
+    EXPECT_EQ(ordinary_res[0], RSResult::AllNull);
+    EXPECT_FALSE(ordinary_res[0].allMatch());
+
+    // Even when trim is already loaded (sibling PreferTrim), Not must not advertise All.
+    auto with_trim = not_in_with_null->roughCheck(0, 1, param);
+    ASSERT_EQ(with_trim.size(), 1u);
+    EXPECT_EQ(with_trim[0], RSResult::AllNull);
+    EXPECT_NE(with_trim[0], RSResult::All);
+    EXPECT_FALSE(with_trim[0].allMatch());
+
+    // Without NULL, Not In(2020) on {2200} may correctly be All (all rows match).
+    auto not_in = createNot(createIn(attr, {Field(v2020)}));
+    auto not_in_res = not_in->roughCheck(0, 1, param);
+    ASSERT_EQ(not_in_res.size(), 1u);
+    EXPECT_EQ(not_in_res[0], RSResult::All);
 }
 CATCH
 
