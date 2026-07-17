@@ -287,7 +287,7 @@ struct ReadIndexWorker
 
     ReadIndexFuturePtr genReadIndexFuture(const kvrpcpb::ReadIndexRequest & req);
 
-    void invalidateReadIndexCache(RegionID region_id);
+    void invalidateReadIndexCache(RegionID region_id) const;
 
     // try to consume read-index response notifications & region waiting list
     void runOneRound(SteadyClock::duration min_dur);
