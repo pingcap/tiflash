@@ -61,7 +61,8 @@ public:
                 raw,
                 start_pack,
                 *trim->minmax,
-                TrimPredicateClass::EqualityOrInOrBounded);
+                TrimPredicateClass::EqualityOrInOrBounded,
+                param.record_trim_metrics);
         }
         return minMaxCheckCmp<RoughCheck::CheckEqual>(start_pack, pack_count, param, attr, value);
     }

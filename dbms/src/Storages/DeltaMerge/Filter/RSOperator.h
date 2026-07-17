@@ -47,6 +47,8 @@ struct RSCheckParam
     ColumnIndexes indexes;
     /// Trim min-max indexes selected for PreferTrim requests.
     TrimColumnIndexes trim_indexes;
+    /// Prometheus trim metrics are recorded only for the query read pass, avoiding duplicate counts from MVCC/LM passes.
+    bool record_trim_metrics = false;
 };
 
 class RSOperator

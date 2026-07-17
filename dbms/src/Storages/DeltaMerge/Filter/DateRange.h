@@ -83,7 +83,12 @@ public:
         if (auto trim = getTrimRSIndex(param, attr, domain))
         {
             auto raw = checkRange(start_pack, pack_count, trim->type, trim->minmax);
-            return applyTrimRoughCheckCorrection(raw, start_pack, *trim->minmax, domain.predicate_class);
+            return applyTrimRoughCheckCorrection(
+                raw,
+                start_pack,
+                *trim->minmax,
+                domain.predicate_class,
+                param.record_trim_metrics);
         }
 
         if (auto rs_index = getRSIndex(param, attr))

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/Filter/And.h>
 #include <Storages/DeltaMerge/Filter/DateQueryDomain.h>
 #include <Storages/DeltaMerge/Filter/DateRange.h>
@@ -217,9 +218,16 @@ RSResults applyTrimRoughCheckCorrection(
     const RSResults & raw,
     size_t start_pack,
     const MinMaxIndex & trim_minmax,
-    TrimPredicateClass predicate_class)
+    TrimPredicateClass predicate_class,
+    bool record_metrics)
 {
     RSResults results = raw;
+    UInt64 none_count = 0;
+    UInt64 some_count = 0;
+    UInt64 all_count = 0;
+    UInt64 all_null_count = 0;
+    UInt64 none_to_some_count = 0;
+    UInt64 all_to_some_count = 0;
     for (size_t i = 0; i < results.size(); ++i)
     {
         const size_t pack_id = start_pack + i;
@@ -248,17 +256,63 @@ RSResults applyTrimRoughCheckCorrection(
         if (trimmed_match_exists)
         {
             if (r == RSResult::None)
+            {
                 r = RSResult::Some;
+                if (record_metrics)
+                    ++none_to_some_count;
+            }
             else if (r == RSResult::NoneNull)
+            {
                 r = RSResult::SomeNull;
+                if (record_metrics)
+                    ++none_to_some_count;
+            }
         }
         if (trimmed_nonmatch_exists)
         {
             if (r == RSResult::All)
+            {
                 r = RSResult::Some;
+                if (record_metrics)
+                    ++all_to_some_count;
+            }
             else if (r == RSResult::AllNull)
+            {
                 r = RSResult::SomeNull;
+                if (record_metrics)
+                    ++all_to_some_count;
+            }
         }
+
+        if (record_metrics)
+        {
+            if (r == RSResult::None || r == RSResult::NoneNull)
+                ++none_count;
+            else if (r == RSResult::Some || r == RSResult::SomeNull)
+                ++some_count;
+            else if (r == RSResult::All)
+                ++all_count;
+            else if (r == RSResult::AllNull)
+                ++all_null_count;
+        }
+    }
+
+    if (record_metrics)
+    {
+        if (none_count != 0)
+            GET_METRIC(tiflash_storage_trim_minmax_rough_check_pack_count, result_none).Increment(none_count);
+        if (some_count != 0)
+            GET_METRIC(tiflash_storage_trim_minmax_rough_check_pack_count, result_some).Increment(some_count);
+        if (all_count != 0)
+            GET_METRIC(tiflash_storage_trim_minmax_rough_check_pack_count, result_all).Increment(all_count);
+        if (all_null_count != 0)
+            GET_METRIC(tiflash_storage_trim_minmax_rough_check_pack_count, result_all_null).Increment(all_null_count);
+        if (none_to_some_count != 0)
+            GET_METRIC(tiflash_storage_trim_minmax_correction_pack_count, type_none_to_some)
+                .Increment(none_to_some_count);
+        if (all_to_some_count != 0)
+            GET_METRIC(tiflash_storage_trim_minmax_correction_pack_count, type_all_to_some)
+                .Increment(all_to_some_count);
     }
     return results;
 }

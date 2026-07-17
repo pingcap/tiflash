@@ -38,6 +38,48 @@
 
 namespace DB::DM
 {
+namespace
+{
+void recordTrimMinMaxSelect(TrimMinMaxFallbackReason reason)
+{
+    switch (reason)
+    {
+    case TrimMinMaxFallbackReason::None:
+        GET_METRIC(tiflash_storage_trim_minmax_select_count, result_used).Increment();
+        return;
+    case TrimMinMaxFallbackReason::Disabled:
+        GET_METRIC(tiflash_storage_trim_minmax_select_count, result_fallback_disabled).Increment();
+        return;
+    case TrimMinMaxFallbackReason::NonMetaV2:
+        GET_METRIC(tiflash_storage_trim_minmax_select_count, result_fallback_non_meta_v2).Increment();
+        return;
+    case TrimMinMaxFallbackReason::ColumnMissing:
+        GET_METRIC(tiflash_storage_trim_minmax_select_count, result_fallback_column_missing).Increment();
+        return;
+    case TrimMinMaxFallbackReason::NoMeta:
+        GET_METRIC(tiflash_storage_trim_minmax_select_count, result_fallback_no_meta).Increment();
+        return;
+    case TrimMinMaxFallbackReason::UnsupportedVersion:
+        GET_METRIC(tiflash_storage_trim_minmax_select_count, result_fallback_unsupported_version).Increment();
+        return;
+    case TrimMinMaxFallbackReason::MetadataMismatch:
+        GET_METRIC(tiflash_storage_trim_minmax_select_count, result_fallback_metadata_mismatch).Increment();
+        return;
+    case TrimMinMaxFallbackReason::IndexMissing:
+        GET_METRIC(tiflash_storage_trim_minmax_select_count, result_fallback_index_missing).Increment();
+        return;
+    case TrimMinMaxFallbackReason::UnsupportedExpression:
+        GET_METRIC(tiflash_storage_trim_minmax_select_count, result_fallback_unsupported_expression).Increment();
+        return;
+    case TrimMinMaxFallbackReason::PredicateBoundaryOutsideRange:
+        GET_METRIC(tiflash_storage_trim_minmax_select_count, result_fallback_predicate_outside_range).Increment();
+        return;
+    case TrimMinMaxFallbackReason::InvalidPackMarks:
+        GET_METRIC(tiflash_storage_trim_minmax_select_count, result_fallback_invalid_pack_marks).Increment();
+        return;
+    }
+}
+} // namespace
 
 DMFilePackFilterResultPtr DMFilePackFilter::load(ReadTag read_tag)
 {
@@ -45,6 +87,7 @@ DMFilePackFilterResultPtr DMFilePackFilter::load(ReadTag read_tag)
     SCOPE_EXIT({ scan_context->total_rs_pack_filter_check_time_ns += watch.elapsed(); });
     const size_t pack_count = dmfile->getPacks();
     DMFilePackFilterResult result(index_cache, read_limiter, pack_count);
+    result.param.record_trim_metrics = read_tag == ReadTag::Query;
     auto read_all_packs = (rowkey_ranges.size() == 1 && rowkey_ranges[0].all()) || rowkey_ranges.empty();
     if (!read_all_packs)
     {
@@ -151,6 +194,19 @@ DMFilePackFilterResultPtr DMFilePackFilter::load(ReadTag read_tag)
         scan_context->rs_pack_filter_some += some_count;
         scan_context->rs_pack_filter_all += all_count;
         scan_context->rs_pack_filter_all_null += all_null_count;
+
+        if (filter)
+        {
+            if (after_read_packs != 0)
+                GET_METRIC(tiflash_storage_rough_set_pack_count, stage_query_input).Increment(after_read_packs);
+            if (after_read_packs != after_filter)
+            {
+                GET_METRIC(tiflash_storage_rough_set_pack_count, stage_query_filtered)
+                    .Increment(after_read_packs - after_filter);
+            }
+            if (after_filter != 0)
+                GET_METRIC(tiflash_storage_rough_set_pack_count, stage_query_remaining).Increment(after_filter);
+        }
     }
 
     Float64 filter_rate = 0.0;
@@ -373,26 +429,37 @@ void DMFilePackFilter::tryLoadIndex(RSCheckParam & param, ColId col_id)
 
 void DMFilePackFilter::tryLoadIndexByRequest(RSCheckParam & param, const RSIndexRequest & request)
 {
-    if (request.preferred_kind == RSIndexKind::PreferTrim && request.query_domain.has_value())
+    if (request.preferred_kind == RSIndexKind::PreferTrim)
     {
-        if (tryLoadTrimIndex(param, request.col_id, *request.query_domain))
+        const auto reason = request.query_domain.has_value()
+            ? tryLoadTrimIndex(param, request.col_id, *request.query_domain)
+            : TrimMinMaxFallbackReason::UnsupportedExpression;
+        if (param.record_trim_metrics)
+            recordTrimMinMaxSelect(reason);
+        if (reason == TrimMinMaxFallbackReason::None)
             return;
     }
     tryLoadIndex(param, request.col_id);
 }
 
-bool DMFilePackFilter::tryLoadTrimIndex(RSCheckParam & param, ColId col_id, const DateQueryDomain & query_domain)
+TrimMinMaxFallbackReason DMFilePackFilter::tryLoadTrimIndex(
+    RSCheckParam & param,
+    ColId col_id,
+    const DateQueryDomain & query_domain)
 {
-    if (!enable_trim_minmax || !dmfile->useMetaV2())
-        return false;
+    if (!enable_trim_minmax)
+        return TrimMinMaxFallbackReason::Disabled;
+
+    if (!dmfile->useMetaV2())
+        return TrimMinMaxFallbackReason::NonMetaV2;
 
     if (!dmfile->isColumnExist(col_id))
-        return false;
+        return TrimMinMaxFallbackReason::ColumnMissing;
 
     const auto & col_stat = dmfile->getColumnStat(col_id);
     const auto * dmfile_meta = typeid_cast<const DMFileMetaV2 *>(dmfile->meta.get());
     if (!dmfile_meta)
-        return false;
+        return TrimMinMaxFallbackReason::MetadataMismatch;
 
     const auto file_name_base = DMFile::getFileNameBase(col_id);
     const auto trim_fname = colTrimIndexFileName(file_name_base);
@@ -402,7 +469,9 @@ bool DMFilePackFilter::tryLoadTrimIndex(RSCheckParam & param, ColId col_id, cons
     // loads the ordinary min-max for the non-eligible request.
     if (auto it = param.trim_indexes.find(col_id); it != param.trim_indexes.end())
     {
-        return query_domain.isTrimEligible(it->second.meta.lower_bound, it->second.meta.upper_bound);
+        return query_domain.isTrimEligible(it->second.meta.lower_bound, it->second.meta.upper_bound)
+            ? TrimMinMaxFallbackReason::None
+            : TrimMinMaxFallbackReason::PredicateBoundaryOutsideRange;
     }
 
     TrimMinMaxIndexMeta meta;
@@ -415,10 +484,10 @@ bool DMFilePackFilter::tryLoadTrimIndex(RSCheckParam & param, ColId col_id, cons
         trim_fname,
         &meta);
     if (reason != TrimMinMaxFallbackReason::None)
-        return false;
+        return reason;
 
     if (!query_domain.isTrimEligible(meta.lower_bound, meta.upper_bound))
-        return false;
+        return TrimMinMaxFallbackReason::PredicateBoundaryOutsideRange;
 
     auto load_trim = [&]() -> MinMaxIndexPtr {
         const auto file_path = dmfile->meta->mergedPath(meta.merged_file_number);
@@ -471,10 +540,10 @@ bool DMFilePackFilter::tryLoadTrimIndex(RSCheckParam & param, ColId col_id, cons
     }
 
     if (!minmax_index || !TrimMinMax::validateTrimPackMarks(minmax_index->packMarks(), meta.pack_count))
-        return false;
+        return TrimMinMaxFallbackReason::InvalidPackMarks;
 
     param.trim_indexes.emplace(col_id, TrimRSIndex{.type = col_stat.type, .minmax = minmax_index, .meta = meta});
-    return true;
+    return TrimMinMaxFallbackReason::None;
 }
 
 std::pair<std::vector<DMFilePackFilter::Range>, DMFilePackFilterResults> //

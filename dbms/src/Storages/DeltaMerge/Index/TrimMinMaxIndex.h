@@ -75,6 +75,9 @@ enum class TrimMinMaxFallbackReason : UInt8
     IndexMissing,
     UnsupportedExpression,
     PredicateBoundaryOutsideRange,
+    NonMetaV2,
+    ColumnMissing,
+    InvalidPackMarks,
 };
 
 inline std::string_view trimMinMaxFallbackReasonToString(TrimMinMaxFallbackReason reason)
@@ -97,6 +100,12 @@ inline std::string_view trimMinMaxFallbackReasonToString(TrimMinMaxFallbackReaso
         return "unsupported_expression";
     case TrimMinMaxFallbackReason::PredicateBoundaryOutsideRange:
         return "predicate_boundary_outside_range";
+    case TrimMinMaxFallbackReason::NonMetaV2:
+        return "non_meta_v2";
+    case TrimMinMaxFallbackReason::ColumnMissing:
+        return "column_missing";
+    case TrimMinMaxFallbackReason::InvalidPackMarks:
+        return "invalid_pack_marks";
     }
     return "unknown";
 }

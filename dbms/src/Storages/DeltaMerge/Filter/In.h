@@ -104,7 +104,8 @@ public:
                 raw,
                 start_pack,
                 *trim->minmax,
-                TrimPredicateClass::EqualityOrInOrBounded);
+                TrimPredicateClass::EqualityOrInOrBounded,
+                param.record_trim_metrics);
         }
 
         auto rs_index = getRSIndex(param, attr);

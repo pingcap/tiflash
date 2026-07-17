@@ -155,7 +155,7 @@ private:
 
     void tryLoadIndex(RSCheckParam & param, ColId col_id);
     void tryLoadIndexByRequest(RSCheckParam & param, const RSIndexRequest & request);
-    bool tryLoadTrimIndex(RSCheckParam & param, ColId col_id, const DateQueryDomain & query_domain);
+    TrimMinMaxFallbackReason tryLoadTrimIndex(RSCheckParam & param, ColId col_id, const DateQueryDomain & query_domain);
 
 private:
     DMFilePtr dmfile;
