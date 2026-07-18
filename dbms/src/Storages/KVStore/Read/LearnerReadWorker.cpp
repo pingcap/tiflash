@@ -420,7 +420,11 @@ void LearnerReadWorker::waitIndex(
 
         std::visit(
             variant_op::overloaded{
-                [&](LockInfoPtr & lock) { unavailable_regions.addRegionLock(region->id(), std::move(lock)); },
+                [&](LockInfoPtr & lock) {
+                    kvstore->invalidateReadIndexCache(region_to_query.region_id);
+                    mvcc_query_info.invalidateReadIndexResCache(region_to_query.region_id);
+                    unavailable_regions.addRegionLock(region->id(), std::move(lock));
+                },
                 [&](RegionException::RegionReadStatus & status) {
                     if (status != RegionException::RegionReadStatus::OK)
                     {

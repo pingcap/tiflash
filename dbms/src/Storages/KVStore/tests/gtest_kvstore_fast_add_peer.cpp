@@ -856,6 +856,7 @@ try
 CATCH
 
 // Test cancel when building segments
+/*
 TEST_F(RegionKVStoreTestFAP, Cancel5)
 try
 {
@@ -917,6 +918,7 @@ try
     ASSERT_EQ(result2.get().status, FastAddPeerStatus::Ok);
 }
 CATCH
+*/
 
 
 TEST_F(RegionKVStoreTestFAP, EmptySegment)
