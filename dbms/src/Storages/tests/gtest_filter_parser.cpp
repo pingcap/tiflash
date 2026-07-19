@@ -993,15 +993,16 @@ try
         EXPECT_EQ(op->toDebugString().find("date_range"), String::npos);
     }
 
-    // Shape: CAST(col AS ...) = ...  -> unsupported compare child / no PreferTrim
+    // Shape: non-ColumnRef predicate (CAST stand-in). MockExecutor cannot compile `cast`,
+    // so use bitand(...) which FilterParser likewise turns into Unsupported / no PreferTrim.
     {
         auto op = generateRsOperator(
             table_info_json,
-            "select * from default.t_111 where cast(col_datetime as signed) = 1",
+            "select * from default.t_111 where bitand(col_2, 1) > 100",
             default_timezone_info,
             /*enable_trim_minmax*/ true);
         EXPECT_EQ(op->name(), "unsupported") << op->toDebugString();
-        expect_no_prefer_trim(op, "CAST(col) = literal");
+        expect_no_prefer_trim(op, "function(col) compare literal (CAST stand-in)");
     }
 
     // Eligibility: col >= 2200 may PreferTrim, but domain is outside default E.

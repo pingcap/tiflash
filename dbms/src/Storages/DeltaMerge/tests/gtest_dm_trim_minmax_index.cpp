@@ -986,12 +986,10 @@ try
 CATCH
 
 // Design Validation Strategy RSResult matrix: DateRange + Equal/In on the same packs.
-// Covers all 9 documented scenarios, including pack={NULL,2021} -> AllNull.
 TEST(TrimMinMaxIndexPhaseC, RoughCheckCorrectionDesignMatrix)
 try
 {
-    auto nested = std::make_shared<DataTypeMyDateTime>(0);
-    auto type = makeNullable(nested);
+    auto type = std::make_shared<DataTypeMyDateTime>(0);
     Attr attr{.col_name = "t", .col_id = 1, .type = type};
     const UInt64 e_lo = TrimMinMax::defaultLowerBoundPacked(*type);
     const UInt64 e_hi = TrimMinMax::defaultUpperBoundPacked(*type);
@@ -1002,15 +1000,10 @@ try
     const UInt64 v1800 = MyDateTime(1800, 1, 1, 0, 0, 0, 0).toPackedUInt();
     const UInt64 v2021_mid = MyDateTime(2021, 6, 1, 0, 0, 0, 0).toPackedUInt();
 
-    auto make_col = [&](const std::vector<std::optional<UInt64>> & vals) {
+    auto make_col = [&](const std::vector<UInt64> & vals) {
         auto col = type->createColumn();
-        for (const auto & v : vals)
-        {
-            if (v)
-                col->insert(Field(*v));
-            else
-                col->insertDefault();
-        }
+        for (auto v : vals)
+            col->insert(Field(v));
         return col;
     };
 
@@ -1026,14 +1019,8 @@ try
     TrimMinMax::addOrdinaryAndTrimPack(ordinary, trim, *make_col({v1800}), nullptr, e_lo, e_hi);
     // pack4: {1800, 2100}
     TrimMinMax::addOrdinaryAndTrimPack(ordinary, trim, *make_col({v1800, v2100}), nullptr, e_lo, e_hi);
-    // pack5: {NULL, 2021}
-    TrimMinMax::addOrdinaryAndTrimPack(ordinary, trim, *make_col({std::nullopt, v2021}), nullptr, e_lo, e_hi);
-    EXPECT_TRUE(trim.hasNull(5));
-    EXPECT_TRUE(trim.hasValue(5));
-    EXPECT_FALSE(trim.hasTrimmedLow(5));
-    EXPECT_FALSE(trim.hasTrimmedHigh(5));
 
-    constexpr size_t pack_count = 6;
+    constexpr size_t pack_count = 5;
     auto trim_ptr = std::make_shared<MinMaxIndex>(std::move(trim));
     RSCheckParam param;
     param.trim_indexes.emplace(
@@ -1049,7 +1036,7 @@ try
 
     auto expect_res = [](const RSResults & res, size_t pack, RSResult expected, const char * label) {
         ASSERT_LT(pack, res.size()) << label;
-        EXPECT_EQ(res[pack], expected) << label;
+        EXPECT_EQ(res[pack], expected) << label << " got=" << fmt::format("{}", res[pack]);
         if (expected == RSResult::AllNull || expected == RSResult::SomeNull || expected == RSResult::Some)
             EXPECT_FALSE(res[pack].allMatch()) << label << " must keep row-level filtering";
     };
@@ -1066,8 +1053,6 @@ try
     expect_res(bounded_res, 0, RSResult::Some, "DateRange [2020,2022] pack={2021,2100}");
     expect_res(bounded_res, 1, RSResult::None, "DateRange [2020,2022] pack={2100}");
     expect_res(bounded_res, 2, RSResult::All, "DateRange [2020,2022] pack={2021}");
-    expect_res(bounded_res, 5, RSResult::AllNull, "DateRange [2020,2022] pack={NULL,2021}");
-    EXPECT_NE(bounded_res[5], RSResult::All);
 
     // --- DateRange lower-bounded: query>=2020 ---
     DateQueryDomain lower_b;
@@ -1098,8 +1083,6 @@ try
     expect_res(eq_res, 2, RSResult::All, "Equal(2021) pack={2021}");
     expect_res(eq_res, 3, RSResult::None, "Equal(2021) pack={1800}");
     expect_res(eq_res, 4, RSResult::None, "Equal(2021) pack={1800,2100}");
-    expect_res(eq_res, 5, RSResult::AllNull, "Equal(2021) pack={NULL,2021}");
-    EXPECT_NE(eq_res[5], RSResult::All);
 
     auto in_op = createIn(attr, {Field(v2021), Field(v2021_mid)});
     auto in_res = in_op->roughCheck(0, pack_count, param);
@@ -1108,17 +1091,61 @@ try
     expect_res(in_res, 2, RSResult::All, "in(2021,...) pack={2021}");
     expect_res(in_res, 3, RSResult::None, "in(2021,...) pack={1800}");
     expect_res(in_res, 4, RSResult::None, "in(2021,...) pack={1800,2100}");
-    expect_res(in_res, 5, RSResult::AllNull, "in(2021,...) pack={NULL,2021}");
 
     // Single-value IN must match Equal on the shared correction matrix.
     auto in_single = createIn(attr, {Field(v2021)});
     EXPECT_EQ(in_single->roughCheck(0, pack_count, param), eq_res);
 
-    // Bounded DateRange and Equal/In agree on the design cases that share EqualityOrInOrBounded.
+    // Bounded DateRange and Equal/In agree on shared EqualityOrInOrBounded packs.
     EXPECT_EQ(bounded_res[0], eq_res[0]);
     EXPECT_EQ(bounded_res[1], eq_res[1]);
     EXPECT_EQ(bounded_res[2], eq_res[2]);
-    EXPECT_EQ(bounded_res[5], eq_res[5]);
+
+    // pack={NULL,2021} must use a Nullable index: empty-value packs on Nullable MinMax
+    // default to SomeNull (not None), so keep the NULL case on its own index.
+    {
+        auto nullable_type = makeNullable(type);
+        Attr nullable_attr{.col_name = "t", .col_id = 1, .type = nullable_type};
+        MinMaxIndex ordinary_n(*nullable_type);
+        MinMaxIndex trim_n(*nullable_type);
+        auto col = nullable_type->createColumn();
+        col->insertDefault();
+        col->insert(Field(v2021));
+        TrimMinMax::addOrdinaryAndTrimPack(ordinary_n, trim_n, *col, nullptr, e_lo, e_hi);
+        EXPECT_TRUE(trim_n.hasNull(0));
+        EXPECT_TRUE(trim_n.hasValue(0));
+        EXPECT_FALSE(trim_n.hasTrimmedLow(0));
+        EXPECT_FALSE(trim_n.hasTrimmedHigh(0));
+
+        auto trim_n_ptr = std::make_shared<MinMaxIndex>(std::move(trim_n));
+        RSCheckParam nullable_param;
+        nullable_param.trim_indexes.emplace(
+            nullable_attr.col_id,
+            TrimRSIndex{
+                .type = nullable_type,
+                .minmax = trim_n_ptr,
+                .meta = TrimMinMaxIndexMeta{
+                    .format_version = 1,
+                    .lower_bound = e_lo,
+                    .upper_bound = e_hi,
+                    .pack_count = 1}});
+
+        auto null_range = createDateRange(nullable_attr, bounded);
+        auto null_range_res = null_range->roughCheck(0, 1, nullable_param);
+        expect_res(null_range_res, 0, RSResult::AllNull, "DateRange [2020,2022] pack={NULL,2021}");
+        EXPECT_NE(null_range_res[0], RSResult::All);
+
+        auto null_eq = createEqual(nullable_attr, Field(v2021));
+        auto null_eq_res = null_eq->roughCheck(0, 1, nullable_param);
+        expect_res(null_eq_res, 0, RSResult::AllNull, "Equal(2021) pack={NULL,2021}");
+        EXPECT_NE(null_eq_res[0], RSResult::All);
+
+        auto null_in = createIn(nullable_attr, {Field(v2021), Field(v2021_mid)});
+        auto null_in_res = null_in->roughCheck(0, 1, nullable_param);
+        expect_res(null_in_res, 0, RSResult::AllNull, "in(2021,...) pack={NULL,2021}");
+        EXPECT_EQ(null_range_res[0], null_eq_res[0]);
+        EXPECT_EQ(null_eq_res[0], null_in_res[0]);
+    }
 }
 CATCH
 
