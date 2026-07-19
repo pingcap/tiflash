@@ -485,27 +485,24 @@ TEST(TrimMinMaxIndexPhaseB, AppendPackRejectsInvalidMask)
 // DATE / DATETIME(fsp) bounds, FSP near upper edge, zero/invalid packed values, Nullable.
 TEST(TrimMinMaxIndexTemporalTypes, DateAndDateTimeBoundsFspAndCompatValues)
 {
-    auto expect_classification = [](const DataTypePtr & type,
-                                    UInt64 value,
-                                    bool expect_has_value,
-                                    bool expect_low,
-                                    bool expect_high) {
-        MinMaxIndex ordinary(*type);
-        MinMaxIndex trim(*type);
-        const UInt64 lower = TrimMinMax::defaultLowerBoundPacked(*type);
-        const UInt64 upper = TrimMinMax::defaultUpperBoundPacked(*type);
-        auto col = type->createColumn();
-        col->insert(Field(value));
-        TrimMinMax::addOrdinaryAndTrimPack(ordinary, trim, *col, nullptr, lower, upper);
-        EXPECT_EQ(trim.hasValue(0), expect_has_value) << type->getName() << " value=" << value;
-        EXPECT_EQ(trim.hasTrimmedLow(0), expect_low) << type->getName() << " value=" << value;
-        EXPECT_EQ(trim.hasTrimmedHigh(0), expect_high) << type->getName() << " value=" << value;
-        if (expect_has_value)
-        {
-            EXPECT_EQ(trim.getCell(0).min.safeGet<UInt64>(), value);
-            EXPECT_EQ(trim.getCell(0).max.safeGet<UInt64>(), value);
-        }
-    };
+    auto expect_classification
+        = [](const DataTypePtr & type, UInt64 value, bool expect_has_value, bool expect_low, bool expect_high) {
+              MinMaxIndex ordinary(*type);
+              MinMaxIndex trim(*type);
+              const UInt64 lower = TrimMinMax::defaultLowerBoundPacked(*type);
+              const UInt64 upper = TrimMinMax::defaultUpperBoundPacked(*type);
+              auto col = type->createColumn();
+              col->insert(Field(value));
+              TrimMinMax::addOrdinaryAndTrimPack(ordinary, trim, *col, nullptr, lower, upper);
+              EXPECT_EQ(trim.hasValue(0), expect_has_value) << type->getName() << " value=" << value;
+              EXPECT_EQ(trim.hasTrimmedLow(0), expect_low) << type->getName() << " value=" << value;
+              EXPECT_EQ(trim.hasTrimmedHigh(0), expect_high) << type->getName() << " value=" << value;
+              if (expect_has_value)
+              {
+                  EXPECT_EQ(trim.getCell(0).min.safeGet<UInt64>(), value);
+                  EXPECT_EQ(trim.getCell(0).max.safeGet<UInt64>(), value);
+              }
+          };
 
     // Supported types: DATE, DATETIME(0/3/6), Nullable wrappers.
     EXPECT_TRUE(TrimMinMax::isSupportedTemporalType(*std::make_shared<DataTypeMyDate>()));
@@ -1124,11 +1121,8 @@ try
             TrimRSIndex{
                 .type = nullable_type,
                 .minmax = trim_n_ptr,
-                .meta = TrimMinMaxIndexMeta{
-                    .format_version = 1,
-                    .lower_bound = e_lo,
-                    .upper_bound = e_hi,
-                    .pack_count = 1}});
+                .meta
+                = TrimMinMaxIndexMeta{.format_version = 1, .lower_bound = e_lo, .upper_bound = e_hi, .pack_count = 1}});
 
         auto null_range = createDateRange(nullable_attr, bounded);
         auto null_range_res = null_range->roughCheck(0, 1, nullable_param);
@@ -1182,8 +1176,7 @@ TEST(TrimMinMaxIndexPhaseC, MustFallBackOperatorShapesHaveNoPreferTrim)
 
     // BETWEEN under OR is not rewritten to DateRange; GE/LE themselves are Normal.
     auto between_under_or = createOr(
-        {createAnd({createGreaterEqual(attr, Field(v2020)), createLessEqual(attr, Field(v2021))}),
-         createIsNull(attr)});
+        {createAnd({createGreaterEqual(attr, Field(v2020)), createLessEqual(attr, Field(v2021))}), createIsNull(attr)});
     EXPECT_FALSE(has_prefer_trim(between_under_or));
     EXPECT_EQ(normalizeTemporalRangesForTrim(between_under_or)->name(), "or");
     EXPECT_FALSE(has_prefer_trim(normalizeTemporalRangesForTrim(between_under_or)));
