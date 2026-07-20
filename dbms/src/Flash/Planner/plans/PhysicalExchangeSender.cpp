@@ -16,6 +16,7 @@
 #include <DataStreams/ExchangeSenderBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/ExchangeSenderInterpreterHelper.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Mpp/newMPPExchangeWriter.h>
@@ -69,6 +70,7 @@ void PhysicalExchangeSender::transformImpl(DAGPipeline & pipeline, Context & con
     {
         restoreConcurrency(pipeline, dag_context.final_concurrency, log);
     }
+    const auto concurrency = pipeline.streams.size();
     pipeline.transform([&](auto & stream) {
         // construct writer
         std::unique_ptr<DAGResponseWriter> response_writer = newMPPExchangeWriter(
@@ -78,6 +80,9 @@ void PhysicalExchangeSender::transformImpl(DAGPipeline & pipeline, Context & con
             exchange_type,
             context.getSettingsRef().dag_records_per_chunk,
             context.getSettingsRef().batch_send_min_limit,
+            getMaxBufferedBytesInResponseWriter(
+                context.getSettingsRef().max_buffered_bytes_in_executor,
+                concurrency),
             dag_context,
             fine_grained_shuffle.enable(),
             fine_grained_shuffle.stream_count,

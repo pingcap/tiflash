@@ -29,6 +29,7 @@ public:
     BroadcastOrPassThroughWriter(
         ExchangeWriterPtr writer_,
         Int64 batch_send_min_limit_,
+        UInt64 max_buffered_bytes_,
         DAGContext & dag_context_);
     void write(const Block & block) override;
     void flush() override;
@@ -37,10 +38,8 @@ private:
     void encodeThenWriteBlocks();
 
 private:
-    Int64 batch_send_min_limit;
     ExchangeWriterPtr writer;
     std::vector<Block> blocks;
-    size_t rows_in_blocks;
     std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
 };
 

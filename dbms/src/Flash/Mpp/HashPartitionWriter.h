@@ -31,6 +31,7 @@ public:
         std::vector<Int64> partition_col_ids_,
         TiDB::TiDBCollators collators_,
         Int64 batch_send_min_limit_,
+        UInt64 max_buffered_bytes_,
         DAGContext & dag_context_);
     void write(const Block & block) override;
     void flush() override;
@@ -41,12 +42,10 @@ private:
     void writePackets(TrackedMppDataPacketPtrs & packets);
 
 private:
-    Int64 batch_send_min_limit;
     ExchangeWriterPtr writer;
     std::vector<Block> blocks;
     std::vector<Int64> partition_col_ids;
     TiDB::TiDBCollators collators;
-    size_t rows_in_blocks;
     uint16_t partition_num;
     std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
 };
