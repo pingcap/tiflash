@@ -41,6 +41,18 @@ protected:
         return resp;
     }
 
+    static LockInfoPtr makeLockInfo(UInt64 lock_version)
+    {
+        auto lock_info = std::make_unique<kvrpcpb::LockInfo>();
+        lock_info->set_key("key");
+        lock_info->set_primary_lock("primary");
+        lock_info->set_lock_version(lock_version);
+        lock_info->set_lock_ttl(3000);
+        lock_info->set_txn_size(1);
+        lock_info->set_lock_type(kvrpcpb::Op::Put);
+        return lock_info;
+    }
+
     // helper function for testing private method
     static std::vector<kvrpcpb::ReadIndexRequest> buildBatchReadIndex( //
         LearnerReadWorker & worker,
@@ -57,6 +69,11 @@ protected:
         RegionsReadIndexResult & read_index_result)
     {
         worker.recordReadIndexError(regions_snapshot, read_index_result);
+    }
+
+    static void throwUnavailableRegions(LearnerReadWorker & worker)
+    {
+        worker.unavailable_regions.tryThrowRegionException();
     }
 
 protected:
@@ -173,6 +190,67 @@ try
     ASSERT_EQ(1024, mvcc_query_info.getReadIndexRes(202));
     ASSERT_EQ(10000, mvcc_query_info.getReadIndexRes(203));
     ASSERT_EQ(0, mvcc_query_info.getReadIndexRes(999)); // not exist region_id
+}
+CATCH
+
+TEST_F(LearnerReadTest, ReadIndexLockIsUnavailableRegion)
+try
+{
+    auto & global_ctx = TiFlashTestEnv::getGlobalContext();
+    auto & tmt = global_ctx.getTMTContext();
+
+    const RegionID region_id = 200;
+    const UInt64 lock_version = 12345;
+
+    MvccQueryInfo mvcc_query_info(false, 10000, nullptr);
+    LearnerReadWorker worker(mvcc_query_info, tmt, true, false, log);
+
+    kvrpcpb::ReadIndexResponse resp;
+    resp.mutable_locked()->CopyFrom(*makeLockInfo(lock_version));
+
+    RegionsReadIndexResult read_index_result;
+    read_index_result.emplace(region_id, std::move(resp));
+
+    recordReadIndexError({}, worker, read_index_result);
+
+    try
+    {
+        throwUnavailableRegions(worker);
+        FAIL() << "read-index lock should throw RegionException for batch cop";
+    }
+    catch (const RegionException & e)
+    {
+        ASSERT_TRUE(e.unavailable_region.contains(region_id));
+        ASSERT_TRUE(e.lock_region.empty());
+        ASSERT_TRUE(e.locks.empty());
+        ASSERT_EQ(e.status, RegionException::RegionReadStatus::NOT_FOUND);
+    }
+}
+CATCH
+
+TEST_F(LearnerReadTest, LocalLockIsRetryableLockRegion)
+try
+{
+    const RegionID region_id = 200;
+    const UInt64 lock_version = 12345;
+
+    UnavailableRegions unavailable_regions(true, false);
+    unavailable_regions.addRegionLock(region_id, makeLockInfo(lock_version));
+
+    try
+    {
+        unavailable_regions.tryThrowRegionException();
+        FAIL() << "local lock should throw RegionException for batch cop";
+    }
+    catch (const RegionException & e)
+    {
+        ASSERT_TRUE(e.unavailable_region.empty());
+        ASSERT_TRUE(e.lock_region.contains(region_id));
+        ASSERT_TRUE(e.locks.contains(lock_version));
+        ASSERT_EQ(e.locks.at(lock_version).size(), 1);
+        ASSERT_EQ(e.locks.at(lock_version).front()->txn_id, lock_version);
+        ASSERT_EQ(e.status, RegionException::RegionReadStatus::NOT_FOUND);
+    }
 }
 CATCH
 
