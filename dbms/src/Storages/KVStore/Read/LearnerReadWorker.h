@@ -65,8 +65,12 @@ struct UnavailableRegions
         extra_msg = std::move(extra_msg_);
     }
 
-    void addRegionLockAsUnavailableRegion(RegionID region_id_, LockInfoPtr && region_lock_)
+    void addReadIndexLockAsUnavailableRegion(RegionID region_id_, LockInfoPtr && region_lock_)
     {
+        // Read-index locks are reported by the leader-side memory lock check before TiFlash gets a local read
+        // index. Current read-index requests cannot carry bypass_lock_ts/resolved_locks to the leader, so local
+        // bypass retry cannot skip these locks. Keep them out of lock_region_ids and use the existing
+        // unavailable-region/LockException handling.
         region_locks.emplace_back(region_id_, std::move(region_lock_));
         unavailable_region_ids.emplace(region_id_);
     }

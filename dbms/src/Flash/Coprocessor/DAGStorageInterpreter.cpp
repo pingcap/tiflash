@@ -97,7 +97,7 @@ bool tryAddBypassLockTsForLocalRetry(
         return false;
 
     std::vector<UInt64> bypass_lock_ts;
-    bool has_pending_resolve = false;
+    pingcap::kv::TryGetBypassLockResult bypass_lock_result;
     try
     {
         auto * cluster = tmt.getKVCluster();
@@ -114,7 +114,7 @@ bool tryAddBypassLockTsForLocalRetry(
         }
 
         pingcap::kv::Backoffer bo(try_get_bypass_lock_max_backoff_ms);
-        has_pending_resolve = cluster->lock_resolver->tryGetBypassLock(bo, read_tso, e.locks, bypass_lock_ts);
+        bypass_lock_result = cluster->lock_resolver->tryGetBypassLock(bo, read_tso, e.locks, bypass_lock_ts);
     }
     catch (const pingcap::Exception & ex)
     {
@@ -138,6 +138,16 @@ bool tryAddBypassLockTsForLocalRetry(
             ex.displayText());
         return false;
     }
+    catch (...)
+    {
+        LOG_WARNING(
+            log,
+            "Failed to check bypass locks for local retry, lock_regions={} lock_txns={} read_tso={} error=unknown",
+            e.lock_region.size(),
+            e.locks.size(),
+            read_tso);
+        return false;
+    }
 
     if (!bypass_lock_ts.empty())
     {
@@ -145,19 +155,20 @@ bool tryAddBypassLockTsForLocalRetry(
         query_bypass_lock_ts.insert(bypass_lock_ts.begin(), bypass_lock_ts.end());
     }
 
-    const bool should_retry_local = has_pending_resolve || !bypass_lock_ts.empty();
+    const bool should_retry_local = bypass_lock_result.has_pending_resolve || !bypass_lock_ts.empty();
     LOG_INFO(
         log,
         "Check bypass locks for local retry, lock_regions={} lock_txns={} bypass_lock_ts={} "
-        "has_pending_resolve={} retry_local={} read_tso={}",
+        "has_pending_resolve={} need_wait_bg_resolve={} retry_local={} read_tso={}",
         e.lock_region.size(),
         e.locks.size(),
         bypass_lock_ts.size(),
-        has_pending_resolve,
+        bypass_lock_result.has_pending_resolve,
+        bypass_lock_result.need_wait_bg_resolve,
         should_retry_local,
         read_tso);
 
-    if (has_pending_resolve)
+    if (bypass_lock_result.need_wait_bg_resolve)
         std::this_thread::sleep_for(std::chrono::milliseconds(wait_bg_resolve_lock_ms));
 
     return should_retry_local;
@@ -970,6 +981,8 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
             if (tmt.checkShuttingDown())
                 throw TiFlashException("TiFlash server is terminating", Errors::Coprocessor::Internal);
             // For normal unavailable regions, let MakeRegionQueryInfos move them to remote read in the next loop.
+            // Local lock regions are handled separately: try local retry with bypass_lock_ts first, and fall back
+            // to remote read if bypass is not available.
             force_retry.insert(e.unavailable_region.begin(), e.unavailable_region.end());
 
             if (!e.lock_region.empty())

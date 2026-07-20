@@ -301,7 +301,7 @@ void LearnerReadWorker::recordReadIndexError(
         else if (resp.has_locked())
         {
             GET_METRIC(tiflash_raft_learner_read_failures_count, type_tikv_lock).Increment();
-            unavailable_regions.addRegionLockAsUnavailableRegion(region_id, LockInfoPtr(resp.release_locked()));
+            unavailable_regions.addReadIndexLockAsUnavailableRegion(region_id, LockInfoPtr(resp.release_locked()));
         }
         else
         {
