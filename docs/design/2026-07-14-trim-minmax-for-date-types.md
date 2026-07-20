@@ -9,7 +9,7 @@ This document proposes an optional pack-level `trim_minmax` index for `DATETIME`
 
 The first version adopts the following key decisions:
 
-1. The effective date range is the half-open interval `[1900-01-01 00:00:00, 2100-01-01 00:00:00)`.
+1. The effective date range is the half-open interval `[1900-01-01 00:00:00, 2099-12-01 00:00:00)`.
 2. `trim_minmax` stores the min/max of values inside this interval. The ordinary min-max remains unchanged and continues to serve queries that do not satisfy the trim eligibility conditions.
 3. The actual bounds, format version, and pack count used by each trim index are persisted directly through `ColumnStat.trim_minmax_index: TrimMinMaxIndexProps`. The `MergedSubFileInfo` associated with the deterministic file name is the sole source of the file location and size. Per-pack low/high flags are merged into the trim index's existing `has_null_marks` byte array, whose on-disk semantics are generalized as `pack_marks`.
 4. A reader may select the trim index only according to the actual interval stored in the DMFile. It must not interpret a historical index using the current version's global default interval.
@@ -188,7 +188,7 @@ Consequently, if the raw trim result is `None` but a trimmed value that must mat
 The following counterexample shows why checking only whether the SQL literal is inside the effective interval is insufficient:
 
 ```text
-E = [1900, 2100)
+E = [1900, 2099-12)
 pack = {2100-01-01}
 predicate = col >= 2020-01-01
 ```
@@ -198,7 +198,7 @@ The literal 2020 is inside `E`, but the query domain is `[2020, +∞)` and inclu
 Another counterexample demonstrates why low/high pack marks are necessary:
 
 ```text
-E = [1900, 2100)
+E = [1900, 2099-12)
 pack = {2021-01-01, 2100-01-01}
 predicate = col BETWEEN 2020-01-01 AND 2022-01-01
 ```
@@ -232,7 +232,7 @@ DateRange(t, [L, U]) AND Or(t = A, t = B)
 A dangerous anti-pattern, and the reason eligibility must be per predicate rather than per column, is:
 
 ```text
-E = [1900, 2100)
+E = [1900, 2099-12)
 pack = {2200-01-01}
 predicate = (t = 2020-01-01) OR (t = 2200-01-01)
 ```
@@ -299,10 +299,10 @@ Query DAG
 The default interval for the first version is:
 
 ```text
-[1900-01-01 00:00:00, 2100-01-01 00:00:00)
+[1900-01-01 00:00:00, 2099-12-01 00:00:00)
 ```
 
-A half-open interval is used instead of the closed interval `2099-12-31 23:59:59` because it unambiguously covers fractional seconds in `DATETIME(1..6)`, such as `2099-12-31 23:59:59.999999`.
+A half-open interval is used so fractional seconds in `DATETIME(1..6)` remain unambiguous, for example `2099-11-30 23:59:59.999999` is inside `E` while `2099-12-01 00:00:00` is not. The exclusive upper bound is `2099-12-01` rather than `2100-01-01` to leave a buffer before the common `2100-01-01` sentinel: `TIMESTAMP` literals converted across time zones or DST must not accidentally move the exclusive edge onto an unexpected calendar day and weaken outlier classification around that sentinel.
 
 The bounds are persisted using the column's internal encoding rather than as time strings:
 
@@ -549,7 +549,7 @@ else
 Selection must use `trim_meta.range` rather than the current process's default range. This safely supports:
 
 ```text
-DMFile A: E=[1900, 2100), use trim
+DMFile A: E=[1900, 2099-12), use trim
 DMFile B: no trim, use normal
 DMFile C: future version E=[1800, 2200), decide according to C's metadata
 ```
@@ -817,8 +817,8 @@ CAST(col AS ...) = ...
 - `DATE`, `DATETIME(0)`, `DATETIME(3)`, and `DATETIME(6)`.
 - `TIMESTAMP` in UTC, fixed-offset, and named time zones, including DST boundaries.
 - The lower and upper bounds themselves.
-- `2099-12-31 23:59:59.999999`.
-- `2100-01-01 00:00:00`.
+- `2099-11-30 23:59:59.999999` (inside `E`).
+- `2099-12-01 00:00:00` and `2100-01-01 00:00:00` (outside `E`).
 - Zero dates, invalid-date compatibility values, and other out-of-range packed values.
 - Nullable and NotNull.
 
@@ -967,7 +967,7 @@ This would let trim share a unified registry with vector, inverted, and full-tex
 
 ## Established Design Boundaries
 
-- The effective interval is the half-open interval `[1900-01-01, 2100-01-01)`.
+- The effective interval is the half-open interval `[1900-01-01, 2099-12-01)`.
 - Actual bounds are persisted per column and per DMFile. Readers do not use the current default configuration to interpret old indexes.
 - The trim index defines the original `has_null_marks` byte array as `pack_marks`: bit 0 is NULL, bit 1 is low, bit 2 is high, and bits 3 through 7 must be zero in V1.
 - Trim metadata uses `ColumnStat.trim_minmax_index = 105`, whose type is directly the self-contained `TrimMinMaxIndexProps`. It is not added to `indexes = 104` and does not modify `DMFileIndexInfo`, `IndexFilePropsV2`, or `IndexFileKind`.

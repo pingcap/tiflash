@@ -127,7 +127,7 @@ inline constexpr UInt32 FormatVersionV1 = 1;
 
 bool isSupportedTemporalType(const IDataType & type);
 
-/// Default half-open effective range [1900-01-01 00:00:00, 2100-01-01 00:00:00).
+/// Default half-open effective range [1900-01-01 00:00:00, 2099-12-01 00:00:00).
 UInt64 defaultLowerBoundPacked(const IDataType & nested_type);
 UInt64 defaultUpperBoundPacked(const IDataType & nested_type);
 

@@ -519,9 +519,9 @@ TEST(TrimMinMaxIndexTemporalTypes, DateAndDateTimeBoundsFspAndCompatValues)
     auto dt6 = std::make_shared<DataTypeMyDateTime>(6);
 
     EXPECT_EQ(TrimMinMax::defaultLowerBoundPacked(*date_type), MyDate(1900, 1, 1).toPackedUInt());
-    EXPECT_EQ(TrimMinMax::defaultUpperBoundPacked(*date_type), MyDate(2100, 1, 1).toPackedUInt());
+    EXPECT_EQ(TrimMinMax::defaultUpperBoundPacked(*date_type), MyDate(2099, 12, 1).toPackedUInt());
     EXPECT_EQ(TrimMinMax::defaultLowerBoundPacked(*dt0), MyDateTime(1900, 1, 1, 0, 0, 0, 0).toPackedUInt());
-    EXPECT_EQ(TrimMinMax::defaultUpperBoundPacked(*dt0), MyDateTime(2100, 1, 1, 0, 0, 0, 0).toPackedUInt());
+    EXPECT_EQ(TrimMinMax::defaultUpperBoundPacked(*dt0), MyDateTime(2099, 12, 1, 0, 0, 0, 0).toPackedUInt());
     // FSP does not change the persisted default packed bounds.
     EXPECT_EQ(TrimMinMax::defaultLowerBoundPacked(*dt3), TrimMinMax::defaultLowerBoundPacked(*dt0));
     EXPECT_EQ(TrimMinMax::defaultUpperBoundPacked(*dt6), TrimMinMax::defaultUpperBoundPacked(*dt0));
@@ -532,15 +532,16 @@ TEST(TrimMinMaxIndexTemporalTypes, DateAndDateTimeBoundsFspAndCompatValues)
 
     // DATE: inclusive lower / exclusive upper / zero-date low outlier.
     expect_classification(date_type, MyDate(1900, 1, 1).toPackedUInt(), /*has*/ true, /*low*/ false, /*high*/ false);
-    expect_classification(date_type, MyDate(2099, 12, 31).toPackedUInt(), true, false, false);
+    expect_classification(date_type, MyDate(2099, 11, 30).toPackedUInt(), true, false, false);
+    expect_classification(date_type, MyDate(2099, 12, 1).toPackedUInt(), false, false, true);
     expect_classification(date_type, MyDate(2100, 1, 1).toPackedUInt(), false, false, true);
     expect_classification(date_type, MyDate(0, 0, 0).toPackedUInt(), false, true, false);
     // Invalid-date compatibility packed value still participates via packed compare (inside E).
     expect_classification(date_type, MyDate(2020, 2, 30).toPackedUInt(), true, false, false);
 
-    // DATETIME(0/3/6): half-open E covers 2099-12-31 23:59:59.999999; 2100-01-01 is high.
-    const UInt64 just_inside = MyDateTime(2099, 12, 31, 23, 59, 59, 999999).toPackedUInt();
-    const UInt64 upper_edge = MyDateTime(2100, 1, 1, 0, 0, 0, 0).toPackedUInt();
+    // DATETIME(0/3/6): half-open E covers 2099-11-30 23:59:59.999999; 2099-12-01 is high.
+    const UInt64 just_inside = MyDateTime(2099, 11, 30, 23, 59, 59, 999999).toPackedUInt();
+    const UInt64 upper_edge = MyDateTime(2099, 12, 1, 0, 0, 0, 0).toPackedUInt();
     const UInt64 lower_edge = MyDateTime(1900, 1, 1, 0, 0, 0, 0).toPackedUInt();
     const UInt64 zero_dt = MyDateTime(0, 0, 0, 0, 0, 0, 0).toPackedUInt();
     for (const auto & type : {dt0, dt3, dt6})
@@ -548,6 +549,7 @@ TEST(TrimMinMaxIndexTemporalTypes, DateAndDateTimeBoundsFspAndCompatValues)
         expect_classification(type, lower_edge, true, false, false);
         expect_classification(type, just_inside, true, false, false);
         expect_classification(type, upper_edge, false, false, true);
+        expect_classification(type, MyDateTime(2100, 1, 1, 0, 0, 0, 0).toPackedUInt(), false, false, true);
         expect_classification(type, zero_dt, false, true, false);
         // Fractional second inside a normal day stays in-range for every fsp.
         expect_classification(type, MyDateTime(2020, 1, 1, 12, 0, 0, 123456).toPackedUInt(), true, false, false);
@@ -594,7 +596,7 @@ TEST(TrimMinMaxIndexTemporalTypes, DateAndDateTimeBoundsFspAndCompatValues)
         auto props = TrimMinMax::makeDefaultProps(*date_type, /*pack_count*/ 4);
         EXPECT_EQ(props.format_version(), TrimMinMax::FormatVersionV1);
         EXPECT_EQ(TrimMinMax::decodeBound(props.lower_bound()), MyDate(1900, 1, 1).toPackedUInt());
-        EXPECT_EQ(TrimMinMax::decodeBound(props.upper_bound()), MyDate(2100, 1, 1).toPackedUInt());
+        EXPECT_EQ(TrimMinMax::decodeBound(props.upper_bound()), MyDate(2099, 12, 1).toPackedUInt());
     }
 }
 
@@ -602,32 +604,36 @@ TEST(TrimMinMaxIndexTemporalTypes, DateAndDateTimeBoundsFspAndCompatValues)
 TEST(TrimMinMaxIndexTemporalTypes, DateQueryDomainUsesTypePackedBounds)
 {
     const UInt64 date_lo = MyDate(1900, 1, 1).toPackedUInt();
-    const UInt64 date_hi = MyDate(2100, 1, 1).toPackedUInt();
+    const UInt64 date_hi = MyDate(2099, 12, 1).toPackedUInt();
     const UInt64 dt_lo = MyDateTime(1900, 1, 1, 0, 0, 0, 0).toPackedUInt();
-    const UInt64 dt_hi = MyDateTime(2100, 1, 1, 0, 0, 0, 0).toPackedUInt();
+    const UInt64 dt_hi = MyDateTime(2099, 12, 1, 0, 0, 0, 0).toPackedUInt();
 
     DateQueryDomain d;
     d.predicate_class = TrimPredicateClass::EqualityOrInOrBounded;
 
     d.values = {Field(MyDate(2020, 1, 1).toPackedUInt())};
     EXPECT_TRUE(d.isTrimEligible(date_lo, date_hi));
+    d.values = {Field(MyDate(2099, 12, 1).toPackedUInt())};
+    EXPECT_FALSE(d.isTrimEligible(date_lo, date_hi));
     d.values = {Field(MyDate(2100, 1, 1).toPackedUInt())};
     EXPECT_FALSE(d.isTrimEligible(date_lo, date_hi));
     d.values = {Field(MyDate(0, 0, 0).toPackedUInt())};
     EXPECT_FALSE(d.isTrimEligible(date_lo, date_hi));
 
-    // Half-open E keeps 2099-12-31 23:59:59.999999 eligible; 2100-01-01 is not.
-    d.values = {Field(MyDateTime(2099, 12, 31, 23, 59, 59, 999999).toPackedUInt())};
+    // Half-open E keeps 2099-11-30 23:59:59.999999 eligible; 2099-12-01 / 2100-01-01 are not.
+    d.values = {Field(MyDateTime(2099, 11, 30, 23, 59, 59, 999999).toPackedUInt())};
     EXPECT_TRUE(d.isTrimEligible(dt_lo, dt_hi));
+    d.values = {Field(MyDateTime(2099, 12, 1, 0, 0, 0, 0).toPackedUInt())};
+    EXPECT_FALSE(d.isTrimEligible(dt_lo, dt_hi));
     d.values = {Field(MyDateTime(2100, 1, 1, 0, 0, 0, 0).toPackedUInt())};
     EXPECT_FALSE(d.isTrimEligible(dt_lo, dt_hi));
 
     // One-sided lower bound at the FSP edge remains eligible.
     d.predicate_class = TrimPredicateClass::LowerBounded;
     d.values.clear();
-    d.lower = Field(MyDateTime(2099, 12, 31, 23, 59, 59, 999999).toPackedUInt());
+    d.lower = Field(MyDateTime(2099, 11, 30, 23, 59, 59, 999999).toPackedUInt());
     EXPECT_TRUE(d.isTrimEligible(dt_lo, dt_hi));
-    d.lower = Field(MyDateTime(2100, 1, 1, 0, 0, 0, 0).toPackedUInt());
+    d.lower = Field(MyDateTime(2099, 12, 1, 0, 0, 0, 0).toPackedUInt());
     EXPECT_FALSE(d.isTrimEligible(dt_lo, dt_hi));
 }
 
@@ -765,9 +771,9 @@ CATCH
 
 TEST(TrimMinMaxIndexPhaseC, DateQueryDomainEligibility)
 {
-    // E = {date| date ∈ [1900-01-01 00:00:00, 2100-01-01 00:00:00)}
+    // E = {date| date ∈ [1900-01-01 00:00:00, 2099-12-01 00:00:00)}
     const UInt64 e_lo = MyDateTime(1900, 1, 1, 0, 0, 0, 0).toPackedUInt();
-    const UInt64 e_hi = MyDateTime(2100, 1, 1, 0, 0, 0, 0).toPackedUInt();
+    const UInt64 e_hi = MyDateTime(2099, 12, 1, 0, 0, 0, 0).toPackedUInt();
     const UInt64 in_e = MyDateTime(2020, 1, 1, 0, 0, 0, 0).toPackedUInt();
     const UInt64 below = MyDateTime(1800, 1, 1, 0, 0, 0, 0).toPackedUInt();
     const UInt64 above = MyDateTime(2200, 1, 1, 0, 0, 0, 0).toPackedUInt();

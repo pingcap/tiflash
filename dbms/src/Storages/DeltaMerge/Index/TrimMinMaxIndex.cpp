@@ -70,9 +70,12 @@ UInt64 defaultLowerBoundPacked(const IDataType & nested_type)
 UInt64 defaultUpperBoundPacked(const IDataType & nested_type)
 {
     const auto & type = *stripNullable(nested_type);
+    // Use 2099-12-01 rather than 2100-01-01 so TIMESTAMP / TZ / DST conversions
+    // near the common 2100-01-01 sentinel do not push the exclusive upper edge
+    // across timezone boundaries into an unexpected calendar day.
     if (typeid_cast<const DataTypeMyDate *>(&type))
-        return MyDate(2100, 1, 1).toPackedUInt();
-    return MyDateTime(2100, 1, 1, 0, 0, 0, 0).toPackedUInt();
+        return MyDate(2099, 12, 1).toPackedUInt();
+    return MyDateTime(2099, 12, 1, 0, 0, 0, 0).toPackedUInt();
 }
 
 String encodeBound(UInt64 packed)
