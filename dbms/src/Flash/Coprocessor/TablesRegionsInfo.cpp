@@ -71,7 +71,8 @@ static void insertRegionInfoToTablesRegionInfo(
     Int64 table_id,
     TablesRegionsInfo & tables_region_infos,
     std::unordered_set<RegionID> & local_region_id_set,
-    const TMTContext & tmt_context)
+    const TMTContext & tmt_context,
+    const std::unordered_set<UInt64> * bypass_lock_ts)
 {
     auto & table_region_info = tables_region_infos.getOrCreateTableRegionInfoByTableID(table_id);
     for (int i = 0; i < regions.size(); ++i) // NOLINT
@@ -82,7 +83,7 @@ static void insertRegionInfoToTablesRegionInfo(
             r.region_epoch().version(),
             r.region_epoch().conf_ver(),
             genCopKeyRange(r.ranges()),
-            nullptr);
+            bypass_lock_ts);
         if (region_info.key_ranges.empty())
         {
             throw TiFlashException(
@@ -121,7 +122,8 @@ static void insertRegionInfoToTablesRegionInfo(
 TablesRegionsInfo TablesRegionsInfo::create(
     const google::protobuf::RepeatedPtrField<coprocessor::RegionInfo> & regions,
     const google::protobuf::RepeatedPtrField<coprocessor::TableRegions> & table_regions,
-    const TMTContext & tmt_context)
+    const TMTContext & tmt_context,
+    const std::unordered_set<UInt64> * bypass_lock_ts)
 {
     assert(regions.empty() || table_regions.empty());
     TablesRegionsInfo tables_regions_info(!regions.empty());
@@ -132,7 +134,8 @@ TablesRegionsInfo TablesRegionsInfo::create(
             InvalidTableID,
             tables_regions_info,
             local_region_id_set,
-            tmt_context);
+            tmt_context,
+            bypass_lock_ts);
     else
     {
         for (const auto & table_region : table_regions)
@@ -143,7 +146,8 @@ TablesRegionsInfo TablesRegionsInfo::create(
                 table_region.physical_table_id(),
                 tables_regions_info,
                 local_region_id_set,
-                tmt_context);
+                tmt_context,
+                bypass_lock_ts);
         }
         assert(static_cast<UInt64>(table_regions.size()) == tables_regions_info.tableCount());
     }

@@ -59,7 +59,13 @@
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <common/logger_useful.h>
 #include <kvproto/coprocessor.pb.h>
+#include <pingcap/Exception.h>
+#include <pingcap/kv/Backoff.h>
+#include <pingcap/kv/Cluster.h>
 #include <tipb/select.pb.h>
+
+#include <chrono>
+#include <thread>
 
 namespace DB
 {
@@ -77,6 +83,97 @@ extern const char random_trigger_remote_read[];
 
 namespace
 {
+constexpr UInt64 wait_bg_resolve_lock_ms = 20;
+constexpr UInt64 try_get_bypass_lock_max_backoff_ms = 500;
+
+bool tryAddBypassLockTsForLocalRetry(
+    const RegionException & e,
+    UInt64 read_tso,
+    TMTContext & tmt,
+    DAGContext & dag_context,
+    const LoggerPtr & log)
+{
+    if (e.lock_region.empty())
+        return false;
+
+    std::vector<UInt64> bypass_lock_ts;
+    pingcap::kv::TryGetBypassLockResult bypass_lock_result;
+    try
+    {
+        auto * cluster = tmt.getKVCluster();
+        if (cluster == nullptr || cluster->lock_resolver == nullptr)
+        {
+            LOG_WARNING(
+                log,
+                "Skip local retry with bypass locks because lock resolver is not available, lock_regions={} "
+                "lock_txns={} read_tso={}",
+                e.lock_region.size(),
+                e.locks.size(),
+                read_tso);
+            return false;
+        }
+
+        pingcap::kv::Backoffer bo(try_get_bypass_lock_max_backoff_ms);
+        bypass_lock_result = cluster->lock_resolver->tryGetBypassLock(bo, read_tso, e.locks, bypass_lock_ts);
+    }
+    catch (const pingcap::Exception & ex)
+    {
+        LOG_WARNING(
+            log,
+            "Failed to check bypass locks for local retry, lock_regions={} lock_txns={} read_tso={} error={}",
+            e.lock_region.size(),
+            e.locks.size(),
+            read_tso,
+            ex.displayText());
+        return false;
+    }
+    catch (const Poco::Exception & ex)
+    {
+        LOG_WARNING(
+            log,
+            "Failed to check bypass locks for local retry, lock_regions={} lock_txns={} read_tso={} error={}",
+            e.lock_region.size(),
+            e.locks.size(),
+            read_tso,
+            ex.displayText());
+        return false;
+    }
+    catch (...)
+    {
+        LOG_WARNING(
+            log,
+            "Failed to check bypass locks for local retry, lock_regions={} lock_txns={} read_tso={} error=unknown",
+            e.lock_region.size(),
+            e.locks.size(),
+            read_tso);
+        return false;
+    }
+
+    if (!bypass_lock_ts.empty())
+    {
+        auto & query_bypass_lock_ts = dag_context.getBypassLockTs();
+        query_bypass_lock_ts.insert(bypass_lock_ts.begin(), bypass_lock_ts.end());
+    }
+
+    const bool should_retry_local = bypass_lock_result.has_pending_resolve || !bypass_lock_ts.empty();
+    LOG_INFO(
+        log,
+        "Check bypass locks for local retry, lock_regions={} lock_txns={} bypass_lock_ts={} "
+        "has_pending_resolve={} need_wait_bg_resolve={} retry_local={} read_tso={}",
+        e.lock_region.size(),
+        e.locks.size(),
+        bypass_lock_ts.size(),
+        bypass_lock_result.has_pending_resolve,
+        bypass_lock_result.need_wait_bg_resolve,
+        should_retry_local,
+        read_tso);
+
+    if (bypass_lock_result.need_wait_bg_resolve)
+        std::this_thread::sleep_for(std::chrono::milliseconds(wait_bg_resolve_lock_ms));
+
+    return should_retry_local;
+}
+
 RegionException::RegionReadStatus GetRegionReadStatus(
     const RegionInfo & check_info,
     const RegionPtr & current_region,
@@ -842,6 +939,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
     if (regions_for_local_read.empty())
         return {};
     std::unordered_set<RegionID> force_retry;
+    bool should_try_bypass_locks = true;
     for (;;)
     {
         try
@@ -882,9 +980,28 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
 
             if (tmt.checkShuttingDown())
                 throw TiFlashException("TiFlash server is terminating", Errors::Coprocessor::Internal);
-            // By now, RegionException will contain all region id of MvccQueryInfo, which is needed by CHSpark.
-            // When meeting RegionException, we can let MakeRegionQueryInfos to check in next loop.
+            // For normal unavailable regions, let MakeRegionQueryInfos move them to remote read in the next loop.
+            // Local lock regions are handled separately: try local retry with bypass_lock_ts first, and fall back
+            // to remote read if bypass is not available.
             force_retry.insert(e.unavailable_region.begin(), e.unavailable_region.end());
+
+            if (!e.lock_region.empty())
+            {
+                if (should_try_bypass_locks)
+                {
+                    should_try_bypass_locks = false;
+                    if (tryAddBypassLockTsForLocalRetry(
+                            e,
+                            mvcc_query_info->start_ts,
+                            tmt,
+                            *context.getDAGContext(),
+                            log))
+                    {
+                        continue;
+                    }
+                }
+                force_retry.insert(e.lock_region.begin(), e.lock_region.end());
+            }
         }
         catch (DB::Exception & e)
         {

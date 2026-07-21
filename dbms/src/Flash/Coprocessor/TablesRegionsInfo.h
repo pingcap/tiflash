@@ -43,7 +43,8 @@ public:
     static TablesRegionsInfo create(
         const google::protobuf::RepeatedPtrField<coprocessor::RegionInfo> & regions,
         const google::protobuf::RepeatedPtrField<coprocessor::TableRegions> & table_regions,
-        const TMTContext & tmt_context);
+        const TMTContext & tmt_context,
+        const std::unordered_set<UInt64> * bypass_lock_ts = nullptr);
     TablesRegionsInfo()
         : is_single_table(false)
     {}

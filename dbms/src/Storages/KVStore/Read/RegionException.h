@@ -16,8 +16,12 @@
 
 #include <Common/Exception.h>
 #include <Storages/KVStore/Types.h>
+#include <pingcap/kv/LockResolver.h>
 
 #include <magic_enum.hpp>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 namespace DB
 {
@@ -43,6 +47,7 @@ public:
     };
 
     using UnavailableRegions = std::unordered_set<RegionID>;
+    using LocksByTxn = std::unordered_map<UInt64, std::vector<pingcap::kv::LockPtr>>;
 
 public:
     RegionException(UnavailableRegions && unavailable_region_, RegionReadStatus status_, const char * extra_msg)
@@ -51,8 +56,24 @@ public:
         , status(status_)
     {}
 
+    RegionException(
+        UnavailableRegions && unavailable_region_,
+        UnavailableRegions && lock_region_,
+        LocksByTxn && locks_,
+        RegionReadStatus status_,
+        const char * extra_msg)
+        : Exception(fmt::format("Region error {}({})", magic_enum::enum_name(status_), extra_msg ? extra_msg : ""))
+        , unavailable_region(std::move(unavailable_region_))
+        , lock_region(std::move(lock_region_))
+        , locks(std::move(locks_))
+        , status(status_)
+    {}
+
     /// Region could be found with correct epoch, but unavailable (e.g. its lease in proxy has not been built with leader).
     UnavailableRegions unavailable_region;
+    /// Regions that hit local lock CF after wait-index succeeds. They may be retried locally with bypass_lock_ts.
+    UnavailableRegions lock_region;
+    LocksByTxn locks;
     RegionReadStatus status;
 };
 
