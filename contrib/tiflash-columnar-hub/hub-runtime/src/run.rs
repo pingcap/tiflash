@@ -47,13 +47,13 @@ use pd_client::{Config as PdConfig, Error as PdError, PdClient, RpcClient};
 use security::{RestfulClient, SecurityConfig, SecurityManager};
 use serde::{Deserialize, Serialize};
 use tikv_util::{
-    config::{AbsoluteOrPercentSize, LogFormat, ReadableSize},
+    config::{AbsoluteOrPercentSize, LogFormat, ReadableDuration, ReadableSize},
     logger,
     sys::disk::get_disks_stats,
 };
 
 use crate::{
-    cloud_helper::{CloudEngineBackends, CloudHelper},
+    cloud_helper::{CloudEngineBackends, CloudHelper, DEFAULT_SCHEMA_FILE_CACHE_MAX_KEYSPACES},
     columnar_impls::{
         ffi_clear_shared_snap_access_by_start_ts, ffi_columnar_scan_stats,
         ffi_get_region_bucket_keys, ffi_make_columnar_reader, ffi_physical_table_id,
@@ -163,6 +163,8 @@ struct ConfigFile {
     fts_cache: FtsCacheConfig,
     fts_delta_cache: FtsDeltaCacheConfig,
     block_cache_size: AbsoluteOrPercentSize,
+    background_gc_interval: ReadableDuration,
+    schema_file_cache_max_keyspaces: usize,
     log: HubLogConfig,
     log_level: String,
     log_file: String,
@@ -200,6 +202,8 @@ impl Default for ConfigFile {
             fts_cache: FtsCacheConfig::default(),
             fts_delta_cache: FtsDeltaCacheConfig::default(),
             block_cache_size: AbsoluteOrPercentSize::default(),
+            background_gc_interval: ReadableDuration::minutes(10),
+            schema_file_cache_max_keyspaces: DEFAULT_SCHEMA_FILE_CACHE_MAX_KEYSPACES,
             log: HubLogConfig::default(),
             log_level: String::default(),
             log_file: String::default(),
@@ -238,8 +242,10 @@ struct HubConfigSummary<'a> {
 
 const STORE_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(10);
 const HEARTBEAT_SHUTDOWN_POLL_INTERVAL: Duration = Duration::from_millis(200);
+const BACKGROUND_GC_SHUTDOWN_POLL_INTERVAL: Duration = Duration::from_secs(1);
 const STORE_TOMBSTONE_WAIT_TIMEOUT: Duration = Duration::from_secs(30);
 const STORE_TOMBSTONE_POLL_INTERVAL: Duration = Duration::from_secs(1);
+
 fn init_metrics() {
     static INIT: Once = Once::new();
 
@@ -1043,15 +1049,11 @@ fn spawn_store_heartbeat_loop(
                     }
                 }
 
-                let mut slept = Duration::from_secs(0);
-                while slept < STORE_HEARTBEAT_INTERVAL && !shutdown.load(Ordering::SeqCst) {
-                    let step = std::cmp::min(
-                        HEARTBEAT_SHUTDOWN_POLL_INTERVAL,
-                        STORE_HEARTBEAT_INTERVAL - slept,
-                    );
-                    thread::sleep(step);
-                    slept += step;
-                }
+                sleep_with_shutdown(
+                    &shutdown,
+                    STORE_HEARTBEAT_INTERVAL,
+                    HEARTBEAT_SHUTDOWN_POLL_INTERVAL,
+                );
             }
 
             info!(
@@ -1060,6 +1062,57 @@ fn spawn_store_heartbeat_loop(
             );
         })
         .unwrap_or_else(|err| panic!("failed to spawn store heartbeat thread: {}", err))
+}
+
+fn resolve_ia_meta_gc_cap(ia: &IaConfig, data_dir: &Path) -> u64 {
+    match ia.disk_cap.as_disk_size(data_dir) {
+        Ok(bytes) => bytes,
+        Err(err) => {
+            error!(
+                "resolve ia meta cap failed";
+                "path" => data_dir.display().to_string(),
+                "err" => ?err,
+            );
+            0
+        }
+    }
+}
+
+fn sleep_with_shutdown(shutdown: &AtomicBool, duration: Duration, poll_interval: Duration) {
+    let mut slept = Duration::from_secs(0);
+    while slept < duration && !shutdown.load(Ordering::SeqCst) {
+        let step = std::cmp::min(poll_interval, duration - slept);
+        thread::sleep(step);
+        slept += step;
+    }
+}
+
+fn spawn_background_gc_loop(
+    cloud_helper: CloudHelper,
+    ia: IaConfig,
+    data_dir: PathBuf,
+    gc_interval: Duration,
+    shutdown: Arc<AtomicBool>,
+) -> thread::JoinHandle<()> {
+    thread::Builder::new()
+        .name("hub-background-gc".to_owned())
+        .spawn(move || {
+            info!(
+                "starting TiFlash Columnar Hub background gc loop";
+                "interval_secs" => gc_interval.as_secs(),
+                "data_dir" => data_dir.display().to_string()
+            );
+
+            while !shutdown.load(Ordering::SeqCst) {
+                let meta_cap_bytes = resolve_ia_meta_gc_cap(&ia, &data_dir);
+                cloud_helper.gc_ia_meta_files(meta_cap_bytes);
+                cloud_helper.gc_schema_file_cache();
+                sleep_with_shutdown(&shutdown, gc_interval, BACKGROUND_GC_SHUTDOWN_POLL_INTERVAL);
+            }
+
+            info!("stopped TiFlash Columnar Hub background gc loop");
+        })
+        .unwrap_or_else(|err| panic!("failed to spawn background gc thread: {}", err))
 }
 
 fn store_id_path(data_dir: &Path) -> PathBuf {
@@ -1402,8 +1455,9 @@ pub unsafe fn run_proxy(argc: c_int, argv: *const *const c_char, helper_ptr: *co
     let status_config_json = build_status_config_json(&config);
     let mut store_registration: Option<(metapb::Store, u32)> = None;
     let mut heartbeat_context: Option<(u64, u32)> = None;
-    let heartbeat_shutdown = Arc::new(AtomicBool::new(false));
+    let service_shutdown = Arc::new(AtomicBool::new(false));
     let mut heartbeat_handle: Option<thread::JoinHandle<()>> = None;
+    let mut background_gc_handle: Option<thread::JoinHandle<()>> = None;
 
     if !init_only {
         let store_id = ensure_store_id(pd_client.as_ref(), &data_dir);
@@ -1426,6 +1480,7 @@ pub unsafe fn run_proxy(argc: c_int, argv: *const *const c_char, helper_ptr: *co
         config.fts_cache.clone(),
         config.fts_delta_cache.clone(),
         config.block_cache_size,
+        config.schema_file_cache_max_keyspaces,
     );
     let hub_status = Arc::new(AtomicU8::new(RaftProxyStatus::Idle as u8));
     let hub = ColumnarHub::new(hub_status.clone(), cloud_helper, hub_config_str);
@@ -1472,13 +1527,25 @@ pub unsafe fn run_proxy(argc: c_int, argv: *const *const c_char, helper_ptr: *co
         }
 
         hub.set_status(RaftProxyStatus::Running);
+        let gc_interval = config.background_gc_interval.0;
+        if gc_interval.is_zero() {
+            info!("background gc task disabled: background-gc-interval is zero");
+        } else {
+            background_gc_handle = Some(spawn_background_gc_loop(
+                hub.cloud_helper.clone(),
+                config.ia.clone(),
+                data_dir.clone(),
+                gc_interval,
+                service_shutdown.clone(),
+            ));
+        }
         if let Some((store_id, start_time)) = heartbeat_context {
             heartbeat_handle = Some(spawn_store_heartbeat_loop(
                 pd_client.clone(),
                 store_id,
                 start_time,
                 data_dir.clone(),
-                heartbeat_shutdown.clone(),
+                service_shutdown.clone(),
             ));
         }
     }
@@ -1488,7 +1555,7 @@ pub unsafe fn run_proxy(argc: c_int, argv: *const *const c_char, helper_ptr: *co
             EngineStoreServerStatus::Running => thread::sleep(Duration::from_millis(200)),
             EngineStoreServerStatus::Stopping => {
                 hub.set_status(RaftProxyStatus::Stopped);
-                heartbeat_shutdown.store(true, Ordering::SeqCst);
+                service_shutdown.store(true, Ordering::SeqCst);
                 while !matches!(
                     helper.handle_get_engine_store_server_status(),
                     EngineStoreServerStatus::Terminated
@@ -1498,7 +1565,7 @@ pub unsafe fn run_proxy(argc: c_int, argv: *const *const c_char, helper_ptr: *co
                 break;
             }
             EngineStoreServerStatus::Terminated => {
-                heartbeat_shutdown.store(true, Ordering::SeqCst);
+                service_shutdown.store(true, Ordering::SeqCst);
                 break;
             }
             EngineStoreServerStatus::Idle => thread::sleep(Duration::from_millis(200)),
@@ -1512,6 +1579,9 @@ pub unsafe fn run_proxy(argc: c_int, argv: *const *const c_char, helper_ptr: *co
     );
 
     if let Some(handle) = heartbeat_handle.take() {
+        let _ = handle.join();
+    }
+    if let Some(handle) = background_gc_handle.take() {
         let _ = handle.join();
     }
     if let Some(server) = status_server.take() {
