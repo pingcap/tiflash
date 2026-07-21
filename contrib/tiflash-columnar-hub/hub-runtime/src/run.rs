@@ -163,7 +163,8 @@ struct ConfigFile {
     fts_cache: FtsCacheConfig,
     fts_delta_cache: FtsDeltaCacheConfig,
     block_cache_size: AbsoluteOrPercentSize,
-    background_gc_interval: ReadableDuration,
+    gc_interval: ReadableDuration,
+    ia_meta_cap: AbsoluteOrPercentSize,
     schema_file_cache_max_keyspaces: usize,
     log: HubLogConfig,
     log_level: String,
@@ -202,7 +203,8 @@ impl Default for ConfigFile {
             fts_cache: FtsCacheConfig::default(),
             fts_delta_cache: FtsDeltaCacheConfig::default(),
             block_cache_size: AbsoluteOrPercentSize::default(),
-            background_gc_interval: ReadableDuration::minutes(10),
+            gc_interval: ReadableDuration::minutes(10),
+            ia_meta_cap: AbsoluteOrPercentSize::Percent(10.0),
             schema_file_cache_max_keyspaces: DEFAULT_SCHEMA_FILE_CACHE_MAX_KEYSPACES,
             log: HubLogConfig::default(),
             log_level: String::default(),
@@ -1064,8 +1066,8 @@ fn spawn_store_heartbeat_loop(
         .unwrap_or_else(|err| panic!("failed to spawn store heartbeat thread: {}", err))
 }
 
-fn resolve_ia_meta_gc_cap(ia: &IaConfig, data_dir: &Path) -> u64 {
-    match ia.disk_cap.as_disk_size(data_dir) {
+fn resolve_ia_meta_cap(meta_cap: &AbsoluteOrPercentSize, data_dir: &Path) -> u64 {
+    match meta_cap.as_disk_size(data_dir) {
         Ok(bytes) => bytes,
         Err(err) => {
             error!(
@@ -1089,7 +1091,7 @@ fn sleep_with_shutdown(shutdown: &AtomicBool, duration: Duration, poll_interval:
 
 fn spawn_background_gc_loop(
     cloud_helper: CloudHelper,
-    ia: IaConfig,
+    ia_meta_cap: AbsoluteOrPercentSize,
     data_dir: PathBuf,
     gc_interval: Duration,
     shutdown: Arc<AtomicBool>,
@@ -1104,7 +1106,7 @@ fn spawn_background_gc_loop(
             );
 
             while !shutdown.load(Ordering::SeqCst) {
-                let meta_cap_bytes = resolve_ia_meta_gc_cap(&ia, &data_dir);
+                let meta_cap_bytes = resolve_ia_meta_cap(&ia_meta_cap, &data_dir);
                 cloud_helper.gc_ia_meta_files(meta_cap_bytes);
                 cloud_helper.gc_schema_file_cache();
                 sleep_with_shutdown(&shutdown, gc_interval, BACKGROUND_GC_SHUTDOWN_POLL_INTERVAL);
@@ -1527,13 +1529,13 @@ pub unsafe fn run_proxy(argc: c_int, argv: *const *const c_char, helper_ptr: *co
         }
 
         hub.set_status(RaftProxyStatus::Running);
-        let gc_interval = config.background_gc_interval.0;
+        let gc_interval = config.gc_interval.0;
         if gc_interval.is_zero() {
-            info!("background gc task disabled: background-gc-interval is zero");
+            info!("background gc task disabled: gc-interval is zero");
         } else {
             background_gc_handle = Some(spawn_background_gc_loop(
                 hub.cloud_helper.clone(),
-                config.ia.clone(),
+                config.ia_meta_cap,
                 data_dir.clone(),
                 gc_interval,
                 service_shutdown.clone(),
@@ -1702,6 +1704,7 @@ log-level = "debug"
                 AbsoluteOrPercentSize::Abs(ReadableSize::mb(100))
             );
         }
+        assert_eq!(config.ia_meta_cap, AbsoluteOrPercentSize::Percent(10.0));
     }
 
     #[test]
