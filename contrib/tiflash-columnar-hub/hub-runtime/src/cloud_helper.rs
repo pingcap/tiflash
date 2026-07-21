@@ -1388,14 +1388,18 @@ fn gc_schema_file_cache_global(
         .retain(|keyspace_id, _| latest_by_keyspace.contains_key(keyspace_id));
 
     for (&keyspace_id, latest_schema_file) in &latest_by_keyspace {
-        cache_state
-            .keyspaces
-            .entry(keyspace_id)
-            .and_modify(|entry| entry.latest_version = latest_schema_file.version)
-            .or_insert(SchemaFileCacheEntry {
+        if let Some(entry) = cache_state.keyspaces.get_mut(&keyspace_id) {
+            entry.latest_version = latest_schema_file.version;
+        } else {
+            // Treat first discovery in the cache as a recent access so GC does
+            // not immediately evict a schema file that was just loaded.
+            let access_seq = cache_state.access_seq.wrapping_add(1);
+            cache_state.access_seq = access_seq;
+            cache_state.keyspaces.insert(keyspace_id, SchemaFileCacheEntry {
                 latest_version: latest_schema_file.version,
-                last_access_seq: 0,
+                last_access_seq: access_seq,
             });
+        }
     }
 
     if max_keyspaces == 0 {
@@ -1636,8 +1640,10 @@ mod tests {
         assert!(schema_files.contains_key(&31));
 
         let cache_state = cache_state.lock().unwrap();
+        assert_eq!(cache_state.access_seq, 4);
         assert_eq!(cache_state.keyspaces.get(&1).unwrap().latest_version, 2);
         assert!(!cache_state.keyspaces.contains_key(&2));
+        assert_eq!(cache_state.keyspaces.get(&3).unwrap().last_access_seq, 4);
         assert!(cache_state.keyspaces.contains_key(&3));
     }
 
