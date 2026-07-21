@@ -71,7 +71,8 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(
             read_limiter,
             scan_context,
             tracing_id,
-            read_tag);
+            read_tag,
+            enable_trim_minmax);
     }
 
     bool enable_read_thread = SegmentReaderPoolManager::instance().isSegmentReader();
@@ -128,6 +129,7 @@ DMFileBlockInputStreamPtr createSimpleBlockInputStream(
 DMFileBlockInputStreamBuilder & DMFileBlockInputStreamBuilder::setFromSettings(const Settings & settings)
 {
     enable_column_cache = settings.dt_enable_stable_column_cache;
+    enable_trim_minmax = settings.dt_enable_trim_minmax;
     max_read_buffer_size = settings.max_read_buffer_size;
     max_sharing_column_bytes_for_all = settings.dt_max_sharing_column_bytes_for_all;
     return *this;
@@ -197,7 +199,8 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::tryBuildWithVectorIn
             read_limiter,
             scan_context,
             tracing_id,
-            ReadTag::Query);
+            ReadTag::Query,
+            enable_trim_minmax);
     }
 
     bool enable_read_thread = SegmentReaderPoolManager::instance().isSegmentReader();

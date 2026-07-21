@@ -103,6 +103,11 @@ public:
 
         MinMaxIndexPtr minmaxes;
 
+        // Optional trim min-max builder for MyDate / MyDateTime user columns (V3 only).
+        MinMaxIndexPtr trim_minmaxes;
+        UInt64 trim_lower = 0;
+        UInt64 trim_upper = 0;
+
         MarksInCompressedFilePtr marks;
 
         WriteBufferFromFileBasePtr mark_file;
@@ -123,16 +128,20 @@ public:
         CompressionSettings compression_settings;
         size_t min_compress_block_size{};
         size_t max_compress_block_size{};
+        /// Controlled by Settings.dt_enable_trim_minmax in production write paths.
+        bool enable_trim_minmax = false;
 
         Options() = default;
 
         Options(
             CompressionSettings compression_settings_,
             size_t min_compress_block_size_,
-            size_t max_compress_block_size_)
+            size_t max_compress_block_size_,
+            bool enable_trim_minmax_ = false)
             : compression_settings(compression_settings_)
             , min_compress_block_size(min_compress_block_size_)
             , max_compress_block_size(max_compress_block_size_)
+            , enable_trim_minmax(enable_trim_minmax_)
         {}
 
         Options(const Options & from) = default;

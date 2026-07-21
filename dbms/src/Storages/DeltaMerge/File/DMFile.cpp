@@ -191,6 +191,12 @@ String DMFile::colIndexCacheKey(const FileNameBase & file_name_base) const
     return colIndexPath(file_name_base);
 }
 
+String DMFile::colTrimIndexCacheKey(const FileNameBase & file_name_base) const
+{
+    // Distinct from ordinary `.idx` cache key; path already ends with `.trim.idx`.
+    return colTrimIndexPath(file_name_base);
+}
+
 String DMFile::colMarkCacheKey(const FileNameBase & file_name_base) const
 {
     return colMarkPath(file_name_base);
@@ -282,6 +288,11 @@ EncryptionPath DMFile::encryptionDataPath(const FileNameBase & file_name_base) c
 EncryptionPath DMFile::encryptionIndexPath(const FileNameBase & file_name_base) const
 {
     return EncryptionPath(encryptionBasePath(), file_name_base + details::INDEX_FILE_SUFFIX, keyspaceId());
+}
+
+EncryptionPath DMFile::encryptionTrimIndexPath(const FileNameBase & file_name_base) const
+{
+    return EncryptionPath(encryptionBasePath(), file_name_base + details::TRIM_INDEX_FILE_SUFFIX, keyspaceId());
 }
 
 EncryptionPath DMFile::encryptionMarkPath(const FileNameBase & file_name_base) const

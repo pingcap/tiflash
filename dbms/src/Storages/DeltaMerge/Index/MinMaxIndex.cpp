@@ -15,6 +15,7 @@
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnVector.h>
 #include <Columns/IColumn.h>
+#include <Common/Exception.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeEnum.h>
@@ -28,6 +29,7 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 #include <Storages/DeltaMerge/Index/RoughCheck.h>
+#include <Storages/DeltaMerge/Index/TrimMinMaxIndex.h>
 
 namespace DB::DM
 {
@@ -103,6 +105,46 @@ ALWAYS_INLINE bool minIsNull(const DB::ColumnUInt8 & null_map, size_t i)
 }
 } // namespace details
 
+void MinMaxIndex::appendPack(
+    UInt8 pack_mark,
+    bool has_value,
+    UInt8 allowed_mask,
+    const IColumn * column,
+    size_t min_idx,
+    size_t max_idx)
+{
+    RUNTIME_CHECK_MSG(
+        (pack_mark & ~allowed_mask) == 0,
+        "invalid pack_mark={:#x} allowed_mask={:#x}",
+        static_cast<UInt32>(pack_mark),
+        static_cast<UInt32>(allowed_mask));
+    RUNTIME_CHECK(!has_value || column != nullptr);
+
+    pack_marks.push_back(pack_mark);
+    has_value_marks.push_back(has_value ? 1 : 0);
+    if (has_value)
+    {
+        minmaxes->insertFrom(*column, min_idx);
+        minmaxes->insertFrom(*column, max_idx);
+    }
+    else
+    {
+        minmaxes->insertDefault();
+        minmaxes->insertDefault();
+    }
+}
+
+bool MinMaxIndex::hasAnyTrimmedValue() const
+{
+    constexpr UInt8 trimmed_mask = PackMarkBits::TrimmedLow | PackMarkBits::TrimmedHigh;
+    for (unsigned char pack_mark : pack_marks)
+    {
+        if ((pack_mark & trimmed_mask) != 0)
+            return true;
+    }
+    return false;
+}
+
 void MinMaxIndex::addPack(const IColumn & column, const ColumnVector<UInt8> * del_mark)
 {
     auto size = column.size();
@@ -139,27 +181,18 @@ void MinMaxIndex::addPack(const IColumn & column, const ColumnVector<UInt8> * de
         std::tie(min_index, max_index) = details::minmax(column, del_mark, 0, column.size());
     }
 
+    const UInt8 pack_mark = has_null ? PackMarkBits::Null : 0;
     if (min_index != NONE_EXIST)
-    {
-        has_null_marks.push_back(has_null);
-        has_value_marks.push_back(1);
-        minmaxes->insertFrom(column, min_index);
-        minmaxes->insertFrom(column, max_index);
-    }
+        appendPack(pack_mark, /*has_value*/ true, PackMarkBits::OrdinaryAllowedMask, &column, min_index, max_index);
     else
-    {
-        has_null_marks.push_back(has_null);
-        has_value_marks.push_back(0);
-        minmaxes->insertDefault();
-        minmaxes->insertDefault();
-    }
+        appendPack(pack_mark, /*has_value*/ false, PackMarkBits::OrdinaryAllowedMask);
 }
 
 void MinMaxIndex::write(const IDataType & type, WriteBuffer & buf)
 {
-    UInt64 size = has_null_marks.size();
+    UInt64 size = pack_marks.size();
     DB::writeIntBinary(size, buf);
-    buf.write(reinterpret_cast<const char *>(has_null_marks.data()), sizeof(UInt8) * size);
+    buf.write(reinterpret_cast<const char *>(pack_marks.data()), sizeof(UInt8) * size);
     buf.write(reinterpret_cast<const char *>(has_value_marks.data()), sizeof(UInt8) * size);
     type.serializeBinaryBulkWithMultipleStreams(
         *minmaxes, //
@@ -178,10 +211,10 @@ MinMaxIndexPtr MinMaxIndex::read(const IDataType & type, ReadBuffer & buf, size_
     {
         DB::readIntBinary(size, buf);
     }
-    PaddedPODArray<UInt8> has_null_marks(size);
+    PaddedPODArray<UInt8> pack_marks(size);
     PaddedPODArray<UInt8> has_value_marks(size);
     auto minmaxes = type.createColumn();
-    buf.read(reinterpret_cast<char *>(has_null_marks.data()), sizeof(UInt8) * size);
+    buf.read(reinterpret_cast<char *>(pack_marks.data()), sizeof(UInt8) * size);
     buf.read(reinterpret_cast<char *>(has_value_marks.data()), sizeof(UInt8) * size);
     type.deserializeBinaryBulkWithMultipleStreams(
         *minmaxes, //
@@ -198,7 +231,22 @@ MinMaxIndexPtr MinMaxIndex::read(const IDataType & type, ReadBuffer & buf, size_
                 + " vs. actual: " + std::to_string(bytes_read),
             Errors::DeltaTree::Internal);
     }
-    return std::make_shared<MinMaxIndex>(std::move(has_null_marks), std::move(has_value_marks), std::move(minmaxes));
+    return std::make_shared<MinMaxIndex>(std::move(pack_marks), std::move(has_value_marks), std::move(minmaxes));
+}
+
+bool MinMaxIndex::hasNull(size_t pack_index) const
+{
+    return hasNullMark(pack_marks[pack_index]);
+}
+
+bool MinMaxIndex::hasTrimmedLow(size_t pack_index) const
+{
+    return hasTrimmedLowMark(pack_marks[pack_index]);
+}
+
+bool MinMaxIndex::hasTrimmedHigh(size_t pack_index) const
+{
+    return hasTrimmedHighMark(pack_marks[pack_index]);
 }
 
 std::pair<Int64, Int64> MinMaxIndex::getIntMinMax(size_t pack_index)
@@ -503,7 +551,7 @@ RSResults MinMaxIndex::checkNullableNullEqualImpl(
     {
         if (details::minIsNull(null_map, i))
         {
-            if (has_null_marks[i] && !has_value_marks[i])
+            if (hasNull(i) && !has_value_marks[i])
                 results[i - start_pack] = RSResult::None;
             continue;
         }
@@ -511,7 +559,9 @@ RSResults MinMaxIndex::checkNullableNullEqualImpl(
         auto min = minmaxes_data[i * 2];
         auto max = minmaxes_data[i * 2 + 1];
         auto value_result = RoughCheck::CheckEqual::check<T>(value, type, min, max);
-        if (has_null_marks[i] && value_result == RSResult::All)
+        /// Non-null values may all equal `value`, but NULL rows still make `col <=> value` false.
+        /// Downgrade All => Some so the pack is read and filtered row by row.
+        if (hasNull(i) && value_result == RSResult::All)
             results[i - start_pack] = RSResult::Some;
         else
             results[i - start_pack] = value_result;
@@ -556,7 +606,7 @@ RSResults MinMaxIndex::checkNullableNullEqual(
         {
             if (details::minIsNull(null_map, i))
             {
-                if (has_null_marks[i] && !has_value_marks[i])
+                if (hasNull(i) && !has_value_marks[i])
                     results[i - start_pack] = RSResult::None;
                 continue;
             }
@@ -569,7 +619,7 @@ RSResults MinMaxIndex::checkNullableNullEqual(
             prev_offset = offsets[pos - 1];
             auto max = String(reinterpret_cast<const char *>(&chars[prev_offset]), offsets[pos] - prev_offset - 1);
             auto value_result = RoughCheck::CheckEqual::check<String>(value, type, min, max);
-            if (has_null_marks[i] && value_result == RSResult::All)
+            if (hasNull(i) && value_result == RSResult::All)
                 results[i - start_pack] = RSResult::Some;
             else
                 results[i - start_pack] = value_result;
@@ -720,7 +770,7 @@ RSResults MinMaxIndex::checkIsNull(size_t start_pack, size_t pack_count)
     RSResults results(pack_count, RSResult::None);
     for (size_t i = start_pack; i < start_pack + pack_count; ++i)
     {
-        if (has_null_marks[i])
+        if (hasNull(i))
         {
             results[i - start_pack] = has_value_marks[i] ? RSResult::Some : RSResult::All;
         }
@@ -730,7 +780,7 @@ RSResults MinMaxIndex::checkIsNull(size_t start_pack, size_t pack_count)
 
 RSResult MinMaxIndex::addNullIfHasNull(RSResult value_result, size_t i) const
 {
-    if (has_null_marks[i])
+    if (hasNull(i))
         value_result.setHasNull();
     return value_result;
 }
@@ -738,7 +788,7 @@ RSResult MinMaxIndex::addNullIfHasNull(RSResult value_result, size_t i) const
 MinMaxIndex::Cell MinMaxIndex::getCell(size_t pack_index) const
 {
     Cell cell;
-    if (has_null_marks[pack_index])
+    if (hasNull(pack_index))
         cell.has_null = true;
     if (has_value_marks[pack_index])
     {

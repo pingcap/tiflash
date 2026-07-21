@@ -21,6 +21,7 @@
 
 #include <Common/FieldVisitors.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/Filter/DateQueryDomain.h>
 #include <Storages/DeltaMerge/Index/RSIndex.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
 #include <Storages/DeltaMerge/Index/VectorIndex_fwd.h>
@@ -42,7 +43,12 @@ inline static const RSOperatorPtr EMPTY_RS_OPERATOR{};
 
 struct RSCheckParam
 {
+    /// Ordinary min-max indexes (existing field name kept for compatibility).
     ColumnIndexes indexes;
+    /// Trim min-max indexes selected for PreferTrim requests.
+    TrimColumnIndexes trim_indexes;
+    /// Prometheus trim metrics are recorded only for the query read pass, avoiding duplicate counts from MVCC/LM passes.
+    bool record_trim_metrics = false;
 };
 
 class RSOperator
@@ -61,12 +67,22 @@ public:
 
     virtual ColIds getColumnIDs() = 0;
 
+    /// Index load requests. Default maps getColumnIDs() to Normal requests.
+    virtual RSIndexRequests getIndexRequests()
+    {
+        RSIndexRequests reqs;
+        for (const auto id : getColumnIDs())
+            reqs.push_back(RSIndexRequest{.col_id = id, .preferred_kind = RSIndexKind::Normal, .query_domain = {}});
+        return reqs;
+    }
+
     static RSOperatorPtr build(
         const std::unique_ptr<DAGQueryInfo> & dag_query,
         const TiDB::ColumnInfos & scan_column_infos,
         const ColumnDefines & table_column_defines,
         bool enable_rs_filter,
-        const LoggerPtr & tracing_logger);
+        const LoggerPtr & tracing_logger,
+        bool enable_trim_minmax = false);
 };
 
 class ColCmpVal : public RSOperator
@@ -80,6 +96,9 @@ public:
         : attr(attr_)
         , value(value_)
     {}
+
+    const Attr & getAttr() const { return attr; }
+    const Field & getValue() const { return value; }
 
     ColIds getColumnIDs() override { return {attr.col_id}; }
 
@@ -112,6 +131,8 @@ public:
         : children(children_)
     {}
 
+    const RSOperators & getChildren() const { return children; }
+
     ColIds getColumnIDs() override
     {
         ColIds col_ids;
@@ -121,6 +142,17 @@ public:
             col_ids.insert(col_ids.end(), child_col_ids.begin(), child_col_ids.end());
         }
         return col_ids;
+    }
+
+    RSIndexRequests getIndexRequests() override
+    {
+        RSIndexRequests reqs;
+        for (const auto & child : children)
+        {
+            auto child_reqs = child->getIndexRequests();
+            reqs.insert(reqs.end(), child_reqs.begin(), child_reqs.end());
+        }
+        return reqs;
     }
 
     String toDebugString() override
@@ -151,12 +183,32 @@ public:
 
 inline std::optional<RSIndex> getRSIndex(const RSCheckParam & param, const Attr & attr)
 {
+    if (!attr.type)
+        return std::nullopt;
     auto it = param.indexes.find(attr.col_id);
     if (it != param.indexes.end() && it->second.type->equals(*attr.type))
     {
         return it->second;
     }
     return std::nullopt;
+}
+
+/// Return the column's trim index only when `query_domain` is trim-eligible for the
+/// stored E. Trim indexes are cached per column, so callers must re-check the
+/// current predicate's domain before using trim.
+inline std::optional<TrimRSIndex> getTrimRSIndex(
+    const RSCheckParam & param,
+    const Attr & attr,
+    const DateQueryDomain & query_domain)
+{
+    if (!attr.type)
+        return std::nullopt;
+    auto it = param.trim_indexes.find(attr.col_id);
+    if (it == param.trim_indexes.end() || !it->second.type->equals(*attr.type))
+        return std::nullopt;
+    if (!query_domain.isTrimEligible(it->second.meta.lower_bound, it->second.meta.upper_bound))
+        return std::nullopt;
+    return it->second;
 }
 
 template <typename Op>
@@ -198,5 +250,7 @@ RSOperatorPtr wrapWithANNQueryInfo(const RSOperatorPtr & op, const ANNQueryInfoP
 
 // Get ANNQueryInfo from RSOperator
 ANNQueryInfoPtr getANNQueryInfo(const RSOperatorPtr & op);
+
+RSOperatorPtr createDateRange(const Attr & attr, DateQueryDomain domain);
 
 } // namespace DB::DM

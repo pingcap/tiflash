@@ -14,10 +14,22 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/Stopwatch.h>
+#include <Common/TiFlashMetrics.h>
+#include <DataTypes/IDataType.h>
+#include <IO/FileProvider/ChecksumReadBufferBuilder.h>
+#include <IO/FileProvider/ReadBufferFromRandomAccessFileBuilder.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/File/DMFileMetaV2.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilterResult.h>
+#include <Storages/DeltaMerge/File/DMFileUtil.h>
+#include <Storages/DeltaMerge/Filter/DateQueryDomain.h>
+#include <Storages/DeltaMerge/Filter/FilterHelper.h>
+#include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/Index/RSResult.h>
+#include <Storages/DeltaMerge/Index/TrimMinMaxIndex.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
@@ -26,6 +38,48 @@
 
 namespace DB::DM
 {
+namespace
+{
+void recordTrimMinMaxSelect(TrimMinMaxFallbackReason reason)
+{
+    switch (reason)
+    {
+    case TrimMinMaxFallbackReason::None:
+        GET_METRIC(tiflash_storage_trim_minmax_select_count, result_used).Increment();
+        return;
+    case TrimMinMaxFallbackReason::Disabled:
+        GET_METRIC(tiflash_storage_trim_minmax_select_count, result_fallback_disabled).Increment();
+        return;
+    case TrimMinMaxFallbackReason::NonMetaV2:
+        GET_METRIC(tiflash_storage_trim_minmax_select_count, result_fallback_non_meta_v2).Increment();
+        return;
+    case TrimMinMaxFallbackReason::ColumnMissing:
+        GET_METRIC(tiflash_storage_trim_minmax_select_count, result_fallback_column_missing).Increment();
+        return;
+    case TrimMinMaxFallbackReason::NoMeta:
+        GET_METRIC(tiflash_storage_trim_minmax_select_count, result_fallback_no_meta).Increment();
+        return;
+    case TrimMinMaxFallbackReason::UnsupportedVersion:
+        GET_METRIC(tiflash_storage_trim_minmax_select_count, result_fallback_unsupported_version).Increment();
+        return;
+    case TrimMinMaxFallbackReason::MetadataMismatch:
+        GET_METRIC(tiflash_storage_trim_minmax_select_count, result_fallback_metadata_mismatch).Increment();
+        return;
+    case TrimMinMaxFallbackReason::IndexMissing:
+        GET_METRIC(tiflash_storage_trim_minmax_select_count, result_fallback_index_missing).Increment();
+        return;
+    case TrimMinMaxFallbackReason::UnsupportedExpression:
+        GET_METRIC(tiflash_storage_trim_minmax_select_count, result_fallback_unsupported_expression).Increment();
+        return;
+    case TrimMinMaxFallbackReason::PredicateBoundaryOutsideRange:
+        GET_METRIC(tiflash_storage_trim_minmax_select_count, result_fallback_predicate_outside_range).Increment();
+        return;
+    case TrimMinMaxFallbackReason::InvalidPackMarks:
+        GET_METRIC(tiflash_storage_trim_minmax_select_count, result_fallback_invalid_pack_marks).Increment();
+        return;
+    }
+}
+} // namespace
 
 DMFilePackFilterResultPtr DMFilePackFilter::load(ReadTag read_tag)
 {
@@ -33,6 +87,7 @@ DMFilePackFilterResultPtr DMFilePackFilter::load(ReadTag read_tag)
     SCOPE_EXIT({ scan_context->total_rs_pack_filter_check_time_ns += watch.elapsed(); });
     const size_t pack_count = dmfile->getPacks();
     DMFilePackFilterResult result(index_cache, read_limiter, pack_count);
+    result.param.record_trim_metrics = read_tag == ReadTag::Query;
     auto read_all_packs = (rowkey_ranges.size() == 1 && rowkey_ranges[0].all()) || rowkey_ranges.empty();
     if (!read_all_packs)
     {
@@ -103,12 +158,9 @@ DMFilePackFilterResultPtr DMFilePackFilter::load(ReadTag read_tag)
     /// Check packs by filter in where clause
     if (filter)
     {
-        // Load index based on filter.
-        ColIds ids = filter->getColumnIDs();
-        for (const auto & id : ids)
-        {
-            tryLoadIndex(result.param, id);
-        }
+        // Load index based on filter requests (normal and/or PreferTrim).
+        for (const auto & request : filter->getIndexRequests())
+            tryLoadIndexByRequest(result.param, request);
 
         const auto check_results = filter->roughCheck(0, pack_count, result.param);
         std::transform(
@@ -142,6 +194,19 @@ DMFilePackFilterResultPtr DMFilePackFilter::load(ReadTag read_tag)
         scan_context->rs_pack_filter_some += some_count;
         scan_context->rs_pack_filter_all += all_count;
         scan_context->rs_pack_filter_all_null += all_null_count;
+
+        if (filter)
+        {
+            if (after_read_packs != 0)
+                GET_METRIC(tiflash_storage_rough_set_pack_count, stage_query_input).Increment(after_read_packs);
+            if (after_read_packs != after_filter)
+            {
+                GET_METRIC(tiflash_storage_rough_set_pack_count, stage_query_filtered)
+                    .Increment(after_read_packs - after_filter);
+            }
+            if (after_filter != 0)
+                GET_METRIC(tiflash_storage_rough_set_pack_count, stage_query_remaining).Increment(after_filter);
+        }
     }
 
     Float64 filter_rate = 0.0;
@@ -362,6 +427,124 @@ void DMFilePackFilter::tryLoadIndex(RSCheckParam & param, ColId col_id)
     loadIndex(param.indexes, dmfile, file_provider, index_cache, set_cache_if_miss, col_id, read_limiter, scan_context);
 }
 
+void DMFilePackFilter::tryLoadIndexByRequest(RSCheckParam & param, const RSIndexRequest & request)
+{
+    if (request.preferred_kind == RSIndexKind::PreferTrim)
+    {
+        const auto reason = request.query_domain.has_value()
+            ? tryLoadTrimIndex(param, request.col_id, *request.query_domain)
+            : TrimMinMaxFallbackReason::UnsupportedExpression;
+        if (param.record_trim_metrics)
+            recordTrimMinMaxSelect(reason);
+        if (reason == TrimMinMaxFallbackReason::None)
+            return;
+    }
+    tryLoadIndex(param, request.col_id);
+}
+
+TrimMinMaxFallbackReason DMFilePackFilter::tryLoadTrimIndex(
+    RSCheckParam & param,
+    ColId col_id,
+    const DateQueryDomain & query_domain)
+{
+    if (!enable_trim_minmax)
+        return TrimMinMaxFallbackReason::Disabled;
+
+    if (!dmfile->useMetaV2())
+        return TrimMinMaxFallbackReason::NonMetaV2;
+
+    if (!dmfile->isColumnExist(col_id))
+        return TrimMinMaxFallbackReason::ColumnMissing;
+
+    const auto & col_stat = dmfile->getColumnStat(col_id);
+    const auto * dmfile_meta = typeid_cast<const DMFileMetaV2 *>(dmfile->meta.get());
+    if (!dmfile_meta)
+        return TrimMinMaxFallbackReason::MetadataMismatch;
+
+    const auto file_name_base = DMFile::getFileNameBase(col_id);
+    const auto trim_fname = colTrimIndexFileName(file_name_base);
+
+    // If trim is already loaded for this column, still require THIS predicate's
+    // query domain to be trim-eligible. Otherwise fall through so the caller
+    // loads the ordinary min-max for the non-eligible request.
+    if (auto it = param.trim_indexes.find(col_id); it != param.trim_indexes.end())
+    {
+        return query_domain.isTrimEligible(it->second.meta.lower_bound, it->second.meta.upper_bound)
+            ? TrimMinMaxFallbackReason::None
+            : TrimMinMaxFallbackReason::PredicateBoundaryOutsideRange;
+    }
+
+    TrimMinMaxIndexMeta meta;
+    auto reason = TrimMinMax::trySelectTrimMeta(
+        /*read_enabled*/ true,
+        col_stat.trim_minmax_index,
+        *col_stat.type,
+        dmfile->getPacks(),
+        dmfile_meta->merged_sub_file_infos,
+        trim_fname,
+        &meta);
+    if (reason != TrimMinMaxFallbackReason::None)
+        return reason;
+
+    if (!query_domain.isTrimEligible(meta.lower_bound, meta.upper_bound))
+        return TrimMinMaxFallbackReason::PredicateBoundaryOutsideRange;
+
+    auto load_trim = [&]() -> MinMaxIndexPtr {
+        const auto file_path = dmfile->meta->mergedPath(meta.merged_file_number);
+        const auto offset = meta.merged_file_offset;
+        const auto data_size = meta.file_size;
+
+        auto index_guard = S3::S3RandomAccessFile::setReadFileInfo({
+            .size = dmfile->getReadFileSize(col_id, trim_fname),
+            .scan_context = scan_context,
+        });
+
+        auto buffer = ReadBufferFromRandomAccessFileBuilder::build(
+            file_provider,
+            file_path,
+            dmfile_meta->encryptionMergedPath(meta.merged_file_number),
+            std::min(data_size, dmfile->getConfiguration()->getChecksumFrameLength()),
+            read_limiter);
+        auto ret = buffer.seek(offset);
+        RUNTIME_CHECK_MSG(
+            ret >= 0,
+            "Failed to seek in merged file for trim index, ret={} file_path={} offset={}",
+            ret,
+            file_path,
+            offset);
+
+        String raw_data(data_size, '\0');
+        buffer.read(reinterpret_cast<char *>(raw_data.data()), data_size);
+
+        auto buf = ChecksumReadBufferBuilder::build(
+            std::move(raw_data),
+            file_path,
+            dmfile->getConfiguration()->getChecksumAlgorithm(),
+            dmfile->getConfiguration()->getChecksumFrameLength());
+
+        auto header_size = dmfile->getConfiguration()->getChecksumHeaderLength();
+        auto frame_total_size = dmfile->getConfiguration()->getChecksumFrameLength() + header_size;
+        auto frame_count = data_size / frame_total_size + (data_size % frame_total_size != 0);
+        return MinMaxIndex::read(*col_stat.type, *buf, data_size - header_size * frame_count);
+    };
+
+    MinMaxIndexPtr minmax_index;
+    if (index_cache && set_cache_if_miss)
+        minmax_index = index_cache->getOrSet(dmfile->colTrimIndexCacheKey(file_name_base), load_trim);
+    else
+    {
+        if (index_cache)
+            minmax_index = index_cache->get(dmfile->colTrimIndexCacheKey(file_name_base));
+        if (minmax_index == nullptr)
+            minmax_index = load_trim();
+    }
+
+    if (!minmax_index || !TrimMinMax::validateTrimPackMarks(minmax_index->packMarks(), meta.pack_count))
+        return TrimMinMaxFallbackReason::InvalidPackMarks;
+
+    param.trim_indexes.emplace(col_id, TrimRSIndex{.type = col_stat.type, .minmax = minmax_index, .meta = meta});
+    return TrimMinMaxFallbackReason::None;
+}
 
 std::pair<std::vector<DMFilePackFilter::Range>, DMFilePackFilterResults> //
 DMFilePackFilter::getSkippedRangeAndFilterForBitmapNormal(

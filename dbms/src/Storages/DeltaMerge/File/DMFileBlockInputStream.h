@@ -222,10 +222,10 @@ private:
     FileProviderPtr file_provider;
 
     // clean read
-
     bool enable_handle_clean_read = false;
     bool is_fast_scan = false;
     bool enable_del_clean_read = false;
+    bool enable_trim_minmax = false;
     UInt64 max_data_version = std::numeric_limits<UInt64>::max();
     // Rough set filter
     RSOperatorPtr rs_filter;
@@ -247,7 +247,7 @@ private:
     DMFilePackFilterResultPtr pack_filter;
 
     VectorIndexCachePtr vector_index_cache;
-    // Note: Currently thie field is assigned only for Stable streams, not available for ColumnFileBig
+    // Note: Currently this field is assigned only for Stable streams, not available for ColumnFileBig
     std::optional<BitmapFilterView> bitmap_filter;
 
     // Note: column_cache_long_term is currently only filled when performing Vector Search.

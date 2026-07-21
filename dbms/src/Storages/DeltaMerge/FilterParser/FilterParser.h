@@ -43,7 +43,8 @@ public:
         const DAGQueryInfo & dag_info,
         const TiDB::ColumnInfos & scan_column_infos,
         AttrCreatorByColumnID && creator,
-        const LoggerPtr & log);
+        const LoggerPtr & log,
+        bool enable_trim_minmax = false);
 
     // only for runtime filter in predicate
     static RSOperatorPtr parseRFInExpr(
