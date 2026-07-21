@@ -77,7 +77,7 @@ const BACKOFF_RETRY_COUNT: usize = 5;
 const SNAPSHOT_CACHE_SIZE: usize = 10240; // 10k shards
 const SNAPSHOT_CACHE_CAP: u64 = 1024 * 1024 * 1024; // 1GB snapshot size with memtable
 const SNAPSHOT_CACHE_CAPABILITY_HEADER: &str = "x-cse-snapshot-cache-version";
-const SCHEMA_FILE_CACHE_MAX_KEYSPACES: usize = 1024;
+pub(crate) const DEFAULT_SCHEMA_FILE_CACHE_MAX_KEYSPACES: usize = 1024;
 
 #[derive(Clone)]
 struct RefreshingHttpClient {
@@ -351,6 +351,7 @@ pub struct CloudHelper {
     meta_file_cache: Arc<Cache<u64, Arc<dyn File>, MetaFileCacheWeighter>>,
     schema_files: Arc<DashMap<u64, SchemaFile>>,
     schema_file_cache_state: Arc<Mutex<SchemaFileCacheState>>,
+    schema_file_cache_max_keyspaces: usize,
     runtime: Arc<tokio::runtime::Runtime>,
     read_concurrency: usize,
     ia_ctx: IaCtx,
@@ -367,6 +368,7 @@ impl CloudHelper {
         fts_cache_config: FtsCacheConfig,
         fts_delta_cache_config: FtsDeltaCacheConfig,
         block_cache_size: AbsoluteOrPercentSize,
+        schema_file_cache_max_keyspaces: usize,
     ) -> Self {
         let thread_count = std::cmp::max(4, (SysQuota::cpu_cores_quota() * 7.0 / 8.0) as usize);
         let runtime = Arc::new(
@@ -417,6 +419,7 @@ impl CloudHelper {
             meta_file_cache,
             schema_files: Arc::new(DashMap::new()),
             schema_file_cache_state: Arc::new(Mutex::new(SchemaFileCacheState::default())),
+            schema_file_cache_max_keyspaces,
             runtime,
             read_concurrency: thread_count,
             ia_ctx,
@@ -497,6 +500,14 @@ impl CloudHelper {
                 "size_after" => current_size,
             );
         }
+    }
+
+    pub fn gc_schema_file_cache(&self) {
+        gc_schema_file_cache_global(
+            &self.schema_files,
+            &self.schema_file_cache_state,
+            self.schema_file_cache_max_keyspaces,
+        );
     }
 
     pub fn make_columnar_reader(
@@ -872,7 +883,7 @@ async fn request_snapshot_from_leader(
                     fts_cache,
                     fts_delta_cache,
                     meta_file_cache,
-                    schema_files: Some(schema_files),
+                    schema_files: Some(schema_files.clone()),
                     txn_chunk_manager,
                     ia_ctx,
                     prepare_type,
@@ -892,12 +903,7 @@ async fn request_snapshot_from_leader(
                 )
                 .await?;
                 if let Some(keyspace_id) = get_snapshot_keyspace_id(tables) {
-                    gc_schema_file_cache(
-                        &schema_files,
-                        &schema_file_cache_state,
-                        keyspace_id,
-                        SCHEMA_FILE_CACHE_MAX_KEYSPACES,
-                    );
+                    touch_schema_file_cache_keyspace(&schema_file_cache_state, keyspace_id);
                 }
                 // Fill cache if not hit.
                 if !cache_valid && server_supports_snap_cache {
@@ -1351,30 +1357,50 @@ fn get_snapshot_keyspace_id(tables: &[TableCtx]) -> Option<u32> {
         .and_then(|range| ApiV2::get_u32_keyspace_id_by_key(range.get_low()))
 }
 
-fn gc_schema_file_cache(
-    schema_files: &DashMap<u64, SchemaFile>,
+fn touch_schema_file_cache_keyspace(
     schema_file_cache_state: &Mutex<SchemaFileCacheState>,
     active_keyspace_id: u32,
-    max_keyspaces: usize,
 ) {
-    let Some(latest_schema_file) =
-        retain_latest_schema_file_for_keyspace(schema_files, active_keyspace_id)
-    else {
-        let mut cache_state = schema_file_cache_state.lock().unwrap();
-        cache_state.keyspaces.remove(&active_keyspace_id);
-        return;
-    };
-
+    // The read path only updates recency. Stale schema files are pruned by the
+    // background GC task so a keyspace may temporarily keep multiple versions.
     let mut cache_state = schema_file_cache_state.lock().unwrap();
     let access_seq = cache_state.access_seq.wrapping_add(1);
     cache_state.access_seq = access_seq;
-    cache_state.keyspaces.insert(
-        active_keyspace_id,
-        SchemaFileCacheEntry {
-            latest_version: latest_schema_file.version,
+    cache_state
+        .keyspaces
+        .entry(active_keyspace_id)
+        .and_modify(|entry| entry.last_access_seq = access_seq)
+        .or_insert(SchemaFileCacheEntry {
+            latest_version: 0,
             last_access_seq: access_seq,
-        },
-    );
+        });
+}
+
+fn gc_schema_file_cache_global(
+    schema_files: &DashMap<u64, SchemaFile>,
+    schema_file_cache_state: &Mutex<SchemaFileCacheState>,
+    max_keyspaces: usize,
+) {
+    let latest_by_keyspace = prune_stale_schema_file_versions(schema_files);
+    let mut cache_state = schema_file_cache_state.lock().unwrap();
+    cache_state
+        .keyspaces
+        .retain(|keyspace_id, _| latest_by_keyspace.contains_key(keyspace_id));
+
+    for (&keyspace_id, latest_schema_file) in &latest_by_keyspace {
+        cache_state
+            .keyspaces
+            .entry(keyspace_id)
+            .and_modify(|entry| entry.latest_version = latest_schema_file.version)
+            .or_insert(SchemaFileCacheEntry {
+                latest_version: latest_schema_file.version,
+                last_access_seq: 0,
+            });
+    }
+
+    if max_keyspaces == 0 {
+        return;
+    }
 
     while cache_state.keyspaces.len() > max_keyspaces {
         let Some((victim_keyspace_id, victim_entry)) = cache_state
@@ -1386,65 +1412,73 @@ fn gc_schema_file_cache(
             break;
         };
         cache_state.keyspaces.remove(&victim_keyspace_id);
-        let removed_files = remove_schema_files_for_keyspace(schema_files, victim_keyspace_id);
-        if !removed_files.is_empty() {
-            info!(
-                "evicted schema file cache for inactive keyspace";
-                "victim_keyspace_id" => victim_keyspace_id,
-                "victim_latest_version" => victim_entry.latest_version,
-                "removed_file_count" => removed_files.len(),
-                "removed_files" => ?removed_files,
-                "max_keyspaces" => max_keyspaces,
-            );
-        }
+        evict_schema_file_cache_keyspace(
+            schema_files,
+            victim_keyspace_id,
+            victim_entry.latest_version,
+            max_keyspaces,
+        );
     }
 }
 
-fn retain_latest_schema_file_for_keyspace(
+fn prune_stale_schema_file_versions(
     schema_files: &DashMap<u64, SchemaFile>,
-    keyspace_id: u32,
-) -> Option<LatestSchemaFile> {
-    let mut latest = None;
+) -> HashMap<u32, LatestSchemaFile> {
+    let mut latest_by_keyspace = HashMap::new();
     let mut stale_files = Vec::new();
 
     for entry in schema_files.iter() {
         let schema_file = entry.value();
-        if schema_file.get_keyspace_id() != keyspace_id {
-            continue;
-        }
-
+        let keyspace_id = schema_file.get_keyspace_id();
         let candidate = LatestSchemaFile {
             file_id: *entry.key(),
             version: schema_file.get_version(),
         };
-        match latest {
-            None => latest = Some(candidate),
-            Some(current) if is_newer_schema_file(candidate, current) => {
-                stale_files.push((current.file_id, current.version));
-                latest = Some(candidate);
+
+        match latest_by_keyspace.get_mut(&keyspace_id) {
+            None => {
+                latest_by_keyspace.insert(keyspace_id, candidate);
             }
-            Some(_) => stale_files.push((candidate.file_id, candidate.version)),
+            Some(current) if is_newer_schema_file(candidate, *current) => {
+                stale_files.push((keyspace_id, current.file_id, current.version));
+                *current = candidate;
+            }
+            Some(_) => stale_files.push((keyspace_id, candidate.file_id, candidate.version)),
         }
     }
 
-    for (file_id, _) in &stale_files {
+    for (_, file_id, _) in &stale_files {
         schema_files.remove(file_id);
     }
 
-    if let Some(latest_schema_file) = latest {
-        if !stale_files.is_empty() {
-            info!(
-                "removed stale schema file versions for keyspace";
-                "keyspace_id" => keyspace_id,
-                "kept_file_id" => latest_schema_file.file_id,
-                "kept_version" => latest_schema_file.version,
-                "removed_file_count" => stale_files.len(),
-                "removed_files" => ?stale_files,
-            );
-        }
+    if !stale_files.is_empty() {
+        info!(
+            "removed stale schema file versions during full cache gc";
+            "removed_file_count" => stale_files.len(),
+            "removed_files" => ?stale_files,
+        );
     }
 
-    latest
+    latest_by_keyspace
+}
+
+fn evict_schema_file_cache_keyspace(
+    schema_files: &DashMap<u64, SchemaFile>,
+    keyspace_id: u32,
+    latest_version: i64,
+    max_keyspaces: usize,
+) {
+    let removed_files = remove_schema_files_for_keyspace(schema_files, keyspace_id);
+    if !removed_files.is_empty() {
+        info!(
+            "evicted schema file cache for inactive keyspace";
+            "victim_keyspace_id" => keyspace_id,
+            "victim_latest_version" => latest_version,
+            "removed_file_count" => removed_files.len(),
+            "removed_files" => ?removed_files,
+            "max_keyspaces" => max_keyspaces,
+        );
+    }
 }
 
 fn remove_schema_files_for_keyspace(
@@ -1531,46 +1565,100 @@ mod tests {
     #[test]
     fn schema_file_cache_keeps_latest_version_per_keyspace() {
         let schema_files = DashMap::new();
-        let cache_state = Mutex::new(SchemaFileCacheState::default());
         schema_files.insert(11, new_test_schema_file(11, 1, 1));
         schema_files.insert(13, new_test_schema_file(13, 1, 3));
         schema_files.insert(12, new_test_schema_file(12, 1, 2));
         schema_files.insert(21, new_test_schema_file(21, 2, 8));
 
-        gc_schema_file_cache(&schema_files, &cache_state, 1, 8);
+        let latest = prune_stale_schema_file_versions(&schema_files);
 
         assert!(!schema_files.contains_key(&11));
         assert!(!schema_files.contains_key(&12));
         assert!(schema_files.contains_key(&13));
         assert!(schema_files.contains_key(&21));
-        let cache_state = cache_state.lock().unwrap();
-        assert_eq!(cache_state.keyspaces.len(), 1);
-        assert_eq!(cache_state.keyspaces.get(&1).unwrap().latest_version, 3);
+        assert_eq!(latest.len(), 2);
+        assert_eq!(latest.get(&1).unwrap().version, 3);
+        assert_eq!(latest.get(&1).unwrap().file_id, 13);
     }
 
     #[test]
-    fn schema_file_cache_limits_total_keyspaces_by_lru() {
+    fn schema_file_cache_touch_updates_lru_state() {
+        let cache_state = Mutex::new(SchemaFileCacheState::default());
+
+        touch_schema_file_cache_keyspace(&cache_state, 1);
+        touch_schema_file_cache_keyspace(&cache_state, 2);
+        touch_schema_file_cache_keyspace(&cache_state, 1);
+
+        let cache_state = cache_state.lock().unwrap();
+        assert_eq!(cache_state.keyspaces.len(), 2);
+        assert!(cache_state.keyspaces.contains_key(&1));
+        assert!(cache_state.keyspaces.contains_key(&2));
+        assert_eq!(cache_state.keyspaces.get(&1).unwrap().latest_version, 0);
+        assert!(
+            cache_state.keyspaces.get(&1).unwrap().last_access_seq
+                > cache_state.keyspaces.get(&2).unwrap().last_access_seq
+        );
+    }
+
+    #[test]
+    fn schema_file_cache_global_gc_removes_stale_versions_and_enforces_limit() {
+        let schema_files = DashMap::new();
+        let cache_state = Mutex::new(SchemaFileCacheState {
+            access_seq: 3,
+            keyspaces: HashMap::from([
+                (
+                    1,
+                    SchemaFileCacheEntry {
+                        latest_version: 1,
+                        last_access_seq: 3,
+                    },
+                ),
+                (
+                    2,
+                    SchemaFileCacheEntry {
+                        latest_version: 2,
+                        last_access_seq: 1,
+                    },
+                ),
+            ]),
+        });
+
+        schema_files.insert(11, new_test_schema_file(11, 1, 1));
+        schema_files.insert(12, new_test_schema_file(12, 1, 2));
+        schema_files.insert(21, new_test_schema_file(21, 2, 5));
+        schema_files.insert(31, new_test_schema_file(31, 3, 7));
+
+        gc_schema_file_cache_global(&schema_files, &cache_state, 2);
+
+        assert!(!schema_files.contains_key(&11));
+        assert!(!schema_files.contains_key(&21));
+        assert!(schema_files.contains_key(&12));
+        assert!(schema_files.contains_key(&31));
+
+        let cache_state = cache_state.lock().unwrap();
+        assert_eq!(cache_state.keyspaces.get(&1).unwrap().latest_version, 2);
+        assert!(!cache_state.keyspaces.contains_key(&2));
+        assert!(cache_state.keyspaces.contains_key(&3));
+    }
+
+    #[test]
+    fn schema_file_cache_global_gc_keeps_all_keyspaces_when_limit_is_zero() {
         let schema_files = DashMap::new();
         let cache_state = Mutex::new(SchemaFileCacheState::default());
 
         schema_files.insert(11, new_test_schema_file(11, 1, 1));
-        gc_schema_file_cache(&schema_files, &cache_state, 1, 2);
-
         schema_files.insert(21, new_test_schema_file(21, 2, 2));
-        gc_schema_file_cache(&schema_files, &cache_state, 2, 2);
-
-        gc_schema_file_cache(&schema_files, &cache_state, 1, 2);
-
         schema_files.insert(31, new_test_schema_file(31, 3, 3));
-        gc_schema_file_cache(&schema_files, &cache_state, 3, 2);
+
+        gc_schema_file_cache_global(&schema_files, &cache_state, 0);
 
         assert!(schema_files.contains_key(&11));
-        assert!(!schema_files.contains_key(&21));
+        assert!(schema_files.contains_key(&21));
         assert!(schema_files.contains_key(&31));
 
         let cache_state = cache_state.lock().unwrap();
         assert!(cache_state.keyspaces.contains_key(&1));
-        assert!(!cache_state.keyspaces.contains_key(&2));
+        assert!(cache_state.keyspaces.contains_key(&2));
         assert!(cache_state.keyspaces.contains_key(&3));
     }
 }
