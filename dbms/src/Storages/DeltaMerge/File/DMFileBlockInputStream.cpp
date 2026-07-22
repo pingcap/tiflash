@@ -89,7 +89,8 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::buildNoLocalIndex(
             EMPTY_RS_OPERATOR,
             read_packs,
             tracing_id,
-            enable_trim_minmax);
+            enable_trim_minmax,
+            read_tag);
     }
 
     DMFileReader reader(
@@ -213,7 +214,8 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::buildForVectorIndex(
             EMPTY_RS_OPERATOR,
             read_packs,
             tracing_id,
-            enable_trim_minmax);
+            enable_trim_minmax,
+            read_tag);
     }
 
     DMFileReader rest_columns_reader(
@@ -300,7 +302,8 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::buildForFullTextInde
             EMPTY_RS_OPERATOR,
             read_packs,
             tracing_id,
-            enable_trim_minmax);
+            enable_trim_minmax,
+            read_tag);
     }
 
     DMFileReader rest_columns_reader(
