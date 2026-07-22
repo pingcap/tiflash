@@ -85,7 +85,7 @@ std::optional<GACRequestInfo> ResourceGroup::buildRequestInfoIfNecessary(const S
     {
         acquire_tokens = getAcquireRUNumWithoutLock(
             consumption_delta_info.speed,
-            LocalAdmissionController::DEFAULT_TARGET_PERIOD.count(),
+            REFILL_TOKEN_INTERVAL.count(),
             LocalAdmissionController::ACQUIRE_RU_AMPLIFICATION);
 
         assert(acquire_tokens >= 0.0);
@@ -138,26 +138,50 @@ bool ResourceGroup::shouldReportRUConsumption(const SteadyClock::time_point & no
     return false;
 }
 
+bool ResourceGroup::shouldRefillToken(const SteadyClock::time_point & now) const
+{
+    std::lock_guard lock(mu);
+    if (burstable || bucket_mode != normal_mode || request_in_progress)
+        return false;
+
+    const auto elapsed = now - last_request_gac_timepoint;
+    RUNTIME_CHECK(elapsed.count() >= 0, elapsed.count());
+    if (elapsed < REFILL_TOKEN_INTERVAL)
+        return false;
+
+    const auto refill_threshold = getTokenHighWatermarkWithoutLock() * REFILL_TOKEN_THRESHOLD_RATE;
+    return bucket->peek() <= refill_threshold;
+}
+
+double ResourceGroup::getTokenHighWatermarkWithoutLock() const
+{
+    // The resource group definition contains the global burst limit. Only use capacity as a local high watermark after
+    // GAC has returned the capacity assigned to this client. Before that, keep the startup fill rate as the watermark.
+    const auto high_watermark = has_gac_capacity ? bucket->getCapacity() : static_cast<double>(user_ru_per_sec);
+    if unlikely (high_watermark <= 0.0 && !burstable)
+        return DEFAULT_BUFFER_TOKENS;
+    return high_watermark;
+}
+
 double ResourceGroup::getAcquireRUNumWithoutLock(double speed, uint32_t n_sec, double amplification) const
 {
     assert(amplification > 1.0);
 
-    double remaining_ru = 0.0;
-    remaining_ru = bucket->peek();
+    const auto remaining_ru = bucket->peek();
+    const auto high_watermark = getTokenHighWatermarkWithoutLock();
+    auto acquire_num = high_watermark - remaining_ru;
+    if (acquire_num <= 0.0)
+        return 0.0;
 
-    // Appropriate amplification is necessary to prevent situation that GAC has sufficient RU,
-    // but user query speed is limited due to LAC requests too few RU.
-    double acquire_num = speed * n_sec * amplification;
+    if (bucket->lowToken())
+        return acquire_num;
 
-    // This should not happen, but still add this to avoid stuck.
-    if unlikely (acquire_num == 0.0 && remaining_ru == 0.0)
-        acquire_num = DEFAULT_BUFFER_TOKENS;
-
-    // The purpose of subtracting remaining_ru is try to ensure that the number of local tokens
-    // always stays same with the amount consumed.
-    acquire_num -= remaining_ru;
-    acquire_num = (acquire_num > 0.0 ? acquire_num : 0.0);
-    return acquire_num;
+    // Refill at most one second of predicted consumption in normal mode. The fallback batch gradually raises an idle
+    // bucket without transferring the whole capacity from GAC in one request. Low-token mode bypasses this limit above.
+    const auto refill_window = high_watermark * (1.0 - REFILL_TOKEN_THRESHOLD_RATE);
+    const auto fallback_batch = std::min(static_cast<double>(DEFAULT_BUFFER_TOKENS), refill_window);
+    const auto incremental_batch = std::max(speed * n_sec * amplification, fallback_batch);
+    return std::min(acquire_num, incremental_batch);
 }
 
 void ResourceGroup::updateNormalMode(double add_tokens, double new_capacity, const SteadyClock::time_point & now)
@@ -173,6 +197,7 @@ void ResourceGroup::updateNormalMode(double add_tokens, double new_capacity, con
         burstable = true;
         return;
     }
+    has_gac_capacity = true;
     auto config = bucket->getConfig();
     std::string ori_bucket_info = bucket->toString();
 
@@ -209,6 +234,7 @@ void ResourceGroup::updateTrickleMode(
         burstable = true;
         return;
     }
+    has_gac_capacity = true;
 
     bucket_mode = TokenBucketMode::trickle_mode;
     double new_fill_rate = add_tokens / (static_cast<double>(trickle_ms) / 1000);
@@ -476,7 +502,8 @@ std::optional<resource_manager::TokenBucketsRequest> LocalAdmissionController::b
 
         for (const auto & ele : local_keyspace_resource_groups)
         {
-            const bool need_fetch_token = local_keyspace_low_token_resource_groups.contains(ele.first);
+            const bool need_fetch_token = local_keyspace_low_token_resource_groups.contains(ele.first)
+                || ele.second->shouldRefillToken(current_tick);
             const bool need_report = ele.second->shouldReportRUConsumption(current_tick);
 
             if (need_fetch_token || need_report)

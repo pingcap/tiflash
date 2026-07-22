@@ -142,6 +142,8 @@ private:
     static constexpr auto REPORT_RU_CONSUMPTION_DELTA_THRESHOLD = 100;
     static constexpr auto EXTENDING_REPORT_RU_CONSUMPTION_FACTOR = 4;
     static constexpr auto DEFAULT_BUFFER_TOKENS = 5000;
+    static constexpr auto REFILL_TOKEN_INTERVAL = std::chrono::seconds(1);
+    static constexpr double REFILL_TOKEN_THRESHOLD_RATE = 0.8;
 
     // Indicate the round trip time of gac request.
     static constexpr auto GAC_RTT_ANTICIPATION = std::chrono::seconds(1);
@@ -204,9 +206,11 @@ private:
         endRequestWithoutLock();
     }
     bool shouldReportRUConsumption(const SteadyClock::time_point & now) const;
+    bool shouldRefillToken(const SteadyClock::time_point & now) const;
     std::optional<GACRequestInfo> buildRequestInfoIfNecessary(const SteadyClock::time_point & now);
     LACRUConsumptionDeltaInfo updateRUConsumptionDeltaInfoWithoutLock();
     double getAcquireRUNumWithoutLock(double speed, uint32_t n_sec, double amplification) const;
+    double getTokenHighWatermarkWithoutLock() const;
     void updateRUConsumptionSpeedIfNecessary(const SteadyClock::time_point & now);
 
     // Called when user change config of resource group.
@@ -310,6 +314,7 @@ private:
     // Local token bucket.
     TokenBucketPtr bucket;
     TokenBucketMode bucket_mode = TokenBucketMode::normal_mode;
+    bool has_gac_capacity = false;
 
     // For compute priority.
     uint64_t cpu_time_in_ns = 0;
