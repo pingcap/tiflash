@@ -1372,7 +1372,8 @@ try
         filter,
         /*read_packs*/ {},
         /*tracing_id*/ "trim_phase_c",
-        /*enable_trim_minmax*/ true);
+        /*enable_trim_minmax*/ true,
+        ReadTag::Query);
 
     // Sentinel-only values are trimmed out of min-max; bounded query must not be All.
     const auto & pack_res = pack_result->getPackRes();
@@ -1419,7 +1420,8 @@ try
             filter,
             /*read_packs*/ {},
             /*tracing_id*/ "trim_phase_c_or",
-            /*enable_trim_minmax*/ true);
+            /*enable_trim_minmax*/ true,
+            ReadTag::Query);
 
         const auto & pack_res = pack_result->getPackRes();
         ASSERT_FALSE(pack_res.empty());
