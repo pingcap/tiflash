@@ -495,7 +495,7 @@ protected:
             agg_process_info.resetBlock(*block);
             do
             {
-                aggregator->executeOnBlock(agg_process_info, *data_variants, 1);
+                aggregator->executeOnBlock(agg_process_info, *data_variants, 0);
             } while (!agg_process_info.allBlockDataHandled());
         }
 
