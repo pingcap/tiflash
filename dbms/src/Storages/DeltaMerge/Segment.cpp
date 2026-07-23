@@ -1032,13 +1032,17 @@ BlockInputStreamPtr Segment::getInputStream(
     pack_filter_results.reserve(segment_snap->stable->getDMFiles().size());
     for (const auto & dmfile : segment_snap->stable->getDMFiles())
     {
+        // Normal mode is the query read path; other modes build MVCC bitmaps.
+        const auto pack_filter_read_tag
+            = (read_mode == ReadMode::Normal) ? ReadTag::Query : ReadTag::MVCC;
         auto result = DMFilePackFilter::loadFrom(
             dm_context,
             dmfile,
             /*set_cache_if_miss*/ true,
             real_ranges,
             executor ? executor->rs_operator : EMPTY_RS_OPERATOR,
-            /*read_pack*/ {});
+            /*read_pack*/ {},
+            pack_filter_read_tag);
         pack_filter_results.push_back(result);
     }
 

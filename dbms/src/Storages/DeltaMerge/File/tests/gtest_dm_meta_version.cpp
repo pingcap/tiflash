@@ -19,6 +19,7 @@
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/File/DMFileV3IncrementWriter.h>
+#include <Storages/DeltaMerge/Index/TrimMinMaxIndex.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
@@ -528,6 +529,80 @@ try
     ASSERT_STREQ("test", cn_dmf->meta->getColumnStats()[MutSup::extra_handle_id].additional_data_for_test.c_str());
 
     SCOPE_EXIT({ FileCache::shutdown(); });
+}
+CATCH
+
+TEST_P(LocalDMFile, TrimMinMaxIndexMetaPersistAndDrop)
+try
+{
+    auto dm_file = prepareDMFile(/* file_id= */ 1);
+    ASSERT_EQ(0, dm_file->metaVersion());
+    ASSERT_FALSE(dm_file->getColumnStat(MutSup::extra_handle_id).trim_minmax_index.has_value());
+
+    dtpb::TrimMinMaxIndexProps props;
+    props.set_format_version(TrimMinMax::FormatVersionV1);
+    props.set_lower_bound(TrimMinMax::encodeBound(100));
+    props.set_upper_bound(TrimMinMax::encodeBound(200));
+    props.set_pack_count(dm_file->getPacks());
+
+    {
+        auto iw = DMFileV3IncrementWriter::create(DMFileV3IncrementWriter::Options{
+            .dm_file = dm_file,
+            .file_provider = file_provider_maybe_encrypted,
+            .write_limiter = db_context->getWriteLimiter(),
+            .path_pool = path_pool,
+            .disagg_ctx = db_context->getSharedContextDisagg(),
+        });
+        dm_file->meta->getColumnStats()[MutSup::extra_handle_id].trim_minmax_index = props;
+        ASSERT_EQ(1, dm_file->meta->bumpMetaVersion({}));
+        iw->finalize();
+    }
+
+    // New Reader restores field 105 from MetaV2.
+    dm_file = DMFile::restore(
+        file_provider_maybe_encrypted,
+        1,
+        1,
+        parent_path,
+        DMFileMeta::ReadMode::all(),
+        /* meta_version= */ 1);
+    ASSERT_TRUE(dm_file->getColumnStat(MutSup::extra_handle_id).trim_minmax_index.has_value());
+    EXPECT_EQ(dm_file->getColumnStat(MutSup::extra_handle_id).trim_minmax_index->pack_count(), dm_file->getPacks());
+    EXPECT_EQ(dm_file->getColumnStat(MutSup::extra_handle_id).trim_minmax_index->format_version(), TrimMinMax::FormatVersionV1);
+
+    // Simulate an old node rewriting ColumnStat without field 105.
+    {
+        auto iw = DMFileV3IncrementWriter::create(DMFileV3IncrementWriter::Options{
+            .dm_file = dm_file,
+            .file_provider = file_provider_maybe_encrypted,
+            .write_limiter = db_context->getWriteLimiter(),
+            .path_pool = path_pool,
+            .disagg_ctx = db_context->getSharedContextDisagg(),
+        });
+        dm_file->meta->getColumnStats()[MutSup::extra_handle_id].trim_minmax_index.reset();
+        ASSERT_EQ(2, dm_file->meta->bumpMetaVersion({}));
+        iw->finalize();
+    }
+
+    dm_file = DMFile::restore(
+        file_provider_maybe_encrypted,
+        1,
+        1,
+        parent_path,
+        DMFileMeta::ReadMode::all(),
+        /* meta_version= */ 2);
+    ASSERT_FALSE(dm_file->getColumnStat(MutSup::extra_handle_id).trim_minmax_index.has_value());
+
+    // Without meta, Reader selection must fall back even if a trim fname is presented.
+    auto reason = TrimMinMax::trySelectTrimMeta(
+        /*read_enabled*/ true,
+        dm_file->getColumnStat(MutSup::extra_handle_id).trim_minmax_index,
+        *dm_file->getColumnStat(MutSup::extra_handle_id).type,
+        dm_file->getPacks(),
+        /*merged*/ {},
+        colTrimIndexFileName(DB::toString(MutSup::extra_handle_id)),
+        nullptr);
+    EXPECT_EQ(reason, TrimMinMaxFallbackReason::NoMeta);
 }
 CATCH
 
