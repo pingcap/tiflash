@@ -94,6 +94,8 @@ public:
 
     bool isStatic() const { return fill_rate == 0.0; }
 
+    double getCapacity() const { return capacity; }
+
     std::string toString() const
     {
         return fmt::format("tokens: {}, fill_rate: {}, capacity: {}", tokens, fill_rate, capacity);
