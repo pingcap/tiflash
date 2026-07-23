@@ -641,6 +641,8 @@ void Aggregator::executeImplInner(
 {
     auto * aggregates_pool = result.aggregates_pool;
     typename Method::State state(agg_process_info.key_columns, key_sizes, collators);
+    if (!result.string_collation_key_cache_fallback)
+        state.initCollationSortKeyCache(agg_process_info.end_row - agg_process_info.start_row);
 
     // For key_serialized, memory allocation and key serialization will be batch-wise.
     // For key_string, collation decode will be batch-wise.
@@ -673,6 +675,8 @@ void Aggregator::executeImplInner(
             aggregates_pool,
             agg_process_info);
     }
+
+    result.string_collation_key_cache_fallback |= state.hasCollationSortKeyCacheFallback();
 }
 
 template <bool only_lookup, typename Method, typename KeyHolderType>

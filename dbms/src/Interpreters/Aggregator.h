@@ -478,6 +478,9 @@ struct AggregatedDataVariants : private boost::noncopyable
     // This is done both for better performance and because currently, batch and non-batch methods are not compatible.
     bool batch_get_key_holder = false;
 
+    // Once a block exceeds the sort-key cache distinct limit, this worker skips cache attempts for later blocks.
+    bool string_collation_key_cache_fallback = false;
+
     using AggregationMethod_key8 = AggregationMethodOneNumber<UInt8, AggregatedDataWithUInt8Key, false>;
     using AggregationMethod_key16 = AggregationMethodOneNumber<UInt16, AggregatedDataWithUInt16Key, false>;
     using AggregationMethod_key32 = AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64Key>;
