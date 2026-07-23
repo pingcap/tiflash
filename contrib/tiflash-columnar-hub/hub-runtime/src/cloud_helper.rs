@@ -14,14 +14,13 @@
 
 use std::{
     collections::HashMap,
-    fs,
     ops::Deref,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex, Weak,
     },
-    time::{Duration, UNIX_EPOCH},
+    time::Duration,
 };
 
 use api_version::{api_v2::KEYSPACE_PREFIX_LEN, ApiV2};
@@ -33,7 +32,11 @@ use keys::next_key;
 use kvengine::{
     context::{new_meta_file_cache, IaCtx, MetaFileCacheWeighter, PrepareType, SnapCtx},
     dfs::{self, Dfs},
-    ia::{ia_file::parse_table_meta_filename, manager::IaManager, util::IaConfig},
+    ia::{
+        gc::{IaGcConfig, IaGcRunner},
+        manager::IaManager,
+        util::IaConfig,
+    },
     table::{
         columnar::{
             filter::TableScanCtx, ColumnarFileCache, ColumnarFileCacheConfig, ColumnarMetaCache,
@@ -428,78 +431,12 @@ impl CloudHelper {
     }
 }
 
-#[derive(Debug)]
-struct IaMetaFileEntry {
-    file_id: u64,
-    path: PathBuf,
-    size: u64,
-    modified: Duration,
-}
-
 impl CloudHelper {
-    pub fn gc_ia_meta_files(&self, meta_cap: u64) {
+    pub fn new_ia_gc_runner(&self, config: IaGcConfig) -> Option<IaGcRunner> {
         let IaCtx::Enabled(ia_mgr, meta_paths) = &self.ia_ctx else {
-            return;
+            return None;
         };
-
-        if meta_cap == 0 {
-            return;
-        }
-
-        let mut entries = match collect_ia_meta_files(meta_paths) {
-            Ok(entries) => entries,
-            Err(err) => {
-                error!("ia meta gc scan failed"; "err" => ?err);
-                return;
-            }
-        };
-        let total_size: u64 = entries.iter().map(|entry| entry.size).sum();
-        if total_size <= meta_cap {
-            return;
-        }
-
-        entries.sort_by(|a, b| {
-            a.modified
-                .cmp(&b.modified)
-                .then_with(|| a.file_id.cmp(&b.file_id))
-                .then_with(|| a.path.cmp(&b.path))
-        });
-        let mut current_size = total_size;
-        let mut removed_files = 0;
-        let mut removed_bytes = 0;
-        for entry in entries {
-            if current_size <= meta_cap {
-                break;
-            }
-
-            match remove_ia_meta_file(ia_mgr, &entry.path, entry.file_id) {
-                Ok(true) => {
-                    current_size = current_size.saturating_sub(entry.size);
-                    removed_files += 1;
-                    removed_bytes += entry.size;
-                }
-                Ok(false) => {}
-                Err(err) => {
-                    error!(
-                        "ia meta gc remove failed";
-                        "file_id" => entry.file_id,
-                        "path" => ?entry.path,
-                        "err" => ?err,
-                    );
-                }
-            }
-        }
-
-        if removed_files > 0 {
-            info!(
-                "ia meta gc reclaimed files to satisfy cap";
-                "meta_cap" => meta_cap,
-                "removed_files" => removed_files,
-                "removed_bytes" => removed_bytes,
-                "size_before" => total_size,
-                "size_after" => current_size,
-            );
-        }
+        Some(IaGcRunner::new(config, ia_mgr.clone(), meta_paths.clone()))
     }
 
     pub fn gc_schema_file_cache(&self) {
@@ -634,56 +571,6 @@ impl CloudHelper {
             "clear shared snapaccess by start_ts, start_ts: {}, cleared_cache_entries: {}, in_flight_loader_entries: {}",
             start_ts, cleared_cache_entries, in_flight_loader_entries
         );
-    }
-}
-
-fn collect_ia_meta_files(meta_paths: &[PathBuf]) -> std::io::Result<Vec<IaMetaFileEntry>> {
-    let mut entries = Vec::new();
-    for meta_path in meta_paths {
-        if !meta_path.is_dir() {
-            continue;
-        }
-        for entry in fs::read_dir(meta_path)? {
-            let entry = entry?;
-            let path = entry.path();
-            if !path.is_file() {
-                continue;
-            }
-            let filename = path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or("");
-            let Some((file_id, _)) = parse_table_meta_filename(filename) else {
-                continue;
-            };
-            let metadata = match entry.metadata() {
-                Ok(m) => m,
-                Err(err) => {
-                    error!("ia meta gc get metadata failed"; "path" => ?path, "err" => ?err);
-                    continue;
-                }
-            };
-            entries.push(IaMetaFileEntry {
-                file_id,
-                path,
-                size: metadata.len(),
-                modified: metadata
-                    .modified()
-                    .ok()
-                    .and_then(|mtime| mtime.duration_since(UNIX_EPOCH).ok())
-                    .unwrap_or(Duration::ZERO),
-            });
-        }
-    }
-    Ok(entries)
-}
-
-fn remove_ia_meta_file(ia_mgr: &IaManager, path: &Path, file_id: u64) -> std::io::Result<bool> {
-    ia_mgr.remove_table_meta(file_id);
-    match fs::remove_file(path) {
-        Ok(()) => Ok(true),
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(false),
-        Err(err) => Err(err),
     }
 }
 
@@ -1395,10 +1282,13 @@ fn gc_schema_file_cache_global(
             // not immediately evict a schema file that was just loaded.
             let access_seq = cache_state.access_seq.wrapping_add(1);
             cache_state.access_seq = access_seq;
-            cache_state.keyspaces.insert(keyspace_id, SchemaFileCacheEntry {
-                latest_version: latest_schema_file.version,
-                last_access_seq: access_seq,
-            });
+            cache_state.keyspaces.insert(
+                keyspace_id,
+                SchemaFileCacheEntry {
+                    latest_version: latest_schema_file.version,
+                    last_access_seq: access_seq,
+                },
+            );
         }
     }
 

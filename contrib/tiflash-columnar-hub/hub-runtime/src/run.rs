@@ -33,7 +33,10 @@ use cloud_encryption::MasterKey;
 use grpcio::EnvBuilder;
 use kvengine::{
     dfs::{DFSConfig, Dfs, InMemFs, S3Fs},
-    ia::util::IaConfig,
+    ia::{
+        gc::{IaFileGcState, IaGcConfig},
+        util::IaConfig,
+    },
     table::{
         columnar::ColumnarFileCacheConfig,
         fts::{FtsCacheConfig, FtsDeltaCacheConfig},
@@ -163,8 +166,7 @@ struct ConfigFile {
     fts_cache: FtsCacheConfig,
     fts_delta_cache: FtsDeltaCacheConfig,
     block_cache_size: AbsoluteOrPercentSize,
-    gc_interval: ReadableDuration,
-    ia_meta_cap: AbsoluteOrPercentSize,
+    local_gc: LocalGcConfig,
     schema_file_cache_max_keyspaces: usize,
     log: HubLogConfig,
     log_level: String,
@@ -203,8 +205,7 @@ impl Default for ConfigFile {
             fts_cache: FtsCacheConfig::default(),
             fts_delta_cache: FtsDeltaCacheConfig::default(),
             block_cache_size: AbsoluteOrPercentSize::default(),
-            gc_interval: ReadableDuration::minutes(10),
-            ia_meta_cap: AbsoluteOrPercentSize::Percent(10.0),
+            local_gc: LocalGcConfig::default(),
             schema_file_cache_max_keyspaces: DEFAULT_SCHEMA_FILE_CACHE_MAX_KEYSPACES,
             log: HubLogConfig::default(),
             log_level: String::default(),
@@ -240,6 +241,23 @@ struct HubConfigSummary<'a> {
     pd_endpoints: &'a [String],
     data_dir: &'a str,
     init_only: bool,
+}
+
+// Keep this config surface identical to cloud_worker::local_gc::LocalGcConfig.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(default, rename_all = "kebab-case")]
+struct LocalGcConfig {
+    interval: ReadableDuration,
+    ia: IaGcConfig,
+}
+
+impl Default for LocalGcConfig {
+    fn default() -> Self {
+        Self {
+            interval: ReadableDuration::hours(1),
+            ia: IaGcConfig::default(),
+        }
+    }
 }
 
 const STORE_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(10);
@@ -1066,20 +1084,6 @@ fn spawn_store_heartbeat_loop(
         .unwrap_or_else(|err| panic!("failed to spawn store heartbeat thread: {}", err))
 }
 
-fn resolve_ia_meta_cap(meta_cap: &AbsoluteOrPercentSize, data_dir: &Path) -> u64 {
-    match meta_cap.as_disk_size(data_dir) {
-        Ok(bytes) => bytes,
-        Err(err) => {
-            error!(
-                "resolve ia meta cap failed";
-                "path" => data_dir.display().to_string(),
-                "err" => ?err,
-            );
-            0
-        }
-    }
-}
-
 fn sleep_with_shutdown(shutdown: &AtomicBool, duration: Duration, poll_interval: Duration) {
     let mut slept = Duration::from_secs(0);
     while slept < duration && !shutdown.load(Ordering::SeqCst) {
@@ -1091,23 +1095,26 @@ fn sleep_with_shutdown(shutdown: &AtomicBool, duration: Duration, poll_interval:
 
 fn spawn_background_gc_loop(
     cloud_helper: CloudHelper,
-    ia_meta_cap: AbsoluteOrPercentSize,
+    local_gc_config: LocalGcConfig,
     data_dir: PathBuf,
-    gc_interval: Duration,
     shutdown: Arc<AtomicBool>,
 ) -> thread::JoinHandle<()> {
     thread::Builder::new()
         .name("hub-background-gc".to_owned())
         .spawn(move || {
+            let gc_interval = local_gc_config.interval.0;
+            let mut ia_gc_runner = cloud_helper.new_ia_gc_runner(local_gc_config.ia.clone());
             info!(
                 "starting TiFlash Columnar Hub background gc loop";
-                "interval_secs" => gc_interval.as_secs(),
+                "config" => ?local_gc_config,
                 "data_dir" => data_dir.display().to_string()
             );
 
             while !shutdown.load(Ordering::SeqCst) {
-                let meta_cap_bytes = resolve_ia_meta_cap(&ia_meta_cap, &data_dir);
-                cloud_helper.gc_ia_meta_files(meta_cap_bytes);
+                if let Some(runner) = ia_gc_runner.as_mut() {
+                    // This is the same state callback used by LocalGcRunner.
+                    runner.run(|_| IaFileGcState::NotLive);
+                }
                 cloud_helper.gc_schema_file_cache();
                 sleep_with_shutdown(&shutdown, gc_interval, BACKGROUND_GC_SHUTDOWN_POLL_INTERVAL);
             }
@@ -1529,15 +1536,14 @@ pub unsafe fn run_proxy(argc: c_int, argv: *const *const c_char, helper_ptr: *co
         }
 
         hub.set_status(RaftProxyStatus::Running);
-        let gc_interval = config.gc_interval.0;
+        let gc_interval = config.local_gc.interval.0;
         if gc_interval.is_zero() {
-            info!("background gc task disabled: gc-interval is zero");
+            info!("background gc task disabled: local-gc.interval is zero");
         } else {
             background_gc_handle = Some(spawn_background_gc_loop(
                 hub.cloud_helper.clone(),
-                config.ia_meta_cap,
+                config.local_gc.clone(),
                 data_dir.clone(),
-                gc_interval,
                 service_shutdown.clone(),
             ));
         }
@@ -1704,7 +1710,8 @@ log-level = "debug"
                 AbsoluteOrPercentSize::Abs(ReadableSize::mb(100))
             );
         }
-        assert_eq!(config.ia_meta_cap, AbsoluteOrPercentSize::Percent(10.0));
+        assert_eq!(config.local_gc.interval, ReadableDuration::hours(1));
+        assert_eq!(config.local_gc.ia, IaGcConfig::default());
     }
 
     #[test]
@@ -1732,6 +1739,33 @@ engine-addr = "1.2.3.4:3930"
                 AbsoluteOrPercentSize::Abs(ReadableSize::mb(100))
             );
         }
+    }
+
+    #[test]
+    fn test_local_gc_config_matches_cloud_worker_config() {
+        let config: ConfigFile = toml::from_str(
+            r#"
+[local-gc]
+interval = "10m"
+
+[local-gc.ia]
+meta-lifetime = "2h"
+segment-interval = "12h"
+tmp-lifetime = "5m"
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(config.local_gc.interval, ReadableDuration::minutes(10));
+        assert_eq!(config.local_gc.ia.meta_lifetime, ReadableDuration::hours(2));
+        assert_eq!(
+            config.local_gc.ia.segment_interval,
+            ReadableDuration::hours(12)
+        );
+        assert_eq!(
+            config.local_gc.ia.tmp_lifetime,
+            ReadableDuration::minutes(5)
+        );
     }
 
     #[test]
