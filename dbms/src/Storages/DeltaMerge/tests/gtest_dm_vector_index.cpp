@@ -1204,6 +1204,7 @@ public:
             snapshot,
             {range},
             std::make_shared<PushDownFilter>(wrapWithANNQueryInfo({}, ann_query)),
+            /*multi_stage_late_materialization_filter*/ nullptr,
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE,
             DEFAULT_BLOCK_SIZE);
@@ -1843,6 +1844,7 @@ public:
             cn_segment_snap,
             {write_node_segment->getRowKeyRange()},
             filter,
+            EMPTY_FILTER,
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE);
 

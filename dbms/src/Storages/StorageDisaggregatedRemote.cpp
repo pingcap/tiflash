@@ -544,6 +544,7 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
             extra_table_id_index,
             *column_defines,
             push_down_filter,
+            /*multi_stage_late_materialization_filter*/ nullptr,
             start_ts,
             db_context.getSettingsRef().max_block_size,
             read_mode,

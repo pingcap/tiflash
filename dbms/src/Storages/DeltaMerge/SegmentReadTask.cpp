@@ -261,6 +261,7 @@ void SegmentReadTask::initInputStream(
     const ColumnDefines & columns_to_read,
     UInt64 start_ts,
     const PushDownFilterPtr & push_down_filter,
+    const PushDownFilterPtr & multi_stage_late_materialization_filter,
     ReadMode read_mode,
     size_t expected_block_size,
     bool enable_delta_index_error_fallback)
@@ -269,6 +270,7 @@ void SegmentReadTask::initInputStream(
             columns_to_read,
             start_ts,
             push_down_filter,
+            multi_stage_late_materialization_filter,
             read_mode,
             expected_block_size,
             enable_delta_index_error_fallback)))
@@ -283,20 +285,33 @@ void SegmentReadTask::initInputStream(
     {
         cache->setDeltaIndex(read_snapshot->delta->getSharedDeltaIndex());
     }
-    doInitInputStream(columns_to_read, start_ts, push_down_filter, read_mode, expected_block_size);
+    doInitInputStream(
+        columns_to_read,
+        start_ts,
+        push_down_filter,
+        multi_stage_late_materialization_filter,
+        read_mode,
+        expected_block_size);
 }
 
 bool SegmentReadTask::doInitInputStreamWithErrorFallback(
     const ColumnDefines & columns_to_read,
     UInt64 start_ts,
     const PushDownFilterPtr & push_down_filter,
+    const PushDownFilterPtr & multi_stage_late_materialization_filter,
     ReadMode read_mode,
     size_t expected_block_size,
     bool enable_delta_index_error_fallback)
 {
     try
     {
-        doInitInputStream(columns_to_read, start_ts, push_down_filter, read_mode, expected_block_size);
+        doInitInputStream(
+            columns_to_read,
+            start_ts,
+            push_down_filter,
+            multi_stage_late_materialization_filter,
+            read_mode,
+            expected_block_size);
         return true;
     }
     catch (const Exception & e)
@@ -317,6 +332,7 @@ void SegmentReadTask::doInitInputStream(
     const ColumnDefines & columns_to_read,
     UInt64 start_ts,
     const PushDownFilterPtr & push_down_filter,
+    const PushDownFilterPtr & multi_stage_late_materialization_filter,
     ReadMode read_mode,
     size_t expected_block_size)
 {
@@ -334,6 +350,7 @@ void SegmentReadTask::doInitInputStream(
         read_snapshot,
         ranges,
         push_down_filter,
+        multi_stage_late_materialization_filter,
         start_ts,
         expected_block_size);
 }

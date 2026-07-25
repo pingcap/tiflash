@@ -96,6 +96,7 @@ protected:
             /*extra_table_id_index_*/ dm_context->physical_table_id,
             /*columns_to_read_*/ ColumnDefines{},
             /*filter_*/ nullptr,
+            /*multi_stage_late_materialization_filter_*/ nullptr,
             /*max_version_*/ 0,
             /*expected_block_size_*/ DEFAULT_BLOCK_SIZE,
             /*read_mode_*/ ReadMode::Bitmap,

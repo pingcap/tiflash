@@ -228,6 +228,7 @@ public:
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & read_ranges,
         const PushDownFilterPtr & filter,
+        const PushDownFilterPtr & multi_stage_late_materialization_filter,
         UInt64 start_ts,
         size_t expected_block_size);
 
@@ -789,6 +790,7 @@ public:
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & read_ranges,
         const PushDownFilterPtr & filter,
+        const PushDownFilterPtr & multi_stage_late_materialization_filter,
         UInt64 start_ts,
         size_t build_bitmap_filter_block_rows,
         size_t read_data_block_rows);
@@ -800,6 +802,7 @@ public:
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & data_ranges,
         const PushDownFilterPtr & filter,
+        const PushDownFilterPtr & multi_stage_late_materialization_filter,
         UInt64 start_ts,
         size_t expected_block_size);
 

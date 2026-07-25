@@ -204,6 +204,7 @@ struct DMReadOptions
     bool keep_order = false;
     bool is_fast_scan = false;
     bool has_multiple_partitions = false;
+    PushDownFilterPtr multi_stage_late_materialization_filter = nullptr;
 };
 class DeltaMergeStore
     : private boost::noncopyable

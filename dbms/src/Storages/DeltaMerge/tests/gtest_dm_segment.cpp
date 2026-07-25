@@ -1107,6 +1107,7 @@ try
             segment_snap,
             {RowKeyRange::newAll(false, 1)},
             EMPTY_FILTER,
+            /*multi_stage_late_materialization_filter*/ nullptr,
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE,
             DEFAULT_BLOCK_SIZE);
@@ -1148,6 +1149,7 @@ try
             segment_snap,
             {RowKeyRange::newAll(false, 1)},
             EMPTY_FILTER,
+            /*multi_stage_late_materialization_filter*/ nullptr,
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE,
             DEFAULT_BLOCK_SIZE);

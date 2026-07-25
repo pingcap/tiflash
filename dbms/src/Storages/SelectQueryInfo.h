@@ -54,6 +54,7 @@ struct SelectQueryInfo
     bool keep_order = true;
     bool is_fast_scan = false;
     bool has_multiple_partitions = false;
+    bool enable_multi_stage_late_materialization = false;
 
     SelectQueryInfo();
     ~SelectQueryInfo();

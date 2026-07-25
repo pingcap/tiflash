@@ -104,6 +104,7 @@ public:
         const ColumnDefines & columns_to_read,
         UInt64 start_ts,
         const PushDownFilterPtr & push_down_filter,
+        const PushDownFilterPtr & multi_stage_late_materialization_filter,
         ReadMode read_mode,
         size_t expected_block_size,
         bool enable_delta_index_error_fallback);
@@ -141,6 +142,7 @@ private:
         const ColumnDefines & columns_to_read,
         UInt64 start_ts,
         const PushDownFilterPtr & push_down_filter,
+        const PushDownFilterPtr & multi_stage_late_materialization_filter,
         ReadMode read_mode,
         size_t expected_block_size,
         bool enable_delta_index_error_fallback);
@@ -149,6 +151,7 @@ private:
         const ColumnDefines & columns_to_read,
         UInt64 start_ts,
         const PushDownFilterPtr & push_down_filter,
+        const PushDownFilterPtr & multi_stage_late_materialization_filter,
         ReadMode read_mode,
         size_t expected_block_size);
 

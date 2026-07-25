@@ -32,6 +32,7 @@ SelectQueryInfo::SelectQueryInfo(const SelectQueryInfo & rhs)
     , keep_order(rhs.keep_order)
     , is_fast_scan(rhs.is_fast_scan)
     , has_multiple_partitions(rhs.has_multiple_partitions)
+    , enable_multi_stage_late_materialization(rhs.enable_multi_stage_late_materialization)
 {}
 
 SelectQueryInfo::SelectQueryInfo(SelectQueryInfo && rhs) noexcept
@@ -43,6 +44,7 @@ SelectQueryInfo::SelectQueryInfo(SelectQueryInfo && rhs) noexcept
     , keep_order(rhs.keep_order)
     , is_fast_scan(rhs.is_fast_scan)
     , has_multiple_partitions(rhs.has_multiple_partitions)
+    , enable_multi_stage_late_materialization(rhs.enable_multi_stage_late_materialization)
 {}
 
 } // namespace DB

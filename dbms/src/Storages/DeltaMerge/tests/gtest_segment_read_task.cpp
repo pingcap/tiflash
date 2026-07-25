@@ -100,6 +100,7 @@ protected:
             column_defines,
             0,
             nullptr,
+            nullptr,
             ReadMode::Bitmap,
             DEFAULT_BLOCK_SIZE,
             true));
@@ -109,6 +110,7 @@ protected:
             [[maybe_unused]] auto succ = task->doInitInputStreamWithErrorFallback(
                 column_defines,
                 0,
+                nullptr,
                 nullptr,
                 ReadMode::Bitmap,
                 DEFAULT_BLOCK_SIZE,
@@ -123,6 +125,7 @@ protected:
         task->initInputStream(
             column_defines,
             std::numeric_limits<UInt64>::max(),
+            nullptr,
             nullptr,
             ReadMode::Bitmap,
             DEFAULT_BLOCK_SIZE,
@@ -256,7 +259,14 @@ public:
         ASSERT_EQ(q.size(), 0);
 
         remote_seg->initColumnFileDataProvider(occupied_result.pages_guard);
-        remote_seg->initInputStream(*table_column_defines, 0, nullptr, ReadMode::Bitmap, DEFAULT_BLOCK_SIZE, false);
+        remote_seg->initInputStream(
+            *table_column_defines,
+            0,
+            nullptr,
+            nullptr,
+            ReadMode::Bitmap,
+            DEFAULT_BLOCK_SIZE,
+            false);
         auto remote_stream = remote_seg->getInputStream();
 
         Blocks remote_blks;
@@ -273,7 +283,14 @@ public:
             }
         }
 
-        local_seg->initInputStream(*table_column_defines, 0, nullptr, ReadMode::Bitmap, DEFAULT_BLOCK_SIZE, false);
+        local_seg->initInputStream(
+            *table_column_defines,
+            0,
+            nullptr,
+            nullptr,
+            ReadMode::Bitmap,
+            DEFAULT_BLOCK_SIZE,
+            false);
         auto local_stream = local_seg->getInputStream();
 
         ASSERT_INPUTSTREAM_BLOCKS(local_stream, remote_blks);
