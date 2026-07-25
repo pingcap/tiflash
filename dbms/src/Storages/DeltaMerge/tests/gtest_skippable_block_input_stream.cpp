@@ -14,6 +14,8 @@
 
 #include <Columns/ColumnsCommon.h>
 #include <Common/Logger.h>
+#include <Functions/FunctionFactory.h>
+#include <Functions/registerFunctions.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/LateMaterializationBlockInputStream.h>
 #include <Storages/DeltaMerge/MultiStageLateMaterializationBlockInputStream.h>
@@ -25,6 +27,8 @@
 #include <common/defines.h>
 #include <gtest/gtest.h>
 
+#include <mutex>
+
 namespace DB::DM::tests
 {
 namespace
@@ -34,6 +38,7 @@ constexpr ColumnID MULTI_STAGE_REST_COL_ID = 102;
 const String MULTI_STAGE_FILTER_COL_NAME = "f";
 const String MULTI_STAGE_REST_COL_NAME = "v";
 const String MULTI_STAGE_FILTER_TMP_COL_NAME = "__residual_filter";
+const String MULTI_STAGE_FILTER_CONST_COL_NAME = "__residual_filter_const";
 
 ColumnWithTypeAndName makeUInt8Column(const std::vector<UInt8> & values, const String & name, ColumnID column_id)
 {
@@ -267,6 +272,51 @@ PushDownFilterPtr makeResidualFilterForMultiStageTest()
     auto filter_columns = std::make_shared<ColumnDefines>(makeMultiStageFilterColumns());
     auto actions = std::make_shared<ExpressionActions>(toEmptyBlock(*filter_columns).getNamesAndTypes());
     actions->add(ExpressionAction::copyColumn(MULTI_STAGE_FILTER_COL_NAME, MULTI_STAGE_FILTER_TMP_COL_NAME));
+    return std::make_shared<PushDownFilter>(
+        EMPTY_RS_OPERATOR,
+        actions,
+        nullptr,
+        filter_columns,
+        MULTI_STAGE_FILTER_TMP_COL_NAME,
+        nullptr,
+        nullptr);
+}
+
+void ensureMultiStageTestFunctionsRegistered()
+{
+    static std::once_flag once;
+    std::call_once(once, [] {
+        try
+        {
+            DB::registerFunctions();
+        }
+        catch (DB::Exception &)
+        {
+            // Another test suite may have already registered the functions.
+        }
+    });
+}
+
+PushDownFilterPtr makeResidualFunctionFilterForMultiStageTest()
+{
+    ensureMultiStageTestFunctionsRegistered();
+
+    auto filter_columns = std::make_shared<ColumnDefines>(makeMultiStageFilterColumns());
+    auto actions = std::make_shared<ExpressionActions>(toEmptyBlock(*filter_columns).getNamesAndTypes());
+
+    auto const_column_type = std::make_shared<DataTypeUInt8>();
+    actions->add(ExpressionAction::addColumn({
+        const_column_type->createColumnConst(1, Field(static_cast<UInt64>(1))),
+        const_column_type,
+        MULTI_STAGE_FILTER_CONST_COL_NAME,
+    }));
+
+    auto equals_builder = FunctionFactory::instance().get("equals", *DB::tests::TiFlashTestEnv::getContext());
+    actions->add(ExpressionAction::applyFunction(
+        equals_builder,
+        {MULTI_STAGE_FILTER_COL_NAME, MULTI_STAGE_FILTER_CONST_COL_NAME},
+        MULTI_STAGE_FILTER_TMP_COL_NAME));
+
     return std::make_shared<PushDownFilter>(
         EMPTY_RS_OPERATOR,
         actions,
@@ -666,6 +716,46 @@ try
         stage1_stream,
         final_rest_stream,
         makeResidualFilterForMultiStageTest(),
+        bitmap_filter,
+        "test");
+
+    assertMultiStageRows(stream->read(), {1, 1}, {101, 100 + static_cast<Int64>(rows) - 2});
+    ASSERT_BLOCK_EQ(stream->read(), Block{});
+    ASSERT_EQ(stage1_stream->getReadCount(), 1);
+    ASSERT_EQ(stage1_stream->getReadWithFilterCount(), 0);
+    ASSERT_EQ(final_rest_stream->getReadCount(), 0);
+    ASSERT_EQ(final_rest_stream->getReadWithFilterCount(), 1);
+}
+CATCH
+
+TEST_F(SkippableBlockInputStreamTest, MultiStageLateMaterializationComputedResidualFilter)
+try
+{
+    constexpr size_t rows = DEFAULT_MERGE_BLOCK_SIZE * 2 + 4;
+    std::vector<UInt8> residual_values(rows, 0);
+    residual_values[1] = 1;
+    residual_values[rows - 2] = 1;
+    auto rest_values = makeRestValues(100, rows);
+
+    std::vector<IColumn::Filter> stage0_filters;
+    stage0_filters.emplace_back(rows, 1);
+    auto stage0_stream = std::make_shared<DeterministicStage0FilterInputStream>(std::move(stage0_filters));
+    auto stage1_stream = std::make_shared<DeterministicSkippableBlockInputStream>(
+        makeMultiStageFilterColumns(),
+        std::vector<std::vector<UInt8>>{residual_values},
+        std::vector<std::vector<Int64>>{rest_values});
+    auto final_rest_stream = std::make_shared<DeterministicSkippableBlockInputStream>(
+        makeMultiStageRestColumns(),
+        std::vector<std::vector<UInt8>>{residual_values},
+        std::vector<std::vector<Int64>>{rest_values});
+
+    auto bitmap_filter = std::make_shared<BitmapFilter>(rows, 1);
+    auto stream = std::make_shared<MultiStageLateMaterializationBlockInputStream>(
+        makeMultiStageColumnsToRead(),
+        stage0_stream,
+        stage1_stream,
+        final_rest_stream,
+        makeResidualFunctionFilterForMultiStageTest(),
         bitmap_filter,
         "test");
 

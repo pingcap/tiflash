@@ -216,15 +216,17 @@ Block MultiStageLateMaterializationBlockInputStream::readWithOptionalFilter(
 
 size_t MultiStageLateMaterializationBlockInputStream::executeResidualFilter(
     Block & stage1_block,
+    Block & filter_eval_block,
     FilterPtr & residual_filter_ptr)
 {
+    residual_filter_ptr = nullptr;
+
     if (residual_filter_action.alwaysFalse())
     {
-        residual_filter_ptr = nullptr;
         return 0;
     }
 
-    Block filter_eval_block = stage1_block;
+    filter_eval_block = stage1_block;
     if (residual_filter->extra_cast)
         residual_filter->extra_cast->execute(filter_eval_block);
 
@@ -369,8 +371,9 @@ Block MultiStageLateMaterializationBlockInputStream::read()
             stage1_block.rows(),
             effective_stage0_filter.passed_count);
 
+        Block filter_eval_block;
         FilterPtr residual_filter_ptr = nullptr;
-        const auto residual_passed_rows = executeResidualFilter(stage1_block, residual_filter_ptr);
+        const auto residual_passed_rows = executeResidualFilter(stage1_block, filter_eval_block, residual_filter_ptr);
         updateAdaptiveState(effective_stage0_filter.passed_count, residual_passed_rows);
 
         if (residual_passed_rows == 0)
