@@ -101,6 +101,7 @@ protected:
             0,
             nullptr,
             nullptr,
+            nullptr,
             ReadMode::Bitmap,
             DEFAULT_BLOCK_SIZE,
             true));
@@ -110,6 +111,7 @@ protected:
             [[maybe_unused]] auto succ = task->doInitInputStreamWithErrorFallback(
                 column_defines,
                 0,
+                nullptr,
                 nullptr,
                 nullptr,
                 ReadMode::Bitmap,
@@ -125,6 +127,7 @@ protected:
         task->initInputStream(
             column_defines,
             std::numeric_limits<UInt64>::max(),
+            nullptr,
             nullptr,
             nullptr,
             ReadMode::Bitmap,
@@ -264,6 +267,7 @@ public:
             0,
             nullptr,
             nullptr,
+            nullptr,
             ReadMode::Bitmap,
             DEFAULT_BLOCK_SIZE,
             false);
@@ -286,6 +290,7 @@ public:
         local_seg->initInputStream(
             *table_column_defines,
             0,
+            nullptr,
             nullptr,
             nullptr,
             ReadMode::Bitmap,

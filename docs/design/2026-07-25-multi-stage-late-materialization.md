@@ -87,7 +87,7 @@ LIMIT ?, ?;
 - 在 residual filters 过滤率足够高时，避免提前读取大量 final rest columns。
 - 对弱过滤率 residual filters 使用自适应降级，避免因为多阶段读造成明显性能回退。
 - 保持表达式语义与现有 TiFlash Selection 执行一致，包括类型转换、timezone、collation、NULL 语义、常量表达式和临时 filter column 清理。
-- 保证 TiDB `EXPLAIN ANALYZE` 仍然能看到 Selection executor 的 runtime stats。
+- 保证 TiDB `EXPLAIN ANALYZE` 仍然能看到 Selection executor 的 runtime stats，并且 TableScan/Selection 的 `actRows` 至少能分别表示 Stage 0 和 Stage 1 输出行数。
 - 第一版只考虑 pipeline 执行路径，不考虑旧的 BlockInputStream DAG executor 路径。
 
 ## 非目标
@@ -100,7 +100,7 @@ LIMIT ?, ?;
 - 不做基于真实列宽的 cost model。
 - 不在 TiDB planner 中重写复杂的 late materialization 代价模型。
 - 不支持 generated column 参与该优化。第一版遇到 generated column 直接禁用。
-- 不追求 TableScan 和 Selection runtime stats 的严格拆分。Selection 有 execution summary 即可。
+- 不追求 TableScan 和 Selection runtime stats 的耗时、bytes、loops 严格拆分；第一版只拆分 `actRows`。
 - 不考虑旧的 `DAGPipeline` / BlockInputStream executor 路径。
 
 ## 现有实现
@@ -188,6 +188,7 @@ DirectMode 不需要新增 `full_stream`。它本质上还是两次读取：
 
 启用条件：
 
+- TiFlash setting `dt_enable_multi_stage_late_materialization` 为 true。
 - 当前 query 使用 pipeline 执行模式。
 - TableScan 已存在 pushed down filters，即可以形成 Stage 0。
 - TableScan 上方存在 residual Selection，即 `filter_conditions.hasValue()`。
@@ -411,7 +412,7 @@ MVCC 对齐依赖 row id、segment row 坐标和 bitmap。后续业务列读取�
 - TableScan executor id 注册当前 scan pipeline 的 `OperatorProfileInfoPtr`。
 - 普通 pushed down Selection 会 append `FilterTransformOp` 和 `ExpressionTransformOp`，然后把当前 profile infos 注册到 Selection executor id。
 
-多阶段 LM 消费 residual Selection 后，不再 append 原来的 Selection transform。为了让 TiDB `EXPLAIN ANALYZE` 中仍然有 Selection execution summary，可以直接复用当前 scan pipeline 的 profile infos：
+多阶段 LM 消费 residual Selection 后，不再 append 原来的 Selection transform。为了让 TiDB `EXPLAIN ANALYZE` 中仍然有 Selection execution summary，可以继续复用当前 scan pipeline 的 profile infos：
 
 ```cpp
 dag_context.addOperatorProfileInfos(
@@ -428,11 +429,24 @@ if (filter_conditions.hasValue() && multi_stage_lm_consumed_filter_conditions)
 }
 ```
 
-这样 TableScan 和 Selection 可能共享同一组 execution summary。第一版可以接受这种不严格拆分：
+不过，如果完全共享同一组 `OperatorProfileInfo`，TableScan 和 Selection 的 `actRows` 也会相同，无法看出 Stage 0 和 Stage 1 的行数差异。因此第一版增加一个很轻量的 rows override：
+
+- `MultiStageLateMaterializationRuntimeStats::stage0_output_rows` 记录 Stage 0 pushed filter 后的输出行数。
+- `MultiStageLateMaterializationRuntimeStats::stage1_output_rows` 记录 residual filters 后的输出行数。
+- `DAGContext` 维护 `executor_id -> rows_override`。
+- `ExecutorStatistics::collectRuntimeDetail()` 聚合原始 profile 后，如果存在 rows override，只覆盖 `base.rows`。
+
+这样 TiDB 侧不需要新增协议字段，仍然使用 `ExecutorExecutionSummary.num_produced_rows` 展示 `actRows`：
+
+- TableScan `actRows` 显示 Stage 0 输出行数。
+- Selection `actRows` 显示 Stage 1 输出行数。
+- execution time、bytes、allocated bytes、loops 等仍然来自同一组 scan pipeline profile，不承诺严格拆分。
+
+这个方案的取舍：
 
 - Selection 不会缺 runtime stats。
 - 不需要新增 synthetic operator。
-- 不需要在 storage reader 中手动维护独立 `OperatorProfileInfo`。
+- 不需要在 storage reader 中手动维护独立完整 `OperatorProfileInfo`。
 - 和 remote/null pipeline 分支中复用当前 profile infos 的做法一致。
 
 ## 实现阶段
@@ -444,12 +458,13 @@ if (filter_conditions.hasValue() && multi_stage_lm_consumed_filter_conditions)
 改动点：
 
 - 在 TiFlash pipeline TableScan 构建路径中识别 candidate：
+  - `dt_enable_multi_stage_late_materialization` 为 true。
   - `filter_conditions.hasValue()`。
   - TableScan 已经有 pushed down filters。
   - `generated_column_infos` 为空。
   - `read_opts.keep_order == false`。
   - 列数满足启用规则。
-- 增加一个内部 flag，例如 `multi_stage_lm_enabled`。
+- 增加 TiFlash setting `dt_enable_multi_stage_late_materialization`，并增加一个内部 flag，例如 `multi_stage_lm_enabled`。
 - 将 residual filter conditions 传入 DeltaMerge read 层。
 - 当 `multi_stage_lm_enabled` 为 true 时，跳过 `executePushedDownFilter(...)`。
 - 同时把当前 `group_builder.getCurProfileInfos()` 注册给 `filter_conditions.executor_id`。
@@ -556,21 +571,28 @@ read():
 
 ### Stage E: Runtime stats 和可观测性
 
-目标：保证 TiDB 能看到 Selection execution summary，并能从 TiFlash 日志判断优化是否生效。
+目标：保证 TiDB 能看到 Selection execution summary，TableScan/Selection 的 `actRows` 能分别表示 Stage 0/Stage 1 输出行数，并能从 TiFlash 日志判断 adaptive direct/late 选择。
 
 改动点：
 
 - 在 `DAGStorageInterpreter::executeImpl(PipelineExecGroupBuilder & group_builder)` 的 pipeline path 中：
   - 如果 multi-stage LM 消费了 `filter_conditions`，跳过 `executePushedDownFilter(...)`。
   - 调用 `dag_context.addOperatorProfileInfos(filter_conditions.executor_id, group_builder.getCurProfileInfos(), true)`。
+- 在 `DAGStorageInterpreter::generateSelectQueryInfos()` 中创建 `MultiStageLateMaterializationRuntimeStats`：
+  - TableScan executor id 的 rows override 指向 `stage0_output_rows`。
+  - Selection executor id 的 rows override 指向 `stage1_output_rows`。
+- 在 `MultiStageLateMaterializationBlockInputStream` 中累加：
+  - `effective_stage0_filter.passed_count` 到 `stage0_output_rows`。
+  - `residual_passed_rows` 到 `stage1_output_rows`。
+- 在 `ExecutorStatistics::collectRuntimeDetail()` 中应用 rows override，只覆盖 `base.rows`。
 - 增加 scan 日志字段：
   - `multi_stage_lm_enabled`。
   - `adaptive_mode`。
   - `sample_stage0_rows`。
   - `sample_residual_passed_rows`。
   - `residual_filtered_ratio`。
-  - `late_mode_blocks`。
-  - `direct_mode_blocks`。
+  - `late_mode_blocks`：按 Stage 1 输入 block 统计，不按输出 block 统计。
+  - `direct_mode_blocks`：按 Stage 1 输入 block 统计，不按输出 block 统计。
 - 后续可以考虑加入 profile extra info，但第一版不是必须。
 
 ### Stage F: 测试和性能验证
@@ -668,11 +690,11 @@ read():
 
 ### Runtime stats 不严格
 
-Selection 和 TableScan 可能共享同一组 execution summary，不严格反映各自独立耗时。
+Selection 和 TableScan 可能共享同一组 execution summary，不严格反映各自独立耗时、bytes 和 loops。
 
 缓解：
 
-- 第一版目标是保证 Selection 有 execution summary。
+- 第一版保证 Selection 有 execution summary，并保证 TableScan/Selection 的 `actRows` 分别显示 Stage 0/Stage 1 输出行数。
 - 后续如果需要更精确，可以在多阶段 LM reader 内维护独立 synthetic `OperatorProfileInfo`。
 
 ## 备选方案

@@ -288,6 +288,24 @@ void DAGContext::addOperatorProfileInfos(
     }
 }
 
+void DAGContext::setExecutorRowsOverride(const String & executor_id, ExecutorRowsOverridePtr rows_override)
+{
+    RUNTIME_CHECK(rows_override != nullptr);
+    std::lock_guard lock(operator_profile_infos_map_mu);
+    executor_rows_override_map[executor_id] = std::move(rows_override);
+}
+
+ExecutorRowsOverridePtr DAGContext::getExecutorRowsOverride(const String & executor_id) const
+{
+    if (executor_rows_override_map.empty())
+        return nullptr;
+
+    auto it = executor_rows_override_map.find(executor_id);
+    if (it == executor_rows_override_map.end())
+        return nullptr;
+    return it->second;
+}
+
 void DAGContext::addInboundIOProfileInfos(
     const String & executor_id,
     IOProfileInfos && io_profile_infos,

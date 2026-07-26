@@ -41,6 +41,7 @@
 #include <Operators/NullSourceOp.h>
 #include <Operators/UnorderedSourceOp.h>
 #include <Parsers/makeDummyQuery.h>
+#include <Storages/DeltaMerge/MultiStageLateMaterializationRuntimeStats.h>
 #include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
@@ -1027,6 +1028,23 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
 std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSelectQueryInfos()
 {
     std::unordered_map<TableID, SelectQueryInfo> ret;
+    DM::MultiStageLateMaterializationRuntimeStatsPtr multi_stage_late_materialization_runtime_stats;
+    if (enable_multi_stage_late_materialization)
+    {
+        multi_stage_late_materialization_runtime_stats
+            = std::make_shared<DM::MultiStageLateMaterializationRuntimeStats>();
+        dagContext().setExecutorRowsOverride(
+            table_scan.getTableScanExecutorID(),
+            std::shared_ptr<std::atomic<UInt64>>(
+                multi_stage_late_materialization_runtime_stats,
+                &multi_stage_late_materialization_runtime_stats->stage0_output_rows));
+        dagContext().setExecutorRowsOverride(
+            filter_conditions.executor_id,
+            std::shared_ptr<std::atomic<UInt64>>(
+                multi_stage_late_materialization_runtime_stats,
+                &multi_stage_late_materialization_runtime_stats->stage1_output_rows));
+    }
+
     auto create_query_info = [&](Int64 table_id) -> SelectQueryInfo {
         SelectQueryInfo query_info;
         /// to avoid null point exception
@@ -1043,6 +1061,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
         query_info.keep_order = table_scan.keepOrder();
         query_info.is_fast_scan = table_scan.isFastScan();
         query_info.enable_multi_stage_late_materialization = enable_multi_stage_late_materialization;
+        query_info.multi_stage_late_materialization_runtime_stats = multi_stage_late_materialization_runtime_stats;
         return query_info;
     };
     RUNTIME_CHECK_MSG(mvcc_query_info->scan_context != nullptr, "Unexpected null scan_context");
@@ -1753,6 +1772,9 @@ std::pair<Names, std::vector<UInt8>> DAGStorageInterpreter::getColumnsForTableSc
 
 bool DAGStorageInterpreter::shouldEnableMultiStageLateMaterialization() const
 {
+    if (!context.getSettingsRef().dt_enable_multi_stage_late_materialization)
+        return false;
+
     auto disable = [&](const String & reason) {
         LOG_DEBUG(log, "Disable multi-stage late materialization, reason={}", reason);
         return false;

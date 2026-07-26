@@ -44,6 +44,7 @@ protected:
             start_ts,
             push_down_filter,
             EMPTY_FILTER,
+            nullptr,
             read_mode,
             settings.max_block_size,
             settings.dt_enable_delta_index_error_fallback);

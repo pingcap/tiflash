@@ -19,6 +19,7 @@
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
+#include <Storages/DeltaMerge/MultiStageLateMaterializationRuntimeStats.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
 namespace DB::DM
@@ -43,7 +44,8 @@ public:
         SkippableBlockInputStreamPtr final_rest_stream_,
         const PushDownFilterPtr & residual_filter_,
         const BitmapFilterPtr & bitmap_filter_,
-        const String & req_id_);
+        const String & req_id_,
+        const MultiStageLateMaterializationRuntimeStatsPtr & runtime_stats_ = nullptr);
 
     String getName() const override { return NAME; }
 
@@ -111,6 +113,7 @@ private:
     SkippableBlockInputStreamPtr final_rest_stream;
     PushDownFilterPtr residual_filter;
     BitmapFilterPtr bitmap_filter;
+    MultiStageLateMaterializationRuntimeStatsPtr runtime_stats;
     FilterTransformAction residual_filter_action;
 
     AdaptiveMode adaptive_mode = AdaptiveMode::Sampling;

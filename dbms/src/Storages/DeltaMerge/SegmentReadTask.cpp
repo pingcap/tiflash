@@ -262,6 +262,7 @@ void SegmentReadTask::initInputStream(
     UInt64 start_ts,
     const PushDownFilterPtr & push_down_filter,
     const PushDownFilterPtr & multi_stage_late_materialization_filter,
+    const MultiStageLateMaterializationRuntimeStatsPtr & multi_stage_late_materialization_runtime_stats,
     ReadMode read_mode,
     size_t expected_block_size,
     bool enable_delta_index_error_fallback)
@@ -271,6 +272,7 @@ void SegmentReadTask::initInputStream(
             start_ts,
             push_down_filter,
             multi_stage_late_materialization_filter,
+            multi_stage_late_materialization_runtime_stats,
             read_mode,
             expected_block_size,
             enable_delta_index_error_fallback)))
@@ -290,6 +292,7 @@ void SegmentReadTask::initInputStream(
         start_ts,
         push_down_filter,
         multi_stage_late_materialization_filter,
+        multi_stage_late_materialization_runtime_stats,
         read_mode,
         expected_block_size);
 }
@@ -299,6 +302,7 @@ bool SegmentReadTask::doInitInputStreamWithErrorFallback(
     UInt64 start_ts,
     const PushDownFilterPtr & push_down_filter,
     const PushDownFilterPtr & multi_stage_late_materialization_filter,
+    const MultiStageLateMaterializationRuntimeStatsPtr & multi_stage_late_materialization_runtime_stats,
     ReadMode read_mode,
     size_t expected_block_size,
     bool enable_delta_index_error_fallback)
@@ -310,6 +314,7 @@ bool SegmentReadTask::doInitInputStreamWithErrorFallback(
             start_ts,
             push_down_filter,
             multi_stage_late_materialization_filter,
+            multi_stage_late_materialization_runtime_stats,
             read_mode,
             expected_block_size);
         return true;
@@ -333,6 +338,7 @@ void SegmentReadTask::doInitInputStream(
     UInt64 start_ts,
     const PushDownFilterPtr & push_down_filter,
     const PushDownFilterPtr & multi_stage_late_materialization_filter,
+    const MultiStageLateMaterializationRuntimeStatsPtr & multi_stage_late_materialization_runtime_stats,
     ReadMode read_mode,
     size_t expected_block_size)
 {
@@ -351,6 +357,7 @@ void SegmentReadTask::doInitInputStream(
         ranges,
         push_down_filter,
         multi_stage_late_materialization_filter,
+        multi_stage_late_materialization_runtime_stats,
         start_ts,
         expected_block_size);
 }

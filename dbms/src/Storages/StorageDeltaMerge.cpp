@@ -885,13 +885,13 @@ BlockInputStreams StorageDeltaMerge::read(
         tracing_logger);
 
     auto filter = PushDownFilter::build(query_info, columns_to_read, store->getTableColumns(), context, tracing_logger);
-    const auto & final_columns_to_read = filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read;
-    auto multi_stage_late_materialization_filter = buildMultiStageLateMaterializationFilter(
-        query_info,
-        filter,
-        final_columns_to_read,
-        context,
-        tracing_logger);
+    DM::PushDownFilterPtr multi_stage_late_materialization_filter;
+    if (query_info.enable_multi_stage_late_materialization)
+    {
+        const auto & final_columns_to_read = filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read;
+        multi_stage_late_materialization_filter
+            = buildMultiStageLateMaterializationFilter(query_info, filter, final_columns_to_read, context, tracing_logger);
+    }
 
     auto runtime_filter_list = parseRuntimeFilterList(query_info, store->getTableColumns(), context, tracing_logger);
 
@@ -914,6 +914,8 @@ BlockInputStreams StorageDeltaMerge::read(
             .is_fast_scan = query_info.is_fast_scan,
             .has_multiple_partitions = query_info.has_multiple_partitions,
             .multi_stage_late_materialization_filter = multi_stage_late_materialization_filter,
+            .multi_stage_late_materialization_runtime_stats
+            = query_info.multi_stage_late_materialization_runtime_stats,
         },
         max_block_size,
         parseSegmentSet(select_query.segment_expression_list),
@@ -980,13 +982,13 @@ void StorageDeltaMerge::read(
         tracing_logger);
 
     auto filter = PushDownFilter::build(query_info, columns_to_read, store->getTableColumns(), context, tracing_logger);
-    const auto & final_columns_to_read = filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read;
-    auto multi_stage_late_materialization_filter = buildMultiStageLateMaterializationFilter(
-        query_info,
-        filter,
-        final_columns_to_read,
-        context,
-        tracing_logger);
+    DM::PushDownFilterPtr multi_stage_late_materialization_filter;
+    if (query_info.enable_multi_stage_late_materialization)
+    {
+        const auto & final_columns_to_read = filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read;
+        multi_stage_late_materialization_filter
+            = buildMultiStageLateMaterializationFilter(query_info, filter, final_columns_to_read, context, tracing_logger);
+    }
 
     auto runtime_filter_list = parseRuntimeFilterList(query_info, store->getTableColumns(), context, tracing_logger);
 
@@ -1011,6 +1013,8 @@ void StorageDeltaMerge::read(
             .is_fast_scan = query_info.is_fast_scan,
             .has_multiple_partitions = query_info.has_multiple_partitions,
             .multi_stage_late_materialization_filter = multi_stage_late_materialization_filter,
+            .multi_stage_late_materialization_runtime_stats
+            = query_info.multi_stage_late_materialization_runtime_stats,
         },
         max_block_size,
         parseSegmentSet(select_query.segment_expression_list),

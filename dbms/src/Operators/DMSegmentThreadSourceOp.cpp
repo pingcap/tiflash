@@ -32,6 +32,7 @@ DMSegmentThreadSourceOp::DMSegmentThreadSourceOp(
     const DM::ColumnDefines & columns_to_read_,
     const DM::PushDownFilterPtr & filter_,
     const DM::PushDownFilterPtr & multi_stage_late_materialization_filter_,
+    const DM::MultiStageLateMaterializationRuntimeStatsPtr & multi_stage_late_materialization_runtime_stats_,
     UInt64 start_ts_,
     size_t expected_block_size_,
     DM::ReadMode read_mode_,
@@ -43,6 +44,7 @@ DMSegmentThreadSourceOp::DMSegmentThreadSourceOp(
     , columns_to_read(columns_to_read_)
     , filter(filter_)
     , multi_stage_late_materialization_filter(multi_stage_late_materialization_filter_)
+    , multi_stage_late_materialization_runtime_stats(multi_stage_late_materialization_runtime_stats_)
     , start_ts(start_ts_)
     , expected_block_size(expected_block_size_)
     , read_mode(read_mode_)
@@ -104,6 +106,7 @@ OperatorStatus DMSegmentThreadSourceOp::executeIOImpl()
             task->ranges,
             filter,
             multi_stage_late_materialization_filter,
+            multi_stage_late_materialization_runtime_stats,
             start_ts,
             block_size);
         LOG_TRACE(log, "Start to read segment, segment={}", cur_segment->simpleInfo());

@@ -41,6 +41,7 @@
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 
+#include <atomic>
 #include <memory>
 #include <unordered_set>
 
@@ -70,6 +71,7 @@ struct JoinExecuteInfo
 };
 
 using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
+using ExecutorRowsOverridePtr = std::shared_ptr<std::atomic<UInt64>>;
 
 class ProcessListEntry;
 
@@ -193,6 +195,10 @@ public:
         const String & executor_id,
         OperatorProfileInfos && profile_infos,
         bool is_append = false);
+
+    void setExecutorRowsOverride(const String & executor_id, ExecutorRowsOverridePtr rows_override);
+
+    ExecutorRowsOverridePtr getExecutorRowsOverride(const String & executor_id) const;
 
     std::unordered_map<String, std::vector<String>> & getExecutorIdToJoinIdMap();
 
@@ -436,6 +442,9 @@ private:
     std::unordered_map<String, BlockInputStreams> profile_streams_map;
     /// operator_profile_infos_map is a map that maps from executor_id to OperatorProfileInfos.
     std::unordered_map<String, OperatorProfileInfos> operator_profile_infos_map;
+    /// executor_rows_override_map is used when an internal scan optimization consumes an executor without
+    /// creating a standalone pipeline operator, but still needs to report executor-level produced rows.
+    std::unordered_map<String, ExecutorRowsOverridePtr> executor_rows_override_map;
     /// executor_id_to_join_id_map is a map that maps executor id to all the join executor id of itself and all its children.
     std::unordered_map<String, std::vector<String>> executor_id_to_join_id_map;
     /// join_execute_info_map is a map that maps from join_probe_executor_id to JoinExecuteInfo

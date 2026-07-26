@@ -1108,6 +1108,7 @@ try
             {RowKeyRange::newAll(false, 1)},
             EMPTY_FILTER,
             /*multi_stage_late_materialization_filter*/ nullptr,
+            /*multi_stage_late_materialization_runtime_stats*/ nullptr,
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE,
             DEFAULT_BLOCK_SIZE);
@@ -1150,6 +1151,7 @@ try
             {RowKeyRange::newAll(false, 1)},
             EMPTY_FILTER,
             /*multi_stage_late_materialization_filter*/ nullptr,
+            /*multi_stage_late_materialization_runtime_stats*/ nullptr,
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE,
             DEFAULT_BLOCK_SIZE);

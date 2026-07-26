@@ -1025,6 +1025,7 @@ BlockInputStreamPtr Segment::getInputStream(
     const RowKeyRanges & read_ranges,
     const PushDownFilterPtr & filter,
     const PushDownFilterPtr & multi_stage_late_materialization_filter,
+    const MultiStageLateMaterializationRuntimeStatsPtr & multi_stage_late_materialization_runtime_stats,
     UInt64 start_ts,
     size_t expected_block_size)
 {
@@ -1100,6 +1101,7 @@ BlockInputStreamPtr Segment::getInputStream(
             read_ranges,
             filter,
             multi_stage_late_materialization_filter,
+            multi_stage_late_materialization_runtime_stats,
             start_ts,
             expected_block_size,
             clipped_block_rows);
@@ -3620,6 +3622,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
     const RowKeyRanges & data_ranges,
     const PushDownFilterPtr & filter,
     const PushDownFilterPtr & multi_stage_late_materialization_filter,
+    const MultiStageLateMaterializationRuntimeStatsPtr & multi_stage_late_materialization_runtime_stats,
     UInt64 start_ts,
     size_t expected_block_size)
 {
@@ -3743,7 +3746,8 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
             final_rest_stream,
             multi_stage_late_materialization_filter,
             bitmap_filter,
-            dm_context.tracing_id);
+            dm_context.tracing_id,
+            multi_stage_late_materialization_runtime_stats);
     }
 
     auto rest_columns_to_read = std::make_shared<ColumnDefines>(columns_to_read);
@@ -3804,6 +3808,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
     const RowKeyRanges & read_ranges,
     const PushDownFilterPtr & filter,
     const PushDownFilterPtr & multi_stage_late_materialization_filter,
+    const MultiStageLateMaterializationRuntimeStatsPtr & multi_stage_late_materialization_runtime_stats,
     UInt64 start_ts,
     size_t build_bitmap_filter_block_rows,
     size_t read_data_block_rows)
@@ -3840,6 +3845,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
             real_ranges,
             filter,
             multi_stage_late_materialization_filter,
+            multi_stage_late_materialization_runtime_stats,
             start_ts,
             read_data_block_rows);
     }

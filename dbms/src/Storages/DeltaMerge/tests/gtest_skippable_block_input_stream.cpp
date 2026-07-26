@@ -670,6 +670,7 @@ try
         std::vector<std::vector<Int64>>{{10, 11, 12, 13, 14, 15}});
 
     auto bitmap_filter = std::make_shared<BitmapFilter>(6, 1);
+    auto runtime_stats = std::make_shared<MultiStageLateMaterializationRuntimeStats>();
     auto stream = std::make_shared<MultiStageLateMaterializationBlockInputStream>(
         makeMultiStageColumnsToRead(),
         stage0_stream,
@@ -677,10 +678,13 @@ try
         final_rest_stream,
         makeResidualFilterForMultiStageTest(),
         bitmap_filter,
-        "test");
+        "test",
+        runtime_stats);
 
     assertMultiStageRows(stream->read(), {1, 1, 1, 1, 1, 1}, {10, 11, 12, 13, 14, 15});
     ASSERT_BLOCK_EQ(stream->read(), Block{});
+    ASSERT_EQ(runtime_stats->stage0_output_rows.load(), 6);
+    ASSERT_EQ(runtime_stats->stage1_output_rows.load(), 6);
     ASSERT_EQ(stage1_stream->getReadCount(), 1);
     ASSERT_EQ(stage1_stream->getReadWithFilterCount(), 0);
     ASSERT_EQ(final_rest_stream->getReadCount(), 1);
@@ -710,6 +714,7 @@ try
         std::vector<std::vector<Int64>>{rest_values});
 
     auto bitmap_filter = std::make_shared<BitmapFilter>(rows, 1);
+    auto runtime_stats = std::make_shared<MultiStageLateMaterializationRuntimeStats>();
     auto stream = std::make_shared<MultiStageLateMaterializationBlockInputStream>(
         makeMultiStageColumnsToRead(),
         stage0_stream,
@@ -717,10 +722,13 @@ try
         final_rest_stream,
         makeResidualFilterForMultiStageTest(),
         bitmap_filter,
-        "test");
+        "test",
+        runtime_stats);
 
     assertMultiStageRows(stream->read(), {1, 1}, {101, 100 + static_cast<Int64>(rows) - 2});
     ASSERT_BLOCK_EQ(stream->read(), Block{});
+    ASSERT_EQ(runtime_stats->stage0_output_rows.load(), rows);
+    ASSERT_EQ(runtime_stats->stage1_output_rows.load(), 2);
     ASSERT_EQ(stage1_stream->getReadCount(), 1);
     ASSERT_EQ(stage1_stream->getReadWithFilterCount(), 0);
     ASSERT_EQ(final_rest_stream->getReadCount(), 0);
@@ -817,6 +825,7 @@ try
         std::vector<std::vector<Int64>>{{10, 11, 12, 13}});
 
     auto bitmap_filter = std::make_shared<BitmapFilter>(4, 1);
+    auto runtime_stats = std::make_shared<MultiStageLateMaterializationRuntimeStats>();
     auto stream = std::make_shared<MultiStageLateMaterializationBlockInputStream>(
         makeMultiStageColumnsToRead(),
         stage0_stream,
@@ -824,9 +833,12 @@ try
         final_rest_stream,
         makeResidualFilterForMultiStageTest(),
         bitmap_filter,
-        "test");
+        "test",
+        runtime_stats);
 
     ASSERT_BLOCK_EQ(stream->read(), Block{});
+    ASSERT_EQ(runtime_stats->stage0_output_rows.load(), 4);
+    ASSERT_EQ(runtime_stats->stage1_output_rows.load(), 0);
     ASSERT_EQ(stage1_stream->getReadCount(), 1);
     ASSERT_EQ(final_rest_stream->getSkipCount(), 1);
     ASSERT_EQ(final_rest_stream->getReadCount(), 0);

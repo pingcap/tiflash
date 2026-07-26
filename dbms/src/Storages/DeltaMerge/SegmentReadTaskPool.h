@@ -18,6 +18,7 @@
 #include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
+#include <Storages/DeltaMerge/MultiStageLateMaterializationRuntimeStats.h>
 #include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/ReadThread/WorkQueue.h>
 #include <Storages/DeltaMerge/SegmentReadTask.h>
@@ -113,6 +114,7 @@ public:
         const ColumnDefines & columns_to_read_,
         const PushDownFilterPtr & filter_,
         const PushDownFilterPtr & multi_stage_late_materialization_filter_,
+        const MultiStageLateMaterializationRuntimeStatsPtr & multi_stage_late_materialization_runtime_stats_,
         uint64_t start_ts_,
         size_t expected_block_size_,
         ReadMode read_mode_,
@@ -191,6 +193,7 @@ private:
     ColumnDefines columns_to_read;
     PushDownFilterPtr filter;
     PushDownFilterPtr multi_stage_late_materialization_filter;
+    MultiStageLateMaterializationRuntimeStatsPtr multi_stage_late_materialization_runtime_stats;
     const uint64_t start_ts;
     const size_t expected_block_size;
     const ReadMode read_mode;

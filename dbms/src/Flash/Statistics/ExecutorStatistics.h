@@ -23,6 +23,7 @@
 #include <common/types.h>
 #include <tipb/executor.pb.h>
 
+#include <atomic>
 #include <memory>
 #include <vector>
 
@@ -99,6 +100,9 @@ public:
         {
             collectExtraRuntimeDetail();
         }
+
+        if (auto rows_override = dag_context.getExecutorRowsOverride(executor_id); rows_override)
+            base.rows = rows_override->load(std::memory_order_relaxed);
     }
 
     static bool isMatch(const tipb::Executor * executor) { return ExecutorImpl::isMatch(executor); }

@@ -61,13 +61,15 @@ MultiStageLateMaterializationBlockInputStream::MultiStageLateMaterializationBloc
     SkippableBlockInputStreamPtr final_rest_stream_,
     const PushDownFilterPtr & residual_filter_,
     const BitmapFilterPtr & bitmap_filter_,
-    const String & req_id_)
+    const String & req_id_,
+    const MultiStageLateMaterializationRuntimeStatsPtr & runtime_stats_)
     : header(toEmptyBlock(columns_to_read))
     , stage0_filter_stream(std::move(stage0_filter_stream_))
     , stage1_filter_stream(std::move(stage1_filter_stream_))
     , final_rest_stream(std::move(final_rest_stream_))
     , residual_filter(residual_filter_)
     , bitmap_filter(bitmap_filter_)
+    , runtime_stats(runtime_stats_)
     , residual_filter_action(
           buildResidualFilterHeader(residual_filter_),
           residual_filter_->before_where,
@@ -290,7 +292,6 @@ Block MultiStageLateMaterializationBlockInputStream::buildLateModeBlock(
     const IColumn::Filter & residual_filter_,
     size_t residual_passed_rows)
 {
-    ++late_mode_blocks;
     auto combined_filter = composeFilters(stage0_filter, stage0_rows, residual_filter_);
     auto final_rest_block
         = readWithOptionalFilter(final_rest_stream, &combined_filter, residual_passed_rows, "final_rest");
@@ -315,7 +316,6 @@ Block MultiStageLateMaterializationBlockInputStream::buildDirectModeBlock(
     const IColumn::Filter * residual_filter_,
     size_t residual_passed_rows)
 {
-    ++direct_mode_blocks;
     auto final_rest_block = readWithOptionalFilter(final_rest_stream, stage0_filter, stage0_passed_rows, "final_rest");
 
     RUNTIME_CHECK_MSG(
@@ -347,6 +347,10 @@ Block MultiStageLateMaterializationBlockInputStream::read()
         }
 
         auto effective_stage0_filter = buildStage0EffectiveFilter(stage0_block, stage0_filter);
+        if (runtime_stats)
+            runtime_stats->stage0_output_rows.fetch_add(
+                effective_stage0_filter.passed_count,
+                std::memory_order_relaxed);
         if (effective_stage0_filter.passed_count == 0)
         {
             skipNextBlockOrRead(stage1_filter_stream, "stage1_filter");
@@ -374,16 +378,20 @@ Block MultiStageLateMaterializationBlockInputStream::read()
         Block filter_eval_block;
         FilterPtr residual_filter_ptr = nullptr;
         const auto residual_passed_rows = executeResidualFilter(stage1_block, filter_eval_block, residual_filter_ptr);
+        if (runtime_stats)
+            runtime_stats->stage1_output_rows.fetch_add(residual_passed_rows, std::memory_order_relaxed);
         updateAdaptiveState(effective_stage0_filter.passed_count, residual_passed_rows);
 
         if (residual_passed_rows == 0)
         {
+            ++late_mode_blocks;
             skipNextBlockOrRead(final_rest_stream, "final_rest");
             continue;
         }
 
         if (residual_filter_ptr == nullptr)
         {
+            ++direct_mode_blocks;
             return buildDirectModeBlock(
                 stage1_block,
                 stage0_filter_ptr,
@@ -394,6 +402,7 @@ Block MultiStageLateMaterializationBlockInputStream::read()
 
         if (shouldUseLateMode(effective_stage0_filter.passed_count, residual_passed_rows))
         {
+            ++late_mode_blocks;
             return buildLateModeBlock(
                 stage1_block,
                 stage0_filter_ptr,
@@ -402,6 +411,7 @@ Block MultiStageLateMaterializationBlockInputStream::read()
                 residual_passed_rows);
         }
 
+        ++direct_mode_blocks;
         return buildDirectModeBlock(
             stage1_block,
             stage0_filter_ptr,
