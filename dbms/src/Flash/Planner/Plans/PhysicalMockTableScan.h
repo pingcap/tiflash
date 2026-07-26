@@ -46,7 +46,9 @@ public:
         Int64 table_id_,
         bool keep_order_,
         const std::vector<Int32> & runtime_filter_ids_,
-        const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters_);
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters_,
+        const TiDB::ColumnInfos & table_scan_columns_,
+        bool use_table_scan_columns_for_delta_merge_);
 
     void finalizeImpl(const Names & parent_require) override;
 
@@ -87,6 +89,10 @@ private:
     std::vector<Int32> runtime_filter_ids;
 
     google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters;
+
+    TiDB::ColumnInfos table_scan_columns;
+
+    bool use_table_scan_columns_for_delta_merge;
 
     const int rf_max_wait_time_ms = 10000;
 };

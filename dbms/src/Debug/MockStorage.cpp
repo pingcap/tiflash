@@ -15,6 +15,7 @@
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/IBlockOutputStream.h>
+#include <DataTypes/DataTypeMyDuration.h>
 #include <Debug/MockStorage.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
@@ -29,15 +30,127 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/DeltaMerge/MultiStageLateMaterializationRuntimeStats.h>
 #include <Storages/DeltaMerge/ScanContext.h>
+#include <Storages/MutableSupport.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/StorageDeltaMerge.h>
+#include <TiDB/Decode/TypeMapping.h>
 
+#include <algorithm>
 #include <unordered_set>
 
 namespace DB
 {
 namespace
 {
+String getColumnNameForDeltaMergeRead(const MockColumnInfoVec & table_schema, const TiDB::ColumnInfo & ci)
+{
+    const ColumnID cid = ci.id;
+    if (cid == TiDBPkColumnID)
+        return MutableSupport::tidb_pk_column_name;
+    if (cid == ExtraTableIDColumnID)
+        return MutableSupport::extra_table_id_column_name;
+    if (cid == ExtraCommitTSColumnID)
+        return MutableSupport::version_column_name;
+    if (!ci.name.empty())
+        return ci.name;
+    RUNTIME_CHECK_MSG(cid >= 0 && static_cast<size_t>(cid) < table_schema.size(), "Invalid mock column id {}", cid);
+    return table_schema[cid].name;
+}
+
+Names getColumnNamesForDeltaMergeRead(
+    const MockColumnInfoVec & table_schema,
+    const TiDB::ColumnInfos & scan_column_infos)
+{
+    Names column_names;
+    column_names.reserve(scan_column_infos.size());
+    for (const auto & ci : scan_column_infos)
+        column_names.push_back(getColumnNameForDeltaMergeRead(table_schema, ci));
+    return column_names;
+}
+
+NamesAndTypes getNameAndTypesForDeltaMergeRead(
+    const MockColumnInfoVec & table_schema,
+    const TiDB::ColumnInfos & scan_column_infos)
+{
+    NamesAndTypes names_and_types;
+    names_and_types.reserve(scan_column_infos.size());
+    for (const auto & ci : scan_column_infos)
+        names_and_types.emplace_back(
+            getColumnNameForDeltaMergeRead(table_schema, ci),
+            getDataTypeByColumnInfoForComputingLayer(ci));
+    return names_and_types;
+}
+
+std::vector<UInt8> getMayNeedAddCastColumnAfterTableScan(
+    const TiDB::ColumnInfos & scan_column_infos,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters,
+    const FilterConditions * filter_conditions,
+    const Context & context,
+    bool enable_multi_stage_late_materialization)
+{
+    std::unordered_set<ColumnID> filter_col_id_set;
+    if (!enable_multi_stage_late_materialization)
+    {
+        for (const auto & expr : pushed_down_filters)
+            getColumnIDsFromExpr(expr, scan_column_infos, filter_col_id_set);
+        if (unlikely(context.getSettingsRef().force_push_down_all_filters_to_scan) && filter_conditions != nullptr)
+        {
+            for (const auto & expr : filter_conditions->conditions)
+                getColumnIDsFromExpr(expr, scan_column_infos, filter_col_id_set);
+        }
+    }
+
+    std::vector<UInt8> may_need_add_cast_column;
+    may_need_add_cast_column.reserve(scan_column_infos.size());
+    for (const auto & col : scan_column_infos)
+        may_need_add_cast_column.push_back(
+            !col.hasGeneratedColumnFlag() && !filter_col_id_set.contains(col.id) && col.id != -1);
+    return may_need_add_cast_column;
+}
+
+ExpressionActionsPtr buildExtraCastsAfterTableScan(
+    DAGExpressionAnalyzer & analyzer,
+    const std::vector<UInt8> & may_need_add_cast_column,
+    const TiDB::ColumnInfos & scan_column_infos)
+{
+    auto adjusted_may_need_add_cast_column = may_need_add_cast_column;
+    const auto & source_columns = analyzer.getCurrentInputColumns();
+    const auto columns_size = std::min(adjusted_may_need_add_cast_column.size(), source_columns.size());
+    for (size_t i = 0; i < columns_size; ++i)
+    {
+        if (!adjusted_may_need_add_cast_column[i] || scan_column_infos[i].tp != TiDB::TypeTime)
+            continue;
+        if (checkAndGetDataType<DataTypeMyDuration>(removeNullable(source_columns[i].type).get()) != nullptr)
+            adjusted_may_need_add_cast_column[i] = false;
+    }
+
+    if (std::find(adjusted_may_need_add_cast_column.begin(), adjusted_may_need_add_cast_column.end(), true)
+        == adjusted_may_need_add_cast_column.end())
+        return nullptr;
+
+    ExpressionActionsChain chain;
+    auto & step = analyzer.initAndGetLastStep(chain);
+    auto & actions = step.actions;
+    auto [has_cast, casted_columns]
+        = analyzer.buildExtraCastsAfterTS(actions, adjusted_may_need_add_cast_column, scan_column_infos);
+    if (!has_cast)
+        return nullptr;
+
+    NamesWithAliases project_cols;
+    project_cols.reserve(casted_columns.size());
+    for (size_t i = 0; i < casted_columns.size(); ++i)
+        project_cols.emplace_back(casted_columns[i], source_columns[i].name);
+    actions->add(ExpressionAction::project(project_cols));
+
+    for (const auto & col : source_columns)
+        step.required_output.push_back(col.name);
+
+    auto extra_cast = chain.getLastActions();
+    chain.finalize();
+    chain.clear();
+    return extra_cast;
+}
+
 bool shouldEnableMultiStageLateMaterializationForMockDeltaMerge(
     const Context & context,
     bool keep_order,
@@ -256,7 +369,8 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(
     bool keep_order,
     std::vector<int> runtime_filter_ids,
     int rf_max_wait_time_ms,
-    const google::protobuf::RepeatedPtrField<tipb::Expr> * pushed_down_filters)
+    const google::protobuf::RepeatedPtrField<tipb::Expr> * pushed_down_filters,
+    const TiDB::ColumnInfos * table_scan_column_infos)
 {
     static const google::protobuf::RepeatedPtrField<tipb::Expr> empty_pushed_down_filters{};
     static const auto empty_ann_query_info = tipb::ANNQueryInfo{};
@@ -265,10 +379,13 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(
 
     QueryProcessingStage::Enum stage;
     auto [storage, column_names, query_info] = prepareForRead(context, table_id, keep_order);
+    const auto scan_column_infos = table_scan_column_infos == nullptr
+        ? mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id])
+        : *table_scan_column_infos;
+    if (table_scan_column_infos != nullptr)
+        column_names = getColumnNamesForDeltaMergeRead(table_schema_for_delta_merge[table_id], scan_column_infos);
     if (filter_conditions && filter_conditions->hasValue())
     {
-        auto analyzer = std::make_unique<DAGExpressionAnalyzer>(names_and_types_map_for_delta_merge[table_id], context);
-        auto scan_column_infos = mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]);
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             filter_conditions->conditions,
             empty_ann_query_info,
@@ -277,8 +394,6 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(
             runtime_filter_ids,
             rf_max_wait_time_ms,
             context.getTimezoneInfo());
-        auto [before_where, filter_column_name, project_after_where]
-            = analyzer->buildPushDownFilter(filter_conditions->conditions);
         BlockInputStreams ins = storage->read(
             column_names,
             query_info,
@@ -288,6 +403,22 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(
             1); // TODO: Support config max_block_size and num_streams
         // TODO: set num_streams, then ins.size() != 1
         BlockInputStreamPtr in = ins[0];
+        auto analyzer = std::make_unique<DAGExpressionAnalyzer>(in->getHeader(), context);
+        auto may_need_add_cast_column = getMayNeedAddCastColumnAfterTableScan(
+            scan_column_infos,
+            effective_pushed_down_filters,
+            filter_conditions,
+            context,
+            /*enable_multi_stage_late_materialization=*/false);
+        auto extra_cast = buildExtraCastsAfterTableScan(*analyzer, may_need_add_cast_column, scan_column_infos);
+        if (extra_cast)
+        {
+            in = std::make_shared<ExpressionBlockInputStream>(in, extra_cast, "test");
+            in->setExtraInfo("cast after table scan");
+        }
+
+        auto [before_where, filter_column_name, project_after_where]
+            = analyzer->buildPushDownFilter(filter_conditions->conditions);
         in = std::make_shared<FilterBlockInputStream>(in, before_where, filter_column_name, "test");
         in->setExtraInfo("push down filter");
         in = std::make_shared<ExpressionBlockInputStream>(in, project_after_where, "test");
@@ -297,7 +428,6 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(
     else
     {
         static const google::protobuf::RepeatedPtrField<tipb::Expr> empty_filters{};
-        auto scan_column_infos = mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]);
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             empty_filters,
             empty_ann_query_info,
@@ -308,6 +438,22 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(
             context.getTimezoneInfo());
         BlockInputStreams ins = storage->read(column_names, query_info, context, stage, 8192, 1);
         BlockInputStreamPtr in = ins[0];
+        if (table_scan_column_infos != nullptr)
+        {
+            DAGExpressionAnalyzer analyzer{in->getHeader(), context};
+            auto may_need_add_cast_column = getMayNeedAddCastColumnAfterTableScan(
+                scan_column_infos,
+                effective_pushed_down_filters,
+                /*filter_conditions=*/nullptr,
+                context,
+                /*enable_multi_stage_late_materialization=*/false);
+            auto extra_cast = buildExtraCastsAfterTableScan(analyzer, may_need_add_cast_column, scan_column_infos);
+            if (extra_cast)
+            {
+                in = std::make_shared<ExpressionBlockInputStream>(in, extra_cast, "test");
+                in->setExtraInfo("cast after table scan");
+            }
+        }
         return in;
     }
 }
@@ -323,7 +469,8 @@ void MockStorage::buildExecFromDeltaMerge(
     std::vector<int> runtime_filter_ids,
     int rf_max_wait_time_ms,
     const google::protobuf::RepeatedPtrField<tipb::Expr> * pushed_down_filters,
-    const String & table_scan_executor_id)
+    const String & table_scan_executor_id,
+    const TiDB::ColumnInfos * table_scan_column_infos)
 {
     static const google::protobuf::RepeatedPtrField<tipb::Expr> empty_pushed_down_filters{};
     static const auto empty_ann_query_info = tipb::ANNQueryInfo{};
@@ -331,10 +478,13 @@ void MockStorage::buildExecFromDeltaMerge(
         = pushed_down_filters == nullptr ? empty_pushed_down_filters : *pushed_down_filters;
 
     auto [storage, column_names, query_info] = prepareForRead(context, table_id, keep_order);
+    const auto scan_column_infos = table_scan_column_infos == nullptr
+        ? mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id])
+        : *table_scan_column_infos;
+    if (table_scan_column_infos != nullptr)
+        column_names = getColumnNamesForDeltaMergeRead(table_schema_for_delta_merge[table_id], scan_column_infos);
     if (filter_conditions && filter_conditions->hasValue())
     {
-        auto analyzer = std::make_unique<DAGExpressionAnalyzer>(names_and_types_map_for_delta_merge[table_id], context);
-        auto scan_column_infos = mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]);
         const auto enable_multi_stage_late_materialization = shouldEnableMultiStageLateMaterializationForMockDeltaMerge(
             context,
             keep_order,
@@ -370,8 +520,6 @@ void MockStorage::buildExecFromDeltaMerge(
             context.getTimezoneInfo());
         query_info.enable_multi_stage_late_materialization = enable_multi_stage_late_materialization;
         query_info.multi_stage_late_materialization_runtime_stats = multi_stage_late_materialization_runtime_stats;
-        // Not using `auto [before_where, filter_column_name, project_after_where]` just to make the compiler happy.
-        auto build_ret = analyzer->buildPushDownFilter(filter_conditions->conditions);
         storage->read(
             exec_context_,
             group_builder,
@@ -380,9 +528,22 @@ void MockStorage::buildExecFromDeltaMerge(
             context,
             context.getSettingsRef().max_block_size,
             concurrency);
+
+        DAGExpressionAnalyzer analyzer{group_builder.getCurrentHeader(), context};
+        auto may_need_add_cast_column = getMayNeedAddCastColumnAfterTableScan(
+            scan_column_infos,
+            effective_pushed_down_filters,
+            filter_conditions,
+            context,
+            enable_multi_stage_late_materialization);
+        auto extra_cast = buildExtraCastsAfterTableScan(analyzer, may_need_add_cast_column, scan_column_infos);
+        executeExpression(exec_context_, group_builder, extra_cast, Logger::get("test for cast after table scan"));
+
         if (enable_multi_stage_late_materialization)
             return;
 
+        // Not using `auto [before_where, filter_column_name, project_after_where]` just to make the compiler happy.
+        auto build_ret = analyzer.buildPushDownFilter(filter_conditions->conditions);
         auto log = Logger::get("test for late materialization");
         auto input_header = group_builder.getCurrentHeader();
         group_builder.transform([&](auto & builder) {
@@ -398,7 +559,6 @@ void MockStorage::buildExecFromDeltaMerge(
     else
     {
         static const google::protobuf::RepeatedPtrField<tipb::Expr> empty_filters{};
-        auto scan_column_infos = mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]);
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             empty_filters,
             empty_ann_query_info,
@@ -415,6 +575,18 @@ void MockStorage::buildExecFromDeltaMerge(
             context,
             context.getSettingsRef().max_block_size,
             concurrency);
+        if (table_scan_column_infos != nullptr)
+        {
+            DAGExpressionAnalyzer analyzer{group_builder.getCurrentHeader(), context};
+            auto may_need_add_cast_column = getMayNeedAddCastColumnAfterTableScan(
+                scan_column_infos,
+                effective_pushed_down_filters,
+                /*filter_conditions=*/nullptr,
+                context,
+                /*enable_multi_stage_late_materialization=*/false);
+            auto extra_cast = buildExtraCastsAfterTableScan(analyzer, may_need_add_cast_column, scan_column_infos);
+            executeExpression(exec_context_, group_builder, extra_cast, Logger::get("test for cast after table scan"));
+        }
     }
 }
 
@@ -489,6 +661,13 @@ NamesAndTypes MockStorage::getNameAndTypesForDeltaMerge(Int64 table_id)
     {
         return names_and_types_map_for_delta_merge[table_id];
     }
+    throw Exception(fmt::format("Failed to get NamesAndTypes by table id '{}'", table_id));
+}
+
+NamesAndTypes MockStorage::getNameAndTypesForDeltaMerge(Int64 table_id, const TiDB::ColumnInfos & scan_column_infos)
+{
+    if (tableExistsForDeltaMerge(table_id))
+        return getNameAndTypesForDeltaMergeRead(table_schema_for_delta_merge[table_id], scan_column_infos);
     throw Exception(fmt::format("Failed to get NamesAndTypes by table id '{}'", table_id));
 }
 

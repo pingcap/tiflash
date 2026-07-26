@@ -295,6 +295,24 @@ void DAGContext::setExecutorRowsOverride(const String & executor_id, ExecutorRow
     executor_rows_override_map[executor_id] = std::move(rows_override);
 }
 
+void DAGContext::addProfileRowsToExecutorRowsOverride(
+    const String & executor_id,
+    const OperatorProfileInfos & profile_infos)
+{
+    auto rows_override = getExecutorRowsOverride(executor_id);
+    if (!rows_override)
+        return;
+
+    UInt64 rows = 0;
+    for (const auto & profile_info : profile_infos)
+    {
+        if (profile_info)
+            rows += profile_info->rows;
+    }
+    if (rows != 0)
+        rows_override->fetch_add(rows, std::memory_order_relaxed);
+}
+
 ExecutorRowsOverridePtr DAGContext::getExecutorRowsOverride(const String & executor_id) const
 {
     std::lock_guard lock(operator_profile_infos_map_mu);

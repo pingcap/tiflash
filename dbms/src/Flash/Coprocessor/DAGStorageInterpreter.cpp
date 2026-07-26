@@ -89,25 +89,6 @@ namespace
 constexpr UInt64 wait_bg_resolve_lock_ms = 20;
 constexpr UInt64 try_get_bypass_lock_max_backoff_ms = 500;
 
-void addProfileRowsToExecutorRowsOverride(
-    DAGContext & dag_context,
-    const String & executor_id,
-    const OperatorProfileInfos & profile_infos)
-{
-    auto rows_override = dag_context.getExecutorRowsOverride(executor_id);
-    if (!rows_override)
-        return;
-
-    UInt64 rows = 0;
-    for (const auto & profile_info : profile_infos)
-    {
-        if (profile_info)
-            rows += profile_info->rows;
-    }
-    if (rows != 0)
-        rows_override->fetch_add(rows, std::memory_order_relaxed);
-}
-
 bool tryAddBypassLockTsForLocalRetry(
     const RegionException & e,
     UInt64 read_tso,
@@ -532,17 +513,14 @@ void DAGStorageInterpreter::executeImpl(
                 remote_builder.getCurIOProfileInfos(),
                 /*is_append=*/true);
             auto remote_profile_infos = remote_builder.getCurProfileInfos();
-            addProfileRowsToExecutorRowsOverride(
-                dag_context,
-                table_scan.getTableScanExecutorID(),
-                remote_profile_infos);
+            dag_context.addProfileRowsToExecutorRowsOverride(table_scan.getTableScanExecutorID(), remote_profile_infos);
             dag_context.addOperatorProfileInfos(
                 table_scan.getTableScanExecutorID(),
                 OperatorProfileInfos(remote_profile_infos),
                 /*is_append=*/true);
             if (filter_conditions.hasValue())
             {
-                addProfileRowsToExecutorRowsOverride(dag_context, filter_conditions.executor_id, remote_profile_infos);
+                dag_context.addProfileRowsToExecutorRowsOverride(filter_conditions.executor_id, remote_profile_infos);
                 dag_context.addOperatorProfileInfos(
                     filter_conditions.executor_id,
                     std::move(remote_profile_infos),

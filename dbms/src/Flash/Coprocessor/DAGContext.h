@@ -198,6 +198,8 @@ public:
 
     void setExecutorRowsOverride(const String & executor_id, ExecutorRowsOverridePtr rows_override);
 
+    void addProfileRowsToExecutorRowsOverride(const String & executor_id, const OperatorProfileInfos & profile_infos);
+
     ExecutorRowsOverridePtr getExecutorRowsOverride(const String & executor_id) const;
 
     std::unordered_map<String, std::vector<String>> & getExecutorIdToJoinIdMap();

@@ -1289,7 +1289,10 @@ BlockInputStreams DeltaMergeStore::read(
     GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
     size_t final_num_stream = std::max(1, std::min(num_streams, tasks.size()));
     auto read_mode = getReadMode(db_context, read_opts.is_fast_scan, read_opts.keep_order, filter);
-    const auto & final_columns_to_read = filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read;
+    const auto & final_columns_to_read
+        = read_opts.multi_stage_late_materialization_filter == nullptr && filter && filter->extra_cast
+        ? *filter->columns_after_cast
+        : columns_to_read;
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         extra_table_id_index,
         final_columns_to_read,
@@ -1419,7 +1422,10 @@ void DeltaMergeStore::read(
         final_num_stream = std::max(1, std::min(num_streams, tasks.size()));
     }
     auto read_mode = getReadMode(db_context, read_opts.is_fast_scan, read_opts.keep_order, filter);
-    const auto & final_columns_to_read = filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read;
+    const auto & final_columns_to_read
+        = read_opts.multi_stage_late_materialization_filter == nullptr && filter && filter->extra_cast
+        ? *filter->columns_after_cast
+        : columns_to_read;
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         extra_table_id_index,
         final_columns_to_read,
