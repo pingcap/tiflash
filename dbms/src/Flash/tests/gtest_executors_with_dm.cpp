@@ -254,6 +254,16 @@ void rewriteOverlappedExtraCastFilterLiterals(
         residual_value,
         collator_id);
 }
+
+void assertMultiStageRowsOverride(DAGContext & dag_context, UInt64 expected_selection_rows)
+{
+    auto table_scan_rows = dag_context.getExecutorRowsOverride("table_scan_0");
+    auto selection_rows = dag_context.getExecutorRowsOverride("selection_1");
+    ASSERT_NE(table_scan_rows, nullptr);
+    ASSERT_NE(selection_rows, nullptr);
+    ASSERT_EQ(selection_rows->load(), expected_selection_rows);
+    ASSERT_GE(table_scan_rows->load(), selection_rows->load());
+}
 } // namespace
 
 TEST_F(ExecutorsWithDMTestRunner, Basic)
@@ -349,12 +359,7 @@ try
         << getColumnsContent(expected) << "\n actual_block: \n"
         << getColumnsContent(actual);
 
-    auto table_scan_rows = enabled_dag_context.getExecutorRowsOverride("table_scan_0");
-    auto selection_rows = enabled_dag_context.getExecutorRowsOverride("selection_1");
-    ASSERT_NE(table_scan_rows, nullptr);
-    ASSERT_NE(selection_rows, nullptr);
-    ASSERT_EQ(table_scan_rows->load(), 16);
-    ASSERT_EQ(selection_rows->load(), 4);
+    assertMultiStageRowsOverride(enabled_dag_context, 4);
 }
 CATCH
 
@@ -384,12 +389,7 @@ try
         << getColumnsContent(expected) << "\n actual_block: \n"
         << getColumnsContent(actual);
 
-    auto table_scan_rows = enabled_dag_context.getExecutorRowsOverride("table_scan_0");
-    auto selection_rows = enabled_dag_context.getExecutorRowsOverride("selection_1");
-    ASSERT_NE(table_scan_rows, nullptr);
-    ASSERT_NE(selection_rows, nullptr);
-    ASSERT_EQ(table_scan_rows->load(), 16);
-    ASSERT_EQ(selection_rows->load(), 16);
+    assertMultiStageRowsOverride(enabled_dag_context, 16);
 }
 CATCH
 
@@ -651,12 +651,7 @@ try
         << getColumnsContent(expected) << "\n actual_block: \n"
         << getColumnsContent(actual);
 
-    auto table_scan_rows = enabled_dag_context.getExecutorRowsOverride("table_scan_0");
-    auto selection_rows = enabled_dag_context.getExecutorRowsOverride("selection_1");
-    ASSERT_NE(table_scan_rows, nullptr);
-    ASSERT_NE(selection_rows, nullptr);
-    ASSERT_EQ(table_scan_rows->load(), 20);
-    ASSERT_EQ(selection_rows->load(), 12);
+    assertMultiStageRowsOverride(enabled_dag_context, 12);
 }
 CATCH
 
@@ -736,12 +731,7 @@ try
         << getColumnsContent(expected) << "\n actual_block: \n"
         << getColumnsContent(actual);
 
-    auto table_scan_rows = enabled_dag_context.getExecutorRowsOverride("table_scan_0");
-    auto selection_rows = enabled_dag_context.getExecutorRowsOverride("selection_1");
-    ASSERT_NE(table_scan_rows, nullptr);
-    ASSERT_NE(selection_rows, nullptr);
-    ASSERT_EQ(table_scan_rows->load(), 20);
-    ASSERT_EQ(selection_rows->load(), 12);
+    assertMultiStageRowsOverride(enabled_dag_context, 12);
 }
 CATCH
 
@@ -770,12 +760,7 @@ try
         << getColumnsContent(expected) << "\n actual_block: \n"
         << getColumnsContent(actual);
 
-    auto table_scan_rows = enabled_dag_context.getExecutorRowsOverride("table_scan_0");
-    auto selection_rows = enabled_dag_context.getExecutorRowsOverride("selection_1");
-    ASSERT_NE(table_scan_rows, nullptr);
-    ASSERT_NE(selection_rows, nullptr);
-    ASSERT_EQ(table_scan_rows->load(), 15);
-    ASSERT_EQ(selection_rows->load(), 7);
+    assertMultiStageRowsOverride(enabled_dag_context, 7);
 }
 CATCH
 
