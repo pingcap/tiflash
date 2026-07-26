@@ -113,10 +113,7 @@ public:
 
     String getName() const override { return "DeterministicStage0Filter"; }
 
-    Block getHeader() const override
-    {
-        return makeMultiStageBlock(0, std::vector<UInt8>{}, std::nullopt);
-    }
+    Block getHeader() const override { return makeMultiStageBlock(0, std::vector<UInt8>{}, std::nullopt); }
 
     Block readImpl() override
     {
@@ -132,10 +129,7 @@ public:
 
         auto & filter = filters[next_block];
         res_filter = &filter;
-        auto block = makeMultiStageBlock(
-            start_offset,
-            std::vector<UInt8>(filter.size(), 1),
-            std::nullopt);
+        auto block = makeMultiStageBlock(start_offset, std::vector<UInt8>(filter.size(), 1), std::nullopt);
         start_offset += filter.size();
         ++next_block;
         return block;
@@ -327,7 +321,10 @@ PushDownFilterPtr makeResidualFunctionFilterForMultiStageTest()
         nullptr);
 }
 
-void assertMultiStageRows(const Block & block, const std::vector<UInt8> & filter_values, const std::vector<Int64> & rest_values)
+void assertMultiStageRows(
+    const Block & block,
+    const std::vector<UInt8> & filter_values,
+    const std::vector<Int64> & rest_values)
 {
     ASSERT_TRUE(block);
     ASSERT_EQ(block.rows(), filter_values.size());

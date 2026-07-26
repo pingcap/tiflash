@@ -81,10 +81,7 @@ private:
 
     void skipNextBlockOrRead(SkippableBlockInputStreamPtr & stream, const char * stream_name);
 
-    size_t executeResidualFilter(
-        Block & stage1_block,
-        Block & filter_eval_block,
-        FilterPtr & residual_filter);
+    size_t executeResidualFilter(Block & stage1_block, Block & filter_eval_block, FilterPtr & residual_filter);
 
     void updateAdaptiveState(size_t stage0_passed_rows, size_t residual_passed_rows);
 

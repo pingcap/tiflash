@@ -16,8 +16,10 @@
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <Debug/MockStorage.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Interpreters/Context.h>
@@ -25,12 +27,58 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <Storages/DeltaMerge/MultiStageLateMaterializationRuntimeStats.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/StorageDeltaMerge.h>
 
+#include <unordered_set>
+
 namespace DB
 {
+namespace
+{
+bool shouldEnableMultiStageLateMaterializationForMockDeltaMerge(
+    const Context & context,
+    bool keep_order,
+    const FilterConditions * filter_conditions,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters,
+    const TiDB::ColumnInfos & scan_column_infos)
+{
+    const auto & settings = context.getSettingsRef();
+    if (!settings.dt_enable_multi_stage_late_materialization)
+        return false;
+    if (filter_conditions == nullptr || !filter_conditions->hasValue())
+        return false;
+    if (filter_conditions->conditions.empty())
+        return false;
+    if (pushed_down_filters.empty())
+        return false;
+    if (settings.force_push_down_all_filters_to_scan)
+        return false;
+    if (!settings.dt_enable_bitmap_filter)
+        return false;
+    if (keep_order)
+        return false;
+
+    std::unordered_set<ColumnID> stage1_filter_col_id_set;
+    for (const auto & expr : filter_conditions->conditions)
+        getColumnIDsFromExpr(expr, scan_column_infos, stage1_filter_col_id_set);
+
+    const auto stage1_filter_col_cnt = stage1_filter_col_id_set.size();
+    if (stage1_filter_col_cnt == 0 || stage1_filter_col_cnt > 10)
+        return false;
+
+    size_t final_rest_col_cnt = 0;
+    for (const auto & col : scan_column_infos)
+    {
+        if (!stage1_filter_col_id_set.contains(col.id))
+            ++final_rest_col_cnt;
+    }
+    return final_rest_col_cnt >= 12 && final_rest_col_cnt >= 3 * stage1_filter_col_cnt;
+}
+} // namespace
+
 /// for table scan
 void MockStorage::addTableSchema(const String & name, const MockColumnInfoVec & columnInfos)
 {
@@ -191,10 +239,13 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(
     const FilterConditions * filter_conditions,
     bool keep_order,
     std::vector<int> runtime_filter_ids,
-    int rf_max_wait_time_ms)
+    int rf_max_wait_time_ms,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> * pushed_down_filters)
 {
     static const google::protobuf::RepeatedPtrField<tipb::Expr> empty_pushed_down_filters{};
     static const auto empty_ann_query_info = tipb::ANNQueryInfo{};
+    const auto & effective_pushed_down_filters
+        = pushed_down_filters == nullptr ? empty_pushed_down_filters : *pushed_down_filters;
 
     QueryProcessingStage::Enum stage;
     auto [storage, column_names, query_info] = prepareForRead(context, table_id, keep_order);
@@ -205,7 +256,7 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             filter_conditions->conditions,
             empty_ann_query_info,
-            empty_pushed_down_filters, // Not care now
+            effective_pushed_down_filters,
             scan_column_infos,
             runtime_filter_ids,
             rf_max_wait_time_ms,
@@ -234,7 +285,7 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             empty_filters,
             empty_ann_query_info,
-            empty_pushed_down_filters, // Not care now
+            effective_pushed_down_filters,
             scan_column_infos,
             runtime_filter_ids,
             rf_max_wait_time_ms,
@@ -254,24 +305,55 @@ void MockStorage::buildExecFromDeltaMerge(
     bool keep_order,
     const FilterConditions * filter_conditions,
     std::vector<int> runtime_filter_ids,
-    int rf_max_wait_time_ms)
+    int rf_max_wait_time_ms,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> * pushed_down_filters,
+    const String & table_scan_executor_id)
 {
     static const google::protobuf::RepeatedPtrField<tipb::Expr> empty_pushed_down_filters{};
     static const auto empty_ann_query_info = tipb::ANNQueryInfo{};
+    const auto & effective_pushed_down_filters
+        = pushed_down_filters == nullptr ? empty_pushed_down_filters : *pushed_down_filters;
 
     auto [storage, column_names, query_info] = prepareForRead(context, table_id, keep_order);
     if (filter_conditions && filter_conditions->hasValue())
     {
         auto analyzer = std::make_unique<DAGExpressionAnalyzer>(names_and_types_map_for_delta_merge[table_id], context);
         auto scan_column_infos = mockColumnInfosToTiDBColumnInfos(table_schema_for_delta_merge[table_id]);
+        const auto enable_multi_stage_late_materialization = shouldEnableMultiStageLateMaterializationForMockDeltaMerge(
+            context,
+            keep_order,
+            filter_conditions,
+            effective_pushed_down_filters,
+            scan_column_infos);
+        DM::MultiStageLateMaterializationRuntimeStatsPtr multi_stage_late_materialization_runtime_stats;
+        if (enable_multi_stage_late_materialization)
+        {
+            multi_stage_late_materialization_runtime_stats
+                = std::make_shared<DM::MultiStageLateMaterializationRuntimeStats>();
+            if (auto * dag_context = context.getDAGContext(); dag_context != nullptr && !table_scan_executor_id.empty())
+            {
+                dag_context->setExecutorRowsOverride(
+                    table_scan_executor_id,
+                    std::shared_ptr<std::atomic<UInt64>>(
+                        multi_stage_late_materialization_runtime_stats,
+                        &multi_stage_late_materialization_runtime_stats->stage0_output_rows));
+                dag_context->setExecutorRowsOverride(
+                    filter_conditions->executor_id,
+                    std::shared_ptr<std::atomic<UInt64>>(
+                        multi_stage_late_materialization_runtime_stats,
+                        &multi_stage_late_materialization_runtime_stats->stage1_output_rows));
+            }
+        }
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             filter_conditions->conditions,
             empty_ann_query_info,
-            empty_pushed_down_filters, // Not care now
+            effective_pushed_down_filters,
             scan_column_infos,
             runtime_filter_ids,
             rf_max_wait_time_ms,
             context.getTimezoneInfo());
+        query_info.enable_multi_stage_late_materialization = enable_multi_stage_late_materialization;
+        query_info.multi_stage_late_materialization_runtime_stats = multi_stage_late_materialization_runtime_stats;
         // Not using `auto [before_where, filter_column_name, project_after_where]` just to make the compiler happy.
         auto build_ret = analyzer->buildPushDownFilter(filter_conditions->conditions);
         storage->read(
@@ -282,6 +364,9 @@ void MockStorage::buildExecFromDeltaMerge(
             context,
             context.getSettingsRef().max_block_size,
             concurrency);
+        if (enable_multi_stage_late_materialization)
+            return;
+
         auto log = Logger::get("test for late materialization");
         auto input_header = group_builder.getCurrentHeader();
         group_builder.transform([&](auto & builder) {
@@ -301,7 +386,7 @@ void MockStorage::buildExecFromDeltaMerge(
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             empty_filters,
             empty_ann_query_info,
-            empty_pushed_down_filters, // Not care now
+            effective_pushed_down_filters,
             scan_column_infos,
             runtime_filter_ids,
             rf_max_wait_time_ms,

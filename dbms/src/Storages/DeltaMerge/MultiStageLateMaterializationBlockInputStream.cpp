@@ -140,8 +140,8 @@ IColumn::Filter MultiStageLateMaterializationBlockInputStream::composeFilters(
     return combined_filter;
 }
 
-MultiStageLateMaterializationBlockInputStream::EffectiveFilter
-MultiStageLateMaterializationBlockInputStream::buildStage0EffectiveFilter(Block & stage0_block, FilterPtr stage0_filter)
+MultiStageLateMaterializationBlockInputStream::EffectiveFilter MultiStageLateMaterializationBlockInputStream::
+    buildStage0EffectiveFilter(Block & stage0_block, FilterPtr stage0_filter)
 {
     EffectiveFilter effective_filter;
     const auto rows = stage0_block.rows();

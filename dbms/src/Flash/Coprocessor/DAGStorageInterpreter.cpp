@@ -410,8 +410,10 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
 
 void DAGStorageInterpreter::execute(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder)
 {
-    prepare(); // learner read
+    // `prepare` builds `may_need_add_cast_column` for TableScan post casts. Compute the multi-stage flag before
+    // that so pushed-down filter columns are not skipped when multi-stage late materialization outputs raw columns.
     enable_multi_stage_late_materialization = shouldEnableMultiStageLateMaterialization();
+    prepare(); // learner read
 
     return executeImpl(exec_context, group_builder);
 }
@@ -456,7 +458,8 @@ void DAGStorageInterpreter::executeImpl(
                     group_builder.getCurProfileInfos(),
                     /*is_append=*/true);
             }
-            else if (filter_conditions.hasValue() && likely(!context.getSettingsRef().force_push_down_all_filters_to_scan))
+            else if (
+                filter_conditions.hasValue() && likely(!context.getSettingsRef().force_push_down_all_filters_to_scan))
             {
                 ::DB::executePushedDownFilter(exec_context, group_builder, filter_conditions, analyzer, log);
                 dag_context.addOperatorProfileInfos(
@@ -1753,16 +1756,22 @@ std::pair<Names, std::vector<UInt8>> DAGStorageInterpreter::getColumnsForTableSc
 
     // Get the columns that may need to add extra cast.
     std::unordered_set<ColumnID> filter_col_id_set;
-    for (const auto & expr : table_scan.getPushedDownFilters())
-        getColumnIDsFromExpr(expr, table_scan.getColumns(), filter_col_id_set);
-    if (unlikely(context.getSettingsRef().force_push_down_all_filters_to_scan))
+    // In multi-stage late materialization, storage outputs raw columns from stage1/final-rest streams.
+    // Stage0/residual extra casts are only used for predicate evaluation, so final output casts still belong here.
+    if (!enable_multi_stage_late_materialization)
     {
-        for (const auto & expr : filter_conditions.conditions)
+        for (const auto & expr : table_scan.getPushedDownFilters())
             getColumnIDsFromExpr(expr, table_scan.getColumns(), filter_col_id_set);
+        if (unlikely(context.getSettingsRef().force_push_down_all_filters_to_scan))
+        {
+            for (const auto & expr : filter_conditions.conditions)
+                getColumnIDsFromExpr(expr, table_scan.getColumns(), filter_col_id_set);
+        }
     }
     std::vector<UInt8> may_need_add_cast_column_tmp;
     may_need_add_cast_column_tmp.reserve(table_scan.getColumnSize());
-    // If the column is not generated column, not in the filter columns and column id is not -1, then it may need cast.
+    // In the normal late materialization path, filter columns already carry casted values from the storage filter stream.
+    // In the multi-stage path, filter_col_id_set stays empty so final output casts can still be applied after TableScan.
     for (const auto & col : table_scan.getColumns())
         may_need_add_cast_column_tmp.push_back(
             !col.hasGeneratedColumnFlag() && !filter_col_id_set.contains(col.id) && col.id != -1);
