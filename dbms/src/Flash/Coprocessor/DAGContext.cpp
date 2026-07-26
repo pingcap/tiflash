@@ -297,6 +297,7 @@ void DAGContext::setExecutorRowsOverride(const String & executor_id, ExecutorRow
 
 ExecutorRowsOverridePtr DAGContext::getExecutorRowsOverride(const String & executor_id) const
 {
+    std::lock_guard lock(operator_profile_infos_map_mu);
     if (executor_rows_override_map.empty())
         return nullptr;
 
