@@ -393,6 +393,46 @@ try
 }
 CATCH
 
+TEST_F(ExecutorsWithDMTestRunner, MultiStageLateMaterializationDisabledWhenStage0CoversAllColumns)
+try
+{
+    enablePipeline(true);
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(64)));
+
+    ASTPtr stage0_filter = gt(col("c0"), lit(Field(static_cast<Int64>(-1))));
+    for (size_t col_id = 1; col_id < 15; ++col_id)
+    {
+        stage0_filter = And(stage0_filter, gt(col(fmt::format("c{}", col_id)), lit(Field(static_cast<Int64>(-1)))));
+    }
+
+    auto pushed_down_filter_request = context.scan("test_db", "multi_stage_lm").filter(stage0_filter).build(context);
+    RUNTIME_CHECK(pushed_down_filter_request->root_executor().tp() == tipb::ExecType::TypeSelection);
+
+    auto request = context.scan("test_db", "multi_stage_lm")
+                       .filter(lt(col("c1"), lit(Field(static_cast<Int64>(4)))))
+                       .build(context);
+    auto * table_scan = findMutableTableScan(request->mutable_root_executor());
+    for (const auto & condition : pushed_down_filter_request->root_executor().selection().conditions())
+        *table_scan->add_pushed_down_filter_conditions() = condition;
+
+    context.context->getSettingsRef().dt_enable_multi_stage_late_materialization = false;
+    DAGContext disabled_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/4);
+    auto expected = executeStreams(&disabled_dag_context);
+
+    context.context->getSettingsRef().dt_enable_multi_stage_late_materialization = true;
+    DAGContext enabled_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/4);
+    auto actual = executeStreams(&enabled_dag_context);
+
+    ASSERT_TRUE(columnsEqual(expected, actual, /*_restrict=*/false))
+        << "\n  expect_block: \n"
+        << getColumnsContent(expected) << "\n actual_block: \n"
+        << getColumnsContent(actual);
+
+    ASSERT_EQ(enabled_dag_context.getExecutorRowsOverride("table_scan_0"), nullptr);
+    ASSERT_EQ(enabled_dag_context.getExecutorRowsOverride("selection_1"), nullptr);
+}
+CATCH
+
 TEST_F(ExecutorsWithDMTestRunner, MultiStageLateMaterializationSharedTimeColumnCast)
 try
 {

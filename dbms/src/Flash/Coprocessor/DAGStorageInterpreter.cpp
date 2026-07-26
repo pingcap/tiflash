@@ -1835,6 +1835,27 @@ bool DAGStorageInterpreter::shouldEnableMultiStageLateMaterialization() const
     if (!generated_column_infos.empty())
         return disable("generated columns are present");
 
+    std::unordered_set<ColumnID> stage0_filter_col_id_set;
+    for (const auto & expr : table_scan.getPushedDownFilters())
+        getColumnIDsFromExpr(expr, table_scan.getColumns(), stage0_filter_col_id_set);
+
+    bool stage0_filter_covers_all_scan_columns = true;
+    for (const auto & col : table_scan.getColumns())
+    {
+        if (!stage0_filter_col_id_set.contains(col.id))
+        {
+            stage0_filter_covers_all_scan_columns = false;
+            break;
+        }
+    }
+    if (stage0_filter_covers_all_scan_columns)
+    {
+        return disable(fmt::format(
+            "stage0 pushed filters cover all table scan columns, stage0_filter_col_cnt={}, table_scan_col_cnt={}",
+            stage0_filter_col_id_set.size(),
+            table_scan.getColumnSize()));
+    }
+
     std::unordered_set<ColumnID> stage1_filter_col_id_set;
     for (const auto & expr : filter_conditions.conditions)
         getColumnIDsFromExpr(expr, table_scan.getColumns(), stage1_filter_col_id_set);

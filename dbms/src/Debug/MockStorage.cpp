@@ -61,6 +61,22 @@ bool shouldEnableMultiStageLateMaterializationForMockDeltaMerge(
     if (keep_order)
         return false;
 
+    std::unordered_set<ColumnID> stage0_filter_col_id_set;
+    for (const auto & expr : pushed_down_filters)
+        getColumnIDsFromExpr(expr, scan_column_infos, stage0_filter_col_id_set);
+
+    bool stage0_filter_covers_all_scan_columns = true;
+    for (const auto & col : scan_column_infos)
+    {
+        if (!stage0_filter_col_id_set.contains(col.id))
+        {
+            stage0_filter_covers_all_scan_columns = false;
+            break;
+        }
+    }
+    if (stage0_filter_covers_all_scan_columns)
+        return false;
+
     std::unordered_set<ColumnID> stage1_filter_col_id_set;
     for (const auto & expr : filter_conditions->conditions)
         getColumnIDsFromExpr(expr, scan_column_infos, stage1_filter_col_id_set);
