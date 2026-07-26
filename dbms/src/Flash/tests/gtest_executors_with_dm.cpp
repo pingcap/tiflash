@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #include <Common/MyDuration.h>
+#include <Common/MyTime.h>
+#include <Debug/MockExecutor/AstToPB.h>
 #include <Debug/MockStorage.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/ExecutorTestUtils.h>
@@ -154,6 +156,29 @@ tipb::TableScan * findMutableTableScan(tipb::Executor * executor)
     }
 }
 
+tipb::Selection * findMutableSelection(tipb::Executor * executor)
+{
+    switch (executor->tp())
+    {
+    case tipb::ExecType::TypeSelection:
+        return executor->mutable_selection();
+    case tipb::ExecType::TypeProjection:
+        return findMutableSelection(executor->mutable_projection()->mutable_child());
+    default:
+        RUNTIME_CHECK_MSG(false, "Unexpected executor type {}", tipb::ExecType_Name(executor->tp()));
+    }
+}
+
+MockAstVec buildPkAndPayloadColumnProjection()
+{
+    MockAstVec projections;
+    projections.reserve(15);
+    projections.push_back(col("pk"));
+    for (size_t col_id = 1; col_id <= 14; ++col_id)
+        projections.push_back(col(fmt::format("c{}", col_id)));
+    return projections;
+}
+
 std::shared_ptr<tipb::DAGRequest> buildDAGRequestWithPushedDownFilter(
     MockDAGRequestContext & context,
     const String & table_name,
@@ -169,6 +194,65 @@ std::shared_ptr<tipb::DAGRequest> buildDAGRequestWithPushedDownFilter(
     *findMutableTableScan(request->mutable_root_executor())->add_pushed_down_filter_conditions()
         = pushed_down_filter_expr;
     return request;
+}
+
+std::shared_ptr<tipb::DAGRequest> buildDAGRequestWithPushedDownFilterAndProjection(
+    MockDAGRequestContext & context,
+    const String & table_name,
+    const ASTPtr & pushed_down_filter,
+    const ASTPtr & residual_filter,
+    const MockAstVec & projections)
+{
+    auto pushed_down_filter_request = context.scan("test_db", table_name).filter(pushed_down_filter).build(context);
+    RUNTIME_CHECK(pushed_down_filter_request->root_executor().tp() == tipb::ExecType::TypeSelection);
+    RUNTIME_CHECK(pushed_down_filter_request->root_executor().selection().conditions_size() == 1);
+    const auto & pushed_down_filter_expr = pushed_down_filter_request->root_executor().selection().conditions(0);
+
+    auto request = context.scan("test_db", table_name).filter(residual_filter).project(projections).build(context);
+    *findMutableTableScan(request->mutable_root_executor())->add_pushed_down_filter_conditions()
+        = pushed_down_filter_expr;
+    return request;
+}
+
+void rewriteComparisonRightLiteral(
+    tipb::Expr * condition,
+    tipb::ScalarFuncSig sig,
+    const TiDB::ColumnInfo & literal_type,
+    const Field & value,
+    Int32 collator_id)
+{
+    RUNTIME_CHECK(condition->tp() == tipb::ExprType::ScalarFunc);
+    RUNTIME_CHECK(condition->children_size() == 2);
+    condition->set_sig(sig);
+    literalFieldToTiPBExpr(literal_type, value, condition->mutable_children(1), collator_id);
+}
+
+void rewriteOverlappedExtraCastFilterLiterals(
+    tipb::DAGRequest * request,
+    const TiDB::ColumnInfo & literal_type,
+    const Field & pushed_down_value,
+    const Field & residual_value,
+    tipb::ScalarFuncSig pushed_down_sig,
+    tipb::ScalarFuncSig residual_sig,
+    Int32 collator_id)
+{
+    auto * table_scan = findMutableTableScan(request->mutable_root_executor());
+    RUNTIME_CHECK(table_scan->pushed_down_filter_conditions_size() == 1);
+    rewriteComparisonRightLiteral(
+        table_scan->mutable_pushed_down_filter_conditions(0),
+        pushed_down_sig,
+        literal_type,
+        pushed_down_value,
+        collator_id);
+
+    auto * selection = findMutableSelection(request->mutable_root_executor());
+    RUNTIME_CHECK(selection->conditions_size() == 1);
+    rewriteComparisonRightLiteral(
+        selection->mutable_conditions(0),
+        residual_sig,
+        literal_type,
+        residual_value,
+        collator_id);
 }
 } // namespace
 
@@ -449,6 +533,209 @@ try
         << "\n  expect_block: \n"
         << getColumnsContent(expected) << "\n actual_block: \n"
         << getColumnsContent(actual);
+}
+CATCH
+
+TEST_F(ExecutorsWithDMTestRunner, MultiStageLateMaterializationTypeTimeOverlappedExtraCast)
+try
+{
+    enablePipeline(true);
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(64)));
+
+    MockColumnInfoVec columns;
+    columns.push_back({"pk", TiDB::TP::TypeLongLong});
+    columns.push_back({"time_col", TiDB::TP::TypeTime});
+    for (size_t col_id = 1; col_id <= 14; ++col_id)
+        columns.push_back({fmt::format("c{}", col_id), TiDB::TP::TypeLongLong});
+
+    constexpr size_t rows = 32;
+    std::vector<Int64> pk_values;
+    std::vector<Int64> time_values;
+    pk_values.reserve(rows);
+    time_values.reserve(rows);
+    for (size_t row = 0; row < rows; ++row)
+    {
+        pk_values.push_back(row);
+        time_values.push_back(MyDuration(1, static_cast<Int32>(row % 8), 0, 0, 0, 6).nanoSecond());
+    }
+
+    ColumnsWithTypeAndName data;
+    data.emplace_back(toVec<Int64>("pk", pk_values));
+    data.emplace_back(toVec<Int64>("time_col", time_values));
+    for (size_t col_id = 1; col_id <= 14; ++col_id)
+    {
+        std::vector<Int64> values;
+        values.reserve(rows);
+        for (size_t row = 0; row < rows; ++row)
+        {
+            if (col_id == 1)
+                values.push_back(row % 8);
+            else
+                values.push_back(static_cast<Int64>(col_id * 1000 + row));
+        }
+        data.emplace_back(toVec<Int64>(fmt::format("c{}", col_id), values));
+    }
+    context.addMockDeltaMerge(
+        {"test_db", "multi_stage_lm_time_overlap"},
+        columns,
+        data,
+        /*concurrency_hint=*/4);
+
+    auto request = buildDAGRequestWithPushedDownFilterAndProjection(
+        context,
+        "multi_stage_lm_time_overlap",
+        gt(col("time_col"), lit(Field(MyDuration(1, 2, 0, 0, 0, 0).nanoSecond()))),
+        lt(col("time_col"), lit(Field(MyDuration(1, 6, 0, 0, 0, 0).nanoSecond()))),
+        buildPkAndPayloadColumnProjection());
+    TiDB::ColumnInfo duration_literal_type;
+    duration_literal_type.tp = TiDB::TypeTime;
+    rewriteOverlappedExtraCastFilterLiterals(
+        request.get(),
+        duration_literal_type,
+        Field(MyDuration(1, 2, 0, 0, 0, 0).nanoSecond()),
+        Field(MyDuration(1, 6, 0, 0, 0, 0).nanoSecond()),
+        tipb::ScalarFuncSig::GTDuration,
+        tipb::ScalarFuncSig::LTDuration,
+        context.getCollation());
+
+    context.context->getSettingsRef().dt_enable_multi_stage_late_materialization = false;
+    DAGContext disabled_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/4);
+    auto expected = executeStreams(&disabled_dag_context);
+
+    context.context->getSettingsRef().dt_enable_multi_stage_late_materialization = true;
+    DAGContext enabled_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/4);
+    auto actual = executeStreams(&enabled_dag_context);
+
+    ASSERT_TRUE(columnsEqual(expected, actual, /*_restrict=*/false))
+        << "\n  expect_block: \n"
+        << getColumnsContent(expected) << "\n actual_block: \n"
+        << getColumnsContent(actual);
+
+    auto table_scan_rows = enabled_dag_context.getExecutorRowsOverride("table_scan_0");
+    auto selection_rows = enabled_dag_context.getExecutorRowsOverride("selection_1");
+    ASSERT_NE(table_scan_rows, nullptr);
+    ASSERT_NE(selection_rows, nullptr);
+    ASSERT_EQ(table_scan_rows->load(), 20);
+    ASSERT_EQ(selection_rows->load(), 12);
+}
+CATCH
+
+TEST_F(ExecutorsWithDMTestRunner, MultiStageLateMaterializationTimestampOverlappedExtraCast)
+try
+{
+    enablePipeline(true);
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(64)));
+
+    MockColumnInfoVec columns;
+    columns.push_back({"pk", TiDB::TP::TypeLongLong});
+    columns.push_back({"ts_col", TiDB::TP::TypeTimestamp});
+    for (size_t col_id = 1; col_id <= 14; ++col_id)
+        columns.push_back({fmt::format("c{}", col_id), TiDB::TP::TypeLongLong});
+
+    constexpr size_t rows = 32;
+    std::vector<Int64> pk_values;
+    ColumnWithNullableMyDateTime ts_values;
+    pk_values.reserve(rows);
+    ts_values.reserve(rows);
+    for (size_t row = 0; row < rows; ++row)
+    {
+        pk_values.push_back(row);
+        ts_values.push_back(MyDateTime(2020, 1, 1, static_cast<UInt32>(row % 8), 0, 0, 0).toPackedUInt());
+    }
+
+    ColumnsWithTypeAndName data;
+    data.emplace_back(toVec<Int64>("pk", pk_values));
+    data.emplace_back(toNullableVec<MyDateTime>("ts_col", ts_values));
+    for (size_t col_id = 1; col_id <= 14; ++col_id)
+    {
+        std::vector<Int64> values;
+        values.reserve(rows);
+        for (size_t row = 0; row < rows; ++row)
+        {
+            if (col_id == 1)
+                values.push_back(row % 8);
+            else
+                values.push_back(static_cast<Int64>(col_id * 1000 + row));
+        }
+        data.emplace_back(toVec<Int64>(fmt::format("c{}", col_id), values));
+    }
+    context.addMockDeltaMerge(
+        {"test_db", "multi_stage_lm_timestamp_overlap"},
+        columns,
+        data,
+        /*concurrency_hint=*/4);
+
+    auto request = buildDAGRequestWithPushedDownFilterAndProjection(
+        context,
+        "multi_stage_lm_timestamp_overlap",
+        gt(col("ts_col"), lit(Field(MyDateTime(2020, 1, 1, 2, 0, 0, 0).toPackedUInt()))),
+        lt(col("ts_col"), lit(Field(MyDateTime(2020, 1, 1, 6, 0, 0, 0).toPackedUInt()))),
+        buildPkAndPayloadColumnProjection());
+    TiDB::ColumnInfo timestamp_literal_type;
+    timestamp_literal_type.tp = TiDB::TypeTimestamp;
+    rewriteOverlappedExtraCastFilterLiterals(
+        request.get(),
+        timestamp_literal_type,
+        Field(MyDateTime(2020, 1, 1, 2, 0, 0, 0).toPackedUInt()),
+        Field(MyDateTime(2020, 1, 1, 6, 0, 0, 0).toPackedUInt()),
+        tipb::ScalarFuncSig::GTTime,
+        tipb::ScalarFuncSig::LTTime,
+        context.getCollation());
+    request->set_time_zone_name("Asia/Shanghai");
+
+    context.context->getSettingsRef().dt_enable_multi_stage_late_materialization = false;
+    DAGContext disabled_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/4);
+    auto expected = executeStreams(&disabled_dag_context);
+
+    context.context->getSettingsRef().dt_enable_multi_stage_late_materialization = true;
+    DAGContext enabled_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/4);
+    auto actual = executeStreams(&enabled_dag_context);
+
+    ASSERT_TRUE(columnsEqual(expected, actual, /*_restrict=*/false))
+        << "\n  expect_block: \n"
+        << getColumnsContent(expected) << "\n actual_block: \n"
+        << getColumnsContent(actual);
+
+    auto table_scan_rows = enabled_dag_context.getExecutorRowsOverride("table_scan_0");
+    auto selection_rows = enabled_dag_context.getExecutorRowsOverride("selection_1");
+    ASSERT_NE(table_scan_rows, nullptr);
+    ASSERT_NE(selection_rows, nullptr);
+    ASSERT_EQ(table_scan_rows->load(), 20);
+    ASSERT_EQ(selection_rows->load(), 12);
+}
+CATCH
+
+TEST_F(ExecutorsWithDMTestRunner, MultiStageLateMaterializationPlainColumnOverlapped)
+try
+{
+    enablePipeline(true);
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(64)));
+
+    auto request = buildDAGRequestWithPushedDownFilter(
+        context,
+        "multi_stage_lm",
+        gt(col("c0"), lit(Field(static_cast<Int64>(16)))),
+        lt(col("c0"), lit(Field(static_cast<Int64>(24)))));
+
+    context.context->getSettingsRef().dt_enable_multi_stage_late_materialization = false;
+    DAGContext disabled_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/4);
+    auto expected = executeStreams(&disabled_dag_context);
+
+    context.context->getSettingsRef().dt_enable_multi_stage_late_materialization = true;
+    DAGContext enabled_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/4);
+    auto actual = executeStreams(&enabled_dag_context);
+
+    ASSERT_TRUE(columnsEqual(expected, actual, /*_restrict=*/false))
+        << "\n  expect_block: \n"
+        << getColumnsContent(expected) << "\n actual_block: \n"
+        << getColumnsContent(actual);
+
+    auto table_scan_rows = enabled_dag_context.getExecutorRowsOverride("table_scan_0");
+    auto selection_rows = enabled_dag_context.getExecutorRowsOverride("selection_1");
+    ASSERT_NE(table_scan_rows, nullptr);
+    ASSERT_NE(selection_rows, nullptr);
+    ASSERT_EQ(table_scan_rows->load(), 15);
+    ASSERT_EQ(selection_rows->load(), 7);
 }
 CATCH
 
