@@ -257,20 +257,55 @@ for each stage0 block:
 
 如果被挤出的 row 来自之前已经输出的 block，则不能撤回。该 row 会作为额外候选留给上层 TopN 过滤。
 
-Heap entry 可以记录：
+Heap entry 只能记录轻量信息，不能持有 `Block` 或 column 引用：
 
 ```text
 struct HeapEntry
 {
-    SortKey key;
+    OwnedSortKey key;
     UInt64 stream_sequence;
     UInt64 block_sequence;
     UInt32 row_index_in_stage1_block;
-    bool current_block_output_candidate;
 };
 ```
 
-`block_sequence` 用于判断被 eviction 的 entry 是否属于当前 block。
+`block_sequence` 用于判断被 eviction 的 entry 是否属于当前 block。`row_index_in_stage1_block` 只在 entry 属于当前 block 时有效。
+
+如果 eviction 的 entry 来自当前 block，可以将 `topn_candidate_filter[row_index_in_stage1_block]` 置为 false，避免对该 row 读取 final rest columns。
+
+如果 eviction 的 entry 来自历史 block，则不做任何回撤。历史 block 已经输出给上层 TopN，该 row 只是额外候选。
+
+### Heap 内存模型
+
+Running local TopN 不能保存 `{Block, row_id}`。如果 heap entry 持有 `Block` 或 column memory 引用，会导致历史 blocks 被 retain，内存随扫描推进累积。
+
+Heap 中只保存排序需要的 owned key：
+
+```text
+heap memory = O(topk * order_key_size)
+current block filter memory = O(current_block_rows)
+```
+
+不保存：
+
+- 历史 block。
+- 历史 row payload。
+- 历史 column 引用。
+- 用于回读的 row locator。
+
+历史 candidate rows 一旦输出给上层 TopN，MSLM stream 不再负责保存它们。Heap eviction 只释放 owned sort key。
+
+对于 fixed-size order-by 类型，owned key 可以直接拷贝值和 NULL flag。对于 variable-length 类型，例如 String，owned key 可能带来较大内存开销。第一版可以先禁用 variable-length order-by columns，或者增加 per-stream memory guard。
+
+如果采用 memory guard，触发后应退化为普通 MSLM：
+
+```text
+后续 blocks 不再生成 TopN candidate filter。
+final rest columns 按现有 MSLM 逻辑读取。
+上层 TopN 保留，保证最终结果正确。
+```
+
+Ties 也需要避免破坏内存上界。第一版 heap 仍最多保存 `topk` 个 entries。与 heap worst 相等的 rows 可以作为当前 block candidate 输出，但不插入 heap。这样 ties 较多时剪枝效果会下降，但 heap 内存保持 bounded。
 
 ## Running Local TopN 状态
 
@@ -285,13 +320,16 @@ public:
 private:
     UInt64 topk;
     SortDescription sort_description;
-    PriorityQueue heap; // heap top is current worst candidate
+    PriorityQueue<HeapEntry> heap; // heap top is current worst candidate
+    UInt64 current_block_sequence;
 };
 ```
 
 Heap 大小最多为 `topk`。如果 `topk` 超过启发式阈值，则禁用该优化。
 
 比较器必须和上层 TopN 使用的 comparator 保持一致。第一版只支持 plain order-by columns，减少 comparator 语义不一致风险。
+
+第一版不要求 heap entry 能定位历史 block。Heap entry 的 locator 只服务于 current block eviction。历史 entry 被 eviction 时只释放 key，不访问历史 block。
 
 ## Filter 坐标
 
@@ -472,6 +510,18 @@ order_by_column_count <= 4
 - `topk` 和 order-by column count 设置上限。
 - 对 ties 多的场景 benchmark。
 
+### Heap 持有历史 Block 导致内存累积
+
+如果 heap entry 设计成 `{Block, row_id}`，或者持有历史 column memory 引用，会导致已经处理过的 blocks 无法释放，内存随扫描推进累积。
+
+缓解：
+
+- Heap entry 只保存 owned sort key。
+- Heap entry 不持有 `Block`、column 引用或历史 row payload。
+- Row locator 只用于 current block 内 eviction。
+- 历史 block entry 被 eviction 时只释放 key，不访问历史 block。
+- 对 variable-length order-by keys 使用禁用策略或 memory guard。
+
 ### Streaming Superset 过大
 
 Running local TopN 不能撤回之前已经输出的 rows。极端数据分布下，每个 block 都可能输出一批候选 rows。
@@ -522,6 +572,7 @@ Running local TopN 是 block-local TopN 的增强版，复杂度增加有限，�
 
 - `topk` 阈值应该如何设置。
 - ties 场景是否需要为了结果稳定性保留所有 equal-worst rows。
+- 第一版是否禁用 variable-length order-by columns，还是实现 per-stream memory guard。
 - 是否需要支持 ORDER BY expression，以及 expression action 如何复用。
 - 是否需要在 EXPLAIN ANALYZE 中暴露 TopN-enhanced MSLM 的 candidate rows。
 - 是否需要在 cost model 中引入列宽和 TopN selectivity。
