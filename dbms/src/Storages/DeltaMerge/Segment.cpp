@@ -3705,7 +3705,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
             filter->rs_operator,
             start_ts,
             expected_block_size,
-            ReadTag::LMFilter);
+            ReadTag::MSLMStage1Filter);
 
         auto final_rest_columns_to_read = std::make_shared<ColumnDefines>(columns_to_read);
         for (const auto & col : *stage1_filter_columns)

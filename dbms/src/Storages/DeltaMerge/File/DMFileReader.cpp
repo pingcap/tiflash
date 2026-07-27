@@ -705,6 +705,9 @@ void DMFileReader::addScannedRows(UInt64 rows)
     case ReadTag::LMFilter:
         scan_context->dmfile_lm_filter_scanned_rows += rows;
         break;
+    case ReadTag::MSLMStage1Filter:
+        scan_context->dmfile_mslm_stage1_filter_scanned_rows += rows;
+        break;
     default:
         break;
     }

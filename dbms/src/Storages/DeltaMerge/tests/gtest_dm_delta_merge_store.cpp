@@ -194,6 +194,86 @@ try
 }
 CATCH
 
+TEST_F(DeltaMergeStoreTest, ReadWithMultiStageLateMaterializationSeparatesStage0AndStage1ScanRows)
+try
+{
+    constexpr size_t rows = 128;
+    auto block = DMTestEnv::prepareSimpleWriteBlock(0, rows, false);
+    store->write(*db_context, db_context->getSettingsRef(), block);
+    store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+    store->compact(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+    store->mergeDeltaAll(*db_context);
+
+    const auto raw_column = getExtraHandleColumnDefine(/*is_common_handle=*/false);
+    const auto version_column = getVersionColumnDefine();
+    ColumnDefines columns_to_read{raw_column, version_column};
+
+    auto make_always_true_filter_actions = [](const ColumnDefines & filter_columns, const String & filter_column_name) {
+        auto actions = std::make_shared<ExpressionActions>(toEmptyBlock(filter_columns).getNamesAndTypes());
+        auto filter_column_type = std::make_shared<DataTypeUInt8>();
+        actions->add(ExpressionAction::addColumn({
+            filter_column_type->createColumnConst(1, Field(static_cast<UInt64>(1))),
+            filter_column_type,
+            filter_column_name,
+        }));
+        return actions;
+    };
+
+    auto stage0_filter_columns = std::make_shared<ColumnDefines>(ColumnDefines{raw_column});
+    const String stage0_filter_column_name = "__stage0_filter";
+    auto stage0_filter = std::make_shared<PushDownFilter>(
+        EMPTY_RS_OPERATOR,
+        make_always_true_filter_actions(*stage0_filter_columns, stage0_filter_column_name),
+        /*project_after_where_*/ nullptr,
+        stage0_filter_columns,
+        stage0_filter_column_name,
+        /*extra_cast_*/ nullptr,
+        /*columns_after_cast_*/ nullptr);
+
+    auto stage1_filter_columns = std::make_shared<ColumnDefines>(ColumnDefines{version_column});
+    const String stage1_filter_column_name = "__stage1_filter";
+    auto stage1_filter = std::make_shared<PushDownFilter>(
+        EMPTY_RS_OPERATOR,
+        make_always_true_filter_actions(*stage1_filter_columns, stage1_filter_column_name),
+        /*project_after_where_*/ nullptr,
+        stage1_filter_columns,
+        stage1_filter_column_name,
+        /*extra_cast_*/ nullptr,
+        /*columns_after_cast_*/ nullptr);
+
+    DMReadOptions read_opts;
+    read_opts.multi_stage_late_materialization_filter = stage1_filter;
+    auto scan_context = std::make_shared<ScanContext>();
+    auto in = store->read(
+        *db_context,
+        db_context->getSettingsRef(),
+        columns_to_read,
+        {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+        /*num_streams*/ 1,
+        /*start_ts*/ std::numeric_limits<UInt64>::max(),
+        stage0_filter,
+        std::vector<RuntimeFilterPtr>{},
+        /*rf_max_wait_time_ms*/ 0,
+        "ReadWithMultiStageLateMaterializationSeparatesStage0AndStage1ScanRows",
+        read_opts,
+        /*expected_block_size*/ 1024,
+        /*read_segments*/ {},
+        /*extra_table_id_index*/ InvalidColumnID,
+        scan_context)[0];
+
+    size_t output_rows = 0;
+    in->readPrefix();
+    while (auto read_block = in->read())
+        output_rows += read_block.rows();
+    in->readSuffix();
+
+    ASSERT_EQ(output_rows, rows);
+    ASSERT_EQ(scan_context->dmfile_lm_filter_scanned_rows, rows);
+    ASSERT_EQ(scan_context->dmfile_mslm_stage1_filter_scanned_rows, rows);
+    ASSERT_NE(scan_context->toJson().find("dmfile_mslm_stage1_filter_scanned_rows"), String::npos);
+}
+CATCH
+
 TEST_F(DeltaMergeStoreTest, ShutdownInMiddleDTFileGC)
 try
 {
