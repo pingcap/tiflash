@@ -297,7 +297,7 @@ void DAGContext::setExecutorRowsOverride(const String & executor_id, ExecutorRow
 
 void DAGContext::addProfileRowsToExecutorRowsOverride(
     const String & executor_id,
-    const OperatorProfileInfos & profile_infos)
+    const OperatorProfileInfos & profile_infos) const
 {
     auto rows_override = getExecutorRowsOverride(executor_id);
     if (!rows_override)

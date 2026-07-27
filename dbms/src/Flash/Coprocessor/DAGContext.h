@@ -198,7 +198,7 @@ public:
 
     void setExecutorRowsOverride(const String & executor_id, ExecutorRowsOverridePtr rows_override);
 
-    void addProfileRowsToExecutorRowsOverride(const String & executor_id, const OperatorProfileInfos & profile_infos);
+    void addProfileRowsToExecutorRowsOverride(const String & executor_id, const OperatorProfileInfos & profile_infos) const;
 
     ExecutorRowsOverridePtr getExecutorRowsOverride(const String & executor_id) const;
 

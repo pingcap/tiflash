@@ -30,13 +30,6 @@ class MultiStageLateMaterializationBlockInputStream : public IBlockInputStream
     static constexpr auto NAME = "MultiStageLateMaterializationBlockInputStream";
 
 public:
-    enum class AdaptiveMode
-    {
-        Sampling,
-        Late,
-        Direct,
-    };
-
     MultiStageLateMaterializationBlockInputStream(
         const ColumnDefines & columns_to_read,
         BlockInputStreamPtr stage0_filter_stream_,
@@ -83,10 +76,6 @@ private:
 
     size_t executeResidualFilter(Block & stage1_block, Block & filter_eval_block, FilterPtr & residual_filter);
 
-    void updateAdaptiveState(size_t stage0_passed_rows, size_t residual_passed_rows);
-
-    bool shouldUseLateMode(size_t stage0_passed_rows, size_t residual_passed_rows) const;
-
     Block buildLateModeBlock(
         Block & stage1_block,
         const IColumn::Filter * stage0_filter,
@@ -113,10 +102,6 @@ private:
     MultiStageLateMaterializationRuntimeStatsPtr runtime_stats;
     FilterTransformAction residual_filter_action;
 
-    AdaptiveMode adaptive_mode = AdaptiveMode::Sampling;
-    size_t sample_blocks = 0;
-    size_t sample_stage0_rows = 0;
-    size_t sample_residual_passed_rows = 0;
     size_t late_mode_blocks = 0;
     size_t direct_mode_blocks = 0;
     bool summary_logged = false;

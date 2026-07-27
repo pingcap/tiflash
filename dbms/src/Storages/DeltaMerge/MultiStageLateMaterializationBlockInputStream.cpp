@@ -21,9 +21,6 @@ namespace DB::DM
 {
 namespace
 {
-constexpr size_t MIN_SAMPLE_BLOCKS = 4;
-constexpr size_t MIN_SAMPLE_ROWS = 16384;
-
 void filterBlock(Block & block, const IColumn::Filter & filter, size_t passed_count)
 {
     if (!block)
@@ -36,20 +33,6 @@ void filterBlock(Block & block, const IColumn::Filter & filter, size_t passed_co
         else
             col.column = col.column->filter(filter, passed_count);
     }
-}
-
-const char * modeToString(MultiStageLateMaterializationBlockInputStream::AdaptiveMode mode)
-{
-    switch (mode)
-    {
-    case MultiStageLateMaterializationBlockInputStream::AdaptiveMode::Sampling:
-        return "sampling";
-    case MultiStageLateMaterializationBlockInputStream::AdaptiveMode::Late:
-        return "late";
-    case MultiStageLateMaterializationBlockInputStream::AdaptiveMode::Direct:
-        return "direct";
-    }
-    return "unknown";
 }
 
 } // namespace
@@ -247,44 +230,6 @@ size_t MultiStageLateMaterializationBlockInputStream::executeResidualFilter(
     return countBytesInFilter(*residual_filter_ptr);
 }
 
-void MultiStageLateMaterializationBlockInputStream::updateAdaptiveState(
-    size_t stage0_passed_rows,
-    size_t residual_passed_rows)
-{
-    if (adaptive_mode != AdaptiveMode::Sampling)
-        return;
-
-    ++sample_blocks;
-    sample_stage0_rows += stage0_passed_rows;
-    sample_residual_passed_rows += residual_passed_rows;
-
-    if (sample_blocks < MIN_SAMPLE_BLOCKS || sample_stage0_rows < MIN_SAMPLE_ROWS)
-        return;
-
-    adaptive_mode = sample_residual_passed_rows * 2 < sample_stage0_rows ? AdaptiveMode::Late : AdaptiveMode::Direct;
-}
-
-bool MultiStageLateMaterializationBlockInputStream::shouldUseLateMode(
-    size_t stage0_passed_rows,
-    size_t residual_passed_rows) const
-{
-    if (residual_passed_rows == 0)
-        return true;
-    if (residual_passed_rows == stage0_passed_rows)
-        return false;
-
-    switch (adaptive_mode)
-    {
-    case AdaptiveMode::Late:
-        return true;
-    case AdaptiveMode::Direct:
-        return false;
-    case AdaptiveMode::Sampling:
-        return residual_passed_rows * 2 < stage0_passed_rows;
-    }
-    return false;
-}
-
 Block MultiStageLateMaterializationBlockInputStream::buildLateModeBlock(
     Block & stage1_block,
     const IColumn::Filter * stage0_filter,
@@ -380,7 +325,6 @@ Block MultiStageLateMaterializationBlockInputStream::read()
         const auto residual_passed_rows = executeResidualFilter(stage1_block, filter_eval_block, residual_filter_ptr);
         if (runtime_stats)
             runtime_stats->stage1_output_rows.fetch_add(residual_passed_rows, std::memory_order_relaxed);
-        updateAdaptiveState(effective_stage0_filter.passed_count, residual_passed_rows);
 
         if (residual_passed_rows == 0)
         {
@@ -389,34 +333,24 @@ Block MultiStageLateMaterializationBlockInputStream::read()
             continue;
         }
 
-        if (residual_filter_ptr == nullptr)
+        if (residual_passed_rows == stage1_block.rows())
         {
             ++direct_mode_blocks;
             return buildDirectModeBlock(
                 stage1_block,
                 stage0_filter_ptr,
                 effective_stage0_filter.passed_count,
-                nullptr,
+                residual_filter_ptr,
                 residual_passed_rows);
         }
 
-        if (shouldUseLateMode(effective_stage0_filter.passed_count, residual_passed_rows))
-        {
-            ++late_mode_blocks;
-            return buildLateModeBlock(
-                stage1_block,
-                stage0_filter_ptr,
-                stage0_block.rows(),
-                *residual_filter_ptr,
-                residual_passed_rows);
-        }
-
-        ++direct_mode_blocks;
-        return buildDirectModeBlock(
+        RUNTIME_CHECK(residual_filter_ptr != nullptr);
+        ++late_mode_blocks;
+        return buildLateModeBlock(
             stage1_block,
             stage0_filter_ptr,
-            effective_stage0_filter.passed_count,
-            residual_filter_ptr,
+            stage0_block.rows(),
+            *residual_filter_ptr,
             residual_passed_rows);
     }
 }
@@ -427,18 +361,9 @@ void MultiStageLateMaterializationBlockInputStream::logSummary()
         return;
     summary_logged = true;
 
-    const double residual_filtered_ratio = sample_stage0_rows == 0
-        ? 0.0
-        : 1.0 - static_cast<double>(sample_residual_passed_rows) / static_cast<double>(sample_stage0_rows);
     LOG_INFO(
         log,
-        "Multi-stage late materialization finished, adaptive_mode={} sample_blocks={} sample_stage0_rows={} "
-        "sample_residual_passed_rows={} residual_filtered_ratio={:.3f} late_mode_blocks={} direct_mode_blocks={}",
-        modeToString(adaptive_mode),
-        sample_blocks,
-        sample_stage0_rows,
-        sample_residual_passed_rows,
-        residual_filtered_ratio,
+        "Multi-stage late materialization finished, late_mode_blocks={} direct_mode_blocks={}",
         late_mode_blocks,
         direct_mode_blocks);
 }

@@ -876,22 +876,15 @@ try
 }
 CATCH
 
-TEST_F(SkippableBlockInputStreamTest, MultiStageLateMaterializationAdaptiveLateMode)
+TEST_F(SkippableBlockInputStreamTest, MultiStageLateMaterializationPartialPassUsesLateMode)
 try
 {
-    constexpr size_t sample_rows_per_block = 4096;
     constexpr size_t final_rows = DEFAULT_MERGE_BLOCK_SIZE * 6 + 1024;
     constexpr size_t final_passed_rows = DEFAULT_MERGE_BLOCK_SIZE * 4;
 
     std::vector<IColumn::Filter> stage0_filters;
     std::vector<std::vector<UInt8>> filter_values;
     std::vector<std::vector<Int64>> rest_values;
-    for (size_t i = 0; i < 4; ++i)
-    {
-        stage0_filters.emplace_back(sample_rows_per_block, 1);
-        filter_values.emplace_back(makeResidualValues(sample_rows_per_block, 1));
-        rest_values.emplace_back(makeRestValues(static_cast<Int64>(i * sample_rows_per_block), sample_rows_per_block));
-    }
     stage0_filters.emplace_back(final_rows, 1);
     filter_values.emplace_back(makeResidualValues(final_rows, final_passed_rows));
     rest_values.emplace_back(makeRestValues(100000, final_rows));
@@ -906,7 +899,7 @@ try
         filter_values,
         rest_values);
 
-    auto bitmap_filter = std::make_shared<BitmapFilter>(4 * sample_rows_per_block + final_rows, 1);
+    auto bitmap_filter = std::make_shared<BitmapFilter>(final_rows, 1);
     auto stream = std::make_shared<MultiStageLateMaterializationBlockInputStream>(
         makeMultiStageColumnsToRead(),
         stage0_stream,
@@ -916,12 +909,13 @@ try
         bitmap_filter,
         "test");
 
-    ASSERT_EQ(drainMultiStageStream(stream), 4 + final_passed_rows);
+    ASSERT_EQ(drainMultiStageStream(stream), final_passed_rows);
+    ASSERT_EQ(final_rest_stream->getReadCount(), 0);
     ASSERT_EQ(final_rest_stream->getReadWithFilterCount(), 1);
 }
 CATCH
 
-TEST_F(SkippableBlockInputStreamTest, MultiStageLateMaterializationAdaptiveDirectMode)
+TEST_F(SkippableBlockInputStreamTest, MultiStageLateMaterializationSwitchesDirectAndLatePerBlock)
 try
 {
     constexpr size_t sample_rows_per_block = 4096;
@@ -962,12 +956,12 @@ try
         "test");
 
     ASSERT_EQ(drainMultiStageStream(stream), 4 * sample_rows_per_block + final_passed_rows);
-    ASSERT_EQ(final_rest_stream->getReadWithFilterCount(), 0);
-    ASSERT_EQ(final_rest_stream->getReadCount(), 5);
+    ASSERT_EQ(final_rest_stream->getReadWithFilterCount(), 1);
+    ASSERT_EQ(final_rest_stream->getReadCount(), 4);
 }
 CATCH
 
-TEST_F(SkippableBlockInputStreamTest, MultiStageLateMaterializationSparseSampleRowsKeepSampling)
+TEST_F(SkippableBlockInputStreamTest, MultiStageLateMaterializationZeroPassSkipsAndPartialPassUsesLateMode)
 try
 {
     constexpr size_t final_rows = DEFAULT_MERGE_BLOCK_SIZE * 6 + 1024;
@@ -1008,8 +1002,8 @@ try
 
     ASSERT_EQ(drainMultiStageStream(stream), final_passed_rows);
     ASSERT_EQ(final_rest_stream->getSkipCount(), 4);
-    ASSERT_EQ(final_rest_stream->getReadWithFilterCount(), 0);
-    ASSERT_EQ(final_rest_stream->getReadCount(), 1);
+    ASSERT_EQ(final_rest_stream->getReadWithFilterCount(), 1);
+    ASSERT_EQ(final_rest_stream->getReadCount(), 0);
 }
 CATCH
 
