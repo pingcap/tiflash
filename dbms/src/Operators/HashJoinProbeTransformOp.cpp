@@ -163,9 +163,12 @@ OperatorStatus HashJoinProbeTransformOp::tryOutputImpl(Block & block)
 {
     if (status == ProbeStatus::PROBE && probe_process_info.all_rows_joined_finish)
     {
-        if (auto ret = probe_transform->tryFillProcessInfoInProbeStage(probe_process_info);
-            ret != OperatorStatus::HAS_OUTPUT)
-            return ret;
+        if (!probe_transform->shouldSkipProbe())
+        {
+            if (auto ret = probe_transform->tryFillProcessInfoInProbeStage(probe_process_info);
+                ret != OperatorStatus::HAS_OUTPUT)
+                return ret;
+        }
     }
 
     return onOutput(block);

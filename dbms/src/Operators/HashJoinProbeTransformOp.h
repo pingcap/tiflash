@@ -33,6 +33,8 @@ public:
 
     String getName() const override { return "HashJoinProbeTransformOp"; }
 
+    bool shouldSkipSource() const override { return origin_join->shouldSkipProbe(); }
+
 protected:
     OperatorStatus transformImpl(Block & block) override;
 

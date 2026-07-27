@@ -247,6 +247,16 @@ public:
 
     ASTTableJoin::Kind getKind() const { return kind; }
 
+    /// Inner/Semi cannot produce rows without build entries. RightSemi has no matched build rows to output.
+    /// This is available after finalizeBuild and can be used to avoid reading the probe side.
+    bool shouldSkipProbe() const
+    {
+        const bool can_skip_probe = kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Semi
+            || kind == ASTTableJoin::Kind::RightSemi;
+        return can_skip_probe && build_finished.load(std::memory_order_acquire)
+            && build_side_empty.load(std::memory_order_acquire);
+    }
+
     const Names & getLeftJoinKeys() const { return key_names_left; }
 
     void setInitActiveBuildThreads()
@@ -436,6 +446,7 @@ private:
     const LoggerPtr log;
 
     std::atomic<size_t> total_input_build_rows{0};
+    std::atomic_bool build_side_empty{false};
 
     /** Protect state for concurrent use in insertFromBlock and joinBlock.
       * Note that these methods could be called simultaneously only while use of StorageJoin,

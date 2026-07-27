@@ -256,6 +256,217 @@ try
 }
 CATCH
 
+TEST_F(JoinExecutorTestRunner, EmptyBuildInnerJoinSkipsProbe)
+try
+{
+    context.addMockTable(
+        "empty_build_join",
+        "probe_table",
+        {{"a", TiDB::TP::TypeLong}},
+        {toNullableVec<Int32>("a", {1, 2, 3})});
+    context.addExchangeReceiver("empty_build_receiver", {{"a", TiDB::TP::TypeLong}});
+
+    auto request = context.scan("empty_build_join", "probe_table")
+                       .join(context.receive("empty_build_receiver"), tipb::JoinType::TypeInnerJoin, {col("a")})
+                       .build(context);
+
+    WRAP_FOR_TEST_BEGIN
+    WRAP_FOR_JOIN_TEST_BEGIN
+    if (!enable_pipeline && cfg.enable_join_v2)
+        continue;
+
+    Expect expect{{"table_scan_0", {0, 10}}, {"exchange_receiver_1", {0, 10}}, {"Join_2", {0, 10}}};
+    testForExecutionSummary(request, expect);
+    WRAP_FOR_JOIN_TEST_END
+    WRAP_FOR_TEST_END
+}
+CATCH
+
+TEST_F(JoinExecutorTestRunner, BuildWithOnlyNullKeysInnerJoinSkipsProbe)
+try
+{
+    context.addMockTable(
+        "null_key_build_join",
+        "probe_table",
+        {{"a", TiDB::TP::TypeLong}},
+        {toNullableVec<Int32>("a", {1, 2, 3})});
+    context.addExchangeReceiver(
+        "null_key_build_receiver",
+        {{"a", TiDB::TP::TypeLong}},
+        {toNullableVec<Int32>("a", {{}})});
+
+    auto request = context.scan("null_key_build_join", "probe_table")
+                       .join(context.receive("null_key_build_receiver"), tipb::JoinType::TypeInnerJoin, {col("a")})
+                       .build(context);
+
+    WRAP_FOR_TEST_BEGIN
+    WRAP_FOR_JOIN_TEST_BEGIN
+    if (!enable_pipeline && cfg.enable_join_v2)
+        continue;
+
+    Expect expect{{"table_scan_0", {0, 10}}, {"exchange_receiver_1", {1, 10}}, {"Join_2", {0, 10}}};
+    testForExecutionSummary(request, expect);
+    WRAP_FOR_JOIN_TEST_END
+    WRAP_FOR_TEST_END
+}
+CATCH
+
+TEST_F(JoinExecutorTestRunner, EmptyBuildSemiJoinSkipsProbe)
+try
+{
+    context.addMockTable(
+        "empty_build_semi_join",
+        "probe_table",
+        {{"a", TiDB::TP::TypeLong}},
+        {toNullableVec<Int32>("a", {1, 2, 3})});
+    context.addExchangeReceiver("empty_build_semi_receiver", {{"a", TiDB::TP::TypeLong}});
+
+    auto request = context.scan("empty_build_semi_join", "probe_table")
+                       .join(context.receive("empty_build_semi_receiver"), tipb::JoinType::TypeSemiJoin, {col("a")})
+                       .build(context);
+
+    WRAP_FOR_TEST_BEGIN
+    WRAP_FOR_JOIN_TEST_BEGIN
+    if (!enable_pipeline && cfg.enable_join_v2)
+        continue;
+
+    Expect expect{{"table_scan_0", {0, 10}}, {"exchange_receiver_1", {0, 10}}, {"Join_2", {0, 10}}};
+    testForExecutionSummary(request, expect);
+    WRAP_FOR_JOIN_TEST_END
+    WRAP_FOR_TEST_END
+}
+CATCH
+
+TEST_F(JoinExecutorTestRunner, BuildWithOnlyNullKeysSemiJoinSkipsProbe)
+try
+{
+    context.addMockTable(
+        "null_key_build_semi_join",
+        "probe_table",
+        {{"a", TiDB::TP::TypeLong}},
+        {toNullableVec<Int32>("a", {1, 2, 3})});
+    context.addExchangeReceiver(
+        "null_key_build_semi_receiver",
+        {{"a", TiDB::TP::TypeLong}},
+        {toNullableVec<Int32>("a", {{}})});
+
+    auto request = context.scan("null_key_build_semi_join", "probe_table")
+                       .join(context.receive("null_key_build_semi_receiver"), tipb::JoinType::TypeSemiJoin, {col("a")})
+                       .build(context);
+
+    WRAP_FOR_TEST_BEGIN
+    WRAP_FOR_JOIN_TEST_BEGIN
+    if (!enable_pipeline && cfg.enable_join_v2)
+        continue;
+
+    Expect expect{{"table_scan_0", {0, 10}}, {"exchange_receiver_1", {1, 10}}, {"Join_2", {0, 10}}};
+    testForExecutionSummary(request, expect);
+    WRAP_FOR_JOIN_TEST_END
+    WRAP_FOR_TEST_END
+}
+CATCH
+
+TEST_F(JoinExecutorTestRunner, EmptyBuildRightSemiJoinSkipsProbe)
+try
+{
+    context.addMockTable("empty_build_right_semi_join", "build_table", {{"a", TiDB::TP::TypeLong}});
+    context.addExchangeReceiver(
+        "empty_build_right_semi_receiver",
+        {{"a", TiDB::TP::TypeLong}},
+        {toNullableVec<Int32>("a", {1, 2, 3})});
+
+    auto request = context.scan("empty_build_right_semi_join", "build_table")
+                       .join(
+                           context.receive("empty_build_right_semi_receiver"),
+                           tipb::JoinType::TypeSemiJoin,
+                           {col("a")},
+                           {},
+                           {},
+                           {},
+                           {},
+                           0,
+                           false,
+                           0)
+                       .build(context);
+
+    WRAP_FOR_TEST_BEGIN
+    WRAP_FOR_JOIN_TEST_BEGIN
+    if (!enable_pipeline && cfg.enable_join_v2)
+        continue;
+
+    Expect expect{{"table_scan_0", {0, 10}}, {"exchange_receiver_1", {0, 10}}, {"Join_2", {0, 10}}};
+    testForExecutionSummary(request, expect);
+    WRAP_FOR_JOIN_TEST_END
+    WRAP_FOR_TEST_END
+}
+CATCH
+
+TEST_F(JoinExecutorTestRunner, BuildWithOnlyNullKeysRightSemiJoinSkipsProbe)
+try
+{
+    context.addMockTable(
+        "null_key_build_right_semi_join",
+        "build_table",
+        {{"a", TiDB::TP::TypeLong}},
+        {toNullableVec<Int32>("a", {{}})});
+    context.addExchangeReceiver(
+        "null_key_build_right_semi_receiver",
+        {{"a", TiDB::TP::TypeLong}},
+        {toNullableVec<Int32>("a", {1, 2, 3})});
+
+    auto request = context.scan("null_key_build_right_semi_join", "build_table")
+                       .join(
+                           context.receive("null_key_build_right_semi_receiver"),
+                           tipb::JoinType::TypeSemiJoin,
+                           {col("a")},
+                           {},
+                           {},
+                           {},
+                           {},
+                           0,
+                           false,
+                           0)
+                       .build(context);
+
+    WRAP_FOR_TEST_BEGIN
+    WRAP_FOR_JOIN_TEST_BEGIN
+    if (!enable_pipeline && cfg.enable_join_v2)
+        continue;
+
+    Expect expect{{"table_scan_0", {1, 10}}, {"exchange_receiver_1", {0, 10}}, {"Join_2", {0, 10}}};
+    testForExecutionSummary(request, expect);
+    WRAP_FOR_JOIN_TEST_END
+    WRAP_FOR_TEST_END
+}
+CATCH
+
+TEST_F(JoinExecutorTestRunner, EmptyBuildAntiSemiJoinStillReadsProbe)
+try
+{
+    context.addMockTable(
+        "empty_build_anti_semi_join",
+        "probe_table",
+        {{"a", TiDB::TP::TypeLong}},
+        {toNullableVec<Int32>("a", {1, 2, 3})});
+    context.addExchangeReceiver("empty_build_anti_semi_receiver", {{"a", TiDB::TP::TypeLong}});
+
+    auto request
+        = context.scan("empty_build_anti_semi_join", "probe_table")
+              .join(context.receive("empty_build_anti_semi_receiver"), tipb::JoinType::TypeAntiSemiJoin, {col("a")})
+              .build(context);
+
+    WRAP_FOR_TEST_BEGIN
+    WRAP_FOR_JOIN_TEST_BEGIN
+    if (!enable_pipeline && cfg.enable_join_v2)
+        continue;
+
+    Expect expect{{"table_scan_0", {3, 10}}, {"exchange_receiver_1", {0, 10}}, {"Join_2", {3, 10}}};
+    testForExecutionSummary(request, expect);
+    WRAP_FOR_JOIN_TEST_END
+    WRAP_FOR_TEST_END
+}
+CATCH
+
 TEST_F(JoinExecutorTestRunner, MultiJoin)
 try
 {

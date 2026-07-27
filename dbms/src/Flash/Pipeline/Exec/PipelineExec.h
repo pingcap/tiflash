@@ -80,6 +80,7 @@ private:
     TransformOps transform_ops;
     SinkOpPtr sink_op;
     bool has_pipeline_breaker_wait_time = false;
+    bool source_prefix_executed = false;
 
     // hold the operator which is ready for executing await.
     Operator * awaitable = nullptr;

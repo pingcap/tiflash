@@ -74,6 +74,14 @@ public:
     size_t getBuildConcurrency() const { return build_concurrency; }
     size_t getProbeConcurrency() const { return probe_concurrency; }
 
+    /// Inner/Semi cannot produce rows if no build row is inserted into the hash table.
+    /// The probe pipeline is scheduled after the build pointer-table event, so build_side_empty is already published.
+    bool shouldSkipProbe() const
+    {
+        const bool can_skip_probe = kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Semi;
+        return can_skip_probe && build_side_empty.load(std::memory_order_acquire);
+    }
+
     const JoinProfileInfoPtr & getProfileInfo() const { return profile_info; }
 
 private:
@@ -145,6 +153,7 @@ private:
     size_t build_concurrency = 0;
     std::vector<JoinBuildWorkerData> build_workers_data;
     std::atomic<size_t> active_build_worker = 0;
+    std::atomic_bool build_side_empty{false};
 
     HashJoinPointerTable pointer_table;
 

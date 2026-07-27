@@ -51,6 +51,60 @@ protected:
 private:
     ResultHandler result_handler;
 };
+
+struct SourceLifecycle
+{
+    size_t prefix_count = 0;
+    size_t read_count = 0;
+    size_t suffix_count = 0;
+};
+
+class LifecycleSourceOp : public SourceOp
+{
+public:
+    LifecycleSourceOp(PipelineExecutorContext & exec_context_, const std::shared_ptr<SourceLifecycle> & lifecycle_)
+        : SourceOp(exec_context_, "")
+        , lifecycle(lifecycle_)
+    {}
+
+    String getName() const override { return "LifecycleSourceOp"; }
+
+protected:
+    void operatePrefixImpl() override { ++lifecycle->prefix_count; }
+    void operateSuffixImpl() override { ++lifecycle->suffix_count; }
+
+    OperatorStatus readImpl(Block & block) override
+    {
+        ++lifecycle->read_count;
+        block = {};
+        return OperatorStatus::HAS_OUTPUT;
+    }
+
+private:
+    std::shared_ptr<SourceLifecycle> lifecycle;
+};
+
+class SkipSourceTransformOp : public TransformOp
+{
+public:
+    explicit SkipSourceTransformOp(PipelineExecutorContext & exec_context_)
+        : TransformOp(exec_context_, "")
+    {}
+
+    String getName() const override { return "SkipSourceTransformOp"; }
+    bool shouldSkipSource() const override { return true; }
+
+protected:
+    OperatorStatus transformImpl(Block &) override { return OperatorStatus::HAS_OUTPUT; }
+
+    OperatorStatus tryOutputImpl(Block & block) override
+    {
+        block = {};
+        return OperatorStatus::HAS_OUTPUT;
+    }
+
+    void transformHeaderImpl(Block &) override {}
+};
 } // namespace
 
 class SimpleOperatorTestRunner : public DB::tests::ExecutorTest
@@ -141,6 +195,29 @@ try
     auto op_pipeline = build(request, result_handler, exec_context);
     exec_context.cancel();
     ASSERT_EQ(op_pipeline->execute(), OperatorStatus::CANCELLED);
+}
+CATCH
+
+TEST_F(SimpleOperatorTestRunner, SkipSourceWhenTransformCanFinish)
+try
+{
+    PipelineExecutorContext exec_context;
+    auto lifecycle = std::make_shared<SourceLifecycle>();
+    auto source = std::make_unique<LifecycleSourceOp>(exec_context, lifecycle);
+    TransformOps transforms;
+    transforms.push_back(std::make_unique<SkipSourceTransformOp>(exec_context));
+    ResultHandler result_handler{[](const Block &) {
+    }};
+    auto sink = std::make_unique<SimpleGetResultSinkOp>(exec_context, "", std::move(result_handler));
+    PipelineExec pipeline(std::move(source), std::move(transforms), std::move(sink), false);
+
+    pipeline.executePrefix();
+    ASSERT_EQ(pipeline.execute(), OperatorStatus::FINISHED);
+    pipeline.executeSuffix();
+
+    ASSERT_EQ(lifecycle->prefix_count, 0);
+    ASSERT_EQ(lifecycle->read_count, 0);
+    ASSERT_EQ(lifecycle->suffix_count, 0);
 }
 CATCH
 
