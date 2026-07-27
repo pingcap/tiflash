@@ -1861,9 +1861,9 @@ bool DAGStorageInterpreter::shouldEnableMultiStageLateMaterialization() const
             ++final_rest_col_cnt;
     }
 
-    if (final_rest_col_cnt < 12)
+    if (final_rest_col_cnt < 10)
         return disable(fmt::format("too few final rest columns: {}", final_rest_col_cnt));
-    if (final_rest_col_cnt < 3 * stage1_filter_col_cnt)
+    if (final_rest_col_cnt < 2 * stage1_filter_col_cnt)
     {
         return disable(fmt::format(
             "final rest columns are not wide enough, final_rest_col_cnt={}, stage1_filter_col_cnt={}",

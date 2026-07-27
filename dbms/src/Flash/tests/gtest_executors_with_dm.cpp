@@ -364,6 +364,46 @@ std::shared_ptr<tipb::DAGRequest> buildDAGRequestWithPushedDownFilterAndProjecti
     return request;
 }
 
+ASTPtr buildAllGreaterThanMinusOneFilter(size_t begin_col_id, size_t end_col_id)
+{
+    RUNTIME_CHECK(begin_col_id < end_col_id);
+    ASTPtr filter = gt(col(fmt::format("c{}", begin_col_id)), lit(Field(static_cast<Int64>(-1))));
+    for (size_t col_id = begin_col_id + 1; col_id < end_col_id; ++col_id)
+        filter = And(filter, gt(col(fmt::format("c{}", col_id)), lit(Field(static_cast<Int64>(-1)))));
+    return filter;
+}
+
+void addMockMultiStageLateMaterializationTable(
+    MockDAGRequestContext & context,
+    const String & table_name,
+    size_t column_count)
+{
+    RUNTIME_CHECK(column_count > 1);
+
+    MockColumnInfoVec columns;
+    ColumnsWithTypeAndName data;
+    constexpr size_t rows = 32;
+    for (size_t col_id = 0; col_id < column_count; ++col_id)
+    {
+        const auto name = fmt::format("c{}", col_id);
+        columns.push_back({name, TiDB::TP::TypeLongLong});
+
+        std::vector<Int64> values;
+        values.reserve(rows);
+        for (size_t row = 0; row < rows; ++row)
+        {
+            if (col_id == 0)
+                values.push_back(row);
+            else if (col_id == 1)
+                values.push_back(row % 8);
+            else
+                values.push_back(static_cast<Int64>(col_id * 1000 + row));
+        }
+        data.emplace_back(toVec<Int64>(name, values));
+    }
+    context.addMockDeltaMerge({"test_db", table_name}, columns, data, /*concurrency_hint=*/4);
+}
+
 void rewriteComparisonRightLiteral(
     tipb::Expr * condition,
     tipb::ScalarFuncSig sig,
@@ -540,6 +580,105 @@ try
         << getColumnsContent(actual);
 
     assertMultiStageRowsOverride(enabled_dag_context, 16);
+}
+CATCH
+
+TEST_F(ExecutorsWithDMTestRunner, MultiStageLateMaterializationEnabledAtRestColumnThreshold)
+try
+{
+    enablePipeline(true);
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(64)));
+
+    auto request = buildDAGRequestWithPushedDownFilter(
+        context,
+        "multi_stage_lm",
+        lt(col("c0"), lit(Field(static_cast<Int64>(16)))),
+        buildAllGreaterThanMinusOneFilter(/*begin_col_id=*/1, /*end_col_id=*/6));
+
+    context.context->getSettingsRef().dt_enable_multi_stage_late_materialization = false;
+    DAGContext disabled_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/4);
+    auto expected = executeStreams(&disabled_dag_context);
+    ASSERT_EQ(disabled_dag_context.getExecutorRowsOverride("table_scan_0"), nullptr);
+    ASSERT_EQ(disabled_dag_context.getExecutorRowsOverride("selection_1"), nullptr);
+
+    context.context->getSettingsRef().dt_enable_multi_stage_late_materialization = true;
+    DAGContext enabled_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/4);
+    auto actual = executeStreams(&enabled_dag_context);
+    ASSERT_TRUE(columnsEqual(expected, actual, /*_restrict=*/false))
+        << "\n  expect_block: \n"
+        << getColumnsContent(expected) << "\n actual_block: \n"
+        << getColumnsContent(actual);
+
+    assertMultiStageRowsOverride(enabled_dag_context, 16);
+}
+CATCH
+
+TEST_F(ExecutorsWithDMTestRunner, MultiStageLateMaterializationDisabledWhenRestColumnsBelowThreshold)
+try
+{
+    enablePipeline(true);
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(64)));
+
+    addMockMultiStageLateMaterializationTable(context, "multi_stage_lm_rest_below_threshold", /*column_count=*/10);
+
+    auto request = buildDAGRequestWithPushedDownFilter(
+        context,
+        "multi_stage_lm_rest_below_threshold",
+        lt(col("c0"), lit(Field(static_cast<Int64>(16)))),
+        lt(col("c1"), lit(Field(static_cast<Int64>(4)))));
+
+    context.context->getSettingsRef().dt_enable_multi_stage_late_materialization = false;
+    DAGContext disabled_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/4);
+    auto expected = executeStreams(&disabled_dag_context);
+    ASSERT_EQ(disabled_dag_context.getExecutorRowsOverride("table_scan_0"), nullptr);
+    ASSERT_EQ(disabled_dag_context.getExecutorRowsOverride("selection_1"), nullptr);
+
+    context.context->getSettingsRef().dt_enable_multi_stage_late_materialization = true;
+    DAGContext enabled_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/4);
+    auto actual = executeStreams(&enabled_dag_context);
+    ASSERT_TRUE(columnsEqual(expected, actual, /*_restrict=*/false))
+        << "\n  expect_block: \n"
+        << getColumnsContent(expected) << "\n actual_block: \n"
+        << getColumnsContent(actual);
+
+    ASSERT_EQ(enabled_dag_context.getExecutorRowsOverride("table_scan_0"), nullptr);
+    ASSERT_EQ(enabled_dag_context.getExecutorRowsOverride("selection_1"), nullptr);
+}
+CATCH
+
+TEST_F(ExecutorsWithDMTestRunner, MultiStageLateMaterializationDisabledWhenRestColumnsRatioBelowThreshold)
+try
+{
+    enablePipeline(true);
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(64)));
+
+    addMockMultiStageLateMaterializationTable(
+        context,
+        "multi_stage_lm_rest_ratio_below_threshold",
+        /*column_count=*/21);
+
+    auto request = buildDAGRequestWithPushedDownFilter(
+        context,
+        "multi_stage_lm_rest_ratio_below_threshold",
+        lt(col("c0"), lit(Field(static_cast<Int64>(16)))),
+        buildAllGreaterThanMinusOneFilter(/*begin_col_id=*/1, /*end_col_id=*/9));
+
+    context.context->getSettingsRef().dt_enable_multi_stage_late_materialization = false;
+    DAGContext disabled_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/4);
+    auto expected = executeStreams(&disabled_dag_context);
+    ASSERT_EQ(disabled_dag_context.getExecutorRowsOverride("table_scan_0"), nullptr);
+    ASSERT_EQ(disabled_dag_context.getExecutorRowsOverride("selection_1"), nullptr);
+
+    context.context->getSettingsRef().dt_enable_multi_stage_late_materialization = true;
+    DAGContext enabled_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/4);
+    auto actual = executeStreams(&enabled_dag_context);
+    ASSERT_TRUE(columnsEqual(expected, actual, /*_restrict=*/false))
+        << "\n  expect_block: \n"
+        << getColumnsContent(expected) << "\n actual_block: \n"
+        << getColumnsContent(actual);
+
+    ASSERT_EQ(enabled_dag_context.getExecutorRowsOverride("table_scan_0"), nullptr);
+    ASSERT_EQ(enabled_dag_context.getExecutorRowsOverride("selection_1"), nullptr);
 }
 CATCH
 

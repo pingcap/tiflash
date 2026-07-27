@@ -210,7 +210,7 @@ bool shouldEnableMultiStageLateMaterializationForMockDeltaMerge(
         if (!stage1_filter_col_id_set.contains(col.id))
             ++final_rest_col_cnt;
     }
-    return final_rest_col_cnt >= 12 && final_rest_col_cnt >= 3 * stage1_filter_col_cnt;
+    return final_rest_col_cnt >= 10 && final_rest_col_cnt >= 2 * stage1_filter_col_cnt;
 }
 } // namespace
 
