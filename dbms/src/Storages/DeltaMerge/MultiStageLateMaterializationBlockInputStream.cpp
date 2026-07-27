@@ -57,6 +57,10 @@ MultiStageLateMaterializationBlockInputStream::MultiStageLateMaterializationBloc
           buildResidualFilterHeader(residual_filter_),
           residual_filter_->before_where,
           residual_filter_->filter_column_name)
+    , running_topn(
+          residual_filter_->topn != nullptr
+              ? std::make_unique<RunningLocalTopN>(*residual_filter_->topn, *residual_filter_->filter_columns)
+              : nullptr)
     , log(Logger::get(NAME, req_id_))
 {
     RUNTIME_CHECK(residual_filter != nullptr);
@@ -326,11 +330,47 @@ Block MultiStageLateMaterializationBlockInputStream::read()
         if (runtime_stats)
             runtime_stats->stage1_output_rows.fetch_add(residual_passed_rows, std::memory_order_relaxed);
 
+        if (running_topn == nullptr && runtime_stats)
+            runtime_stats->topn_candidate_rows.fetch_add(residual_passed_rows, std::memory_order_relaxed);
+
         if (residual_passed_rows == 0)
         {
             ++late_mode_blocks;
             skipNextBlockOrRead(final_rest_stream, "final_rest");
             continue;
+        }
+
+        if (running_topn != nullptr)
+        {
+            auto topn_result = running_topn->update(stage1_block, residual_filter_ptr, residual_passed_rows);
+            if (runtime_stats)
+                runtime_stats->topn_candidate_rows.fetch_add(topn_result.passed_count, std::memory_order_relaxed);
+
+            if (topn_result.passed_count == 0)
+            {
+                ++late_mode_blocks;
+                skipNextBlockOrRead(final_rest_stream, "final_rest");
+                continue;
+            }
+
+            if (topn_result.passed_count == stage1_block.rows())
+            {
+                ++direct_mode_blocks;
+                return buildDirectModeBlock(
+                    stage1_block,
+                    stage0_filter_ptr,
+                    effective_stage0_filter.passed_count,
+                    nullptr,
+                    topn_result.passed_count);
+            }
+
+            ++late_mode_blocks;
+            return buildLateModeBlock(
+                stage1_block,
+                stage0_filter_ptr,
+                stage0_block.rows(),
+                topn_result.filter,
+                topn_result.passed_count);
         }
 
         if (residual_passed_rows == stage1_block.rows())

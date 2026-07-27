@@ -22,6 +22,11 @@
 #include <Core/Defines.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/OneBlockInputStream.h>
+#include <DataTypes/DataTypeDate.h>
+#include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeDecimal.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/isSupportedDataTypeCast.h>
 #include <Databases/IDatabase.h>
 #include <Debug/MockTiDB.h>
@@ -29,6 +34,7 @@
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
+#include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTExpressionList.h>
@@ -792,6 +798,134 @@ RuntimeFilteList parseRuntimeFilterList(
     return runtime_filter_list;
 }
 
+bool isSupportedMultiStageLateMaterializationTopNOrderByType(const DataTypePtr & type)
+{
+    const auto type_not_null = removeNullable(type);
+    return checkDataType<DataTypeUInt8>(type_not_null.get()) //
+        || checkDataType<DataTypeUInt16>(type_not_null.get()) //
+        || checkDataType<DataTypeUInt32>(type_not_null.get()) //
+        || checkDataType<DataTypeUInt64>(type_not_null.get()) //
+        || checkDataType<DataTypeInt8>(type_not_null.get()) //
+        || checkDataType<DataTypeInt16>(type_not_null.get()) //
+        || checkDataType<DataTypeInt32>(type_not_null.get()) //
+        || checkDataType<DataTypeInt64>(type_not_null.get()) //
+        || checkDataType<DataTypeFloat32>(type_not_null.get()) //
+        || checkDataType<DataTypeFloat64>(type_not_null.get()) //
+        || checkDataType<DataTypeDecimal32>(type_not_null.get()) //
+        || checkDataType<DataTypeDecimal64>(type_not_null.get()) //
+        || checkDataType<DataTypeDecimal128>(type_not_null.get()) //
+        || checkDataType<DataTypeDecimal256>(type_not_null.get()) //
+        || checkDataType<DataTypeDate>(type_not_null.get()) //
+        || checkDataType<DataTypeDateTime>(type_not_null.get());
+}
+
+const TiDB::ColumnInfo * findSourceColumnByID(const TiDB::ColumnInfos & source_columns, ColumnID column_id)
+{
+    const auto it = std::find_if(source_columns.begin(), source_columns.end(), [&](const auto & column) {
+        return column.id == column_id;
+    });
+    return it == source_columns.end() ? nullptr : &*it;
+}
+
+DM::MultiStageLateMaterializationTopNDescriptionPtr buildStorageMultiStageLateMaterializationTopN(
+    const SelectQueryInfo & query_info,
+    const DM::ColumnDefines & final_columns_to_read,
+    const DM::ColumnDefinesPtr & residual_filter_columns,
+    const LoggerPtr & tracing_logger,
+    DM::ColumnDefinesPtr & merged_stage1_columns)
+{
+    auto disable = [&](const String & reason) -> DM::MultiStageLateMaterializationTopNDescriptionPtr {
+        LOG_DEBUG(tracing_logger, "Disable TopN-enhanced multi-stage late materialization, reason={}", reason);
+        return nullptr;
+    };
+
+    if (!query_info.multi_stage_late_materialization_topn)
+        return nullptr;
+    if (query_info.multi_stage_late_materialization_topn->topk == 0)
+        return disable("topk is zero");
+    if (query_info.multi_stage_late_materialization_topn->topk > DM::multi_stage_late_materialization_topn_max_topk)
+        return disable(fmt::format("topk is too large: {}", query_info.multi_stage_late_materialization_topn->topk));
+    if (query_info.multi_stage_late_materialization_topn->order_by_columns.empty())
+        return disable("empty order by columns");
+    if (query_info.multi_stage_late_materialization_topn->order_by_columns.size()
+        > DM::multi_stage_late_materialization_topn_max_order_by_columns)
+        return disable(fmt::format(
+            "too many order by columns: {}",
+            query_info.multi_stage_late_materialization_topn->order_by_columns.size()));
+
+    std::unordered_map<ColumnID, DM::ColumnDefine> final_column_map;
+    final_column_map.reserve(final_columns_to_read.size());
+    for (const auto & column : final_columns_to_read)
+        final_column_map.emplace(column.id, column);
+
+    merged_stage1_columns = std::make_shared<DM::ColumnDefines>(*residual_filter_columns);
+    std::unordered_set<ColumnID> stage1_column_ids;
+    stage1_column_ids.reserve(merged_stage1_columns->size());
+    for (const auto & column : *merged_stage1_columns)
+        stage1_column_ids.insert(column.id);
+
+    auto storage_topn = std::make_shared<DM::MultiStageLateMaterializationTopNDescription>();
+    storage_topn->topk = query_info.multi_stage_late_materialization_topn->topk;
+    storage_topn->order_by_columns.reserve(query_info.multi_stage_late_materialization_topn->order_by_columns.size());
+
+    for (const auto & order_by_column : query_info.multi_stage_late_materialization_topn->order_by_columns)
+    {
+        const auto column_id = order_by_column.column_id;
+        if (column_id == ExtraTableIDColumnID || column_id == ExtraCommitTSColumnID)
+            return disable(fmt::format("order by virtual column is unsupported, column_id={}", column_id));
+
+        const auto * source_column = findSourceColumnByID(query_info.dag_query->source_columns, column_id);
+        if (source_column == nullptr)
+            return disable(
+                fmt::format("order by column is not found in table scan source columns, column_id={}", column_id));
+        if (source_column->hasGeneratedColumnFlag())
+            return disable(fmt::format("order by generated column is unsupported, column_id={}", column_id));
+        if (source_column->tp == TiDB::TypeTimestamp || source_column->tp == TiDB::TypeTime)
+            return disable(fmt::format(
+                "order by column type needs or may need table scan extra cast, column_id={}, tp={}",
+                column_id,
+                static_cast<int>(source_column->tp)));
+
+        const auto final_column_it = final_column_map.find(column_id);
+        if (final_column_it == final_column_map.end())
+            return disable(
+                fmt::format("order by column is not found in storage columns_to_read, column_id={}", column_id));
+        if (!isSupportedMultiStageLateMaterializationTopNOrderByType(final_column_it->second.type))
+            return disable(fmt::format(
+                "unsupported order by storage type, column_id={}, type={}",
+                column_id,
+                final_column_it->second.type->getName()));
+
+        if (stage1_column_ids.insert(column_id).second)
+            merged_stage1_columns->push_back(final_column_it->second);
+        storage_topn->order_by_columns.push_back(order_by_column);
+    }
+
+    const auto final_rest_col_cnt = final_columns_to_read.size() - merged_stage1_columns->size();
+    if (final_rest_col_cnt == 0)
+        return disable("no final rest columns after adding order by columns");
+    if (final_rest_col_cnt < 10)
+        return disable(fmt::format("too few final rest columns after adding order by columns: {}", final_rest_col_cnt));
+    if (final_rest_col_cnt < 2 * merged_stage1_columns->size())
+    {
+        return disable(fmt::format(
+            "final rest columns are not wide enough after adding order by columns, final_rest_col_cnt={}, "
+            "stage1_col_cnt={}",
+            final_rest_col_cnt,
+            merged_stage1_columns->size()));
+    }
+
+    LOG_DEBUG(
+        tracing_logger,
+        "Enable TopN-enhanced multi-stage late materialization, topk={} order_by_columns={} stage1_columns={} "
+        "final_rest_columns={}",
+        storage_topn->topk,
+        storage_topn->order_by_columns.size(),
+        merged_stage1_columns->size(),
+        final_rest_col_cnt);
+    return storage_topn;
+}
+
 DM::PushDownFilterPtr buildMultiStageLateMaterializationFilter(
     const SelectQueryInfo & query_info,
     const DM::PushDownFilterPtr & stage0_filter,
@@ -832,7 +966,25 @@ DM::PushDownFilterPtr buildMultiStageLateMaterializationFilter(
         "Build multi-stage late materialization residual filter, stage1_filter_columns={} final_columns_to_read={}",
         residual_filter->filter_columns->size(),
         final_columns_to_read.size());
-    return residual_filter;
+    DM::ColumnDefinesPtr merged_stage1_columns;
+    auto storage_topn = buildStorageMultiStageLateMaterializationTopN(
+        query_info,
+        final_columns_to_read,
+        residual_filter->filter_columns,
+        tracing_logger,
+        merged_stage1_columns);
+    if (storage_topn == nullptr)
+        return residual_filter;
+
+    return std::make_shared<DM::PushDownFilter>(
+        residual_filter->rs_operator,
+        residual_filter->before_where,
+        residual_filter->project_after_where,
+        merged_stage1_columns,
+        residual_filter->filter_column_name,
+        residual_filter->extra_cast,
+        residual_filter->columns_after_cast,
+        storage_topn);
 }
 } // namespace
 

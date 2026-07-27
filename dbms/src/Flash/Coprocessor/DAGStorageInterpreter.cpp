@@ -382,11 +382,13 @@ DAGStorageInterpreter::DAGStorageInterpreter(
     Context & context_,
     const TiDBTableScan & table_scan_,
     const FilterConditions & filter_conditions_,
-    size_t max_streams_)
+    size_t max_streams_,
+    const DM::MultiStageLateMaterializationTopNDescriptionPtr & multi_stage_late_materialization_topn_)
     : context(context_)
     , table_scan(table_scan_)
     , filter_conditions(filter_conditions_)
     , max_streams(max_streams_)
+    , multi_stage_late_materialization_topn(multi_stage_late_materialization_topn_)
     , log(Logger::get(context.getDAGContext()->log ? context.getDAGContext()->log->identifier() : ""))
     , logical_table_id(table_scan.getLogicalTableID())
     , tmt(context.getTMTContext())
@@ -1052,9 +1054,13 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
                 &multi_stage_late_materialization_runtime_stats->stage0_output_rows));
         dagContext().setExecutorRowsOverride(
             filter_conditions.executor_id,
-            std::shared_ptr<std::atomic<UInt64>>(
-                multi_stage_late_materialization_runtime_stats,
-                &multi_stage_late_materialization_runtime_stats->stage1_output_rows));
+            multi_stage_late_materialization_topn != nullptr
+                ? std::shared_ptr<std::atomic<UInt64>>(
+                    multi_stage_late_materialization_runtime_stats,
+                    &multi_stage_late_materialization_runtime_stats->topn_candidate_rows)
+                : std::shared_ptr<std::atomic<UInt64>>(
+                    multi_stage_late_materialization_runtime_stats,
+                    &multi_stage_late_materialization_runtime_stats->stage1_output_rows));
     }
 
     auto create_query_info = [&](Int64 table_id) -> SelectQueryInfo {
@@ -1074,6 +1080,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
         query_info.is_fast_scan = table_scan.isFastScan();
         query_info.enable_multi_stage_late_materialization = enable_multi_stage_late_materialization;
         query_info.multi_stage_late_materialization_runtime_stats = multi_stage_late_materialization_runtime_stats;
+        query_info.multi_stage_late_materialization_topn = multi_stage_late_materialization_topn;
         return query_info;
     };
     RUNTIME_CHECK_MSG(mvcc_query_info->scan_context != nullptr, "Unexpected null scan_context");

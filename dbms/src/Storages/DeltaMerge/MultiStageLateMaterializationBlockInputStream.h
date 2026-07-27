@@ -101,6 +101,7 @@ private:
     BitmapFilterPtr bitmap_filter;
     MultiStageLateMaterializationRuntimeStatsPtr runtime_stats;
     FilterTransformAction residual_filter_action;
+    std::unique_ptr<RunningLocalTopN> running_topn;
 
     size_t late_mode_blocks = 0;
     size_t direct_mode_blocks = 0;

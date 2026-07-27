@@ -149,6 +149,8 @@ tipb::TableScan * findMutableTableScan(tipb::Executor * executor)
 {
     switch (executor->tp())
     {
+    case tipb::ExecType::TypeTopN:
+        return findMutableTableScan(executor->mutable_topn()->mutable_child());
     case tipb::ExecType::TypeTableScan:
         return executor->mutable_tbl_scan();
     case tipb::ExecType::TypeSelection:
@@ -164,6 +166,8 @@ tipb::Selection * findMutableSelection(tipb::Executor * executor)
 {
     switch (executor->tp())
     {
+    case tipb::ExecType::TypeTopN:
+        return findMutableSelection(executor->mutable_topn()->mutable_child());
     case tipb::ExecType::TypeSelection:
         return executor->mutable_selection();
     case tipb::ExecType::TypeProjection:
@@ -359,6 +363,29 @@ std::shared_ptr<tipb::DAGRequest> buildDAGRequestWithPushedDownFilterAndProjecti
     const auto & pushed_down_filter_expr = pushed_down_filter_request->root_executor().selection().conditions(0);
 
     auto request = context.scan("test_db", table_name).filter(residual_filter).project(projections).build(context);
+    *findMutableTableScan(request->mutable_root_executor())->add_pushed_down_filter_conditions()
+        = pushed_down_filter_expr;
+    return request;
+}
+
+std::shared_ptr<tipb::DAGRequest> buildDAGRequestWithPushedDownFilterAndTopN(
+    MockDAGRequestContext & context,
+    const String & table_name,
+    const ASTPtr & pushed_down_filter,
+    const ASTPtr & residual_filter,
+    const String & order_by_column,
+    bool is_desc,
+    UInt64 limit)
+{
+    auto pushed_down_filter_request = context.scan("test_db", table_name).filter(pushed_down_filter).build(context);
+    RUNTIME_CHECK(pushed_down_filter_request->root_executor().tp() == tipb::ExecType::TypeSelection);
+    RUNTIME_CHECK(pushed_down_filter_request->root_executor().selection().conditions_size() == 1);
+    const auto & pushed_down_filter_expr = pushed_down_filter_request->root_executor().selection().conditions(0);
+
+    auto request = context.scan("test_db", table_name)
+                       .filter(residual_filter)
+                       .topN(order_by_column, is_desc, limit)
+                       .build(context);
     *findMutableTableScan(request->mutable_root_executor())->add_pushed_down_filter_conditions()
         = pushed_down_filter_expr;
     return request;
@@ -570,6 +597,115 @@ try
     auto expected = executeStreams(&disabled_dag_context);
     ASSERT_EQ(disabled_dag_context.getExecutorRowsOverride("table_scan_0"), nullptr);
     ASSERT_EQ(disabled_dag_context.getExecutorRowsOverride("selection_1"), nullptr);
+
+    context.context->getSettingsRef().dt_enable_multi_stage_late_materialization = true;
+    DAGContext enabled_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/4);
+    auto actual = executeStreams(&enabled_dag_context);
+    ASSERT_TRUE(columnsEqual(expected, actual, /*_restrict=*/false))
+        << "\n  expect_block: \n"
+        << getColumnsContent(expected) << "\n actual_block: \n"
+        << getColumnsContent(actual);
+
+    assertMultiStageRowsOverride(enabled_dag_context, 16);
+}
+CATCH
+
+TEST_F(ExecutorsWithDMTestRunner, MultiStageLateMaterializationTopNAsc)
+try
+{
+    enablePipeline(true);
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(64)));
+
+    auto request = buildDAGRequestWithPushedDownFilterAndTopN(
+        context,
+        "multi_stage_lm",
+        lt(col("c0"), lit(Field(static_cast<Int64>(16)))),
+        gt(col("c1"), lit(Field(static_cast<Int64>(-1)))),
+        "c1",
+        /*is_desc=*/false,
+        /*limit=*/2);
+
+    context.context->getSettingsRef().dt_enable_multi_stage_late_materialization = false;
+    DAGContext disabled_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/4);
+    auto expected = executeStreams(&disabled_dag_context);
+    ASSERT_EQ(disabled_dag_context.getExecutorRowsOverride("table_scan_0"), nullptr);
+    ASSERT_EQ(disabled_dag_context.getExecutorRowsOverride("selection_1"), nullptr);
+
+    context.context->getSettingsRef().dt_enable_multi_stage_late_materialization = true;
+    DAGContext enabled_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/4);
+    auto actual = executeStreams(&enabled_dag_context);
+    ASSERT_TRUE(columnsEqual(expected, actual, /*_restrict=*/false))
+        << "\n  expect_block: \n"
+        << getColumnsContent(expected) << "\n actual_block: \n"
+        << getColumnsContent(actual);
+
+    auto table_scan_rows = enabled_dag_context.getExecutorRowsOverride("table_scan_0");
+    auto selection_rows = enabled_dag_context.getExecutorRowsOverride("selection_1");
+    ASSERT_NE(table_scan_rows, nullptr);
+    ASSERT_NE(selection_rows, nullptr);
+    ASSERT_EQ(table_scan_rows->load(), 16);
+    ASSERT_GE(selection_rows->load(), 2);
+    ASSERT_LT(selection_rows->load(), 16);
+}
+CATCH
+
+TEST_F(ExecutorsWithDMTestRunner, MultiStageLateMaterializationTopNDisabledForStringOrderBy)
+try
+{
+    enablePipeline(true);
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(64)));
+
+    MockColumnInfoVec columns;
+    columns.push_back({"c0", TiDB::TP::TypeLongLong});
+    columns.push_back({"c1", TiDB::TP::TypeLongLong});
+    columns.push_back({"s", TiDB::TP::TypeString});
+    for (size_t col_id = 2; col_id <= 14; ++col_id)
+        columns.push_back({fmt::format("c{}", col_id), TiDB::TP::TypeLongLong});
+
+    constexpr size_t rows = 32;
+    std::vector<Int64> c0_values;
+    std::vector<Int64> c1_values;
+    std::vector<String> s_values;
+    c0_values.reserve(rows);
+    c1_values.reserve(rows);
+    s_values.reserve(rows);
+    for (size_t row = 0; row < rows; ++row)
+    {
+        c0_values.push_back(row);
+        c1_values.push_back(row % 8);
+        s_values.push_back(fmt::format("s{:02}", 31 - row));
+    }
+
+    ColumnsWithTypeAndName data;
+    data.emplace_back(toVec<Int64>("c0", c0_values));
+    data.emplace_back(toVec<Int64>("c1", c1_values));
+    data.emplace_back(toVec<String>("s", s_values));
+    for (size_t col_id = 2; col_id <= 14; ++col_id)
+    {
+        std::vector<Int64> values;
+        values.reserve(rows);
+        for (size_t row = 0; row < rows; ++row)
+            values.push_back(static_cast<Int64>(col_id * 1000 + row));
+        data.emplace_back(toVec<Int64>(fmt::format("c{}", col_id), values));
+    }
+    context.addMockDeltaMerge(
+        {"test_db", "multi_stage_lm_string_topn"},
+        columns,
+        data,
+        /*concurrency_hint=*/4);
+
+    auto request = buildDAGRequestWithPushedDownFilterAndTopN(
+        context,
+        "multi_stage_lm_string_topn",
+        lt(col("c0"), lit(Field(static_cast<Int64>(16)))),
+        gt(col("c1"), lit(Field(static_cast<Int64>(-1)))),
+        "s",
+        /*is_desc=*/false,
+        /*limit=*/2);
+
+    context.context->getSettingsRef().dt_enable_multi_stage_late_materialization = false;
+    DAGContext disabled_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/4);
+    auto expected = executeStreams(&disabled_dag_context);
 
     context.context->getSettingsRef().dt_enable_multi_stage_late_materialization = true;
     DAGContext enabled_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/4);

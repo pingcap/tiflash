@@ -20,6 +20,7 @@
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Operators/Operator.h>
 #include <Storages/DeltaMerge/ColumnDefine_fwd.h>
+#include <Storages/DeltaMerge/MultiStageLateMaterializationTopN.h>
 #include <TiDB/Schema/TiDB_fwd.h>
 #include <common/types.h>
 
@@ -107,7 +108,8 @@ public:
         std::vector<int> runtime_filter_ids = std::vector<int>(),
         int rf_max_wait_time_ms = 0,
         const google::protobuf::RepeatedPtrField<tipb::Expr> * pushed_down_filters = nullptr,
-        const TiDB::ColumnInfos * scan_column_infos = nullptr);
+        const TiDB::ColumnInfos * scan_column_infos = nullptr,
+        const DM::MultiStageLateMaterializationTopNDescriptionPtr & multi_stage_late_materialization_topn = nullptr);
 
     void buildExecFromDeltaMerge(
         PipelineExecutorContext & exec_context_,
@@ -121,7 +123,8 @@ public:
         int rf_max_wait_time_ms = 0,
         const google::protobuf::RepeatedPtrField<tipb::Expr> * pushed_down_filters = nullptr,
         const String & table_scan_executor_id = "",
-        const TiDB::ColumnInfos * scan_column_infos = nullptr);
+        const TiDB::ColumnInfos * scan_column_infos = nullptr,
+        const DM::MultiStageLateMaterializationTopNDescriptionPtr & multi_stage_late_materialization_topn = nullptr);
 
     bool tableExistsForDeltaMerge(Int64 table_id);
 

@@ -19,6 +19,7 @@
 #include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Flash/Planner/Plans/PhysicalLeaf.h>
+#include <Storages/DeltaMerge/MultiStageLateMaterializationTopN.h>
 #include <tipb/executor.pb.h>
 
 namespace DB
@@ -63,6 +64,12 @@ public:
 
     const String & getFilterConditionsId() const;
 
+    const TiDB::ColumnInfos & getTableScanColumns() const { return table_scan_columns; }
+
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & getPushedDownFilters() const { return pushed_down_filters; }
+
+    void setMultiStageLateMaterializationTopN(const DM::MultiStageLateMaterializationTopNDescriptionPtr & topn);
+
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/) override;
 
@@ -91,6 +98,8 @@ private:
     google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters;
 
     TiDB::ColumnInfos table_scan_columns;
+
+    DM::MultiStageLateMaterializationTopNDescriptionPtr multi_stage_late_materialization_topn;
 
     bool use_table_scan_columns_for_delta_merge;
 

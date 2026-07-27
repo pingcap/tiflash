@@ -73,7 +73,8 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
             table_scan.getRuntimeFilterIDs(),
             10000,
             &table_scan.getPushedDownFilters(),
-            use_table_scan_columns ? &table_scan.getColumns() : nullptr));
+            use_table_scan_columns ? &table_scan.getColumns() : nullptr,
+            nullptr));
     }
     else
     {
@@ -184,7 +185,8 @@ void PhysicalMockTableScan::buildPipelineExecGroupImpl(
             rf_max_wait_time_ms,
             &pushed_down_filters,
             execId(),
-            use_table_scan_columns_for_delta_merge ? &table_scan_columns : nullptr);
+            use_table_scan_columns_for_delta_merge ? &table_scan_columns : nullptr,
+            multi_stage_late_materialization_topn);
         for (size_t i = 0; i < group_builder.concurrency(); ++i)
         {
             if (auto * source_op = dynamic_cast<UnorderedSourceOp *>(group_builder.getCurBuilder(i).source_op.get()))
@@ -240,7 +242,8 @@ bool PhysicalMockTableScan::setFilterConditions(
             runtime_filter_ids,
             10000,
             &pushed_down_filters,
-            use_table_scan_columns_for_delta_merge ? &table_scan_columns : nullptr));
+            use_table_scan_columns_for_delta_merge ? &table_scan_columns : nullptr,
+            multi_stage_late_materialization_topn));
 
         return true;
     }
@@ -259,6 +262,12 @@ const String & PhysicalMockTableScan::getFilterConditionsId() const
 {
     RUNTIME_CHECK(hasFilterConditions());
     return filter_conditions.executor_id;
+}
+
+void PhysicalMockTableScan::setMultiStageLateMaterializationTopN(
+    const DM::MultiStageLateMaterializationTopNDescriptionPtr & topn)
+{
+    multi_stage_late_materialization_topn = topn;
 }
 
 void PhysicalMockTableScan::buildRuntimeFilterInLocalStream(Context & context)

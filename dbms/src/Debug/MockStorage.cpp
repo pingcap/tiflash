@@ -376,7 +376,8 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(
     std::vector<int> runtime_filter_ids,
     int rf_max_wait_time_ms,
     const google::protobuf::RepeatedPtrField<tipb::Expr> * pushed_down_filters,
-    const TiDB::ColumnInfos * table_scan_column_infos)
+    const TiDB::ColumnInfos * table_scan_column_infos,
+    const DM::MultiStageLateMaterializationTopNDescriptionPtr & multi_stage_late_materialization_topn)
 {
     static const google::protobuf::RepeatedPtrField<tipb::Expr> empty_pushed_down_filters{};
     static const auto empty_ann_query_info = tipb::ANNQueryInfo{};
@@ -400,6 +401,7 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(
             runtime_filter_ids,
             rf_max_wait_time_ms,
             context.getTimezoneInfo());
+        query_info.multi_stage_late_materialization_topn = multi_stage_late_materialization_topn;
         BlockInputStreams ins = storage->read(
             column_names,
             query_info,
@@ -476,7 +478,8 @@ void MockStorage::buildExecFromDeltaMerge(
     int rf_max_wait_time_ms,
     const google::protobuf::RepeatedPtrField<tipb::Expr> * pushed_down_filters,
     const String & table_scan_executor_id,
-    const TiDB::ColumnInfos * table_scan_column_infos)
+    const TiDB::ColumnInfos * table_scan_column_infos,
+    const DM::MultiStageLateMaterializationTopNDescriptionPtr & multi_stage_late_materialization_topn)
 {
     static const google::protobuf::RepeatedPtrField<tipb::Expr> empty_pushed_down_filters{};
     static const auto empty_ann_query_info = tipb::ANNQueryInfo{};
@@ -511,9 +514,13 @@ void MockStorage::buildExecFromDeltaMerge(
                         &multi_stage_late_materialization_runtime_stats->stage0_output_rows));
                 dag_context->setExecutorRowsOverride(
                     filter_conditions->executor_id,
-                    std::shared_ptr<std::atomic<UInt64>>(
-                        multi_stage_late_materialization_runtime_stats,
-                        &multi_stage_late_materialization_runtime_stats->stage1_output_rows));
+                    multi_stage_late_materialization_topn != nullptr
+                        ? std::shared_ptr<std::atomic<UInt64>>(
+                            multi_stage_late_materialization_runtime_stats,
+                            &multi_stage_late_materialization_runtime_stats->topn_candidate_rows)
+                        : std::shared_ptr<std::atomic<UInt64>>(
+                            multi_stage_late_materialization_runtime_stats,
+                            &multi_stage_late_materialization_runtime_stats->stage1_output_rows));
             }
         }
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
@@ -526,6 +533,7 @@ void MockStorage::buildExecFromDeltaMerge(
             context.getTimezoneInfo());
         query_info.enable_multi_stage_late_materialization = enable_multi_stage_late_materialization;
         query_info.multi_stage_late_materialization_runtime_stats = multi_stage_late_materialization_runtime_stats;
+        query_info.multi_stage_late_materialization_topn = multi_stage_late_materialization_topn;
         storage->read(
             exec_context_,
             group_builder,

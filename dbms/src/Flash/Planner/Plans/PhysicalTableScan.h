@@ -18,6 +18,7 @@
 #include <Flash/Coprocessor/FilterConditions.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Flash/Planner/Plans/PhysicalLeaf.h>
+#include <Storages/DeltaMerge/MultiStageLateMaterializationTopN.h>
 #include <tipb/executor.pb.h>
 
 namespace DB
@@ -48,6 +49,10 @@ public:
 
     const String & getFilterConditionsId() const;
 
+    const TiDBTableScan & getTiDBTableScan() const { return tidb_table_scan; }
+
+    void setMultiStageLateMaterializationTopN(const DM::MultiStageLateMaterializationTopNDescriptionPtr & topn);
+
     void buildPipeline(PipelineBuilder & builder, Context & context, PipelineExecutorContext & exec_context) override;
 
 private:
@@ -66,6 +71,8 @@ private:
     FilterConditions filter_conditions;
 
     TiDBTableScan tidb_table_scan;
+
+    DM::MultiStageLateMaterializationTopNDescriptionPtr multi_stage_late_materialization_topn;
 
     Block sample_block;
 

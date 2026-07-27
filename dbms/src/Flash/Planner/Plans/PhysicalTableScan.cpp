@@ -114,7 +114,12 @@ void PhysicalTableScan::buildBlockInputStreamImpl(DAGPipeline & pipeline, Contex
     }
     else
     {
-        DAGStorageInterpreter storage_interpreter(context, tidb_table_scan, filter_conditions, max_streams);
+        DAGStorageInterpreter storage_interpreter(
+            context,
+            tidb_table_scan,
+            filter_conditions,
+            max_streams,
+            multi_stage_late_materialization_topn);
         storage_interpreter.execute(pipeline);
     }
     buildProjection(pipeline);
@@ -137,7 +142,12 @@ void PhysicalTableScan::buildPipeline(
     }
     else
     {
-        DAGStorageInterpreter storage_interpreter(context, tidb_table_scan, filter_conditions, context.getMaxStreams());
+        DAGStorageInterpreter storage_interpreter(
+            context,
+            tidb_table_scan,
+            filter_conditions,
+            context.getMaxStreams(),
+            multi_stage_late_materialization_topn);
         storage_interpreter.execute(exec_context, pipeline_exec_builder);
     }
     buildProjection(exec_context, pipeline_exec_builder);
@@ -213,5 +223,11 @@ const String & PhysicalTableScan::getFilterConditionsId() const
 {
     RUNTIME_CHECK(hasFilterConditions());
     return filter_conditions.executor_id;
+}
+
+void PhysicalTableScan::setMultiStageLateMaterializationTopN(
+    const DM::MultiStageLateMaterializationTopNDescriptionPtr & topn)
+{
+    multi_stage_late_materialization_topn = topn;
 }
 } // namespace DB

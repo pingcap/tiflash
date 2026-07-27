@@ -26,6 +26,7 @@ struct MultiStageLateMaterializationRuntimeStats
 {
     std::atomic<UInt64> stage0_output_rows{0};
     std::atomic<UInt64> stage1_output_rows{0};
+    std::atomic<UInt64> topn_candidate_rows{0};
 };
 
 using MultiStageLateMaterializationRuntimeStatsPtr = std::shared_ptr<MultiStageLateMaterializationRuntimeStats>;
