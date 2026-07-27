@@ -513,7 +513,9 @@ void DAGStorageInterpreter::executeImpl(
                 remote_builder.getCurIOProfileInfos(),
                 /*is_append=*/true);
             auto remote_profile_infos = remote_builder.getCurProfileInfos();
-            dag_context.addProfileInfosToExecutorRowsOverride(table_scan.getTableScanExecutorID(), remote_profile_infos);
+            dag_context.addProfileInfosToExecutorRowsOverride(
+                table_scan.getTableScanExecutorID(),
+                remote_profile_infos);
             dag_context.addOperatorProfileInfos(
                 table_scan.getTableScanExecutorID(),
                 OperatorProfileInfos(remote_profile_infos),
