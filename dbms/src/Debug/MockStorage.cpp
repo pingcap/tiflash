@@ -181,6 +181,8 @@ bool shouldEnableMultiStageLateMaterializationForMockDeltaMerge(
     bool stage0_filter_covers_all_scan_columns = true;
     for (const auto & col : scan_column_infos)
     {
+        if (col.id == ExtraTableIDColumnID)
+            continue;
         if (!stage0_filter_col_id_set.contains(col.id))
         {
             stage0_filter_covers_all_scan_columns = false;
@@ -193,6 +195,8 @@ bool shouldEnableMultiStageLateMaterializationForMockDeltaMerge(
     std::unordered_set<ColumnID> stage1_filter_col_id_set;
     for (const auto & expr : filter_conditions->conditions)
         getColumnIDsFromExpr(expr, scan_column_infos, stage1_filter_col_id_set);
+    if (stage1_filter_col_id_set.contains(ExtraTableIDColumnID))
+        return false;
 
     const auto stage1_filter_col_cnt = stage1_filter_col_id_set.size();
     if (stage1_filter_col_cnt == 0 || stage1_filter_col_cnt > 10)
@@ -201,6 +205,8 @@ bool shouldEnableMultiStageLateMaterializationForMockDeltaMerge(
     size_t final_rest_col_cnt = 0;
     for (const auto & col : scan_column_infos)
     {
+        if (col.id == ExtraTableIDColumnID)
+            continue;
         if (!stage1_filter_col_id_set.contains(col.id))
             ++final_rest_col_cnt;
     }

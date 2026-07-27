@@ -37,7 +37,8 @@ namespace
 bool useTableScanColumnsForDeltaMerge(const TiDB::ColumnInfos & columns)
 {
     return std::any_of(columns.begin(), columns.end(), [](const auto & column) {
-        return column.id == ExtraCommitTSColumnID || column.tp == TiDB::TypeTime || column.tp == TiDB::TypeTimestamp;
+        return column.id == ExtraTableIDColumnID || column.id == ExtraCommitTSColumnID || column.tp == TiDB::TypeTime
+            || column.tp == TiDB::TypeTimestamp;
     });
 }
 

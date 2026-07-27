@@ -101,8 +101,9 @@ public:
             collectExtraRuntimeDetail();
         }
 
-        if (auto rows_override = dag_context.getExecutorRowsOverride(executor_id); rows_override)
-            base.rows = rows_override->load(std::memory_order_relaxed);
+        UInt64 rows_override = 0;
+        if (dag_context.getExecutorRowsOverrideRows(executor_id, rows_override))
+            base.rows = rows_override;
     }
 
     static bool isMatch(const tipb::Executor * executor) { return ExecutorImpl::isMatch(executor); }

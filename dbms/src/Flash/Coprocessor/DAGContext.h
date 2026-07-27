@@ -198,9 +198,11 @@ public:
 
     void setExecutorRowsOverride(const String & executor_id, ExecutorRowsOverridePtr rows_override);
 
-    void addProfileRowsToExecutorRowsOverride(const String & executor_id, const OperatorProfileInfos & profile_infos) const;
+    void addProfileInfosToExecutorRowsOverride(const String & executor_id, const OperatorProfileInfos & profile_infos);
 
     ExecutorRowsOverridePtr getExecutorRowsOverride(const String & executor_id) const;
+
+    bool getExecutorRowsOverrideRows(const String & executor_id, UInt64 & rows) const;
 
     std::unordered_map<String, std::vector<String>> & getExecutorIdToJoinIdMap();
 
@@ -447,6 +449,8 @@ private:
     /// executor_rows_override_map is used when an internal scan optimization consumes an executor without
     /// creating a standalone pipeline operator, but still needs to report executor-level produced rows.
     std::unordered_map<String, ExecutorRowsOverridePtr> executor_rows_override_map;
+    /// Extra operator profiles whose rows should be added to executor_rows_override_map at statistics collection time.
+    std::unordered_map<String, OperatorProfileInfos> executor_rows_override_profile_infos_map;
     /// executor_id_to_join_id_map is a map that maps executor id to all the join executor id of itself and all its children.
     std::unordered_map<String, std::vector<String>> executor_id_to_join_id_map;
     /// join_execute_info_map is a map that maps from join_probe_executor_id to JoinExecuteInfo

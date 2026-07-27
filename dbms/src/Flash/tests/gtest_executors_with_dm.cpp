@@ -306,6 +306,18 @@ void rewriteTableScanColumnAsCommitTS(tipb::DAGRequest * request, Int32 column_i
     column->set_decimal(0);
 }
 
+void rewriteTableScanColumnAsExtraTableID(tipb::DAGRequest * request, Int32 column_index)
+{
+    auto * table_scan = findMutableTableScan(request->mutable_root_executor());
+    RUNTIME_CHECK(column_index >= 0 && column_index < table_scan->columns_size());
+    auto * column = table_scan->mutable_columns(column_index);
+    column->set_column_id(ExtraTableIDColumnID);
+    column->set_tp(TiDB::TypeLongLong);
+    column->set_flag(0);
+    column->set_columnlen(20);
+    column->set_decimal(0);
+}
+
 UInt64 getExecutionSummaryRows(const tipb::SelectResponse & response, const String & executor_id)
 {
     for (const auto & summary : response.execution_summaries())
@@ -980,6 +992,30 @@ try
 }
 CATCH
 
+TEST_F(ExecutorsWithDMTestRunner, MultiStageLateMaterializationDisabledForStage1ExtraTableIDColumn)
+try
+{
+    enablePipeline(true);
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(64)));
+
+    auto request = buildDAGRequestWithPushedDownFilter(
+        context,
+        "multi_stage_lm",
+        lt(col("c0"), lit(Field(static_cast<Int64>(16)))),
+        gt(col("c1"), lit(Field(static_cast<Int64>(-1)))));
+    rewriteTableScanColumnAsExtraTableID(request.get(), /*column_index=*/1);
+
+    context.context->getSettingsRef().dt_enable_multi_stage_late_materialization = true;
+    DAGContext enabled_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/4);
+    auto actual = executeStreams(&enabled_dag_context);
+
+    ASSERT_FALSE(actual.empty());
+    ASSERT_EQ(actual.front().column->size(), 16);
+    ASSERT_EQ(enabled_dag_context.getExecutorRowsOverride("table_scan_0"), nullptr);
+    ASSERT_EQ(enabled_dag_context.getExecutorRowsOverride("selection_1"), nullptr);
+}
+CATCH
+
 TEST_F(ExecutorsWithDMTestRunner, MultiStageLateMaterializationRowsOverrideMergesRemoteProfileRows)
 try
 {
@@ -1006,9 +1042,8 @@ try
 
     OperatorProfileInfos remote_table_scan_profiles;
     auto remote_table_scan_profile = std::make_shared<OperatorProfileInfo>();
-    remote_table_scan_profile->rows = 6;
     remote_table_scan_profiles.push_back(remote_table_scan_profile);
-    dag_context.addProfileRowsToExecutorRowsOverride("table_scan_0", remote_table_scan_profiles);
+    dag_context.addProfileInfosToExecutorRowsOverride("table_scan_0", remote_table_scan_profiles);
     dag_context.addOperatorProfileInfos(
         "table_scan_0",
         OperatorProfileInfos(remote_table_scan_profiles),
@@ -1016,13 +1051,15 @@ try
 
     OperatorProfileInfos remote_selection_profiles;
     auto remote_selection_profile = std::make_shared<OperatorProfileInfo>();
-    remote_selection_profile->rows = 6;
     remote_selection_profiles.push_back(remote_selection_profile);
-    dag_context.addProfileRowsToExecutorRowsOverride("selection_1", remote_selection_profiles);
+    dag_context.addProfileInfosToExecutorRowsOverride("selection_1", remote_selection_profiles);
     dag_context.addOperatorProfileInfos(
         "selection_1",
         OperatorProfileInfos(remote_selection_profiles),
         /*is_append=*/true);
+
+    remote_table_scan_profile->rows = 6;
+    remote_selection_profile->rows = 6;
 
     ExecutorStatisticsCollector statistics_collector(dag_context_ptr->log->identifier(), true);
     statistics_collector.initialize(&dag_context);

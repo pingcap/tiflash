@@ -513,14 +513,14 @@ void DAGStorageInterpreter::executeImpl(
                 remote_builder.getCurIOProfileInfos(),
                 /*is_append=*/true);
             auto remote_profile_infos = remote_builder.getCurProfileInfos();
-            dag_context.addProfileRowsToExecutorRowsOverride(table_scan.getTableScanExecutorID(), remote_profile_infos);
+            dag_context.addProfileInfosToExecutorRowsOverride(table_scan.getTableScanExecutorID(), remote_profile_infos);
             dag_context.addOperatorProfileInfos(
                 table_scan.getTableScanExecutorID(),
                 OperatorProfileInfos(remote_profile_infos),
                 /*is_append=*/true);
             if (filter_conditions.hasValue())
             {
-                dag_context.addProfileRowsToExecutorRowsOverride(filter_conditions.executor_id, remote_profile_infos);
+                dag_context.addProfileInfosToExecutorRowsOverride(filter_conditions.executor_id, remote_profile_infos);
                 dag_context.addOperatorProfileInfos(
                     filter_conditions.executor_id,
                     std::move(remote_profile_infos),
@@ -1820,6 +1820,8 @@ bool DAGStorageInterpreter::shouldEnableMultiStageLateMaterialization() const
     bool stage0_filter_covers_all_scan_columns = true;
     for (const auto & col : table_scan.getColumns())
     {
+        if (col.id == ExtraTableIDColumnID)
+            continue;
         if (!stage0_filter_col_id_set.contains(col.id))
         {
             stage0_filter_covers_all_scan_columns = false;
@@ -1837,6 +1839,8 @@ bool DAGStorageInterpreter::shouldEnableMultiStageLateMaterialization() const
     std::unordered_set<ColumnID> stage1_filter_col_id_set;
     for (const auto & expr : filter_conditions.conditions)
         getColumnIDsFromExpr(expr, table_scan.getColumns(), stage1_filter_col_id_set);
+    if (stage1_filter_col_id_set.contains(ExtraTableIDColumnID))
+        return disable("residual filters reference extra table id column");
 
     const auto stage1_filter_col_cnt = stage1_filter_col_id_set.size();
     if (stage1_filter_col_cnt == 0)
@@ -1849,6 +1853,8 @@ bool DAGStorageInterpreter::shouldEnableMultiStageLateMaterialization() const
     {
         if (col.hasGeneratedColumnFlag())
             return disable("generated columns are present in table scan");
+        if (col.id == ExtraTableIDColumnID)
+            continue;
         if (!stage1_filter_col_id_set.contains(col.id))
             ++final_rest_col_cnt;
     }
