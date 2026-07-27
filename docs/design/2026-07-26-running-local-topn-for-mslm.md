@@ -75,7 +75,8 @@ LIMIT k;
 - 只支持已经满足现有 MSLM 启用条件的查询。也就是说，TableScan 必须已有 pushed-down filters 作为 Stage 0，且 TableScan 上方必须有 residual Selection 作为 Stage 1。
 - 只支持 `ORDER BY` plain columns，即 TiPB `ByItem.expr` 必须直接是 `ColumnRef`。
 - 只支持 constant `LIMIT` 和 constant `OFFSET`。
-- 只支持单表 `TopN -> Selection -> TableScan`。在 TiFlash physical plan 中，`Selection` 通常已经被 push 到 `PhysicalTableScan::filter_conditions`，所以实际识别形态可以是 `TopN -> PhysicalTableScan(with filter_conditions)`。
+- 只支持 TiDB 下发的单表 `TopN -> Selection -> TableScan`。在 TiFlash physical plan 中，这一层 `Selection` 必须已经被合并到 `PhysicalTableScan::filter_conditions`，所以第一版实际只识别 `PhysicalTopN -> PhysicalTableScan(with filter_conditions and pushed_down_filters)`。
+- 第一版不穿透 `PhysicalFilter`。如果 TiFlash physical plan 中仍然存在独立的 `PhysicalFilter -> PhysicalTableScan`，说明 residual Selection 没有进入当前 MSLM Stage 1 识别范围，TopN-enhanced MSLM 直接禁用。
 - 不移除上层 TopN。
 - 只在 MSLM 已经满足启用条件时启用。
 - TopN filter 只用于减少 final rest columns 的读取。
@@ -208,9 +209,9 @@ struct MSLMTopNDescription
 
 第一版 `order_by_columns` 只允许 plain columns，不构造复杂 expression actions。
 
-Plan 识别建议在 `PhysicalTopN` 和 `PhysicalTableScan` 之间完成。`PhysicalTopN` 只在 child 是 `PhysicalTableScan` 时尝试生成 MSLM TopN 描述；如果 child 是 Projection、Join、Aggregation、Window 等其他节点，则不启用该优化。上层 `PhysicalTopN` executor 仍然保留，storage 内描述只用于减少 final rest columns 的读取。
+Plan 识别建议在 `PhysicalTopN` 和 `PhysicalTableScan` 之间完成。`PhysicalTopN` 只在 child 直接是 `PhysicalTableScan` 时尝试生成 MSLM TopN 描述；如果 child 是 `PhysicalFilter`、Projection、Join、Aggregation、Window 等其他节点，则不启用该优化。上层 `PhysicalTopN` executor 仍然保留，storage 内描述只用于减少 final rest columns 的读取。
 
-因为 TiFlash planner 会尽量把单表 `Selection` push 到 `PhysicalTableScan::filter_conditions`，所以第一版实际需要识别的 physical plan 形态通常是：
+对于 TiPB DAG 中的单层 `TopN -> Selection -> TableScan`，TiFlash physical planner 会先尝试把 `Selection` 合并到 `PhysicalTableScan::filter_conditions`。因此第一版实际需要识别的 physical plan 形态是：
 
 ```text
 PhysicalTopN
@@ -262,6 +263,21 @@ plain column 还需要保证 storage 内比较语义和上层 TopN 一致。第�
 - order-by column 是 generated column 或 virtual `_tidb_tid`。
 - order-by column 需要 TableScan 后的 extra cast 才能得到上层 TopN 的比较值。
 - order-by column 是 variable-length string 且暂未确认 collator 和 owned key 内存上界。
+- order-by column 不在第一版支持的类型白名单内。
+
+第一版 order-by column 类型白名单为：
+
+- integer numeric types。
+- decimal types。
+- date/datetime types。
+- float types。
+
+第一版明确不支持：
+
+- `String` / `FixedString` / `Bytes`，因为需要处理 collation 和 owned key 内存上界。
+- `Timestamp`，因为它通常需要 TableScan 后的 timezone extra cast，storage 内底层值不一定等于上层 TopN 的比较值。
+- `Time` / `Duration`，除非后续明确确认它和上层 TopN 使用完全一致的底层比较表示。
+- JSON、Enum/Set、Bit、Vector、Array、Tuple、Map 等其他类型。
 
 ### Stage 1 列集合
 
@@ -362,7 +378,7 @@ current block filter memory = O(current_block_rows)
 
 历史 candidate rows 一旦输出给上层 TopN，MSLM stream 不再负责保存它们。Heap eviction 只释放 owned sort key。
 
-对于 fixed-size order-by 类型，owned key 可以直接拷贝值和 NULL flag。对于 variable-length 类型，例如 String，owned key 可能带来较大内存开销。第一版可以先禁用 variable-length order-by columns，或者增加 per-stream memory guard。
+对于第一版支持的 order-by 类型，owned key 只拷贝 fixed-size value 和 NULL flag。对于 variable-length 类型，例如 String，owned key 可能带来较大内存开销，并且需要处理 collation。第一版禁用 variable-length order-by columns；后续如果要支持，可以再增加 per-stream memory guard 或 owned collation key。
 
 如果采用 memory guard，触发后应退化为普通 MSLM：
 
@@ -398,6 +414,102 @@ Heap 大小最多为 `topk`。如果 `topk` 超过启发式阈值，则禁用该
 
 第一版不要求 heap entry 能定位历史 block。Heap entry 的 locator 只服务于 current block eviction。历史 entry 被 eviction 时只释放 key，不访问历史 block。
 
+### Sort Key 表示
+
+第一版不使用 order-preserving bytes key。TiFlash 现有 sort 路径本身也是基于 `IColumn::compareAt()` / typed compare 直接比较 column values，而不是先构造可按 bytes 比较的 sort key。引入 bytes key 需要重新设计 signed integer、float、NaN、DESC、NULL、decimal 等类型的 order-preserving encoding，正确性风险较高。
+
+第一版也不直接使用通用 `Field` 作为 heap key。`Field` 虽然已经是 owned variant，但它支持 String/Array/Tuple 等当前不需要的类型，大小和通用抽取路径都偏重；float 的 NaN 比较语义也需要额外绕开。为了降低 hot path 开销，第一版使用一个更窄的 typed sort key：
+
+```text
+static constexpr size_t max_sort_key_columns = 4;
+
+enum class SortKeyKind
+{
+    Int64,
+    UInt64,
+    Float32,
+    Float64,
+    Decimal32,
+    Decimal64,
+    Decimal128,
+    Decimal256,
+    Date,
+    DateTime,
+};
+
+struct SortKeyField
+{
+    bool is_null;
+    SortKeyKind kind;
+    TypedFixedSizeValue value;
+};
+
+struct OwnedSortKey
+{
+    std::array<SortKeyField, max_sort_key_columns> fields;
+    size_t size;
+};
+```
+
+`TypedFixedSizeValue` 是 conceptual storage，实际实现可以使用 union 或其他 fixed-size typed storage。它只需要覆盖第一版白名单内的 fixed-size values，不支持 String/Array/Tuple。
+
+`RunningLocalTopN` 本身不模板化。每个 order-by column 在初始化时生成一个 descriptor，descriptor 中保存 typed extractor 和 comparator：
+
+```text
+struct SortKeyColumnDesc
+{
+    String column_name;
+    size_t column_pos;
+    SortKeyKind kind;
+    int direction;
+
+    extract_owned(column, row, SortKeyField &);
+    compare_owned(SortKeyField, SortKeyField);
+    compare_column_with_owned(column, row, SortKeyField);
+};
+```
+
+模板只用于生成具体类型的 extractor/comparator。这样一个 `OwnedSortKey` 可以同时包含多个不同类型的 order-by columns，而不需要把整个 `RunningLocalTopN` 或 `SortKeyField` 做成模板。
+
+### Sort Key 比较语义
+
+NULL 在所有支持类型中统一处理：
+
+```text
+NULL is minimum before applying direction.
+ASC  -> NULL first
+DESC -> NULL last
+```
+
+非 NULL values 的比较规则：
+
+- integer numeric、date、datetime 直接比较底层整数值。
+- decimal 直接比较底层 decimal value。因为 lhs/rhs 来自同一个 order-by column，decimal type 和 scale 一致。
+- float 使用 TiFlash 现有 `CompareHelper<Float32/Float64>::compare(..., nan_direction_hint=-1)` 语义，避免 NaN 行为和上层 sort 不一致。
+
+每个字段先得到不带 direction 的比较结果，再乘以 `SortKeyColumnDesc::direction`。多列 ORDER BY 按顺序比较，直到第一个非 0 结果。
+
+### Lazy Owned Key Materialization
+
+第一版不对 residual passed 的每一行都构造 `OwnedSortKey`。处理当前 `stage1_block` 时，可以直接使用 order-by columns 参与比较；只有当前 row 真的需要进入 heap 时，才 lazy materialize owned key。
+
+处理一个 block 前，先从 `stage1_block` 中收集 order-by column 指针：
+
+```text
+sort_columns[i] = stage1_block.getByPosition(desc[i].column_pos).column.get()
+```
+
+per-row hot path 不再从 `Block` 里按 name 或 position 查找 column，而是直接使用预先收集好的 `IColumn *`：
+
+```text
+compareRowWithOwnedKey(sort_columns, row, heap.worst().key)
+materializeOwnedKey(sort_columns, row)
+```
+
+heap 中始终只保存 owned key，不保存 `Block`、`IColumn *` 或 historical row reference。当前 row 只有在 `update()` 函数内部比较时可以直接读 `stage1_block` column。这样既避免 retain historical blocks，又避免给明显不可能进入 local TopK 的 rows 做 key copy。
+
+当前 block 内如果某个 entry 被后续更优 row eviction，可以通过 `block_sequence` 和 `row_index_in_stage1_block` 将对应的 `topn_candidate_filter` 置为 false。历史 block 的 entry 被 eviction 时不能回撤，因为 rows 已经输出给上层 TopN。
+
 ## Filter 坐标
 
 MSLM 中存在多套 filter 坐标：
@@ -428,7 +540,7 @@ combined_filter = compose(stage0_filter, stage1_final_filter)
 
 - `dt_enable_multi_stage_late_materialization` 为 true。
 - 当前查询已经满足 MSLM 启用条件。
-- 查询包含 TopN，且 TopN 的 child 是单表 `PhysicalTableScan`。
+- 查询包含 TopN，且 TopN 的 child 直接是单表 `PhysicalTableScan`。
 - `PhysicalTableScan` 已经包含 residual `filter_conditions`，并且 TableScan 已经包含 pushed-down filters。
 - TopN 上方仍保留全局 TopN executor。
 - TopN 的 `LIMIT` 和 `OFFSET` 是常量。
@@ -437,6 +549,7 @@ combined_filter = compose(stage0_filter, stage1_final_filter)
 - ORDER BY 只包含 direct `ColumnRef` plain columns。
 - ORDER BY columns 能通过 `ColumnRef` index 映射到 `table_scan.getColumns()` 中的 column id，并能进一步映射到 DeltaMerge `ColumnDefine`。
 - ORDER BY columns 不需要 TableScan 后 extra cast。
+- ORDER BY columns 类型属于第一版白名单：integer numeric、decimal、date、datetime、float。
 - ORDER BY columns 可加入 Stage 1 column set。
 - ORDER BY columns 数量不超过阈值。
 - final rest columns 数量满足 MSLM 的宽列启发式要求。
@@ -455,9 +568,11 @@ order_by_column_count <= 4
 - ORDER BY expression 不是 plain column。
 - ORDER BY plain column 无法按 column id 映射到 storage column。
 - ORDER BY column 需要 TableScan 后 extra cast。
+- ORDER BY column 类型不在第一版白名单内，例如 String、FixedString、Timestamp、Time/Duration、JSON、Enum/Set、Bit、Vector、Array、Tuple、Map。
 - ORDER BY 依赖 generated column。
 - TopN 包含非常大的 offset。
 - TopN 之前仍有无法进入 MSLM 的 Selection。
+- TopN 的 child 是 `PhysicalFilter`，即 residual Selection 没有被合并到 `PhysicalTableScan::filter_conditions`。
 - 查询没有 residual Selection，或者没有 TableScan pushed-down filters。
 - 查询要求 keep order 且和 MSLM 现有限制冲突。
 - TopN 位于 join、aggregation、window 等算子之上。
@@ -468,26 +583,50 @@ order_by_column_count <= 4
 
 - 明确 MVP 范围。
 - 增加基于 DAG request 的单测设计。
-- 明确 ties、offset、NULL ordering、collation 的测试覆盖。
+- 明确 ties、offset、NULL ordering、float NaN、以及 unsupported string/collation 的禁用测试覆盖。
 
-### Step 2: Plan 识别和元数据传递
+### Step 2: Pattern 识别和元数据传递
 
-- 在 `PhysicalTopN` 构建阶段识别 child 是 `PhysicalTableScan` 的模式。
+- 在 `PhysicalTopN` 构建阶段识别 child 直接是 `PhysicalTableScan` 的模式。
 - 只在 `PhysicalTableScan` 同时包含 residual `filter_conditions` 和 TableScan pushed-down filters 时启用。
+- 如果 child 是 `PhysicalFilter` 或其他节点，第一版不尝试穿透或重写。
 - 构造 `MSLMTopNDescription`。
-- 按 `ColumnRef` index -> `table_scan.getColumns()[index].id` -> `ColumnDefine` 的顺序对齐 order-by columns。
-- 将 order-by columns 合并到 MSLM Stage 1 column set。
-- 使用 Stage 1 storage column names 构造 storage-side `SortDescription`。
 - 保留上层 TopN executor，不修改最终 DAG 语义。
 
-### Step 3: RunningLocalTopN 状态
+### Step 3: ORDER BY ColumnRef 对齐和 Stage 1 列集合
 
-- 实现 per-stream bounded TopK heap。
-- 支持 plain column sort key 提取。
+- 要求每个 `ByItem.expr` 都是 direct `ColumnRef`。
+- 按 `ColumnRef` index -> `table_scan.getColumns()[index].id` -> `ColumnDefine` 的顺序对齐 order-by columns。
+- 禁用无法按 column id 映射到 storage column 的 order-by columns。
+- 禁用 generated column、virtual `_tidb_tid`、需要 TableScan 后 extra cast 的 order-by columns。
+- 校验 order-by column 类型属于第一版白名单。
+- 将 order-by columns 按 ColumnID 合并到 MSLM Stage 1 column set。
+- final rest columns 按 ColumnID 排除 Stage 1 columns，避免 order-by columns 重复读取。
+- 使用 Stage 1 storage column names 构造 storage-side order-by descriptor。
+
+### Step 4: Typed Sort Key Infrastructure
+
+- 实现 fixed-size typed `SortKeyField` / `OwnedSortKey`。
+- 实现 `SortKeyColumnDesc`，保存 column position、direction、type kind、extractor 和 comparator。
+- 支持 integer numeric、decimal、date、datetime、float。
+- Nullable wrapper 统一由 extractor/comparator 处理，nested type 必须在白名单内。
+- integer numeric、date、datetime 直接比较底层整数值。
+- decimal 直接比较底层 decimal value。
+- float comparator 使用现有 `CompareHelper` 的 NaN 语义。
+- 不支持 String/FixedString/collation，不使用 order-preserving bytes key，不直接使用通用 `Field` 作为 heap key。
+
+### Step 5: RunningLocalTopN 状态和算法
+
+- 实现 per-stream bounded TopK heap，heap top 是当前 worst candidate。
+- heap entry 只保存 owned key、stream/block sequence 和 current-block row index。
+- 每个 block 开始时预先收集 order-by column pointers，per-row compare 不从 `Block` 查找 column。
+- 支持 row-to-owned lazy compare，只在 row 需要进入 heap 时 materialize owned key。
 - 支持 ASC/DESC、NULL ordering 和 TiFlash 现有 comparator 语义。
 - 生成当前 block 的 `topn_candidate_filter`。
+- 支持 current block eviction，将被当前 block 后续更优 row 挤出的 candidate filter 清掉。
+- 历史 block entry eviction 不做回撤。
 
-### Step 4: 接入 MSLM final rest 读取
+### Step 6: 接入 MSLM final rest 读取
 
 - 在 residual filter 之后执行 running local TopN。
 - 将 `residual_filter` 和 `topn_candidate_filter` 合并。
@@ -496,7 +635,7 @@ order_by_column_count <= 4
 - 当 `residual_filter && topn_candidate_filter` 全通过时，final rest stream 按 Stage 0 filter 直接读取。
 - 当 `residual_filter && topn_candidate_filter` 部分通过时，compose 回 Stage 0 原始坐标并读取 final rest columns。
 
-### Step 5: Runtime Stats 和可观测性
+### Step 7: Runtime Stats 和可观测性
 
 - 保留 `stage1_output_rows` internal counter，表示 residual Selection 通过的真实行数。
 - 增加 `topn_candidate_rows` internal counter，表示 `residual_filter && topn_candidate_filter` 之后实际读取 final rest columns 的行数。
@@ -575,7 +714,8 @@ order_by_column_count <= 4
 
 - MVP 只支持 plain columns。
 - 复用现有排序比较逻辑。
-- 对 ASC/DESC、NULL、collation 做单测。
+- 对 ASC/DESC、NULL、float NaN、decimal/date/datetime 做正确性单测。
+- 对 String/FixedString/collation 做禁用路径单测。
 
 ### ORDER BY 列对齐错误
 
