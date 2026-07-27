@@ -13,6 +13,7 @@
 - [核心思路](#核心思路)
 - [正确性](#正确性)
 - [执行流程](#执行流程)
+- [ORDER BY 列对齐](#order-by-列对齐)
 - [Running Local TopN 状态](#running-local-topn-状态)
 - [Filter 坐标](#filter-坐标)
 - [启用规则](#启用规则)
@@ -63,6 +64,7 @@ LIMIT k;
 - 不做跨 stream 的 storage 内全局 TopN merge。
 - 不支持复杂 ORDER BY expression。
 - 不支持 join、aggregation、window 或其他会改变 row cardinality 的算子下的 TopN 下推。
+- 第一版不支持没有进入现有 MSLM 路径的 `TopN + TableScan`。例如没有 TableScan pushed filter，或者没有 residual Selection 的查询，后续单独扩展。
 - 不对旧的非 pipeline DAG executor 路径做支持。
 - 不追求和未优化路径在 ORDER BY ties 下选择完全相同的物理 rows。
 
@@ -70,12 +72,18 @@ LIMIT k;
 
 第一版只支持下面范围：
 
-- 只支持 `ORDER BY` plain columns。
+- 只支持已经满足现有 MSLM 启用条件的查询。也就是说，TableScan 必须已有 pushed-down filters 作为 Stage 0，且 TableScan 上方必须有 residual Selection 作为 Stage 1。
+- 只支持 `ORDER BY` plain columns，即 TiPB `ByItem.expr` 必须直接是 `ColumnRef`。
 - 只支持 constant `LIMIT` 和 constant `OFFSET`。
-- 只支持单表 `Selection + TableScan + TopN` 或 `TableScan + TopN`。
+- 只支持单表 `TopN -> Selection -> TableScan`。在 TiFlash physical plan 中，`Selection` 通常已经被 push 到 `PhysicalTableScan::filter_conditions`，所以实际识别形态可以是 `TopN -> PhysicalTableScan(with filter_conditions)`。
 - 不移除上层 TopN。
 - 只在 MSLM 已经满足启用条件时启用。
 - TopN filter 只用于减少 final rest columns 的读取。
+
+后续可以分阶段扩展：
+
+- 阶段二支持有 TableScan pushed filter 但没有 residual Selection 的 `TopN -> TableScan`。这要求把 residual filter 变成 optional，Stage 1 只读取 order-by columns。
+- 阶段三支持完全没有 filter 的 `TopN -> TableScan`。这需要把 MSLM 从当前的 filter-driven 模型泛化为 order-by-column-driven 模型，Stage 1 order-by stream 需要成为 block driver，工程风险更高。
 
 其中本地 TopN 使用的 K 为：
 
@@ -129,6 +137,12 @@ Final:
 
 `topn_candidate_filter` 只用于减少 final rest columns 的读取。上层 TopN executor 仍然保留，因此 storage 内输出可以是全局 TopN 的 superset。
 
+当前 MSLM 已经不再使用 adaptive mode。TopN-enhanced MSLM 因此不需要根据 residual 过滤率在 direct/late 两种策略之间做启发式选择，而是只保留下面三个自然分支：
+
+- `residual_filter && topn_candidate_filter` 全过滤时，skip final rest stream。
+- `residual_filter && topn_candidate_filter` 全通过时，final rest stream 按 Stage 0 filter 直接读取。
+- 其他部分通过场景，把 Stage 1 坐标的 filter compose 回 Stage 0 原始坐标，再用 combined filter 读取 final rest columns。
+
 ## 正确性
 
 ### Local TopK 覆盖 Global TopK
@@ -176,7 +190,7 @@ TiFlash 在构建 TableScan pipeline 时识别下面模式：
 ```text
 TopN
   |
-Selection (optional)
+Selection
   |
 TableScan
 ```
@@ -186,15 +200,68 @@ TableScan
 ```text
 struct MSLMTopNDescription
 {
-    SortDescription sort_description;
-    UInt64 limit;
-    UInt64 offset;
+    SortDescription storage_sort_description;
     UInt64 topk; // limit + offset
     ColumnDefines order_by_columns;
 };
 ```
 
 第一版 `order_by_columns` 只允许 plain columns，不构造复杂 expression actions。
+
+Plan 识别建议在 `PhysicalTopN` 和 `PhysicalTableScan` 之间完成。`PhysicalTopN` 只在 child 是 `PhysicalTableScan` 时尝试生成 MSLM TopN 描述；如果 child 是 Projection、Join、Aggregation、Window 等其他节点，则不启用该优化。上层 `PhysicalTopN` executor 仍然保留，storage 内描述只用于减少 final rest columns 的读取。
+
+因为 TiFlash planner 会尽量把单表 `Selection` push 到 `PhysicalTableScan::filter_conditions`，所以第一版实际需要识别的 physical plan 形态通常是：
+
+```text
+PhysicalTopN
+  |
+PhysicalTableScan(with filter_conditions and pushed_down_filters)
+```
+
+这里的 `filter_conditions` 是 TiFlash physical planner 内部保存的 residual Selection。对于 TiPB DAG 中形态为 `Selection -> TableScan` 的单个 Selection，TiFlash 构建 physical plan 时会把它放入 `PhysicalTableScan::filter_conditions`，而不是保留一个单独的 `PhysicalFilter`。如果 Selection 的 child 不是 TableScan，或者同一个 TableScan 已经设置过 `filter_conditions`，则会保留普通 `PhysicalFilter`，第一版不处理这种情况。
+
+需要注意，`PhysicalTableScan::filter_conditions` 不等于 TiPB `TableScan.pushed_down_filter_conditions`：
+
+- `TableScan.pushed_down_filter_conditions` 是现有 MSLM 的 Stage 0 pushed filter。
+- `PhysicalTableScan::filter_conditions` 是 Stage 1 residual Selection。
+- 第一版 TopN-enhanced MSLM 要求这两者都存在。
+
+### ORDER BY 列对齐
+
+即使第一版只支持 plain column，也需要显式处理 TopN order-by column 和 DeltaMerge storage column 的对齐。
+
+不要直接使用 `PhysicalTopN` 现有 `SortDescription.column_name` 去匹配 storage column。这个名字来自 TopN child schema，而 DeltaMerge Stage 1 block 使用的是 `ColumnDefine.name`。TableScan 后还有 schema projection、特殊列名和 cast-after-TS 等逻辑，直接按 name 对齐容易和 storage header 不一致。
+
+第一版采用基于 column id 的对齐流程：
+
+```text
+tipb::ByItem.expr() 必须是 ColumnRef
+  -> decode ColumnRef index
+  -> table_scan.getColumns()[index].id
+  -> 在 columns_to_read 或 table column defines 中按 column id 找到 ColumnDefine
+  -> 将该 ColumnDefine 加入 Stage 1 columns
+  -> 使用 ColumnDefine.name 构造 storage-side SortDescription
+```
+
+`MSLMTopNDescription::storage_sort_description` 中的 column name 必须是 Stage 1 block 中真实存在的 storage column name，而不是 TopN child schema name。
+
+Stage 1 column union 和 final rest column subtraction 都必须按 `ColumnID` 去重：
+
+```text
+stage1_columns = residual_filter_columns union order_by_columns
+final_rest_columns = final_columns_to_read - stage1_columns
+```
+
+如果 order-by column 已经属于 residual filter columns，则 Stage 1 只读一次。如果 order-by column 也是最终输出列，则 final rest columns 中必须排除该列，避免重复读取。
+
+第一版不支持没有 residual Selection 的 `TopN -> TableScan`。这种场景没有 Selection executor 可以承载 candidate rows 的 `EXPLAIN ANALYZE` 展示，也需要让 residual filter 变成 optional，后续单独设计。
+
+plain column 还需要保证 storage 内比较语义和上层 TopN 一致。第一版建议保守禁用下面场景：
+
+- order-by expr 不是 direct `ColumnRef`。
+- order-by column 是 generated column 或 virtual `_tidb_tid`。
+- order-by column 需要 TableScan 后的 extra cast 才能得到上层 TopN 的比较值。
+- order-by column 是 variable-length string 且暂未确认 collator 和 owned key 内存上界。
 
 ### Stage 1 列集合
 
@@ -361,12 +428,15 @@ combined_filter = compose(stage0_filter, stage1_final_filter)
 
 - `dt_enable_multi_stage_late_materialization` 为 true。
 - 当前查询已经满足 MSLM 启用条件。
-- 查询包含 TopN，且 TopN 位于单表 Selection/TableScan 之上。
+- 查询包含 TopN，且 TopN 的 child 是单表 `PhysicalTableScan`。
+- `PhysicalTableScan` 已经包含 residual `filter_conditions`，并且 TableScan 已经包含 pushed-down filters。
 - TopN 上方仍保留全局 TopN executor。
 - TopN 的 `LIMIT` 和 `OFFSET` 是常量。
 - `topk = limit + offset` 未超过阈值。
 - TopN 之前的 Selection predicates 全部在 MSLM Stage 0 或 Stage 1 内执行。
-- ORDER BY 只包含 plain columns。
+- ORDER BY 只包含 direct `ColumnRef` plain columns。
+- ORDER BY columns 能通过 `ColumnRef` index 映射到 `table_scan.getColumns()` 中的 column id，并能进一步映射到 DeltaMerge `ColumnDefine`。
+- ORDER BY columns 不需要 TableScan 后 extra cast。
 - ORDER BY columns 可加入 Stage 1 column set。
 - ORDER BY columns 数量不超过阈值。
 - final rest columns 数量满足 MSLM 的宽列启发式要求。
@@ -383,9 +453,12 @@ order_by_column_count <= 4
 禁用场景：
 
 - ORDER BY expression 不是 plain column。
+- ORDER BY plain column 无法按 column id 映射到 storage column。
+- ORDER BY column 需要 TableScan 后 extra cast。
 - ORDER BY 依赖 generated column。
 - TopN 包含非常大的 offset。
 - TopN 之前仍有无法进入 MSLM 的 Selection。
+- 查询没有 residual Selection，或者没有 TableScan pushed-down filters。
 - 查询要求 keep order 且和 MSLM 现有限制冲突。
 - TopN 位于 join、aggregation、window 等算子之上。
 
@@ -399,9 +472,12 @@ order_by_column_count <= 4
 
 ### Step 2: Plan 识别和元数据传递
 
-- 在 TableScan pipeline 构建阶段识别 `TopN -> Selection -> TableScan` 模式。
+- 在 `PhysicalTopN` 构建阶段识别 child 是 `PhysicalTableScan` 的模式。
+- 只在 `PhysicalTableScan` 同时包含 residual `filter_conditions` 和 TableScan pushed-down filters 时启用。
 - 构造 `MSLMTopNDescription`。
+- 按 `ColumnRef` index -> `table_scan.getColumns()[index].id` -> `ColumnDefine` 的顺序对齐 order-by columns。
 - 将 order-by columns 合并到 MSLM Stage 1 column set。
+- 使用 Stage 1 storage column names 构造 storage-side `SortDescription`。
 - 保留上层 TopN executor，不修改最终 DAG 语义。
 
 ### Step 3: RunningLocalTopN 状态
@@ -416,13 +492,18 @@ order_by_column_count <= 4
 - 在 residual filter 之后执行 running local TopN。
 - 将 `residual_filter` 和 `topn_candidate_filter` 合并。
 - 使用 combined filter 读取 final rest columns。
-- 当 TopN filter 无剪枝效果时，允许退化到现有路径。
+- 当 `residual_filter && topn_candidate_filter` 全过滤时，skip final rest stream。
+- 当 `residual_filter && topn_candidate_filter` 全通过时，final rest stream 按 Stage 0 filter 直接读取。
+- 当 `residual_filter && topn_candidate_filter` 部分通过时，compose 回 Stage 0 原始坐标并读取 final rest columns。
 
 ### Step 5: Runtime Stats 和可观测性
 
-- 保留现有 TableScan/Selection actRows 语义。
-- 可选增加 debug log，输出 TopN candidate rows、heap size、filtered rows。
-- 可选增加 scan context counters，用于统计 TopN filter 节省的 final rest rows。
+- 保留 `stage1_output_rows` internal counter，表示 residual Selection 通过的真实行数。
+- 增加 `topn_candidate_rows` internal counter，表示 `residual_filter && topn_candidate_filter` 之后实际读取 final rest columns 的行数。
+- 在 TopN-enhanced MSLM 启用时，可以用 `topn_candidate_rows` overwrite residual Selection executor 的 `actRows`，让 `EXPLAIN ANALYZE` 直接展示 final rest columns materialized rows。
+- 该 overwrite 会改变 Selection `actRows` 的展示语义：它不再表示纯 residual Selection 后的逻辑行数，而是表示 storage 内输出给上层 TopN 的 candidate rows。
+- TableScan executor 的 `actRows` 仍然使用 `stage0_output_rows`。
+- 可选增加 debug log，输出 residual passed rows、TopN candidate rows、heap size、filtered rows。
 
 ## 测试方案
 
@@ -434,6 +515,7 @@ order_by_column_count <= 4
 - `WHERE + ORDER BY + LIMIT`，其中 WHERE 同时包含 Stage 0 pushed filter 和 Stage 1 residual filter。
 - ORDER BY column 不在最终 projection 中。
 - ORDER BY column 同时属于 residual filter columns。
+- ORDER BY column 同时属于最终输出列，验证 final rest columns 不重复读取该列。
 - 多 block 数据，确保 running local TopN 可以跨 block 收紧 threshold。
 - 多 stream 并发，确保上层 TopN 保证最终结果。
 
@@ -447,12 +529,16 @@ order_by_column_count <= 4
 - residual filter 全过滤。
 - TopN candidate filter 全过滤。
 - TopN candidate filter 全通过。
+- ORDER BY plain column 按 column id 对齐到 storage column，避免依赖 child schema name。
+- ORDER BY column 需要 TableScan 后 extra cast 时禁用优化。
+- 没有 residual Selection 时禁用优化。
+- 没有 TableScan pushed-down filters 时禁用优化。
 
 ### 回归测试
 
 - MSLM 原有测试必须全部通过。
 - TopN 上方的 projection 仍然正确。
-- EXPLAIN ANALYZE actRows 不出现明显异常。
+- TopN-enhanced MSLM 启用时，EXPLAIN ANALYZE 中 residual Selection `actRows` 展示 TopN candidate rows，即 final rest columns materialized rows。
 - 禁用条件下必须走原路径。
 
 ## 性能评估
@@ -490,6 +576,17 @@ order_by_column_count <= 4
 - MVP 只支持 plain columns。
 - 复用现有排序比较逻辑。
 - 对 ASC/DESC、NULL、collation 做单测。
+
+### ORDER BY 列对齐错误
+
+如果直接用 TopN child schema name 匹配 DeltaMerge storage column name，可能因为 TableScan projection、特殊列名或 cast-after-TS 造成错配。
+
+缓解：
+
+- 只支持 direct `ColumnRef`。
+- 使用 `ColumnRef` index 映射到 `table_scan.getColumns()[index].id`。
+- 后续所有 Stage 1 column union、final rest column subtraction 和 storage-side sort description 都基于 `ColumnID` / `ColumnDefine` 构造。
+- 禁用无法按 column id 映射到 storage column 的场景。
 
 ### Selection 顺序错误
 
