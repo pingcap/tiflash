@@ -39,16 +39,21 @@ struct MultiStageLateMaterializationRuntimeStats
             logSummary();
         }
         catch (...)
-        {
-        }
+        {}
     }
 
-    void finishStream(UInt64 stream_late_mode_blocks, UInt64 stream_direct_mode_blocks, UInt64 stream_topn_heap_size)
+    void finishStream(
+        UInt64 stream_late_mode_blocks,
+        UInt64 stream_direct_mode_blocks,
+        UInt64 stream_topn_heap_size,
+        bool stream_topn_adaptive_disabled)
     {
         finished_streams.fetch_add(1, std::memory_order_relaxed);
         late_mode_blocks.fetch_add(stream_late_mode_blocks, std::memory_order_relaxed);
         direct_mode_blocks.fetch_add(stream_direct_mode_blocks, std::memory_order_relaxed);
         topn_heap_size_sum.fetch_add(stream_topn_heap_size, std::memory_order_relaxed);
+        if (stream_topn_adaptive_disabled)
+            topn_adaptive_disabled_streams.fetch_add(1, std::memory_order_relaxed);
     }
 
     void logSummary() const
@@ -57,17 +62,16 @@ struct MultiStageLateMaterializationRuntimeStats
             return;
 
         const auto stage1_rows = stage1_output_rows.load(std::memory_order_relaxed);
-        const auto topn_candidate_rows_for_log
-            = topn_enabled ? topn_candidate_rows.load(std::memory_order_relaxed) : 0;
-        const auto topn_filtered_rows
-            = topn_enabled && stage1_rows >= topn_candidate_rows_for_log ? stage1_rows - topn_candidate_rows_for_log
-                                                                          : 0;
+        const auto topn_candidate_rows_for_log = topn_enabled ? topn_candidate_rows.load(std::memory_order_relaxed) : 0;
+        const auto topn_filtered_rows = topn_enabled && stage1_rows >= topn_candidate_rows_for_log
+            ? stage1_rows - topn_candidate_rows_for_log
+            : 0;
 
         LOG_INFO(
             log,
             "Multi-stage late materialization finished, streams={} late_mode_blocks={} direct_mode_blocks={} "
             "stage0_output_rows={} stage1_output_rows={} topn_enabled={} topn_candidate_rows={} "
-            "topn_filtered_rows={} topn_heap_size_sum={}",
+            "topn_filtered_rows={} topn_heap_size_sum={} topn_adaptive_disabled_streams={}",
             finished_streams.load(std::memory_order_relaxed),
             late_mode_blocks.load(std::memory_order_relaxed),
             direct_mode_blocks.load(std::memory_order_relaxed),
@@ -76,7 +80,8 @@ struct MultiStageLateMaterializationRuntimeStats
             topn_enabled,
             topn_candidate_rows_for_log,
             topn_filtered_rows,
-            topn_heap_size_sum.load(std::memory_order_relaxed));
+            topn_heap_size_sum.load(std::memory_order_relaxed),
+            topn_adaptive_disabled_streams.load(std::memory_order_relaxed));
     }
 
     std::atomic<UInt64> stage0_output_rows{0};
@@ -86,6 +91,7 @@ struct MultiStageLateMaterializationRuntimeStats
     std::atomic<UInt64> late_mode_blocks{0};
     std::atomic<UInt64> direct_mode_blocks{0};
     std::atomic<UInt64> topn_heap_size_sum{0};
+    std::atomic<UInt64> topn_adaptive_disabled_streams{0};
     bool topn_enabled = false;
     LoggerPtr log;
 };

@@ -90,6 +90,10 @@ private:
         const IColumn::Filter * residual_filter,
         size_t residual_passed_rows);
 
+    bool shouldUseRunningTopN() const { return running_topn != nullptr && !topn_adaptive_disabled; }
+
+    void updateTopNAdaptiveState(UInt64 residual_passed_rows, UInt64 topn_candidate_rows);
+
     void logSummary();
 
 private:
@@ -105,6 +109,11 @@ private:
 
     size_t late_mode_blocks = 0;
     size_t direct_mode_blocks = 0;
+    UInt64 topn_adaptive_warmup_observed_rows = 0;
+    UInt64 topn_adaptive_input_rows = 0;
+    UInt64 topn_adaptive_candidate_rows = 0;
+    bool topn_adaptive_warmed_up = false;
+    bool topn_adaptive_disabled = false;
     bool summary_logged = false;
 
     const LoggerPtr log;

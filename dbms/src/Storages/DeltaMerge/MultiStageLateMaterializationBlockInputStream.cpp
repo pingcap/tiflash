@@ -17,6 +17,8 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/MultiStageLateMaterializationBlockInputStream.h>
 
+#include <algorithm>
+
 namespace DB::DM
 {
 namespace
@@ -282,6 +284,53 @@ Block MultiStageLateMaterializationBlockInputStream::buildDirectModeBlock(
     return full_block;
 }
 
+void MultiStageLateMaterializationBlockInputStream::updateTopNAdaptiveState(
+    UInt64 residual_passed_rows,
+    UInt64 topn_candidate_rows)
+{
+    if (running_topn == nullptr || topn_adaptive_disabled || residual_passed_rows == 0)
+        return;
+
+    const auto warmup_rows
+        = std::max(running_topn->topK() * 4, multi_stage_late_materialization_topn_adaptive_rows_threshold);
+    if (!topn_adaptive_warmed_up)
+    {
+        topn_adaptive_warmup_observed_rows += residual_passed_rows;
+        if (topn_adaptive_warmup_observed_rows < warmup_rows)
+            return;
+
+        topn_adaptive_warmed_up = true;
+        return;
+    }
+
+    topn_adaptive_input_rows += residual_passed_rows;
+    topn_adaptive_candidate_rows += topn_candidate_rows;
+
+    const auto min_input_rows_to_check
+        = std::max(running_topn->topK() * 4, multi_stage_late_materialization_topn_adaptive_rows_threshold);
+    if (topn_adaptive_input_rows < min_input_rows_to_check)
+        return;
+
+    if (topn_adaptive_candidate_rows * multi_stage_late_materialization_topn_adaptive_disable_ratio_denominator
+        < topn_adaptive_input_rows * multi_stage_late_materialization_topn_adaptive_disable_ratio_numerator)
+    {
+        return;
+    }
+
+    topn_adaptive_disabled = true;
+    LOG_INFO(
+        log,
+        "Disable running local TopN for multi-stage late materialization adaptively, warmup_rows={} input_rows={} "
+        "candidate_rows={} min_input_rows_to_check={} heap_size={} disable_ratio={}/{}",
+        topn_adaptive_warmup_observed_rows,
+        topn_adaptive_input_rows,
+        topn_adaptive_candidate_rows,
+        min_input_rows_to_check,
+        running_topn->heapSize(),
+        multi_stage_late_materialization_topn_adaptive_disable_ratio_numerator,
+        multi_stage_late_materialization_topn_adaptive_disable_ratio_denominator);
+}
+
 Block MultiStageLateMaterializationBlockInputStream::read()
 {
     while (true)
@@ -330,7 +379,7 @@ Block MultiStageLateMaterializationBlockInputStream::read()
         if (runtime_stats)
             runtime_stats->stage1_output_rows.fetch_add(residual_passed_rows, std::memory_order_relaxed);
 
-        if (running_topn == nullptr && runtime_stats)
+        if (!shouldUseRunningTopN() && runtime_stats)
             runtime_stats->topn_candidate_rows.fetch_add(residual_passed_rows, std::memory_order_relaxed);
 
         if (residual_passed_rows == 0)
@@ -340,11 +389,12 @@ Block MultiStageLateMaterializationBlockInputStream::read()
             continue;
         }
 
-        if (running_topn != nullptr)
+        if (shouldUseRunningTopN())
         {
             auto topn_result = running_topn->update(stage1_block, residual_filter_ptr, residual_passed_rows);
             if (runtime_stats)
                 runtime_stats->topn_candidate_rows.fetch_add(topn_result.passed_count, std::memory_order_relaxed);
+            updateTopNAdaptiveState(residual_passed_rows, topn_result.passed_count);
 
             if (topn_result.passed_count == 0)
             {
@@ -405,7 +455,8 @@ void MultiStageLateMaterializationBlockInputStream::logSummary()
         runtime_stats->finishStream(
             late_mode_blocks,
             direct_mode_blocks,
-            running_topn != nullptr ? running_topn->heapSize() : 0);
+            running_topn != nullptr ? running_topn->heapSize() : 0,
+            topn_adaptive_disabled);
 }
 
 } // namespace DB::DM

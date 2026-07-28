@@ -32,6 +32,9 @@ namespace DB::DM
 
 inline constexpr UInt64 multi_stage_late_materialization_topn_max_topk = 2048;
 inline constexpr size_t multi_stage_late_materialization_topn_max_order_by_columns = 4;
+inline constexpr UInt64 multi_stage_late_materialization_topn_adaptive_rows_threshold = 8192;
+inline constexpr UInt64 multi_stage_late_materialization_topn_adaptive_disable_ratio_numerator = 7;
+inline constexpr UInt64 multi_stage_late_materialization_topn_adaptive_disable_ratio_denominator = 10;
 
 struct MultiStageLateMaterializationTopNOrderByColumn
 {
@@ -101,16 +104,15 @@ public:
         size_t residual_passed_rows);
 
     size_t heapSize() const { return heap.size(); }
+    UInt64 topK() const { return topk; }
 
 private:
     struct SortKeyColumnDesc
     {
         using BuildColumnViewFn = SortKeyColumnView (*)(const IColumn & column);
         using ExtractFieldFn = void (*)(const SortKeyColumnView & column, size_t row, SortKeyField & field);
-        using CompareColumnWithOwnedFn = int (*)(
-            const SortKeyColumnView & column,
-            size_t row,
-            const SortKeyField & field);
+        using CompareColumnWithOwnedFn
+            = int (*)(const SortKeyColumnView & column, size_t row, const SortKeyField & field);
 
         ColumnID column_id = EmptyColumnID;
         size_t column_pos = 0;
@@ -138,8 +140,10 @@ private:
     using Heap = std::priority_queue<HeapEntry, std::vector<HeapEntry>, HeapComparator>;
 
     int compareOwnedKeys(const OwnedSortKey & lhs, const OwnedSortKey & rhs) const;
-    int compareRowWithOwnedKey(const std::vector<SortKeyColumnView> & sort_columns, size_t row, const OwnedSortKey & rhs)
-        const;
+    int compareRowWithOwnedKey(
+        const std::vector<SortKeyColumnView> & sort_columns,
+        size_t row,
+        const OwnedSortKey & rhs) const;
     OwnedSortKey materializeOwnedKey(const std::vector<SortKeyColumnView> & sort_columns, size_t row) const;
 
 private:

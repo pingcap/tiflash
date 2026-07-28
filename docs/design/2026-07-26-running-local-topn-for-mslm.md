@@ -134,11 +134,29 @@ Final:
 
 `topn_candidate_filter` 只用于减少 final rest columns 的读取。上层 TopN executor 仍然保留，因此 storage 内输出可以是全局 TopN 的 superset。
 
-当前 MSLM 已经不再使用 adaptive mode。TopN-enhanced MSLM 因此不需要根据 residual 过滤率在 direct/late 两种策略之间做启发式选择，而是只保留下面三个自然分支：
+当前 MSLM 已经不再使用旧的 direct/late adaptive mode。TopN-enhanced MSLM 因此不需要根据 residual 过滤率在 direct/late 两种策略之间做启发式选择，而是只保留下面三个自然分支：
 
 - `residual_filter && topn_candidate_filter` 全过滤时，skip final rest stream。
 - `residual_filter && topn_candidate_filter` 全通过时，final rest stream 按 Stage 0 filter 直接读取。
 - 其他部分通过场景，把 Stage 1 坐标的 filter compose 回 Stage 0 原始坐标，再用 combined filter 读取 final rest columns。
+
+但是 running local TopN 本身有额外代价：Stage 1 需要读取 order-by columns，执行层需要做 comparator、heap 维护和 candidate filter 合并。如果 TopN 几乎不能减少 final rest columns 的读取，就可能带来性能回退。
+
+因此第一版增加一个运行时 one-way adaptive disable：
+
+```text
+开始时启用 running local TopN
+先用 warmup rows 建立初始 TopN 状态
+warmup 后，持续统计后续 residual input rows 和 TopN candidate rows
+如果后续累计 residual_input_rows 达到最小检查门槛，且 topn_candidate_rows / residual_input_rows 过高
+  后续 blocks 禁用 TopN filter
+  后续 final rest 只使用 residual filter
+禁用后不再重新启用
+```
+
+这个 adaptive 只做运行时止损，不改变正确性：禁用后输出的是 residual Selection 后的更多 rows，仍然是上层全局 TopN 的 superset。上层 TopN executor 保留，因此最终结果不变。
+
+需要注意，这个 runtime disable 不能避免已经加入 Stage 1 的 order-by columns IO，因为 Stage 1 schema 在 stream 构建时已经固定。它主要减少后续 comparator、heap 维护和 TopN candidate filter 处理成本。避免明显不划算的 order-by column 读取仍然依赖静态启发式 gating。
 
 ## 正确性
 
@@ -554,6 +572,9 @@ combined_filter = compose(stage0_filter, stage1_final_filter)
 ```text
 topk <= 2048
 order_by_column_count <= 4
+runtime adaptive warmup rows >= max(topk * 4, 8192)
+after warmup, check only when cumulative residual_input_rows >= max(topk * 4, 8192)
+after warmup, disable if cumulative topn_candidate_rows / residual_input_rows >= 0.7
 ```
 
 实际阈值可以根据 benchmark 调整。
@@ -634,10 +655,11 @@ order_by_column_count <= 4
 
 - 保留 `stage1_output_rows` internal counter，表示 residual Selection 通过的真实行数。
 - 增加 `topn_candidate_rows` internal counter，表示 `residual_filter && topn_candidate_filter` 之后实际读取 final rest columns 的行数。
+- 增加 runtime one-way adaptive disable 统计，表示有多少 streams 因 TopN candidate ratio 过高而禁用后续 TopN filter。
 - 在 TopN-enhanced MSLM 启用时，可以用 `topn_candidate_rows` overwrite residual Selection executor 的 `actRows`，让 `EXPLAIN ANALYZE` 直接展示 final rest columns materialized rows。
 - 该 overwrite 会改变 Selection `actRows` 的展示语义：它不再表示纯 residual Selection 后的逻辑行数，而是表示 storage 内输出给上层 TopN 的 candidate rows。
 - TableScan executor 的 `actRows` 仍然使用 `stage0_output_rows`。
-- 可选增加 debug log，输出 residual passed rows、TopN candidate rows、heap size、filtered rows。
+- 可选增加 debug log，输出 residual passed rows、TopN candidate rows、heap size、filtered rows、adaptive disable 状态。
 
 ## 测试方案
 
@@ -740,6 +762,8 @@ order_by_column_count <= 4
 
 - 使用保守启发式启用。
 - `topk` 和 order-by column count 设置上限。
+- 使用 runtime one-way adaptive disable，在 candidate ratio 过高时禁用后续 TopN filter。
+- adaptive disable 不能避免 Stage 1 已经额外读取的 order-by columns，因此静态 gating 仍然是主要防线。
 - 对 ties 多的场景 benchmark。
 
 ### Heap 持有历史 Block 导致内存累积
