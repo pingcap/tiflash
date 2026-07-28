@@ -74,7 +74,7 @@ LIMIT k;
 
 - 只支持已经满足现有 MSLM 启用条件的查询。也就是说，TableScan 必须已有 pushed-down filters 作为 Stage 0，且 TableScan 上方必须有 residual Selection 作为 Stage 1。
 - 只支持 `ORDER BY` plain columns，即 TiPB `ByItem.expr` 必须直接是 `ColumnRef`。
-- 只支持 constant `LIMIT` 和 constant `OFFSET`。
+- 只支持 TiDB 已经能下发为 constant TopN limit 的查询。SQL 层的 `OFFSET` 会在 TiDB pushdown TopN 时合并进 TiPB `TopN.limit`。
 - 只支持 TiDB 下发的单表 `TopN -> Selection -> TableScan`。在 TiFlash physical plan 中，这一层 `Selection` 必须已经被合并到 `PhysicalTableScan::filter_conditions`，所以第一版实际只识别 `PhysicalTopN -> PhysicalTableScan(with filter_conditions and pushed_down_filters)`。
 - 第一版不穿透 `PhysicalFilter`。如果 TiFlash physical plan 中仍然存在独立的 `PhysicalFilter -> PhysicalTableScan`，说明 residual Selection 没有进入当前 MSLM Stage 1 识别范围，TopN-enhanced MSLM 直接禁用。
 - 不移除上层 TopN。
@@ -86,17 +86,13 @@ LIMIT k;
 - 阶段二支持有 TableScan pushed filter 但没有 residual Selection 的 `TopN -> TableScan`。这要求把 residual filter 变成 optional，Stage 1 只读取 order-by columns。
 - 阶段三支持完全没有 filter 的 `TopN -> TableScan`。这需要把 MSLM 从当前的 filter-driven 模型泛化为 order-by-column-driven 模型，Stage 1 order-by stream 需要成为 block driver，工程风险更高。
 
-其中本地 TopN 使用的 K 为：
+其中本地 TopN 使用的 K 为 TiPB `TopN.limit`：
 
 ```text
-K = LIMIT + OFFSET
+K = tipb.TopN.limit
 ```
 
-如果没有 OFFSET，则：
-
-```text
-K = LIMIT
-```
+对 SQL 层的 `LIMIT offset, count`，TiDB 下发 pushed-down TopN 前会把 `PhysicalTopN.Count` 改成 `offset + count`，所以 TiFlash 侧不再额外处理 offset。
 
 ## 核心思路
 
@@ -202,7 +198,7 @@ TableScan
 struct MSLMTopNDescription
 {
     SortDescription storage_sort_description;
-    UInt64 topk; // limit + offset
+    UInt64 topk; // tipb.TopN.limit
     ColumnDefines order_by_columns;
 };
 ```
@@ -538,13 +534,12 @@ combined_filter = compose(stage0_filter, stage1_final_filter)
 
 必须满足：
 
-- `dt_enable_multi_stage_late_materialization` 为 true。
+- `dt_enable_multi_stage_late_materialization == 2`。
 - 当前查询已经满足 MSLM 启用条件。
 - 查询包含 TopN，且 TopN 的 child 直接是单表 `PhysicalTableScan`。
 - `PhysicalTableScan` 已经包含 residual `filter_conditions`，并且 TableScan 已经包含 pushed-down filters。
 - TopN 上方仍保留全局 TopN executor。
-- TopN 的 `LIMIT` 和 `OFFSET` 是常量。
-- `topk = limit + offset` 未超过阈值。
+- TiPB `TopN.limit` 已经包含 SQL 层 offset，并且未超过阈值。
 - TopN 之前的 Selection predicates 全部在 MSLM Stage 0 或 Stage 1 内执行。
 - ORDER BY 只包含 direct `ColumnRef` plain columns。
 - ORDER BY columns 能通过 `ColumnRef` index 映射到 `table_scan.getColumns()` 中的 column id，并能进一步映射到 DeltaMerge `ColumnDefine`。
@@ -557,7 +552,7 @@ combined_filter = compose(stage0_filter, stage1_final_filter)
 建议第一版阈值：
 
 ```text
-topk <= 4096
+topk <= 2048
 order_by_column_count <= 4
 ```
 

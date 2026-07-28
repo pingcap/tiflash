@@ -159,7 +159,7 @@ bool shouldEnableMultiStageLateMaterializationForMockDeltaMerge(
     const TiDB::ColumnInfos & scan_column_infos)
 {
     const auto & settings = context.getSettingsRef();
-    if (!settings.dt_enable_multi_stage_late_materialization)
+    if (settings.dt_enable_multi_stage_late_materialization == 0)
         return false;
     if (filter_conditions == nullptr || !filter_conditions->hasValue())
         return false;

@@ -30,7 +30,7 @@
 namespace DB::DM
 {
 
-inline constexpr UInt64 multi_stage_late_materialization_topn_max_topk = 4096;
+inline constexpr UInt64 multi_stage_late_materialization_topn_max_topk = 2048;
 inline constexpr size_t multi_stage_late_materialization_topn_max_order_by_columns = 4;
 
 struct MultiStageLateMaterializationTopNOrderByColumn
@@ -82,6 +82,12 @@ struct RunningLocalTopNUpdateResult
     size_t passed_count = 0;
 };
 
+struct SortKeyColumnView
+{
+    const void * data = nullptr;
+    const IColumn::Filter * null_map = nullptr;
+};
+
 class RunningLocalTopN
 {
 public:
@@ -99,13 +105,20 @@ public:
 private:
     struct SortKeyColumnDesc
     {
-        using ExtractFieldFn = void (*)(const IColumn & column, size_t row, SortKeyField & field);
+        using BuildColumnViewFn = SortKeyColumnView (*)(const IColumn & column);
+        using ExtractFieldFn = void (*)(const SortKeyColumnView & column, size_t row, SortKeyField & field);
+        using CompareColumnWithOwnedFn = int (*)(
+            const SortKeyColumnView & column,
+            size_t row,
+            const SortKeyField & field);
 
         ColumnID column_id = EmptyColumnID;
         size_t column_pos = 0;
         SortKeyKind kind = SortKeyKind::Int64;
         int direction = 1;
+        BuildColumnViewFn build_column_view = nullptr;
         ExtractFieldFn extract_field = nullptr;
+        CompareColumnWithOwnedFn compare_column_with_owned = nullptr;
     };
 
     struct HeapEntry
@@ -125,9 +138,9 @@ private:
     using Heap = std::priority_queue<HeapEntry, std::vector<HeapEntry>, HeapComparator>;
 
     int compareOwnedKeys(const OwnedSortKey & lhs, const OwnedSortKey & rhs) const;
-    int compareRowWithOwnedKey(const std::vector<const IColumn *> & sort_columns, size_t row, const OwnedSortKey & rhs)
+    int compareRowWithOwnedKey(const std::vector<SortKeyColumnView> & sort_columns, size_t row, const OwnedSortKey & rhs)
         const;
-    OwnedSortKey materializeOwnedKey(const std::vector<const IColumn *> & sort_columns, size_t row) const;
+    OwnedSortKey materializeOwnedKey(const std::vector<SortKeyColumnView> & sort_columns, size_t row) const;
 
 private:
     UInt64 topk;

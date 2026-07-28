@@ -188,7 +188,7 @@ DirectMode 不需要新增 `full_stream`。它本质上还是两次读取：
 
 启用条件：
 
-- TiFlash setting `dt_enable_multi_stage_late_materialization` 为 true。
+- TiFlash setting `dt_enable_multi_stage_late_materialization >= 1`。
 - 当前 query 使用 pipeline 执行模式。
 - TableScan 已存在 pushed down filters，即可以形成 Stage 0。
 - TableScan 上方存在 residual Selection，即 `filter_conditions.hasValue()`。
@@ -458,13 +458,13 @@ if (filter_conditions.hasValue() && multi_stage_lm_consumed_filter_conditions)
 改动点：
 
 - 在 TiFlash pipeline TableScan 构建路径中识别 candidate：
-  - `dt_enable_multi_stage_late_materialization` 为 true。
+  - `dt_enable_multi_stage_late_materialization >= 1`。
   - `filter_conditions.hasValue()`。
   - TableScan 已经有 pushed down filters。
   - `generated_column_infos` 为空。
   - `read_opts.keep_order == false`。
   - 列数满足启用规则。
-- 增加 TiFlash setting `dt_enable_multi_stage_late_materialization`，并增加一个内部 flag，例如 `multi_stage_lm_enabled`。
+- 增加 TiFlash setting `dt_enable_multi_stage_late_materialization`，其中 `0` 表示禁用，`1` 表示启用 selection MSLM，`2` 表示启用 TopN-enhanced MSLM；并增加一个内部 flag，例如 `multi_stage_lm_enabled`。
 - 将 residual filter conditions 传入 DeltaMerge read 层。
 - 当 `multi_stage_lm_enabled` 为 true 时，跳过 `executePushedDownFilter(...)`。
 - 同时把当前 `group_builder.getCurProfileInfos()` 注册给 `filter_conditions.executor_id`。

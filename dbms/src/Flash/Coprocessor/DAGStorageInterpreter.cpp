@@ -1797,7 +1797,7 @@ std::pair<Names, std::vector<UInt8>> DAGStorageInterpreter::getColumnsForTableSc
 
 bool DAGStorageInterpreter::shouldEnableMultiStageLateMaterialization() const
 {
-    if (!context.getSettingsRef().dt_enable_multi_stage_late_materialization)
+    if (context.getSettingsRef().dt_enable_multi_stage_late_materialization == 0)
         return false;
 
     auto disable = [&](const String & reason) {

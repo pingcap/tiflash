@@ -21,6 +21,8 @@
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDecimal.h>
+#include <DataTypes/DataTypeMyDate.h>
+#include <DataTypes/DataTypeMyDateTime.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
@@ -28,6 +30,7 @@
 #include <Storages/DeltaMerge/MultiStageLateMaterializationTopN.h>
 
 #include <algorithm>
+#include <utility>
 
 namespace DB::DM
 {
@@ -36,23 +39,17 @@ namespace
 struct SortKeyTypeInfo
 {
     SortKeyKind kind;
-    void (*extract_field)(const IColumn & column, size_t row, SortKeyField & field);
+    SortKeyColumnView (*build_column_view)(const IColumn & column);
+    void (*extract_field)(const SortKeyColumnView & column, size_t row, SortKeyField & field);
+    int (*compare_column_with_owned)(const SortKeyColumnView & column, size_t row, const SortKeyField & field);
 };
 
-const IColumn & unwrapNullableColumn(const IColumn & column, size_t row, bool & is_null)
+std::pair<const IColumn *, const IColumn::Filter *> unwrapNullableColumn(const IColumn & column)
 {
     if (const auto * nullable_column = typeid_cast<const ColumnNullable *>(&column))
-    {
-        if (nullable_column->isNullAt(row))
-        {
-            is_null = true;
-            return nullable_column->getNestedColumn();
-        }
-        return nullable_column->getNestedColumn();
-    }
+        return {&nullable_column->getNestedColumn(), &nullable_column->getNullMapData()};
 
-    is_null = false;
-    return column;
+    return {&column, nullptr};
 }
 
 template <typename ColumnType>
@@ -66,33 +63,50 @@ const ColumnType & castColumn(const IColumn & column)
     return *typed_column;
 }
 
+template <typename ColumnType>
+SortKeyColumnView buildSortKeyColumnViewImpl(const IColumn & column)
+{
+    const auto [nested_column, null_map] = unwrapNullableColumn(column);
+    return {
+        .data = &castColumn<ColumnType>(*nested_column).getData(),
+        .null_map = null_map,
+    };
+}
+
+template <typename ColumnType>
+const typename ColumnType::Container & getColumnData(const SortKeyColumnView & column)
+{
+    return *static_cast<const typename ColumnType::Container *>(column.data);
+}
+
+bool isNullAt(const IColumn::Filter * null_map, size_t row)
+{
+    return null_map != nullptr && (*null_map)[row] != 0;
+}
+
 template <typename ColumnValueType, typename StorageValueType, SortKeyKind kind, typename ColumnType>
-void extractFieldImpl(const IColumn & column, size_t row, SortKeyField & field)
+void extractFieldImpl(const SortKeyColumnView & column, size_t row, SortKeyField & field)
 {
     field.kind = kind;
 
-    bool is_null = false;
-    const auto & nested_column = unwrapNullableColumn(column, row, is_null);
-    field.is_null = is_null;
-    if (is_null)
+    field.is_null = isNullAt(column.null_map, row);
+    if (field.is_null)
         return;
 
-    const auto & data = castColumn<ColumnType>(nested_column).getData();
+    const auto & data = getColumnData<ColumnType>(column);
     field.value = static_cast<StorageValueType>(data[row]);
 }
 
 template <typename DecimalType, SortKeyKind kind>
-void extractDecimalFieldImpl(const IColumn & column, size_t row, SortKeyField & field)
+void extractDecimalFieldImpl(const SortKeyColumnView & column, size_t row, SortKeyField & field)
 {
     field.kind = kind;
 
-    bool is_null = false;
-    const auto & nested_column = unwrapNullableColumn(column, row, is_null);
-    field.is_null = is_null;
-    if (is_null)
+    field.is_null = isNullAt(column.null_map, row);
+    if (field.is_null)
         return;
 
-    const auto & data = castColumn<ColumnDecimal<DecimalType>>(nested_column).getData();
+    const auto & data = getColumnData<ColumnDecimal<DecimalType>>(column);
     field.value = data[row];
 }
 
@@ -100,6 +114,88 @@ template <typename T>
 int compareValue(const T & lhs, const T & rhs)
 {
     return lhs > rhs ? 1 : (lhs < rhs ? -1 : 0);
+}
+
+int compareNull(bool lhs_is_null, bool rhs_is_null)
+{
+    if (lhs_is_null && rhs_is_null)
+        return 0;
+    return lhs_is_null ? -1 : 1;
+}
+
+template <typename StorageValueType, typename ColumnType>
+int compareColumnWithOwnedFieldImpl(
+    const SortKeyColumnView & column,
+    size_t row,
+    const SortKeyField & rhs)
+{
+    const bool lhs_is_null = isNullAt(column.null_map, row);
+    if (lhs_is_null || rhs.is_null)
+        return compareNull(lhs_is_null, rhs.is_null);
+
+    const auto & data = getColumnData<ColumnType>(column);
+    return compareValue(static_cast<StorageValueType>(data[row]), std::get<StorageValueType>(rhs.value));
+}
+
+template <typename ColumnValueType, typename ColumnType>
+int compareFloatColumnWithOwnedFieldImpl(
+    const SortKeyColumnView & column,
+    size_t row,
+    const SortKeyField & rhs)
+{
+    const bool lhs_is_null = isNullAt(column.null_map, row);
+    if (lhs_is_null || rhs.is_null)
+        return compareNull(lhs_is_null, rhs.is_null);
+
+    const auto & data = getColumnData<ColumnType>(column);
+    return CompareHelper<ColumnValueType>::compare(data[row], std::get<ColumnValueType>(rhs.value), -1);
+}
+
+template <typename DecimalType>
+int compareDecimalColumnWithOwnedFieldImpl(
+    const SortKeyColumnView & column,
+    size_t row,
+    const SortKeyField & rhs)
+{
+    const bool lhs_is_null = isNullAt(column.null_map, row);
+    if (lhs_is_null || rhs.is_null)
+        return compareNull(lhs_is_null, rhs.is_null);
+
+    const auto & data = getColumnData<ColumnDecimal<DecimalType>>(column);
+    return compareValue(data[row], std::get<DecimalType>(rhs.value));
+}
+
+template <typename ColumnValueType, typename StorageValueType, SortKeyKind kind, typename ColumnType>
+SortKeyTypeInfo makeSortKeyTypeInfo()
+{
+    return {
+        .kind = kind,
+        .build_column_view = buildSortKeyColumnViewImpl<ColumnType>,
+        .extract_field = extractFieldImpl<ColumnValueType, StorageValueType, kind, ColumnType>,
+        .compare_column_with_owned = compareColumnWithOwnedFieldImpl<StorageValueType, ColumnType>,
+    };
+}
+
+template <typename ColumnValueType, SortKeyKind kind, typename ColumnType>
+SortKeyTypeInfo makeFloatSortKeyTypeInfo()
+{
+    return {
+        .kind = kind,
+        .build_column_view = buildSortKeyColumnViewImpl<ColumnType>,
+        .extract_field = extractFieldImpl<ColumnValueType, ColumnValueType, kind, ColumnType>,
+        .compare_column_with_owned = compareFloatColumnWithOwnedFieldImpl<ColumnValueType, ColumnType>,
+    };
+}
+
+template <typename DecimalType, SortKeyKind kind>
+SortKeyTypeInfo makeDecimalSortKeyTypeInfo()
+{
+    return {
+        .kind = kind,
+        .build_column_view = buildSortKeyColumnViewImpl<ColumnDecimal<DecimalType>>,
+        .extract_field = extractDecimalFieldImpl<DecimalType, kind>,
+        .compare_column_with_owned = compareDecimalColumnWithOwnedFieldImpl<DecimalType>,
+    };
 }
 
 int compareSortKeyFields(const SortKeyField & lhs, const SortKeyField & rhs)
@@ -142,37 +238,41 @@ SortKeyTypeInfo getSortKeyTypeInfo(const DataTypePtr & type)
 {
     const auto type_not_null = removeNullable(type);
     if (checkDataType<DataTypeInt8>(type_not_null.get()))
-        return {SortKeyKind::Int64, extractFieldImpl<Int8, Int64, SortKeyKind::Int64, ColumnVector<Int8>>};
+        return makeSortKeyTypeInfo<Int8, Int64, SortKeyKind::Int64, ColumnVector<Int8>>();
     if (checkDataType<DataTypeInt16>(type_not_null.get()))
-        return {SortKeyKind::Int64, extractFieldImpl<Int16, Int64, SortKeyKind::Int64, ColumnVector<Int16>>};
+        return makeSortKeyTypeInfo<Int16, Int64, SortKeyKind::Int64, ColumnVector<Int16>>();
     if (checkDataType<DataTypeInt32>(type_not_null.get()))
-        return {SortKeyKind::Int64, extractFieldImpl<Int32, Int64, SortKeyKind::Int64, ColumnVector<Int32>>};
+        return makeSortKeyTypeInfo<Int32, Int64, SortKeyKind::Int64, ColumnVector<Int32>>();
     if (checkDataType<DataTypeInt64>(type_not_null.get()))
-        return {SortKeyKind::Int64, extractFieldImpl<Int64, Int64, SortKeyKind::Int64, ColumnVector<Int64>>};
+        return makeSortKeyTypeInfo<Int64, Int64, SortKeyKind::Int64, ColumnVector<Int64>>();
     if (checkDataType<DataTypeUInt8>(type_not_null.get()))
-        return {SortKeyKind::UInt64, extractFieldImpl<UInt8, UInt64, SortKeyKind::UInt64, ColumnVector<UInt8>>};
+        return makeSortKeyTypeInfo<UInt8, UInt64, SortKeyKind::UInt64, ColumnVector<UInt8>>();
     if (checkDataType<DataTypeUInt16>(type_not_null.get()))
-        return {SortKeyKind::UInt64, extractFieldImpl<UInt16, UInt64, SortKeyKind::UInt64, ColumnVector<UInt16>>};
+        return makeSortKeyTypeInfo<UInt16, UInt64, SortKeyKind::UInt64, ColumnVector<UInt16>>();
     if (checkDataType<DataTypeUInt32>(type_not_null.get()))
-        return {SortKeyKind::UInt64, extractFieldImpl<UInt32, UInt64, SortKeyKind::UInt64, ColumnVector<UInt32>>};
+        return makeSortKeyTypeInfo<UInt32, UInt64, SortKeyKind::UInt64, ColumnVector<UInt32>>();
     if (checkDataType<DataTypeUInt64>(type_not_null.get()))
-        return {SortKeyKind::UInt64, extractFieldImpl<UInt64, UInt64, SortKeyKind::UInt64, ColumnVector<UInt64>>};
+        return makeSortKeyTypeInfo<UInt64, UInt64, SortKeyKind::UInt64, ColumnVector<UInt64>>();
     if (checkDataType<DataTypeFloat32>(type_not_null.get()))
-        return {SortKeyKind::Float32, extractFieldImpl<Float32, Float32, SortKeyKind::Float32, ColumnVector<Float32>>};
+        return makeFloatSortKeyTypeInfo<Float32, SortKeyKind::Float32, ColumnVector<Float32>>();
     if (checkDataType<DataTypeFloat64>(type_not_null.get()))
-        return {SortKeyKind::Float64, extractFieldImpl<Float64, Float64, SortKeyKind::Float64, ColumnVector<Float64>>};
+        return makeFloatSortKeyTypeInfo<Float64, SortKeyKind::Float64, ColumnVector<Float64>>();
     if (checkDataType<DataTypeDecimal32>(type_not_null.get()))
-        return {SortKeyKind::Decimal32, extractDecimalFieldImpl<Decimal32, SortKeyKind::Decimal32>};
+        return makeDecimalSortKeyTypeInfo<Decimal32, SortKeyKind::Decimal32>();
     if (checkDataType<DataTypeDecimal64>(type_not_null.get()))
-        return {SortKeyKind::Decimal64, extractDecimalFieldImpl<Decimal64, SortKeyKind::Decimal64>};
+        return makeDecimalSortKeyTypeInfo<Decimal64, SortKeyKind::Decimal64>();
     if (checkDataType<DataTypeDecimal128>(type_not_null.get()))
-        return {SortKeyKind::Decimal128, extractDecimalFieldImpl<Decimal128, SortKeyKind::Decimal128>};
+        return makeDecimalSortKeyTypeInfo<Decimal128, SortKeyKind::Decimal128>();
     if (checkDataType<DataTypeDecimal256>(type_not_null.get()))
-        return {SortKeyKind::Decimal256, extractDecimalFieldImpl<Decimal256, SortKeyKind::Decimal256>};
+        return makeDecimalSortKeyTypeInfo<Decimal256, SortKeyKind::Decimal256>();
     if (checkDataType<DataTypeDate>(type_not_null.get()))
-        return {SortKeyKind::Date, extractFieldImpl<UInt16, UInt64, SortKeyKind::Date, ColumnVector<UInt16>>};
+        return makeSortKeyTypeInfo<UInt16, UInt64, SortKeyKind::Date, ColumnVector<UInt16>>();
     if (checkDataType<DataTypeDateTime>(type_not_null.get()))
-        return {SortKeyKind::DateTime, extractFieldImpl<UInt32, UInt64, SortKeyKind::DateTime, ColumnVector<UInt32>>};
+        return makeSortKeyTypeInfo<UInt32, UInt64, SortKeyKind::DateTime, ColumnVector<UInt32>>();
+    if (checkDataType<DataTypeMyDate>(type_not_null.get()))
+        return makeSortKeyTypeInfo<UInt64, UInt64, SortKeyKind::Date, ColumnVector<UInt64>>();
+    if (checkDataType<DataTypeMyDateTime>(type_not_null.get()))
+        return makeSortKeyTypeInfo<UInt64, UInt64, SortKeyKind::DateTime, ColumnVector<UInt64>>();
 
     throw Exception("Unsupported order by type for TopN-enhanced multi-stage late materialization: " + type->getName());
 }
@@ -210,7 +310,9 @@ RunningLocalTopN::RunningLocalTopN(
             .column_pos = static_cast<size_t>(column_it - stage1_columns.begin()),
             .kind = type_info.kind,
             .direction = order_by_column.direction,
+            .build_column_view = type_info.build_column_view,
             .extract_field = type_info.extract_field,
+            .compare_column_with_owned = type_info.compare_column_with_owned,
         });
     }
 }
@@ -228,31 +330,30 @@ int RunningLocalTopN::compareOwnedKeys(const OwnedSortKey & lhs, const OwnedSort
 }
 
 int RunningLocalTopN::compareRowWithOwnedKey(
-    const std::vector<const IColumn *> & sort_columns,
+    const std::vector<SortKeyColumnView> & sort_columns,
     size_t row,
     const OwnedSortKey & rhs) const
 {
     RUNTIME_CHECK(sort_columns.size() == sort_key_columns.size());
     RUNTIME_CHECK(rhs.size == sort_key_columns.size());
 
-    SortKeyField lhs_field;
     for (size_t i = 0; i < sort_key_columns.size(); ++i)
     {
-        sort_key_columns[i].extract_field(*sort_columns[i], row, lhs_field);
-        if (const auto cmp = compareSortKeyFields(lhs_field, rhs.fields[i]); cmp != 0)
+        const auto cmp = sort_key_columns[i].compare_column_with_owned(sort_columns[i], row, rhs.fields[i]);
+        if (cmp != 0)
             return cmp * sort_key_columns[i].direction;
     }
     return 0;
 }
 
-OwnedSortKey RunningLocalTopN::materializeOwnedKey(const std::vector<const IColumn *> & sort_columns, size_t row) const
+OwnedSortKey RunningLocalTopN::materializeOwnedKey(const std::vector<SortKeyColumnView> & sort_columns, size_t row) const
 {
     RUNTIME_CHECK(sort_columns.size() == sort_key_columns.size());
 
     OwnedSortKey key;
     key.size = sort_key_columns.size();
     for (size_t i = 0; i < sort_key_columns.size(); ++i)
-        sort_key_columns[i].extract_field(*sort_columns[i], row, key.fields[i]);
+        sort_key_columns[i].extract_field(sort_columns[i], row, key.fields[i]);
     return key;
 }
 
@@ -271,7 +372,7 @@ RunningLocalTopNUpdateResult RunningLocalTopN::update(
         return result;
 
     std::vector<ColumnPtr> materialized_const_columns;
-    std::vector<const IColumn *> sort_columns;
+    std::vector<SortKeyColumnView> sort_columns;
     sort_columns.reserve(sort_key_columns.size());
     for (const auto & desc : sort_key_columns)
     {
@@ -281,7 +382,7 @@ RunningLocalTopNUpdateResult RunningLocalTopN::update(
             materialized_const_columns.push_back(std::move(full_column));
             column = materialized_const_columns.back();
         }
-        sort_columns.push_back(column.get());
+        sort_columns.push_back(desc.build_column_view(*column));
     }
 
     auto markCandidate = [&](size_t row) {

@@ -25,6 +25,8 @@
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDecimal.h>
+#include <DataTypes/DataTypeMyDate.h>
+#include <DataTypes/DataTypeMyDateTime.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/isSupportedDataTypeCast.h>
@@ -816,7 +818,9 @@ bool isSupportedMultiStageLateMaterializationTopNOrderByType(const DataTypePtr &
         || checkDataType<DataTypeDecimal128>(type_not_null.get()) //
         || checkDataType<DataTypeDecimal256>(type_not_null.get()) //
         || checkDataType<DataTypeDate>(type_not_null.get()) //
-        || checkDataType<DataTypeDateTime>(type_not_null.get());
+        || checkDataType<DataTypeDateTime>(type_not_null.get()) //
+        || checkDataType<DataTypeMyDate>(type_not_null.get()) //
+        || checkDataType<DataTypeMyDateTime>(type_not_null.get());
 }
 
 const TiDB::ColumnInfo * findSourceColumnByID(const TiDB::ColumnInfos & source_columns, ColumnID column_id)
