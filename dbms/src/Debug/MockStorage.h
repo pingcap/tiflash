@@ -92,6 +92,7 @@ public:
     MockColumnInfoVec getTableSchemaForDeltaMerge(Int64 table_id);
 
     NamesAndTypes getNameAndTypesForDeltaMerge(Int64 table_id);
+    NamesAndTypes getNameAndTypesForDeltaMerge(Int64 table_id, const TiDB::ColumnInfos & scan_column_infos);
 
     std::tuple<StorageDeltaMergePtr, Names, SelectQueryInfo> prepareForRead(
         Context & context,
@@ -104,7 +105,9 @@ public:
         const FilterConditions * filter_conditions = nullptr,
         bool keep_order = false,
         std::vector<int> runtime_filter_ids = std::vector<int>(),
-        int rf_max_wait_time_ms = 0);
+        int rf_max_wait_time_ms = 0,
+        const google::protobuf::RepeatedPtrField<tipb::Expr> * pushed_down_filters = nullptr,
+        const TiDB::ColumnInfos * scan_column_infos = nullptr);
 
     void buildExecFromDeltaMerge(
         PipelineExecutorContext & exec_context_,
@@ -115,7 +118,10 @@ public:
         bool keep_order = false,
         const FilterConditions * filter_conditions = nullptr,
         std::vector<int> runtime_filter_ids = std::vector<int>(),
-        int rf_max_wait_time_ms = 0);
+        int rf_max_wait_time_ms = 0,
+        const google::protobuf::RepeatedPtrField<tipb::Expr> * pushed_down_filters = nullptr,
+        const String & table_scan_executor_id = "",
+        const TiDB::ColumnInfos * scan_column_infos = nullptr);
 
     bool tableExistsForDeltaMerge(Int64 table_id);
 

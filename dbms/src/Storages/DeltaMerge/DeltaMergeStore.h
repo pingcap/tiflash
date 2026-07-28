@@ -32,6 +32,7 @@
 #include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
 #include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo_fwd.h>
+#include <Storages/DeltaMerge/MultiStageLateMaterializationRuntimeStats.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
@@ -103,6 +104,8 @@ struct DMReadOptions
     bool keep_order = false;
     bool is_fast_scan = false;
     bool has_multiple_partitions = false;
+    PushDownExecutorPtr multi_stage_late_materialization_filter = nullptr;
+    MultiStageLateMaterializationRuntimeStatsPtr multi_stage_late_materialization_runtime_stats = nullptr;
 };
 class DeltaMergeStore
     : private boost::noncopyable

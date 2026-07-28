@@ -16,6 +16,7 @@
 
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Storages/DeltaMerge/DMContext_fwd.h>
+#include <Storages/DeltaMerge/MultiStageLateMaterializationRuntimeStats.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
@@ -109,6 +110,8 @@ public:
         const ColumnDefines & columns_to_read,
         UInt64 start_ts,
         const PushDownExecutorPtr & push_down_executor,
+        const PushDownExecutorPtr & multi_stage_late_materialization_filter,
+        const MultiStageLateMaterializationRuntimeStatsPtr & multi_stage_late_materialization_runtime_stats,
         ReadMode read_mode,
         size_t expected_block_size,
         bool enable_delta_index_error_fallback);
@@ -150,6 +153,8 @@ private:
         const ColumnDefines & columns_to_read,
         UInt64 start_ts,
         const PushDownExecutorPtr & push_down_executor,
+        const PushDownExecutorPtr & multi_stage_late_materialization_filter,
+        const MultiStageLateMaterializationRuntimeStatsPtr & multi_stage_late_materialization_runtime_stats,
         ReadMode read_mode,
         size_t expected_block_size,
         bool enable_delta_index_error_fallback);
@@ -158,6 +163,8 @@ private:
         const ColumnDefines & columns_to_read,
         UInt64 start_ts,
         const PushDownExecutorPtr & push_down_executor,
+        const PushDownExecutorPtr & multi_stage_late_materialization_filter,
+        const MultiStageLateMaterializationRuntimeStatsPtr & multi_stage_late_materialization_runtime_stats,
         ReadMode read_mode,
         size_t expected_block_size);
 

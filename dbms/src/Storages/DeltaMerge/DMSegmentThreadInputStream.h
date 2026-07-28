@@ -43,6 +43,8 @@ public:
         AfterSegmentRead after_segment_read_,
         const ColumnDefines & columns_to_read_,
         const PushDownExecutorPtr & executor_,
+        const PushDownExecutorPtr & multi_stage_late_materialization_filter_,
+        const MultiStageLateMaterializationRuntimeStatsPtr & multi_stage_late_materialization_runtime_stats_,
         UInt64 start_ts_,
         size_t expected_block_size_,
         ReadMode read_mode_,
@@ -52,6 +54,8 @@ public:
         , after_segment_read(after_segment_read_)
         , columns_to_read(columns_to_read_)
         , executor(executor_)
+        , multi_stage_late_materialization_filter(multi_stage_late_materialization_filter_)
+        , multi_stage_late_materialization_runtime_stats(multi_stage_late_materialization_runtime_stats_)
         , header(toEmptyBlock(columns_to_read))
         , start_ts(start_ts_)
         , expected_block_size(expected_block_size_)
@@ -97,6 +101,8 @@ protected:
                     task->read_snapshot,
                     task->ranges,
                     executor,
+                    multi_stage_late_materialization_filter,
+                    multi_stage_late_materialization_runtime_stats,
                     start_ts,
                     block_size);
                 LOG_TRACE(log, "Start to read segment, segment={}", cur_segment->simpleInfo());
@@ -128,6 +134,8 @@ private:
     AfterSegmentRead after_segment_read;
     ColumnDefines columns_to_read;
     PushDownExecutorPtr executor;
+    PushDownExecutorPtr multi_stage_late_materialization_filter;
+    MultiStageLateMaterializationRuntimeStatsPtr multi_stage_late_materialization_runtime_stats;
     Block header;
     const UInt64 start_ts;
     const size_t expected_block_size;

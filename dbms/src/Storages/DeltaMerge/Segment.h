@@ -22,8 +22,10 @@
 #include <Storages/DeltaMerge/DeltaIndex/DeltaIndex.h>
 #include <Storages/DeltaMerge/DeltaIndex/DeltaTree.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/File/DMFilePackFilter_fwd.h>
 #include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Reader_fwd.h>
+#include <Storages/DeltaMerge/MultiStageLateMaterializationRuntimeStats.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/Segment_fwd.h>
@@ -231,6 +233,8 @@ public:
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & read_ranges,
         const PushDownExecutorPtr & executor,
+        const PushDownExecutorPtr & multi_stage_late_materialization_filter,
+        const MultiStageLateMaterializationRuntimeStatsPtr & multi_stage_late_materialization_runtime_stats,
         UInt64 start_ts,
         size_t expected_block_size);
 
@@ -811,6 +815,8 @@ public:
         const RowKeyRanges & read_ranges,
         const PushDownExecutorPtr & executor,
         const DMFilePackFilterResults & pack_filter_results,
+        const PushDownExecutorPtr & multi_stage_late_materialization_filter,
+        const MultiStageLateMaterializationRuntimeStatsPtr & multi_stage_late_materialization_runtime_stats,
         UInt64 start_ts,
         size_t build_bitmap_filter_block_rows,
         size_t read_data_block_rows);
@@ -823,6 +829,8 @@ public:
         const RowKeyRanges & data_ranges,
         const PushDownExecutorPtr & executor,
         const DMFilePackFilterResults & pack_filter_results,
+        const PushDownExecutorPtr & multi_stage_late_materialization_filter,
+        const MultiStageLateMaterializationRuntimeStatsPtr & multi_stage_late_materialization_runtime_stats,
         UInt64 start_ts,
         size_t expected_block_size);
 

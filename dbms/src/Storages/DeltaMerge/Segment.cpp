@@ -45,6 +45,7 @@
 #include <Storages/DeltaMerge/Index/VectorIndex/Stream/Ctx.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Stream/InputStream.h>
 #include <Storages/DeltaMerge/LateMaterializationBlockInputStream.h>
+#include <Storages/DeltaMerge/MultiStageLateMaterializationBlockInputStream.h>
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
@@ -1012,6 +1013,8 @@ BlockInputStreamPtr Segment::getInputStream(
     const SegmentSnapshotPtr & segment_snap,
     const RowKeyRanges & read_ranges,
     const PushDownExecutorPtr & executor,
+    const PushDownExecutorPtr & multi_stage_late_materialization_filter,
+    const MultiStageLateMaterializationRuntimeStatsPtr & multi_stage_late_materialization_runtime_stats,
     UInt64 start_ts,
     size_t expected_block_size)
 {
@@ -1061,6 +1064,8 @@ BlockInputStreamPtr Segment::getInputStream(
             real_ranges,
             executor,
             pack_filter_results,
+            EMPTY_FILTER,
+            nullptr,
             start_ts,
             expected_block_size,
             clipped_block_rows);
@@ -1079,6 +1084,8 @@ BlockInputStreamPtr Segment::getInputStream(
             real_ranges,
             executor,
             pack_filter_results,
+            multi_stage_late_materialization_filter,
+            multi_stage_late_materialization_runtime_stats,
             start_ts,
             expected_block_size,
             clipped_block_rows);
@@ -3587,6 +3594,8 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
     const RowKeyRanges & data_ranges,
     const PushDownExecutorPtr & executor,
     const DMFilePackFilterResults & pack_filter_results,
+    const PushDownExecutorPtr & multi_stage_late_materialization_filter,
+    const MultiStageLateMaterializationRuntimeStatsPtr & multi_stage_late_materialization_runtime_stats,
     UInt64 start_ts,
     size_t expected_block_size)
 {
@@ -3646,6 +3655,72 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
         executor->filter_column_name,
         dm_context.tracing_id);
     filter_column_stream->setExtraInfo("push down filter");
+
+    if (multi_stage_late_materialization_filter && multi_stage_late_materialization_filter->before_where)
+    {
+        const auto & stage1_filter_columns = multi_stage_late_materialization_filter->filter_columns;
+        RUNTIME_CHECK(stage1_filter_columns != nullptr);
+        RUNTIME_CHECK_MSG(
+            !stage1_filter_columns->empty(),
+            "Multi-stage late materialization requires non-empty residual filter columns");
+        RUNTIME_CHECK_MSG(
+            stage1_filter_columns->size() < columns_to_read.size(),
+            "Multi-stage late materialization requires final rest columns, stage1_filter_columns_size={}, "
+            "columns_to_read_size={}",
+            stage1_filter_columns->size(),
+            columns_to_read.size());
+
+        auto stage1_filter_stream = getConcatSkippableBlockInputStream(
+            segment_snap,
+            dm_context,
+            *stage1_filter_columns,
+            data_ranges,
+            pack_filter_results,
+            start_ts,
+            expected_block_size,
+            ReadTag::MSLMStage1Filter);
+
+        auto final_rest_columns_to_read = std::make_shared<ColumnDefines>(columns_to_read);
+        for (const auto & col : *stage1_filter_columns)
+        {
+            final_rest_columns_to_read->erase(
+                std::remove_if(
+                    final_rest_columns_to_read->begin(),
+                    final_rest_columns_to_read->end(),
+                    [&](const ColumnDefine & c) { return c.id == col.id; }),
+                final_rest_columns_to_read->end());
+        }
+        RUNTIME_CHECK_MSG(
+            !final_rest_columns_to_read->empty(),
+            "Multi-stage late materialization requires non-empty final rest columns");
+
+        auto final_rest_stream = getConcatSkippableBlockInputStream(
+            segment_snap,
+            dm_context,
+            *final_rest_columns_to_read,
+            data_ranges,
+            pack_filter_results,
+            start_ts,
+            expected_block_size,
+            ReadTag::Query);
+
+        LOG_INFO(
+            segment_snap->log,
+            "Use multi-stage late materialization, stage0_filter_columns={} stage1_filter_columns={} "
+            "final_rest_columns={}",
+            filter_columns->size(),
+            stage1_filter_columns->size(),
+            final_rest_columns_to_read->size());
+        return std::make_shared<MultiStageLateMaterializationBlockInputStream>(
+            columns_to_read,
+            filter_column_stream,
+            stage1_filter_stream,
+            final_rest_stream,
+            multi_stage_late_materialization_filter,
+            bitmap_filter,
+            dm_context.tracing_id,
+            multi_stage_late_materialization_runtime_stats);
+    }
 
     auto rest_columns_to_read = std::make_shared<ColumnDefines>(columns_to_read);
     // remove columns of pushed down filter
@@ -3781,6 +3856,8 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
     const RowKeyRanges & read_ranges,
     const PushDownExecutorPtr & executor,
     const DMFilePackFilterResults & pack_filter_results,
+    const PushDownExecutorPtr & multi_stage_late_materialization_filter,
+    const MultiStageLateMaterializationRuntimeStatsPtr & multi_stage_late_materialization_runtime_stats,
     UInt64 start_ts,
     size_t build_bitmap_filter_block_rows,
     size_t read_data_block_rows)
@@ -3813,6 +3890,8 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
             read_ranges,
             executor,
             pack_filter_results,
+            multi_stage_late_materialization_filter,
+            multi_stage_late_materialization_runtime_stats,
             start_ts,
             read_data_block_rows);
     }

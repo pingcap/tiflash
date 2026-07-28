@@ -828,6 +828,54 @@ RuntimeFilterList parseRuntimeFilterList(
     }
     return runtime_filter_list;
 }
+
+DM::PushDownExecutorPtr buildMultiStageLateMaterializationFilter(
+    const SelectQueryInfo & query_info,
+    const DM::PushDownExecutorPtr & stage0_filter,
+    const DM::ColumnDefines & final_columns_to_read,
+    const Context & context,
+    const LoggerPtr & tracing_logger)
+{
+    if (!query_info.enable_multi_stage_late_materialization)
+        return nullptr;
+
+    RUNTIME_CHECK(query_info.dag_query != nullptr);
+    RUNTIME_CHECK(!query_info.dag_query->filters.empty());
+    RUNTIME_CHECK(stage0_filter != nullptr && stage0_filter->before_where != nullptr);
+    RUNTIME_CHECK(!context.getSettingsRef().force_push_down_all_filters_to_scan);
+
+    auto residual_filter = DM::PushDownExecutor::build(
+        DM::EMPTY_RS_OPERATOR,
+        /*ann_query_info=*/nullptr,
+#if ENABLE_CLARA
+        /*fts_query_info=*/nullptr,
+#endif
+        query_info.dag_query->source_columns,
+        query_info.dag_query->filters,
+        final_columns_to_read,
+        /*column_range=*/nullptr,
+        context,
+        tracing_logger);
+
+    RUNTIME_CHECK(residual_filter != nullptr && residual_filter->before_where != nullptr);
+    RUNTIME_CHECK(residual_filter->filter_columns != nullptr);
+    RUNTIME_CHECK_MSG(
+        !residual_filter->filter_columns->empty(),
+        "Multi-stage late materialization requires non-empty residual filter columns");
+    RUNTIME_CHECK_MSG(
+        residual_filter->filter_columns->size() < final_columns_to_read.size(),
+        "Multi-stage late materialization requires final rest columns, stage1_filter_columns_size={}, "
+        "final_columns_to_read_size={}",
+        residual_filter->filter_columns->size(),
+        final_columns_to_read.size());
+
+    LOG_DEBUG(
+        tracing_logger,
+        "Build multi-stage late materialization residual filter, stage1_filter_columns={} final_columns_to_read={}",
+        residual_filter->filter_columns->size(),
+        final_columns_to_read.size());
+    return residual_filter;
+}
 } // namespace
 
 
@@ -886,6 +934,16 @@ BlockInputStreams StorageDeltaMerge::read(
                              : google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo>{},
         context,
         tracing_logger);
+    DM::PushDownExecutorPtr multi_stage_late_materialization_filter;
+    if (query_info.enable_multi_stage_late_materialization)
+    {
+        multi_stage_late_materialization_filter = buildMultiStageLateMaterializationFilter(
+            query_info,
+            pushdown_executor,
+            columns_to_read,
+            context,
+            tracing_logger);
+    }
 
     auto runtime_filter_list = parseRuntimeFilterList(query_info, store->getTableColumns(), context, tracing_logger);
 
@@ -907,6 +965,8 @@ BlockInputStreams StorageDeltaMerge::read(
             .keep_order = query_info.keep_order,
             .is_fast_scan = query_info.is_fast_scan,
             .has_multiple_partitions = query_info.has_multiple_partitions,
+            .multi_stage_late_materialization_filter = multi_stage_late_materialization_filter,
+            .multi_stage_late_materialization_runtime_stats = query_info.multi_stage_late_materialization_runtime_stats,
         },
         max_block_size,
         parseSegmentSet(select_query.segment_expression_list),
@@ -980,6 +1040,16 @@ void StorageDeltaMerge::read(
                              : google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo>{},
         context,
         tracing_logger);
+    DM::PushDownExecutorPtr multi_stage_late_materialization_filter;
+    if (query_info.enable_multi_stage_late_materialization)
+    {
+        multi_stage_late_materialization_filter = buildMultiStageLateMaterializationFilter(
+            query_info,
+            pushdown_executor,
+            columns_to_read,
+            context,
+            tracing_logger);
+    }
 
     auto runtime_filter_list = parseRuntimeFilterList(query_info, store->getTableColumns(), context, tracing_logger);
 
@@ -1003,6 +1073,8 @@ void StorageDeltaMerge::read(
             .keep_order = query_info.keep_order,
             .is_fast_scan = query_info.is_fast_scan,
             .has_multiple_partitions = query_info.has_multiple_partitions,
+            .multi_stage_late_materialization_filter = multi_stage_late_materialization_filter,
+            .multi_stage_late_materialization_runtime_stats = query_info.multi_stage_late_materialization_runtime_stats,
         },
         max_block_size,
         parseSegmentSet(select_query.segment_expression_list),

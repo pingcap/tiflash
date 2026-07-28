@@ -1135,6 +1135,8 @@ try
             segment_snap,
             {RowKeyRange::newAll(false, 1)},
             {},
+            /*multi_stage_late_materialization_filter*/ nullptr,
+            /*multi_stage_late_materialization_runtime_stats*/ nullptr,
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE);
         ASSERT_INPUTSTREAM_BLOCK_UR(
@@ -1200,6 +1202,8 @@ try
             segment_snap,
             {RowKeyRange::newAll(false, 1)},
             {},
+            /*multi_stage_late_materialization_filter*/ nullptr,
+            /*multi_stage_late_materialization_runtime_stats*/ nullptr,
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE);
         // Only the rows in [30, 50) and [80, 90) valid

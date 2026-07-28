@@ -270,6 +270,8 @@ void SegmentReadTask::initInputStream(
     const ColumnDefines & columns_to_read,
     UInt64 start_ts,
     const PushDownExecutorPtr & push_down_executor,
+    const PushDownExecutorPtr & multi_stage_late_materialization_filter,
+    const MultiStageLateMaterializationRuntimeStatsPtr & multi_stage_late_materialization_runtime_stats,
     ReadMode read_mode,
     size_t expected_block_size,
     bool enable_delta_index_error_fallback)
@@ -282,6 +284,8 @@ void SegmentReadTask::initInputStream(
             columns_to_read,
             start_ts,
             push_down_executor,
+            multi_stage_late_materialization_filter,
+            multi_stage_late_materialization_runtime_stats,
             read_mode,
             expected_block_size,
             enable_delta_index_error_fallback)))
@@ -292,20 +296,36 @@ void SegmentReadTask::initInputStream(
     // Exception DT_DELTA_INDEX_ERROR raised. Reset delta index and try again.
     DeltaIndex empty_delta_index;
     read_snapshot->delta->getSharedDeltaIndex()->swap(empty_delta_index);
-    doInitInputStream(columns_to_read, start_ts, push_down_executor, read_mode, expected_block_size);
+    doInitInputStream(
+        columns_to_read,
+        start_ts,
+        push_down_executor,
+        multi_stage_late_materialization_filter,
+        multi_stage_late_materialization_runtime_stats,
+        read_mode,
+        expected_block_size);
 }
 
 bool SegmentReadTask::doInitInputStreamWithErrorFallback(
     const ColumnDefines & columns_to_read,
     UInt64 start_ts,
     const PushDownExecutorPtr & push_down_executor,
+    const PushDownExecutorPtr & multi_stage_late_materialization_filter,
+    const MultiStageLateMaterializationRuntimeStatsPtr & multi_stage_late_materialization_runtime_stats,
     ReadMode read_mode,
     size_t expected_block_size,
     bool enable_delta_index_error_fallback)
 {
     try
     {
-        doInitInputStream(columns_to_read, start_ts, push_down_executor, read_mode, expected_block_size);
+        doInitInputStream(
+            columns_to_read,
+            start_ts,
+            push_down_executor,
+            multi_stage_late_materialization_filter,
+            multi_stage_late_materialization_runtime_stats,
+            read_mode,
+            expected_block_size);
         return true;
     }
     catch (const Exception & e)
@@ -326,6 +346,8 @@ void SegmentReadTask::doInitInputStream(
     const ColumnDefines & columns_to_read,
     UInt64 start_ts,
     const PushDownExecutorPtr & push_down_executor,
+    const PushDownExecutorPtr & multi_stage_late_materialization_filter,
+    const MultiStageLateMaterializationRuntimeStatsPtr & multi_stage_late_materialization_runtime_stats,
     ReadMode read_mode,
     size_t expected_block_size)
 {
@@ -343,6 +365,8 @@ void SegmentReadTask::doInitInputStream(
         read_snapshot,
         ranges,
         push_down_executor,
+        multi_stage_late_materialization_filter,
+        multi_stage_late_materialization_runtime_stats,
         start_ts,
         expected_block_size);
 }
