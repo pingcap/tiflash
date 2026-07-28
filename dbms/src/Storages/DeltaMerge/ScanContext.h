@@ -46,6 +46,7 @@ public:
     std::atomic<uint64_t> dmfile_mvcc_skipped_rows{0};
     std::atomic<uint64_t> dmfile_lm_filter_scanned_rows{0};
     std::atomic<uint64_t> dmfile_lm_filter_skipped_rows{0};
+    std::atomic<uint64_t> dmfile_mslm_stage1_filter_scanned_rows{0};
     std::atomic<uint64_t> total_dmfile_read_time_ns{0};
 
     std::atomic<uint64_t> total_rs_pack_filter_check_time_ns{0};
@@ -240,6 +241,7 @@ public:
         dmfile_mvcc_skipped_rows += other.dmfile_mvcc_skipped_rows;
         dmfile_lm_filter_scanned_rows += other.dmfile_lm_filter_scanned_rows;
         dmfile_lm_filter_skipped_rows += other.dmfile_lm_filter_skipped_rows;
+        dmfile_mslm_stage1_filter_scanned_rows += other.dmfile_mslm_stage1_filter_scanned_rows;
         total_rs_pack_filter_check_time_ns += other.total_rs_pack_filter_check_time_ns;
         rs_pack_filter_none += other.rs_pack_filter_none;
         rs_pack_filter_some += other.rs_pack_filter_some;

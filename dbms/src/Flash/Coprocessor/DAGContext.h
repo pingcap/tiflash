@@ -41,6 +41,7 @@
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 
+#include <atomic>
 #include <memory>
 #include <unordered_set>
 
@@ -70,6 +71,7 @@ struct JoinExecuteInfo
 };
 
 using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
+using ExecutorRowsOverridePtr = std::shared_ptr<std::atomic<UInt64>>;
 
 class ProcessListEntry;
 
@@ -193,6 +195,14 @@ public:
         const String & executor_id,
         OperatorProfileInfos && profile_infos,
         bool is_append = false);
+
+    void setExecutorRowsOverride(const String & executor_id, ExecutorRowsOverridePtr rows_override);
+
+    void addProfileInfosToExecutorRowsOverride(const String & executor_id, const OperatorProfileInfos & profile_infos);
+
+    ExecutorRowsOverridePtr getExecutorRowsOverride(const String & executor_id) const;
+
+    bool getExecutorRowsOverrideRows(const String & executor_id, UInt64 & rows) const;
 
     std::unordered_map<String, std::vector<String>> & getExecutorIdToJoinIdMap();
 
@@ -431,11 +441,16 @@ private:
 
     /// operator profile related
     /// operator_profile_infos will be added to map concurrently at runtime, so a lock is needed to prevent data race.
-    std::mutex operator_profile_infos_map_mu;
+    mutable std::mutex operator_profile_infos_map_mu;
     /// profile_streams_map is a map that maps from executor_id to profile BlockInputStreams.
     std::unordered_map<String, BlockInputStreams> profile_streams_map;
     /// operator_profile_infos_map is a map that maps from executor_id to OperatorProfileInfos.
     std::unordered_map<String, OperatorProfileInfos> operator_profile_infos_map;
+    /// executor_rows_override_map is used when an internal scan optimization consumes an executor without
+    /// creating a standalone pipeline operator, but still needs to report executor-level produced rows.
+    std::unordered_map<String, ExecutorRowsOverridePtr> executor_rows_override_map;
+    /// Extra operator profiles whose rows should be added to executor_rows_override_map at statistics collection time.
+    std::unordered_map<String, OperatorProfileInfos> executor_rows_override_profile_infos_map;
     /// executor_id_to_join_id_map is a map that maps executor id to all the join executor id of itself and all its children.
     std::unordered_map<String, std::vector<String>> executor_id_to_join_id_map;
     /// join_execute_info_map is a map that maps from join_probe_executor_id to JoinExecuteInfo

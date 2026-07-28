@@ -184,8 +184,9 @@ DMFilePackFilterResultPtr DMFilePackFilter::load(ReadTag read_tag)
     ProfileEvents::increment(ProfileEvents::DMFileFilterAftRoughSet, after_filter);
     // In table scanning, DMFilePackFilter of a DMFile may be created several times:
     // 1. When building MVCC bitmap (ReadTag::MVCC).
-    // 2. When building LM filter stream (ReadTag::LM).
-    // 3. When building stream of other columns (ReadTag::Query).
+    // 2. When building LM filter stream (ReadTag::LMFilter).
+    // 3. When building MSLM stage1 residual filter stream (ReadTag::MSLMStage1Filter).
+    // 4. When building stream of other columns (ReadTag::Query).
     // Only need to count the filter result once.
     // TODO: We can create DMFilePackFilter at the beginning and pass it to the stages described above.
     if (read_tag == ReadTag::Query)

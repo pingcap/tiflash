@@ -288,6 +288,60 @@ void DAGContext::addOperatorProfileInfos(
     }
 }
 
+void DAGContext::setExecutorRowsOverride(const String & executor_id, ExecutorRowsOverridePtr rows_override)
+{
+    RUNTIME_CHECK(rows_override != nullptr);
+    std::lock_guard lock(operator_profile_infos_map_mu);
+    executor_rows_override_map[executor_id] = std::move(rows_override);
+}
+
+void DAGContext::addProfileInfosToExecutorRowsOverride(
+    const String & executor_id,
+    const OperatorProfileInfos & profile_infos)
+{
+    if (profile_infos.empty())
+        return;
+
+    std::lock_guard lock(operator_profile_infos_map_mu);
+    if (!executor_rows_override_map.contains(executor_id))
+        return;
+
+    auto & elem = executor_rows_override_profile_infos_map[executor_id];
+    elem.insert(elem.end(), profile_infos.begin(), profile_infos.end());
+}
+
+ExecutorRowsOverridePtr DAGContext::getExecutorRowsOverride(const String & executor_id) const
+{
+    std::lock_guard lock(operator_profile_infos_map_mu);
+    if (executor_rows_override_map.empty())
+        return nullptr;
+
+    auto it = executor_rows_override_map.find(executor_id);
+    if (it == executor_rows_override_map.end())
+        return nullptr;
+    return it->second;
+}
+
+bool DAGContext::getExecutorRowsOverrideRows(const String & executor_id, UInt64 & rows) const
+{
+    std::lock_guard lock(operator_profile_infos_map_mu);
+    const auto rows_override_it = executor_rows_override_map.find(executor_id);
+    if (rows_override_it == executor_rows_override_map.end())
+        return false;
+
+    rows = rows_override_it->second->load(std::memory_order_relaxed);
+    const auto profile_infos_it = executor_rows_override_profile_infos_map.find(executor_id);
+    if (profile_infos_it != executor_rows_override_profile_infos_map.end())
+    {
+        for (const auto & profile_info : profile_infos_it->second)
+        {
+            if (profile_info)
+                rows += profile_info->rows;
+        }
+    }
+    return true;
+}
+
 void DAGContext::addInboundIOProfileInfos(
     const String & executor_id,
     IOProfileInfos && io_profile_infos,

@@ -45,6 +45,7 @@ enum class ReadTag
     Query, // Read columns required by queries.
     MVCC, // Read columns to build MVCC bitmap.
     LMFilter, // Read columns required by late-materialization filter.
+    MSLMStage1Filter, // Read columns required by multi-stage late-materialization residual filter.
 };
 
 enum class ReadRUType

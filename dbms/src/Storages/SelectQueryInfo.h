@@ -33,6 +33,12 @@ using PreparedSets = std::unordered_map<IAST *, SetPtr>;
 struct MvccQueryInfo;
 struct DAGQueryInfo;
 
+namespace DM
+{
+struct MultiStageLateMaterializationRuntimeStats;
+using MultiStageLateMaterializationRuntimeStatsPtr = std::shared_ptr<MultiStageLateMaterializationRuntimeStats>;
+} // namespace DM
+
 
 /** Query along with some additional data,
   *  that can be used during query processing
@@ -54,6 +60,8 @@ struct SelectQueryInfo
     bool keep_order = true;
     bool is_fast_scan = false;
     bool has_multiple_partitions = false;
+    bool enable_multi_stage_late_materialization = false;
+    DM::MultiStageLateMaterializationRuntimeStatsPtr multi_stage_late_materialization_runtime_stats;
 
     SelectQueryInfo();
     ~SelectQueryInfo();

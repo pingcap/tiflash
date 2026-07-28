@@ -103,6 +103,7 @@ String ScanContext::toJson() const
     json->set("dmfile_mvcc_skipped_rows", dmfile_mvcc_skipped_rows.load());
     json->set("dmfile_lm_filter_scanned_rows", dmfile_lm_filter_scanned_rows.load());
     json->set("dmfile_lm_filter_skipped_rows", dmfile_lm_filter_skipped_rows.load());
+    json->set("dmfile_mslm_stage1_filter_scanned_rows", dmfile_mslm_stage1_filter_scanned_rows.load());
     json->set("dmfile_read_time", fmt::format("{:.3f}ms", total_dmfile_read_time_ns.load() / NS_TO_MS_SCALE));
 
     json->set(
@@ -274,7 +275,7 @@ std::optional<LACBytesCollector> ScanContext::newLACBytesCollector(ReadTag read_
 {
     if (resource_group_name.empty())
         return std::nullopt;
-    if (read_tag != ReadTag::Query && read_tag != ReadTag::LMFilter)
+    if (read_tag != ReadTag::Query && read_tag != ReadTag::LMFilter && read_tag != ReadTag::MSLMStage1Filter)
         return std::nullopt;
     return LACBytesCollector(resource_group_name);
 }
@@ -284,7 +285,8 @@ void ScanContext::addUserReadBytes(
     ReadTag read_tag,
     std::optional<LACBytesCollector> & lac_bytes_collector)
 {
-    if (read_tag != ReadTag::Query && read_tag != ReadTag::LMFilter && read_tag != ReadTag::MVCC)
+    if (read_tag != ReadTag::Query && read_tag != ReadTag::LMFilter && read_tag != ReadTag::MSLMStage1Filter
+        && read_tag != ReadTag::MVCC)
         return;
     if (read_tag == ReadTag::MVCC)
     {

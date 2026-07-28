@@ -26,11 +26,22 @@
 #include <Operators/BlockInputStreamSourceOp.h>
 #include <Operators/UnorderedSourceOp.h>
 #include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
+#include <Storages/KVStore/Types.h>
+
+#include <algorithm>
 
 namespace DB
 {
 namespace
 {
+bool useTableScanColumnsForDeltaMerge(const TiDB::ColumnInfos & columns)
+{
+    return std::any_of(columns.begin(), columns.end(), [](const auto & column) {
+        return column.id == ExtraTableIDColumnID || column.id == ExtraCommitTSColumnID || column.tp == TiDB::TypeTime
+            || column.tp == TiDB::TypeTimestamp;
+    });
+}
+
 std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
     Context & context,
     const String & executor_id,
@@ -48,14 +59,21 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
     if (context.mockStorage()->useDeltaMerge())
     {
         RUNTIME_CHECK(context.mockStorage()->tableExistsForDeltaMerge(table_scan.getLogicalTableID()));
-        schema = context.mockStorage()->getNameAndTypesForDeltaMerge(table_scan.getLogicalTableID());
+        const auto use_table_scan_columns = useTableScanColumnsForDeltaMerge(table_scan.getColumns());
+        schema = use_table_scan_columns
+            ? context.mockStorage()->getNameAndTypesForDeltaMerge(
+                table_scan.getLogicalTableID(),
+                table_scan.getColumns())
+            : context.mockStorage()->getNameAndTypesForDeltaMerge(table_scan.getLogicalTableID());
         mock_streams.emplace_back(context.mockStorage()->getStreamFromDeltaMerge(
             context,
             table_scan.getLogicalTableID(),
             nullptr,
             false,
             table_scan.getRuntimeFilterIDs(),
-            10000));
+            10000,
+            &table_scan.getPushedDownFilters(),
+            use_table_scan_columns ? &table_scan.getColumns() : nullptr));
     }
     else
     {
@@ -98,13 +116,19 @@ PhysicalMockTableScan::PhysicalMockTableScan(
     const BlockInputStreams & mock_streams_,
     Int64 table_id_,
     bool keep_order_,
-    const std::vector<Int32> & runtime_filter_ids)
+    const std::vector<Int32> & runtime_filter_ids,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters_,
+    const TiDB::ColumnInfos & table_scan_columns_,
+    bool use_table_scan_columns_for_delta_merge_)
     : PhysicalLeaf(executor_id_, PlanType::MockTableScan, schema_, FineGrainedShuffle{}, req_id)
     , sample_block(sample_block_)
     , mock_streams(mock_streams_)
     , table_id(table_id_)
     , keep_order(keep_order_)
     , runtime_filter_ids(runtime_filter_ids)
+    , pushed_down_filters(pushed_down_filters_)
+    , table_scan_columns(table_scan_columns_)
+    , use_table_scan_columns_for_delta_merge(use_table_scan_columns_for_delta_merge_)
 {}
 
 PhysicalPlanNodePtr PhysicalMockTableScan::build(
@@ -123,7 +147,10 @@ PhysicalPlanNodePtr PhysicalMockTableScan::build(
         mock_streams,
         table_scan.getLogicalTableID(),
         table_scan.keepOrder(),
-        table_scan.getRuntimeFilterIDs());
+        table_scan.getRuntimeFilterIDs(),
+        table_scan.getPushedDownFilters(),
+        table_scan.getColumns(),
+        useTableScanColumnsForDeltaMerge(table_scan.getColumns()));
     return physical_mock_table_scan;
 }
 
@@ -154,7 +181,10 @@ void PhysicalMockTableScan::buildPipelineExecGroupImpl(
             keep_order,
             &filter_conditions,
             runtime_filter_ids,
-            rf_max_wait_time_ms);
+            rf_max_wait_time_ms,
+            &pushed_down_filters,
+            execId(),
+            use_table_scan_columns_for_delta_merge ? &table_scan_columns : nullptr);
         for (size_t i = 0; i < group_builder.concurrency(); ++i)
         {
             if (auto * source_op = dynamic_cast<UnorderedSourceOp *>(group_builder.getCurBuilder(i).source_op.get()))
@@ -202,9 +232,15 @@ bool PhysicalMockTableScan::setFilterConditions(
         // The update here is only for the stream model.
         mock_streams.clear();
         RUNTIME_CHECK(context.mockStorage()->tableExistsForDeltaMerge(table_id));
-        mock_streams.emplace_back(
-            context.mockStorage()
-                ->getStreamFromDeltaMerge(context, table_id, &filter_conditions, false, runtime_filter_ids, 10000));
+        mock_streams.emplace_back(context.mockStorage()->getStreamFromDeltaMerge(
+            context,
+            table_id,
+            &filter_conditions,
+            false,
+            runtime_filter_ids,
+            10000,
+            &pushed_down_filters,
+            use_table_scan_columns_for_delta_merge ? &table_scan_columns : nullptr));
 
         return true;
     }

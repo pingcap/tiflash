@@ -39,8 +39,10 @@
 #include <Operators/CoprocessorReaderSourceOp.h>
 #include <Operators/ExpressionTransformOp.h>
 #include <Operators/NullSourceOp.h>
+#include <Operators/OperatorProfileInfo.h>
 #include <Operators/UnorderedSourceOp.h>
 #include <Parsers/makeDummyQuery.h>
+#include <Storages/DeltaMerge/MultiStageLateMaterializationRuntimeStats.h>
 #include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
@@ -64,6 +66,7 @@
 #include <pingcap/kv/Cluster.h>
 #include <tipb/select.pb.h>
 
+#include <atomic>
 #include <chrono>
 #include <thread>
 
@@ -402,12 +405,16 @@ DAGStorageInterpreter::~DAGStorageInterpreter() = default;
 void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
 {
     prepare(); // learner read
+    enable_multi_stage_late_materialization = false;
 
     executeImpl(pipeline);
 }
 
 void DAGStorageInterpreter::execute(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder)
 {
+    // `prepare` builds `may_need_add_cast_column` for TableScan post casts. Compute the multi-stage flag before
+    // that so pushed-down filter columns are not skipped when multi-stage late materialization outputs raw columns.
+    enable_multi_stage_late_materialization = shouldEnableMultiStageLateMaterialization();
     prepare(); // learner read
 
     return executeImpl(exec_context, group_builder);
@@ -446,7 +453,15 @@ void DAGStorageInterpreter::executeImpl(
             /// handle filter conditions for local table scan.
             /// If force_push_down_all_filters_to_scan is set, we will build all filter conditions in scan.
             /// TODO add runtime filter in Filter input stream.
-            if (filter_conditions.hasValue() && likely(!context.getSettingsRef().force_push_down_all_filters_to_scan))
+            if (filter_conditions.hasValue() && enable_multi_stage_late_materialization)
+            {
+                dag_context.addOperatorProfileInfos(
+                    filter_conditions.executor_id,
+                    group_builder.getCurProfileInfos(),
+                    /*is_append=*/true);
+            }
+            else if (
+                filter_conditions.hasValue() && likely(!context.getSettingsRef().force_push_down_all_filters_to_scan))
             {
                 ::DB::executePushedDownFilter(exec_context, group_builder, filter_conditions, analyzer, log);
                 dag_context.addOperatorProfileInfos(
@@ -497,15 +512,22 @@ void DAGStorageInterpreter::executeImpl(
                 table_scan.getTableScanExecutorID(),
                 remote_builder.getCurIOProfileInfos(),
                 /*is_append=*/true);
+            auto remote_profile_infos = remote_builder.getCurProfileInfos();
+            dag_context.addProfileInfosToExecutorRowsOverride(
+                table_scan.getTableScanExecutorID(),
+                remote_profile_infos);
             dag_context.addOperatorProfileInfos(
                 table_scan.getTableScanExecutorID(),
-                remote_builder.getCurProfileInfos(),
+                OperatorProfileInfos(remote_profile_infos),
                 /*is_append=*/true);
             if (filter_conditions.hasValue())
+            {
+                dag_context.addProfileInfosToExecutorRowsOverride(filter_conditions.executor_id, remote_profile_infos);
                 dag_context.addOperatorProfileInfos(
                     filter_conditions.executor_id,
-                    remote_builder.getCurProfileInfos(),
+                    std::move(remote_profile_infos),
                     /*is_append=*/true);
+            }
             group_builder.merge(std::move(remote_builder));
         }
     }
@@ -1018,6 +1040,23 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
 std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSelectQueryInfos()
 {
     std::unordered_map<TableID, SelectQueryInfo> ret;
+    DM::MultiStageLateMaterializationRuntimeStatsPtr multi_stage_late_materialization_runtime_stats;
+    if (enable_multi_stage_late_materialization)
+    {
+        multi_stage_late_materialization_runtime_stats
+            = std::make_shared<DM::MultiStageLateMaterializationRuntimeStats>();
+        dagContext().setExecutorRowsOverride(
+            table_scan.getTableScanExecutorID(),
+            std::shared_ptr<std::atomic<UInt64>>(
+                multi_stage_late_materialization_runtime_stats,
+                &multi_stage_late_materialization_runtime_stats->stage0_output_rows));
+        dagContext().setExecutorRowsOverride(
+            filter_conditions.executor_id,
+            std::shared_ptr<std::atomic<UInt64>>(
+                multi_stage_late_materialization_runtime_stats,
+                &multi_stage_late_materialization_runtime_stats->stage1_output_rows));
+    }
+
     auto create_query_info = [&](Int64 table_id) -> SelectQueryInfo {
         SelectQueryInfo query_info;
         /// to avoid null point exception
@@ -1033,6 +1072,8 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
         query_info.req_id = fmt::format("{} table_id={}", log->identifier(), table_id);
         query_info.keep_order = table_scan.keepOrder();
         query_info.is_fast_scan = table_scan.isFastScan();
+        query_info.enable_multi_stage_late_materialization = enable_multi_stage_late_materialization;
+        query_info.multi_stage_late_materialization_runtime_stats = multi_stage_late_materialization_runtime_stats;
         return query_info;
     };
     RUNTIME_CHECK_MSG(mvcc_query_info->scan_context != nullptr, "Unexpected null scan_context");
@@ -1724,21 +1765,118 @@ std::pair<Names, std::vector<UInt8>> DAGStorageInterpreter::getColumnsForTableSc
 
     // Get the columns that may need to add extra cast.
     std::unordered_set<ColumnID> filter_col_id_set;
-    for (const auto & expr : table_scan.getPushedDownFilters())
-        getColumnIDsFromExpr(expr, table_scan.getColumns(), filter_col_id_set);
-    if (unlikely(context.getSettingsRef().force_push_down_all_filters_to_scan))
+    // In multi-stage late materialization, storage outputs raw columns from stage1/final-rest streams.
+    // Stage0/residual extra casts are only used for predicate evaluation, so final output casts still belong here.
+    if (!enable_multi_stage_late_materialization)
     {
-        for (const auto & expr : filter_conditions.conditions)
+        for (const auto & expr : table_scan.getPushedDownFilters())
             getColumnIDsFromExpr(expr, table_scan.getColumns(), filter_col_id_set);
+        if (unlikely(context.getSettingsRef().force_push_down_all_filters_to_scan))
+        {
+            for (const auto & expr : filter_conditions.conditions)
+                getColumnIDsFromExpr(expr, table_scan.getColumns(), filter_col_id_set);
+        }
     }
     std::vector<UInt8> may_need_add_cast_column_tmp;
     may_need_add_cast_column_tmp.reserve(table_scan.getColumnSize());
-    // If the column is not generated column, not in the filter columns and column id is not -1, then it may need cast.
+    // In the normal late materialization path, filter columns already carry casted values from the storage filter stream.
+    // In the multi-stage path, filter_col_id_set stays empty so final output casts can still be applied after TableScan.
     for (const auto & col : table_scan.getColumns())
         may_need_add_cast_column_tmp.push_back(
             !col.hasGeneratedColumnFlag() && !filter_col_id_set.contains(col.id) && col.id != -1);
 
     return {required_columns_tmp, may_need_add_cast_column_tmp};
+}
+
+bool DAGStorageInterpreter::shouldEnableMultiStageLateMaterialization() const
+{
+    if (!context.getSettingsRef().dt_enable_multi_stage_late_materialization)
+        return false;
+
+    auto disable = [&](const String & reason) {
+        LOG_DEBUG(log, "Disable multi-stage late materialization, reason={}", reason);
+        return false;
+    };
+
+    if (!filter_conditions.hasValue())
+        return disable("no residual filter conditions");
+    if (filter_conditions.conditions.empty())
+        return disable("empty residual filter conditions");
+    if (table_scan.getPushedDownFilters().empty())
+        return disable("no stage0 pushed down filters");
+    if (context.getSettingsRef().force_push_down_all_filters_to_scan)
+        return disable("force_push_down_all_filters_to_scan is enabled");
+    if (!context.getSettingsRef().dt_enable_bitmap_filter)
+        return disable("dt_enable_bitmap_filter is disabled");
+    if (table_scan.keepOrder())
+        return disable("keep_order is true");
+    if (table_scan.isFastScan())
+        return disable("fast scan is enabled");
+    if (!generated_column_infos.empty())
+        return disable("generated columns are present");
+
+    std::unordered_set<ColumnID> stage0_filter_col_id_set;
+    for (const auto & expr : table_scan.getPushedDownFilters())
+        getColumnIDsFromExpr(expr, table_scan.getColumns(), stage0_filter_col_id_set);
+
+    bool stage0_filter_covers_all_scan_columns = true;
+    for (const auto & col : table_scan.getColumns())
+    {
+        if (col.id == ExtraTableIDColumnID)
+            continue;
+        if (!stage0_filter_col_id_set.contains(col.id))
+        {
+            stage0_filter_covers_all_scan_columns = false;
+            break;
+        }
+    }
+    if (stage0_filter_covers_all_scan_columns)
+    {
+        return disable(fmt::format(
+            "stage0 pushed filters cover all table scan columns, stage0_filter_col_cnt={}, table_scan_col_cnt={}",
+            stage0_filter_col_id_set.size(),
+            table_scan.getColumnSize()));
+    }
+
+    std::unordered_set<ColumnID> stage1_filter_col_id_set;
+    for (const auto & expr : filter_conditions.conditions)
+        getColumnIDsFromExpr(expr, table_scan.getColumns(), stage1_filter_col_id_set);
+    if (stage1_filter_col_id_set.contains(ExtraTableIDColumnID))
+        return disable("residual filters reference extra table id column");
+
+    const auto stage1_filter_col_cnt = stage1_filter_col_id_set.size();
+    if (stage1_filter_col_cnt == 0)
+        return disable("residual filters do not reference real columns");
+    if (stage1_filter_col_cnt > 10)
+        return disable(fmt::format("too many stage1 filter columns: {}", stage1_filter_col_cnt));
+
+    size_t final_rest_col_cnt = 0;
+    for (const auto & col : table_scan.getColumns())
+    {
+        if (col.hasGeneratedColumnFlag())
+            return disable("generated columns are present in table scan");
+        if (col.id == ExtraTableIDColumnID)
+            continue;
+        if (!stage1_filter_col_id_set.contains(col.id))
+            ++final_rest_col_cnt;
+    }
+
+    if (final_rest_col_cnt < 10)
+        return disable(fmt::format("too few final rest columns: {}", final_rest_col_cnt));
+    if (final_rest_col_cnt < 2 * stage1_filter_col_cnt)
+    {
+        return disable(fmt::format(
+            "final rest columns are not wide enough, final_rest_col_cnt={}, stage1_filter_col_cnt={}",
+            final_rest_col_cnt,
+            stage1_filter_col_cnt));
+    }
+
+    LOG_DEBUG(
+        log,
+        "Enable multi-stage late materialization, stage1_filter_col_cnt={} final_rest_col_cnt={}",
+        stage1_filter_col_cnt,
+        final_rest_col_cnt);
+    return true;
 }
 
 // Build remote requests from `region_retry_from_local_region` and `table_regions_info.remote_regions`

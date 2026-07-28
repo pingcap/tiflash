@@ -32,6 +32,8 @@ SelectQueryInfo::SelectQueryInfo(const SelectQueryInfo & rhs)
     , keep_order(rhs.keep_order)
     , is_fast_scan(rhs.is_fast_scan)
     , has_multiple_partitions(rhs.has_multiple_partitions)
+    , enable_multi_stage_late_materialization(rhs.enable_multi_stage_late_materialization)
+    , multi_stage_late_materialization_runtime_stats(rhs.multi_stage_late_materialization_runtime_stats)
 {}
 
 SelectQueryInfo::SelectQueryInfo(SelectQueryInfo && rhs) noexcept
@@ -43,6 +45,8 @@ SelectQueryInfo::SelectQueryInfo(SelectQueryInfo && rhs) noexcept
     , keep_order(rhs.keep_order)
     , is_fast_scan(rhs.is_fast_scan)
     , has_multiple_partitions(rhs.has_multiple_partitions)
+    , enable_multi_stage_late_materialization(rhs.enable_multi_stage_late_materialization)
+    , multi_stage_late_materialization_runtime_stats(std::move(rhs.multi_stage_late_materialization_runtime_stats))
 {}
 
 } // namespace DB
