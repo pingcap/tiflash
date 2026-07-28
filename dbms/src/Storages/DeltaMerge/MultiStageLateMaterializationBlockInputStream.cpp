@@ -401,11 +401,11 @@ void MultiStageLateMaterializationBlockInputStream::logSummary()
         return;
     summary_logged = true;
 
-    LOG_INFO(
-        log,
-        "Multi-stage late materialization finished, late_mode_blocks={} direct_mode_blocks={}",
-        late_mode_blocks,
-        direct_mode_blocks);
+    if (runtime_stats)
+        runtime_stats->finishStream(
+            late_mode_blocks,
+            direct_mode_blocks,
+            running_topn != nullptr ? running_topn->heapSize() : 0);
 }
 
 } // namespace DB::DM

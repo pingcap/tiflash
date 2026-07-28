@@ -1045,8 +1045,9 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
     DM::MultiStageLateMaterializationRuntimeStatsPtr multi_stage_late_materialization_runtime_stats;
     if (enable_multi_stage_late_materialization)
     {
-        multi_stage_late_materialization_runtime_stats
-            = std::make_shared<DM::MultiStageLateMaterializationRuntimeStats>();
+        multi_stage_late_materialization_runtime_stats = std::make_shared<DM::MultiStageLateMaterializationRuntimeStats>(
+            fmt::format("{} table_scan_executor_id={}", log->identifier(), table_scan.getTableScanExecutorID()),
+            multi_stage_late_materialization_topn != nullptr);
         dagContext().setExecutorRowsOverride(
             table_scan.getTableScanExecutorID(),
             std::shared_ptr<std::atomic<UInt64>>(

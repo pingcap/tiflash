@@ -504,7 +504,9 @@ void MockStorage::buildExecFromDeltaMerge(
         if (enable_multi_stage_late_materialization)
         {
             multi_stage_late_materialization_runtime_stats
-                = std::make_shared<DM::MultiStageLateMaterializationRuntimeStats>();
+                = std::make_shared<DM::MultiStageLateMaterializationRuntimeStats>(
+                    fmt::format("mock table_scan_executor_id={}", table_scan_executor_id),
+                    multi_stage_late_materialization_topn != nullptr);
             if (auto * dag_context = context.getDAGContext(); dag_context != nullptr && !table_scan_executor_id.empty())
             {
                 dag_context->setExecutorRowsOverride(

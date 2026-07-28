@@ -3732,7 +3732,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
             expected_block_size,
             ReadTag::Query);
 
-        LOG_INFO(
+        LOG_DEBUG(
             segment_snap->log,
             "Use multi-stage late materialization, stage0_filter_columns={} stage1_filter_columns={} "
             "final_rest_columns={}",
