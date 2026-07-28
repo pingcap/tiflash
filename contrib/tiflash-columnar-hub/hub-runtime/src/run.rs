@@ -183,7 +183,7 @@ fn update_default_ia_config(ia: &mut IaConfig) {
 
 #[cfg(target_os = "linux")]
 fn update_default_ia_config(ia: &mut IaConfig) {
-    ia.mem_cap = AbsoluteOrPercentSize::Percent(20.0);
+    ia.mem_cap = AbsoluteOrPercentSize::Percent(10.0);
     ia.disk_cap = AbsoluteOrPercentSize::Percent(70.0);
 }
 
