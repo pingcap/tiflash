@@ -902,9 +902,7 @@ async fn request_snapshot_from_leader(
                     memory_limiter,
                 )
                 .await?;
-                if let Some(keyspace_id) = get_snapshot_keyspace_id(tables) {
-                    touch_schema_file_cache_keyspace(&schema_file_cache_state, keyspace_id);
-                }
+                touch_snapshot_schema_file_cache_keyspace(&schema_file_cache_state, tables);
                 // Fill cache if not hit.
                 if !cache_valid && server_supports_snap_cache {
                     snap_cache.insert(
@@ -1298,6 +1296,7 @@ async fn get_or_request_shared_snapshot(
             "reuse shared snapaccess directly, shard_id: {}, shard_ver: {}, start_ts: {}, start_table_id: {}, end_table_id: {}",
             shard_id, shard_ver, start_ts, start_table_id, end_table_id
         );
+        touch_snapshot_schema_file_cache_keyspace(&schema_file_cache_state, &tables);
         return Ok(snap);
     }
 
@@ -1311,6 +1310,7 @@ async fn get_or_request_shared_snapshot(
             "reuse shared snapaccess after wait, shard_id: {}, shard_ver: {}, start_ts: {}, start_table_id: {}, end_table_id: {}",
             shard_id, shard_ver, start_ts, start_table_id, end_table_id
         );
+        touch_snapshot_schema_file_cache_keyspace(&schema_file_cache_state, &tables);
         return Ok(snap);
     }
 
@@ -1357,6 +1357,15 @@ fn get_snapshot_keyspace_id(tables: &[TableCtx]) -> Option<u32> {
         .and_then(|range| ApiV2::get_u32_keyspace_id_by_key(range.get_low()))
 }
 
+fn touch_snapshot_schema_file_cache_keyspace(
+    schema_file_cache_state: &Mutex<SchemaFileCacheState>,
+    tables: &[TableCtx],
+) {
+    if let Some(keyspace_id) = get_snapshot_keyspace_id(tables) {
+        touch_schema_file_cache_keyspace(schema_file_cache_state, keyspace_id);
+    }
+}
+
 fn touch_schema_file_cache_keyspace(
     schema_file_cache_state: &Mutex<SchemaFileCacheState>,
     active_keyspace_id: u32,
@@ -1382,44 +1391,53 @@ fn gc_schema_file_cache_global(
     max_keyspaces: usize,
 ) {
     let latest_by_keyspace = prune_stale_schema_file_versions(schema_files);
-    let mut cache_state = schema_file_cache_state.lock().unwrap();
-    cache_state
-        .keyspaces
-        .retain(|keyspace_id, _| latest_by_keyspace.contains_key(keyspace_id));
-
-    for (&keyspace_id, latest_schema_file) in &latest_by_keyspace {
-        if let Some(entry) = cache_state.keyspaces.get_mut(&keyspace_id) {
-            entry.latest_version = latest_schema_file.version;
-        } else {
-            // Treat first discovery in the cache as a recent access so GC does
-            // not immediately evict a schema file that was just loaded.
-            let access_seq = cache_state.access_seq.wrapping_add(1);
-            cache_state.access_seq = access_seq;
-            cache_state.keyspaces.insert(keyspace_id, SchemaFileCacheEntry {
-                latest_version: latest_schema_file.version,
-                last_access_seq: access_seq,
-            });
-        }
-    }
-
-    if max_keyspaces == 0 {
-        return;
-    }
-
-    while cache_state.keyspaces.len() > max_keyspaces {
-        let Some((victim_keyspace_id, victim_entry)) = cache_state
+    let victims = {
+        let mut cache_state = schema_file_cache_state.lock().unwrap();
+        cache_state
             .keyspaces
-            .iter()
-            .map(|(keyspace_id, entry)| (*keyspace_id, *entry))
-            .min_by_key(|(_, entry)| entry.last_access_seq)
-        else {
-            break;
-        };
-        cache_state.keyspaces.remove(&victim_keyspace_id);
+            .retain(|keyspace_id, _| latest_by_keyspace.contains_key(keyspace_id));
+
+        for (&keyspace_id, latest_schema_file) in &latest_by_keyspace {
+            if let Some(entry) = cache_state.keyspaces.get_mut(&keyspace_id) {
+                entry.latest_version = latest_schema_file.version;
+            } else {
+                // Treat first discovery in the cache as a recent access so GC does
+                // not immediately evict a schema file that was just loaded.
+                let access_seq = cache_state.access_seq.wrapping_add(1);
+                cache_state.access_seq = access_seq;
+                cache_state.keyspaces.insert(
+                    keyspace_id,
+                    SchemaFileCacheEntry {
+                        latest_version: latest_schema_file.version,
+                        last_access_seq: access_seq,
+                    },
+                );
+            }
+        }
+
+        let mut victims = Vec::new();
+        if max_keyspaces != 0 {
+            while cache_state.keyspaces.len() > max_keyspaces {
+                let Some((victim_keyspace_id, victim_entry)) = cache_state
+                    .keyspaces
+                    .iter()
+                    .map(|(keyspace_id, entry)| (*keyspace_id, *entry))
+                    .min_by_key(|(_, entry)| entry.last_access_seq)
+                else {
+                    break;
+                };
+                cache_state.keyspaces.remove(&victim_keyspace_id);
+                victims.push((victim_keyspace_id, victim_entry.latest_version));
+            }
+        }
+        victims
+    };
+
+    for (victim_keyspace_id, latest_version) in victims {
         evict_schema_file_cache_keyspace(
             schema_files,
             victim_keyspace_id,
-            victim_entry.latest_version,
+            latest_version,
             max_keyspaces,
         );
     }
