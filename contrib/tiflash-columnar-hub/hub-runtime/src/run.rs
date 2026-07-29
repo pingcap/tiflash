@@ -1690,7 +1690,7 @@ log-level = "debug"
         let config = ConfigFile::default();
         #[cfg(target_os = "linux")]
         {
-            assert_eq!(config.ia.mem_cap, AbsoluteOrPercentSize::Percent(20.0));
+            assert_eq!(config.ia.mem_cap, AbsoluteOrPercentSize::Percent(10.0));
             assert_eq!(config.ia.disk_cap, AbsoluteOrPercentSize::Percent(70.0));
         }
         #[cfg(target_os = "macos")]
