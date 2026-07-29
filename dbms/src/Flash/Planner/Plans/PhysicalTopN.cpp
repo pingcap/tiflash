@@ -65,6 +65,9 @@ DM::MultiStageLateMaterializationTopNDescriptionPtr tryBuildMultiStageLateMateri
         if (!isColumnExpr(by_item.expr()))
             return disable("order by expression is not direct ColumnRef");
 
+        // The ColumnRef index is relative to TopN's input schema. TopN-enhanced MSLM is only attached
+        // when the child is a direct TableScan, whose output schema is generated from table_scan_columns
+        // with the same order, so the index can be used to locate the original table scan column here.
         const auto column_index = decodeDAGInt64(by_item.expr().val());
         if (column_index < 0 || column_index >= static_cast<Int64>(table_scan_columns.size()))
             return disable(fmt::format(

@@ -409,6 +409,8 @@ RunningLocalTopNUpdateResult RunningLocalTopN::update(
         }
 
         const auto cmp = compareRowWithOwnedKey(sort_columns, row, heap.top().key);
+        // Equal sort keys are not kept as extra candidates. This matches the existing local TopN behavior,
+        // where ties are broken locally by the entries already selected by the partial TopN.
         if (cmp < 0)
         {
             auto evicted = heap.top();
@@ -421,10 +423,6 @@ RunningLocalTopNUpdateResult RunningLocalTopN::update(
                 .block_sequence = current_block_sequence,
                 .row_index_in_stage1_block = static_cast<UInt32>(row),
             });
-        }
-        else if (cmp == 0)
-        {
-            markCandidate(row);
         }
     }
 

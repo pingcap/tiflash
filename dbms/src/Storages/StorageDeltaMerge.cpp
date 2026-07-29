@@ -980,8 +980,10 @@ DM::PushDownFilterPtr buildMultiStageLateMaterializationFilter(
     if (storage_topn == nullptr)
         return residual_filter;
 
+    // This filter object only carries residual filter actions and the stage1 columns. The actual rough-set
+    // skipping of MSLM streams must use the original query-level rs_operator from the stage0 filter.
     return std::make_shared<DM::PushDownFilter>(
-        residual_filter->rs_operator,
+        DM::EMPTY_RS_OPERATOR,
         residual_filter->before_where,
         residual_filter->project_after_where,
         merged_stage1_columns,

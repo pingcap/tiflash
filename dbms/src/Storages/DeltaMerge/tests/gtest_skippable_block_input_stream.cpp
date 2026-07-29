@@ -1042,6 +1042,7 @@ CATCH
 TEST_F(SkippableBlockInputStreamTest, MultiStageLateMaterializationTopNAdaptiveDoesNotDisableDuringWarmup)
 try
 {
+    constexpr UInt64 topk = 2;
     constexpr size_t warmup_rows = multi_stage_late_materialization_topn_adaptive_rows_threshold;
 
     std::vector<IColumn::Filter> stage0_filters;
@@ -1068,15 +1069,15 @@ try
         stage0_stream,
         stage1_stream,
         final_rest_stream,
-        makeResidualFilterWithTopNForMultiStageTest(/*topk=*/2),
+        makeResidualFilterWithTopNForMultiStageTest(topk),
         bitmap_filter,
         "test",
         runtime_stats);
 
-    ASSERT_EQ(drainMultiStageStream(stream), warmup_rows);
+    ASSERT_EQ(drainMultiStageStream(stream), topk);
     ASSERT_EQ(runtime_stats->stage0_output_rows.load(), warmup_rows);
     ASSERT_EQ(runtime_stats->stage1_output_rows.load(), warmup_rows);
-    ASSERT_EQ(runtime_stats->topn_candidate_rows.load(), warmup_rows);
+    ASSERT_EQ(runtime_stats->topn_candidate_rows.load(), topk);
     ASSERT_EQ(runtime_stats->topn_adaptive_disabled_streams.load(), 0);
 }
 CATCH
@@ -1124,15 +1125,15 @@ try
         "test",
         runtime_stats);
 
-    ASSERT_EQ(drainMultiStageStream(stream), warmup_rows + below_threshold_candidate_rows);
+    ASSERT_EQ(drainMultiStageStream(stream), topk * 2);
     ASSERT_EQ(runtime_stats->stage0_output_rows.load(), warmup_rows + second_block_rows);
     ASSERT_EQ(runtime_stats->stage1_output_rows.load(), warmup_rows + second_block_rows);
-    ASSERT_EQ(runtime_stats->topn_candidate_rows.load(), warmup_rows + below_threshold_candidate_rows);
+    ASSERT_EQ(runtime_stats->topn_candidate_rows.load(), topk * 2);
     ASSERT_EQ(runtime_stats->topn_adaptive_disabled_streams.load(), 0);
 }
 CATCH
 
-TEST_F(SkippableBlockInputStreamTest, MultiStageLateMaterializationTopNAdaptiveDisable)
+TEST_F(SkippableBlockInputStreamTest, MultiStageLateMaterializationTopNTieRowsDoNotExpandCandidates)
 try
 {
     constexpr UInt64 topk = 2;
@@ -1171,11 +1172,11 @@ try
         "test",
         runtime_stats);
 
-    ASSERT_EQ(drainMultiStageStream(stream), warmup_rows + second_block_rows);
+    ASSERT_EQ(drainMultiStageStream(stream), topk);
     ASSERT_EQ(runtime_stats->stage0_output_rows.load(), warmup_rows + second_block_rows);
     ASSERT_EQ(runtime_stats->stage1_output_rows.load(), warmup_rows + second_block_rows);
-    ASSERT_EQ(runtime_stats->topn_candidate_rows.load(), warmup_rows + second_block_rows);
-    ASSERT_EQ(runtime_stats->topn_adaptive_disabled_streams.load(), 1);
+    ASSERT_EQ(runtime_stats->topn_candidate_rows.load(), topk);
+    ASSERT_EQ(runtime_stats->topn_adaptive_disabled_streams.load(), 0);
 }
 CATCH
 
