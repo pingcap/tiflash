@@ -102,6 +102,82 @@ using SettingUInt64 = SettingInt<UInt64>;
 using SettingInt64 = SettingInt<Int64>;
 using SettingBool = SettingInt<bool>;
 
+struct SettingMultiStageLateMaterializationMode
+{
+public:
+    bool changed = false;
+
+    SettingMultiStageLateMaterializationMode(UInt64 x = 0) // NOLINT(google-explicit-constructor)
+        : value(clampMode(x))
+    {}
+
+    SettingMultiStageLateMaterializationMode(const SettingMultiStageLateMaterializationMode & setting)
+        : value(setting.value.load())
+    {}
+
+    operator UInt64() const { return value.load(); } // NOLINT(google-explicit-constructor)
+
+    SettingMultiStageLateMaterializationMode & operator=(UInt64 x)
+    {
+        set(x);
+        return *this;
+    }
+
+    SettingMultiStageLateMaterializationMode & operator=(const SettingMultiStageLateMaterializationMode & setting)
+    {
+        set(setting.value.load());
+        return *this;
+    }
+
+    String toString() const { return DB::toString(value.load()); }
+
+    void set(UInt64 x)
+    {
+        value.store(clampMode(x));
+        changed = true;
+    }
+
+    void set(const Field & x)
+    {
+        if (x.getType() == Field::Types::Int64)
+        {
+            const auto mode = safeGet<Int64>(x);
+            set(mode < 0 ? 0 : static_cast<UInt64>(mode));
+            return;
+        }
+        if (x.getType() == Field::Types::Float64)
+        {
+            const auto mode = safeGet<Float64>(x);
+            set(mode < 0 ? 0 : static_cast<UInt64>(mode));
+            return;
+        }
+        set(applyVisitor(FieldVisitorConvertToNumber<UInt64>(), x));
+    }
+
+    void set(const String & x) { set(!x.empty() && x[0] == '-' ? 0 : parse<UInt64>(x)); }
+
+    void set(ReadBuffer & buf)
+    {
+        UInt64 x = 0;
+        readVarT(x, buf);
+        set(x);
+    }
+
+    UInt64 get() const { return value.load(); }
+
+    void write(WriteBuffer & buf) const { writeVarT(value.load(), buf); }
+
+private:
+    static UInt64 clampMode(UInt64 x) { return x > 2 ? 2 : x; }
+
+    std::atomic<UInt64> value;
+};
+
+ALWAYS_INLINE inline auto format_as(SettingMultiStageLateMaterializationMode s)
+{
+    return s.get();
+}
+
 
 /** Unlike SettingUInt64, supports the value of 'auto' - the number of processor cores without taking into account SMT.
   * A value of 0 is also treated as auto.
