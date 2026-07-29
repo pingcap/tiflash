@@ -371,10 +371,10 @@ String genErrMsgForLocalRead(const KeyspaceID keyspace_id, const TableID & table
     return table_id == logical_table_id
         ? fmt::format("(while creating read sources from storage, keyspace_id={} table_id={})", keyspace_id, table_id)
         : fmt::format(
-            "(while creating read sources from storage, keyspace_id={} table_id={} logical_table_id={})",
-            keyspace_id,
-            table_id,
-            logical_table_id);
+              "(while creating read sources from storage, keyspace_id={} table_id={} logical_table_id={})",
+              keyspace_id,
+              table_id,
+              logical_table_id);
 }
 } // namespace
 
@@ -1045,9 +1045,10 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
     DM::MultiStageLateMaterializationRuntimeStatsPtr multi_stage_late_materialization_runtime_stats;
     if (enable_multi_stage_late_materialization)
     {
-        multi_stage_late_materialization_runtime_stats = std::make_shared<DM::MultiStageLateMaterializationRuntimeStats>(
-            fmt::format("{} table_scan_executor_id={}", log->identifier(), table_scan.getTableScanExecutorID()),
-            multi_stage_late_materialization_topn != nullptr);
+        multi_stage_late_materialization_runtime_stats
+            = std::make_shared<DM::MultiStageLateMaterializationRuntimeStats>(
+                fmt::format("{} table_scan_executor_id={}", log->identifier(), table_scan.getTableScanExecutorID()),
+                multi_stage_late_materialization_topn != nullptr);
         dagContext().setExecutorRowsOverride(
             table_scan.getTableScanExecutorID(),
             std::shared_ptr<std::atomic<UInt64>>(
@@ -1057,11 +1058,11 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
             filter_conditions.executor_id,
             multi_stage_late_materialization_topn != nullptr
                 ? std::shared_ptr<std::atomic<UInt64>>(
-                    multi_stage_late_materialization_runtime_stats,
-                    &multi_stage_late_materialization_runtime_stats->topn_candidate_rows)
+                      multi_stage_late_materialization_runtime_stats,
+                      &multi_stage_late_materialization_runtime_stats->topn_candidate_rows)
                 : std::shared_ptr<std::atomic<UInt64>>(
-                    multi_stage_late_materialization_runtime_stats,
-                    &multi_stage_late_materialization_runtime_stats->stage1_output_rows));
+                      multi_stage_late_materialization_runtime_stats,
+                      &multi_stage_late_materialization_runtime_stats->stage1_output_rows));
     }
 
     auto create_query_info = [&](Int64 table_id) -> SelectQueryInfo {

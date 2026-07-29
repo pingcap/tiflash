@@ -124,10 +124,7 @@ int compareNull(bool lhs_is_null, bool rhs_is_null)
 }
 
 template <typename StorageValueType, typename ColumnType>
-int compareColumnWithOwnedFieldImpl(
-    const SortKeyColumnView & column,
-    size_t row,
-    const SortKeyField & rhs)
+int compareColumnWithOwnedFieldImpl(const SortKeyColumnView & column, size_t row, const SortKeyField & rhs)
 {
     const bool lhs_is_null = isNullAt(column.null_map, row);
     if (lhs_is_null || rhs.is_null)
@@ -138,10 +135,7 @@ int compareColumnWithOwnedFieldImpl(
 }
 
 template <typename ColumnValueType, typename ColumnType>
-int compareFloatColumnWithOwnedFieldImpl(
-    const SortKeyColumnView & column,
-    size_t row,
-    const SortKeyField & rhs)
+int compareFloatColumnWithOwnedFieldImpl(const SortKeyColumnView & column, size_t row, const SortKeyField & rhs)
 {
     const bool lhs_is_null = isNullAt(column.null_map, row);
     if (lhs_is_null || rhs.is_null)
@@ -152,10 +146,7 @@ int compareFloatColumnWithOwnedFieldImpl(
 }
 
 template <typename DecimalType>
-int compareDecimalColumnWithOwnedFieldImpl(
-    const SortKeyColumnView & column,
-    size_t row,
-    const SortKeyField & rhs)
+int compareDecimalColumnWithOwnedFieldImpl(const SortKeyColumnView & column, size_t row, const SortKeyField & rhs)
 {
     const bool lhs_is_null = isNullAt(column.null_map, row);
     if (lhs_is_null || rhs.is_null)
@@ -346,7 +337,8 @@ int RunningLocalTopN::compareRowWithOwnedKey(
     return 0;
 }
 
-OwnedSortKey RunningLocalTopN::materializeOwnedKey(const std::vector<SortKeyColumnView> & sort_columns, size_t row) const
+OwnedSortKey RunningLocalTopN::materializeOwnedKey(const std::vector<SortKeyColumnView> & sort_columns, size_t row)
+    const
 {
     RUNTIME_CHECK(sort_columns.size() == sort_key_columns.size());
 
