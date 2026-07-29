@@ -377,14 +377,14 @@ RunningLocalTopNUpdateResult RunningLocalTopN::update(
         sort_columns.push_back(desc.build_column_view(*column));
     }
 
-    auto markCandidate = [&](size_t row) {
+    auto mark_candidate = [&](size_t row) {
         if (result.filter[row] == 0)
         {
             result.filter[row] = 1;
             ++result.passed_count;
         }
     };
-    auto unmarkCurrentBlockCandidate = [&](const HeapEntry & entry) {
+    auto unmark_current_block_candidate = [&](const HeapEntry & entry) {
         if (entry.block_sequence == current_block_sequence && result.filter[entry.row_index_in_stage1_block] != 0)
         {
             result.filter[entry.row_index_in_stage1_block] = 0;
@@ -399,7 +399,7 @@ RunningLocalTopNUpdateResult RunningLocalTopN::update(
 
         if (heap.size() < topk)
         {
-            markCandidate(row);
+            mark_candidate(row);
             heap.push(HeapEntry{
                 .key = materializeOwnedKey(sort_columns, row),
                 .block_sequence = current_block_sequence,
@@ -415,9 +415,9 @@ RunningLocalTopNUpdateResult RunningLocalTopN::update(
         {
             auto evicted = heap.top();
             heap.pop();
-            unmarkCurrentBlockCandidate(evicted);
+            unmark_current_block_candidate(evicted);
 
-            markCandidate(row);
+            mark_candidate(row);
             heap.push(HeapEntry{
                 .key = materializeOwnedKey(sort_columns, row),
                 .block_sequence = current_block_sequence,

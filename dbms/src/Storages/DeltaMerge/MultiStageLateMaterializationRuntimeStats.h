@@ -46,14 +46,99 @@ struct MultiStageLateMaterializationRuntimeStats
         UInt64 stream_late_mode_blocks,
         UInt64 stream_direct_mode_blocks,
         UInt64 stream_topn_heap_size,
-        bool stream_topn_adaptive_disabled)
+        bool stream_topn_adaptive_disabled,
+        UInt64 stream_topn_adaptive_warmup_rows,
+        UInt64 stream_topn_adaptive_input_rows,
+        UInt64 stream_topn_adaptive_candidate_rows)
     {
         finished_streams.fetch_add(1, std::memory_order_relaxed);
         late_mode_blocks.fetch_add(stream_late_mode_blocks, std::memory_order_relaxed);
         direct_mode_blocks.fetch_add(stream_direct_mode_blocks, std::memory_order_relaxed);
         topn_heap_size_sum.fetch_add(stream_topn_heap_size, std::memory_order_relaxed);
+        topn_adaptive_warmup_rows.fetch_add(stream_topn_adaptive_warmup_rows, std::memory_order_relaxed);
+        topn_adaptive_post_warmup_input_rows.fetch_add(stream_topn_adaptive_input_rows, std::memory_order_relaxed);
+        topn_adaptive_post_warmup_candidate_rows.fetch_add(
+            stream_topn_adaptive_candidate_rows,
+            std::memory_order_relaxed);
         if (stream_topn_adaptive_disabled)
             topn_adaptive_disabled_streams.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    void recordPushedFilter(UInt64 input_rows, UInt64 selected_rows)
+    {
+        pushed_filter_input_rows.fetch_add(input_rows, std::memory_order_relaxed);
+        pushed_filter_selected_rows.fetch_add(selected_rows, std::memory_order_relaxed);
+        pushed_filter_filtered_rows.fetch_add(input_rows - selected_rows, std::memory_order_relaxed);
+
+        // Keep the old counter name for existing actRows/tests.
+        stage0_output_rows.fetch_add(selected_rows, std::memory_order_relaxed);
+    }
+
+    void recordResidualFilter(UInt64 input_rows, UInt64 selected_rows)
+    {
+        residual_filter_input_rows.fetch_add(input_rows, std::memory_order_relaxed);
+        residual_filter_selected_rows.fetch_add(selected_rows, std::memory_order_relaxed);
+        residual_filter_filtered_rows.fetch_add(input_rows - selected_rows, std::memory_order_relaxed);
+
+        // Keep the old counter name for existing actRows/tests.
+        stage1_output_rows.fetch_add(selected_rows, std::memory_order_relaxed);
+    }
+
+    void recordFinalRestInputRows(UInt64 rows)
+    {
+        final_rest_input_rows.fetch_add(rows, std::memory_order_relaxed);
+
+        // Keep the old counter name for existing actRows/tests.
+        topn_candidate_rows.fetch_add(rows, std::memory_order_relaxed);
+    }
+
+    void recordRunningTopN(UInt64 input_rows, UInt64 selected_rows)
+    {
+        topn_enabled.store(true, std::memory_order_relaxed);
+        running_topn_input_rows.fetch_add(input_rows, std::memory_order_relaxed);
+        running_topn_selected_rows.fetch_add(selected_rows, std::memory_order_relaxed);
+        running_topn_filtered_rows.fetch_add(input_rows - selected_rows, std::memory_order_relaxed);
+        recordFinalRestInputRows(selected_rows);
+    }
+
+    void recordRunningTopNBypass(UInt64 rows)
+    {
+        topn_enabled.store(true, std::memory_order_relaxed);
+        running_topn_input_rows.fetch_add(rows, std::memory_order_relaxed);
+        running_topn_bypass_rows.fetch_add(rows, std::memory_order_relaxed);
+        recordFinalRestInputRows(rows);
+    }
+
+    void merge(const MultiStageLateMaterializationRuntimeStats & other)
+    {
+        pushed_filter_input_rows.fetch_add(other.pushed_filter_input_rows.load(std::memory_order_relaxed));
+        pushed_filter_selected_rows.fetch_add(other.pushed_filter_selected_rows.load(std::memory_order_relaxed));
+        pushed_filter_filtered_rows.fetch_add(other.pushed_filter_filtered_rows.load(std::memory_order_relaxed));
+        residual_filter_input_rows.fetch_add(other.residual_filter_input_rows.load(std::memory_order_relaxed));
+        residual_filter_selected_rows.fetch_add(other.residual_filter_selected_rows.load(std::memory_order_relaxed));
+        residual_filter_filtered_rows.fetch_add(other.residual_filter_filtered_rows.load(std::memory_order_relaxed));
+        final_rest_input_rows.fetch_add(other.final_rest_input_rows.load(std::memory_order_relaxed));
+        running_topn_input_rows.fetch_add(other.running_topn_input_rows.load(std::memory_order_relaxed));
+        running_topn_selected_rows.fetch_add(other.running_topn_selected_rows.load(std::memory_order_relaxed));
+        running_topn_bypass_rows.fetch_add(other.running_topn_bypass_rows.load(std::memory_order_relaxed));
+        running_topn_filtered_rows.fetch_add(other.running_topn_filtered_rows.load(std::memory_order_relaxed));
+
+        stage0_output_rows.fetch_add(other.stage0_output_rows.load(std::memory_order_relaxed));
+        stage1_output_rows.fetch_add(other.stage1_output_rows.load(std::memory_order_relaxed));
+        topn_candidate_rows.fetch_add(other.topn_candidate_rows.load(std::memory_order_relaxed));
+        finished_streams.fetch_add(other.finished_streams.load(std::memory_order_relaxed));
+        late_mode_blocks.fetch_add(other.late_mode_blocks.load(std::memory_order_relaxed));
+        direct_mode_blocks.fetch_add(other.direct_mode_blocks.load(std::memory_order_relaxed));
+        topn_heap_size_sum.fetch_add(other.topn_heap_size_sum.load(std::memory_order_relaxed));
+        topn_adaptive_warmup_rows.fetch_add(other.topn_adaptive_warmup_rows.load(std::memory_order_relaxed));
+        topn_adaptive_post_warmup_input_rows.fetch_add(
+            other.topn_adaptive_post_warmup_input_rows.load(std::memory_order_relaxed));
+        topn_adaptive_post_warmup_candidate_rows.fetch_add(
+            other.topn_adaptive_post_warmup_candidate_rows.load(std::memory_order_relaxed));
+        topn_adaptive_disabled_streams.fetch_add(other.topn_adaptive_disabled_streams.load(std::memory_order_relaxed));
+        topn_enabled.store(
+            topn_enabled.load(std::memory_order_relaxed) || other.topn_enabled.load(std::memory_order_relaxed),
+            std::memory_order_relaxed);
     }
 
     void logSummary() const
@@ -61,29 +146,50 @@ struct MultiStageLateMaterializationRuntimeStats
         if (log == nullptr)
             return;
 
-        const auto stage1_rows = stage1_output_rows.load(std::memory_order_relaxed);
-        const auto topn_candidate_rows_for_log = topn_enabled ? topn_candidate_rows.load(std::memory_order_relaxed) : 0;
-        const auto topn_filtered_rows = topn_enabled && stage1_rows >= topn_candidate_rows_for_log
-            ? stage1_rows - topn_candidate_rows_for_log
-            : 0;
-
         LOG_INFO(
             log,
             "Multi-stage late materialization finished, streams={} late_mode_blocks={} direct_mode_blocks={} "
-            "stage0_output_rows={} stage1_output_rows={} topn_enabled={} topn_candidate_rows={} "
-            "topn_filtered_rows={} topn_heap_size_sum={} topn_adaptive_disabled_streams={}",
+            "pushed_filter_input_rows={} pushed_filter_selected_rows={} pushed_filter_filtered_rows={} "
+            "residual_filter_input_rows={} residual_filter_selected_rows={} residual_filter_filtered_rows={} "
+            "final_rest_input_rows={} topn_enabled={} running_topn_input_rows={} running_topn_selected_rows={} "
+            "running_topn_bypass_rows={} running_topn_filtered_rows={} running_topn_heap_size_sum={} "
+            "topn_adaptive_warmup_rows={} topn_adaptive_post_warmup_input_rows={} "
+            "topn_adaptive_post_warmup_candidate_rows={} topn_adaptive_disabled_streams={}",
             finished_streams.load(std::memory_order_relaxed),
             late_mode_blocks.load(std::memory_order_relaxed),
             direct_mode_blocks.load(std::memory_order_relaxed),
-            stage0_output_rows.load(std::memory_order_relaxed),
-            stage1_rows,
-            topn_enabled,
-            topn_candidate_rows_for_log,
-            topn_filtered_rows,
+            pushed_filter_input_rows.load(std::memory_order_relaxed),
+            pushed_filter_selected_rows.load(std::memory_order_relaxed),
+            pushed_filter_filtered_rows.load(std::memory_order_relaxed),
+            residual_filter_input_rows.load(std::memory_order_relaxed),
+            residual_filter_selected_rows.load(std::memory_order_relaxed),
+            residual_filter_filtered_rows.load(std::memory_order_relaxed),
+            final_rest_input_rows.load(std::memory_order_relaxed),
+            topn_enabled.load(std::memory_order_relaxed),
+            running_topn_input_rows.load(std::memory_order_relaxed),
+            running_topn_selected_rows.load(std::memory_order_relaxed),
+            running_topn_bypass_rows.load(std::memory_order_relaxed),
+            running_topn_filtered_rows.load(std::memory_order_relaxed),
             topn_heap_size_sum.load(std::memory_order_relaxed),
+            topn_adaptive_warmup_rows.load(std::memory_order_relaxed),
+            topn_adaptive_post_warmup_input_rows.load(std::memory_order_relaxed),
+            topn_adaptive_post_warmup_candidate_rows.load(std::memory_order_relaxed),
             topn_adaptive_disabled_streams.load(std::memory_order_relaxed));
     }
 
+    std::atomic<UInt64> pushed_filter_input_rows{0};
+    std::atomic<UInt64> pushed_filter_selected_rows{0};
+    std::atomic<UInt64> pushed_filter_filtered_rows{0};
+    std::atomic<UInt64> residual_filter_input_rows{0};
+    std::atomic<UInt64> residual_filter_selected_rows{0};
+    std::atomic<UInt64> residual_filter_filtered_rows{0};
+    std::atomic<UInt64> final_rest_input_rows{0};
+    std::atomic<UInt64> running_topn_input_rows{0};
+    std::atomic<UInt64> running_topn_selected_rows{0};
+    std::atomic<UInt64> running_topn_bypass_rows{0};
+    std::atomic<UInt64> running_topn_filtered_rows{0};
+
+    // Legacy names kept because actRows overrides and existing unit tests still refer to them.
     std::atomic<UInt64> stage0_output_rows{0};
     std::atomic<UInt64> stage1_output_rows{0};
     std::atomic<UInt64> topn_candidate_rows{0};
@@ -91,8 +197,11 @@ struct MultiStageLateMaterializationRuntimeStats
     std::atomic<UInt64> late_mode_blocks{0};
     std::atomic<UInt64> direct_mode_blocks{0};
     std::atomic<UInt64> topn_heap_size_sum{0};
+    std::atomic<UInt64> topn_adaptive_warmup_rows{0};
+    std::atomic<UInt64> topn_adaptive_post_warmup_input_rows{0};
+    std::atomic<UInt64> topn_adaptive_post_warmup_candidate_rows{0};
     std::atomic<UInt64> topn_adaptive_disabled_streams{0};
-    bool topn_enabled = false;
+    std::atomic<bool> topn_enabled{false};
     LoggerPtr log;
 };
 

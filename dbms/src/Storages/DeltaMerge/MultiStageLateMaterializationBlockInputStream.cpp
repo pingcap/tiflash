@@ -346,9 +346,7 @@ Block MultiStageLateMaterializationBlockInputStream::read()
 
         auto effective_stage0_filter = buildStage0EffectiveFilter(stage0_block, stage0_filter);
         if (runtime_stats)
-            runtime_stats->stage0_output_rows.fetch_add(
-                effective_stage0_filter.passed_count,
-                std::memory_order_relaxed);
+            runtime_stats->recordPushedFilter(stage0_block.rows(), effective_stage0_filter.passed_count);
         if (effective_stage0_filter.passed_count == 0)
         {
             skipNextBlockOrRead(stage1_filter_stream, "stage1_filter");
@@ -377,10 +375,15 @@ Block MultiStageLateMaterializationBlockInputStream::read()
         FilterPtr residual_filter_ptr = nullptr;
         const auto residual_passed_rows = executeResidualFilter(stage1_block, filter_eval_block, residual_filter_ptr);
         if (runtime_stats)
-            runtime_stats->stage1_output_rows.fetch_add(residual_passed_rows, std::memory_order_relaxed);
+            runtime_stats->recordResidualFilter(stage1_block.rows(), residual_passed_rows);
 
         if (!shouldUseRunningTopN() && runtime_stats)
-            runtime_stats->topn_candidate_rows.fetch_add(residual_passed_rows, std::memory_order_relaxed);
+        {
+            if (running_topn != nullptr)
+                runtime_stats->recordRunningTopNBypass(residual_passed_rows);
+            else
+                runtime_stats->recordFinalRestInputRows(residual_passed_rows);
+        }
 
         if (residual_passed_rows == 0)
         {
@@ -393,7 +396,7 @@ Block MultiStageLateMaterializationBlockInputStream::read()
         {
             auto topn_result = running_topn->update(stage1_block, residual_filter_ptr, residual_passed_rows);
             if (runtime_stats)
-                runtime_stats->topn_candidate_rows.fetch_add(topn_result.passed_count, std::memory_order_relaxed);
+                runtime_stats->recordRunningTopN(residual_passed_rows, topn_result.passed_count);
             updateTopNAdaptiveState(residual_passed_rows, topn_result.passed_count);
 
             if (topn_result.passed_count == 0)
@@ -456,7 +459,10 @@ void MultiStageLateMaterializationBlockInputStream::logSummary()
             late_mode_blocks,
             direct_mode_blocks,
             running_topn != nullptr ? running_topn->heapSize() : 0,
-            topn_adaptive_disabled);
+            topn_adaptive_disabled,
+            topn_adaptive_warmup_observed_rows,
+            topn_adaptive_input_rows,
+            topn_adaptive_candidate_rows);
 }
 
 } // namespace DB::DM

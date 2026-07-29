@@ -268,9 +268,12 @@ try
     in->readSuffix();
 
     ASSERT_EQ(output_rows, rows);
-    ASSERT_EQ(scan_context->dmfile_lm_filter_scanned_rows, rows);
-    ASSERT_EQ(scan_context->dmfile_mslm_stage1_filter_scanned_rows, rows);
-    ASSERT_NE(scan_context->toJson().find("dmfile_mslm_stage1_filter_scanned_rows"), String::npos);
+    ASSERT_EQ(scan_context->dmfile_lm_filter_scanned_rows, 0);
+    ASSERT_EQ(scan_context->mslm_pushed_filter_read.dmfile_scanned_rows, rows);
+    ASSERT_EQ(scan_context->mslm_candidate_read.dmfile_scanned_rows, rows);
+    ASSERT_EQ(scan_context->mslm_final_rest_read.dmfile_scanned_rows, rows);
+    ASSERT_NE(scan_context->toJson().find("multi_stage_late_materialization"), String::npos);
+    ASSERT_NE(scan_context->toJson().find("candidate_read"), String::npos);
 }
 CATCH
 

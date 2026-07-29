@@ -17,6 +17,7 @@
 - [Running Local TopN 状态](#running-local-topn-状态)
 - [Filter 坐标](#filter-坐标)
 - [启用规则](#启用规则)
+- [可观测性](#可观测性)
 - [实现计划](#实现计划)
 - [测试方案](#测试方案)
 - [性能评估](#性能评估)
@@ -147,8 +148,8 @@ Final:
 ```text
 开始时启用 running local TopN
 先用 warmup rows 建立初始 TopN 状态
-warmup 后，持续统计后续 residual input rows 和 TopN candidate rows
-如果后续累计 residual_input_rows 达到最小检查门槛，且 topn_candidate_rows / residual_input_rows 过高
+warmup 后，持续统计后续 `adaptive_post_warmup_input_rows` 和 `adaptive_post_warmup_candidate_rows`
+如果后续累计 input rows 达到最小检查门槛，且 candidate rows / input rows 过高
   后续 blocks 禁用 TopN filter
   后续 final rest 只使用 residual filter
 禁用后不再重新启用
@@ -156,7 +157,7 @@ warmup 后，持续统计后续 residual input rows 和 TopN candidate rows
 
 这个 adaptive 只做运行时止损，不改变正确性：禁用后输出的是 residual Selection 后的更多 rows，仍然是上层全局 TopN 的 superset。上层 TopN executor 保留，因此最终结果不变。
 
-需要注意，这个 runtime disable 不能避免已经加入 Stage 1 的 order-by columns IO，因为 Stage 1 schema 在 stream 构建时已经固定。它主要减少后续 comparator、heap 维护和 TopN candidate filter 处理成本。避免明显不划算的 order-by column 读取仍然依赖静态启发式 gating。
+需要注意，这个 runtime disable 不能避免已经加入 Stage 1 的 order-by columns IO，因为 Stage 1 schema 在 stream 构建时已经固定。它主要减少后续 comparator、heap 维护和 TopN filter 处理成本。避免明显不划算的 order-by column 读取仍然依赖静态启发式 gating。
 
 ## 正确性
 
@@ -269,7 +270,7 @@ final_rest_columns = final_columns_to_read - stage1_columns
 
 如果 order-by column 已经属于 residual filter columns，则 Stage 1 只读一次。如果 order-by column 也是最终输出列，则 final rest columns 中必须排除该列，避免重复读取。
 
-第一版不支持没有 residual Selection 的 `TopN -> TableScan`。这种场景没有 Selection executor 可以承载 candidate rows 的 `EXPLAIN ANALYZE` 展示，也需要让 residual filter 变成 optional，后续单独设计。
+第一版不支持没有 residual Selection 的 `TopN -> TableScan`。这种场景需要将 candidate read 从 residual-filter-driven 扩展为 order-by-column-driven；scan context 的 `residual_filter` 已经按 optional 设计，可以兼容后续扩展。
 
 plain column 还需要保证 storage 内比较语义和上层 TopN 一致。第一版建议保守禁用下面场景：
 
@@ -573,8 +574,8 @@ combined_filter = compose(stage0_filter, stage1_final_filter)
 topk <= 2048
 order_by_column_count <= 4
 runtime adaptive warmup rows >= max(topk * 4, 8192)
-after warmup, check only when cumulative residual_input_rows >= max(topk * 4, 8192)
-after warmup, disable if cumulative topn_candidate_rows / residual_input_rows >= 0.7
+after warmup, check only when adaptive_post_warmup_input_rows >= max(topk * 4, 8192)
+after warmup, disable if adaptive_post_warmup_candidate_rows / adaptive_post_warmup_input_rows >= 0.7
 ```
 
 实际阈值可以根据 benchmark 调整。
@@ -592,6 +593,208 @@ after warmup, disable if cumulative topn_candidate_rows / residual_input_rows >=
 - 查询没有 residual Selection，或者没有 TableScan pushed-down filters。
 - 查询要求 keep order 且和 MSLM 现有限制冲突。
 - TopN 位于 join、aggregation、window 等算子之上。
+
+## 可观测性
+
+`EXPLAIN ANALYZE` 中各 executor 的 `actRows` 语义保持现状：
+
+- TableScan executor 的 `actRows` 展示 Stage 0 pushed filter 之后的 rows。
+- 没有启用 running local TopN 时，Selection executor 的 `actRows` 展示 residual Selection 之后的 rows。
+- 启用 running local TopN 时，Selection executor 的 `actRows` 展示 MSLM 最终需要读取 final rest columns 的 rows。
+
+MSLM 内部细节通过 TiFlash scan context 展示。原 single-stage late materialization 继续使用现有字段，不改变语义：
+
+- `lm_skip_rows`
+- `dmfile_lm_filter_scanned_rows`
+- `dmfile_lm_filter_skipped_rows`
+
+MSLM 不复用这些旧 LM 字段，而是在 `TiFlashScanContext` 中新增独立的 `multi_stage_late_materialization` context。这样可以避免 single-stage LM 和 MSLM 的统计混在一起解释。
+
+建议 TiPB 结构如下：
+
+```proto
+message TiFlashScanContext {
+    // Existing fields unchanged.
+    optional uint64 dmfile_lm_filter_scanned_rows = 33;
+    optional uint64 dmfile_lm_filter_skipped_rows = 34;
+
+    // Only set when multi-stage late materialization is enabled.
+    optional TiFlashMultiStageLateMaterializationScanContext multi_stage_late_materialization = 35;
+
+    // Existing vector index fields unchanged.
+    optional uint64 total_vector_idx_load_from_s3 = 100;
+    // ...
+}
+
+message TiFlashMultiStageLateMaterializationScanContext {
+    optional uint64 streams = 1;
+    optional uint64 late_mode_blocks = 2;
+    optional uint64 direct_mode_blocks = 3;
+
+    // Physical read stages. These fields describe DMFile/storage read cost only.
+    optional TiFlashMSLMReadStageContext pushed_filter_read = 10;
+    optional TiFlashMSLMReadStageContext candidate_read = 11;
+    optional TiFlashMSLMReadStageContext final_rest_read = 12;
+
+    // Logical row reducers. Each reducer is independently optional.
+    optional TiFlashMSLMFilterContext pushed_filter = 20;
+    optional TiFlashMSLMFilterContext residual_filter = 21;
+    optional TiFlashMSLMRunningTopNContext running_topn = 22;
+
+    // Logical rows that actually need final-rest materialization.
+    optional uint64 final_rest_input_rows = 30;
+}
+
+message TiFlashMSLMReadStageContext {
+    optional uint64 dmfile_scanned_rows = 1;
+    optional uint64 dmfile_skipped_rows = 2;
+    optional uint64 read_bytes = 3;
+    optional uint64 read_time_ms = 4;
+}
+
+message TiFlashMSLMFilterContext {
+    optional uint64 input_rows = 1;
+    optional uint64 selected_rows = 2;
+    optional uint64 filtered_rows = 3;
+}
+
+message TiFlashMSLMRunningTopNContext {
+    optional uint64 input_rows = 1;
+    optional uint64 selected_rows = 2;
+    optional uint64 bypass_rows = 3;
+    optional uint64 filtered_rows = 4;
+    optional uint64 heap_size_sum = 5;
+
+    optional uint64 adaptive_warmup_rows = 10;
+    optional uint64 adaptive_post_warmup_input_rows = 11;
+    optional uint64 adaptive_post_warmup_candidate_rows = 12;
+    optional uint64 adaptive_disabled_streams = 13;
+}
+```
+
+### Logical Reducer 语义
+
+`pushed_filter` 表示 pushed filter 这个逻辑 reducer。只要 MSLM 中存在 pushed filter，就填该字段：
+
+- `input_rows`: 进入 pushed filter 的逻辑 rows。
+- `selected_rows`: pushed filter 之后留下、会进入后续 MSLM stage 的逻辑 rows。
+- `filtered_rows`: 被 pushed filter 过滤掉的逻辑 rows。
+
+`residual_filter` 表示 residual Selection 这个逻辑 reducer。没有 residual filter 时不填该字段，不用 `0` 表示不存在：
+
+- `input_rows`: 进入 residual filter 的逻辑 rows。当前实现中通常等于 `pushed_filter.selected_rows`。
+- `selected_rows`: residual filter 之后留下、会进入后续 TopN 或 final rest 读取的逻辑 rows。
+- `filtered_rows`: 被 residual filter 过滤掉的逻辑 rows。
+
+filter reducer 的 rows 满足：
+
+```text
+filter.input_rows = filter.selected_rows + filter.filtered_rows
+```
+
+`running_topn` 表示 running local TopN 这个逻辑 reducer。没有 running local TopN 时不填该字段：
+
+- `input_rows`: 进入 running local TopN 的逻辑 rows。
+- `selected_rows`: 被 running local TopN 选中、需要继续读取 final rest columns 的 rows。
+- `bypass_rows`: runtime adaptive disable 之后，不再经过 TopN filter、直接进入 final rest 读取的 rows。
+- `filtered_rows`: 被 running local TopN 过滤掉、因此不需要读取 final rest columns 的 rows。
+- `heap_size_sum`: 所有 streams 的 heap size 总和。它不是 `selected_rows`。
+
+`running_topn` 的 rows 满足：
+
+```text
+running_topn.input_rows
+  = running_topn.selected_rows
+  + running_topn.bypass_rows
+  + running_topn.filtered_rows
+```
+
+`final_rest_input_rows` 表示最终需要读取 final rest columns 的逻辑 rows。它和物理读行数不同：
+
+```text
+with running_topn:
+  final_rest_input_rows = running_topn.selected_rows + running_topn.bypass_rows
+
+without running_topn and with residual_filter:
+  final_rest_input_rows = residual_filter.selected_rows
+
+without running_topn and without residual_filter:
+  final_rest_input_rows = pushed_filter.selected_rows
+```
+
+如果未来支持没有 pushed filter、直接由 TopN 驱动的 MSLM，`pushed_filter` 和 `residual_filter` 可以都不存在，`running_topn.input_rows` 表示进入 TopN 的候选 rows，`final_rest_input_rows` 仍然等于 `running_topn.selected_rows + running_topn.bypass_rows`。
+
+### Physical Read Stage 语义
+
+`pushed_filter_read`、`candidate_read`、`final_rest_read` 只表示物理读成本，不承担 logical input/output rows 语义。因此 read stage 中不设置 `input_rows/output_rows` 字段。
+
+- `pushed_filter_read`: 为 pushed filter columns 做的物理读取。
+- `candidate_read`: 为产生 final-rest candidate row set 做的物理读取。当前实现中，它读取 residual filter columns 和 order-by columns；未来 topn-only 路径中，它可以只读取 order-by columns。
+- `final_rest_read`: 为最终输出所需 rest columns 做的物理读取。
+
+这些 read stage 的字段含义：
+
+- `dmfile_scanned_rows`: DMFile 层实际 scan 的 rows。
+- `dmfile_skipped_rows`: DMFile 层跳过的 rows。
+- `read_bytes`: 该 read stage 实际读取的 bytes。
+- `read_time_ms`: 该 read stage 的读取耗时。
+
+`final_rest_input_rows` 和 `final_rest_read.dmfile_scanned_rows` 不能混用：
+
+```text
+final_rest_input_rows:
+  logical rows that need final-rest materialization.
+
+final_rest_read.dmfile_scanned_rows:
+  physical rows scanned by DMFile for final-rest columns. It may be larger than
+  final_rest_input_rows because of pack/block-level read amplification.
+```
+
+### ReadTag 拆分
+
+为了让 MSLM 不污染原 single-stage LM 的统计，TiFlash 内部建议拆分 read tag：
+
+```cpp
+ReadTag::LMFilter              // existing single-stage LM filter read
+ReadTag::MSLMPushedFilter      // MSLM pushed filter read
+ReadTag::MSLMCandidate         // MSLM residual/order-by candidate read
+ReadTag::MSLMFinalRest         // MSLM final rest read
+```
+
+其中 `ReadTag::LMFilter` 继续填旧字段；`MSLMPushedFilter`、`MSLMCandidate`、`MSLMFinalRest` 只填新的 `multi_stage_late_materialization` context。RU 统计上这些 MSLM read tags 仍然属于 query read。
+
+### Optional 字段规则
+
+不存在或无意义的字段不填，不用 `0` 表示不存在。`0` 只表示该阶段或 reducer 真实存在，但计数结果为 0。
+
+例如没有 residual filter 时：
+
+```json
+{
+  "multi_stage_late_materialization": {
+    "pushed_filter": {
+      "input_rows": 1000000,
+      "selected_rows": 120000,
+      "filtered_rows": 880000
+    },
+    "final_rest_input_rows": 120000
+  }
+}
+```
+
+而不是：
+
+```json
+{
+  "multi_stage_late_materialization": {
+    "residual_filter": {
+      "input_rows": 0,
+      "selected_rows": 0,
+      "filtered_rows": 0
+    }
+  }
+}
+```
 
 ## 实现计划
 
@@ -653,13 +856,15 @@ after warmup, disable if cumulative topn_candidate_rows / residual_input_rows >=
 
 ### Step 7: Runtime Stats 和可观测性
 
-- 保留 `stage1_output_rows` internal counter，表示 residual Selection 通过的真实行数。
-- 增加 `topn_candidate_rows` internal counter，表示 `residual_filter && topn_candidate_filter` 之后实际读取 final rest columns 的行数。
+- 保留 logical filter counters：`pushed_filter.input_rows/selected_rows/filtered_rows`、`residual_filter.input_rows/selected_rows/filtered_rows`。
+- 增加 `final_rest_input_rows` internal counter，表示实际需要读取 final rest columns 的逻辑行数。
+- 增加 running TopN counters：`input_rows`、`selected_rows`、`bypass_rows`、`filtered_rows`、`heap_size_sum`。
 - 增加 runtime one-way adaptive disable 统计，表示有多少 streams 因 TopN candidate ratio 过高而禁用后续 TopN filter。
-- 在 TopN-enhanced MSLM 启用时，可以用 `topn_candidate_rows` overwrite residual Selection executor 的 `actRows`，让 `EXPLAIN ANALYZE` 直接展示 final rest columns materialized rows。
-- 该 overwrite 会改变 Selection `actRows` 的展示语义：它不再表示纯 residual Selection 后的逻辑行数，而是表示 storage 内输出给上层 TopN 的 candidate rows。
-- TableScan executor 的 `actRows` 仍然使用 `stage0_output_rows`。
-- 可选增加 debug log，输出 residual passed rows、TopN candidate rows、heap size、filtered rows、adaptive disable 状态。
+- 在 running local TopN 启用时，用 `final_rest_input_rows` overwrite residual Selection executor 的 `actRows`，让 `EXPLAIN ANALYZE` 直接展示 final rest columns materialized rows。
+- 未启用 running local TopN 时，Selection executor 的 `actRows` 仍展示 residual Selection 后的逻辑行数。
+- TableScan executor 的 `actRows` 仍然使用 pushed filter output rows。
+- 增加 `TiFlashScanContext.multi_stage_late_materialization`，不要复用原 single-stage LM 的 `lm_*` / `dmfile_lm_filter_*` 字段。
+- 增加 debug log，输出 residual passed rows、TopN selected/bypass/filtered rows、heap size、adaptive disable 状态。
 
 ## 测试方案
 
@@ -683,8 +888,8 @@ after warmup, disable if cumulative topn_candidate_rows / residual_input_rows >=
 - ties 场景比较，验证结果满足 SQL order semantics。
 - Stage 0 全过滤。
 - residual filter 全过滤。
-- TopN candidate filter 全过滤。
-- TopN candidate filter 全通过。
+- TopN filter 全过滤。
+- TopN filter 全通过。
 - ORDER BY plain column 按 column id 对齐到 storage column，避免依赖 child schema name。
 - ORDER BY column 需要 TableScan 后 extra cast 时禁用优化。
 - 没有 residual Selection 时禁用优化。
@@ -694,7 +899,7 @@ after warmup, disable if cumulative topn_candidate_rows / residual_input_rows >=
 
 - MSLM 原有测试必须全部通过。
 - TopN 上方的 projection 仍然正确。
-- TopN-enhanced MSLM 启用时，EXPLAIN ANALYZE 中 residual Selection `actRows` 展示 TopN candidate rows，即 final rest columns materialized rows。
+- TopN-enhanced MSLM 启用时，EXPLAIN ANALYZE 中 residual Selection `actRows` 展示 `final_rest_input_rows`，即 final rest columns materialized rows。
 - 禁用条件下必须走原路径。
 
 ## 性能评估
@@ -719,7 +924,8 @@ after warmup, disable if cumulative topn_candidate_rows / residual_input_rows >=
 - DMFile read bytes。
 - CPU time。
 - memory usage。
-- candidate rows output to upper TopN。
+- `final_rest_input_rows`。
+- `running_topn.selected_rows/bypass_rows/filtered_rows`。
 
 ## 风险
 
@@ -785,7 +991,7 @@ Running local TopN 不能撤回之前已经输出的 rows。极端数据分布�
 缓解：
 
 - 上层 TopN 保留，保证正确性。
-- 通过 stats 观察 candidate rows 数量。
+- 通过 stats 观察 `final_rest_input_rows` 和 `running_topn.selected_rows/bypass_rows/filtered_rows`。
 - 后续考虑更强的 candidate row id materialization。
 
 ## 备选方案
@@ -830,5 +1036,5 @@ Running local TopN 是 block-local TopN 的增强版，复杂度增加有限，�
 - ties 场景是否需要为了结果稳定性保留所有 equal-worst rows。
 - 第一版是否禁用 variable-length order-by columns，还是实现 per-stream memory guard。
 - 是否需要支持 ORDER BY expression，以及 expression action 如何复用。
-- 是否需要在 EXPLAIN ANALYZE 中暴露 TopN-enhanced MSLM 的 candidate rows。
+- 是否需要在 `EXPLAIN ANALYZE` 中展示 scan context 之外的更细粒度 MSLM TopN 信息。
 - 是否需要在 cost model 中引入列宽和 TopN selectivity。

@@ -25,6 +25,73 @@
 
 namespace DB::DM
 {
+namespace
+{
+static constexpr uint64_t NS_TO_MS = 1'000'000;
+
+bool isQueryReadTag(ReadTag read_tag)
+{
+    switch (read_tag)
+    {
+    case ReadTag::Query:
+    case ReadTag::LMFilter:
+    case ReadTag::MSLMPushedFilter:
+    case ReadTag::MSLMCandidate:
+    case ReadTag::MSLMFinalRest:
+        return true;
+    default:
+        return false;
+    }
+}
+
+void serializeReadStage(const MSLMReadStageScanContext & read_stage, tipb::TiFlashMSLMReadStageContext * proto)
+{
+    proto->set_dmfile_scanned_rows(read_stage.dmfile_scanned_rows);
+    proto->set_dmfile_skipped_rows(read_stage.dmfile_skipped_rows);
+    proto->set_read_bytes(read_stage.read_bytes);
+    proto->set_read_time_ms(read_stage.read_time_ns / NS_TO_MS);
+}
+
+void mergeReadStage(MSLMReadStageScanContext & read_stage, const tipb::TiFlashMSLMReadStageContext & proto)
+{
+    read_stage.dmfile_scanned_rows += proto.dmfile_scanned_rows();
+    read_stage.dmfile_skipped_rows += proto.dmfile_skipped_rows();
+    read_stage.read_bytes += proto.read_bytes();
+    read_stage.read_time_ns += proto.read_time_ms() * NS_TO_MS;
+}
+
+void serializeFilter(
+    uint64_t input_rows,
+    uint64_t selected_rows,
+    uint64_t filtered_rows,
+    tipb::TiFlashMSLMFilterContext * proto)
+{
+    proto->set_input_rows(input_rows);
+    proto->set_selected_rows(selected_rows);
+    proto->set_filtered_rows(filtered_rows);
+}
+
+Poco::JSON::Object::Ptr readStageToJson(const MSLMReadStageScanContext & read_stage)
+{
+    static constexpr double NS_TO_MS_SCALE = 1'000'000.0;
+    Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
+    json->set("dmfile_scanned_rows", read_stage.dmfile_scanned_rows.load());
+    json->set("dmfile_skipped_rows", read_stage.dmfile_skipped_rows.load());
+    json->set("read_bytes", read_stage.read_bytes.load());
+    json->set("read_time", fmt::format("{:.3f}ms", read_stage.read_time_ns.load() / NS_TO_MS_SCALE));
+    return json;
+}
+
+Poco::JSON::Object::Ptr filterToJson(uint64_t input_rows, uint64_t selected_rows, uint64_t filtered_rows)
+{
+    Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
+    json->set("input_rows", input_rows);
+    json->set("selected_rows", selected_rows);
+    json->set("filtered_rows", filtered_rows);
+    return json;
+}
+} // namespace
+
 void ScanContext::setRegionNumOfCurrentInstance(uint64_t region_num)
 {
     region_num_of_instance[current_instance_id] = region_num;
@@ -103,7 +170,6 @@ String ScanContext::toJson() const
     json->set("dmfile_mvcc_skipped_rows", dmfile_mvcc_skipped_rows.load());
     json->set("dmfile_lm_filter_scanned_rows", dmfile_lm_filter_scanned_rows.load());
     json->set("dmfile_lm_filter_skipped_rows", dmfile_lm_filter_skipped_rows.load());
-    json->set("dmfile_mslm_stage1_filter_scanned_rows", dmfile_mslm_stage1_filter_scanned_rows.load());
     json->set("dmfile_read_time", fmt::format("{:.3f}ms", total_dmfile_read_time_ns.load() / NS_TO_MS_SCALE));
 
     json->set(
@@ -191,6 +257,48 @@ String ScanContext::toJson() const
         json->set("pushdown", pushdown_executor->toJSONObject());
     }
 
+    if (hasMultiStageLateMaterializationContext())
+    {
+        const auto & stats = getMultiStageLateMaterializationRuntimeStats();
+        Poco::JSON::Object::Ptr mslm = new Poco::JSON::Object();
+        mslm->set("streams", stats.finished_streams.load());
+        mslm->set("late_mode_blocks", stats.late_mode_blocks.load());
+        mslm->set("direct_mode_blocks", stats.direct_mode_blocks.load());
+        mslm->set("pushed_filter_read", readStageToJson(mslm_pushed_filter_read));
+        mslm->set("candidate_read", readStageToJson(mslm_candidate_read));
+        mslm->set("final_rest_read", readStageToJson(mslm_final_rest_read));
+        mslm->set(
+            "pushed_filter",
+            filterToJson(
+                stats.pushed_filter_input_rows.load(),
+                stats.pushed_filter_selected_rows.load(),
+                stats.pushed_filter_filtered_rows.load()));
+        mslm->set(
+            "residual_filter",
+            filterToJson(
+                stats.residual_filter_input_rows.load(),
+                stats.residual_filter_selected_rows.load(),
+                stats.residual_filter_filtered_rows.load()));
+        if (stats.topn_enabled.load())
+        {
+            Poco::JSON::Object::Ptr running_topn = new Poco::JSON::Object();
+            running_topn->set("input_rows", stats.running_topn_input_rows.load());
+            running_topn->set("selected_rows", stats.running_topn_selected_rows.load());
+            running_topn->set("bypass_rows", stats.running_topn_bypass_rows.load());
+            running_topn->set("filtered_rows", stats.running_topn_filtered_rows.load());
+            running_topn->set("heap_size_sum", stats.topn_heap_size_sum.load());
+            running_topn->set("adaptive_warmup_rows", stats.topn_adaptive_warmup_rows.load());
+            running_topn->set("adaptive_post_warmup_input_rows", stats.topn_adaptive_post_warmup_input_rows.load());
+            running_topn->set(
+                "adaptive_post_warmup_candidate_rows",
+                stats.topn_adaptive_post_warmup_candidate_rows.load());
+            running_topn->set("adaptive_disabled_streams", stats.topn_adaptive_disabled_streams.load());
+            mslm->set("running_topn", running_topn);
+        }
+        mslm->set("final_rest_input_rows", stats.final_rest_input_rows.load());
+        json->set("multi_stage_late_materialization", mslm);
+    }
+
     std::stringstream buf;
     json->stringify(buf);
     return buf.str();
@@ -275,7 +383,7 @@ std::optional<LACBytesCollector> ScanContext::newLACBytesCollector(ReadTag read_
 {
     if (resource_group_name.empty())
         return std::nullopt;
-    if (read_tag != ReadTag::Query && read_tag != ReadTag::LMFilter && read_tag != ReadTag::MSLMStage1Filter)
+    if (!isQueryReadTag(read_tag))
         return std::nullopt;
     return LACBytesCollector(resource_group_name);
 }
@@ -285,8 +393,7 @@ void ScanContext::addUserReadBytes(
     ReadTag read_tag,
     std::optional<LACBytesCollector> & lac_bytes_collector)
 {
-    if (read_tag != ReadTag::Query && read_tag != ReadTag::LMFilter && read_tag != ReadTag::MSLMStage1Filter
-        && read_tag != ReadTag::MVCC)
+    if (!isQueryReadTag(read_tag) && read_tag != ReadTag::MVCC)
         return;
     if (read_tag == ReadTag::MVCC)
     {
@@ -297,10 +404,238 @@ void ScanContext::addUserReadBytes(
     else
     {
         query_read_bytes += bytes;
+        if (auto * read_stage = getMutableMSLMReadStage(read_tag); read_stage != nullptr)
+            read_stage->read_bytes += bytes;
         if (query_read_bytes_counter)
             query_read_bytes_counter->Increment(bytes);
         if (lac_bytes_collector)
             lac_bytes_collector->collect(bytes);
+    }
+}
+
+bool ScanContext::hasMultiStageLateMaterializationContext() const
+{
+    return multi_stage_late_materialization_enabled.load(std::memory_order_relaxed)
+        || multi_stage_late_materialization_runtime_stats != nullptr;
+}
+
+const MultiStageLateMaterializationRuntimeStats & ScanContext::getMultiStageLateMaterializationRuntimeStats() const
+{
+    if (multi_stage_late_materialization_runtime_stats)
+        return *multi_stage_late_materialization_runtime_stats;
+    return merged_multi_stage_late_materialization_runtime_stats;
+}
+
+MultiStageLateMaterializationRuntimeStats & ScanContext::getMergedMultiStageLateMaterializationRuntimeStats()
+{
+    multi_stage_late_materialization_enabled.store(true, std::memory_order_relaxed);
+    return merged_multi_stage_late_materialization_runtime_stats;
+}
+
+MSLMReadStageScanContext * ScanContext::getMutableMSLMReadStage(ReadTag read_tag)
+{
+    switch (read_tag)
+    {
+    case ReadTag::MSLMPushedFilter:
+        multi_stage_late_materialization_enabled.store(true, std::memory_order_relaxed);
+        return &mslm_pushed_filter_read;
+    case ReadTag::MSLMCandidate:
+        multi_stage_late_materialization_enabled.store(true, std::memory_order_relaxed);
+        return &mslm_candidate_read;
+    case ReadTag::MSLMFinalRest:
+        multi_stage_late_materialization_enabled.store(true, std::memory_order_relaxed);
+        return &mslm_final_rest_read;
+    default:
+        return nullptr;
+    }
+}
+
+const MSLMReadStageScanContext * ScanContext::getMSLMReadStage(ReadTag read_tag) const
+{
+    switch (read_tag)
+    {
+    case ReadTag::MSLMPushedFilter:
+        return &mslm_pushed_filter_read;
+    case ReadTag::MSLMCandidate:
+        return &mslm_candidate_read;
+    case ReadTag::MSLMFinalRest:
+        return &mslm_final_rest_read;
+    default:
+        return nullptr;
+    }
+}
+
+void ScanContext::addDMFileReadTime(uint64_t ns, ReadTag read_tag)
+{
+    total_dmfile_read_time_ns += ns;
+    if (auto * read_stage = getMutableMSLMReadStage(read_tag); read_stage != nullptr)
+        read_stage->read_time_ns += ns;
+}
+
+void ScanContext::addDMFileScannedRows(uint64_t rows, ReadTag read_tag)
+{
+    switch (read_tag)
+    {
+    case ReadTag::Query:
+        dmfile_data_scanned_rows += rows;
+        break;
+    case ReadTag::MVCC:
+        dmfile_mvcc_scanned_rows += rows;
+        break;
+    case ReadTag::LMFilter:
+        dmfile_lm_filter_scanned_rows += rows;
+        break;
+    case ReadTag::MSLMPushedFilter:
+    case ReadTag::MSLMCandidate:
+    case ReadTag::MSLMFinalRest:
+        getMutableMSLMReadStage(read_tag)->dmfile_scanned_rows += rows;
+        break;
+    default:
+        break;
+    }
+}
+
+void ScanContext::addDMFileSkippedRows(uint64_t rows, ReadTag read_tag)
+{
+    switch (read_tag)
+    {
+    case ReadTag::Query:
+        dmfile_data_skipped_rows += rows;
+        break;
+    case ReadTag::MVCC:
+        dmfile_mvcc_skipped_rows += rows;
+        break;
+    case ReadTag::LMFilter:
+        dmfile_lm_filter_skipped_rows += rows;
+        break;
+    case ReadTag::MSLMPushedFilter:
+    case ReadTag::MSLMCandidate:
+    case ReadTag::MSLMFinalRest:
+        getMutableMSLMReadStage(read_tag)->dmfile_skipped_rows += rows;
+        break;
+    default:
+        break;
+    }
+}
+
+void ScanContext::setMultiStageLateMaterializationRuntimeStats(
+    const MultiStageLateMaterializationRuntimeStatsPtr & stats)
+{
+    multi_stage_late_materialization_runtime_stats = stats;
+    if (stats != nullptr)
+        multi_stage_late_materialization_enabled.store(true, std::memory_order_relaxed);
+}
+
+void ScanContext::serializeMultiStageLateMaterialization(tipb::TiFlashScanContext & proto) const
+{
+    if (!hasMultiStageLateMaterializationContext())
+        return;
+
+    const auto & stats = getMultiStageLateMaterializationRuntimeStats();
+    auto * mslm = proto.mutable_multi_stage_late_materialization();
+    mslm->set_streams(stats.finished_streams.load(std::memory_order_relaxed));
+    mslm->set_late_mode_blocks(stats.late_mode_blocks.load(std::memory_order_relaxed));
+    mslm->set_direct_mode_blocks(stats.direct_mode_blocks.load(std::memory_order_relaxed));
+    serializeReadStage(mslm_pushed_filter_read, mslm->mutable_pushed_filter_read());
+    serializeReadStage(mslm_candidate_read, mslm->mutable_candidate_read());
+    serializeReadStage(mslm_final_rest_read, mslm->mutable_final_rest_read());
+    serializeFilter(
+        stats.pushed_filter_input_rows.load(std::memory_order_relaxed),
+        stats.pushed_filter_selected_rows.load(std::memory_order_relaxed),
+        stats.pushed_filter_filtered_rows.load(std::memory_order_relaxed),
+        mslm->mutable_pushed_filter());
+    serializeFilter(
+        stats.residual_filter_input_rows.load(std::memory_order_relaxed),
+        stats.residual_filter_selected_rows.load(std::memory_order_relaxed),
+        stats.residual_filter_filtered_rows.load(std::memory_order_relaxed),
+        mslm->mutable_residual_filter());
+    if (stats.topn_enabled.load(std::memory_order_relaxed))
+    {
+        auto * topn = mslm->mutable_running_topn();
+        topn->set_input_rows(stats.running_topn_input_rows.load(std::memory_order_relaxed));
+        topn->set_selected_rows(stats.running_topn_selected_rows.load(std::memory_order_relaxed));
+        topn->set_bypass_rows(stats.running_topn_bypass_rows.load(std::memory_order_relaxed));
+        topn->set_filtered_rows(stats.running_topn_filtered_rows.load(std::memory_order_relaxed));
+        topn->set_heap_size_sum(stats.topn_heap_size_sum.load(std::memory_order_relaxed));
+        topn->set_adaptive_warmup_rows(stats.topn_adaptive_warmup_rows.load(std::memory_order_relaxed));
+        topn->set_adaptive_post_warmup_input_rows(
+            stats.topn_adaptive_post_warmup_input_rows.load(std::memory_order_relaxed));
+        topn->set_adaptive_post_warmup_candidate_rows(
+            stats.topn_adaptive_post_warmup_candidate_rows.load(std::memory_order_relaxed));
+        topn->set_adaptive_disabled_streams(stats.topn_adaptive_disabled_streams.load(std::memory_order_relaxed));
+    }
+    mslm->set_final_rest_input_rows(stats.final_rest_input_rows.load(std::memory_order_relaxed));
+}
+
+void ScanContext::deserializeMultiStageLateMaterialization(const tipb::TiFlashScanContext & proto)
+{
+    if (!proto.has_multi_stage_late_materialization())
+        return;
+    mergeMultiStageLateMaterialization(proto);
+}
+
+void ScanContext::mergeMultiStageLateMaterialization(const ScanContext & other)
+{
+    if (!other.hasMultiStageLateMaterializationContext())
+        return;
+
+    multi_stage_late_materialization_enabled.store(true, std::memory_order_relaxed);
+    mslm_pushed_filter_read.merge(other.mslm_pushed_filter_read);
+    mslm_candidate_read.merge(other.mslm_candidate_read);
+    mslm_final_rest_read.merge(other.mslm_final_rest_read);
+    merged_multi_stage_late_materialization_runtime_stats.merge(other.getMultiStageLateMaterializationRuntimeStats());
+}
+
+void ScanContext::mergeMultiStageLateMaterialization(const tipb::TiFlashScanContext & other)
+{
+    if (!other.has_multi_stage_late_materialization())
+        return;
+
+    const auto & mslm = other.multi_stage_late_materialization();
+    multi_stage_late_materialization_enabled.store(true, std::memory_order_relaxed);
+
+    if (mslm.has_pushed_filter_read())
+        mergeReadStage(mslm_pushed_filter_read, mslm.pushed_filter_read());
+    if (mslm.has_candidate_read())
+        mergeReadStage(mslm_candidate_read, mslm.candidate_read());
+    if (mslm.has_final_rest_read())
+        mergeReadStage(mslm_final_rest_read, mslm.final_rest_read());
+
+    auto & stats = getMergedMultiStageLateMaterializationRuntimeStats();
+    stats.finished_streams += mslm.streams();
+    stats.late_mode_blocks += mslm.late_mode_blocks();
+    stats.direct_mode_blocks += mslm.direct_mode_blocks();
+    if (mslm.has_pushed_filter())
+    {
+        const auto & pushed_filter = mslm.pushed_filter();
+        stats.pushed_filter_input_rows += pushed_filter.input_rows();
+        stats.pushed_filter_selected_rows += pushed_filter.selected_rows();
+        stats.pushed_filter_filtered_rows += pushed_filter.filtered_rows();
+        stats.stage0_output_rows += pushed_filter.selected_rows();
+    }
+    if (mslm.has_residual_filter())
+    {
+        const auto & residual_filter = mslm.residual_filter();
+        stats.residual_filter_input_rows += residual_filter.input_rows();
+        stats.residual_filter_selected_rows += residual_filter.selected_rows();
+        stats.residual_filter_filtered_rows += residual_filter.filtered_rows();
+        stats.stage1_output_rows += residual_filter.selected_rows();
+    }
+    stats.final_rest_input_rows += mslm.final_rest_input_rows();
+    stats.topn_candidate_rows += mslm.final_rest_input_rows();
+    if (mslm.has_running_topn())
+    {
+        const auto & running_topn = mslm.running_topn();
+        stats.topn_enabled.store(true, std::memory_order_relaxed);
+        stats.running_topn_input_rows += running_topn.input_rows();
+        stats.running_topn_selected_rows += running_topn.selected_rows();
+        stats.running_topn_bypass_rows += running_topn.bypass_rows();
+        stats.running_topn_filtered_rows += running_topn.filtered_rows();
+        stats.topn_heap_size_sum += running_topn.heap_size_sum();
+        stats.topn_adaptive_warmup_rows += running_topn.adaptive_warmup_rows();
+        stats.topn_adaptive_post_warmup_input_rows += running_topn.adaptive_post_warmup_input_rows();
+        stats.topn_adaptive_post_warmup_candidate_rows += running_topn.adaptive_post_warmup_candidate_rows();
+        stats.topn_adaptive_disabled_streams += running_topn.adaptive_disabled_streams();
     }
 }
 

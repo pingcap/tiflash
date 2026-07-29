@@ -3627,6 +3627,8 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
     size_t expected_block_size)
 {
     const auto & filter_columns = filter->filter_columns;
+    const bool enable_multi_stage_late_materialization
+        = multi_stage_late_materialization_filter && multi_stage_late_materialization_filter->before_where;
     BlockInputStreamPtr filter_column_stream = getConcatSkippableBlockInputStream(
         bitmap_filter,
         segment_snap,
@@ -3636,7 +3638,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
         filter->rs_operator,
         start_ts,
         expected_block_size,
-        ReadTag::LMFilter);
+        enable_multi_stage_late_materialization ? ReadTag::MSLMPushedFilter : ReadTag::LMFilter);
 
     if (unlikely(filter_columns->size() == columns_to_read.size()))
     {
@@ -3682,7 +3684,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
         dm_context.tracing_id);
     filter_column_stream->setExtraInfo("push down filter");
 
-    if (multi_stage_late_materialization_filter && multi_stage_late_materialization_filter->before_where)
+    if (enable_multi_stage_late_materialization)
     {
         const auto & stage1_filter_columns = multi_stage_late_materialization_filter->filter_columns;
         RUNTIME_CHECK(stage1_filter_columns != nullptr);
@@ -3705,7 +3707,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
             filter->rs_operator,
             start_ts,
             expected_block_size,
-            ReadTag::MSLMStage1Filter);
+            ReadTag::MSLMCandidate);
 
         auto final_rest_columns_to_read = std::make_shared<ColumnDefines>(columns_to_read);
         for (const auto & col : *stage1_filter_columns)
@@ -3730,7 +3732,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
             filter->rs_operator,
             start_ts,
             expected_block_size,
-            ReadTag::Query);
+            ReadTag::MSLMFinalRest);
 
         LOG_DEBUG(
             segment_snap->log,

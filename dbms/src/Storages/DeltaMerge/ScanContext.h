@@ -18,6 +18,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Poco/Util/AbstractConfiguration.h>
+#include <Storages/DeltaMerge/MultiStageLateMaterializationRuntimeStats.h>
 #include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <common/types.h>
@@ -34,6 +35,23 @@ namespace DB::DM
 {
 class PushDownFilter;
 using PushDownFilterPtr = std::shared_ptr<PushDownFilter>;
+
+struct MSLMReadStageScanContext
+{
+    std::atomic<uint64_t> dmfile_scanned_rows{0};
+    std::atomic<uint64_t> dmfile_skipped_rows{0};
+    std::atomic<uint64_t> read_bytes{0};
+    std::atomic<uint64_t> read_time_ns{0};
+
+    void merge(const MSLMReadStageScanContext & other)
+    {
+        dmfile_scanned_rows += other.dmfile_scanned_rows;
+        dmfile_skipped_rows += other.dmfile_skipped_rows;
+        read_bytes += other.read_bytes;
+        read_time_ns += other.read_time_ns;
+    }
+};
+
 /// ScanContext is used to record statistical information in table scan for current query.
 /// For each table scan(one executor id), there is only one ScanContext.
 /// ScanContext helps to collect the statistical information of the table scan to show in `EXPLAIN ANALYZE`.
@@ -46,7 +64,12 @@ public:
     std::atomic<uint64_t> dmfile_mvcc_skipped_rows{0};
     std::atomic<uint64_t> dmfile_lm_filter_scanned_rows{0};
     std::atomic<uint64_t> dmfile_lm_filter_skipped_rows{0};
-    std::atomic<uint64_t> dmfile_mslm_stage1_filter_scanned_rows{0};
+    std::atomic<bool> multi_stage_late_materialization_enabled{false};
+    MSLMReadStageScanContext mslm_pushed_filter_read;
+    MSLMReadStageScanContext mslm_candidate_read;
+    MSLMReadStageScanContext mslm_final_rest_read;
+    MultiStageLateMaterializationRuntimeStats merged_multi_stage_late_materialization_runtime_stats;
+    MultiStageLateMaterializationRuntimeStatsPtr multi_stage_late_materialization_runtime_stats;
     std::atomic<uint64_t> total_dmfile_read_time_ns{0};
 
     std::atomic<uint64_t> total_rs_pack_filter_check_time_ns{0};
@@ -130,6 +153,7 @@ public:
         dmfile_mvcc_skipped_rows = tiflash_scan_context_pb.dmfile_mvcc_skipped_rows();
         dmfile_lm_filter_scanned_rows = tiflash_scan_context_pb.dmfile_lm_filter_scanned_rows();
         dmfile_lm_filter_skipped_rows = tiflash_scan_context_pb.dmfile_lm_filter_skipped_rows();
+        deserializeMultiStageLateMaterialization(tiflash_scan_context_pb);
         total_rs_pack_filter_check_time_ns = tiflash_scan_context_pb.total_dmfile_rs_check_ms() * 1000000;
         // TODO: rs_pack_filter_none, rs_pack_filter_some, rs_pack_filter_all,rs_pack_filter_all_null
         // rs_dmfile_read_with_all
@@ -186,6 +210,7 @@ public:
         tiflash_scan_context_pb.set_dmfile_mvcc_skipped_rows(dmfile_mvcc_skipped_rows);
         tiflash_scan_context_pb.set_dmfile_lm_filter_scanned_rows(dmfile_lm_filter_scanned_rows);
         tiflash_scan_context_pb.set_dmfile_lm_filter_skipped_rows(dmfile_lm_filter_skipped_rows);
+        serializeMultiStageLateMaterialization(tiflash_scan_context_pb);
         tiflash_scan_context_pb.set_total_dmfile_rs_check_ms(total_rs_pack_filter_check_time_ns / 1000000);
         // TODO: pack_filter_none, pack_filter_some, pack_filter_all
         tiflash_scan_context_pb.set_total_dmfile_read_ms(total_dmfile_read_time_ns / 1000000);
@@ -241,7 +266,7 @@ public:
         dmfile_mvcc_skipped_rows += other.dmfile_mvcc_skipped_rows;
         dmfile_lm_filter_scanned_rows += other.dmfile_lm_filter_scanned_rows;
         dmfile_lm_filter_skipped_rows += other.dmfile_lm_filter_skipped_rows;
-        dmfile_mslm_stage1_filter_scanned_rows += other.dmfile_mslm_stage1_filter_scanned_rows;
+        mergeMultiStageLateMaterialization(other);
         total_rs_pack_filter_check_time_ns += other.total_rs_pack_filter_check_time_ns;
         rs_pack_filter_none += other.rs_pack_filter_none;
         rs_pack_filter_some += other.rs_pack_filter_some;
@@ -303,6 +328,7 @@ public:
         dmfile_mvcc_skipped_rows += other.dmfile_mvcc_skipped_rows();
         dmfile_lm_filter_scanned_rows += other.dmfile_lm_filter_scanned_rows();
         dmfile_lm_filter_skipped_rows += other.dmfile_lm_filter_skipped_rows();
+        mergeMultiStageLateMaterialization(other);
         total_rs_pack_filter_check_time_ns += other.total_dmfile_rs_check_ms() * 1000000;
         // TODO: rs_pack_filter_none, rs_pack_filter_some, rs_pack_filter_all, rs_pack_filter_all_null
         // rs_dmfile_read_with_all
@@ -360,9 +386,22 @@ public:
     // LACBytesCollector is not thread-safe, to avoid locking, we create a new one for each stream.
     std::optional<LACBytesCollector> newLACBytesCollector(ReadTag read_tag);
     void addUserReadBytes(size_t bytes, ReadTag read_tag, std::optional<LACBytesCollector> & lac_bytes_collector);
+    void addDMFileReadTime(uint64_t ns, ReadTag read_tag);
+    void addDMFileScannedRows(uint64_t rows, ReadTag read_tag);
+    void addDMFileSkippedRows(uint64_t rows, ReadTag read_tag);
+    void setMultiStageLateMaterializationRuntimeStats(const MultiStageLateMaterializationRuntimeStatsPtr & stats);
     uint64_t userReadBytes() const { return query_read_bytes + mvcc_read_bytes; }
 
 private:
+    bool hasMultiStageLateMaterializationContext() const;
+    const MultiStageLateMaterializationRuntimeStats & getMultiStageLateMaterializationRuntimeStats() const;
+    MultiStageLateMaterializationRuntimeStats & getMergedMultiStageLateMaterializationRuntimeStats();
+    MSLMReadStageScanContext * getMutableMSLMReadStage(ReadTag read_tag);
+    const MSLMReadStageScanContext * getMSLMReadStage(ReadTag read_tag) const;
+    void serializeMultiStageLateMaterialization(tipb::TiFlashScanContext & proto) const;
+    void deserializeMultiStageLateMaterialization(const tipb::TiFlashScanContext & proto);
+    void mergeMultiStageLateMaterialization(const ScanContext & other);
+    void mergeMultiStageLateMaterialization(const tipb::TiFlashScanContext & other);
     void serializeRegionNumOfInstance(tipb::TiFlashScanContext & proto) const;
     void deserializeRegionNumberOfInstance(const tipb::TiFlashScanContext & proto);
     void mergeRegionNumberOfInstance(const ScanContext & other);
