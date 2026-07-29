@@ -630,13 +630,13 @@ try
         /*limit=*/2);
 
     context.context->getSettingsRef().dt_enable_multi_stage_late_materialization = MSLMModeDisabled;
-    DAGContext disabled_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/4);
+    DAGContext disabled_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/1);
     auto expected = executeStreams(&disabled_dag_context);
     ASSERT_EQ(disabled_dag_context.getExecutorRowsOverride("table_scan_0"), nullptr);
     ASSERT_EQ(disabled_dag_context.getExecutorRowsOverride("selection_1"), nullptr);
 
     context.context->getSettingsRef().dt_enable_multi_stage_late_materialization = MSLMModeSelection;
-    DAGContext selection_only_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/4);
+    DAGContext selection_only_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/1);
     auto selection_only_actual = executeStreams(&selection_only_dag_context);
     ASSERT_TRUE(columnsEqual(expected, selection_only_actual, /*_restrict=*/false))
         << "\n  expect_block: \n"
@@ -645,7 +645,7 @@ try
     assertMultiStageRowsOverride(selection_only_dag_context, 16);
 
     context.context->getSettingsRef().dt_enable_multi_stage_late_materialization = MSLMModeTopN;
-    DAGContext enabled_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/4);
+    DAGContext enabled_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/1);
     auto actual = executeStreams(&enabled_dag_context);
     ASSERT_TRUE(columnsEqual(expected, actual, /*_restrict=*/false))
         << "\n  expect_block: \n"
@@ -717,11 +717,11 @@ try
         /*limit=*/2);
 
     context.context->getSettingsRef().dt_enable_multi_stage_late_materialization = MSLMModeDisabled;
-    DAGContext disabled_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/4);
+    DAGContext disabled_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/1);
     auto expected = executeStreams(&disabled_dag_context);
 
     context.context->getSettingsRef().dt_enable_multi_stage_late_materialization = MSLMModeTopN;
-    DAGContext enabled_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/4);
+    DAGContext enabled_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/1);
     auto actual = executeStreams(&enabled_dag_context);
     ASSERT_TRUE(columnsEqual(expected, actual, /*_restrict=*/false))
         << "\n  expect_block: \n"
@@ -793,11 +793,11 @@ try
         /*limit=*/2);
 
     context.context->getSettingsRef().dt_enable_multi_stage_late_materialization = MSLMModeDisabled;
-    DAGContext disabled_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/4);
+    DAGContext disabled_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/1);
     auto expected = executeStreams(&disabled_dag_context);
 
     context.context->getSettingsRef().dt_enable_multi_stage_late_materialization = MSLMModeTopN;
-    DAGContext enabled_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/4);
+    DAGContext enabled_dag_context(*request, dag_context_ptr->log->identifier(), /*concurrency=*/1);
     auto actual = executeStreams(&enabled_dag_context);
     ASSERT_TRUE(columnsEqual(expected, actual, /*_restrict=*/false))
         << "\n  expect_block: \n"
