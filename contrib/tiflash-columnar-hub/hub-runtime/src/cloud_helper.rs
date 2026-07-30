@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::{
+    collections::HashMap,
     fs,
     ops::Deref,
     path::{Path, PathBuf},
@@ -23,7 +24,7 @@ use std::{
     time::{Duration, UNIX_EPOCH},
 };
 
-use api_version::api_v2::KEYSPACE_PREFIX_LEN;
+use api_version::{api_v2::KEYSPACE_PREFIX_LEN, ApiV2};
 use bytes::Bytes;
 use cloud_encryption::MasterKey;
 use dashmap::DashMap;
@@ -76,6 +77,7 @@ const BACKOFF_RETRY_COUNT: usize = 5;
 const SNAPSHOT_CACHE_SIZE: usize = 10240; // 10k shards
 const SNAPSHOT_CACHE_CAP: u64 = 1024 * 1024 * 1024; // 1GB snapshot size with memtable
 const SNAPSHOT_CACHE_CAPABILITY_HEADER: &str = "x-cse-snapshot-cache-version";
+pub(crate) const DEFAULT_SCHEMA_FILE_CACHE_MAX_KEYSPACES: usize = 1024;
 
 #[derive(Clone)]
 struct RefreshingHttpClient {
@@ -207,6 +209,24 @@ pub struct CloudEngineBackends {
     pub txn_chunk_mgr: TxnChunkManager,
 }
 
+#[derive(Clone, Copy, Debug)]
+struct SchemaFileCacheEntry {
+    latest_version: i64,
+    last_access_seq: u64,
+}
+
+#[derive(Debug, Default)]
+struct SchemaFileCacheState {
+    access_seq: u64,
+    keyspaces: HashMap<u32, SchemaFileCacheEntry>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct LatestSchemaFile {
+    file_id: u64,
+    version: i64,
+}
+
 #[derive(Clone)]
 struct RegionBucketCacheEntry {
     region_ver: u64,
@@ -330,6 +350,8 @@ pub struct CloudHelper {
     shared_snap_access_cache: SharedSnapAccessCache,
     meta_file_cache: Arc<Cache<u64, Arc<dyn File>, MetaFileCacheWeighter>>,
     schema_files: Arc<DashMap<u64, SchemaFile>>,
+    schema_file_cache_state: Arc<Mutex<SchemaFileCacheState>>,
+    schema_file_cache_max_keyspaces: usize,
     runtime: Arc<tokio::runtime::Runtime>,
     read_concurrency: usize,
     ia_ctx: IaCtx,
@@ -346,6 +368,7 @@ impl CloudHelper {
         fts_cache_config: FtsCacheConfig,
         fts_delta_cache_config: FtsDeltaCacheConfig,
         block_cache_size: AbsoluteOrPercentSize,
+        schema_file_cache_max_keyspaces: usize,
     ) -> Self {
         let thread_count = std::cmp::max(4, (SysQuota::cpu_cores_quota() * 7.0 / 8.0) as usize);
         let runtime = Arc::new(
@@ -395,6 +418,8 @@ impl CloudHelper {
             shared_snap_access_cache,
             meta_file_cache,
             schema_files: Arc::new(DashMap::new()),
+            schema_file_cache_state: Arc::new(Mutex::new(SchemaFileCacheState::default())),
+            schema_file_cache_max_keyspaces,
             runtime,
             read_concurrency: thread_count,
             ia_ctx,
@@ -477,6 +502,14 @@ impl CloudHelper {
         }
     }
 
+    pub fn gc_schema_file_cache(&self) {
+        gc_schema_file_cache_global(
+            &self.schema_files,
+            &self.schema_file_cache_state,
+            self.schema_file_cache_max_keyspaces,
+        );
+    }
+
     pub fn make_columnar_reader(
         &self,
         shard_id: u64,
@@ -492,6 +525,7 @@ impl CloudHelper {
         let dfs = self.dfs.clone();
         let pd_client = self.pd_client.clone();
         let schema_files = self.schema_files.clone();
+        let schema_file_cache_state = self.schema_file_cache_state.clone();
         let txn_mgr = self.txn_chunk_mgr.clone();
         let master_key = self.master_key.clone();
         let ia_ctx = self.ia_ctx.clone();
@@ -529,6 +563,7 @@ impl CloudHelper {
                 snap_cache_capable_stores,
                 meta_file_cache,
                 schema_files,
+                schema_file_cache_state,
                 txn_mgr,
                 block_cache,
                 fts_cache,
@@ -682,6 +717,7 @@ async fn request_snapshot_from_leader(
     snap_cache_capable_stores: Arc<DashMap<u64, ()>>,
     meta_file_cache: Arc<Cache<u64, Arc<dyn File>, MetaFileCacheWeighter>>,
     schema_files: Arc<DashMap<u64, SchemaFile>>,
+    schema_file_cache_state: Arc<Mutex<SchemaFileCacheState>>,
     txn_chunk_manager: TxnChunkManager,
     block_cache: BlockCache,
     fts_cache: FtsCache,
@@ -847,7 +883,7 @@ async fn request_snapshot_from_leader(
                     fts_cache,
                     fts_delta_cache,
                     meta_file_cache,
-                    schema_files: Some(schema_files),
+                    schema_files: Some(schema_files.clone()),
                     txn_chunk_manager,
                     ia_ctx,
                     prepare_type,
@@ -866,6 +902,7 @@ async fn request_snapshot_from_leader(
                     memory_limiter,
                 )
                 .await?;
+                touch_snapshot_schema_file_cache_keyspace(&schema_file_cache_state, tables);
                 // Fill cache if not hit.
                 if !cache_valid && server_supports_snap_cache {
                     snap_cache.insert(
@@ -1230,6 +1267,7 @@ async fn get_or_request_shared_snapshot(
     snap_cache_capable_stores: Arc<DashMap<u64, ()>>,
     meta_file_cache: Arc<Cache<u64, Arc<dyn File>, MetaFileCacheWeighter>>,
     schema_files: Arc<DashMap<u64, SchemaFile>>,
+    schema_file_cache_state: Arc<Mutex<SchemaFileCacheState>>,
     txn_chunk_manager: TxnChunkManager,
     block_cache: BlockCache,
     fts_cache: FtsCache,
@@ -1258,6 +1296,7 @@ async fn get_or_request_shared_snapshot(
             "reuse shared snapaccess directly, shard_id: {}, shard_ver: {}, start_ts: {}, start_table_id: {}, end_table_id: {}",
             shard_id, shard_ver, start_ts, start_table_id, end_table_id
         );
+        touch_snapshot_schema_file_cache_keyspace(&schema_file_cache_state, &tables);
         return Ok(snap);
     }
 
@@ -1271,6 +1310,7 @@ async fn get_or_request_shared_snapshot(
             "reuse shared snapaccess after wait, shard_id: {}, shard_ver: {}, start_ts: {}, start_table_id: {}, end_table_id: {}",
             shard_id, shard_ver, start_ts, start_table_id, end_table_id
         );
+        touch_snapshot_schema_file_cache_keyspace(&schema_file_cache_state, &tables);
         return Ok(snap);
     }
 
@@ -1289,6 +1329,7 @@ async fn get_or_request_shared_snapshot(
         snap_cache_capable_stores,
         meta_file_cache,
         schema_files,
+        schema_file_cache_state,
         txn_chunk_manager,
         block_cache,
         fts_cache,
@@ -1309,10 +1350,194 @@ async fn get_or_request_shared_snapshot(
     snap
 }
 
+fn get_snapshot_keyspace_id(tables: &[TableCtx]) -> Option<u32> {
+    tables
+        .first()
+        .and_then(|table| table.ranges.first())
+        .and_then(|range| ApiV2::get_u32_keyspace_id_by_key(range.get_low()))
+}
+
+fn touch_snapshot_schema_file_cache_keyspace(
+    schema_file_cache_state: &Mutex<SchemaFileCacheState>,
+    tables: &[TableCtx],
+) {
+    if let Some(keyspace_id) = get_snapshot_keyspace_id(tables) {
+        touch_schema_file_cache_keyspace(schema_file_cache_state, keyspace_id);
+    }
+}
+
+fn touch_schema_file_cache_keyspace(
+    schema_file_cache_state: &Mutex<SchemaFileCacheState>,
+    active_keyspace_id: u32,
+) {
+    // The read path only updates recency. Stale schema files are pruned by the
+    // background GC task so a keyspace may temporarily keep multiple versions.
+    let mut cache_state = schema_file_cache_state.lock().unwrap();
+    let access_seq = cache_state.access_seq.wrapping_add(1);
+    cache_state.access_seq = access_seq;
+    cache_state
+        .keyspaces
+        .entry(active_keyspace_id)
+        .and_modify(|entry| entry.last_access_seq = access_seq)
+        .or_insert(SchemaFileCacheEntry {
+            latest_version: 0,
+            last_access_seq: access_seq,
+        });
+}
+
+fn gc_schema_file_cache_global(
+    schema_files: &DashMap<u64, SchemaFile>,
+    schema_file_cache_state: &Mutex<SchemaFileCacheState>,
+    max_keyspaces: usize,
+) {
+    let latest_by_keyspace = prune_stale_schema_file_versions(schema_files);
+    let victims = {
+        let mut cache_state = schema_file_cache_state.lock().unwrap();
+        cache_state
+            .keyspaces
+            .retain(|keyspace_id, _| latest_by_keyspace.contains_key(keyspace_id));
+
+        for (&keyspace_id, latest_schema_file) in &latest_by_keyspace {
+            if let Some(entry) = cache_state.keyspaces.get_mut(&keyspace_id) {
+                entry.latest_version = latest_schema_file.version;
+            } else {
+                // Treat first discovery in the cache as a recent access so GC does
+                // not immediately evict a schema file that was just loaded.
+                let access_seq = cache_state.access_seq.wrapping_add(1);
+                cache_state.access_seq = access_seq;
+                cache_state.keyspaces.insert(
+                    keyspace_id,
+                    SchemaFileCacheEntry {
+                        latest_version: latest_schema_file.version,
+                        last_access_seq: access_seq,
+                    },
+                );
+            }
+        }
+
+        let mut victims = Vec::new();
+        if max_keyspaces != 0 {
+            while cache_state.keyspaces.len() > max_keyspaces {
+                let Some((victim_keyspace_id, victim_entry)) = cache_state
+                    .keyspaces
+                    .iter()
+                    .map(|(keyspace_id, entry)| (*keyspace_id, *entry))
+                    .min_by_key(|(_, entry)| entry.last_access_seq)
+                else {
+                    break;
+                };
+                cache_state.keyspaces.remove(&victim_keyspace_id);
+                victims.push((victim_keyspace_id, victim_entry.latest_version));
+            }
+        }
+        victims
+    };
+
+    for (victim_keyspace_id, latest_version) in victims {
+        evict_schema_file_cache_keyspace(
+            schema_files,
+            victim_keyspace_id,
+            latest_version,
+            max_keyspaces,
+        );
+    }
+}
+
+fn prune_stale_schema_file_versions(
+    schema_files: &DashMap<u64, SchemaFile>,
+) -> HashMap<u32, LatestSchemaFile> {
+    let mut latest_by_keyspace = HashMap::new();
+    let mut stale_files = Vec::new();
+
+    for entry in schema_files.iter() {
+        let schema_file = entry.value();
+        let keyspace_id = schema_file.get_keyspace_id();
+        let candidate = LatestSchemaFile {
+            file_id: *entry.key(),
+            version: schema_file.get_version(),
+        };
+
+        match latest_by_keyspace.get_mut(&keyspace_id) {
+            None => {
+                latest_by_keyspace.insert(keyspace_id, candidate);
+            }
+            Some(current) if is_newer_schema_file(candidate, *current) => {
+                stale_files.push((keyspace_id, current.file_id, current.version));
+                *current = candidate;
+            }
+            Some(_) => stale_files.push((keyspace_id, candidate.file_id, candidate.version)),
+        }
+    }
+
+    for (_, file_id, _) in &stale_files {
+        schema_files.remove(file_id);
+    }
+
+    if !stale_files.is_empty() {
+        info!(
+            "removed stale schema file versions during full cache gc";
+            "removed_file_count" => stale_files.len(),
+            "removed_files" => ?stale_files,
+        );
+    }
+
+    latest_by_keyspace
+}
+
+fn evict_schema_file_cache_keyspace(
+    schema_files: &DashMap<u64, SchemaFile>,
+    keyspace_id: u32,
+    latest_version: i64,
+    max_keyspaces: usize,
+) {
+    let removed_files = remove_schema_files_for_keyspace(schema_files, keyspace_id);
+    if !removed_files.is_empty() {
+        info!(
+            "evicted schema file cache for inactive keyspace";
+            "victim_keyspace_id" => keyspace_id,
+            "victim_latest_version" => latest_version,
+            "removed_file_count" => removed_files.len(),
+            "removed_files" => ?removed_files,
+            "max_keyspaces" => max_keyspaces,
+        );
+    }
+}
+
+fn remove_schema_files_for_keyspace(
+    schema_files: &DashMap<u64, SchemaFile>,
+    keyspace_id: u32,
+) -> Vec<(u64, i64)> {
+    let removed_files: Vec<_> = schema_files
+        .iter()
+        .filter_map(|entry| {
+            let schema_file = entry.value();
+            (schema_file.get_keyspace_id() == keyspace_id)
+                .then_some((*entry.key(), schema_file.get_version()))
+        })
+        .collect();
+
+    for (file_id, _) in &removed_files {
+        schema_files.remove(file_id);
+    }
+    removed_files
+}
+
+fn is_newer_schema_file(lhs: LatestSchemaFile, rhs: LatestSchemaFile) -> bool {
+    (lhs.version, lhs.file_id) > (rhs.version, rhs.file_id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bytes::Bytes;
+    use kvengine::table::{file::InMemFile, schema_file::build_schema_file};
     use security::SecurityConfig;
+
+    fn new_test_schema_file(file_id: u64, keyspace_id: u32, version: i64) -> SchemaFile {
+        let schema_file_data = build_schema_file(keyspace_id, version, Vec::new(), 0);
+        let file = Arc::new(InMemFile::new(file_id, Bytes::from(schema_file_data)));
+        SchemaFile::open(file).unwrap()
+    }
 
     #[test]
     fn shared_snap_access_eviction_is_sticky_for_in_flight_loader() {
@@ -1357,5 +1582,107 @@ mod tests {
         );
 
         assert_eq!(http_client.refresh_count(), 1);
+    }
+
+    #[test]
+    fn schema_file_cache_keeps_latest_version_per_keyspace() {
+        let schema_files = DashMap::new();
+        schema_files.insert(11, new_test_schema_file(11, 1, 1));
+        schema_files.insert(13, new_test_schema_file(13, 1, 3));
+        schema_files.insert(12, new_test_schema_file(12, 1, 2));
+        schema_files.insert(21, new_test_schema_file(21, 2, 8));
+
+        let latest = prune_stale_schema_file_versions(&schema_files);
+
+        assert!(!schema_files.contains_key(&11));
+        assert!(!schema_files.contains_key(&12));
+        assert!(schema_files.contains_key(&13));
+        assert!(schema_files.contains_key(&21));
+        assert_eq!(latest.len(), 2);
+        assert_eq!(latest.get(&1).unwrap().version, 3);
+        assert_eq!(latest.get(&1).unwrap().file_id, 13);
+    }
+
+    #[test]
+    fn schema_file_cache_touch_updates_lru_state() {
+        let cache_state = Mutex::new(SchemaFileCacheState::default());
+
+        touch_schema_file_cache_keyspace(&cache_state, 1);
+        touch_schema_file_cache_keyspace(&cache_state, 2);
+        touch_schema_file_cache_keyspace(&cache_state, 1);
+
+        let cache_state = cache_state.lock().unwrap();
+        assert_eq!(cache_state.keyspaces.len(), 2);
+        assert!(cache_state.keyspaces.contains_key(&1));
+        assert!(cache_state.keyspaces.contains_key(&2));
+        assert_eq!(cache_state.keyspaces.get(&1).unwrap().latest_version, 0);
+        assert!(
+            cache_state.keyspaces.get(&1).unwrap().last_access_seq
+                > cache_state.keyspaces.get(&2).unwrap().last_access_seq
+        );
+    }
+
+    #[test]
+    fn schema_file_cache_global_gc_removes_stale_versions_and_enforces_limit() {
+        let schema_files = DashMap::new();
+        let cache_state = Mutex::new(SchemaFileCacheState {
+            access_seq: 3,
+            keyspaces: HashMap::from([
+                (
+                    1,
+                    SchemaFileCacheEntry {
+                        latest_version: 1,
+                        last_access_seq: 3,
+                    },
+                ),
+                (
+                    2,
+                    SchemaFileCacheEntry {
+                        latest_version: 2,
+                        last_access_seq: 1,
+                    },
+                ),
+            ]),
+        });
+
+        schema_files.insert(11, new_test_schema_file(11, 1, 1));
+        schema_files.insert(12, new_test_schema_file(12, 1, 2));
+        schema_files.insert(21, new_test_schema_file(21, 2, 5));
+        schema_files.insert(31, new_test_schema_file(31, 3, 7));
+
+        gc_schema_file_cache_global(&schema_files, &cache_state, 2);
+
+        assert!(!schema_files.contains_key(&11));
+        assert!(!schema_files.contains_key(&21));
+        assert!(schema_files.contains_key(&12));
+        assert!(schema_files.contains_key(&31));
+
+        let cache_state = cache_state.lock().unwrap();
+        assert_eq!(cache_state.access_seq, 4);
+        assert_eq!(cache_state.keyspaces.get(&1).unwrap().latest_version, 2);
+        assert!(!cache_state.keyspaces.contains_key(&2));
+        assert_eq!(cache_state.keyspaces.get(&3).unwrap().last_access_seq, 4);
+        assert!(cache_state.keyspaces.contains_key(&3));
+    }
+
+    #[test]
+    fn schema_file_cache_global_gc_keeps_all_keyspaces_when_limit_is_zero() {
+        let schema_files = DashMap::new();
+        let cache_state = Mutex::new(SchemaFileCacheState::default());
+
+        schema_files.insert(11, new_test_schema_file(11, 1, 1));
+        schema_files.insert(21, new_test_schema_file(21, 2, 2));
+        schema_files.insert(31, new_test_schema_file(31, 3, 3));
+
+        gc_schema_file_cache_global(&schema_files, &cache_state, 0);
+
+        assert!(schema_files.contains_key(&11));
+        assert!(schema_files.contains_key(&21));
+        assert!(schema_files.contains_key(&31));
+
+        let cache_state = cache_state.lock().unwrap();
+        assert!(cache_state.keyspaces.contains_key(&1));
+        assert!(cache_state.keyspaces.contains_key(&2));
+        assert!(cache_state.keyspaces.contains_key(&3));
     }
 }

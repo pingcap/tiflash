@@ -29,7 +29,7 @@ hyper = { version = "0.14.26", features = ["full", "runtime"] }
 keys = { workspace = true }
 kvengine = { workspace = true }
 kvenginepb = { workspace = true }
-kvproto = { git = "https://github.com/pingcap/kvproto.git" }
+kvproto = { workspace = true }
 lazy_static = "1.5.0"
 num_cpus = "1"
 pd_client = { workspace = true }
