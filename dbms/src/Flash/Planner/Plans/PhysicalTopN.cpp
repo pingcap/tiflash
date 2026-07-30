@@ -141,7 +141,7 @@ PhysicalPlanNodePtr PhysicalTopN::build(
 
     auto order_columns = analyzer.buildOrderColumns(before_sort_actions, top_n.order_by());
     SortDescription order_descr = getSortDescription(order_columns, top_n.order_by());
-    if (context.getSettingsRef().dt_enable_multi_stage_late_materialization == 2)
+    if (context.getSettingsRef().dt_enable_multi_stage_late_materialization >= 2)
         tryAttachMultiStageLateMaterializationTopN(top_n, child, log);
     else
         LOG_DEBUG(log, "Disable TopN-enhanced multi-stage late materialization, reason=setting disabled");

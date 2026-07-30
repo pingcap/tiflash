@@ -50,6 +50,13 @@ enum class ReadTag
     MSLMFinalRest, // Read final rest columns for multi-stage late-materialization.
 };
 
+/// A DMFile may be opened once for every physical MSLM read stage, but query-level
+/// rough-set statistics must be recorded by exactly one stage.
+inline constexpr bool isQueryRoughSetStatsOwner(ReadTag read_tag)
+{
+    return read_tag == ReadTag::Query || read_tag == ReadTag::MSLMPushedFilter;
+}
+
 enum class ReadRUType
 {
     MVCC_ESTIMATE,

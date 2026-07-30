@@ -163,7 +163,7 @@ std::pair<size_t, RSResult> DMFileReader::getReadRows()
     }
 
     next_row_offset += read_rows;
-    if (read_tag == ReadTag::Query && last_pack_res.allMatch())
+    if (isQueryRoughSetStatsOwner(read_tag) && last_pack_res.allMatch())
         scan_context->rs_dmfile_read_with_all += next_pack_id - start_pack_id;
     return {read_rows, last_pack_res};
 }

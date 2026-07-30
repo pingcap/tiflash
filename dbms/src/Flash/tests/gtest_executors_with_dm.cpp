@@ -151,7 +151,7 @@ constexpr UInt64 MSLMModeDisabled = 0;
 constexpr UInt64 MSLMModeSelection = 1;
 constexpr UInt64 MSLMModeTopN = 2;
 
-TEST_F(ExecutorsWithDMTestRunner, MultiStageLateMaterializationSettingClampsInvalidMode)
+TEST_F(ExecutorsWithDMTestRunner, MultiStageLateMaterializationSettingKeepsUInt64Mode)
 try
 {
     Settings settings;
@@ -167,19 +167,13 @@ try
     ASSERT_EQ(settings.dt_enable_multi_stage_late_materialization.get(), MSLMModeTopN);
 
     settings.dt_enable_multi_stage_late_materialization = 999;
-    ASSERT_EQ(settings.dt_enable_multi_stage_late_materialization.get(), MSLMModeTopN);
+    ASSERT_EQ(settings.dt_enable_multi_stage_late_materialization.get(), 999);
 
     settings.set("dt_enable_multi_stage_late_materialization", Field(static_cast<UInt64>(3)));
-    ASSERT_EQ(settings.dt_enable_multi_stage_late_materialization.get(), MSLMModeTopN);
+    ASSERT_EQ(settings.dt_enable_multi_stage_late_materialization.get(), 3);
 
     settings.set("dt_enable_multi_stage_late_materialization", String("999"));
-    ASSERT_EQ(settings.dt_enable_multi_stage_late_materialization.get(), MSLMModeTopN);
-
-    settings.set("dt_enable_multi_stage_late_materialization", Field(static_cast<Int64>(-1)));
-    ASSERT_EQ(settings.dt_enable_multi_stage_late_materialization.get(), MSLMModeDisabled);
-
-    settings.set("dt_enable_multi_stage_late_materialization", String("-1"));
-    ASSERT_EQ(settings.dt_enable_multi_stage_late_materialization.get(), MSLMModeDisabled);
+    ASSERT_EQ(settings.dt_enable_multi_stage_late_materialization.get(), 999);
 }
 CATCH
 

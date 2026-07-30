@@ -163,19 +163,21 @@ warmup 后，持续统计后续 `adaptive_post_warmup_input_rows` 和 `adaptive_
 
 ### Local TopK 覆盖 Global TopK
 
-对于任意一个 stream，如果某一行 `r` 是全局 TopK 结果中的一行，那么 `r` 必然属于它所在 stream 的 local TopK。
+如果没有 ties，对于任意一个 stream，如果某一行 `r` 是全局 TopK 结果中的一行，那么 `r` 必然属于它所在 stream 的 local TopK。
 
 证明：
 
 如果 `r` 不属于所在 stream 的 local TopK，说明这个 stream 中至少有 K 行按照相同 comparator 排在 `r` 前面。这 K 行在全局也排在 `r` 前面，因此 `r` 不可能是全局 TopK，矛盾。
 
-所以：
+所以在没有 ties 时：
 
 ```text
 global TopK subset union(each stream local TopK)
 ```
 
-第一版保留上层全局 TopN executor，因此只要 storage 内输出包含全局 TopK 的 superset，最终结果就是正确的。
+有 ties 时，local TopK 不一定保留和全局 TopK 完全相同的一组物理 rows，因为相同 sort key 的 rows 可以在不同执行路径中选择不同 tie winners。此时需要的正确性条件不是固定物理 rows 的严格 subset，而是每个 stream 输出足够多的 rows，且这些 rows 的 sort key 不劣于该 stream 内第 K 个 sort key。这样所有 stream 输出的 union 仍然包含足够多的 rows，其 sort key 不劣于全局第 K 个 sort key，上层 TopN 可以在 SQL ties 语义下得到合法结果。
+
+第一版保留上层全局 TopN executor，因此只要 storage 内输出包含上层 TopN 生成合法结果所需的 candidate rows，最终结果就是正确的。
 
 ### Running Local TopN 的 Streaming Superset
 
@@ -195,7 +197,7 @@ final local TopK 的 superset
 
 当 local TopN heap 已满时，如果当前 row 按 comparator 不优于 heap worst row，则该 row 可以被跳过。原因是后续扫描只会增加竞争者，不会让这个 row 的排序位置变得更靠前。
 
-对于和 heap worst row 相等的 ties，第一版采用保守策略：相等 rows 作为 candidate 输出，但不一定放入 bounded heap。这会降低 ties 较多场景下的剪枝效果，但可以避免因为 ties 选择不同物理 rows 引起不必要的行为差异。
+对于和 heap worst row 相等的 ties，第一版不会继续输出这些相等 rows 作为 candidate，而是让 heap 中已有 entries 成为本 stream 的 local tie winners。这样可以避免 ties 大量扩展 candidate rows 和 final-rest IO。代价是 ties 下可能选择不同的物理 rows，但 SQL `ORDER BY` 未提供完整 tie-break key 时本来就不保证相同 sort key 内的物理 row 选择，这也属于本设计的非目标。
 
 ## 执行流程
 
@@ -403,7 +405,7 @@ final rest columns 按现有 MSLM 逻辑读取。
 上层 TopN 保留，保证最终结果正确。
 ```
 
-Ties 也需要避免破坏内存上界。第一版 heap 仍最多保存 `topk` 个 entries。与 heap worst 相等的 rows 可以作为当前 block candidate 输出，但不插入 heap。这样 ties 较多时剪枝效果会下降，但 heap 内存保持 bounded。
+Ties 也需要避免破坏内存和 IO 上界。第一版 heap 仍最多保存 `topk` 个 entries；与 heap worst 相等的 rows 不插入 heap，也不作为当前 block candidate 输出。这样 ties 较多时 candidate rows 不会被 ties 放大，heap 内存保持 bounded，但不同执行路径可能选择不同的物理 tie winners。
 
 ## Running Local TopN 状态
 
