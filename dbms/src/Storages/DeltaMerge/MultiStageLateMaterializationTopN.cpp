@@ -358,7 +358,6 @@ RunningLocalTopNUpdateResult RunningLocalTopN::update(
 
     const auto rows = stage1_block.rows();
     RunningLocalTopNUpdateResult result;
-    result.filter.resize_fill(rows, 0);
 
     if (residual_passed_rows == 0)
         return result;
@@ -377,15 +376,26 @@ RunningLocalTopNUpdateResult RunningLocalTopN::update(
         sort_columns.push_back(desc.build_column_view(*column));
     }
 
+    auto ensure_filter = [&]() -> IColumn::Filter & {
+        if (result.filter.empty())
+            result.filter.resize_fill(rows, 0);
+        return result.filter;
+    };
     auto mark_candidate = [&](size_t row) {
-        if (result.filter[row] == 0)
+        auto & filter = ensure_filter();
+        if (filter[row] == 0)
         {
-            result.filter[row] = 1;
+            filter[row] = 1;
             ++result.passed_count;
         }
     };
     auto unmark_current_block_candidate = [&](const HeapEntry & entry) {
-        if (entry.block_sequence == current_block_sequence && result.filter[entry.row_index_in_stage1_block] != 0)
+        if (entry.block_sequence != current_block_sequence)
+            return;
+
+        RUNTIME_CHECK(!result.filter.empty());
+        RUNTIME_CHECK(entry.row_index_in_stage1_block < result.filter.size());
+        if (result.filter[entry.row_index_in_stage1_block] != 0)
         {
             result.filter[entry.row_index_in_stage1_block] = 0;
             --result.passed_count;
@@ -413,9 +423,8 @@ RunningLocalTopNUpdateResult RunningLocalTopN::update(
         // where ties are broken locally by the entries already selected by the partial TopN.
         if (cmp < 0)
         {
-            auto evicted = heap.top();
+            unmark_current_block_candidate(heap.top());
             heap.pop();
-            unmark_current_block_candidate(evicted);
 
             mark_candidate(row);
             heap.push(HeapEntry{
