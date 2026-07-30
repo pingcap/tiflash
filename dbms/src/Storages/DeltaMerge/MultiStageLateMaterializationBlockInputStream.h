@@ -40,6 +40,8 @@ public:
         const String & req_id_,
         const MultiStageLateMaterializationRuntimeStatsPtr & runtime_stats_ = nullptr);
 
+    ~MultiStageLateMaterializationBlockInputStream() override;
+
     String getName() const override { return NAME; }
 
     Block getHeader() const override { return header; }
@@ -94,7 +96,13 @@ private:
 
     void updateTopNAdaptiveState(UInt64 residual_passed_rows, UInt64 topn_candidate_rows);
 
-    void logSummary();
+    void flushRuntimeStats();
+
+    void flushRuntimeStatsNoThrow();
+
+    void flushRuntimeStatsIfNeeded();
+
+    void finishRuntimeStats();
 
 private:
     Block header;
@@ -104,6 +112,8 @@ private:
     PushDownFilterPtr residual_filter;
     BitmapFilterPtr bitmap_filter;
     MultiStageLateMaterializationRuntimeStatsPtr runtime_stats;
+    MultiStageLateMaterializationRuntimeStatsDelta local_runtime_stats;
+    UInt64 runtime_stats_pending_blocks = 0;
     FilterTransformAction residual_filter_action;
     std::unique_ptr<RunningLocalTopN> running_topn;
 
@@ -114,7 +124,7 @@ private:
     UInt64 topn_adaptive_candidate_rows = 0;
     bool topn_adaptive_warmed_up = false;
     bool topn_adaptive_disabled = false;
-    bool summary_logged = false;
+    bool runtime_stats_finished = false;
 
     const LoggerPtr log;
 };

@@ -1206,6 +1206,34 @@ try
 }
 CATCH
 
+TEST_F(ExecutorsWithDMTestRunner, MultiStageLateMaterializationTopNDisabledForPartitionBy)
+try
+{
+    enablePipeline(true);
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(64)));
+
+    auto request = buildDAGRequestWithPushedDownFilterAndTopN(
+        context,
+        "multi_stage_lm",
+        lt(col("c0"), lit(Field(static_cast<Int64>(16)))),
+        gt(col("c1"), lit(Field(static_cast<Int64>(-1)))),
+        "c1",
+        /*is_desc=*/false,
+        /*limit=*/2);
+
+    auto * topn = request->mutable_root_executor()->mutable_topn();
+    ASSERT_EQ(topn->order_by_size(), 1);
+    *topn->add_partition_by() = topn->order_by(0);
+
+    assertTopNEnhancedMultiStageFallsBackToSelection(
+        *this,
+        context,
+        request,
+        dag_context_ptr->log->identifier(),
+        /*expected_selection_rows=*/16);
+}
+CATCH
+
 TEST_F(ExecutorsWithDMTestRunner, MultiStageLateMaterializationTopNVersionColumn)
 try
 {

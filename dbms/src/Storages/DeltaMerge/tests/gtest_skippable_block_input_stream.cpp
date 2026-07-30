@@ -721,6 +721,55 @@ try
 }
 CATCH
 
+TEST_F(SkippableBlockInputStreamTest, MultiStageLateMaterializationRuntimeStatsFlushesByBlockCount)
+try
+{
+    constexpr size_t blocks_before_flush = 64;
+
+    std::vector<IColumn::Filter> stage0_filters;
+    std::vector<std::vector<UInt8>> filter_values;
+    std::vector<std::vector<Int64>> rest_values;
+    for (size_t i = 0; i < blocks_before_flush; ++i)
+    {
+        stage0_filters.emplace_back(makeFilter({1}));
+        filter_values.emplace_back(std::vector<UInt8>{1});
+        rest_values.emplace_back(std::vector<Int64>{static_cast<Int64>(i)});
+    }
+
+    auto stage0_stream = std::make_shared<DeterministicStage0FilterInputStream>(std::move(stage0_filters));
+    auto stage1_stream = std::make_shared<DeterministicSkippableBlockInputStream>(
+        makeMultiStageFilterColumns(),
+        filter_values,
+        rest_values);
+    auto final_rest_stream = std::make_shared<DeterministicSkippableBlockInputStream>(
+        makeMultiStageRestColumns(),
+        filter_values,
+        rest_values);
+
+    auto bitmap_filter = std::make_shared<BitmapFilter>(blocks_before_flush, 1);
+    auto runtime_stats = std::make_shared<MultiStageLateMaterializationRuntimeStats>();
+    auto stream = std::make_shared<MultiStageLateMaterializationBlockInputStream>(
+        makeMultiStageColumnsToRead(),
+        stage0_stream,
+        stage1_stream,
+        final_rest_stream,
+        makeResidualFilterForMultiStageTest(),
+        bitmap_filter,
+        "test",
+        runtime_stats);
+
+    for (size_t i = 0; i < blocks_before_flush - 1; ++i)
+        assertMultiStageRows(stream->read(), {1}, {static_cast<Int64>(i)});
+    ASSERT_EQ(runtime_stats->stage0_output_rows.load(), 0);
+    ASSERT_EQ(runtime_stats->stage1_output_rows.load(), 0);
+
+    assertMultiStageRows(stream->read(), {1}, {static_cast<Int64>(blocks_before_flush - 1)});
+    ASSERT_EQ(runtime_stats->stage0_output_rows.load(), blocks_before_flush);
+    ASSERT_EQ(runtime_stats->stage1_output_rows.load(), blocks_before_flush);
+    ASSERT_EQ(runtime_stats->final_rest_input_rows.load(), blocks_before_flush);
+}
+CATCH
+
 TEST_F(SkippableBlockInputStreamTest, MultiStageLateMaterializationLateMode)
 try
 {

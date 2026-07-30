@@ -55,6 +55,9 @@ DM::MultiStageLateMaterializationTopNDescriptionPtr tryBuildMultiStageLateMateri
         return disable(fmt::format("topk is too large: {}", top_n.limit()));
     if (top_n.order_by_size() > static_cast<int>(DM::multi_stage_late_materialization_topn_max_order_by_columns))
         return disable(fmt::format("too many order by columns: {}", top_n.order_by_size()));
+    if (top_n.partition_by_size() != 0)
+        return disable(
+            fmt::format("partition TopN is unsupported, partition_by_columns={}", top_n.partition_by_size()));
 
     auto desc = std::make_shared<DM::MultiStageLateMaterializationTopNDescription>();
     desc->topk = top_n.limit();

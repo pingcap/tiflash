@@ -23,6 +23,77 @@
 namespace DB::DM
 {
 
+struct MultiStageLateMaterializationRuntimeStatsDelta
+{
+    void reset() { *this = {}; }
+
+    bool empty() const
+    {
+        return pushed_filter_input_rows == 0 && residual_filter_input_rows == 0 && final_rest_input_rows == 0
+            && running_topn_input_rows == 0;
+    }
+
+    void recordPushedFilter(UInt64 input_rows, UInt64 selected_rows)
+    {
+        pushed_filter_input_rows += input_rows;
+        pushed_filter_selected_rows += selected_rows;
+        pushed_filter_filtered_rows += input_rows - selected_rows;
+
+        // Keep the old counter name for existing actRows/tests.
+        stage0_output_rows += selected_rows;
+    }
+
+    void recordResidualFilter(UInt64 input_rows, UInt64 selected_rows)
+    {
+        residual_filter_input_rows += input_rows;
+        residual_filter_selected_rows += selected_rows;
+        residual_filter_filtered_rows += input_rows - selected_rows;
+
+        // Keep the old counter name for existing actRows/tests.
+        stage1_output_rows += selected_rows;
+    }
+
+    void recordFinalRestInputRows(UInt64 rows)
+    {
+        final_rest_input_rows += rows;
+
+        // Keep the old counter name for existing actRows/tests.
+        topn_candidate_rows += rows;
+    }
+
+    void recordRunningTopN(UInt64 input_rows, UInt64 selected_rows)
+    {
+        running_topn_input_rows += input_rows;
+        running_topn_selected_rows += selected_rows;
+        running_topn_filtered_rows += input_rows - selected_rows;
+        recordFinalRestInputRows(selected_rows);
+    }
+
+    void recordRunningTopNBypass(UInt64 rows)
+    {
+        running_topn_input_rows += rows;
+        running_topn_bypass_rows += rows;
+        recordFinalRestInputRows(rows);
+    }
+
+    UInt64 pushed_filter_input_rows = 0;
+    UInt64 pushed_filter_selected_rows = 0;
+    UInt64 pushed_filter_filtered_rows = 0;
+    UInt64 residual_filter_input_rows = 0;
+    UInt64 residual_filter_selected_rows = 0;
+    UInt64 residual_filter_filtered_rows = 0;
+    UInt64 final_rest_input_rows = 0;
+    UInt64 running_topn_input_rows = 0;
+    UInt64 running_topn_selected_rows = 0;
+    UInt64 running_topn_bypass_rows = 0;
+    UInt64 running_topn_filtered_rows = 0;
+
+    // Legacy names kept because actRows overrides and existing unit tests still refer to them.
+    UInt64 stage0_output_rows = 0;
+    UInt64 stage1_output_rows = 0;
+    UInt64 topn_candidate_rows = 0;
+};
+
 struct MultiStageLateMaterializationRuntimeStats
 {
     MultiStageLateMaterializationRuntimeStats() = default;
@@ -108,6 +179,28 @@ struct MultiStageLateMaterializationRuntimeStats
         running_topn_input_rows.fetch_add(rows, std::memory_order_relaxed);
         running_topn_bypass_rows.fetch_add(rows, std::memory_order_relaxed);
         recordFinalRestInputRows(rows);
+    }
+
+    void merge(const MultiStageLateMaterializationRuntimeStatsDelta & delta)
+    {
+        if (delta.empty())
+            return;
+
+        pushed_filter_input_rows.fetch_add(delta.pushed_filter_input_rows, std::memory_order_relaxed);
+        pushed_filter_selected_rows.fetch_add(delta.pushed_filter_selected_rows, std::memory_order_relaxed);
+        pushed_filter_filtered_rows.fetch_add(delta.pushed_filter_filtered_rows, std::memory_order_relaxed);
+        residual_filter_input_rows.fetch_add(delta.residual_filter_input_rows, std::memory_order_relaxed);
+        residual_filter_selected_rows.fetch_add(delta.residual_filter_selected_rows, std::memory_order_relaxed);
+        residual_filter_filtered_rows.fetch_add(delta.residual_filter_filtered_rows, std::memory_order_relaxed);
+        final_rest_input_rows.fetch_add(delta.final_rest_input_rows, std::memory_order_relaxed);
+        running_topn_input_rows.fetch_add(delta.running_topn_input_rows, std::memory_order_relaxed);
+        running_topn_selected_rows.fetch_add(delta.running_topn_selected_rows, std::memory_order_relaxed);
+        running_topn_bypass_rows.fetch_add(delta.running_topn_bypass_rows, std::memory_order_relaxed);
+        running_topn_filtered_rows.fetch_add(delta.running_topn_filtered_rows, std::memory_order_relaxed);
+
+        stage0_output_rows.fetch_add(delta.stage0_output_rows, std::memory_order_relaxed);
+        stage1_output_rows.fetch_add(delta.stage1_output_rows, std::memory_order_relaxed);
+        topn_candidate_rows.fetch_add(delta.topn_candidate_rows, std::memory_order_relaxed);
     }
 
     void merge(const MultiStageLateMaterializationRuntimeStats & other)
