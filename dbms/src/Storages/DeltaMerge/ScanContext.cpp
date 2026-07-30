@@ -27,7 +27,7 @@ namespace DB::DM
 {
 namespace
 {
-static constexpr uint64_t NS_TO_MS = 1'000'000;
+constexpr uint64_t NS_TO_MS = 1'000'000;
 
 bool isQueryReadTag(ReadTag read_tag)
 {

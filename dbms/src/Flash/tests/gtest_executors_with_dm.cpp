@@ -14,11 +14,13 @@
 
 #include <Common/MyDuration.h>
 #include <Common/MyTime.h>
+#include <DataTypes/DataTypeEnum.h>
 #include <Debug/MockExecutor/AstToPB.h>
 #include <Debug/MockStorage.h>
 #include <Flash/Statistics/ExecutorStatisticsCollector.h>
 #include <Interpreters/Context.h>
 #include <Operators/OperatorProfileInfo.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/KVStore/Types.h>
 #include <Storages/MutableSupport.h>
 #include <TestUtils/ExecutorTestUtils.h>
@@ -334,6 +336,21 @@ void assertColumnsEqual(const ColumnsWithTypeAndName & expected, const ColumnsWi
         << getColumnsContent(actual);
 }
 
+DM::MultiStageLateMaterializationRuntimeStatsPtr getMultiStageRuntimeStats(DAGContext & dag_context)
+{
+    DM::MultiStageLateMaterializationRuntimeStatsPtr stats;
+    for (const auto & scan_context_entry : dag_context.scan_context_map)
+    {
+        const auto & scan_context = scan_context_entry.second;
+        if (scan_context == nullptr || scan_context->multi_stage_late_materialization_runtime_stats == nullptr)
+            continue;
+        RUNTIME_CHECK_MSG(stats == nullptr, "Found multiple table scan contexts with multi-stage runtime stats");
+        stats = scan_context->multi_stage_late_materialization_runtime_stats;
+    }
+    RUNTIME_CHECK_MSG(stats != nullptr, "Cannot find table scan context with multi-stage runtime stats");
+    return stats;
+}
+
 void assertTopNEnhancedMultiStageRowsOverride(
     DAGContext & dag_context,
     UInt64 expected_table_scan_rows,
@@ -346,6 +363,12 @@ void assertTopNEnhancedMultiStageRowsOverride(
     ASSERT_EQ(table_scan_rows->load(), expected_table_scan_rows);
     ASSERT_GE(selection_rows->load(), min_selection_rows);
     ASSERT_LT(selection_rows->load(), expected_table_scan_rows);
+
+    auto stats = getMultiStageRuntimeStats(dag_context);
+    ASSERT_NE(stats, nullptr);
+    ASSERT_TRUE(stats->topn_enabled.load());
+    ASSERT_GT(stats->running_topn_input_rows.load(), 0);
+    ASSERT_EQ(selection_rows->load(), stats->final_rest_input_rows.load());
 }
 
 void assertTopNEnhancedMultiStageMatchesDisabled(
@@ -523,7 +546,7 @@ void addMockMultiStageLateMaterializationTable(
 void addMockMultiStageLateMaterializationTopNOrderByTable(
     MockDAGRequestContext & context,
     const String & table_name,
-    TiDB::TP order_by_type,
+    const MockColumnInfo & order_by_info,
     ColumnWithTypeAndName order_by_column)
 {
     constexpr size_t rows = 32;
@@ -531,7 +554,7 @@ void addMockMultiStageLateMaterializationTopNOrderByTable(
     ColumnsWithTypeAndName data;
 
     columns.push_back({"c0", TiDB::TP::TypeLongLong});
-    columns.push_back({"ord", order_by_type});
+    columns.push_back(order_by_info);
     columns.push_back({"c1", TiDB::TP::TypeLongLong});
 
     std::vector<Int64> c0_values;
@@ -561,6 +584,31 @@ void addMockMultiStageLateMaterializationTopNOrderByTable(
     }
 
     context.addMockDeltaMerge({"test_db", table_name}, columns, data, /*concurrency_hint=*/4);
+}
+
+void addMockMultiStageLateMaterializationTopNOrderByTable(
+    MockDAGRequestContext & context,
+    const String & table_name,
+    TiDB::TP order_by_type,
+    ColumnWithTypeAndName order_by_column)
+{
+    addMockMultiStageLateMaterializationTopNOrderByTable(
+        context,
+        table_name,
+        MockColumnInfo{"ord", order_by_type},
+        std::move(order_by_column));
+}
+
+ColumnWithTypeAndName toEnum16Vec(
+    const String & name,
+    const std::vector<Int16> & values,
+    const DataTypeEnum16::Values & enum_values)
+{
+    auto type = std::make_shared<DataTypeEnum16>(enum_values);
+    auto column = type->createColumn();
+    for (const auto value : values)
+        column->insert(Field(static_cast<Int64>(value)));
+    return {std::move(column), type, name};
 }
 
 void rewriteComparisonRightLiteral(
@@ -612,6 +660,23 @@ void assertMultiStageRowsOverride(DAGContext & dag_context, UInt64 expected_sele
     ASSERT_NE(selection_rows, nullptr);
     ASSERT_EQ(selection_rows->load(), expected_selection_rows);
     ASSERT_GE(table_scan_rows->load(), selection_rows->load());
+
+    auto stats = getMultiStageRuntimeStats(dag_context);
+    ASSERT_NE(stats, nullptr);
+    ASSERT_EQ(selection_rows->load(), stats->final_rest_input_rows.load());
+}
+
+void assertTopNEnhancedMultiStageFallbackStats(DAGContext & dag_context, UInt64 expected_selection_rows)
+{
+    auto stats = getMultiStageRuntimeStats(dag_context);
+    ASSERT_NE(stats, nullptr);
+    ASSERT_FALSE(stats->topn_enabled.load());
+    ASSERT_EQ(stats->running_topn_input_rows.load(), 0);
+    ASSERT_EQ(stats->running_topn_selected_rows.load(), 0);
+    ASSERT_EQ(stats->running_topn_bypass_rows.load(), 0);
+    ASSERT_EQ(stats->running_topn_filtered_rows.load(), 0);
+    ASSERT_EQ(stats->stage1_output_rows.load(), expected_selection_rows);
+    ASSERT_EQ(stats->final_rest_input_rows.load(), expected_selection_rows);
 }
 
 void assertTopNEnhancedMultiStageFallsBackToSelection(
@@ -633,6 +698,7 @@ void assertTopNEnhancedMultiStageFallsBackToSelection(
 
     assertColumnsEqual(expected, actual);
     assertMultiStageRowsOverride(enabled_dag_context, expected_selection_rows);
+    assertTopNEnhancedMultiStageFallbackStats(enabled_dag_context, expected_selection_rows);
 }
 } // namespace
 
@@ -1287,6 +1353,96 @@ try
         << getColumnsContent(actual);
 
     assertMultiStageRowsOverride(enabled_dag_context, 16);
+    assertTopNEnhancedMultiStageFallbackStats(enabled_dag_context, 16);
+}
+CATCH
+
+TEST_F(ExecutorsWithDMTestRunner, MultiStageLateMaterializationTopNDisabledForBitSetEnumOrderBy)
+try
+{
+    enablePipeline(true);
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(64)));
+
+    constexpr size_t rows = 32;
+    std::vector<UInt64> uint64_order_by_values;
+    uint64_order_by_values.reserve(rows);
+    for (size_t row = 0; row < rows; ++row)
+        uint64_order_by_values.push_back(static_cast<UInt64>(rows - row));
+
+    addMockMultiStageLateMaterializationTopNOrderByTable(
+        context,
+        "multi_stage_lm_bit_topn",
+        TiDB::TP::TypeBit,
+        toVec<UInt64>("ord", uint64_order_by_values));
+    auto bit_request = buildDAGRequestWithPushedDownFilterAndTopN(
+        context,
+        "multi_stage_lm_bit_topn",
+        lt(col("c0"), lit(Field(static_cast<Int64>(16)))),
+        gt(col("c1"), lit(Field(static_cast<Int64>(-1)))),
+        "ord",
+        /*is_desc=*/false,
+        /*limit=*/2);
+    assertTopNEnhancedMultiStageFallsBackToSelection(
+        *this,
+        context,
+        bit_request,
+        dag_context_ptr->log->identifier(),
+        /*expected_selection_rows=*/16);
+
+    MockColumnInfo set_info{"ord", TiDB::TP::TypeSet};
+    for (Int16 value = 1; value <= 6; ++value)
+        set_info.elems.emplace_back(fmt::format("set_{}", value), value);
+    addMockMultiStageLateMaterializationTopNOrderByTable(
+        context,
+        "multi_stage_lm_set_topn",
+        set_info,
+        toVec<UInt64>("ord", uint64_order_by_values));
+    auto set_request = buildDAGRequestWithPushedDownFilterAndTopN(
+        context,
+        "multi_stage_lm_set_topn",
+        lt(col("c0"), lit(Field(static_cast<Int64>(16)))),
+        gt(col("c1"), lit(Field(static_cast<Int64>(-1)))),
+        "ord",
+        /*is_desc=*/false,
+        /*limit=*/2);
+    assertTopNEnhancedMultiStageFallsBackToSelection(
+        *this,
+        context,
+        set_request,
+        dag_context_ptr->log->identifier(),
+        /*expected_selection_rows=*/16);
+
+    MockColumnInfo enum_info{"ord", TiDB::TP::TypeEnum};
+    DataTypeEnum16::Values enum_values;
+    enum_values.reserve(rows);
+    std::vector<Int16> enum_order_by_values;
+    enum_order_by_values.reserve(rows);
+    for (size_t row = 0; row < rows; ++row)
+    {
+        const auto value = static_cast<Int16>(row + 1);
+        enum_info.elems.emplace_back(fmt::format("enum_{}", value), value);
+        enum_values.emplace_back(fmt::format("enum_{}", value), value);
+        enum_order_by_values.push_back(static_cast<Int16>(rows - row));
+    }
+    addMockMultiStageLateMaterializationTopNOrderByTable(
+        context,
+        "multi_stage_lm_enum_topn",
+        enum_info,
+        toEnum16Vec("ord", enum_order_by_values, enum_values));
+    auto enum_request = buildDAGRequestWithPushedDownFilterAndTopN(
+        context,
+        "multi_stage_lm_enum_topn",
+        lt(col("c0"), lit(Field(static_cast<Int64>(16)))),
+        gt(col("c1"), lit(Field(static_cast<Int64>(-1)))),
+        "ord",
+        /*is_desc=*/false,
+        /*limit=*/2);
+    assertTopNEnhancedMultiStageFallsBackToSelection(
+        *this,
+        context,
+        enum_request,
+        dag_context_ptr->log->identifier(),
+        /*expected_selection_rows=*/16);
 }
 CATCH
 
@@ -1350,6 +1506,35 @@ try
 
     ASSERT_EQ(enabled_dag_context.getExecutorRowsOverride("table_scan_0"), nullptr);
     ASSERT_EQ(enabled_dag_context.getExecutorRowsOverride("selection_1"), nullptr);
+}
+CATCH
+
+TEST_F(ExecutorsWithDMTestRunner, MultiStageLateMaterializationTopNFallsBackWhenRestColumnsBelowThreshold)
+try
+{
+    enablePipeline(true);
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(64)));
+
+    addMockMultiStageLateMaterializationTable(
+        context,
+        "multi_stage_lm_topn_rest_below_threshold",
+        /*column_count=*/11);
+
+    auto request = buildDAGRequestWithPushedDownFilterAndTopN(
+        context,
+        "multi_stage_lm_topn_rest_below_threshold",
+        lt(col("c0"), lit(Field(static_cast<Int64>(16)))),
+        gt(col("c1"), lit(Field(static_cast<Int64>(-1)))),
+        "c2",
+        /*is_desc=*/false,
+        /*limit=*/2);
+
+    assertTopNEnhancedMultiStageFallsBackToSelection(
+        *this,
+        context,
+        request,
+        dag_context_ptr->log->identifier(),
+        /*expected_selection_rows=*/16);
 }
 CATCH
 

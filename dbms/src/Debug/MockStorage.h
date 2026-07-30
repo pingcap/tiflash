@@ -27,6 +27,8 @@
 #include <atomic>
 #include <memory>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace DB
 {
@@ -37,10 +39,26 @@ struct SelectQueryInfo;
 
 struct MockColumnInfo
 {
+    MockColumnInfo() = default;
+
+    MockColumnInfo(
+        String name_,
+        TiDB::TP type_,
+        bool nullable_ = true,
+        Poco::Dynamic::Var collate_ = {},
+        std::vector<std::pair<std::string, Int16>> elems_ = {})
+        : name(std::move(name_))
+        , type(type_)
+        , nullable(nullable_)
+        , collate(std::move(collate_))
+        , elems(std::move(elems_))
+    {}
+
     String name;
     TiDB::TP type;
     bool nullable = true;
     Poco::Dynamic::Var collate{}; // default empty means no collation.
+    std::vector<std::pair<std::string, Int16>> elems;
 };
 using MockColumnInfoVec = std::vector<MockColumnInfo>;
 using TableInfo = TiDB::TableInfo;

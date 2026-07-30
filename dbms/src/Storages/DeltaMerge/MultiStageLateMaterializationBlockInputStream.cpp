@@ -68,6 +68,8 @@ MultiStageLateMaterializationBlockInputStream::MultiStageLateMaterializationBloc
     RUNTIME_CHECK(residual_filter != nullptr);
     RUNTIME_CHECK(residual_filter->before_where != nullptr);
     RUNTIME_CHECK(residual_filter->filter_columns != nullptr);
+    if (running_topn != nullptr && runtime_stats)
+        runtime_stats->recordRunningTopNEnabled();
 }
 
 Block MultiStageLateMaterializationBlockInputStream::buildResidualFilterHeader(

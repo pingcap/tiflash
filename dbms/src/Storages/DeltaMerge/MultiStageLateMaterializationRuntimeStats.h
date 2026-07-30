@@ -27,9 +27,8 @@ struct MultiStageLateMaterializationRuntimeStats
 {
     MultiStageLateMaterializationRuntimeStats() = default;
 
-    MultiStageLateMaterializationRuntimeStats(const String & log_id_, bool topn_enabled_)
-        : topn_enabled(topn_enabled_)
-        , log(Logger::get("MultiStageLateMaterialization", log_id_))
+    explicit MultiStageLateMaterializationRuntimeStats(const String & log_id_)
+        : log(Logger::get("MultiStageLateMaterialization", log_id_))
     {}
 
     ~MultiStageLateMaterializationRuntimeStats()
@@ -92,9 +91,11 @@ struct MultiStageLateMaterializationRuntimeStats
         topn_candidate_rows.fetch_add(rows, std::memory_order_relaxed);
     }
 
+    void recordRunningTopNEnabled() { topn_enabled.store(true, std::memory_order_relaxed); }
+
     void recordRunningTopN(UInt64 input_rows, UInt64 selected_rows)
     {
-        topn_enabled.store(true, std::memory_order_relaxed);
+        recordRunningTopNEnabled();
         running_topn_input_rows.fetch_add(input_rows, std::memory_order_relaxed);
         running_topn_selected_rows.fetch_add(selected_rows, std::memory_order_relaxed);
         running_topn_filtered_rows.fetch_add(input_rows - selected_rows, std::memory_order_relaxed);
@@ -103,7 +104,7 @@ struct MultiStageLateMaterializationRuntimeStats
 
     void recordRunningTopNBypass(UInt64 rows)
     {
-        topn_enabled.store(true, std::memory_order_relaxed);
+        recordRunningTopNEnabled();
         running_topn_input_rows.fetch_add(rows, std::memory_order_relaxed);
         running_topn_bypass_rows.fetch_add(rows, std::memory_order_relaxed);
         recordFinalRestInputRows(rows);

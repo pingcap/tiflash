@@ -823,6 +823,28 @@ bool isSupportedMultiStageLateMaterializationTopNOrderByType(const DataTypePtr &
         || checkDataType<DataTypeMyDateTime>(type_not_null.get());
 }
 
+bool isSupportedMultiStageLateMaterializationTopNSourceType(TiDB::TP type)
+{
+    switch (type)
+    {
+    case TiDB::TypeTiny:
+    case TiDB::TypeShort:
+    case TiDB::TypeLong:
+    case TiDB::TypeLongLong:
+    case TiDB::TypeInt24:
+    case TiDB::TypeFloat:
+    case TiDB::TypeDouble:
+    case TiDB::TypeDecimal:
+    case TiDB::TypeNewDecimal:
+    case TiDB::TypeDate:
+    case TiDB::TypeNewDate:
+    case TiDB::TypeDatetime:
+        return true;
+    default:
+        return false;
+    }
+}
+
 const TiDB::ColumnInfo * findSourceColumnByID(const TiDB::ColumnInfos & source_columns, ColumnID column_id)
 {
     const auto it = std::find_if(source_columns.begin(), source_columns.end(), [&](const auto & column) {
@@ -884,9 +906,9 @@ DM::MultiStageLateMaterializationTopNDescriptionPtr buildStorageMultiStageLateMa
                 fmt::format("order by column is not found in table scan source columns, column_id={}", column_id));
         if (source_column->hasGeneratedColumnFlag())
             return disable(fmt::format("order by generated column is unsupported, column_id={}", column_id));
-        if (source_column->tp == TiDB::TypeTimestamp || source_column->tp == TiDB::TypeTime)
+        if (!isSupportedMultiStageLateMaterializationTopNSourceType(source_column->tp))
             return disable(fmt::format(
-                "order by column type needs or may need table scan extra cast, column_id={}, tp={}",
+                "unsupported order by source type, column_id={}, tp={}",
                 column_id,
                 static_cast<int>(source_column->tp)));
 

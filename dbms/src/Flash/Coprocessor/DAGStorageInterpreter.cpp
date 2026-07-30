@@ -1047,8 +1047,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
     {
         multi_stage_late_materialization_runtime_stats
             = std::make_shared<DM::MultiStageLateMaterializationRuntimeStats>(
-                fmt::format("{} table_scan_executor_id={}", log->identifier(), table_scan.getTableScanExecutorID()),
-                multi_stage_late_materialization_topn != nullptr);
+                fmt::format("{} table_scan_executor_id={}", log->identifier(), table_scan.getTableScanExecutorID()));
         dagContext().setExecutorRowsOverride(
             table_scan.getTableScanExecutorID(),
             std::shared_ptr<std::atomic<UInt64>>(
@@ -1056,13 +1055,9 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
                 &multi_stage_late_materialization_runtime_stats->stage0_output_rows));
         dagContext().setExecutorRowsOverride(
             filter_conditions.executor_id,
-            multi_stage_late_materialization_topn != nullptr
-                ? std::shared_ptr<std::atomic<UInt64>>(
-                    multi_stage_late_materialization_runtime_stats,
-                    &multi_stage_late_materialization_runtime_stats->final_rest_input_rows)
-                : std::shared_ptr<std::atomic<UInt64>>(
-                    multi_stage_late_materialization_runtime_stats,
-                    &multi_stage_late_materialization_runtime_stats->stage1_output_rows));
+            std::shared_ptr<std::atomic<UInt64>>(
+                multi_stage_late_materialization_runtime_stats,
+                &multi_stage_late_materialization_runtime_stats->final_rest_input_rows));
         if (auto scan_context_it = dagContext().scan_context_map.find(table_scan.getTableScanExecutorID());
             scan_context_it != dagContext().scan_context_map.end() && scan_context_it->second != nullptr)
         {
