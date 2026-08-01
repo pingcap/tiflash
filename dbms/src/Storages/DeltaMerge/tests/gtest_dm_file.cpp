@@ -1705,6 +1705,55 @@ RSOperatorPtr toRSFilter(const ColumnDefine & cd, const HandleRange & range)
 }
 } // namespace
 
+TEST_P(DMFileTest, MSLMRoughSetStatsRecordedOnce)
+try
+{
+    auto cols = DMTestEnv::getDefaultColumns();
+    ColumnDefine i64_cd(2, "i64", typeFromString("Int64"));
+    cols->push_back(i64_cd);
+    reload(cols);
+
+    constexpr Int64 num_rows = 128;
+    {
+        auto block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows, false);
+        block.insert(DB::tests::createColumn<Int64>(createNumbers<Int64>(0, num_rows), i64_cd.name, i64_cd.id));
+        auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
+        stream->writePrefix();
+        stream->write(block, {});
+        stream->writeSuffix();
+    }
+
+    const auto filter = toRSFilter(i64_cd, HandleRange{0, num_rows});
+    const auto read_all = [&](ReadTag read_tag, const ScanContextPtr & scan_context) {
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        auto stream = builder.setColumnCache(column_cache)
+                          .setRSOperator(filter)
+                          .setReadTag(read_tag)
+                          .build(dm_file, *cols, RowKeyRanges{RowKeyRange::newAll(false, 1)}, scan_context);
+        while (stream->read()) {}
+    };
+    const auto pack_filter_count = [](const ScanContextPtr & scan_context) {
+        return scan_context->rs_pack_filter_none.load() + scan_context->rs_pack_filter_some.load()
+            + scan_context->rs_pack_filter_all.load() + scan_context->rs_pack_filter_all_null.load();
+    };
+
+    auto query_context = std::make_shared<ScanContext>();
+    read_all(ReadTag::Query, query_context);
+    EXPECT_EQ(pack_filter_count(query_context), 1);
+    EXPECT_EQ(query_context->rs_dmfile_read_with_all, 1);
+
+    auto mslm_context = std::make_shared<ScanContext>();
+    read_all(ReadTag::MSLMPushedFilter, mslm_context);
+    EXPECT_EQ(pack_filter_count(mslm_context), 1);
+    EXPECT_EQ(mslm_context->rs_dmfile_read_with_all, 1);
+
+    read_all(ReadTag::MSLMCandidate, mslm_context);
+    read_all(ReadTag::MSLMFinalRest, mslm_context);
+    EXPECT_EQ(pack_filter_count(mslm_context), 1);
+    EXPECT_EQ(mslm_context->rs_dmfile_read_with_all, 1);
+}
+CATCH
+
 TEST_P(DMFileTest, ReadFilteredByRoughSetFilter)
 try
 {

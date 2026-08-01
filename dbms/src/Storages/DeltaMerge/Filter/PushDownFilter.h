@@ -22,6 +22,7 @@
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/MultiStageLateMaterializationTopN.h>
 
 namespace DB
 {
@@ -45,7 +46,8 @@ public:
         const ColumnDefinesPtr & filter_columns_,
         const String filter_column_name_,
         const ExpressionActionsPtr & extra_cast_,
-        const ColumnDefinesPtr & columns_after_cast_)
+        const ColumnDefinesPtr & columns_after_cast_,
+        const MultiStageLateMaterializationTopNDescriptionPtr & topn_ = nullptr)
         : rs_operator(rs_operator_)
         , before_where(before_where_)
         , project_after_where(project_after_where_)
@@ -53,10 +55,12 @@ public:
         , filter_columns(filter_columns_)
         , extra_cast(extra_cast_)
         , columns_after_cast(columns_after_cast_)
+        , topn(topn_)
     {}
 
     explicit PushDownFilter(const RSOperatorPtr & rs_operator_)
         : rs_operator(rs_operator_)
+        , topn(nullptr)
     {}
 
     Poco::JSON::Object::Ptr toJSONObject() const;
@@ -94,6 +98,8 @@ public:
     const ExpressionActionsPtr extra_cast;
     // If the extra_cast is not null, the types of the columns may be changed
     const ColumnDefinesPtr columns_after_cast;
+    // Optional storage-side TopN metadata used only by multi-stage late materialization.
+    const MultiStageLateMaterializationTopNDescriptionPtr topn;
 };
 
 } // namespace DB::DM

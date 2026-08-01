@@ -22,6 +22,7 @@
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
+#include <Storages/DeltaMerge/MultiStageLateMaterializationTopN.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
 #include <Storages/KVStore/Read/LearnerRead.h>
 #include <Storages/KVStore/Read/RegionException.h>
@@ -47,7 +48,8 @@ public:
         Context & context_,
         const TiDBTableScan & table_scan,
         const FilterConditions & filter_conditions_,
-        size_t max_streams_);
+        size_t max_streams_,
+        const DM::MultiStageLateMaterializationTopNDescriptionPtr & multi_stage_late_materialization_topn_ = nullptr);
 
     ~DAGStorageInterpreter();
 
@@ -146,6 +148,7 @@ private:
     const TiDBTableScan & table_scan;
     const FilterConditions & filter_conditions;
     const size_t max_streams;
+    const DM::MultiStageLateMaterializationTopNDescriptionPtr multi_stage_late_materialization_topn;
     LoggerPtr log;
 
     /// derived from other members, doesn't change during DAGStorageInterpreter's lifetime

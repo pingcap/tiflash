@@ -138,7 +138,8 @@ size_t DMFileReader::skipNextBlock()
         return 0;
 
     addSkippedRows(read_rows);
-    scan_context->late_materialization_skip_rows += read_rows;
+    if (read_tag == ReadTag::Query)
+        scan_context->late_materialization_skip_rows += read_rows;
     return read_rows;
 }
 
@@ -162,7 +163,7 @@ std::pair<size_t, RSResult> DMFileReader::getReadRows()
     }
 
     next_row_offset += read_rows;
-    if (read_tag == ReadTag::Query && last_pack_res.allMatch())
+    if (isQueryRoughSetStatsOwner(read_tag) && last_pack_res.allMatch())
         scan_context->rs_dmfile_read_with_all += next_pack_id - start_pack_id;
     return {read_rows, last_pack_res};
 }
@@ -285,7 +286,7 @@ bool DMFileReader::isCacheableColumn(const ColumnDefine & cd)
 Block DMFileReader::read()
 {
     Stopwatch watch;
-    SCOPE_EXIT(scan_context->total_dmfile_read_time_ns += watch.elapsed(););
+    SCOPE_EXIT(scan_context->addDMFileReadTime(watch.elapsed(), read_tag););
 
     /// 1. Skip filtered out packs.
     if (size_t skip_rows; !getSkippedRows(skip_rows))
@@ -694,41 +695,12 @@ bool DMFileReader::getCachedPacks(
 
 void DMFileReader::addScannedRows(UInt64 rows)
 {
-    switch (read_tag)
-    {
-    case ReadTag::Query:
-        scan_context->dmfile_data_scanned_rows += rows;
-        break;
-    case ReadTag::MVCC:
-        scan_context->dmfile_mvcc_scanned_rows += rows;
-        break;
-    case ReadTag::LMFilter:
-        scan_context->dmfile_lm_filter_scanned_rows += rows;
-        break;
-    case ReadTag::MSLMStage1Filter:
-        scan_context->dmfile_mslm_stage1_filter_scanned_rows += rows;
-        break;
-    default:
-        break;
-    }
+    scan_context->addDMFileScannedRows(rows, read_tag);
 }
 
 void DMFileReader::addSkippedRows(UInt64 rows)
 {
-    switch (read_tag)
-    {
-    case ReadTag::Query:
-        scan_context->dmfile_data_skipped_rows += rows;
-        break;
-    case ReadTag::MVCC:
-        scan_context->dmfile_mvcc_skipped_rows += rows;
-        break;
-    case ReadTag::LMFilter:
-        scan_context->dmfile_lm_filter_skipped_rows += rows;
-        break;
-    default:
-        break;
-    }
+    scan_context->addDMFileSkippedRows(rows, read_tag);
 }
 
 void DMFileReader::initAllMatchBlockInfo()

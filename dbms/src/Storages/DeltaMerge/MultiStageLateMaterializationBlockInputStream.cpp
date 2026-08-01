@@ -17,10 +17,15 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/MultiStageLateMaterializationBlockInputStream.h>
 
+#include <algorithm>
+
 namespace DB::DM
 {
 namespace
 {
+constexpr UInt64 runtime_stats_flush_logical_rows = static_cast<UInt64>(DEFAULT_MERGE_BLOCK_SIZE) * 64;
+constexpr UInt64 runtime_stats_flush_blocks = 64;
+
 void filterBlock(Block & block, const IColumn::Filter & filter, size_t passed_count)
 {
     if (!block)
@@ -57,11 +62,22 @@ MultiStageLateMaterializationBlockInputStream::MultiStageLateMaterializationBloc
           buildResidualFilterHeader(residual_filter_),
           residual_filter_->before_where,
           residual_filter_->filter_column_name)
+    , running_topn(
+          residual_filter_->topn != nullptr
+              ? std::make_unique<RunningLocalTopN>(*residual_filter_->topn, *residual_filter_->filter_columns)
+              : nullptr)
     , log(Logger::get(NAME, req_id_))
 {
     RUNTIME_CHECK(residual_filter != nullptr);
     RUNTIME_CHECK(residual_filter->before_where != nullptr);
     RUNTIME_CHECK(residual_filter->filter_columns != nullptr);
+    if (running_topn != nullptr && runtime_stats)
+        runtime_stats->recordRunningTopNEnabled();
+}
+
+MultiStageLateMaterializationBlockInputStream::~MultiStageLateMaterializationBlockInputStream()
+{
+    flushRuntimeStatsNoThrow();
 }
 
 Block MultiStageLateMaterializationBlockInputStream::buildResidualFilterHeader(
@@ -278,6 +294,53 @@ Block MultiStageLateMaterializationBlockInputStream::buildDirectModeBlock(
     return full_block;
 }
 
+void MultiStageLateMaterializationBlockInputStream::updateTopNAdaptiveState(
+    UInt64 residual_passed_rows,
+    UInt64 topn_candidate_rows)
+{
+    if (running_topn == nullptr || topn_adaptive_disabled || residual_passed_rows == 0)
+        return;
+
+    const auto warmup_rows
+        = std::max(running_topn->topK() * 4, multi_stage_late_materialization_topn_adaptive_rows_threshold);
+    if (!topn_adaptive_warmed_up)
+    {
+        topn_adaptive_warmup_observed_rows += residual_passed_rows;
+        if (topn_adaptive_warmup_observed_rows < warmup_rows)
+            return;
+
+        topn_adaptive_warmed_up = true;
+        return;
+    }
+
+    topn_adaptive_input_rows += residual_passed_rows;
+    topn_adaptive_candidate_rows += topn_candidate_rows;
+
+    const auto min_input_rows_to_check
+        = std::max(running_topn->topK() * 4, multi_stage_late_materialization_topn_adaptive_rows_threshold);
+    if (topn_adaptive_input_rows < min_input_rows_to_check)
+        return;
+
+    if (topn_adaptive_candidate_rows * multi_stage_late_materialization_topn_adaptive_disable_ratio_denominator
+        < topn_adaptive_input_rows * multi_stage_late_materialization_topn_adaptive_disable_ratio_numerator)
+    {
+        return;
+    }
+
+    topn_adaptive_disabled = true;
+    LOG_INFO(
+        log,
+        "Disable running local TopN for multi-stage late materialization adaptively, warmup_rows={} input_rows={} "
+        "candidate_rows={} min_input_rows_to_check={} heap_size={} disable_ratio={}/{}",
+        topn_adaptive_warmup_observed_rows,
+        topn_adaptive_input_rows,
+        topn_adaptive_candidate_rows,
+        min_input_rows_to_check,
+        running_topn->heapSize(),
+        multi_stage_late_materialization_topn_adaptive_disable_ratio_numerator,
+        multi_stage_late_materialization_topn_adaptive_disable_ratio_denominator);
+}
+
 Block MultiStageLateMaterializationBlockInputStream::read()
 {
     while (true)
@@ -287,19 +350,18 @@ Block MultiStageLateMaterializationBlockInputStream::read()
         stage0_block = stage0_filter_stream->read(stage0_filter, true);
         if (!stage0_block)
         {
-            logSummary();
+            finishRuntimeStats();
             return {};
         }
 
+        ++runtime_stats_pending_blocks;
         auto effective_stage0_filter = buildStage0EffectiveFilter(stage0_block, stage0_filter);
-        if (runtime_stats)
-            runtime_stats->stage0_output_rows.fetch_add(
-                effective_stage0_filter.passed_count,
-                std::memory_order_relaxed);
+        local_runtime_stats.recordPushedFilter(stage0_block.rows(), effective_stage0_filter.passed_count);
         if (effective_stage0_filter.passed_count == 0)
         {
             skipNextBlockOrRead(stage1_filter_stream, "stage1_filter");
             skipNextBlockOrRead(final_rest_stream, "final_rest");
+            flushRuntimeStatsIfNeeded();
             continue;
         }
 
@@ -323,19 +385,64 @@ Block MultiStageLateMaterializationBlockInputStream::read()
         Block filter_eval_block;
         FilterPtr residual_filter_ptr = nullptr;
         const auto residual_passed_rows = executeResidualFilter(stage1_block, filter_eval_block, residual_filter_ptr);
-        if (runtime_stats)
-            runtime_stats->stage1_output_rows.fetch_add(residual_passed_rows, std::memory_order_relaxed);
+        local_runtime_stats.recordResidualFilter(stage1_block.rows(), residual_passed_rows);
+
+        if (!shouldUseRunningTopN())
+        {
+            if (running_topn != nullptr)
+                local_runtime_stats.recordRunningTopNBypass(residual_passed_rows);
+            else
+                local_runtime_stats.recordFinalRestInputRows(residual_passed_rows);
+        }
 
         if (residual_passed_rows == 0)
         {
             ++late_mode_blocks;
             skipNextBlockOrRead(final_rest_stream, "final_rest");
+            flushRuntimeStatsIfNeeded();
             continue;
+        }
+
+        if (shouldUseRunningTopN())
+        {
+            auto topn_result = running_topn->update(stage1_block, residual_filter_ptr, residual_passed_rows);
+            local_runtime_stats.recordRunningTopN(residual_passed_rows, topn_result.passed_count);
+            updateTopNAdaptiveState(residual_passed_rows, topn_result.passed_count);
+
+            if (topn_result.passed_count == 0)
+            {
+                ++late_mode_blocks;
+                skipNextBlockOrRead(final_rest_stream, "final_rest");
+                flushRuntimeStatsIfNeeded();
+                continue;
+            }
+
+            if (topn_result.passed_count == stage1_block.rows())
+            {
+                ++direct_mode_blocks;
+                flushRuntimeStatsIfNeeded();
+                return buildDirectModeBlock(
+                    stage1_block,
+                    stage0_filter_ptr,
+                    effective_stage0_filter.passed_count,
+                    nullptr,
+                    topn_result.passed_count);
+            }
+
+            ++late_mode_blocks;
+            flushRuntimeStatsIfNeeded();
+            return buildLateModeBlock(
+                stage1_block,
+                stage0_filter_ptr,
+                stage0_block.rows(),
+                topn_result.filter,
+                topn_result.passed_count);
         }
 
         if (residual_passed_rows == stage1_block.rows())
         {
             ++direct_mode_blocks;
+            flushRuntimeStatsIfNeeded();
             return buildDirectModeBlock(
                 stage1_block,
                 stage0_filter_ptr,
@@ -346,6 +453,7 @@ Block MultiStageLateMaterializationBlockInputStream::read()
 
         RUNTIME_CHECK(residual_filter_ptr != nullptr);
         ++late_mode_blocks;
+        flushRuntimeStatsIfNeeded();
         return buildLateModeBlock(
             stage1_block,
             stage0_filter_ptr,
@@ -355,17 +463,52 @@ Block MultiStageLateMaterializationBlockInputStream::read()
     }
 }
 
-void MultiStageLateMaterializationBlockInputStream::logSummary()
+void MultiStageLateMaterializationBlockInputStream::flushRuntimeStats()
 {
-    if (summary_logged)
+    if (local_runtime_stats.empty())
+    {
+        runtime_stats_pending_blocks = 0;
         return;
-    summary_logged = true;
+    }
+    if (runtime_stats)
+        runtime_stats->merge(local_runtime_stats);
+    local_runtime_stats.reset();
+    runtime_stats_pending_blocks = 0;
+}
 
-    LOG_INFO(
-        log,
-        "Multi-stage late materialization finished, late_mode_blocks={} direct_mode_blocks={}",
-        late_mode_blocks,
-        direct_mode_blocks);
+void MultiStageLateMaterializationBlockInputStream::flushRuntimeStatsNoThrow()
+{
+    try
+    {
+        finishRuntimeStats();
+    }
+    catch (...)
+    {}
+}
+
+void MultiStageLateMaterializationBlockInputStream::flushRuntimeStatsIfNeeded()
+{
+    if (local_runtime_stats.pushed_filter_input_rows >= runtime_stats_flush_logical_rows
+        || runtime_stats_pending_blocks >= runtime_stats_flush_blocks)
+        flushRuntimeStats();
+}
+
+void MultiStageLateMaterializationBlockInputStream::finishRuntimeStats()
+{
+    if (runtime_stats_finished)
+        return;
+    runtime_stats_finished = true;
+
+    flushRuntimeStats();
+    if (runtime_stats)
+        runtime_stats->finishStream(
+            late_mode_blocks,
+            direct_mode_blocks,
+            running_topn != nullptr ? running_topn->heapSize() : 0,
+            topn_adaptive_disabled,
+            topn_adaptive_warmup_observed_rows,
+            topn_adaptive_input_rows,
+            topn_adaptive_candidate_rows);
 }
 
 } // namespace DB::DM

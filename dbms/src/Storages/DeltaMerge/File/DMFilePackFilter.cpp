@@ -87,7 +87,7 @@ DMFilePackFilterResultPtr DMFilePackFilter::load(ReadTag read_tag)
     SCOPE_EXIT({ scan_context->total_rs_pack_filter_check_time_ns += watch.elapsed(); });
     const size_t pack_count = dmfile->getPacks();
     DMFilePackFilterResult result(index_cache, read_limiter, pack_count);
-    result.param.record_trim_metrics = read_tag == ReadTag::Query;
+    result.param.record_trim_metrics = isQueryRoughSetStatsOwner(read_tag);
     auto read_all_packs = (rowkey_ranges.size() == 1 && rowkey_ranges[0].all()) || rowkey_ranges.empty();
     if (!read_all_packs)
     {
@@ -185,11 +185,14 @@ DMFilePackFilterResultPtr DMFilePackFilter::load(ReadTag read_tag)
     // In table scanning, DMFilePackFilter of a DMFile may be created several times:
     // 1. When building MVCC bitmap (ReadTag::MVCC).
     // 2. When building LM filter stream (ReadTag::LMFilter).
-    // 3. When building MSLM stage1 residual filter stream (ReadTag::MSLMStage1Filter).
-    // 4. When building stream of other columns (ReadTag::Query).
-    // Only need to count the filter result once.
+    // 3. When building MSLM pushed filter stream (ReadTag::MSLMPushedFilter).
+    // 4. When building MSLM candidate stream (ReadTag::MSLMCandidate).
+    // 5. When building MSLM final rest stream (ReadTag::MSLMFinalRest).
+    // 6. When building stream of other columns (ReadTag::Query).
+    // Query owns these statistics for normal/LM reads. MSLMPushedFilter owns them for MSLM because it always
+    // traverses the logical MSLM input.
     // TODO: We can create DMFilePackFilter at the beginning and pass it to the stages described above.
-    if (read_tag == ReadTag::Query)
+    if (isQueryRoughSetStatsOwner(read_tag))
     {
         scan_context->rs_pack_filter_none += none_count;
         scan_context->rs_pack_filter_some += some_count;

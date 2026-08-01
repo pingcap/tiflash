@@ -96,6 +96,14 @@ std::vector<UInt8> makeResidualValues(size_t rows, size_t passed_rows)
     return values;
 }
 
+std::vector<UInt8> makeTopNAdaptiveValues(size_t rows, size_t candidate_rows)
+{
+    RUNTIME_CHECK(candidate_rows <= rows);
+    std::vector<UInt8> values(rows, 3);
+    std::fill(values.begin(), values.begin() + candidate_rows, 1);
+    return values;
+}
+
 size_t drainMultiStageStream(const BlockInputStreamPtr & stream)
 {
     size_t rows = 0;
@@ -274,6 +282,30 @@ PushDownFilterPtr makeResidualFilterForMultiStageTest()
         MULTI_STAGE_FILTER_TMP_COL_NAME,
         nullptr,
         nullptr);
+}
+
+PushDownFilterPtr makeResidualFilterWithTopNForMultiStageTest(UInt64 topk)
+{
+    auto filter_columns = std::make_shared<ColumnDefines>(makeMultiStageFilterColumns());
+    auto actions = std::make_shared<ExpressionActions>(toEmptyBlock(*filter_columns).getNamesAndTypes());
+    actions->add(ExpressionAction::copyColumn(MULTI_STAGE_FILTER_COL_NAME, MULTI_STAGE_FILTER_TMP_COL_NAME));
+
+    auto topn = std::make_shared<MultiStageLateMaterializationTopNDescription>();
+    topn->topk = topk;
+    topn->order_by_columns.push_back(MultiStageLateMaterializationTopNOrderByColumn{
+        .column_id = MULTI_STAGE_FILTER_COL_ID,
+        .direction = 1,
+    });
+
+    return std::make_shared<PushDownFilter>(
+        EMPTY_RS_OPERATOR,
+        actions,
+        nullptr,
+        filter_columns,
+        MULTI_STAGE_FILTER_TMP_COL_NAME,
+        nullptr,
+        nullptr,
+        topn);
 }
 
 void ensureMultiStageTestFunctionsRegistered()
@@ -689,6 +721,55 @@ try
 }
 CATCH
 
+TEST_F(SkippableBlockInputStreamTest, MultiStageLateMaterializationRuntimeStatsFlushesByBlockCount)
+try
+{
+    constexpr size_t blocks_before_flush = 64;
+
+    std::vector<IColumn::Filter> stage0_filters;
+    std::vector<std::vector<UInt8>> filter_values;
+    std::vector<std::vector<Int64>> rest_values;
+    for (size_t i = 0; i < blocks_before_flush; ++i)
+    {
+        stage0_filters.emplace_back(makeFilter({1}));
+        filter_values.emplace_back(std::vector<UInt8>{1});
+        rest_values.emplace_back(std::vector<Int64>{static_cast<Int64>(i)});
+    }
+
+    auto stage0_stream = std::make_shared<DeterministicStage0FilterInputStream>(std::move(stage0_filters));
+    auto stage1_stream = std::make_shared<DeterministicSkippableBlockInputStream>(
+        makeMultiStageFilterColumns(),
+        filter_values,
+        rest_values);
+    auto final_rest_stream = std::make_shared<DeterministicSkippableBlockInputStream>(
+        makeMultiStageRestColumns(),
+        filter_values,
+        rest_values);
+
+    auto bitmap_filter = std::make_shared<BitmapFilter>(blocks_before_flush, 1);
+    auto runtime_stats = std::make_shared<MultiStageLateMaterializationRuntimeStats>();
+    auto stream = std::make_shared<MultiStageLateMaterializationBlockInputStream>(
+        makeMultiStageColumnsToRead(),
+        stage0_stream,
+        stage1_stream,
+        final_rest_stream,
+        makeResidualFilterForMultiStageTest(),
+        bitmap_filter,
+        "test",
+        runtime_stats);
+
+    for (size_t i = 0; i < blocks_before_flush - 1; ++i)
+        assertMultiStageRows(stream->read(), {1}, {static_cast<Int64>(i)});
+    ASSERT_EQ(runtime_stats->stage0_output_rows.load(), 0);
+    ASSERT_EQ(runtime_stats->stage1_output_rows.load(), 0);
+
+    assertMultiStageRows(stream->read(), {1}, {static_cast<Int64>(blocks_before_flush - 1)});
+    ASSERT_EQ(runtime_stats->stage0_output_rows.load(), blocks_before_flush);
+    ASSERT_EQ(runtime_stats->stage1_output_rows.load(), blocks_before_flush);
+    ASSERT_EQ(runtime_stats->final_rest_input_rows.load(), blocks_before_flush);
+}
+CATCH
+
 TEST_F(SkippableBlockInputStreamTest, MultiStageLateMaterializationLateMode)
 try
 {
@@ -1004,6 +1085,147 @@ try
     ASSERT_EQ(final_rest_stream->getSkipCount(), 4);
     ASSERT_EQ(final_rest_stream->getReadWithFilterCount(), 1);
     ASSERT_EQ(final_rest_stream->getReadCount(), 0);
+}
+CATCH
+
+TEST_F(SkippableBlockInputStreamTest, MultiStageLateMaterializationTopNAdaptiveDoesNotDisableDuringWarmup)
+try
+{
+    constexpr UInt64 topk = 2;
+    constexpr size_t warmup_rows = multi_stage_late_materialization_topn_adaptive_rows_threshold;
+
+    std::vector<IColumn::Filter> stage0_filters;
+    std::vector<std::vector<UInt8>> filter_values;
+    std::vector<std::vector<Int64>> rest_values;
+    stage0_filters.emplace_back(warmup_rows, 1);
+    filter_values.emplace_back(warmup_rows, 1);
+    rest_values.emplace_back(makeRestValues(0, warmup_rows));
+
+    auto stage0_stream = std::make_shared<DeterministicStage0FilterInputStream>(std::move(stage0_filters));
+    auto stage1_stream = std::make_shared<DeterministicSkippableBlockInputStream>(
+        makeMultiStageFilterColumns(),
+        filter_values,
+        rest_values);
+    auto final_rest_stream = std::make_shared<DeterministicSkippableBlockInputStream>(
+        makeMultiStageRestColumns(),
+        filter_values,
+        rest_values);
+
+    auto bitmap_filter = std::make_shared<BitmapFilter>(warmup_rows, 1);
+    auto runtime_stats = std::make_shared<MultiStageLateMaterializationRuntimeStats>();
+    auto stream = std::make_shared<MultiStageLateMaterializationBlockInputStream>(
+        makeMultiStageColumnsToRead(),
+        stage0_stream,
+        stage1_stream,
+        final_rest_stream,
+        makeResidualFilterWithTopNForMultiStageTest(topk),
+        bitmap_filter,
+        "test",
+        runtime_stats);
+
+    ASSERT_EQ(drainMultiStageStream(stream), topk);
+    ASSERT_EQ(runtime_stats->stage0_output_rows.load(), warmup_rows);
+    ASSERT_EQ(runtime_stats->stage1_output_rows.load(), warmup_rows);
+    ASSERT_EQ(runtime_stats->topn_candidate_rows.load(), topk);
+    ASSERT_EQ(runtime_stats->topn_adaptive_disabled_streams.load(), 0);
+}
+CATCH
+
+TEST_F(SkippableBlockInputStreamTest, MultiStageLateMaterializationTopNAdaptiveDoesNotDisableBelowThreshold)
+try
+{
+    constexpr UInt64 topk = 2;
+    constexpr size_t warmup_rows = multi_stage_late_materialization_topn_adaptive_rows_threshold;
+    constexpr size_t second_block_rows = multi_stage_late_materialization_topn_adaptive_rows_threshold;
+    constexpr size_t below_threshold_candidate_rows = second_block_rows
+            * multi_stage_late_materialization_topn_adaptive_disable_ratio_numerator
+            / multi_stage_late_materialization_topn_adaptive_disable_ratio_denominator
+        - 1;
+
+    std::vector<IColumn::Filter> stage0_filters;
+    std::vector<std::vector<UInt8>> filter_values;
+    std::vector<std::vector<Int64>> rest_values;
+    stage0_filters.emplace_back(warmup_rows, 1);
+    filter_values.emplace_back(warmup_rows, 2);
+    rest_values.emplace_back(makeRestValues(0, warmup_rows));
+    stage0_filters.emplace_back(second_block_rows, 1);
+    filter_values.emplace_back(makeTopNAdaptiveValues(second_block_rows, below_threshold_candidate_rows));
+    rest_values.emplace_back(makeRestValues(100000, second_block_rows));
+
+    auto stage0_stream = std::make_shared<DeterministicStage0FilterInputStream>(std::move(stage0_filters));
+    auto stage1_stream = std::make_shared<DeterministicSkippableBlockInputStream>(
+        makeMultiStageFilterColumns(),
+        filter_values,
+        rest_values);
+    auto final_rest_stream = std::make_shared<DeterministicSkippableBlockInputStream>(
+        makeMultiStageRestColumns(),
+        filter_values,
+        rest_values);
+
+    auto bitmap_filter = std::make_shared<BitmapFilter>(warmup_rows + second_block_rows, 1);
+    auto runtime_stats = std::make_shared<MultiStageLateMaterializationRuntimeStats>();
+    auto stream = std::make_shared<MultiStageLateMaterializationBlockInputStream>(
+        makeMultiStageColumnsToRead(),
+        stage0_stream,
+        stage1_stream,
+        final_rest_stream,
+        makeResidualFilterWithTopNForMultiStageTest(topk),
+        bitmap_filter,
+        "test",
+        runtime_stats);
+
+    ASSERT_EQ(drainMultiStageStream(stream), topk * 2);
+    ASSERT_EQ(runtime_stats->stage0_output_rows.load(), warmup_rows + second_block_rows);
+    ASSERT_EQ(runtime_stats->stage1_output_rows.load(), warmup_rows + second_block_rows);
+    ASSERT_EQ(runtime_stats->topn_candidate_rows.load(), topk * 2);
+    ASSERT_EQ(runtime_stats->topn_adaptive_disabled_streams.load(), 0);
+}
+CATCH
+
+TEST_F(SkippableBlockInputStreamTest, MultiStageLateMaterializationTopNTieRowsDoNotExpandCandidates)
+try
+{
+    constexpr UInt64 topk = 2;
+    constexpr size_t warmup_rows = multi_stage_late_materialization_topn_adaptive_rows_threshold;
+    constexpr size_t second_block_rows = multi_stage_late_materialization_topn_adaptive_rows_threshold;
+
+    std::vector<IColumn::Filter> stage0_filters;
+    std::vector<std::vector<UInt8>> filter_values;
+    std::vector<std::vector<Int64>> rest_values;
+    stage0_filters.emplace_back(warmup_rows, 1);
+    filter_values.emplace_back(warmup_rows, 1);
+    rest_values.emplace_back(makeRestValues(0, warmup_rows));
+    stage0_filters.emplace_back(second_block_rows, 1);
+    filter_values.emplace_back(second_block_rows, 1);
+    rest_values.emplace_back(makeRestValues(100000, second_block_rows));
+
+    auto stage0_stream = std::make_shared<DeterministicStage0FilterInputStream>(std::move(stage0_filters));
+    auto stage1_stream = std::make_shared<DeterministicSkippableBlockInputStream>(
+        makeMultiStageFilterColumns(),
+        filter_values,
+        rest_values);
+    auto final_rest_stream = std::make_shared<DeterministicSkippableBlockInputStream>(
+        makeMultiStageRestColumns(),
+        filter_values,
+        rest_values);
+
+    auto bitmap_filter = std::make_shared<BitmapFilter>(warmup_rows + second_block_rows, 1);
+    auto runtime_stats = std::make_shared<MultiStageLateMaterializationRuntimeStats>();
+    auto stream = std::make_shared<MultiStageLateMaterializationBlockInputStream>(
+        makeMultiStageColumnsToRead(),
+        stage0_stream,
+        stage1_stream,
+        final_rest_stream,
+        makeResidualFilterWithTopNForMultiStageTest(topk),
+        bitmap_filter,
+        "test",
+        runtime_stats);
+
+    ASSERT_EQ(drainMultiStageStream(stream), topk);
+    ASSERT_EQ(runtime_stats->stage0_output_rows.load(), warmup_rows + second_block_rows);
+    ASSERT_EQ(runtime_stats->stage1_output_rows.load(), warmup_rows + second_block_rows);
+    ASSERT_EQ(runtime_stats->topn_candidate_rows.load(), topk);
+    ASSERT_EQ(runtime_stats->topn_adaptive_disabled_streams.load(), 0);
 }
 CATCH
 

@@ -382,11 +382,13 @@ DAGStorageInterpreter::DAGStorageInterpreter(
     Context & context_,
     const TiDBTableScan & table_scan_,
     const FilterConditions & filter_conditions_,
-    size_t max_streams_)
+    size_t max_streams_,
+    const DM::MultiStageLateMaterializationTopNDescriptionPtr & multi_stage_late_materialization_topn_)
     : context(context_)
     , table_scan(table_scan_)
     , filter_conditions(filter_conditions_)
     , max_streams(max_streams_)
+    , multi_stage_late_materialization_topn(multi_stage_late_materialization_topn_)
     , log(Logger::get(context.getDAGContext()->log ? context.getDAGContext()->log->identifier() : ""))
     , logical_table_id(table_scan.getLogicalTableID())
     , tmt(context.getTMTContext())
@@ -1044,7 +1046,8 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
     if (enable_multi_stage_late_materialization)
     {
         multi_stage_late_materialization_runtime_stats
-            = std::make_shared<DM::MultiStageLateMaterializationRuntimeStats>();
+            = std::make_shared<DM::MultiStageLateMaterializationRuntimeStats>(
+                fmt::format("{} table_scan_executor_id={}", log->identifier(), table_scan.getTableScanExecutorID()));
         dagContext().setExecutorRowsOverride(
             table_scan.getTableScanExecutorID(),
             std::shared_ptr<std::atomic<UInt64>>(
@@ -1054,7 +1057,13 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
             filter_conditions.executor_id,
             std::shared_ptr<std::atomic<UInt64>>(
                 multi_stage_late_materialization_runtime_stats,
-                &multi_stage_late_materialization_runtime_stats->stage1_output_rows));
+                &multi_stage_late_materialization_runtime_stats->final_rest_input_rows));
+        if (auto scan_context_it = dagContext().scan_context_map.find(table_scan.getTableScanExecutorID());
+            scan_context_it != dagContext().scan_context_map.end() && scan_context_it->second != nullptr)
+        {
+            scan_context_it->second->setMultiStageLateMaterializationRuntimeStats(
+                multi_stage_late_materialization_runtime_stats);
+        }
     }
 
     auto create_query_info = [&](Int64 table_id) -> SelectQueryInfo {
@@ -1074,6 +1083,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
         query_info.is_fast_scan = table_scan.isFastScan();
         query_info.enable_multi_stage_late_materialization = enable_multi_stage_late_materialization;
         query_info.multi_stage_late_materialization_runtime_stats = multi_stage_late_materialization_runtime_stats;
+        query_info.multi_stage_late_materialization_topn = multi_stage_late_materialization_topn;
         return query_info;
     };
     RUNTIME_CHECK_MSG(mvcc_query_info->scan_context != nullptr, "Unexpected null scan_context");
@@ -1790,7 +1800,7 @@ std::pair<Names, std::vector<UInt8>> DAGStorageInterpreter::getColumnsForTableSc
 
 bool DAGStorageInterpreter::shouldEnableMultiStageLateMaterialization() const
 {
-    if (!context.getSettingsRef().dt_enable_multi_stage_late_materialization)
+    if (context.getSettingsRef().dt_enable_multi_stage_late_materialization == 0)
         return false;
 
     auto disable = [&](const String & reason) {

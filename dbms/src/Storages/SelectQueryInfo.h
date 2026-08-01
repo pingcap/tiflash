@@ -37,6 +37,8 @@ namespace DM
 {
 struct MultiStageLateMaterializationRuntimeStats;
 using MultiStageLateMaterializationRuntimeStatsPtr = std::shared_ptr<MultiStageLateMaterializationRuntimeStats>;
+struct MultiStageLateMaterializationTopNDescription;
+using MultiStageLateMaterializationTopNDescriptionPtr = std::shared_ptr<MultiStageLateMaterializationTopNDescription>;
 } // namespace DM
 
 
@@ -62,6 +64,7 @@ struct SelectQueryInfo
     bool has_multiple_partitions = false;
     bool enable_multi_stage_late_materialization = false;
     DM::MultiStageLateMaterializationRuntimeStatsPtr multi_stage_late_materialization_runtime_stats;
+    DM::MultiStageLateMaterializationTopNDescriptionPtr multi_stage_late_materialization_topn;
 
     SelectQueryInfo();
     ~SelectQueryInfo();

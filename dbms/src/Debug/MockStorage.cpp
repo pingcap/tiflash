@@ -159,7 +159,7 @@ bool shouldEnableMultiStageLateMaterializationForMockDeltaMerge(
     const TiDB::ColumnInfos & scan_column_infos)
 {
     const auto & settings = context.getSettingsRef();
-    if (!settings.dt_enable_multi_stage_late_materialization)
+    if (settings.dt_enable_multi_stage_late_materialization == 0)
         return false;
     if (filter_conditions == nullptr || !filter_conditions->hasValue())
         return false;
@@ -376,7 +376,8 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(
     std::vector<int> runtime_filter_ids,
     int rf_max_wait_time_ms,
     const google::protobuf::RepeatedPtrField<tipb::Expr> * pushed_down_filters,
-    const TiDB::ColumnInfos * table_scan_column_infos)
+    const TiDB::ColumnInfos * table_scan_column_infos,
+    const DM::MultiStageLateMaterializationTopNDescriptionPtr & multi_stage_late_materialization_topn)
 {
     static const google::protobuf::RepeatedPtrField<tipb::Expr> empty_pushed_down_filters{};
     static const auto empty_ann_query_info = tipb::ANNQueryInfo{};
@@ -400,6 +401,7 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(
             runtime_filter_ids,
             rf_max_wait_time_ms,
             context.getTimezoneInfo());
+        query_info.multi_stage_late_materialization_topn = multi_stage_late_materialization_topn;
         BlockInputStreams ins = storage->read(
             column_names,
             query_info,
@@ -476,7 +478,8 @@ void MockStorage::buildExecFromDeltaMerge(
     int rf_max_wait_time_ms,
     const google::protobuf::RepeatedPtrField<tipb::Expr> * pushed_down_filters,
     const String & table_scan_executor_id,
-    const TiDB::ColumnInfos * table_scan_column_infos)
+    const TiDB::ColumnInfos * table_scan_column_infos,
+    const DM::MultiStageLateMaterializationTopNDescriptionPtr & multi_stage_late_materialization_topn)
 {
     static const google::protobuf::RepeatedPtrField<tipb::Expr> empty_pushed_down_filters{};
     static const auto empty_ann_query_info = tipb::ANNQueryInfo{};
@@ -501,9 +504,11 @@ void MockStorage::buildExecFromDeltaMerge(
         if (enable_multi_stage_late_materialization)
         {
             multi_stage_late_materialization_runtime_stats
-                = std::make_shared<DM::MultiStageLateMaterializationRuntimeStats>();
+                = std::make_shared<DM::MultiStageLateMaterializationRuntimeStats>(
+                    fmt::format("mock table_scan_executor_id={}", table_scan_executor_id));
             if (auto * dag_context = context.getDAGContext(); dag_context != nullptr && !table_scan_executor_id.empty())
             {
+                dag_context->scan_context_map[table_scan_executor_id] = query_info.mvcc_query_info->scan_context;
                 dag_context->setExecutorRowsOverride(
                     table_scan_executor_id,
                     std::shared_ptr<std::atomic<UInt64>>(
@@ -513,8 +518,10 @@ void MockStorage::buildExecFromDeltaMerge(
                     filter_conditions->executor_id,
                     std::shared_ptr<std::atomic<UInt64>>(
                         multi_stage_late_materialization_runtime_stats,
-                        &multi_stage_late_materialization_runtime_stats->stage1_output_rows));
+                        &multi_stage_late_materialization_runtime_stats->final_rest_input_rows));
             }
+            query_info.mvcc_query_info->scan_context->setMultiStageLateMaterializationRuntimeStats(
+                multi_stage_late_materialization_runtime_stats);
         }
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             filter_conditions->conditions,
@@ -526,6 +533,7 @@ void MockStorage::buildExecFromDeltaMerge(
             context.getTimezoneInfo());
         query_info.enable_multi_stage_late_materialization = enable_multi_stage_late_materialization;
         query_info.multi_stage_late_materialization_runtime_stats = multi_stage_late_materialization_runtime_stats;
+        query_info.multi_stage_late_materialization_topn = multi_stage_late_materialization_topn;
         storage->read(
             exec_context_,
             group_builder,
@@ -607,6 +615,8 @@ void MockStorage::addTableInfoForDeltaMerge(const String & name, const MockColum
         TiDB::ColumnInfo ret;
         ret.name = column.name;
         ret.tp = column.type;
+        ret.collate = column.collate;
+        ret.elems = column.elems;
 
         if (!column.nullable)
             ret.setNotNullFlag();
@@ -890,6 +900,7 @@ TiDB::ColumnInfos mockColumnInfosToTiDBColumnInfos(const MockColumnInfoVec & moc
         column_info.name = mock_column_info.name;
         column_info.tp = mock_column_info.type;
         column_info.collate = mock_column_info.collate;
+        column_info.elems = mock_column_info.elems;
         column_info.id = col_id++;
         // TODO: find a way to assign decimal field's flen.
         if (column_info.tp == TiDB::TP::TypeNewDecimal)

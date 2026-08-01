@@ -40,6 +40,8 @@ public:
         const String & req_id_,
         const MultiStageLateMaterializationRuntimeStatsPtr & runtime_stats_ = nullptr);
 
+    ~MultiStageLateMaterializationBlockInputStream() override;
+
     String getName() const override { return NAME; }
 
     Block getHeader() const override { return header; }
@@ -90,7 +92,17 @@ private:
         const IColumn::Filter * residual_filter,
         size_t residual_passed_rows);
 
-    void logSummary();
+    bool shouldUseRunningTopN() const { return running_topn != nullptr && !topn_adaptive_disabled; }
+
+    void updateTopNAdaptiveState(UInt64 residual_passed_rows, UInt64 topn_candidate_rows);
+
+    void flushRuntimeStats();
+
+    void flushRuntimeStatsNoThrow();
+
+    void flushRuntimeStatsIfNeeded();
+
+    void finishRuntimeStats();
 
 private:
     Block header;
@@ -100,11 +112,19 @@ private:
     PushDownFilterPtr residual_filter;
     BitmapFilterPtr bitmap_filter;
     MultiStageLateMaterializationRuntimeStatsPtr runtime_stats;
+    MultiStageLateMaterializationRuntimeStatsDelta local_runtime_stats;
+    UInt64 runtime_stats_pending_blocks = 0;
     FilterTransformAction residual_filter_action;
+    std::unique_ptr<RunningLocalTopN> running_topn;
 
     size_t late_mode_blocks = 0;
     size_t direct_mode_blocks = 0;
-    bool summary_logged = false;
+    UInt64 topn_adaptive_warmup_observed_rows = 0;
+    UInt64 topn_adaptive_input_rows = 0;
+    UInt64 topn_adaptive_candidate_rows = 0;
+    bool topn_adaptive_warmed_up = false;
+    bool topn_adaptive_disabled = false;
+    bool runtime_stats_finished = false;
 
     const LoggerPtr log;
 };
