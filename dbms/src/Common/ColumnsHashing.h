@@ -111,7 +111,7 @@ private:
         const StringRef & raw_key,
         std::string & sort_key_container)
     {
-        if (!collation_sort_key_cache_active)
+        if unlikely (!collation_sort_key_cache_active)
             return collator.sortKey(raw_key.data, raw_key.size, sort_key_container);
 
         if (auto it = raw_to_sort_key_index.find(raw_key); it != nullptr)
