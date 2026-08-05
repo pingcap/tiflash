@@ -58,12 +58,11 @@ public:
             primary_keys.insert(TiKVKey(primary_key.data(), primary_key.size()).toDebugString());
         }
         this->message(fmt::format(
-            "Key is locked ({} locks in regions {} key {} primary {} first_lock_info={})",
+            "Key is locked ({} locks in regions {} key {} primary {})",
             locks.size(),
             locked_regions,
             keys,
-            primary_keys,
-            firstLockInfoToDebugString(locks)));
+            primary_keys));
 #endif
     }
 
