@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Common/Exception.h>
-#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Common/FmtUtils.h>
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Storages/KVStore/Read/RegionLockInfo.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVKeyValue.h>
 #include <pingcap/kv/RegionCache.h>
