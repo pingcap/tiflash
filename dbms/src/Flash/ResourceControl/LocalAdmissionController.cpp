@@ -457,15 +457,10 @@ std::optional<resource_manager::TokenBucketsRequest> LocalAdmissionController::b
 
         for (const auto & iter : local_resource_groups)
         {
-<<<<<<< HEAD
             const auto rg_name = iter.first;
-            const bool need_fetch_token = local_low_token_resource_groups.contains(rg_name);
+            const bool need_fetch_token = local_low_token_resource_groups.contains(rg_name)
+                || iter.second->shouldRefillToken(current_tick);
             const bool need_report = iter.second->shouldReportRUConsumption(current_tick);
-=======
-            const bool need_fetch_token = local_keyspace_low_token_resource_groups.contains(ele.first)
-                || ele.second->shouldRefillToken(current_tick);
-            const bool need_report = ele.second->shouldReportRUConsumption(current_tick);
->>>>>>> 555bb7cc2a (LAC: smoothing tokens request and keep in high level (#10997))
 
             if (need_fetch_token || need_report)
             {
