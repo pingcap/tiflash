@@ -389,7 +389,7 @@ void ReadIndexTest::testNormal()
             manager->invalidateReadIndexCache(0);
 
             reqs = {make_read_index_reqs(0, 9)};
-            auto resps = manager->batchReadIndex(reqs);
+            auto resps = manager->batchReadIndex(reqs, 10 * 1000);
             ASSERT_EQ(resps[0].first.read_index(), 670);
             ASSERT_EQ(computeCntUseHistoryTasks(*manager), expect_cnt_use_history_tasks);
         }
