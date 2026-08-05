@@ -458,8 +458,8 @@ std::optional<resource_manager::TokenBucketsRequest> LocalAdmissionController::b
         for (const auto & iter : local_resource_groups)
         {
             const auto rg_name = iter.first;
-            const bool need_fetch_token = local_low_token_resource_groups.contains(rg_name)
-                || iter.second->shouldRefillToken(current_tick);
+            const bool need_fetch_token
+                = local_low_token_resource_groups.contains(rg_name) || iter.second->shouldRefillToken(current_tick);
             const bool need_report = iter.second->shouldReportRUConsumption(current_tick);
 
             if (need_fetch_token || need_report)
