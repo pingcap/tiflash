@@ -19,6 +19,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/S3/Lifecycle.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 #include <TiDB/OwnerInfo.h>

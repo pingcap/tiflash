@@ -14,12 +14,14 @@
 
 #include <Common/Exception.h>
 #include <IO/BaseFile/RateLimiter.h>
+#include <Storages/S3/S3ReadLimiter.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <fcntl.h>
 #include <gtest/gtest.h>
 #include <unistd.h>
 
 #include <ctime>
+#include <future>
 #include <random>
 #include <thread>
 
@@ -372,6 +374,67 @@ TEST(ReadLimiterTest, ReadMany)
     request(read_limiter, 1000);
     ASSERT_EQ(read_limiter.getAvailableBalance(), -900);
     ASSERT_EQ(read_limiter.alloc_bytes, 100);
+}
+
+TEST(S3ReadLimiterTest, ByteRequestsWaitForRefill)
+{
+    S3::S3ReadLimiter limiter(1000, 100);
+    // Consume the initial 100-byte burst, then verify the next request waits for at least one refill period.
+    limiter.requestBytes(100, S3::S3ReadSource::DirectRead);
+    AtomicStopwatch watch;
+    limiter.requestBytes(100, S3::S3ReadSource::DirectRead);
+    ASSERT_GE(watch.elapsedMilliseconds(), 80);
+}
+
+TEST(S3ReadLimiterTest, UpdateConfigDisablesWaitingBytes)
+{
+    S3::S3ReadLimiter limiter(1000, 100);
+    // Exhaust the initial burst, then make sure disabling the byte limit wakes a waiting requester promptly.
+    limiter.requestBytes(100, S3::S3ReadSource::DirectRead);
+
+    std::promise<void> waiter_started;
+    auto waiter_started_future = waiter_started.get_future();
+    auto future = std::async(std::launch::async, [&]() {
+        AtomicStopwatch watch;
+        waiter_started.set_value();
+        limiter.requestBytes(100, S3::S3ReadSource::DirectRead);
+        return watch.elapsedMilliseconds();
+    });
+
+    ASSERT_EQ(waiter_started_future.wait_for(1s), std::future_status::ready);
+    ASSERT_EQ(future.wait_for(50ms), std::future_status::timeout);
+
+    limiter.updateConfig(/*max_read_bytes_per_sec*/ 0);
+    ASSERT_LT(future.get(), 100);
+}
+
+TEST(S3ReadLimiterTest, SuggestedChunkSizeTracksBurstLimit)
+{
+    // The suggested chunk size should never exceed one refill-period burst when byte limiting is enabled.
+    S3::S3ReadLimiter limiter(/*max_read_bytes_per_sec*/ 1000, /*refill_period_ms*/ 100);
+    ASSERT_EQ(limiter.getSuggestedChunkSize(128 * 1024), 100);
+
+    limiter.updateConfig(/*max_read_bytes_per_sec*/ 5000);
+    ASSERT_EQ(limiter.getSuggestedChunkSize(128 * 1024), 500);
+
+    limiter.updateConfig(/*max_read_bytes_per_sec*/ 0);
+    ASSERT_EQ(limiter.getSuggestedChunkSize(4096), 4096);
+}
+
+TEST(S3ReadLimiterTest, LargeRequestDoesNotWaitForever)
+{
+    S3::S3ReadLimiter limiter(/*max_read_bytes_per_sec*/ 1000, /*refill_period_ms*/ 100);
+
+    // The initial burst is only 100 bytes, but callers that request a larger chunk should still make
+    // forward progress instead of waiting forever for a budget that can never accumulate.
+    auto future = std::async(std::launch::async, [&] {
+        AtomicStopwatch watch;
+        limiter.requestBytes(128 * 1024, S3::S3ReadSource::DirectRead);
+        return watch.elapsedMilliseconds();
+    });
+
+    ASSERT_EQ(future.wait_for(1s), std::future_status::ready);
+    ASSERT_LT(future.get(), 200);
 }
 
 #ifdef __linux__

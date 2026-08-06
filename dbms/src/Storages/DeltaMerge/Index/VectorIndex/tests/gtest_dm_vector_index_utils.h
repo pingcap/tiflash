@@ -138,7 +138,8 @@ public:
         auto stream = ConcatSkippableBlockInputStream<false>::create(
             /* inputs */ {inner},
             /* rows */ {filter->size()},
-            /* ScanContext */ nullptr);
+            /* ScanContext */ nullptr,
+            ReadTag::Query);
         return VectorIndexInputStream::create(ctx, filter, stream);
     }
 };
@@ -210,7 +211,7 @@ public:
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /*keep_order=*/false)[0];
+            DMReadOptions{})[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
             Strings({vec_column_name}),

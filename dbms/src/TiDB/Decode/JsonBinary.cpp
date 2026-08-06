@@ -34,6 +34,7 @@ namespace DB
 {
 namespace ErrorCodes
 {
+extern const int ARGUMENT_OUT_OF_BOUND;
 extern const int LOGICAL_ERROR;
 extern const int UNKNOWN_TYPE;
 } // namespace ErrorCodes
@@ -264,7 +265,9 @@ inline UInt64 appendValueOfSIMDJsonElem(
             encodeNumeric(write_buffer, data_offset);
             data_offset += key.size();
             if (unlikely(key.size() > std::numeric_limits<UInt16>::max()))
-                throw Exception("TiDB/TiFlash does not yet support JSON objects with the key length >= 65536");
+                throw Exception(
+                    "TiDB/TiFlash does not yet support JSON objects with the key length >= 65536",
+                    ErrorCodes::ARGUMENT_OUT_OF_BOUND);
             UInt16 key_len = key.size();
             encodeNumeric(write_buffer, key_len);
         }
@@ -1096,6 +1099,78 @@ void JsonBinary::buildBinaryJsonArrayInBuffer(
 
     encodeNumeric(write_buffer, total_size);
     buildBinaryJsonElementsInBuffer(json_binary_vec, write_buffer);
+}
+
+void JsonBinary::buildBinaryJsonObjectInBuffer(
+    const std::vector<StringRef> & keys,
+    const std::vector<JsonBinary> & values,
+    JsonBinaryWriteBuffer & write_buffer)
+{
+    RUNTIME_CHECK(keys.size() == values.size());
+
+    write_buffer.write(TYPE_CODE_OBJECT);
+
+    UInt32 buffer_start_pos = write_buffer.offset();
+
+    UInt32 element_count = keys.size();
+    encodeNumeric(write_buffer, element_count);
+
+    auto total_size_pos = write_buffer.offset();
+    write_buffer.advance(4);
+
+    UInt32 data_offset_start = HEADER_SIZE + element_count * (KEY_ENTRY_SIZE + VALUE_ENTRY_SIZE);
+    UInt32 data_offset = data_offset_start;
+    for (const auto & key : keys)
+    {
+        encodeNumeric(write_buffer, data_offset);
+        if (unlikely(key.size > std::numeric_limits<UInt16>::max()))
+            throw Exception(
+                "TiDB/TiFlash does not yet support JSON objects with the key length >= 65536",
+                ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+        UInt16 key_len = key.size;
+        encodeNumeric(write_buffer, key_len);
+        data_offset += key.size;
+    }
+
+    UInt32 value_entry_start_pos = write_buffer.offset();
+
+    write_buffer.setOffset(buffer_start_pos + data_offset_start);
+    for (const auto & key : keys)
+        write_buffer.write(key.data, key.size);
+
+    write_buffer.setOffset(value_entry_start_pos);
+    UInt64 max_child_depth = 0;
+    for (const auto & value : values)
+    {
+        write_buffer.write(value.type);
+        if (value.type == TYPE_CODE_LITERAL)
+        {
+            write_buffer.write(value.data.data[0]);
+            write_buffer.write(0);
+            write_buffer.write(0);
+            write_buffer.write(0);
+        }
+        else
+        {
+            encodeNumeric(write_buffer, data_offset);
+            auto tmp_entry_pos = write_buffer.offset();
+
+            write_buffer.setOffset(buffer_start_pos + data_offset);
+            write_buffer.write(value.data.data, value.data.size);
+            data_offset = write_buffer.offset() - buffer_start_pos;
+
+            write_buffer.setOffset(tmp_entry_pos);
+        }
+        max_child_depth = std::max(max_child_depth, value.getDepth());
+    }
+
+    UInt64 depth = max_child_depth + 1;
+    JsonBinary::assertJsonDepth(depth);
+
+    UInt32 total_size = data_offset;
+    write_buffer.setOffset(total_size_pos);
+    encodeNumeric(write_buffer, total_size);
+    write_buffer.setOffset(buffer_start_pos + data_offset);
 }
 
 void JsonBinary::buildKeyArrayInBuffer(const std::vector<StringRef> & keys, JsonBinaryWriteBuffer & write_buffer)

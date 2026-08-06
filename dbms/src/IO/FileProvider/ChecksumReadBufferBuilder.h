@@ -40,7 +40,6 @@ public:
     static std::unique_ptr<ReadBufferFromFileBase> build(
         String && data,
         const String & file_name,
-        size_t estimated_size,
         ChecksumAlgo checksum_algorithm,
         size_t checksum_frame_size);
 };

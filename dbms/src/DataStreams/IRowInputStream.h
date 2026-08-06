@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/DataStreams/IRowInputStream.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -47,7 +49,7 @@ public:
     /// In case of parse error, try to roll back and parse last one or two rows very carefully
     ///  and collect as much as possible diagnostic information about error.
     /// If not implemented, returns empty string.
-    virtual std::string getDiagnosticInfo() { return {}; };
+    virtual std::string getDiagnosticInfo() { return {}; }
 
     virtual ~IRowInputStream() {}
 };

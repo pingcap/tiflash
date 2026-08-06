@@ -80,6 +80,7 @@ public:
     explicit MvccQueryInfo(bool resolve_locks_ = false, UInt64 start_ts_ = 0, DM::ScanContextPtr scan_ctx = nullptr);
 
     void addReadIndexResToCache(RegionID region_id, UInt64 read_index) { read_index_res_cache[region_id] = read_index; }
+    void invalidateReadIndexResCache(RegionID region_id) { read_index_res_cache.erase(region_id); }
     UInt64 getReadIndexRes(RegionID region_id) const
     {
         if (auto it = read_index_res_cache.find(region_id); it != read_index_res_cache.end())

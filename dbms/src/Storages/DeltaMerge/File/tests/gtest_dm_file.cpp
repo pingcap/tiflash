@@ -1107,6 +1107,91 @@ try
 }
 CATCH
 
+TEST_F(DMFileMetaV2Test, WriteReadNullableEmptyArrayColumn)
+try
+{
+    auto cols = std::make_shared<ColumnDefines>();
+    ColumnDefine id_cd(1, "id", std::make_shared<DataTypeInt64>());
+    ColumnDefine embedding_cd(
+        2,
+        "embedding",
+        std::make_shared<DataTypeNullable>(std::make_shared<DataTypeArray>(std::make_shared<DataTypeFloat32>())));
+    cols->emplace_back(id_cd);
+    cols->emplace_back(embedding_cd);
+
+    constexpr size_t total_rows = 128;
+
+    {
+        Block block;
+        block.insert(DB::tests::createColumn<Int64>(createNumbers<Int64>(0, total_rows), id_cd.name, id_cd.id));
+
+        std::vector<std::optional<Array>> embedding_data(total_rows, Array{});
+        auto embedding_col = DB::tests::createColumn<Nullable<Array>>(
+            std::make_tuple(std::make_shared<DataTypeFloat32>()),
+            embedding_data);
+        embedding_col.name = embedding_cd.name;
+        embedding_col.column_id = embedding_cd.id;
+        block.insert(embedding_col);
+
+        auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
+        stream->writePrefix();
+        stream->write(block, DMFileBlockOutputStream::BlockProperty{0, 0, 0, 0});
+        stream->writeSuffix();
+    }
+
+    const auto empty_elements_stream_name = IDataType::getFileNameForStream(
+        DB::toString(embedding_cd.id),
+        {IDataType::Substream::NullableElements, IDataType::Substream::ArrayElements});
+    const auto empty_elements_fname = colDataFileName(empty_elements_stream_name);
+    const auto empty_elements_path = dm_file->path() + "/" + empty_elements_fname;
+    const auto * dmfile_meta = typeid_cast<const DMFileMetaV2 *>(dm_file->getMeta().get());
+    ASSERT_TRUE(dmfile_meta != nullptr);
+    ASSERT_EQ(dm_file->getColumnStat(embedding_cd.id).data_bytes, 0);
+    ASSERT_FALSE(Poco::File(empty_elements_path).exists());
+    auto info_iter = dmfile_meta->merged_sub_file_infos.find(empty_elements_fname);
+    ASSERT_NE(info_iter, dmfile_meta->merged_sub_file_infos.end());
+    ASSERT_EQ(info_iter->second.size, 0);
+
+    dm_file = restoreDMFile();
+
+    {
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        auto stream = builder.build(
+            dm_file,
+            *cols,
+            RowKeyRanges{RowKeyRange::newAll(false, 1)},
+            std::make_shared<ScanContext>());
+
+        size_t rows_read = 0;
+        while (Block block = stream->read())
+        {
+            if (!block)
+                break;
+
+            ASSERT_EQ(block.columns(), 2);
+
+            auto id_column = block.getByName(id_cd.name).column;
+            auto embedding_column = block.getByName(embedding_cd.name).column;
+            const auto * nullable_embedding = typeid_cast<const ColumnNullable *>(embedding_column.get());
+            ASSERT_TRUE(nullable_embedding != nullptr);
+
+            const auto * array_column = typeid_cast<const ColumnArray *>(&nullable_embedding->getNestedColumn());
+            ASSERT_TRUE(array_column != nullptr);
+
+            auto null_map = nullable_embedding->getNullMapColumnPtr();
+            for (size_t i = 0; i < block.rows(); ++i)
+            {
+                ASSERT_EQ(id_column->getInt(i), static_cast<Int64>(rows_read + i));
+                ASSERT_EQ(null_map->getUInt(i), 0);
+                ASSERT_EQ(array_column->sizeAt(i), 0);
+            }
+            rows_read += block.rows();
+        }
+        ASSERT_EQ(rows_read, total_rows);
+    }
+}
+CATCH
+
 class DMFileTest
     : public DMFileMetaV2Test
     , public testing::WithParamInterface<DMFileMode>

@@ -340,10 +340,7 @@ private:
         while (expected != 0)
         {
             ProfileEvents::increment(ProfileEvents::ReadBufferFromFileDescriptorRead);
-            ssize_t count;
-            {
-                count = in->read(pos, expected);
-            }
+            ssize_t count = in->read(pos, expected);
             if (count == 0)
             {
                 break;
@@ -356,8 +353,10 @@ private:
                 else
                 {
                     throw TiFlashException(
-                        fmt::format("cannot load checksum framed data from {} (errno = {})", in->getFileName(), errno),
-                        Errors::Checksum::IOFailure);
+                        Errors::Checksum::IOFailure,
+                        "cannot load checksum framed data from {} (errno = {})",
+                        in->getFileName(),
+                        errno);
                 }
             }
             expected -= count;

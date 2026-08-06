@@ -79,10 +79,12 @@ public:
     {
         passive_merged_segments.fetch_add(units.size() - 1, std::memory_order_relaxed);
         GET_METRIC(tiflash_storage_read_thread_gauge, type_merged_task).Increment();
+        GET_METRIC(tiflash_storage_read_thread_gauge, type_merged_task_units).Increment(units.size());
     }
     ~MergedTask()
     {
         passive_merged_segments.fetch_sub(units.size() - 1, std::memory_order_relaxed);
+        GET_METRIC(tiflash_storage_read_thread_gauge, type_merged_task_units).Decrement(units.size());
         GET_METRIC(tiflash_storage_read_thread_gauge, type_merged_task).Decrement();
         GET_METRIC(tiflash_storage_read_thread_seconds, type_merged_task).Observe(sw.elapsedSeconds());
     }

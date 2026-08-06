@@ -20,6 +20,7 @@
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/TiKVHelpers/PDTiKVClient.h>
 #include <Storages/KVStore/Types.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <TiDB/Schema/SchemaSyncService.h>
@@ -101,15 +102,18 @@ void SchemaSyncService::addKeyspaceGCTasks()
                         GET_METRIC(tiflash_schema_trigger_count, type_timer).Increment();
 
                     stage = "GC";
-                    auto gc_safe_point
-                        = PDClientHelper::getGCSafePointWithRetry(context.getTMTContext().getPDClient(), keyspace);
+                    auto gc_safe_point = PDClientHelper::getGCSafePointWithRetry(
+                        context.getTMTContext().getPDClient(),
+                        keyspace,
+                        30,
+                        context.getSettingsRef().safe_point_get_max_backoff_ms);
                     done_anything = gc(gc_safe_point, keyspace);
 
                     return done_anything;
                 }
                 catch (const Exception & e)
                 {
-                    LOG_ERROR(
+                    LOG_WARNING(
                         ks_log,
                         "{}, keyspace={} failed by {} \n stack : {}",
                         stage,
@@ -119,11 +123,11 @@ void SchemaSyncService::addKeyspaceGCTasks()
                 }
                 catch (const Poco::Exception & e)
                 {
-                    LOG_ERROR(ks_log, "{}, keyspace={} failed by {}", stage, keyspace, e.displayText());
+                    LOG_WARNING(ks_log, "{}, keyspace={} failed by {}", stage, keyspace, e.displayText());
                 }
                 catch (const std::exception & e)
                 {
-                    LOG_ERROR(ks_log, "{}, keyspace={} failed by {}", stage, keyspace, e.what());
+                    LOG_WARNING(ks_log, "{}, keyspace={} failed by {}", stage, keyspace, e.what());
                 }
                 return false;
             },
@@ -323,7 +327,7 @@ bool SchemaSyncService::gcImpl(Timestamp gc_safepoint, KeyspaceID keyspace_id, b
                     storage->getTombstone(),
                     gc_safepoint,
                     canonical_name);
-                succeeded = false; // dropping this table is skipped, do not succee the `last_gc_safepoint`
+                succeeded = false; // dropping this table is skipped, do not success the `last_gc_safepoint`
                 continue;
             }
             else
@@ -350,7 +354,7 @@ bool SchemaSyncService::gcImpl(Timestamp gc_safepoint, KeyspaceID keyspace_id, b
         drop_query->database = std::move(database_name);
         drop_query->table = std::move(table_name);
         drop_query->if_exists = true;
-        drop_query->lock_timeout = std::chrono::milliseconds(1 * 1000); // timeout for acquring table drop lock
+        drop_query->lock_timeout = std::chrono::milliseconds(1 * 1000); // timeout for acquiring table drop lock
         ASTPtr ast_drop_query = drop_query;
         try
         {
@@ -363,7 +367,7 @@ bool SchemaSyncService::gcImpl(Timestamp gc_safepoint, KeyspaceID keyspace_id, b
         }
         catch (DB::Exception & e)
         {
-            succeeded = false; // dropping this table is skipped, do not succee the `last_gc_safepoint`
+            succeeded = false; // dropping this table is skipped, do not success the `last_gc_safepoint`
             String err_msg;
             // Maybe a read lock of a table is held for a long time, just ignore it this round.
             if (e.code() == ErrorCodes::DEADLOCK_AVOIDED)
@@ -406,7 +410,7 @@ bool SchemaSyncService::gcImpl(Timestamp gc_safepoint, KeyspaceID keyspace_id, b
         auto drop_query = std::make_shared<ASTDropQuery>();
         drop_query->database = db_name;
         drop_query->if_exists = true;
-        drop_query->lock_timeout = std::chrono::milliseconds(1 * 1000); // timeout for acquring table drop lock
+        drop_query->lock_timeout = std::chrono::milliseconds(1 * 1000); // timeout for acquiring table drop lock
         ASTPtr ast_drop_query = drop_query;
         try
         {
@@ -417,7 +421,7 @@ bool SchemaSyncService::gcImpl(Timestamp gc_safepoint, KeyspaceID keyspace_id, b
         }
         catch (DB::Exception & e)
         {
-            succeeded = false; // dropping this database is skipped, do not succee the `last_gc_safepoint`
+            succeeded = false; // dropping this database is skipped, do not success the `last_gc_safepoint`
             String err_msg;
             if (e.code() == ErrorCodes::DEADLOCK_AVOIDED)
                 err_msg = "locking attempt has timed out!"; // ignore verbose stack for this error

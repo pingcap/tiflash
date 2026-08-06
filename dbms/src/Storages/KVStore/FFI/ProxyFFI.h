@@ -67,6 +67,9 @@ enum class RawCppPtrTypeImpl : RawCppPtrType
 
 RawCppPtr GenRawCppPtr(RawVoidPtr ptr_ = nullptr, RawCppPtrTypeImpl type_ = RawCppPtrTypeImpl::None);
 
+CppStrWithView GenCppStrWithView(std::string && str);
+CppStrWithView GenCppStrWithView(const std::string & str);
+
 struct ReadIndexTask;
 struct RawRustPtrWrap;
 

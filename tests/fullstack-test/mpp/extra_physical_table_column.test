@@ -12,9 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# line 27: Pessimistic lock response corrupted
-#SKIP_FOR_NEXT_GEN
-
 # Preparation.
 => DBGInvoke __init_fail_point()
 

@@ -167,10 +167,10 @@ public:
         bool is_common_handle,
         bool including_right_boundary = false);
 
-    size_t getPageNumAfterGC(StorageType type, NamespaceID ns_id) const;
+    size_t getPageNumAfterGC(StorageType type, TableID tbl_id) const;
 
-    std::set<PageIdU64> getAliveExternalPageIdsWithoutGC(NamespaceID ns_id) const;
-    std::set<PageIdU64> getAliveExternalPageIdsAfterGC(NamespaceID ns_id) const;
+    std::set<PageIdU64> getAliveExternalPageIdsWithoutGC(TableID tbl_id) const;
+    std::set<PageIdU64> getAliveExternalPageIdsAfterGC(TableID tbl_id) const;
 
 protected:
     std::mt19937 random;

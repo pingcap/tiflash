@@ -89,6 +89,7 @@ UInt32 buildVersionFilterVector(
         auto block = cf_reader->readNextBlock();
         if (!block)
             break;
+        addUserReadBytes(dm_context, block.bytes());
 
         ++read_block_count;
         read_rows += block.rows();
@@ -169,6 +170,7 @@ template <ExtraHandleType HandleType>
     {
         auto block = stream->read();
         RUNTIME_CHECK(block.rows() == pack_stats[pack_id].rows, block.rows(), pack_stats[pack_id].rows);
+        addUserReadBytes(dm_context, block.bytes());
         const auto handles = ColumnView<HandleType>(*(block.getByPosition(0).column));
         const auto & versions = *toColumnVectorDataPtr<UInt64>(block.getByPosition(1).column);
         const auto itr = start_row_id_of_need_read_packs.find(pack_id);

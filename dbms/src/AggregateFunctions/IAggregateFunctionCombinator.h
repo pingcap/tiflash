@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/AggregateFunctions/IAggregateFunctionCombinator.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -60,7 +62,8 @@ public:
     virtual AggregateFunctionPtr transformAggregateFunction(
         const AggregateFunctionPtr & nested_function,
         const DataTypes & arguments,
-        const Array & params) const = 0;
+        const Array & params) const
+        = 0;
 
     virtual ~IAggregateFunctionCombinator() {}
 };

@@ -102,7 +102,7 @@ void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, 
 
     {
         const auto & new_range = new_region->getRange();
-        auto task_lock = genTaskLock();
+        auto task_lock = genTaskLock(); // m1
         auto region_map = getRegionsByRangeOverlap(new_range->comparableKeys());
         for (const auto & overlapped_region : region_map)
         {

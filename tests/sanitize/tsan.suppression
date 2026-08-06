@@ -9,6 +9,7 @@ race:StackTrace::toString
 race:DB::SyncPointCtl::sync
 race:XXH3_hashLong_64b_withSeed_selection
 race:re2::RE2::NumberOfCapturingGroups
+race:DB::DM::VectorIndexReader::search
 # PathPool is used in lot of places, but TiFlashStorageTestBasic::reload will try to write it.
 # Since we will never call Context::setPathPool after TiFlash is initialized, it is safe to suppress.
 race:TiFlashStorageTestBasic::reload

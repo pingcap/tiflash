@@ -271,7 +271,10 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
         mpp::DispatchTaskResponse resp;
         auto status = rpc.call(&client_context, req, &resp);
         if (!status.ok())
-            throw Exception("Meet grpc error while dispatch mpp task: " + rpc.errMsg(status));
+        {
+            std::string extra_msg = "addr: " + Debug::LOCAL_HOST;
+            throw Exception("Meet grpc error while dispatch mpp task: " + rpc.errMsg(status, extra_msg));
+        }
         if (resp.has_error())
             throw Exception("Meet error while dispatch mpp task: " + resp.error().msg());
     }

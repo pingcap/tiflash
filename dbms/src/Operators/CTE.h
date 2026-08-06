@@ -61,11 +61,10 @@ public:
 
     void initForTest()
     {
+#ifndef NDEBUG
         for (size_t i = 0; i < this->partition_num; i++)
-        {
-            this->partitions[i]->mu_for_test = std::make_unique<std::mutex>();
             this->partitions[i]->cv_for_test = std::make_unique<std::condition_variable>();
-        }
+#endif
     }
 
     // ------------------------
@@ -150,7 +149,9 @@ public:
         return this->err_msg;
     }
 
+#ifndef NDEBUG
     CTEOpStatus checkBlockAvailableForTest(size_t cte_reader_id, size_t partition_id);
+#endif
 
     void checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_id, size_t partition_id);
     void checkInSpillingAndRegisterTask(TaskPtr && task, size_t partition_id);
@@ -177,7 +178,7 @@ public:
 
     void tryToGetResp(tipb::SelectResponse & resp)
     {
-        std::shared_lock<std::shared_mutex> lock(this->rw_lock);
+        std::unique_lock<std::shared_mutex> lock(this->rw_lock);
         if (!this->get_resp)
         {
             this->get_resp = true;
@@ -256,10 +257,11 @@ public:
         return this->checkBlockAvailableImpl<false>(cte_reader_id, partition_id);
     }
 
-    std::shared_ptr<CTEPartition> & getPartitionForTest(size_t partition_idx)
-    {
-        return this->partitions[partition_idx];
-    }
+#ifndef NDEBUG
+    std::shared_ptr<CTEPartition> & getPartitionForTest(size_t partition_idx) { return this->partitions[partition_idx]; }
+    
+    std::shared_mutex & getRWLockForTest() { return this->rw_lock; }
+#endif
 
 private:
     template <bool need_lock>
@@ -307,7 +309,11 @@ private:
         for (auto & partition : this->partitions)
         {
             if constexpr (for_test)
+            {
+#ifndef NDEBUG
                 partition->cv_for_test->notify_all();
+#endif
+            }
             else
                 partition->pipe_cv->notifyAll();
         }
@@ -316,6 +322,9 @@ private:
     const size_t partition_num;
     std::vector<std::shared_ptr<CTEPartition>> partitions;
 
+    // Protect fields:
+    //   next_cte_reader_id, is_eof, is_cancelled, get_resp, resp, err_msg,
+    //   sink_exit_num, source_exit_num, registered_sink_num
     std::shared_mutex rw_lock;
     size_t next_cte_reader_id = 0;
     bool is_eof = false;

@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Common/SpaceSaving.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,7 +26,6 @@
 #include <IO/WriteHelpers.h>
 
 #include <boost/range/adaptor/reversed.hpp>
-#include <iostream>
 #include <vector>
 
 /*

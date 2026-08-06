@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Server/main.cpp
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -60,7 +62,13 @@ int mainEntryVersion(int, char **)
     TiFlashBuildInfo::outputDetail(std::cout);
     std::cout << std::endl;
 
-    std::cout << "Raft Proxy" << std::endl;
+    std::cout
+#if ENABLE_NEXT_GEN_COLUMNAR
+        << "TiFlash Columnar Hub"
+#else
+        << "Raft Proxy"
+#endif
+        << std::endl;
     print_raftstore_proxy_version();
     return 0;
 }
@@ -127,7 +135,7 @@ int printHelp(int, char **)
     for (auto & application : clickhouse_applications)
         std::cerr << "tiflash " << application.first << " [args] " << std::endl;
     return -1;
-};
+}
 
 
 bool isClickhouseApp(const std::string & app_suffix, std::vector<char *> & argv)

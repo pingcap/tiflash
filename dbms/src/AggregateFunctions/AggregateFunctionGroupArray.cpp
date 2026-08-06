@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/AggregateFunctions/AggregateFunctionGroupArray.cpp
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -59,7 +61,7 @@ inline AggregateFunctionPtr createAggregateFunctionGroupArrayImpl(const DataType
     return std::make_shared<GroupArrayGeneralListImpl<GroupArrayListNodeGeneral, HasLimit::value>>(
         argument_type,
         std::forward<TArgs>(args)...);
-};
+}
 
 
 AggregateFunctionPtr createAggregateFunctionGroupArray(

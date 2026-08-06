@@ -83,7 +83,7 @@ struct WriteBatches : private boost::noncopyable
                 if (!wb.empty())
                 {
                     StackTrace trace;
-                    LOG_ERROR(
+                    LOG_WARNING(
                         Logger::get(),
                         "!!!=========================Modifications in {} haven't persisted=========================!!! "
                         "Stack trace: {}",

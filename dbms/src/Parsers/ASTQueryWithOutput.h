@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Parsers/ASTQueryWithOutput.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -38,8 +40,8 @@ protected:
     void cloneOutputOptions(ASTQueryWithOutput & cloned) const;
 
     /// Format only the query part of the AST (without output options).
-    virtual void formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame)
-        const = 0;
+    virtual void formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
+        = 0;
 };
 
 
@@ -49,7 +51,7 @@ template <typename ASTIDAndQueryNames>
 class ASTQueryWithOutputImpl : public ASTQueryWithOutput
 {
 public:
-    String getID() const override { return ASTIDAndQueryNames::ID; };
+    String getID() const override { return ASTIDAndQueryNames::ID; }
 
     ASTPtr clone() const override
     {

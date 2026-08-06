@@ -83,6 +83,7 @@ void RNLocalPageCache::write(
     }
 
     UniversalWriteBatch cache_wb;
+    cache_wb.disableFSync(); // RNLocalPageCache doesn't need fsync. Disable it to reduce IOPS requirements.
     cache_wb.putPage(key, 0, read_buffer, size, field_sizes);
     GET_METRIC(tiflash_storage_remote_cache, type_page_download).Increment();
     GET_METRIC(tiflash_storage_remote_cache_bytes, type_page_download_bytes).Increment(size);
@@ -113,6 +114,7 @@ void RNLocalPageCache::write(UniversalWriteBatch && wb)
                 itr->second.size);
         }
     }
+    wb.disableFSync(); // RNLocalPageCache doesn't need fsync. Disable it to reduce IOPS requirements.
     GET_METRIC(tiflash_storage_remote_cache, type_page_download).Increment(wb.getWrites().size());
     GET_METRIC(tiflash_storage_remote_cache_bytes, type_page_download_bytes).Increment(wb.getTotalDataSize());
     storage->write(std::move(wb));
@@ -131,7 +133,7 @@ Page RNLocalPageCache::getPage(const PageOID & oid, const std::vector<size_t> & 
             key);
     }
 
-    auto snapshot = storage->getSnapshot("RNLocalPageCache.getPage");
+    auto snapshot = storage->getGeneralSnapshot("RNLocalPageCache.getPage");
     auto page_map = storage->read(
         {{key, indices}},
         /* read_limiter */ nullptr,
@@ -385,7 +387,7 @@ RNLocalPageCache::OccupySpaceResult RNLocalPageCache::occupySpace(
         RUNTIME_CHECK(guard == nullptr);
     }
 
-    auto snapshot = storage->getSnapshot("RNLocalPageCache.occupySpace");
+    auto snapshot = storage->getGeneralSnapshot("RNLocalPageCache.occupySpace");
     std::vector<PageOID> missing_ids;
     for (size_t i = 0; i < n; ++i)
     {
@@ -394,10 +396,12 @@ RNLocalPageCache::OccupySpaceResult RNLocalPageCache::occupySpace(
         if (const auto & page_entry = storage->getEntry(keys[i], snapshot); page_entry.isValid())
         {
             scan_context->disagg_read_cache_hit_size += page_sizes[i];
+            scan_context->disagg_page_hit_count++;
             continue;
         }
         missing_ids.push_back(pages[i]);
         scan_context->disagg_read_cache_miss_size += page_sizes[i];
+        scan_context->disagg_page_miss_count++;
     }
     GET_METRIC(tiflash_storage_remote_cache, type_page_miss).Increment(missing_ids.size());
     GET_METRIC(tiflash_storage_remote_cache, type_page_hit).Increment(pages.size() - missing_ids.size());

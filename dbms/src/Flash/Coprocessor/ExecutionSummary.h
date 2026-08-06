@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Flash/Coprocessor/ColumnarScanContext_fwd.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <common/types.h>
 #include <kvproto/resource_manager.pb.h>
@@ -42,6 +43,7 @@ struct ExecutionSummary
     resource_manager::Consumption ru_consumption{};
 
     DM::ScanContextPtr scan_context;
+    ColumnarScanContextPtr columnar_scan_context;
 
     ExecutionSummary();
 

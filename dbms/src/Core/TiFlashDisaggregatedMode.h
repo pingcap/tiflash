@@ -41,6 +41,7 @@ struct DisaggOptions
 {
     DisaggregatedMode mode = DisaggregatedMode::None;
     bool use_autoscaler = false;
+    bool use_columnar = false;
 
     static DisaggOptions parseFromConfig(const Poco::Util::LayeredConfiguration & config);
 };

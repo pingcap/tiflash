@@ -184,12 +184,14 @@ void CTE::checkInSpillingAndRegisterTask(TaskPtr && task, size_t partition_id)
         this->notifyTaskDirectly(partition_id, std::move(task));
 }
 
+#ifndef NDEBUG
 CTEOpStatus CTE::checkBlockAvailableForTest(size_t cte_reader_id, size_t partition_id)
 {
     std::shared_lock<std::shared_mutex> rw_lock(this->rw_lock);
     std::lock_guard<std::mutex> lock(*this->partitions[partition_id]->mu);
     return this->checkBlockAvailableNoLock(cte_reader_id, partition_id);
 }
+#endif
 
 template CTEOpStatus CTE::pushBlock<false>(size_t, const Block &);
 template CTEOpStatus CTE::pushBlock<true>(size_t, const Block &);

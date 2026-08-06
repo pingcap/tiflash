@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/DataStreams/CreatingSetsBlockInputStream.cpp
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -146,7 +148,7 @@ void CreatingSetsBlockInputStream::createAll()
 
         if (!exception_from_workers.empty())
         {
-            LOG_ERROR(
+            LOG_WARNING(
                 log,
                 "Creating all tasks takes {} sec with exception and rethrow the first of total {} exceptions",
                 watch.elapsedSeconds(),
@@ -276,7 +278,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
         auto error_message = getCurrentExceptionMessage(false, true);
         if (subquery.join)
             subquery.join->meetError(error_message);
-        LOG_ERROR(log, "{} throw exception: {} In {} sec. ", gen_log_msg(), error_message, watch.elapsedSeconds());
+        LOG_WARNING(log, "{} throw exception: {} In {} sec. ", gen_log_msg(), error_message, watch.elapsedSeconds());
         /// createOne is concurrently running in multiple threads, call cancel here to stop other threads
         /// need to use cancel(true) here because the other threads may be blocked in `ExchangeReceiver::nextResult`,
         /// cancel(true) will wake up these threads

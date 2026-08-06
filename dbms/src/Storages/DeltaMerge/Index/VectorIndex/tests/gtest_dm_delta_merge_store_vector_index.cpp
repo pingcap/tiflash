@@ -124,7 +124,7 @@ public:
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /*keep_order=*/false)[0];
+            DMReadOptions{})[0];
         Strings cols_name;
         for (const auto & cd : col_defs)
         {

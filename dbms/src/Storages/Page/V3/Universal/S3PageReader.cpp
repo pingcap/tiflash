@@ -87,7 +87,7 @@ std::tuple<Page, ReadBufferFromRandomAccessFilePtr, S3PageReader::ReuseStat> S3P
         ProfileEvents::increment(ProfileEvents::S3PageReaderNotReusedFile, 1);
         if (remote_fname_view.isLockFile())
         {
-            s3_remote_file = std::make_shared<S3::S3RandomAccessFile>(s3_client, remote_fname);
+            s3_remote_file = std::make_shared<S3::S3RandomAccessFile>(s3_client, remote_fname, nullptr);
         }
         else
         {
@@ -98,7 +98,7 @@ std::tuple<Page, ReadBufferFromRandomAccessFilePtr, S3PageReader::ReuseStat> S3P
                 location.toDebugString());
 #else
             // In unit test, we directly read from `location.data_file_id` which want to just focus on read write logic
-            s3_remote_file = std::make_shared<S3::S3RandomAccessFile>(s3_client, remote_fname);
+            s3_remote_file = std::make_shared<S3::S3RandomAccessFile>(s3_client, remote_fname, nullptr);
 #endif
         }
         read_buff = std::make_shared<ReadBufferFromRandomAccessFile>(s3_remote_file, prefetch_size);
@@ -117,7 +117,12 @@ std::tuple<Page, ReadBufferFromRandomAccessFilePtr, S3PageReader::ReuseStat> S3P
     try
     {
         RUNTIME_CHECK(read_buff != nullptr);
-        read_buff->seek(location.offset_in_file, SEEK_SET);
+        auto seek_ret = read_buff->seek(location.offset_in_file, SEEK_SET);
+        RUNTIME_CHECK_MSG(
+            seek_ret >= 0,
+            "Failed to seek in S3 file, ret={} location={}",
+            seek_ret,
+            location.toDebugString());
         // TODO: support checksum verification
         read_buff->readStrict(data_buf, buf_size);
     }

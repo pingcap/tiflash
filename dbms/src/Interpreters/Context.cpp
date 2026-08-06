@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Interpreters/Context.cpp
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -327,6 +329,15 @@ struct ContextShared
             std::lock_guard lock(mutex);
             databases.clear();
         }
+
+        // This is a temporary with minimal code changes to fix the issue that
+        // removing `BackgroundService::storage_gc_handle` may be blocked for a long time
+        // because IStorage::shutdown (and IDatabase::shutdown) is not called yet.
+        // So we move the call of `BackgroundService::shutdownStorageGc` here.
+        if (tmt_context)
+        {
+            tmt_context->shutdownStorageGc();
+        }
     }
 
 private:
@@ -351,6 +362,7 @@ std::unique_ptr<Context> Context::createGlobal(
     {
         res->shared->ctx_disagg->disaggregated_mode = disagg_opt->mode;
         res->shared->ctx_disagg->use_autoscaler = disagg_opt->use_autoscaler;
+        res->shared->ctx_disagg->use_columnar = disagg_opt->use_columnar;
     }
     res->quota = std::make_shared<QuotaForIntervals>();
     res->timezone_info.init();
@@ -1208,6 +1220,15 @@ void Context::dropMarkCache() const
         shared->mark_cache->reset();
 }
 
+bool Context::dropMarkCacheAndReport() const
+{
+    auto lock = getLock();
+    if (shared->mark_cache == nullptr)
+        return false;
+    shared->mark_cache->reset();
+    return true;
+}
+
 
 void Context::setMinMaxIndexCache(size_t cache_size_in_bytes)
 {
@@ -1230,6 +1251,15 @@ void Context::dropMinMaxIndexCache() const
     auto lock = getLock();
     if (shared->minmax_index_cache)
         shared->minmax_index_cache->reset();
+}
+
+bool Context::dropMinMaxIndexCacheAndReport() const
+{
+    auto lock = getLock();
+    if (shared->minmax_index_cache == nullptr)
+        return false;
+    shared->minmax_index_cache->reset();
+    return true;
 }
 
 void Context::setLocalIndexCache(size_t light_local_index_cache, size_t heavy_cache_entities)

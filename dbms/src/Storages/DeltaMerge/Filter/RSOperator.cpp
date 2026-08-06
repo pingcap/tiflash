@@ -25,12 +25,13 @@
 #include <Storages/DeltaMerge/Filter/Like.h>
 #include <Storages/DeltaMerge/Filter/Not.h>
 #include <Storages/DeltaMerge/Filter/NotEqual.h>
+#include <Storages/DeltaMerge/Filter/NullEqual.h>
 #include <Storages/DeltaMerge/Filter/Or.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Filter/Unsupported.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
+#include <Storages/MutableSupport.h>
 #include <TiDB/Schema/TiDB.h>
-
 
 namespace DB::DM
 {
@@ -38,6 +39,7 @@ namespace DB::DM
 // clang-format off
 RSOperatorPtr createAnd(const RSOperators & children)                           { return std::make_shared<And>(children); }
 RSOperatorPtr createEqual(const Attr & attr, const Field & value)               { return std::make_shared<Equal>(attr, value); }
+RSOperatorPtr createNullEqual(const Attr & attr, const Field & value)           { return std::make_shared<NullEqual>(attr, value); }
 RSOperatorPtr createGreater(const Attr & attr, const Field & value)             { return std::make_shared<Greater>(attr, value); }
 RSOperatorPtr createGreaterEqual(const Attr & attr, const Field & value)        { return std::make_shared<GreaterEqual>(attr, value); }
 RSOperatorPtr createIn(const Attr & attr, const Fields & values)                { return std::make_shared<In>(attr, values); }
@@ -70,10 +72,15 @@ RSOperatorPtr RSOperator::build(
     FilterParser::ColumnIDToAttrMap column_id_to_attr;
     for (const auto & col_info : scan_column_infos)
     {
+        ColumnID col_id = col_info.id;
+        // TiDB may request a hidden commit_ts column in TableScan with a special ColumnID.
+        // In TiFlash it is stored in `_INTERNAL_VERSION` (VersionColumnID), so create an alias mapping.
+        if (unlikely(col_id == MutSup::extra_commit_ts_col_id))
+            col_id = MutSup::version_col_id;
         auto iter = std::find_if(
             table_column_defines.cbegin(),
             table_column_defines.cend(),
-            [col_id = col_info.id](const ColumnDefine & cd) { return cd.id == col_id; });
+            [col_id](const ColumnDefine & cd) { return cd.id == col_id; });
         if (iter == table_column_defines.cend())
         {
             // Some columns may not be in the table schema, such as extra table id column.
@@ -81,7 +88,12 @@ RSOperatorPtr RSOperator::build(
             continue;
         }
         const auto & cd = *iter;
-        column_id_to_attr[cd.id] = Attr{.col_name = cd.name, .col_id = cd.id, .type = cd.type};
+        Attr attr{.col_name = cd.name, .col_id = cd.id, .type = cd.type};
+        column_id_to_attr[cd.id] = attr;
+        // When commit_ts (extra_commit_ts_col_id) is aliased to version_col_id, also register under
+        // col_info.id so that FilterParser lookups by column id from expressions find the Attr.
+        if (unlikely(col_info.id != cd.id))
+            column_id_to_attr[col_info.id] = attr;
     }
 
     auto rs_operator = FilterParser::parseDAGQuery(*dag_query, scan_column_infos, column_id_to_attr, tracing_logger);

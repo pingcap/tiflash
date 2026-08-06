@@ -5,10 +5,31 @@ Scripts to build TiFlash binaries under Rocky Linux 8
 Usage:
 
 ```bash
-> make build_tiflash_release
+> make build_tiflash_release SUFFIX=-llvm-17.0.6-v2
 # The binaries is built under directory `tiflash`, check its information
 > ./tiflash/tiflash version
+
+# build release image
+> make image_tiflash_release
 ```
+
+To build TiFlash binaries && docker image for TiDB X:
+
+```bash
+# Requires ~/.ssh access to git@github.com:tidbcloud/cloud-storage-engine (mounted into the build container).
+> make build_tiflash_next_gen_release SUFFIX=-llvm-17.0.6-v2
+# To enter the build container interactively (same mounts/env as above):
+> make shell_tiflash_next_gen_release SUFFIX=-llvm-17.0.6-v2
+
+# The binary for tiflash-write is built under directory `tiflash`
+# The binary for tiflash-compute is built under directory `tiflash-columnar`
+> ./tiflash/tiflash version
+> ./tiflash-columnar/tiflash version
+
+# build release image for TiDB X
+> make image_tiflash_next_gen_release
+```
+
 
 ## Upgrading toolchain for releasing image
 

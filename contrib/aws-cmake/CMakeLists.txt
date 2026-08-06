@@ -163,6 +163,30 @@ else ()
   message(FATAL_ERROR "Can not check the aws patch status")
 endif ()
 
+set (AWS_PATCH_FILE "${TiFlash_SOURCE_DIR}/contrib/aws-cmake/0004-Allow-set-Alibaba-cloud-oss-format-for-LifecycleRule.patch")
+execute_process(
+  COMMAND grep "// Alibaba cloud OSS specific." "${AWS_SDK_DIR}/generated/src/aws-cpp-sdk-s3/source/model/LifecycleRule.cpp"
+  RESULT_VARIABLE HAVE_APPLY_PATCH)
+# grep - Normally, the exit status is 0 if selected lines are found and 1 otherwise. But the exit status is 2 if an error occurred.
+if (HAVE_APPLY_PATCH EQUAL 1)
+  message(STATUS "aws patch ${AWS_PATCH_FILE} not apply: ${HAVE_APPLY_PATCH}, patching...")
+  # apply the patch
+  execute_process(
+    COMMAND git apply -v "${AWS_PATCH_FILE}"
+    WORKING_DIRECTORY "${AWS_SDK_DIR}"
+    COMMAND_ECHO STDOUT
+    RESULT_VARIABLE PATCH_SUCC)
+  if (NOT PATCH_SUCC EQUAL 0)
+    message(FATAL_ERROR "Can not apply aws patch ${AWS_PATCH_FILE}")
+  else ()
+    message(STATUS "aws patch done, patch=${AWS_PATCH_FILE}")
+  endif ()
+elseif (HAVE_APPLY_PATCH EQUAL 0)
+  message(STATUS "aws patch have been applied, patch=${HAVE_APPLY_PATCH}")
+else ()
+  message(FATAL_ERROR "Can not check the aws patch status")
+endif ()
+
 if(OS_LINUX OR OS_DARWIN)
     file(GLOB AWS_SDK_CORE_NET_SRC "${AWS_SDK_CORE_DIR}/source/net/linux-shared/*.cpp")
     file(GLOB AWS_SDK_CORE_PLATFORM_SRC "${AWS_SDK_CORE_DIR}/source/platform/linux-shared/*.cpp")

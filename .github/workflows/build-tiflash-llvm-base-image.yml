@@ -1,0 +1,235 @@
+name: Build TiFlash LLVM Base Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_name:
+        description: "Target GHCR image name. Leave empty to use ghcr.io/<owner>/<repo>/tiflash-llvm-base."
+        required: false
+        type: string
+      tag:
+        description: "Tag for the merged multi-arch image."
+        required: true
+        default: "llvm17-rocky8"
+        type: string
+      upload_artifacts:
+        description: "Upload downloadable image archives after publishing the multi-arch image."
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE_DOCKERFILE: ./release-linux-llvm/dockerfiles/Dockerfile-tiflash-llvm-base
+  IMAGE_BUILD_CONTEXT: ./release-linux-llvm/dockerfiles
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            docker_arch: amd64
+            tiflash_arch: x86_64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            docker_arch: arm64
+            tiflash_arch: aarch64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare image metadata
+        id: meta
+        shell: bash
+        env:
+          INPUT_IMAGE_NAME: ${{ inputs.image_name }}
+        run: |
+          set -euo pipefail
+
+          if [[ -n "${INPUT_IMAGE_NAME}" ]]; then
+            image_name="${INPUT_IMAGE_NAME}"
+          else
+            image_name="ghcr.io/${GITHUB_REPOSITORY}/tiflash-llvm-base"
+          fi
+
+          image_name="${image_name,,}"
+          if [[ "${image_name}" != ghcr.io/* ]]; then
+            echo "This workflow logs in with GITHUB_TOKEN and only supports ghcr.io image names." >&2
+            exit 1
+          fi
+
+          echo "image_name=${image_name}" >> "${GITHUB_OUTPUT}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image by digest
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ env.IMAGE_BUILD_CONTEXT }}
+          file: ${{ env.IMAGE_DOCKERFILE }}
+          platforms: ${{ matrix.platform }}
+          build-args: |
+            arch=${{ matrix.tiflash_arch }}
+          outputs: type=image,name=${{ steps.meta.outputs.image_name }},push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p "${RUNNER_TEMP}/digests"
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${RUNNER_TEMP}/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.docker_arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    name: Merge and package image
+    runs-on: ubuntu-24.04
+    needs: build
+
+    steps:
+      - name: Prepare image metadata
+        id: meta
+        shell: bash
+        env:
+          INPUT_IMAGE_NAME: ${{ inputs.image_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+
+          if [[ -n "${INPUT_IMAGE_NAME}" ]]; then
+            image_name="${INPUT_IMAGE_NAME}"
+          else
+            image_name="ghcr.io/${GITHUB_REPOSITORY}/tiflash-llvm-base"
+          fi
+
+          image_name="${image_name,,}"
+          if [[ "${image_name}" != ghcr.io/* ]]; then
+            echo "This workflow logs in with GITHUB_TOKEN and only supports ghcr.io image names." >&2
+            exit 1
+          fi
+
+          if [[ ! "${INPUT_TAG}" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
+            echo "Invalid Docker tag: ${INPUT_TAG}" >&2
+            exit 1
+          fi
+
+          echo "image_name=${image_name}" >> "${GITHUB_OUTPUT}"
+          echo "image_tag=${INPUT_TAG}" >> "${GITHUB_OUTPUT}"
+
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create multi-arch manifest
+        shell: bash
+        env:
+          IMAGE_NAME: ${{ steps.meta.outputs.image_name }}
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+
+          mapfile -t digests < <(find "${RUNNER_TEMP}/digests" -maxdepth 1 -type f -exec basename {} \; | sort)
+          if [[ "${#digests[@]}" -eq 0 ]]; then
+            echo "No digests were downloaded." >&2
+            exit 1
+          fi
+
+          sources=()
+          for digest in "${digests[@]}"; do
+            sources+=("${IMAGE_NAME}@sha256:${digest}")
+          done
+
+          docker buildx imagetools create \
+            --tag "${IMAGE_NAME}:${IMAGE_TAG}" \
+            "${sources[@]}"
+
+          docker buildx imagetools inspect "${IMAGE_NAME}:${IMAGE_TAG}"
+
+      - name: Install packaging tools
+        if: ${{ inputs.upload_artifacts }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sudo apt-get update
+          sudo apt-get install -y skopeo
+
+      - name: Package downloadable image archives
+        if: ${{ inputs.upload_artifacts }}
+        shell: bash
+        env:
+          IMAGE_NAME: ${{ steps.meta.outputs.image_name }}
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p dist
+          safe_name="$(echo "${IMAGE_NAME#*/}" | tr '/:' '--')"
+          safe_tag="$(echo "${IMAGE_TAG}" | tr '/:' '--')"
+
+          echo "${{ secrets.GITHUB_TOKEN }}" | skopeo login ghcr.io \
+            --username "${{ github.actor }}" \
+            --password-stdin
+
+          skopeo copy --all \
+            "docker://${IMAGE_NAME}:${IMAGE_TAG}" \
+            "oci-archive:dist/${safe_name}-${safe_tag}-multiarch.oci.tar"
+
+          skopeo copy --override-os linux --override-arch amd64 \
+            "docker://${IMAGE_NAME}:${IMAGE_TAG}" \
+            "docker-archive:dist/${safe_name}-${safe_tag}-linux-amd64.docker.tar:${IMAGE_NAME}:${IMAGE_TAG}"
+
+          skopeo copy --override-os linux --override-arch arm64 \
+            "docker://${IMAGE_NAME}:${IMAGE_TAG}" \
+            "docker-archive:dist/${safe_name}-${safe_tag}-linux-arm64.docker.tar:${IMAGE_NAME}:${IMAGE_TAG}"
+
+          sha256sum dist/* > dist/SHA256SUMS
+
+      - name: Upload image archives
+        if: ${{ inputs.upload_artifacts }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: tiflash-llvm-base-image-archives
+          path: dist/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1

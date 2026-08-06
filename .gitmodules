@@ -35,6 +35,16 @@
 [submodule "contrib/tiflash-proxy"]
 	path = contrib/tiflash-proxy
 	url = https://github.com/pingcap/tidb-engine-ext.git
+# TODO: drop the support for contrib/tiflash-proxy-next-gen after we fully replace it by tiflash-proxy-columnar
+[submodule "contrib/tiflash-proxy-next-gen"]
+	path = contrib/tiflash-proxy-next-gen
+	url = git@github.com:tidbcloud/cloud-storage-engine.git
+# cloud-storage-engine is a private repo. It is added as a submodule in TiFlash to bypass image 
+# release issues for tiflash-columnar-hub. This avoids private repo cloning in the internal CD pipeline.
+[submodule "contrib/cloud-storage-engine"]
+	path = contrib/cloud-storage-engine
+	url = git@github.com:tidbcloud/cloud-storage-engine.git
+	branch = cloud-engine
 [submodule "contrib/prometheus-cpp"]
 	path = contrib/prometheus-cpp
 	url = https://github.com/jupp0r/prometheus-cpp.git
@@ -152,6 +162,3 @@
 [submodule "contrib/highfive"]
 	path = contrib/highfive
 	url = https://github.com/BlueBrain/HighFive
-[submodule "contrib/tiflash-proxy-next-gen"]
-	path = contrib/tiflash-proxy-next-gen
-	url = git@github.com:tidbcloud/cloud-storage-engine.git

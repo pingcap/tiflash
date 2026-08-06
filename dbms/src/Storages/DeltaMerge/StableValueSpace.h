@@ -87,6 +87,11 @@ public:
     String getDMFilesString();
 
     /**
+     * Return the number of columns of the underlying DTFiles.
+     */
+    size_t getDMFilesNumColumns() const;
+
+    /**
      * Return the total on-disk size of the underlying DTFiles.
      * DTFiles are not fully included in the segment range will be also counted in.
      * Note: Out-of-range DTFiles may be produced by logical split.
@@ -256,6 +261,12 @@ public:
          * If the pack is partially intersected, then it is not counted.
          */
         AtLeastRowsAndBytesResult getAtLeastRowsAndBytes(const DMContext & dm_context, const RowKeyRange & range) const;
+
+        UInt64 estimatedReadRows(
+            const DMContext & dm_context,
+            const DMFilePackFilterResults & pack_filter_results,
+            UInt64 start_ts,
+            bool use_version_chain) const;
 
     private:
         LoggerPtr log;

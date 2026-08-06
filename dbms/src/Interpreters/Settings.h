@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Interpreters/Settings.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -53,6 +55,7 @@ struct Settings
     M(SettingUInt64, mpp_task_running_timeout, DEFAULT_MPP_TASK_RUNNING_TIMEOUT, "mpp task max time that running without any progress.")                                                                                                \
     M(SettingUInt64, mpp_task_waiting_timeout, DEFAULT_MPP_TASK_WAITING_TIMEOUT, "mpp task max time that waiting first data block from source input stream.")                                                                           \
     M(SettingInt64, safe_point_update_interval_seconds, 1, "The interval in seconds to update safe point from PD.")                                                                                                                     \
+    M(SettingInt64, safe_point_get_max_backoff_ms, 120000, "Max total backoff sleep time in milliseconds when fetching GC safe point from PD.")                                                                                         \
     M(SettingUInt64, max_block_size, DEFAULT_BLOCK_SIZE, "Maximum block rows for reading")                                                                                                                                              \
     M(SettingUInt64, max_block_bytes, DEFAULT_BLOCK_BYTES, "Maximum block bytes for reading")                                                                                                                                           \
     M(SettingUInt64, max_insert_block_size, DEFAULT_INSERT_BLOCK_SIZE, "The maximum block size for insertion, if we control the creation of blocks for insertion.")                                                                     \
@@ -109,7 +112,7 @@ struct Settings
                                                                                                                                                                                                                                         \
     M(SettingFloat, memory_tracker_fault_probability, 0., "For testing of `exception safety` - throw an exception every time you allocate memory with the specified probability.")                                                      \
                                                                                                                                                                                                                                         \
-    M(SettingInt64, memory_tracker_accuracy_diff_for_test, 0, "For testing of the accuracy of the memory tracker - throw an exception when real_rss is much larger than tracked amount.")                                               \
+    M(SettingInt64, memory_tracker_accuracy_diff_for_test, 0, "For testing of the accuracy of the memory tracker - throw an exception when effective RSS (rss - rss_file) is much larger than tracked amount.")                       \
                                                                                                                                                                                                                                         \
     M(SettingString, count_distinct_implementation, "uniqExact", "What aggregate function to use for implementation of count(DISTINCT ...)")                                                                                            \
                                                                                                                                                                                                                                         \
@@ -182,7 +185,7 @@ struct Settings
     M(SettingUInt64, dt_merged_file_max_size, 16 * 1024 * 1024, "Small files are merged into one or more files not larger than dt_merged_file_max_size")                                                                                \
     M(SettingDouble, dt_page_gc_threshold, 0.5, "Max valid rate of deciding to do a GC in PageStorage")                                                                                                                                 \
     M(SettingDouble, dt_page_gc_threshold_raft_data, 0.05, "Max valid rate of deciding to do a GC for BlobFile storing PageData in PageStorage")                                                                                        \
-    M(SettingInt64, enable_version_chain, 1, "Enable version chain or not: 0 - disable, 1 - enabled. "                                                                                                                                  \
+    M(SettingInt64, enable_version_chain, 0, "Enable version chain or not: 0 - disable, 1 - enabled. "                                                                                                                                  \
                                              "More details are in the comments of `enum class VersionChainMode`."                                                                                                                       \
                                              "Modifying this configuration requires a restart to reset the in-memory state.")                                                                                                           \
     /* DeltaTree engine testing settings */\
@@ -238,14 +241,17 @@ struct Settings
     M(SettingBool, remote_checkpoint_only_upload_manifest, true, "Only upload manifest data when uploading checkpoint")                                                                                                                 \
     M(SettingInt64, remote_gc_method, 1, "The method of running GC task on the remote store. 1 - lifecycle, 2 - scan.")                                                                                                                 \
     M(SettingInt64, remote_gc_interval_seconds, 3600, "The interval of running GC task on the remote store. Unit is second.")                                                                                                           \
+    M(SettingInt64, remote_summary_interval_seconds, 0, "The interval of collecting remote S3 storage summary. Unit is second. <=0 disables periodic summary task.")                                                                    \
     M(SettingInt64, remote_gc_verify_consistency, 0, "[testing] Verify the consistenct of valid locks when doing GC")                                                                                                                   \
     M(SettingInt64, remote_gc_min_age_seconds, 3600, "The file will NOT be compacted when the time difference between the last modification is less than this threshold")                                                               \
     M(SettingDouble, remote_gc_ratio, 0.5, "The files with valid rate less than this threshold will be compacted")                                                                                                                      \
     M(SettingInt64, remote_gc_small_size, 128 * 1024, "The files with total size less than this threshold will be compacted")                                                                                                           \
     /* Disagg arch reading settings */ \
     M(SettingUInt64, dt_write_page_cache_limit_size, 2 * 1024 * 1024, "Limit size per write batch when compute node writing to PageStorage cache")                                                                                      \
-    M(SettingDouble, dt_filecache_max_downloading_count_scale, 1.0, "Max downloading task count of FileCache = io thread count * dt_filecache_max_downloading_count_scale.")                                                            \
+    M(SettingDouble, dt_filecache_downloading_count_scale, 2.0, "Max concurrency of download task count of FileCache = number of logical cpu cores * dt_filecache_downloading_count_scale.")                                            \
+    M(SettingDouble, dt_filecache_max_downloading_count_scale, 10.0, "Max queue size of download task count of FileCache = number of logical cpu cores * dt_filecache_max_downloading_count_scale.")                                    \
     M(SettingUInt64, dt_filecache_min_age_seconds, 1800, "Files of the same priority can only be evicted from files that were not accessed within `dt_filecache_min_age_seconds` seconds.")                                             \
+    M(SettingUInt64, dt_filecache_wait_on_downloading_ms, 0, "When a remote cache lookup sees the same key is already being downloaded, wait up to this many milliseconds for that download to finish. 0 disables the bounded wait.")   \
     M(SettingBool, dt_enable_fetch_memtableset, true, "Whether fetching delta cache in FetchDisaggPages")                                                                                                                               \
     M(SettingUInt64, dt_fetch_pages_packet_limit_size, 512 * 1024, "Response packet bytes limit of FetchDisaggPages, 0 means one page per packet")                                                                                      \
     M(SettingDouble, dt_fetch_page_concurrency_scale, 4.0, "Concurrency of fetching pages of one query equals to num_streams * dt_fetch_page_concurrency_scale.")                                                                       \
@@ -336,7 +342,7 @@ struct Settings
     M(SettingUInt64, cop_timeout_for_remote_read, 60, "cop timeout seconds for remote read")                                                                                                                                            \
     M(SettingUInt64, auto_spill_check_min_interval_ms, 10, "The minimum interval in millisecond between two successive auto spill check, default value is 100, 0 means no limit")                                                       \
     M(SettingUInt64, join_probe_cache_columns_threshold, 1000, "The threshold that a join key will cache its output columns during probe stage, 0 means never cache")                                                                   \
-    M(SettingBool, enable_hash_join_v2, false, "Enable hash join v2")                                                                                                                                                                    \
+    M(SettingBool, enable_hash_join_v2, false, "Enable hash join v2")                                                                                                                                                                   \
     M(SettingUInt64, join_v2_max_block_size, 8192, "hash join v2 max block size")                                                                                                                                                       \
     M(SettingUInt64, join_v2_probe_enable_prefetch_threshold, 1024 * 1024, "hash join v2 minimum row number of join build table to use prefetch during join probe phase")                                                               \
     M(SettingUInt64, join_v2_probe_prefetch_step, 16, "hash join v2 probe prefetch length")                                                                                                                                             \

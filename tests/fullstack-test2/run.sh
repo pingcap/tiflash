@@ -38,6 +38,14 @@ clean_data_log
 # FIXME: now vector does not support run with encryption-at-rest enabled
 ${COMPOSE} -f cluster.yaml -f tiflash-dt-disable-encrypt.yaml up -d
 wait_env
+
+echo "PD version:"
+${COMPOSE} -f cluster.yaml -f tiflash-dt-disable-encrypt.yaml exec -T pd0 bash -c '/pd-server -V'
+echo "TiDB version:"
+${COMPOSE} -f cluster.yaml -f tiflash-dt-disable-encrypt.yaml exec -T tidb0 bash -c '/tidb-server -V'
+echo "TiKV version:"
+${COMPOSE} -f cluster.yaml -f tiflash-dt-disable-encrypt.yaml exec -T tikv0 bash -c '/tikv-server -V'
+
 ${COMPOSE} -f cluster.yaml -f tiflash-dt-disable-encrypt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test-index'
 ${COMPOSE} -f cluster.yaml -f tiflash-dt-disable-encrypt.yaml down
 clean_data_log

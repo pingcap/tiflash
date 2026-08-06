@@ -16,6 +16,9 @@
 enable-experimental = true
 enable-telemetry = false
 internal-proxy = false
+
+# We only setup 1 tikv for testing.
+[replication]
 max-replicas = 1
 
 # pre-allocated keyspace for next-gen

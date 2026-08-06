@@ -30,6 +30,7 @@ public:
     AddExtraTableIDColumnTransformAction(const DM::ColumnDefines & columns_to_read_, int extra_table_id_index_);
 
     bool transform(Block & block, TableID physical_table_id);
+    bool fill(Block & block, TableID physical_table_id);
 
     Block getHeader() const;
 

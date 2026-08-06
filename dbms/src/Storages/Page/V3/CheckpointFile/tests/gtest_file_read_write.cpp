@@ -52,16 +52,16 @@ public:
         RUNTIME_CHECK(location.offset_in_file > 0);
         RUNTIME_CHECK(location.data_file_id != nullptr && !location.data_file_id->empty());
 
-        std::string ret;
-        ret.resize(location.size_in_file);
+        std::string res;
+        res.resize(location.size_in_file);
 
         auto data_file = PosixRandomAccessFile::create(dir + "/" + *location.data_file_id);
         ReadBufferFromRandomAccessFile buf(data_file);
-        buf.seek(location.offset_in_file);
-        auto n = buf.readBig(ret.data(), location.size_in_file);
+        RUNTIME_CHECK(buf.seek(location.offset_in_file) >= 0);
+        auto n = buf.readBig(res.data(), location.size_in_file);
         RUNTIME_CHECK(n == location.size_in_file);
 
-        return ret;
+        return res;
     }
 
 protected:

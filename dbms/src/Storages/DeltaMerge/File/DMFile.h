@@ -24,7 +24,6 @@
 #include <Storages/DeltaMerge/File/DMFile_fwd.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/S3/S3Filename.h>
-#include <Storages/S3/S3RandomAccessFile.h>
 #include <TiDB/Schema/TiDB.h>
 #include <common/logger_useful.h>
 
@@ -133,6 +132,7 @@ public:
     const DMFileMeta::PackProperties & getPackProperties() const { return meta->pack_properties; }
     const ColumnStats & getColumnStats() const { return meta->column_stats; }
     const std::unordered_set<ColId> & getColumnIndices() const { return meta->column_indices; }
+    size_t getNumColumns() const { return meta->column_stats.size(); }
 
     // only used in gtest
     void clearPackProperties() const { meta->pack_properties.clear_property(); }
@@ -358,6 +358,7 @@ public:
     friend class DMFileLocalIndexWriter;
     friend class DMFileReader;
     friend class MarkLoader;
+    friend class MinMaxIndexLoader;
     friend class ColumnReadStream;
     friend class DMFilePackFilter;
     friend class DMFileBlockInputStreamBuilder;

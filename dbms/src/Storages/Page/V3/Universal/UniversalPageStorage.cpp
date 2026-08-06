@@ -35,6 +35,7 @@
 #include <common/logger_useful.h>
 #include <fiu.h>
 
+#include <functional>
 #include <mutex>
 
 namespace DB
@@ -109,21 +110,56 @@ void UniversalPageStorage::write(
     Stopwatch watch;
     SCOPE_EXIT(
         { GET_METRIC(tiflash_storage_page_write_duration_seconds, type_total).Observe(watch.elapsedSeconds()); });
-    bool has_writes_from_remote = write_batch.hasWritesFromRemote();
-    if (has_writes_from_remote)
+    const size_t remote_write_count = write_batch.writesRemoteCount();
+    std::unordered_set<String> created_pre_lock_keys;
+    if (remote_write_count > 0)
     {
         assert(remote_locks_local_mgr != nullptr);
         // Before ingesting remote pages/remote external pages, we need to create "lock" on S3
         // to ensure the correctness between FAP and S3GC.
-        // If any "lock" failed to be created, then it will throw exception.
-        // Note that if `remote_locks_local_mgr`'s store_id is not inited, it will blocks until inited
-        remote_locks_local_mgr->createS3LockForWriteBatch(write_batch);
+        // Note that if `remote_locks_local_mgr`'s store_id is not inited, this function
+        // call will be blocked until inited.
+        // Assumption: different write batches should not concurrently create lock
+        // for the same remote data file. Under this assumption, failure-path
+        // cleanup of `created_pre_lock_keys` is ownership-safe for this batch.
+        // If this invariant changes in the future, pre-lock ownership tracking
+        // (for example, ref-count per lock key) should be introduced.
+        created_pre_lock_keys = remote_locks_local_mgr->createS3LockForWriteBatch(write_batch);
     }
-    auto edit = blob_store->write(std::move(write_batch), page_type, write_limiter);
-    auto applied_lock_ids = page_directory->apply(std::move(edit), write_limiter);
-    if (has_writes_from_remote)
+    std::unordered_set<String> applied_lock_ids;
+    const char * failed_stage = "blob_store->write";
+    try
+    {
+        auto edit = blob_store->write(std::move(write_batch), page_type, write_limiter);
+        failed_stage = "page_directory->apply";
+        applied_lock_ids = page_directory->apply(std::move(edit), write_limiter);
+    }
+    catch (...)
+    {
+        if (remote_write_count > 0)
+        {
+            // If write fails after pre-lock creation, clean these pre-lock keys
+            // to avoid residual entries in checkpoint_manager.pre_lock_keys.
+            remote_locks_local_mgr->cleanPreLockKeysOnWriteFailure(std::move(created_pre_lock_keys));
+            tryLogCurrentException(
+                log,
+                fmt::format(
+                    "Remote write batch failed, stage={} remote_write_count={}",
+                    failed_stage,
+                    remote_write_count));
+        }
+        throw;
+    }
+    if (remote_write_count > 0)
     {
         assert(remote_locks_local_mgr != nullptr);
+        if (applied_lock_ids.empty())
+        {
+            LOG_WARNING(
+                log,
+                "Remote write batch has lock keys but no applied lock ids, remote_write_count={}",
+                remote_write_count);
+        }
         // Remove the applied locks from checkpoint_manager.pre_lock_files
         remote_locks_local_mgr->cleanAppliedS3ExternalFiles(std::move(applied_lock_ids));
     }
@@ -140,7 +176,7 @@ Page UniversalPageStorage::read(
     GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
     if (!snapshot)
     {
-        snapshot = this->getSnapshot("");
+        snapshot = this->getGeneralSnapshot("");
     }
 
     auto page_entry = throw_on_not_exist ? page_directory->getByID(page_id, snapshot)
@@ -198,7 +234,7 @@ UniversalPageMap UniversalPageStorage::read(
     GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
     if (!snapshot)
     {
-        snapshot = this->getSnapshot("");
+        snapshot = this->getGeneralSnapshot("");
     }
 
     auto do_read = [&](const UniversalPageIdAndEntries & page_entries) {
@@ -255,7 +291,7 @@ UniversalPageMap UniversalPageStorage::read(
     GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
     if (!snapshot)
     {
-        snapshot = this->getSnapshot("");
+        snapshot = this->getGeneralSnapshot("");
     }
 
     // get the entries from directory, keep track
@@ -321,7 +357,7 @@ void UniversalPageStorage::traverse(
 {
     if (!snapshot)
     {
-        snapshot = this->getSnapshot("");
+        snapshot = this->getGeneralSnapshot("");
     }
 
     // TODO: This could hold the read lock of `page_directory` for a long time
@@ -353,7 +389,7 @@ void UniversalPageStorage::traverseEntries(
 {
     if (!snapshot)
     {
-        snapshot = this->getSnapshot("");
+        snapshot = this->getGeneralSnapshot("");
     }
 
     // TODO: This could hold the read lock of `page_directory` for a long time
@@ -371,7 +407,7 @@ UniversalPageId UniversalPageStorage::getNormalPageId(
 {
     if (!snapshot)
     {
-        snapshot = this->getSnapshot("");
+        snapshot = this->getGeneralSnapshot("");
     }
 
     return page_directory->getNormalPageId(page_id, snapshot, throw_on_not_exist);
@@ -381,7 +417,7 @@ DB::PageEntry UniversalPageStorage::getEntry(const UniversalPageId & page_id, Sn
 {
     if (!snapshot)
     {
-        snapshot = this->getSnapshot("");
+        snapshot = this->getGeneralSnapshot("");
     }
 
     try
@@ -411,7 +447,7 @@ std::optional<DB::PS::V3::CheckpointLocation> UniversalPageStorage::getCheckpoin
 {
     if (!snapshot)
     {
-        snapshot = this->getSnapshot("");
+        snapshot = this->getGeneralSnapshot("");
     }
 
     try
@@ -512,7 +548,7 @@ PS::V3::S3LockLocalManager::ExtraLockInfo UniversalPageStorage::allocateNewUploa
 bool UniversalPageStorage::canSkipCheckpoint() const
 {
     std::scoped_lock lock(checkpoint_mu);
-    auto snap = page_directory->createSnapshot(/*tracing_id*/ "canSkipCheckpoint");
+    auto snap = page_directory->createSnapshot(SnapshotType::General, /*tracing_id*/ "canSkipCheckpoint");
     return snap->sequence == last_checkpoint_sequence;
 }
 
@@ -522,7 +558,9 @@ std::optional<PS::V3::CPDataDumpStats> UniversalPageStorage::dumpIncrementalChec
     std::scoped_lock lock(checkpoint_mu);
     Stopwatch sw;
     // Let's keep this snapshot until all finished, so that blob data will not be GCed.
-    auto snap = page_directory->createSnapshot(/*tracing_id*/ "dumpIncrementalCheckpoint");
+    auto snap = page_directory->createSnapshot(
+        SnapshotType::General,
+        /*tracing_id*/ "dumpIncrementalCheckpoint");
 
     if (snap->sequence == last_checkpoint_sequence && !options.full_compact)
         return PS::V3::CPDataDumpStats{.has_new_data = false};
@@ -534,7 +572,7 @@ std::optional<PS::V3::CPDataDumpStats> UniversalPageStorage::dumpIncrementalChec
         sequence = options.override_sequence.value();
 
     auto edit_from_mem = page_directory->dumpSnapshotToEdit(snap);
-    // The output of `PageDirectory::dumpSnapshotToEdit` may contain page ids which are logically deleted but have not been gced yet.
+    // The output of `PageDirectory::dumpSnapshotToEdit` may contain page ids which are logically deleted but have not been GCed yet.
     // These page ids may be GC-ed when dumping snapshot, so we cannot read data of these page ids.
     // So we create a clean temp page_directory here and use it to dump edits with all visible page ids for `snap`.
     // But if we just upload manifest without reading page data, we can skip this step.

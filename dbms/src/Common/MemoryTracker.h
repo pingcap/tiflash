@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Common/MemoryTracker.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +22,7 @@
 #include <atomic>
 #include <boost/noncopyable.hpp>
 
-extern std::atomic<Int64> real_rss, proc_num_threads, baseline_of_query_mem_tracker;
+extern std::atomic<Int64> real_rss, real_rss_file, proc_num_threads, baseline_of_query_mem_tracker;
 extern std::atomic<UInt64> proc_virt_size;
 namespace CurrentMetrics
 {
@@ -77,6 +79,7 @@ class MemoryTracker : public std::enable_shared_from_this<MemoryTracker>
     {}
 
     void reportAmount();
+    void checkRssLimitImpl(bool require_tracked_growth, Int64 will_be, Int64 size) const;
 
 public:
     /// Using `std::shared_ptr` and `new` instread of `std::make_shared` is because `std::make_shared` cannot call private constructors.
@@ -104,6 +107,10 @@ public:
     /** This function should be called after memory deallocation.
       */
     void free(Int64 size);
+
+    /// Explicitly checks whether process RSS is already much larger than the configured limit.
+    /// Unlike alloc(0), this probe does not require tracked memory growth in the current tracker.
+    void checkRssLimit() const;
 
     Int64 get() const { return amount.load(std::memory_order_relaxed); }
 
@@ -182,6 +189,7 @@ namespace CurrentMemoryTracker
 void disableThreshold();
 void submitLocalDeltaMemory();
 Int64 getLocalDeltaMemory();
+void checkRssLimit();
 void alloc(Int64 size);
 void realloc(Int64 old_size, Int64 new_size);
 void free(Int64 size);

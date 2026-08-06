@@ -26,6 +26,8 @@ namespace DB
 {
 namespace FailPoints
 {
+extern const char force_gc_try_segment_merge_generic_error[];
+extern const char force_gc_try_segment_merge_s3_error[];
 extern const char skip_check_segment_update[];
 } // namespace FailPoints
 
@@ -136,6 +138,59 @@ try
 
     ASSERT_EQ(200, getRowsN(0, 200));
     ASSERT_EQ(2000, getRowsN());
+}
+CATCH
+
+TEST_F(DeltaMergeStoreGCMergeTest, MergeableSegmentsCapLimitsFanIn)
+try
+{
+    ensureSegmentBreakpoints({0, 10, 20, 30, 40, 50});
+    db_context->getGlobalContext().getSettingsRef().dt_segment_limit_rows = 1000;
+    db_context->getGlobalContext().getSettingsRef().dt_segment_limit_size = 1ULL << 30;
+
+    store->setGcMergeableSegmentsCapForTest(3);
+    auto segments_to_merge = store->getMergeableSegments(dm_context, getSegmentAt(0));
+    ASSERT_EQ(segments_to_merge.size(), 3);
+    ASSERT_EQ(store->getGcMergeableSegmentsCapForTest(), 3);
+}
+CATCH
+
+TEST_F(DeltaMergeStoreGCMergeTest, S3ErrorReducesCapAndSuccessfulMergeRecoversIt)
+try
+{
+    ensureSegmentBreakpoints({0, 10, 20, 30, 40, 50});
+    db_context->getGlobalContext().getSettingsRef().dt_segment_limit_rows = 1000;
+
+    ASSERT_EQ(store->getGcMergeableSegmentsCapForTest(), DeltaMergeStore::gc_mergeable_segments_cap_default);
+
+    FailPointHelper::enableFailPoint(FailPoints::force_gc_try_segment_merge_s3_error);
+    ASSERT_THROW(store->onSyncGc(1, gc_options), DB::Exception);
+    ASSERT_EQ(store->getGcMergeableSegmentsCapForTest(), DeltaMergeStore::gc_mergeable_segments_cap_default / 2);
+
+    ASSERT_THROW(store->onSyncGc(1, gc_options), DB::Exception);
+    ASSERT_EQ(store->getGcMergeableSegmentsCapForTest(), DeltaMergeStore::gc_mergeable_segments_cap_default / 4);
+
+    FailPointHelper::disableFailPoint(FailPoints::force_gc_try_segment_merge_s3_error);
+    ASSERT_EQ(store->onSyncGc(1, gc_options), 1);
+    ASSERT_EQ(
+        store->getGcMergeableSegmentsCapForTest(),
+        DeltaMergeStore::gc_mergeable_segments_cap_default / 4
+            + DeltaMergeStore::gc_mergeable_segments_cap_recover_step);
+}
+CATCH
+
+TEST_F(DeltaMergeStoreGCMergeTest, NonS3ErrorDoesNotReduceCap)
+try
+{
+    ensureSegmentBreakpoints({0, 10, 20, 30, 40, 50});
+    db_context->getGlobalContext().getSettingsRef().dt_segment_limit_rows = 1000;
+    store->setGcMergeableSegmentsCapForTest(8);
+
+    FailPointHelper::enableFailPoint(FailPoints::force_gc_try_segment_merge_generic_error);
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_gc_try_segment_merge_generic_error); });
+
+    ASSERT_THROW(store->onSyncGc(1, gc_options), DB::Exception);
+    ASSERT_EQ(store->getGcMergeableSegmentsCapForTest(), 8);
 }
 CATCH
 

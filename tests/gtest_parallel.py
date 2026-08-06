@@ -253,6 +253,7 @@ class Task(object):
             try:
                 self.exit_code = sigint_handler.wait(task)
             except sigint_handler.ProcessWasInterrupted:
+                self.runtime_ms = int(1000 * (time.time() - begin))
                 thread.exit()
         self.runtime_ms = int(1000 * (time.time() - begin))
         self.last_execution_time = None if self.exit_code else self.runtime_ms
@@ -366,13 +367,27 @@ class FilterFormat(object):
     def print_tests(self, message, tasks, print_try_number):
         self.out.permanent_line("%s (%s/%s):" %
                                 (message, len(tasks), self.total_tasks))
+        is_interrupted = message == 'INTERRUPTED TESTS'
         for task in sorted(tasks):
+            try_number_suffix = (
+                (" (try #%d)" % task.execution_number) if print_try_number else "")
+            if is_interrupted:
+                if task.runtime_ms is not None:
+                    self.out.permanent_line(
+                        "Interrupted: %d ms: %s %s%s" % (
+                            task.runtime_ms, task.test_binary, task.test_name,
+                            try_number_suffix))
+                else:
+                    self.out.permanent_line(
+                        "Interrupted: %s %s%s" % (
+                            task.test_binary, task.test_name, try_number_suffix))
+                continue
+
             runtime_ms = 'Interrupted'
             if task.runtime_ms is not None:
                 runtime_ms = '%d ms' % task.runtime_ms
             self.out.permanent_line("%11s: %s %s%s" % (
-                runtime_ms, task.test_binary, task.test_name,
-                (" (try #%d)" % task.execution_number) if print_try_number else ""))
+                runtime_ms, task.test_binary, task.test_name, try_number_suffix))
 
     def log_exit(self, task):
         with self.stdout_lock:

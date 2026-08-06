@@ -108,5 +108,7 @@ protected:
     };
 
     void checkBitmap(const CheckBitmapOptions & opt);
+
+    UInt64 estimatedBytesOfInternalColumns(UInt64 start_ts, Int64 enable_version_chain);
 };
 } // namespace DB::DM::tests

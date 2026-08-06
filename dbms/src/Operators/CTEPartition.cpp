@@ -96,7 +96,11 @@ CTEOpStatus CTEPartition::pushBlock(const Block & block)
     this->memory_usage.fetch_add(block.bytes());
     this->blocks.push_back(BlockWithCounter(block, static_cast<Int16>(this->expected_source_num)));
     if constexpr (for_test)
+    {
+#ifndef NDEBUG
         this->cv_for_test->notify_all();
+#endif
+    }
     else
         this->pipe_cv->notifyAll();
 

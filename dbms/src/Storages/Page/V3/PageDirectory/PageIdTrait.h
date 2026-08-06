@@ -15,6 +15,7 @@
 
 #include <Storages/Page/PageDefinesBase.h>
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
+#include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 
 namespace DB::PS::V3
 {
@@ -30,6 +31,7 @@ struct PageIdTrait
     static inline Prefix getPrefix(const PageId & page_id) { return page_id.high; }
     static inline PageIdU64 getPageMapKey(const PageId & page_id) { return page_id.low; }
     static inline size_t getPageIDSize(const PageId & page_id) { return sizeof(page_id); }
+    static inline bool isFromRaftLayer(const PageId & /*page_id*/) { return false; }
 };
 } // namespace u128
 namespace universal
@@ -48,6 +50,26 @@ struct PageIdTrait
     static inline PageId getPageMapKey(const PageId & page_id) { return page_id; }
 
     static inline size_t getPageIDSize(const PageId & page_id) { return page_id.size(); }
+
+    // Return true if the page_id is generated for raft engine or kv engine.
+    static inline bool isFromRaftLayer(const PageId & page_id)
+    {
+        switch (UniversalPageIdFormat::getUniversalPageIdType(page_id))
+        {
+        case StorageType::Unknown:
+        case StorageType::Log:
+        case StorageType::Data:
+        case StorageType::Meta:
+        case StorageType::KVStore:
+        case StorageType::LocalKV:
+        case StorageType::_MAX_STORAGE_TYPE_:
+            return false;
+        case StorageType::RaftEngine:
+        case StorageType::KVEngine:
+            return true;
+            break;
+        }
+    }
 };
 } // namespace universal
 } // namespace DB::PS::V3

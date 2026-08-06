@@ -20,6 +20,7 @@
 #include <Storages/KVStore/Read/LearnerRead.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TiKVHelpers/DecodedLockCFValue.h>
+#include <Storages/KVStore/TiKVHelpers/PDTiKVClient.h>
 #include <Storages/KVStore/Utils/AsyncTasks.h>
 #include <Storages/KVStore/tests/region_kvstore_test.h>
 #include <Storages/Page/V3/PageDefines.h>
@@ -33,6 +34,7 @@
 #include <common/config_common.h> // Included for `USE_JEMALLOC`
 
 #include <limits>
+#include <thread>
 
 
 namespace DB::tests
@@ -391,11 +393,23 @@ try
                 ctx.getTMTContext()),
             EngineStoreApplyRes::None);
 
+        request.set_cmd_type(::raft_cmdpb::AdminCmdType::TransferLeader);
+        response = response2;
+        ASSERT_EQ(
+            kvs.handleAdminRaftCmd(
+                raft_cmdpb::AdminRequest{request},
+                std::move(response),
+                region_id,
+                26,
+                6,
+                ctx.getTMTContext()),
+            EngineStoreApplyRes::None);
+
         {
             kvs.debugGetConfigMut().debugSetCompactLogConfig(0, 0, 0, 0);
             request.set_cmd_type(::raft_cmdpb::AdminCmdType::CompactLog);
             ASSERT_EQ(
-                kvs.handleAdminRaftCmd(std::move(request), std::move(response2), region_id, 26, 6, ctx.getTMTContext()),
+                kvs.handleAdminRaftCmd(std::move(request), std::move(response2), region_id, 27, 6, ctx.getTMTContext()),
                 EngineStoreApplyRes::Persist);
         }
     }
@@ -974,11 +988,10 @@ try
     auto & ctx = TiFlashTestEnv::getGlobalContext();
     ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
     UInt64 region_id = 1;
-    TableID table_id;
 
     initStorages();
     KVStore & kvs = getKVS();
-    table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
+    TableID table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
     LOG_INFO(&Poco::Logger::get("Test"), "generated table_id {}", table_id);
     proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), region_id, std::nullopt);
     auto kvr1 = kvs.getRegion(region_id);
@@ -1061,5 +1074,277 @@ try
     }
 }
 CATCH
+
+TEST(KeyspacesGCInfoTest, Basic)
+{
+    KeyspacesGCInfo info;
+    ASSERT_EQ(info.getGCSafepoint(1), std::nullopt);
+    info.updateGCSafepoint(1, 10086);
+    // get hit cache
+    auto gc_info = info.getGCSafepoint(1);
+    ASSERT_TRUE(gc_info.has_value());
+    ASSERT_EQ(gc_info->gc_safepoint, 10086);
+    // get hit cache second time
+    gc_info = info.getGCSafepoint(1);
+    ASSERT_TRUE(gc_info.has_value());
+    ASSERT_EQ(gc_info->gc_safepoint, 10086);
+    // update with a smaller safepoint should not move cache backwards
+    ASSERT_EQ(info.updateGCSafepoint(1, 10085), 10086);
+    gc_info = info.getGCSafepoint(1);
+    ASSERT_TRUE(gc_info.has_value());
+    ASSERT_EQ(gc_info->gc_safepoint, 10086);
+    // update with a larger safepoint should advance the cache
+    ASSERT_EQ(info.updateGCSafepoint(1, 10087), 10087);
+    gc_info = info.getGCSafepoint(1);
+    ASSERT_TRUE(gc_info.has_value());
+    ASSERT_EQ(gc_info->gc_safepoint, 10087);
+    // get with valid seconds, not expired
+    gc_info = info.getGCSafepointIfValid(1, 10);
+    ASSERT_TRUE(gc_info.has_value());
+    ASSERT_EQ(gc_info->gc_safepoint, 10087);
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    // get with valid seconds, expired
+    gc_info = info.getGCSafepointIfValid(1, 1);
+    ASSERT_EQ(gc_info, std::nullopt);
+    // remove keyspace
+    info.removeGCSafepoint(1);
+    ASSERT_EQ(info.getGCSafepoint(1), std::nullopt);
+}
+
+namespace
+{
+
+class CountingPDClient : public pingcap::pd::IClient
+{
+public:
+    explicit CountingPDClient(uint64_t gc_safe_point_)
+        : gc_safe_point(gc_safe_point_)
+    {}
+
+    uint64_t getClusterID() override { return 1; }
+
+    uint64_t getTS() override { return 0; }
+
+    pdpb::GetRegionResponse getRegionByKey(const std::string &) override
+    {
+        throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
+    }
+
+    pdpb::GetRegionResponse getRegionByID(uint64_t) override
+    {
+        throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
+    }
+
+    metapb::Store getStore(uint64_t) override
+    {
+        throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
+    }
+
+    bool isClusterBootstrapped() override { return true; }
+
+    std::vector<metapb::Store> getAllStores(bool) override
+    {
+        throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
+    }
+
+    uint64_t getGCSafePoint() override { return gc_safe_point; }
+
+    uint64_t getGCSafePointV2(KeyspaceID) override { return gc_safe_point; }
+
+    pdpb::GetGCStateResponse getGCState(KeyspaceID keyspace_id) override
+    {
+        ++gc_state_call_count;
+
+        pdpb::GetGCStateResponse gc_state;
+        auto * hdr = gc_state.mutable_header();
+        hdr->set_cluster_id(1);
+        hdr->mutable_error()->set_type(pdpb::ErrorType::OK);
+        auto * state = gc_state.mutable_gc_state();
+        state->mutable_keyspace_scope()->set_keyspace_id(keyspace_id);
+        state->set_is_keyspace_level_gc(true);
+        state->set_txn_safe_point(gc_safe_point);
+        state->set_gc_safe_point(gc_safe_point);
+        return gc_state;
+    }
+
+    pdpb::GetAllKeyspacesGCStatesResponse getAllKeyspacesGCStates() override
+    {
+        throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
+    }
+
+    KeyspaceID getKeyspaceID(const std::string &) override
+    {
+        throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
+    }
+
+    void update(const std::vector<std::string> &, const pingcap::ClusterConfig &) override
+    {
+        throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
+    }
+
+    bool isMock() override { return false; }
+
+    std::string getLeaderUrl() override
+    {
+        throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
+    }
+
+    resource_manager::ListResourceGroupsResponse listResourceGroups(
+        const resource_manager::ListResourceGroupsRequest &) override
+    {
+        throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
+    }
+
+    resource_manager::GetResourceGroupResponse getResourceGroup(
+        const resource_manager::GetResourceGroupRequest &) override
+    {
+        throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
+    }
+
+    resource_manager::PutResourceGroupResponse addResourceGroup(
+        const resource_manager::PutResourceGroupRequest &) override
+    {
+        throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
+    }
+
+    resource_manager::PutResourceGroupResponse modifyResourceGroup(
+        const resource_manager::PutResourceGroupRequest &) override
+    {
+        throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
+    }
+
+    resource_manager::DeleteResourceGroupResponse deleteResourceGroup(
+        const resource_manager::DeleteResourceGroupRequest &) override
+    {
+        throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
+    }
+
+    resource_manager::TokenBucketsResponse acquireTokenBuckets(const resource_manager::TokenBucketsRequest &) override
+    {
+        throw pingcap::Exception("not implemented", pingcap::ErrorCodes::UnknownError);
+    }
+
+    uint64_t gc_safe_point;
+    size_t gc_state_call_count = 0;
+};
+
+} // namespace
+
+TEST(PDClientHelperTest, CacheOnlyReadPathDoesNotFetchFromPD)
+{
+    constexpr KeyspaceID keyspace_id = 9527;
+    PDClientHelper::removeKeyspaceGCSafepoint(keyspace_id);
+
+    auto pd_client = std::make_shared<CountingPDClient>(123456);
+
+    // Read path should not warm the cache on a miss.
+    auto safe_point = PDClientHelper::getGCSafePointWithRetry(
+        pd_client,
+        keyspace_id,
+        /* safe_point_update_interval_seconds= */ 30,
+        /* safe_point_get_max_backoff_ms= */ 1000,
+        GCSafepointFetchStrategy::CacheOnly);
+    ASSERT_EQ(safe_point, 0);
+    ASSERT_EQ(pd_client->gc_state_call_count, 0);
+
+    // Existing non-query paths still refresh the cache from PD.
+    safe_point = PDClientHelper::getGCSafePointWithRetry(
+        pd_client,
+        keyspace_id,
+        /* safe_point_update_interval_seconds= */ 30,
+        /* safe_point_get_max_backoff_ms= */ 1000);
+    ASSERT_EQ(safe_point, 123456);
+    ASSERT_EQ(pd_client->gc_state_call_count, 1);
+
+    // Once refreshed by other paths, read path consumes the cached value only.
+    safe_point = PDClientHelper::getGCSafePointWithRetry(
+        pd_client,
+        keyspace_id,
+        /* safe_point_update_interval_seconds= */ 30,
+        /* safe_point_get_max_backoff_ms= */ 1000,
+        GCSafepointFetchStrategy::CacheOnly);
+    ASSERT_EQ(safe_point, 123456);
+    ASSERT_EQ(pd_client->gc_state_call_count, 1);
+
+    PDClientHelper::removeKeyspaceGCSafepoint(keyspace_id);
+}
+
+TEST(PDClientHelperTest, CacheOnlyReadPathCanReturnExpiredCache)
+{
+    constexpr KeyspaceID keyspace_id = 9528;
+    PDClientHelper::removeKeyspaceGCSafepoint(keyspace_id);
+
+    auto pd_client = std::make_shared<CountingPDClient>(223344);
+
+    auto safe_point = PDClientHelper::getGCSafePointWithRetry(
+        pd_client,
+        keyspace_id,
+        /* safe_point_update_interval_seconds= */ 30,
+        /* safe_point_get_max_backoff_ms= */ 1000);
+    ASSERT_EQ(safe_point, 223344);
+    ASSERT_EQ(pd_client->gc_state_call_count, 1);
+
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+
+    // The read path keeps using the last observed safepoint even after the cache is
+    // stale. Only non-query callers are allowed to advance it via PD.
+    safe_point = PDClientHelper::getGCSafePointWithRetry(
+        pd_client,
+        keyspace_id,
+        /* safe_point_update_interval_seconds= */ 1,
+        /* safe_point_get_max_backoff_ms= */ 1000,
+        GCSafepointFetchStrategy::CacheOnly);
+    ASSERT_EQ(safe_point, 223344);
+    ASSERT_EQ(pd_client->gc_state_call_count, 1);
+
+    pd_client->gc_safe_point = 223355;
+    safe_point = PDClientHelper::getGCSafePointWithRetry(
+        pd_client,
+        keyspace_id,
+        /* safe_point_update_interval_seconds= */ 1,
+        /* safe_point_get_max_backoff_ms= */ 1000);
+    ASSERT_EQ(safe_point, 223355);
+    ASSERT_EQ(pd_client->gc_state_call_count, 2);
+
+    PDClientHelper::removeKeyspaceGCSafepoint(keyspace_id);
+}
+
+TEST(PDClientHelperTest, CacheRefreshDoesNotMoveSafepointBackwards)
+{
+    constexpr KeyspaceID keyspace_id = 9529;
+    PDClientHelper::removeKeyspaceGCSafepoint(keyspace_id);
+
+    auto pd_client = std::make_shared<CountingPDClient>(334455);
+
+    auto safe_point = PDClientHelper::getGCSafePointWithRetry(
+        pd_client,
+        keyspace_id,
+        /* safe_point_update_interval_seconds= */ 30,
+        /* safe_point_get_max_backoff_ms= */ 1000);
+    ASSERT_EQ(safe_point, 334455);
+    ASSERT_EQ(pd_client->gc_state_call_count, 1);
+
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+
+    pd_client->gc_safe_point = 334400;
+    safe_point = PDClientHelper::getGCSafePointWithRetry(
+        pd_client,
+        keyspace_id,
+        /* safe_point_update_interval_seconds= */ 1,
+        /* safe_point_get_max_backoff_ms= */ 1000);
+    ASSERT_EQ(safe_point, 334455);
+    ASSERT_EQ(pd_client->gc_state_call_count, 2);
+
+    safe_point = PDClientHelper::getGCSafePointWithRetry(
+        pd_client,
+        keyspace_id,
+        /* safe_point_update_interval_seconds= */ 30,
+        /* safe_point_get_max_backoff_ms= */ 1000,
+        GCSafepointFetchStrategy::CacheOnly);
+    ASSERT_EQ(safe_point, 334455);
+    ASSERT_EQ(pd_client->gc_state_call_count, 2);
+
+    PDClientHelper::removeKeyspaceGCSafepoint(keyspace_id);
+}
 
 } // namespace DB::tests

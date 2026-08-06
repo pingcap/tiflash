@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Functions/FunctionsGeo.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,6 +26,7 @@
 
 #include <array>
 #include <ext/range.h>
+#include <vector>
 
 #define DEGREES_IN_RADIANS (M_PI / 180.0)
 #define EARTH_RADIUS_IN_METERS 6372797.560856
@@ -255,7 +258,7 @@ private:
 
         /// Prepare array of ellipses.
         size_t ellipses_count = (arguments.size() - 2) / 4;
-        Ellipse ellipses[ellipses_count];
+        std::vector<Ellipse> ellipses(ellipses_count);
 
         for (const auto ellipse_idx : ext::range(0, ellipses_count))
         {
@@ -312,7 +315,7 @@ private:
                 dst_data[row] = isPointInEllipses(
                     col_vec_x->getData()[row],
                     col_vec_y->getData()[row],
-                    ellipses,
+                    ellipses.data(),
                     ellipses_count,
                     start_index);
             }
@@ -327,7 +330,7 @@ private:
             UInt8 res = isPointInEllipses(
                 col_const_x->getValue<Float64>(),
                 col_const_y->getValue<Float64>(),
-                ellipses,
+                ellipses.data(),
                 ellipses_count,
                 start_index);
             block.getByPosition(result).column = DataTypeUInt8().createColumnConst(size, UInt64(res));

@@ -473,7 +473,12 @@ try
         .dir = fmt::format("{}/fs_cache", getTemporaryPath()),
         .capacity = 1 * 1000 * 1000 * 1000,
     };
-    FileCache::initialize(db_context->getGlobalContext().getPathCapacity(), file_cache_config);
+    UInt16 vcores = 8;
+    FileCache::initialize(
+        db_context->getGlobalContext().getPathCapacity(),
+        file_cache_config,
+        vcores,
+        db_context->getGlobalContext().getIORateLimiter());
 
     auto dm_file = prepareDMFileRemote(/* file_id= */ 1);
     ASSERT_TRUE(dm_file->path().starts_with("s3://"));

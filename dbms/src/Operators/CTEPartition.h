@@ -238,7 +238,8 @@ struct CTEPartition
 
     std::shared_ptr<CTEPartitionSharedConfig> config;
 
-    std::unique_ptr<std::mutex> mu_for_test;
+#ifndef NDEBUG
     std::unique_ptr<std::condition_variable> cv_for_test;
+#endif
 };
 } // namespace DB

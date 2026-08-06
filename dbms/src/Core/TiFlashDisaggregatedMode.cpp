@@ -22,6 +22,7 @@ DisaggOptions DisaggOptions::parseFromConfig(const Poco::Util::LayeredConfigurat
 {
     static const std::string config_key = "flash.disaggregated_mode";
     static const std::string autoscaler_config_key = "flash.use_autoscaler";
+    static const std::string columnar_config_key = "flash.use_columnar";
 
     DisaggregatedMode mode = DisaggregatedMode::None;
     if (config.has(config_key))
@@ -49,7 +50,11 @@ DisaggOptions DisaggOptions::parseFromConfig(const Poco::Util::LayeredConfigurat
     if (config.has(autoscaler_config_key))
         use_autoscaler = config.getBool(autoscaler_config_key);
 
-    return DisaggOptions{mode, use_autoscaler};
+    bool use_columnar = false;
+    if (config.has(columnar_config_key))
+        use_columnar = config.getBool(columnar_config_key);
+
+    return DisaggOptions{mode, use_autoscaler, use_columnar};
 }
 
 std::string getProxyLabelByDisaggregatedMode(DisaggregatedMode mode)

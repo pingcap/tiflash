@@ -25,8 +25,22 @@ using namespace Aws::S3;
 class MockS3Client final : public S3::TiFlashS3Client
 {
 public:
-    explicit MockS3Client(const String & bucket, const String & root)
-        : TiFlashS3Client(bucket, root)
+    explicit MockS3Client(
+        const String & bucket,
+        const String & root,
+        const Aws::Auth::AWSCredentials & cred,
+        const Aws::Client::ClientConfiguration & cfg,
+        std::shared_ptr<S3ReadLimiter> s3_read_limiter = nullptr,
+        std::shared_ptr<S3ReadMetricsRecorder> s3_read_metrics_recorder = nullptr)
+        : TiFlashS3Client(
+            bucket,
+            root,
+            cred,
+            cfg,
+            Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
+            false,
+            std::move(s3_read_limiter),
+            std::move(s3_read_metrics_recorder))
     {}
 
     ~MockS3Client() override = default;
@@ -57,6 +71,12 @@ public:
         FAILED,
     };
     static void setPutObjectStatus(S3Status status) { put_object_status = status; }
+    /// Reset the GetObject observation state used by unit tests.
+    void resetGetObjectObservations() const;
+    /// Return the number of GetObject requests observed since the last reset.
+    UInt64 getGetObjectCount() const;
+    /// Return the latest Range header observed by GetObject, or empty when unset.
+    String getLastGetObjectRange() const;
 
 private:
     inline static S3Status put_object_status = S3Status::NORMAL;
@@ -72,5 +92,7 @@ private:
     mutable std::unordered_map<String, BucketStorage> storage;
     mutable std::unordered_map<String, BucketStorageTagging> storage_tagging;
     mutable std::unordered_map<String, UploadParts> upload_parts;
+    mutable UInt64 get_object_count = 0;
+    mutable String last_get_object_range;
 };
 } // namespace DB::S3::tests

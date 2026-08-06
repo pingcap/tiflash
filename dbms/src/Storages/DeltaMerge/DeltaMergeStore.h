@@ -97,6 +97,13 @@ using LocalIndexesStats = std::vector<LocalIndexStats>;
 class DeltaMergeStore;
 using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
 
+// TODO: merge more parameters to ReadOptions
+struct DMReadOptions
+{
+    bool keep_order = false;
+    bool is_fast_scan = false;
+    bool has_multiple_partitions = false;
+};
 class DeltaMergeStore
     : private boost::noncopyable
     , public std::enable_shared_from_this<DeltaMergeStore>
@@ -184,6 +191,9 @@ public:
             const LoggerPtr & log_);
 
         BackgroundTask nextTask(bool is_heavy, const LoggerPtr & log_);
+
+        // num of stopped light_tasks and heavy_tasks
+        std::pair<size_t, size_t> clearTasks();
     };
 
 private:
@@ -275,7 +285,7 @@ public:
 
     /// You must ensure external files are ordered and do not overlap. Otherwise exceptions will be thrown.
     /// You must ensure all of the external files are contained by the range. Otherwise exceptions will be thrown.
-    /// Return the 'ingtested bytes'.
+    /// Return the 'ingested bytes'.
     UInt64 ingestFiles(
         const Context & db_context, //
         const DB::Settings & db_settings,
@@ -377,11 +387,10 @@ public:
         size_t num_streams,
         UInt64 start_ts,
         const PushDownExecutorPtr & executor,
-        const RuntimeFilteList & runtime_filter_list,
+        const RuntimeFilterList & runtime_filter_list,
         int rf_max_wait_time_ms,
         const String & tracing_id,
-        bool keep_order,
-        bool is_fast_scan = false,
+        const DMReadOptions & read_opts = {},
         size_t expected_block_size = DEFAULT_BLOCK_SIZE,
         const SegmentIdSet & read_segments = {},
         size_t extra_table_id_index = MutSup::invalid_col_id,
@@ -402,11 +411,10 @@ public:
         size_t num_streams,
         UInt64 start_ts,
         const PushDownExecutorPtr & executor,
-        const RuntimeFilteList & runtime_filter_list,
+        const RuntimeFilterList & runtime_filter_list,
         int rf_max_wait_time_ms,
         const String & tracing_id,
-        bool keep_order,
-        bool is_fast_scan = false,
+        const DMReadOptions & read_opts = {},
         size_t expected_block_size = DEFAULT_BLOCK_SIZE,
         const SegmentIdSet & read_segments = {},
         size_t extra_table_id_index = MutSup::invalid_col_id,
@@ -445,6 +453,12 @@ public:
 
     /// Iterator over all segments and apply gc jobs.
     UInt64 onSyncGc(Int64 limit, const GCOptions & gc_options);
+
+    /// Test hook for verifying the background GC merge fan-in cap.
+    UInt32 getGcMergeableSegmentsCapForTest() const;
+
+    /// Test hook for overriding the background GC merge fan-in cap.
+    void setGcMergeableSegmentsCapForTest(UInt32 cap);
 
     /**
      * Try to merge the segment in the current thread as the GC operation.
@@ -544,8 +558,11 @@ private:
 
     void waitForDeleteRange(const DMContextPtr & context, const SegmentPtr & segment);
 
+    void reduceGcMergeableSegmentsCap(std::string_view reason);
+    void recoverGcMergeableSegmentsCap(std::string_view reason);
+
     /// Should be called after every write into DeltaMergeStore.
-    /// If the delta cache reaches the foreground flush limit, it will also trigger a KVStore flush of releated regions,
+    /// If the delta cache reaches the foreground flush limit, it will also trigger a KVStore flush of related regions,
     /// by returning a non-empty DM::WriteResult.
     // Deferencing `Iter` can get a pointer to a Segment.
     template <typename Iter>
@@ -760,18 +777,18 @@ private:
 private:
     /**
       * Remove the segment from the store's memory structure.
-      * Not protected by lock, should accquire lock before calling this function.
+      * Not protected by lock, should acquire lock before calling this function.
       */
     void removeSegment(std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment);
     /**
       * Add the segment to the store's memory structure.
-      * Not protected by lock, should accquire lock before calling this function.
+      * Not protected by lock, should acquire lock before calling this function.
       */
     void addSegment(std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment);
     /**
       * Replace the old segment with the new segment in the store's memory structure.
       * New segment should have the same segment id as the old segment.
-      * Not protected by lock, should accquire lock before calling this function.
+      * Not protected by lock, should acquire lock before calling this function.
       */
     void replaceSegment(
         std::unique_lock<std::shared_mutex> &,
@@ -825,6 +842,10 @@ private:
 #else
 public:
 #endif
+
+    static constexpr UInt32 gc_mergeable_segments_cap_default = 32;
+    static constexpr UInt32 gc_mergeable_segments_cap_min = 2;
+    static constexpr UInt32 gc_mergeable_segments_cap_recover_step = 2;
 
     /**
       * Ensure the segment has delta index.
@@ -910,6 +931,7 @@ public:
     MergeDeltaTaskPool background_tasks;
 
     std::atomic<DB::Timestamp> latest_gc_safe_point = 0;
+    std::atomic<UInt32> gc_mergeable_segments_cap = gc_mergeable_segments_cap_default;
 
     RowKeyValue next_gc_check_key;
 

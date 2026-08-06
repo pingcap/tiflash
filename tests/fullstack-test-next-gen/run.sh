@@ -15,6 +15,8 @@
 
 
 source ../docker/util.sh
+# shellcheck source=/dev/null
+source ./_env.sh
 
 set_branch
 
@@ -25,38 +27,41 @@ export verbose=${verbose:-"false"}
 check_env
 check_docker_compose
 
-DISAGG_TIFLASH_YAML="disagg_tiflash.yaml"
-if grep -q "Rocky Linux release 9" /etc/redhat-release; then
-    # replace the base image for running under Rocky Linux 9
-    sed 's/tiflash-ci-base:rocky8-20241028/tiflash-ci-base:rocky9-20250529/g' \
-        "${DISAGG_TIFLASH_YAML}" > "disagg_tiflash.rocky9.yaml"
-    DISAGG_TIFLASH_YAML="disagg_tiflash.rocky9.yaml"
-    echo "Using ${DISAGG_TIFLASH_YAML} for Rocky Linux 9"
-fi
+setup_next_gen_compose_files COMPOSE_FILES
 
 if [[ -n "$ENABLE_NEXT_GEN" && "$ENABLE_NEXT_GEN" != "false" && "$ENABLE_NEXT_GEN" != "0" ]]; then
     echo "Running fullstack test on next-gen TiFlash"
 
     # clean up previous docker instances, data and log
-    ${COMPOSE} -f next-gen-cluster.yaml -f "${DISAGG_TIFLASH_YAML}" down
+    ${COMPOSE} "${COMPOSE_FILES[@]}" down
     clean_data_log
+    prepare_next_gen_data_dirs
+
+    ${COMPOSE} "${COMPOSE_FILES[@]}" up -d
+    echo "PD version:"
+    ${COMPOSE} "${COMPOSE_FILES[@]}" exec -T pd0 bash -c '/pd-server -V'
+    echo "TiDB version:"
+    ${COMPOSE} "${COMPOSE_FILES[@]}" exec -T tidb0 bash -c '/tidb-server -V'
+    echo "TiKV version:"
+    ${COMPOSE} "${COMPOSE_FILES[@]}" exec -T tikv0 bash -c '/tikv-server -V'
+    echo "TiKV worker version:"
+    ${COMPOSE} "${COMPOSE_FILES[@]}" exec -T tikv-worker0 bash -c '/tikv-worker -V'
 
     # run fullstack-tests
-    ${COMPOSE} -f next-gen-cluster.yaml -f "${DISAGG_TIFLASH_YAML}" up -d
     wait_next_gen_env
     ENV_ARGS="ENABLE_NEXT_GEN=true verbose=${verbose} "
     # most failpoints are expected to be set on the compute layer, use tiflash-cn0 to run tests
-    ${COMPOSE} -f next-gen-cluster.yaml -f "${DISAGG_TIFLASH_YAML}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test/sample.test"
-    ${COMPOSE} -f next-gen-cluster.yaml -f "${DISAGG_TIFLASH_YAML}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test-index/vector"
-    ${COMPOSE} -f next-gen-cluster.yaml -f "${DISAGG_TIFLASH_YAML}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test-next-gen/placement"
-    ${COMPOSE} -f next-gen-cluster.yaml -f "${DISAGG_TIFLASH_YAML}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test2/clustered_index"
-    ${COMPOSE} -f next-gen-cluster.yaml -f "${DISAGG_TIFLASH_YAML}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test2/dml"
-    ${COMPOSE} -f next-gen-cluster.yaml -f "${DISAGG_TIFLASH_YAML}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test2/variables"
-    ${COMPOSE} -f next-gen-cluster.yaml -f "${DISAGG_TIFLASH_YAML}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test2/mpp"
-    # TODO: enable the following tests after they are fixed. And maybe we need to split them into parallel pipelines because they take too long to run.
-    #${COMPOSE} -f next-gen-cluster.yaml -f "${DISAGG_TIFLASH_YAML}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test/expr"
-    #${COMPOSE} -f next-gen-cluster.yaml -f "${DISAGG_TIFLASH_YAML}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test/mpp"
-    ${COMPOSE} -f next-gen-cluster.yaml -f "${DISAGG_TIFLASH_YAML}" down
+    ${COMPOSE} "${COMPOSE_FILES[@]}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test/sample.test"
+    ${COMPOSE} "${COMPOSE_FILES[@]}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test-index"
+    ${COMPOSE} "${COMPOSE_FILES[@]}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test-next-gen/placement"
+    ${COMPOSE} "${COMPOSE_FILES[@]}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test2/clustered_index"
+    ${COMPOSE} "${COMPOSE_FILES[@]}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test2/dml"
+    ${COMPOSE} "${COMPOSE_FILES[@]}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test2/variables"
+    ${COMPOSE} "${COMPOSE_FILES[@]}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test2/mpp"
+    ${COMPOSE} "${COMPOSE_FILES[@]}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test/expr"
+    ${COMPOSE} "${COMPOSE_FILES[@]}" exec -T tiflash-cn0 bash -c "cd /tests ; ${ENV_ARGS} ./run-test.sh fullstack-test/mpp"
+    # If test commands fail, data and logs are kept for inspection and root-cause analysis.
+    ${COMPOSE} "${COMPOSE_FILES[@]}" down
     clean_data_log
 
     exit 0

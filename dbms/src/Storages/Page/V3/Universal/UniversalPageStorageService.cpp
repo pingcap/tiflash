@@ -77,6 +77,7 @@ UniversalPageStorageServicePtr UniversalPageStorageService::create(
             /*interval_ms*/ interval_s * 1000);
     }
 
+    auto bg_gc_check_interval = context.getSettingsRef().dt_bg_gc_check_interval;
     auto & bkg_pool = context.getBackgroundPool();
     service->gc_handle = bkg_pool.addTask(
         [srv_weak = std::weak_ptr<UniversalPageStorageService>(service)] {
@@ -86,7 +87,7 @@ UniversalPageStorageServicePtr UniversalPageStorageService::create(
             return service->gc();
         },
         false,
-        /*interval_ms*/ 60 * 1000);
+        /*interval_ms*/ bg_gc_check_interval * 1000);
     return service;
 }
 
@@ -262,6 +263,11 @@ bool UniversalPageStorageService::uploadCheckpointImpl(
     {
         LOG_INFO(log, "Upload checkpoint with all existing data");
     }
+    LOG_INFO(
+        log,
+        "Checkpoint lock set, upload_sequence={} pre_lock_keys_size={}",
+        upload_info.upload_sequence,
+        upload_info.pre_lock_keys.size());
     UniversalPageStorage::DumpCheckpointOptions opts{
         .data_file_id_pattern = S3::S3Filename::newCheckpointDataNameTemplate(store_info.id(), upload_info.upload_sequence),
         .data_file_path_pattern = local_dir_str + "dat_{seq}_{index}",

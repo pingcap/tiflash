@@ -70,6 +70,7 @@ public:
         And,
         // compare
         Equal,
+        NullEqual,
         NotEqual,
         Greater,
         GreaterEqual,

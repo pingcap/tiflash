@@ -37,6 +37,27 @@ void SharedContextDisagg::initReadNodePageCache(
         PSDiskDelegatorPtr delegator;
         if (!cache_dir.empty())
         {
+            {
+                // Compute node disable fsync to improve performance, so we need to
+                // clear the cache dir before use to avoid corrupted data.
+                auto dir = Poco::File(cache_dir);
+                if (dir.exists())
+                {
+                    LOG_INFO(
+                        Logger::get(),
+                        "Local cache directory will be cleared before setting up LocalPageCache",
+                        cache_dir);
+                    dir.remove(true);
+                }
+                else
+                {
+                    LOG_INFO(
+                        Logger::get(),
+                        "Local cache directory not exist when setting up LocalPageCache",
+                        cache_dir);
+                }
+            }
+
             delegator = path_pool.getPSDiskDelegatorFixedDirectory(cache_dir);
             LOG_INFO(
                 Logger::get(),

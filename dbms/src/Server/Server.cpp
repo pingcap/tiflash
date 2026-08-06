@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Server/Server.cpp
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -241,7 +243,7 @@ void printGRPCLog(gpr_log_func_args * args)
 // Later we will adjust it by `adjustThreadPoolSize`
 void initThreadPool(DisaggregatedMode disaggregated_mode)
 {
-    size_t default_num_threads = std::max(4UL, 2 * std::thread::hardware_concurrency());
+    size_t default_num_threads = std::max(4UL, 6 * std::thread::hardware_concurrency());
 
     // Note: Global Thread Pool must be larger than sub thread pools.
     GlobalThreadPool::initialize(
@@ -328,9 +330,11 @@ void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
     }
     if (S3FileCachePool::instance)
     {
-        S3FileCachePool::instance->setMaxThreads(max_io_thread_count);
-        S3FileCachePool::instance->setMaxFreeThreads(max_io_thread_count / 2);
-        S3FileCachePool::instance->setQueueSize(max_io_thread_count * 2);
+        auto concurrency = logical_cores * settings.dt_filecache_downloading_count_scale;
+        auto queue_size = logical_cores * settings.dt_filecache_max_downloading_count_scale;
+        S3FileCachePool::instance->setMaxThreads(concurrency);
+        S3FileCachePool::instance->setMaxFreeThreads(concurrency / 2);
+        S3FileCachePool::instance->setQueueSize(queue_size);
     }
     if (RNWritePageCachePool::instance)
     {
@@ -379,7 +383,7 @@ void syncSchemaWithTiDB(
             }
             catch (DB::Exception & e)
             {
-                LOG_ERROR(
+                LOG_WARNING(
                     log,
                     "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
                     " seconds and try again.",
@@ -389,7 +393,7 @@ void syncSchemaWithTiDB(
             }
             catch (Poco::Exception & e)
             {
-                LOG_ERROR(
+                LOG_WARNING(
                     log,
                     "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
                     " seconds and try again.",
@@ -477,6 +481,107 @@ void loadBlockList(
         keyspace_arr.isNull() ? 0 : keyspace_arr->size(),
         region_arr.isNull() ? 0 : region_arr->size());
 #endif
+}
+
+// Returns whether encryption is enabled and the KeyManagerPtr
+std::tuple<bool, KeyManagerPtr> getKeyManager(
+    ProxyStateMachine & proxy_machine,
+    bool is_s3_enabled,
+    const LoggerPtr & log)
+{
+    if (!proxy_machine.isProxyRunnable())
+    {
+        // Proxy is not runnable, tiflash is run for mock tests
+        LOG_INFO(log, "encryption is using a mock key manager for mock tests");
+        return {false, std::make_shared<MockKeyManager>(false)};
+    }
+
+    const bool enable_encryption = proxy_machine.getProxyHelper()->checkEncryptionEnabled();
+    if (!enable_encryption)
+    {
+        LOG_INFO(log, "encryption is disabled");
+        return {false, std::make_shared<DataKeyManager>(proxy_machine.getEngineStoreServerWrap())};
+    }
+
+    if (!is_s3_enabled)
+    {
+        const auto method = proxy_machine.getProxyHelper()->getEncryptionMethod();
+        LOG_INFO(log, "encryption is enabled, method is {}", magic_enum::enum_name(method));
+        KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(proxy_machine.getEngineStoreServerWrap());
+        return {method != EncryptionMethod::Plaintext, key_manager};
+    }
+
+    // When s3 is enabled, we could enable keyspace-level encryption. Currently only Aes256Ctr is supported
+    // for keyspace-level encryption.
+    LOG_INFO(log, "encryption can be enabled at keyspace-level, method is Aes256Ctr");
+    // The UniversalPageStorage has not been init yet, the UniversalPageStoragePtr in KeyspacesKeyManager is nullptr.
+    KeyManagerPtr key_manager
+        = std::make_shared<KeyspacesKeyManager<TiFlashRaftProxyHelper>>(proxy_machine.getProxyHelper());
+    return {true, key_manager};
+}
+
+void Server::initCaches(bool is_disagg_compute_mode, bool is_disagg_storage_mode, const LoggerPtr & log) const
+{
+    /// Size of cache for marks (index of MergeTree family of tables). It is necessary.
+    size_t mark_cache_size = config().getUInt64("mark_cache_size", DEFAULT_MARK_CACHE_SIZE);
+    if (mark_cache_size)
+        global_context->setMarkCache(mark_cache_size);
+
+    /// Size of cache for minmax index, used by DeltaMerge engine.
+    size_t minmax_index_cache_size = config().getUInt64("minmax_index_cache_size", mark_cache_size);
+    if (minmax_index_cache_size)
+        global_context->setMinMaxIndexCache(minmax_index_cache_size);
+
+    /// The vector index cache by number instead of bytes. Because it use `mmap` and let the operating system decide the memory usage.
+    size_t light_local_index_cache_entities = config().getUInt64("light_local_index_cache_entities", 10000);
+    size_t heavy_local_index_cache_entities = config().getUInt64("heavy_local_index_cache_entities", 500);
+    if (light_local_index_cache_entities && heavy_local_index_cache_entities)
+        global_context->setLocalIndexCache(light_local_index_cache_entities, heavy_local_index_cache_entities);
+
+    size_t column_cache_long_term_size
+        = config().getUInt64("column_cache_long_term_size", 512 * 1024 * 1024 /* 512MB */);
+    if (column_cache_long_term_size)
+        global_context->setColumnCacheLongTerm(column_cache_long_term_size);
+
+    /// Size of max memory usage of DeltaIndex, used by DeltaMerge engine.
+    /// - In non-disaggregated mode, its default value is 0, means unlimited, and it
+    ///   controls the number of total bytes keep in the memory.
+    /// - In disaggregated compute node, its default value is memory_capacity_of_host * 0.02.
+    ///   0 means cache is disabled.
+    ///   We cannot support unlimited delta index cache in disaggregated mode for now,
+    ///   because cache items will be never explicitly removed.
+    /// - In disaggregated write node, its default value is 1GiB. Because write node manage
+    ///   much more data than non-disaggregated mode, and the delta index cache is less useful.
+    if (is_disagg_compute_mode)
+    {
+        constexpr auto delta_index_cache_ratio = 0.02;
+        constexpr auto backup_delta_index_cache_size = 1024 * 1024 * 1024; // 1GiB
+        const auto default_delta_index_cache_size = server_info.memory_info.capacity > 0
+            ? server_info.memory_info.capacity * delta_index_cache_ratio
+            : backup_delta_index_cache_size;
+        size_t n = config().getUInt64("delta_index_cache_size", default_delta_index_cache_size);
+        LOG_INFO(log, "delta_index_cache_size={}", n);
+        // In disaggregated compute node, we will not use DeltaIndexManager to cache the delta index.
+        // Instead, we use RNMVCCIndexCache.
+        global_context->getSharedContextDisagg()->initReadNodeMVCCIndexCache(n);
+    }
+    else if (is_disagg_storage_mode)
+    {
+        constexpr auto default_delta_index_cache_size = 1024 * 1024 * 1024; // 1GiB
+        size_t n = config().getUInt64("delta_index_cache_size", default_delta_index_cache_size);
+        global_context->setDeltaIndexManager(n);
+    }
+    else
+    {
+        size_t n = config().getUInt64("delta_index_cache_size", 0);
+        global_context->setDeltaIndexManager(n);
+    }
+
+    // Size of schema cache for blockschemas of tables.
+    // Note that the cache must be initialized before `loadMetadata` is called, because
+    // `StorageDeltaMerge` requires the cache when loading table metadata.
+    size_t schema_cache_size = config().getUInt64("schema_cache_size", 10000);
+    global_context->initializeSharedBlockSchemas(schema_cache_size);
 }
 
 int Server::main(const std::vector<std::string> & /*args*/)
@@ -570,8 +675,8 @@ try
         }
     }
 
-    // Set whether to use safe point v2.
-    PDClientHelper::enable_safepoint_v2 = config().getBool("enable_safe_point_v2", false);
+    // Safe point v2 is deprecated and replaced by keyspace-based safe point.
+    // config().getBool("enable_safe_point_v2", false);
 
     /** Context contains all that query execution is dependent:
       *  settings, available functions, data types, aggregate functions, databases...
@@ -596,6 +701,7 @@ try
         config(),
         disagg_opt.mode,
         disagg_opt.use_autoscaler,
+        disagg_opt.use_columnar,
         STORAGE_FORMAT_CURRENT,
         settings,
         log);
@@ -617,35 +723,10 @@ try
     global_context->initializeJointThreadInfoJeallocMap();
 
     /// Init File Provider
-    if (proxy_machine.isProxyRunnable())
     {
-        const bool enable_encryption = proxy_machine.getProxyHelper()->checkEncryptionEnabled();
-        if (enable_encryption && storage_config.s3_config.isS3Enabled())
-        {
-            LOG_INFO(log, "encryption can be enabled, method is Aes256Ctr");
-            // The UniversalPageStorage has not been init yet, the UniversalPageStoragePtr in KeyspacesKeyManager is nullptr.
-            KeyManagerPtr key_manager
-                = std::make_shared<KeyspacesKeyManager<TiFlashRaftProxyHelper>>(proxy_machine.getProxyHelper());
-            global_context->initializeFileProvider(key_manager, true);
-        }
-        else if (enable_encryption)
-        {
-            const auto method = proxy_machine.getProxyHelper()->getEncryptionMethod();
-            LOG_INFO(log, "encryption is enabled, method is {}", magic_enum::enum_name(method));
-            KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(proxy_machine.getEngineStoreServerWrap());
-            global_context->initializeFileProvider(key_manager, method != EncryptionMethod::Plaintext);
-        }
-        else
-        {
-            LOG_INFO(log, "encryption is disabled");
-            KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(proxy_machine.getEngineStoreServerWrap());
-            global_context->initializeFileProvider(key_manager, false);
-        }
-    }
-    else
-    {
-        KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
-        global_context->initializeFileProvider(key_manager, false);
+        auto [enable_encryption, key_manager]
+            = getKeyManager(proxy_machine, storage_config.s3_config.isS3Enabled(), log);
+        global_context->initializeFileProvider(key_manager, enable_encryption);
     }
 
     /// ===== Paths related configuration initialized start ===== ///
@@ -691,7 +772,15 @@ try
     if (const auto & config = storage_config.remote_cache_config; config.isCacheEnabled() && is_disagg_compute_mode)
     {
         config.initCacheDir();
-        FileCache::initialize(global_context->getPathCapacity(), config);
+        FileCache::initialize(
+            global_context->getPathCapacity(),
+            config,
+            server_info.cpu_info.logical_cores,
+            global_context->getIORateLimiter());
+        // FileCache::initialize() only constructs the global instance. Push the current settings once
+        // here so startup-time values like dt_filecache_wait_on_downloading_ms take effect immediately
+        // instead of waiting for a later config reload.
+        FileCache::instance()->updateConfig(global_context->getSettingsRef());
     }
 
     /// Determining PageStorage run mode based on current files on disk and storage config.
@@ -856,8 +945,22 @@ try
             storage_config.remote_cache_config.getPageCapacity());
     }
 
+    if (disagg_opt.use_columnar)
+    {
+        global_context->getSharedContextDisagg()->use_columnar = true;
+#if ENABLE_NEXT_GEN_COLUMNAR == 0
+        throw Exception(
+            ErrorCodes::NOT_IMPLEMENTED,
+            "Columnar storage is not supported in current build, please check the build configuration of TiFlash.");
+#endif
+        LOG_INFO(log, "Using columnar storage as upstream");
+    }
+
     /// Initialize RateLimiter.
     global_context->initializeRateLimiter(config(), bg_pool, blockable_bg_pool);
+    // ClientFactory keeps the process-wide shared S3 client. Publish the latest limiter explicitly so
+    // every existing and future `TiFlashS3Client` observes the same node-level S3 read budget.
+    S3::ClientFactory::instance().setS3ReadLimiter(global_context->getIORateLimiter().getS3ReadLimiter());
 
     global_context->setServerInfo(server_info);
     if (server_info.memory_info.capacity == 0)
@@ -887,6 +990,8 @@ try
             buildLoggers(*config);
             global_context->getTMTContext().reloadConfig(*config);
             global_context->getIORateLimiter().updateConfig(*config);
+            // Config reload may replace the limiter instance or disable it. Re-publish it to the shared S3 client.
+            S3::ClientFactory::instance().setS3ReadLimiter(global_context->getIORateLimiter().getS3ReadLimiter());
             global_context->reloadDeltaTreeConfig(*config);
             DM::SegmentReadTaskScheduler::instance().updateConfig(global_context->getSettingsRef());
             if (FileCache::instance() != nullptr)
@@ -917,52 +1022,9 @@ try
             users_config_reloader->reload();
     });
 
-    /// Size of cache for marks (index of MergeTree family of tables). It is necessary.
-    size_t mark_cache_size = config().getUInt64("mark_cache_size", DEFAULT_MARK_CACHE_SIZE);
-    if (mark_cache_size)
-        global_context->setMarkCache(mark_cache_size);
-
-    /// Size of cache for minmax index, used by DeltaMerge engine.
-    size_t minmax_index_cache_size = config().getUInt64("minmax_index_cache_size", mark_cache_size);
-    if (minmax_index_cache_size)
-        global_context->setMinMaxIndexCache(minmax_index_cache_size);
-
-    /// The vector index cache by number instead of bytes. Because it use `mmap` and let the operator system decide the memory usage.
-    size_t light_local_index_cache_entities = config().getUInt64("light_local_index_cache_entities", 10000);
-    size_t heavy_local_index_cache_entities = config().getUInt64("heavy_local_index_cache_entities", 500);
-    if (light_local_index_cache_entities && heavy_local_index_cache_entities)
-        global_context->setLocalIndexCache(light_local_index_cache_entities, heavy_local_index_cache_entities);
-
-    size_t column_cache_long_term_size
-        = config().getUInt64("column_cache_long_term_size", 512 * 1024 * 1024 /* 512MB */);
-    if (column_cache_long_term_size)
-        global_context->setColumnCacheLongTerm(column_cache_long_term_size);
-
-    /// Size of max memory usage of DeltaIndex, used by DeltaMerge engine.
-    /// - In non-disaggregated mode, its default value is 0, means unlimited, and it
-    ///   controls the number of total bytes keep in the memory.
-    /// - In disaggregated mode, its default value is memory_capacity_of_host * 0.02.
-    ///   0 means cache is disabled.
-    ///   We cannot support unlimited delta index cache in disaggregated mode for now,
-    ///   because cache items will be never explicitly removed.
-    if (is_disagg_compute_mode)
-    {
-        constexpr auto delta_index_cache_ratio = 0.02;
-        constexpr auto backup_delta_index_cache_size = 1024 * 1024 * 1024; // 1GiB
-        const auto default_delta_index_cache_size = server_info.memory_info.capacity > 0
-            ? server_info.memory_info.capacity * delta_index_cache_ratio
-            : backup_delta_index_cache_size;
-        size_t n = config().getUInt64("delta_index_cache_size", default_delta_index_cache_size);
-        LOG_INFO(log, "delta_index_cache_size={}", n);
-        // In disaggregated compute node, we will not use DeltaIndexManager to cache the delta index.
-        // Instead, we use RNMVCCIndexCache.
-        global_context->getSharedContextDisagg()->initReadNodeMVCCIndexCache(n);
-    }
-    else
-    {
-        size_t n = config().getUInt64("delta_index_cache_size", 0);
-        global_context->setDeltaIndexManager(n);
-    }
+    // Note that `initCaches` should be done before `loadMetadataSystem` and `loadMetadata`
+    // otherwise some caches may not be initialized when loading metadata of some tables.
+    initCaches(is_disagg_compute_mode, is_disagg_storage_mode, log);
 
     loadBlockList(config(), *global_context, log);
 
@@ -1007,16 +1069,20 @@ try
     LOG_INFO(log, "Init S3 GC Manager");
     global_context->getTMTContext().initS3GCManager(proxy_machine.getProxyHelper());
     // Initialize the thread pool of storage before the storage engine is initialized.
-    LOG_INFO(log, "dt_enable_read_thread {}", global_context->getSettingsRef().dt_enable_read_thread);
-    // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
-    DM::DMFileReaderPool::instance();
-    DM::SegmentReaderPoolManager::instance().init(
-        server_info.cpu_info.logical_cores,
-        settings.dt_read_thread_count_scale);
-    DM::SegmentReadTaskScheduler::instance().updateConfig(global_context->getSettingsRef());
-
-    auto schema_cache_size = config().getInt("schema_cache_size", 10000);
-    global_context->initializeSharedBlockSchemas(schema_cache_size);
+    if (!disagg_opt.use_columnar)
+    {
+        LOG_INFO(log, "dt_enable_read_thread {}", global_context->getSettingsRef().dt_enable_read_thread);
+        // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
+        DM::DMFileReaderPool::instance();
+        double read_thread_final_scale = settings.dt_read_thread_count_scale;
+        if (is_disagg_compute_mode)
+        {
+            // disagg compute node needs more read threads to handle blocking IO from S3.
+            read_thread_final_scale *= 10;
+        }
+        DM::SegmentReaderPoolManager::instance().init(server_info.cpu_info.logical_cores, read_thread_final_scale);
+        DM::SegmentReadTaskScheduler::instance().updateConfig(global_context->getSettingsRef());
+    }
 
     // Load remaining databases
     loadMetadata(*global_context);
@@ -1045,6 +1111,9 @@ try
           *  table engines could use Context on destroy.
           */
         LOG_INFO(log, "Shutting down storages.");
+        // Stop scheduler first to avoid use-after-free: schedLoop may try to
+        // push MergedTask to already-destroyed reader_pools.
+        DB::DM::SegmentReadTaskScheduler::instance().stop();
         // `SegmentReader` threads may hold a segment and its delta-index for read.
         // `Context::shutdown()` will destroy `DeltaIndexManager`.
         // So, stop threads explicitly before `TiFlashTestEnv::shutdown()`.
@@ -1054,8 +1123,9 @@ try
         if (storage_config.s3_config.isS3Enabled())
         {
             S3::ClientFactory::instance().shutdown();
+            LOG_INFO(log, "S3 Client Factory shutdown done.");
         }
-        LOG_DEBUG(log, "Shutted down storages.");
+        LOG_INFO(log, "Shutted down storages.");
     });
 
     proxy_machine.restoreKVStore(global_context->getTMTContext(), global_context->getPathPool());
@@ -1138,10 +1208,16 @@ try
         SessionCleaner session_cleaner(*global_context);
         auto & tmt_context = global_context->getTMTContext();
 
+        // Start the proxy service, including the grpc service for raft and http status service
         proxy_machine.startProxyService(tmt_context, store_ident);
-        if (proxy_machine.isProxyRunnable())
+        if (proxy_machine.isProxyRunnable() && proxy_machine.isColumnar())
         {
-            const auto store_id = tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst);
+            LOG_INFO(log, "columnar proxy is ready to serve");
+        }
+        else if (proxy_machine.isProxyRunnable())
+        {
+            auto kvstore = tmt_context.getKVStore();
+            const auto store_id = kvstore->getStoreID(std::memory_order_seq_cst);
             if (is_disagg_compute_mode)
             {
                 // compute node do not need to handle read index
@@ -1162,6 +1238,8 @@ try
                     syncSchemaWithTiDB(storage_config, bg_init_stores, terminate_signals_counter, global_context, log);
                     bg_init_stores.waitUntilFinish();
                 }
+
+                // Start read index workers and wait region apply index catch up with TiKV before serving requests.
                 proxy_machine.waitProxyServiceReady(tmt_context, terminate_signals_counter);
             }
         }
@@ -1224,13 +1302,13 @@ try
             GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
         }
 
-        /// startup grpc server to serve raft and/or flash services.
+        /// startup flash service for handling coprocessor and MPP requests.
         FlashGrpcServerHolder flash_grpc_server_holder(this->context(), this->config(), raft_config, log);
 
         SCOPE_EXIT({
             // Stop LAC for AutoScaler managed CN before FlashGrpcServerHolder is destructed.
             // Because AutoScaler it will kill tiflash process when port of flash_server_addr is down.
-            // And we want to make sure LAC is cleanedup.
+            // And we want to make sure LAC is cleaned up.
             // The effects are there will be no resource control during [lac.safeStop(), FlashGrpcServer destruct done],
             // but it's basically ok, that duration is small(normally 100-200ms).
             if (is_disagg_compute_mode && disagg_opt.use_autoscaler && LocalAdmissionController::global_instance)

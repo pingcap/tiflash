@@ -33,8 +33,8 @@ public:
         const String & req_id,
         const DM::SegmentReadTaskPoolPtr & task_pool_,
         int max_wait_time_ms,
-        RuntimeFilteList && waiting_rf_list_,
-        RuntimeFilteList && ready_rf_list_)
+        RuntimeFilterList && waiting_rf_list_,
+        RuntimeFilterList && ready_rf_list_)
         : Task(exec_context_, req_id, ExecTaskStatus::WAITING)
         , task_pool(task_pool_)
         , max_wait_time_ns(max_wait_time_ms < 0 ? 0 : 1000000UL * max_wait_time_ms)
@@ -42,7 +42,7 @@ public:
         , ready_rf_list(std::move(ready_rf_list_))
     {}
 
-    static void filterAndMoveReadyRfs(RuntimeFilteList & waiting_rf_list, RuntimeFilteList & ready_rf_list)
+    static void filterAndMoveReadyRfs(RuntimeFilterList & waiting_rf_list, RuntimeFilterList & ready_rf_list)
     {
         for (auto it = waiting_rf_list.begin(); it != waiting_rf_list.end();)
         {
@@ -63,7 +63,7 @@ public:
     }
 
     static void submitReadyRfsAndSegmentTaskPool(
-        const RuntimeFilteList & ready_rf_list,
+        const RuntimeFilterList & ready_rf_list,
         const DM::SegmentReadTaskPoolPtr & task_pool)
     {
         for (const RuntimeFilterPtr & rf : ready_rf_list)
@@ -92,8 +92,8 @@ private:
     DM::SegmentReadTaskPoolPtr task_pool;
 
     UInt64 max_wait_time_ns;
-    RuntimeFilteList waiting_rf_list;
-    RuntimeFilteList ready_rf_list;
+    RuntimeFilterList waiting_rf_list;
+    RuntimeFilterList ready_rf_list;
 
     Stopwatch stopwatch{CLOCK_MONOTONIC_COARSE};
 };

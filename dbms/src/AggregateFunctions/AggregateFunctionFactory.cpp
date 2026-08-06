@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/AggregateFunctions/AggregateFunctionFactory.cpp
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -63,7 +65,15 @@ void AggregateFunctionFactory::registerFunction(
 /// Combinator will check if nested_function was created.
 /// TODO Consider replace with function property. See also https://github.com/ClickHouse/ClickHouse/pull/11661
 extern const std::unordered_set<String> hacking_return_non_null_agg_func_names
-    = {"count", "uniq", "uniqHLL12", "uniqExact", "uniqCombined", uniq_raw_res_name, count_second_stage};
+    = {"count",
+       "min_count",
+       "max_count",
+       "uniq",
+       "uniqHLL12",
+       "uniqExact",
+       "uniqCombined",
+       uniq_raw_res_name,
+       count_second_stage};
 
 AggregateFunctionPtr AggregateFunctionFactory::get(
     const Context & context,

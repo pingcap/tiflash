@@ -20,6 +20,7 @@
 #include <DataStreams/copyData.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGDriver.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/StreamWriter.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Coprocessor/UnaryDAGResponseWriter.h>
@@ -171,6 +172,7 @@ try
             streaming_writer,
             context.getSettingsRef().dag_records_per_chunk,
             context.getSettingsRef().batch_send_min_limit,
+            getMaxBufferedBytesInResponseWriter(context.getSettingsRef().max_buffered_bytes_in_executor, 1),
             dag_context);
         response_writer->prepare(query_executor->getSampleBlock());
         query_executor
@@ -225,6 +227,7 @@ try
             streaming_writer,
             context.getSettingsRef().dag_records_per_chunk,
             context.getSettingsRef().batch_send_min_limit,
+            getMaxBufferedBytesInResponseWriter(context.getSettingsRef().max_buffered_bytes_in_executor, 1),
             dag_context);
         response_writer->prepare(query_executor->getSampleBlock());
         query_executor
@@ -298,27 +301,27 @@ catch (const LockException & e)
 }
 catch (const TiFlashException & e)
 {
-    LOG_ERROR(log, "{}\n{}", e.standardText(), e.getStackTrace().toString());
+    LOG_WARNING(log, "{}\n{}", e.standardText(), e.getStackTrace().toString());
     recordError(grpc::StatusCode::INTERNAL, e.standardText());
 }
 catch (const Exception & e)
 {
-    LOG_ERROR(log, "DB Exception: {}\n{}", e.message(), e.getStackTrace().toString());
+    LOG_WARNING(log, "DB Exception: {}\n{}", e.message(), e.getStackTrace().toString());
     recordError(e.code(), e.message());
 }
 catch (const pingcap::Exception & e)
 {
-    LOG_ERROR(log, "KV Client Exception: {}", e.message());
+    LOG_WARNING(log, "KV Client Exception: {}", e.message());
     recordError(e.code(), e.message());
 }
 catch (const std::exception & e)
 {
-    LOG_ERROR(log, "std exception: {}", e.what());
+    LOG_WARNING(log, "std exception: {}", e.what());
     recordError(ErrorCodes::UNKNOWN_EXCEPTION, e.what());
 }
 catch (...)
 {
-    LOG_ERROR(log, "other exception");
+    LOG_WARNING(log, "other exception");
     recordError(ErrorCodes::UNKNOWN_EXCEPTION, "other exception");
 }
 

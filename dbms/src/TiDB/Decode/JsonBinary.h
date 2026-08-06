@@ -173,6 +173,10 @@ public:
     static void buildBinaryJsonArrayInBuffer(
         const std::vector<JsonBinary> & json_binary_vec,
         JsonBinaryWriteBuffer & write_buffer);
+    static void buildBinaryJsonObjectInBuffer(
+        const std::vector<StringRef> & keys,
+        const std::vector<JsonBinary> & values,
+        JsonBinaryWriteBuffer & write_buffer);
     static void buildKeyArrayInBuffer(const std::vector<StringRef> & keys, JsonBinaryWriteBuffer & write_buffer);
 
     static void appendNumber(JsonBinaryWriteBuffer & write_buffer, bool value);

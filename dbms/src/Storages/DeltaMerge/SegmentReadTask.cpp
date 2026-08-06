@@ -26,6 +26,7 @@
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
+#include <common/logger_useful.h>
 
 using namespace std::chrono_literals;
 using namespace DB::DM::Remote;
@@ -39,6 +40,7 @@ namespace DB::ErrorCodes
 {
 extern const int DT_DELTA_INDEX_ERROR;
 extern const int FETCH_PAGES_ERROR;
+extern const int TIMEOUT_EXCEEDED;
 } // namespace DB::ErrorCodes
 
 namespace DB::DM
@@ -54,7 +56,8 @@ SegmentReadTask::SegmentReadTask(
     , dm_context(dm_context_)
     , ranges(ranges_)
 {
-    CurrentMetrics::add(CurrentMetrics::DT_SegmentReadTasks);
+    CurrentMetrics::add(CurrentMetrics::DT_SegmentReadTasks); // keep for compatibility.
+    GET_METRIC(tiflash_storage_read_thread_gauge, type_read_task).Increment();
 }
 
 SegmentReadTask::SegmentReadTask(
@@ -72,7 +75,8 @@ SegmentReadTask::SegmentReadTask(
     size_t establish_disagg_task_resp_size)
     : store_id(store_id_)
 {
-    CurrentMetrics::add(CurrentMetrics::DT_SegmentReadTasks);
+    CurrentMetrics::add(CurrentMetrics::DT_SegmentReadTasks); // keep for compatibility.
+    GET_METRIC(tiflash_storage_read_thread_gauge, type_read_task).Increment();
     auto tracing_id = fmt::format(
         "{} segment_id={} epoch={} delta_epoch={}",
         log->identifier(),
@@ -179,7 +183,8 @@ SegmentReadTask::SegmentReadTask(
 
 SegmentReadTask::~SegmentReadTask()
 {
-    CurrentMetrics::sub(CurrentMetrics::DT_SegmentReadTasks);
+    CurrentMetrics::sub(CurrentMetrics::DT_SegmentReadTasks); // keep for compatibility.
+    GET_METRIC(tiflash_storage_read_thread_gauge, type_read_task).Decrement();
 }
 
 void SegmentReadTask::addRange(const RowKeyRange & range)
@@ -469,7 +474,7 @@ disaggregated::FetchDisaggPagesRequest SegmentReadTask::buildFetchPagesRequest(
     return req;
 }
 
-// In order to make network and disk run parallelly,
+// In order to make network and disk run in parallel,
 // `doFetchPages` will receive data pages from WN,
 // package these data pages into several `WritePageTask` objects
 // and send them to `RNWritePageCachePool` to write into local page cache.
@@ -586,10 +591,12 @@ void SegmentReadTask::doFetchPages(const disaggregated::FetchDisaggPagesRequest 
         }
     });
 
-    // All delta data is cached.
     if (request.page_ids_size() == 0 && !needFetchMemTableSet())
     {
-        finishPagesPacketStream(stream_resp);
+        // All delta data is cached in the compute node, just send a request to notify WN
+        // to release the snapshot of current segment. The Compute node can safely ignore
+        // the error message in response under this case.
+        finishPagesPacketStream(stream_resp, /*ignore_err*/ true);
         return;
     }
 
@@ -601,7 +608,7 @@ void SegmentReadTask::doFetchPages(const disaggregated::FetchDisaggPagesRequest 
             }
             else
             {
-                finishPagesPacketStream(stream_resp);
+                finishPagesPacketStream(stream_resp, /*ignore_err*/ false);
                 return false;
             }
         },
@@ -792,20 +799,58 @@ GlobalSegmentID SegmentReadTask::getGlobalSegmentID() const
 }
 
 void SegmentReadTask::finishPagesPacketStream(
-    std::unique_ptr<grpc::ClientReader<disaggregated::PagesPacket>> & stream_resp)
+    std::unique_ptr<grpc::ClientReader<disaggregated::PagesPacket>> & stream_resp,
+    bool ignore_err)
 {
-    if unlikely (stream_resp == nullptr)
+    if (unlikely(stream_resp == nullptr))
         return;
 
     auto status = stream_resp->Finish();
     stream_resp.reset(); // Reset to avoid calling `Finish()` repeatedly.
-    RUNTIME_CHECK_MSG(
-        status.ok(),
-        "Failed to fetch all pages for {}, status={}, message={}, wn_address={}",
-        *this,
-        static_cast<int>(status.error_code()),
-        status.error_message(),
-        extra_remote_info->store_address);
+    if (ignore_err)
+    {
+        if (!status.ok())
+        {
+            LOG_WARNING(
+                read_snapshot->log,
+                "Ignore error when finishing pages packet stream for {}, wn_address={} status={} message={}",
+                *this,
+                extra_remote_info->store_address,
+                static_cast<int>(status.error_code()),
+                status.error_message());
+        }
+    }
+    else
+    {
+        switch (status.error_code())
+        {
+        case grpc::StatusCode::OK:
+            break;
+        case grpc::StatusCode::DEADLINE_EXCEEDED:
+        {
+            LOG_WARNING(
+                read_snapshot->log,
+                "Fetch pages timeout for {}, wn_address={} message={}",
+                *this,
+                extra_remote_info->store_address,
+                status.error_message());
+            // throw exception without wn address to avoid returning internal info to user
+            throw Exception(
+                ErrorCodes::TIMEOUT_EXCEEDED,
+                "Fetch pages timeout for {}, message={}",
+                *this,
+                status.error_message());
+        }
+        default:
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Failed to fetch all pages for {}, wn_address={} status={} message={}",
+                *this,
+                extra_remote_info->store_address,
+                static_cast<int>(status.error_code()),
+                status.error_message());
+        }
+    }
 }
 
 bool SegmentReadTask::hasColumnFileToFetch() const

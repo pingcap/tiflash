@@ -26,8 +26,8 @@ data-dir = "/tmp/tiflash/proxy"
 config = "/proxy.toml"
 log-file = "/tmp/tiflash/log/tiflash_tikv.log"
 engine-addr = "tiflash0:3930"
-status-addr = "0.0.0.0:20181"
-advertise-status-addr = "tiflash0:20181"
+status-addr = "0.0.0.0:20292"
+advertise-status-addr = "tiflash0:20292"
 
 [logger]
 count = 10

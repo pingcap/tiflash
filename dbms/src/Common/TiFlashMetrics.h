@@ -18,6 +18,7 @@
 #include <Common/ProcessCollector_fwd.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/nocopyable.h>
+#include <Storages/DeltaMerge/ReadMode.h>
 #include <common/types.h>
 #include <prometheus/counter.h>
 #include <prometheus/exposer.h>
@@ -26,6 +27,7 @@
 #include <prometheus/histogram.h>
 #include <prometheus/registry.h>
 
+#include <array>
 #include <cassert>
 #include <ext/scope_guard.h>
 #include <mutex>
@@ -64,6 +66,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_remote_read_constructed, {"type", "remote_read_constructed"}),                                                         \
       F(type_remote_read_sent, {"type", "remote_read_sent"}),                                                                       \
       F(type_disagg_establish_task, {"type", "disagg_establish_task"}),                                                             \
+      F(type_disagg_fetch_pages_empty, {"type", "disagg_fetch_pages_empty"}),                                                       \
       F(type_disagg_fetch_pages, {"type", "disagg_fetch_pages"}))                                                                   \
     M(tiflash_coprocessor_handling_request_count,                                                                                   \
       "Number of handling request",                                                                                                 \
@@ -81,6 +84,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_remote_read, {"type", "remote_read"}),                                                                                 \
       F(type_remote_read_executing, {"type", "remote_read_executing"}),                                                             \
       F(type_disagg_establish_task, {"type", "disagg_establish_task"}),                                                             \
+      F(type_disagg_fetch_pages_empty, {"type", "disagg_fetch_pages_empty"}),                                                       \
       F(type_disagg_fetch_pages, {"type", "disagg_fetch_pages"}))                                                                   \
     M(tiflash_coprocessor_executor_count,                                                                                           \
       "Total number of each executor",                                                                                              \
@@ -112,7 +116,8 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_cancel_mpp_task, {{"type", "cancel_mpp_task"}}, ExpBuckets{0.001, 2, 20}),                                             \
       F(type_run_mpp_task, {{"type", "run_mpp_task"}}, ExpBuckets{0.001, 2, 20}),                                                   \
       F(type_disagg_establish_task, {{"type", "disagg_establish_task"}}, ExpBuckets{0.001, 2, 20}),                                 \
-      F(type_disagg_fetch_pages, {{"type", "type_disagg_fetch_pages"}}, ExpBuckets{0.001, 2, 20}))                                  \
+      F(type_disagg_fetch_pages_empty, {{"type", "disagg_fetch_pages_empty"}}, ExpBuckets{0.001, 2, 20}),                           \
+      F(type_disagg_fetch_pages, {{"type", "disagg_fetch_pages"}}, ExpBuckets{0.001, 2, 20}))                                       \
     M(tiflash_coprocessor_request_memory_usage,                                                                                     \
       "Bucketed histogram of request memory usage",                                                                                 \
       Histogram,                                                                                                                    \
@@ -146,7 +151,8 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_mpp_establish_conn, {{"type", "mpp_tunnel"}}),                                                                         \
       F(type_mpp_establish_conn_local, {{"type", "mpp_tunnel_local"}}),                                                             \
       F(type_cancel_mpp_task, {{"type", "cancel_mpp_task"}}),                                                                       \
-      F(type_disagg_establish_task, {{"type", "type_disagg_establish_task"}}))                                                      \
+      F(type_disagg_fetch_pages, {{"type", "disagg_fetch_pages"}}),                                                                 \
+      F(type_disagg_establish_task, {{"type", "disagg_establish_task"}}))                                                           \
     M(tiflash_exchange_data_bytes,                                                                                                  \
       "Total bytes sent by exchange operators",                                                                                     \
       Counter,                                                                                                                      \
@@ -189,6 +195,20 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       Histogram,                                                                                                                    \
       F(type_sync_schema_apply_duration, {{"type", "sync_schema_duration"}}, ExpBuckets{0.001, 2, 20}),                             \
       F(type_sync_table_schema_apply_duration, {{"type", "sync_table_schema_duration"}}, ExpBuckets{0.001, 2, 20}))                 \
+    M(tiflash_gc_safepoint_request_count,                                                                                           \
+      "GC safepoint request events",                                                                                                \
+      Counter,                                                                                                                      \
+      F(type_get_gc_state, {{"type", "get_gc_state"}}),                                                                             \
+      F(type_zero_gc_safe_point, {{"type", "zero_gc_safe_point"}}),                                                                 \
+      F(type_rewind, {{"type", "rewind"}}),                                                                                         \
+      F(type_pd_response_error, {{"type", "pd_response_error"}}),                                                                   \
+      F(type_request_exception, {{"type", "request_exception"}}),                                                                   \
+      F(type_backoff_error, {{"type", "backoff_error"}}))                                                                           \
+    M(tiflash_gc_safepoint_backoff_count,                                                                                           \
+      "Bucketed histogram of GC safepoint request backoff count per call",                                                          \
+      Histogram,                                                                                                                    \
+      F(type_success, {{"type", "success"}}, ExpBuckets{1, 2, 8}),                                                                  \
+      F(type_failure, {{"type", "failure"}}, ExpBuckets{1, 2, 8}))                                                                  \
     M(tiflash_raft_read_index_count, "Total number of raft read index", Counter)                                                    \
     M(tiflash_stale_read_count, "Total number of stale read", Counter)                                                              \
     M(tiflash_raft_read_index_duration_seconds,                                                                                     \
@@ -219,6 +239,22 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_uni_page_ids, {"type", "uni_page_ids"}),                                                                               \
       F(type_versioned_entries, {"type", "versioned_entries"}))                                                                     \
     M(tiflash_storage_read_tasks_count, "Total number of storage engine read tasks", Counter)                                       \
+    M(tiflash_storage_place_index_count,                                                                                            \
+      "Total number of place index operations",                                                                                     \
+      Counter,                                                                                                                      \
+      F(type_reuse, {"type", "reuse"}),                                                                                             \
+      F(type_placed, {"type", "placed"}),                                                                                           \
+      F(type_placed_fully_indexed, {"type", "placed_fully_indexed"}),                                                               \
+      F(type_placed_fully_saved, {"type", "placed_fully_saved"}))                                                                   \
+    M(tiflash_storage_place_index_stats_count,                                                                                      \
+      "Bucketed histogram of number of rows/deletes of index placement operations",                                                 \
+      Histogram,                                                                                                                    \
+      F(type_rows_newly_placed, {{"type", "rows_newly_placed"}}, ExpBuckets{1000, 2, 10}),                                          \
+      F(type_deletes_newly_placed, {{"type", "deletes_newly_placed"}}, ExpBucketsWithRange{1, 2, 100}),                             \
+      F(type_rows_after_placed, {{"type", "rows_after_placed"}}, ExpBuckets{1000, 2, 10}),                                          \
+      F(type_deletes_after_placed, {{"type", "deletes_after_placed"}}, ExpBucketsWithRange{1, 2, 100}),                             \
+      F(type_rows_reuse_placed, {{"type", "rows_reuse_placed"}}, ExpBuckets{1000, 2, 10}),                                          \
+      F(type_deletes_reuse_placed, {{"type", "deletes_reuse_placed"}}, ExpBucketsWithRange{1, 2, 100}))                             \
     M(tiflash_storage_command_count,                                                                                                \
       "Total number of storage's command, such as delete range / shutdown /startup",                                                \
       Counter,                                                                                                                      \
@@ -241,18 +277,18 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_place_index_update, {"type", "place_index_update"}))                                                                   \
     M(tiflash_storage_subtask_duration_seconds,                                                                                     \
       "Bucketed histogram of storage's sub task duration",                                                                          \
-      Histogram,                                                                                                                    \
-      F(type_delta_merge_bg, {{"type", "delta_merge_bg"}}, ExpBuckets{0.001, 2, 20}),                                               \
-      F(type_delta_merge_bg_gc, {{"type", "delta_merge_bg_gc"}}, ExpBuckets{0.001, 2, 20}),                                         \
-      F(type_delta_merge_fg, {{"type", "delta_merge_fg"}}, ExpBuckets{0.001, 2, 20}),                                               \
-      F(type_delta_merge_manual, {{"type", "delta_merge_manual"}}, ExpBuckets{0.001, 2, 20}),                                       \
-      F(type_delta_compact, {{"type", "delta_compact"}}, ExpBuckets{0.001, 2, 20}),                                                 \
-      F(type_delta_flush, {{"type", "delta_flush"}}, ExpBuckets{0.001, 2, 20}),                                                     \
-      F(type_seg_split_bg, {{"type", "seg_split_bg"}}, ExpBuckets{0.001, 2, 20}),                                                   \
-      F(type_seg_split_fg, {{"type", "seg_split_fg"}}, ExpBuckets{0.001, 2, 20}),                                                   \
-      F(type_seg_split_ingest, {{"type", "seg_split_ingest"}}, ExpBuckets{0.001, 2, 20}),                                           \
-      F(type_seg_merge_bg_gc, {{"type", "seg_merge_bg_gc"}}, ExpBuckets{0.001, 2, 20}),                                             \
-      F(type_place_index_update, {{"type", "place_index_update"}}, ExpBuckets{0.001, 2, 20}))                                       \
+      Histogram, /* increase the bucket from 10ms to 87 minutes */                                                                  \
+      F(type_delta_merge_bg, {{"type", "delta_merge_bg"}}, ExpBuckets{0.010, 2, 20}),                                               \
+      F(type_delta_merge_bg_gc, {{"type", "delta_merge_bg_gc"}}, ExpBuckets{0.010, 2, 20}),                                         \
+      F(type_delta_merge_fg, {{"type", "delta_merge_fg"}}, ExpBuckets{0.010, 2, 20}),                                               \
+      F(type_delta_merge_manual, {{"type", "delta_merge_manual"}}, ExpBuckets{0.010, 2, 20}),                                       \
+      F(type_delta_compact, {{"type", "delta_compact"}}, ExpBuckets{0.010, 2, 20}),                                                 \
+      F(type_delta_flush, {{"type", "delta_flush"}}, ExpBuckets{0.010, 2, 20}),                                                     \
+      F(type_seg_split_bg, {{"type", "seg_split_bg"}}, ExpBuckets{0.010, 2, 20}),                                                   \
+      F(type_seg_split_fg, {{"type", "seg_split_fg"}}, ExpBuckets{0.010, 2, 20}),                                                   \
+      F(type_seg_split_ingest, {{"type", "seg_split_ingest"}}, ExpBuckets{0.010, 2, 20}),                                           \
+      F(type_seg_merge_bg_gc, {{"type", "seg_merge_bg_gc"}}, ExpBuckets{0.010, 2, 20}),                                             \
+      F(type_place_index_update, {{"type", "place_index_update"}}, ExpBuckets{0.010, 2, 20}))                                       \
     M(tiflash_storage_subtask_throughput_bytes,                                                                                     \
       "Calculate the throughput of (maybe foreground) tasks of storage in bytes",                                                   \
       Counter, /**/                                                                                                                 \
@@ -323,6 +359,14 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_read_blob, {"type", "read_blob"}),                                                                                     \
       F(type_scan, {"type", "scan"}),                                                                                               \
       F(type_snapshot, {"type", "snapshot"}))                                                                                       \
+    M(tiflash_storage_page_apply_edit_type,                                                                                         \
+      "Total number of PageDirectory applied edit",                                                                                 \
+      Counter,                                                                                                                      \
+      F(type_put, {"type", "put"}),                                                                                                 \
+      F(type_put_external, {"type", "put_external"}),                                                                               \
+      F(type_del, {"type", "del"}),                                                                                                 \
+      F(type_del_not_exist, {"type", "del_not_exist"}),                                                                             \
+      F(type_ref, {"type", "ref"}))                                                                                                 \
     M(tiflash_storage_page_write_batch_size,                                                                                        \
       "The size of each write batch in bytes",                                                                                      \
       Histogram,                                                                                                                    \
@@ -345,7 +389,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       Histogram,                                                                                                                    \
       F(type_read, {{"type", "read"}}, EqualWidthBuckets{1 * 1024 * 1024, 60, 50 * 1024 * 1024}))                                   \
     M(tiflash_storage_io_limiter,                                                                                                   \
-      "Storage I/O limiter metrics",                                                                                                \
+      "Storage I/O limiter byte flow",                                                                                              \
       Counter,                                                                                                                      \
       F(type_fg_read_req_bytes, {"type", "fg_read_req_bytes"}),                                                                     \
       F(type_fg_read_alloc_bytes, {"type", "fg_read_alloc_bytes"}),                                                                 \
@@ -354,14 +398,33 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_fg_write_req_bytes, {"type", "fg_write_req_bytes"}),                                                                   \
       F(type_fg_write_alloc_bytes, {"type", "fg_write_alloc_bytes"}),                                                               \
       F(type_bg_write_req_bytes, {"type", "bg_write_req_bytes"}),                                                                   \
-      F(type_bg_write_alloc_bytes, {"type", "bg_write_alloc_bytes"}))                                                               \
+      F(type_bg_write_alloc_bytes, {"type", "bg_write_alloc_bytes"}),                                                               \
+      F(type_s3_direct_read_bytes, {"type", "s3_direct_read_bytes"}),                                                               \
+      F(type_s3_filecache_download_bytes, {"type", "s3_filecache_download_bytes"}))                                                 \
     M(tiflash_storage_io_limiter_curr,                                                                                              \
       "Current limit bytes per second of Storage I/O limiter",                                                                      \
       Gauge,                                                                                                                        \
       F(type_fg_read_bytes, {"type", "fg_read_bytes"}),                                                                             \
       F(type_bg_read_bytes, {"type", "bg_read_bytes"}),                                                                             \
       F(type_fg_write_bytes, {"type", "fg_write_bytes"}),                                                                           \
-      F(type_bg_write_bytes, {"type", "bg_write_bytes"}))                                                                           \
+      F(type_bg_write_bytes, {"type", "bg_write_bytes"}),                                                                           \
+      F(type_s3_read_bytes, {"type", "s3_read_bytes"}))                                                                             \
+    M(tiflash_storage_io_limiter_pending_seconds,                                                                                   \
+      "I/O limiter pending duration in seconds",                                                                                    \
+      Histogram,                                                                                                                    \
+      F(type_fg_read, {{"type", "fg_read"}}, ExpBuckets{0.001, 2, 20}),                                                             \
+      F(type_bg_read, {{"type", "bg_read"}}, ExpBuckets{0.001, 2, 20}),                                                             \
+      F(type_fg_write, {{"type", "fg_write"}}, ExpBuckets{0.001, 2, 20}),                                                           \
+      F(type_bg_write, {{"type", "bg_write"}}, ExpBuckets{0.001, 2, 20}),                                                           \
+      F(type_s3_read_byte, {{"type", "s3_read_byte"}}, ExpBuckets{0.001, 2, 20}))                                                   \
+    M(tiflash_storage_io_limiter_pending_count,                                                                                     \
+      "I/O limiter pending count",                                                                                                  \
+      Counter,                                                                                                                      \
+      F(type_fg_read, {"type", "fg_read"}),                                                                                         \
+      F(type_bg_read, {"type", "bg_read"}),                                                                                         \
+      F(type_fg_write, {"type", "fg_write"}),                                                                                       \
+      F(type_bg_write, {"type", "bg_write"}),                                                                                       \
+      F(type_s3_read_byte, {"type", "s3_read_byte"}))                                                                               \
     M(tiflash_storage_rough_set_filter_rate,                                                                                        \
       "Bucketed histogram of rough set filter rate",                                                                                \
       Histogram,                                                                                                                    \
@@ -395,7 +458,10 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_worker_prepare_stream, {{"type", "worker_prepare_stream"}}, ExpBuckets{0.01, 2, 20}),                                  \
       F(type_stream_wait_next_task, {{"type", "stream_wait_next_task"}}, ExpBuckets{0.01, 2, 20}),                                  \
       F(type_stream_read, {{"type", "stream_read"}}, ExpBuckets{0.01, 2, 20}),                                                      \
-      F(type_deserialize_page, {{"type", "deserialize_page"}}, ExpBuckets{0.01, 2, 20}))                                            \
+      F(type_deserialize_page, {{"type", "deserialize_page"}}, ExpBuckets{0.01, 2, 20}),                                            \
+      F(type_build_read_tasks, {{"type", "build_read_tasks"}}, ExpBuckets{0.01, 2, 20}),                                            \
+      F(type_build_batch_cop_tasks, {{"type", "build_batch_cop_tasks"}}, ExpBuckets{0.01, 2, 20}),                                  \
+      F(type_parse_read_tasks, {{"type", "parse_read_tasks"}}, ExpBuckets{0.01, 2, 20}))                                            \
     M(tiflash_disaggregated_details,                                                                                                \
       "",                                                                                                                           \
       Counter,                                                                                                                      \
@@ -475,6 +541,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_write_del, {"type", "write_del"}),                                                                                     \
       F(type_lock_del, {"type", "lock_del"}),                                                                                       \
       F(type_pessimistic_lock_put, {"type", "pessimistic_lock_put"}),                                                               \
+      F(type_shared_lock_put, {"type", "shared_lock_put"}),                                                                         \
       F(type_lock_replaced, {"type", "lock_replaced"}),                                                                             \
       F(type_default_del, {"type", "default_del"}),                                                                                 \
       F(type_apply_snapshot, {"type", "apply_snapshot"}),                                                                           \
@@ -585,6 +652,9 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_key_not_in_region, {{"type", "key_not_in_region"}}),                                                                   \
       F(type_tikv_server_issue, {{"type", "tikv_server_issue"}}),                                                                   \
       F(type_tikv_lock, {{"type", "tikv_lock"}}),                                                                                   \
+      F(type_server_is_busy, {{"type", "server_is_busy"}}),                                                                         \
+      F(type_stale_command, {{"type", "stale_command"}}),                                                                           \
+      F(type_store_not_match, {{"type", "store_not_match"}}),                                                                       \
       F(type_other, {{"type", "other"}}))                                                                                           \
     M(tiflash_raft_classes_count,                                                                                                   \
       "Raft classes counter",                                                                                                       \
@@ -658,11 +728,17 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
     M(tiflash_storage_read_thread_gauge,                                                                                            \
       "The gauge of storage read thread",                                                                                           \
       Gauge,                                                                                                                        \
-      F(type_merged_task, {"type", "merged_task"}))                                                                                 \
+      F(type_read_task_pool, {"type", "read_task_pool"}),                                                                           \
+      F(type_read_task, {"type", "read_task"}),                                                                                     \
+      F(type_read_task_active, {"type", "read_task_active"}),                                                                       \
+      F(type_merged_task, {"type", "merged_task"}),                                                                                 \
+      F(type_merged_task_units, /* num of merged task segments */ {"type", "merged_task_units"}),                                   \
+      F(type_merged_task_active, /* num of merged task actively reading by SegmentReader */                                         \
+        {"type", "merged_task_active"}))                                                                                            \
     M(tiflash_storage_read_thread_seconds,                                                                                          \
       "Bucketed histogram of read thread",                                                                                          \
-      Histogram,                                                                                                                    \
-      F(type_merged_task, {{"type", "merged_task"}}, ExpBuckets{0.001, 2, 20}))                                                     \
+      Histogram, /* increase the bucket from 10ms to 87 minutes */                                                                  \
+      F(type_merged_task, {{"type", "merged_task"}}, ExpBuckets{0.010, 2, 20}))                                                     \
     M(tiflash_mpp_task_manager,                                                                                                     \
       "The gauge of mpp task manager",                                                                                              \
       Gauge,                                                                                                                        \
@@ -747,7 +823,8 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_list_objects, {{"type", "list_objects"}}, ExpBuckets{0.001, 2, 20}),                                                   \
       F(type_delete_object, {{"type", "delete_object"}}, ExpBuckets{0.001, 2, 20}),                                                 \
       F(type_head_object, {{"type", "head_object"}}, ExpBuckets{0.001, 2, 20}),                                                     \
-      F(type_read_stream, {{"type", "read_stream"}}, ExpBuckets{0.0001, 2, 20}))                                                    \
+      F(type_read_stream, {{"type", "read_stream"}}, ExpBuckets{0.0001, 2, 20}),                                                    \
+      F(type_read_stream_err, {{"type", "read_stream_err"}}, ExpBuckets{0.0001, 2, 20}))                                            \
     M(tiflash_storage_s3_http_request_seconds,                                                                                      \
       "S3 request duration breakdown in seconds",                                                                                   \
       Histogram,                                                                                                                    \
@@ -804,6 +881,15 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_to_finished, {"type", "to_finished"}),                                                                                 \
       F(type_to_error, {"type", "to_error"}),                                                                                       \
       F(type_to_cancelled, {"type", "to_cancelled"}))                                                                               \
+    M(tiflash_storage_s3_lock_mgr_status, "S3 Lock Manager", Gauge, F(type_prelock_keys, {{"type", "prelock_keys"}}))               \
+    M(tiflash_storage_s3_lock_mgr_counter,                                                                                          \
+      "S3 Lock Manager Counter",                                                                                                    \
+      Counter,                                                                                                                      \
+      F(type_create_lock_local, {{"type", "create_lock_local"}}),                                                                   \
+      F(type_create_lock_ingest, {{"type", "create_lock_ingest"}}),                                                                 \
+      F(type_clean_lock, {{"type", "clean_lock"}}),                                                                                 \
+      F(type_clean_lock_erase_hit, {{"type", "clean_lock_erase_hit"}}),                                                             \
+      F(type_clean_lock_erase_miss, {{"type", "clean_lock_erase_miss"}}))                                                           \
     M(tiflash_storage_s3_gc_status,                                                                                                 \
       "S3 GC status",                                                                                                               \
       Gauge,                                                                                                                        \
@@ -826,10 +912,16 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       Counter,                                                                                                                      \
       F(type_dtfile_hit, {"type", "dtfile_hit"}),                                                                                   \
       F(type_dtfile_miss, {"type", "dtfile_miss"}),                                                                                 \
+      F(type_dtfile_not_cache_type, {"type", "dtfile_not_cache_type"}),                                                             \
+      F(type_dtfile_too_many_download, {"type", "dtfile_too_many_download"}),                                                       \
       F(type_dtfile_evict, {"type", "dtfile_evict"}),                                                                               \
       F(type_dtfile_full, {"type", "dtfile_full"}),                                                                                 \
       F(type_dtfile_download, {"type", "dtfile_download"}),                                                                         \
       F(type_dtfile_download_failed, {"type", "dtfile_download_failed"}),                                                           \
+      F(type_wait_on_downloading, {"type", "wait_on_downloading"}),                                                                 \
+      F(type_wait_on_downloading_hit, {"type", "wait_on_downloading_hit"}),                                                         \
+      F(type_wait_on_downloading_timeout, {"type", "wait_on_downloading_timeout"}),                                                 \
+      F(type_wait_on_downloading_failed, {"type", "wait_on_downloading_failed"}),                                                   \
       F(type_page_hit, {"type", "page_hit"}),                                                                                       \
       F(type_page_miss, {"type", "page_miss"}),                                                                                     \
       F(type_page_evict, {"type", "page_evict"}),                                                                                   \
@@ -844,36 +936,37 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_page_evict_bytes, {"type", "page_evict_bytes"}),                                                                       \
       F(type_page_download_bytes, {"type", "page_download_bytes"}),                                                                 \
       F(type_page_read_bytes, {"type", "page_read_bytes"}))                                                                         \
-    M(tiflash_storage_io_limiter_pending_seconds,                                                                                   \
-      "I/O limiter pending duration in seconds",                                                                                    \
-      Histogram,                                                                                                                    \
-      F(type_fg_read, {{"type", "fg_read"}}, ExpBuckets{0.001, 2, 20}),                                                             \
-      F(type_bg_read, {{"type", "bg_read"}}, ExpBuckets{0.001, 2, 20}),                                                             \
-      F(type_fg_write, {{"type", "fg_write"}}, ExpBuckets{0.001, 2, 20}),                                                           \
-      F(type_bg_write, {{"type", "bg_write"}}, ExpBuckets{0.001, 2, 20}))                                                           \
+    M(tiflash_storage_remote_cache_status,                                                                                          \
+      "Remote cache status",                                                                                                        \
+      Gauge,                                                                                                                        \
+      F(type_bg_downloading_count, {{"type", "bg_downloading_count"}}),                                                             \
+      F(type_bg_download_queue_count, {{"type", "bg_download_queue_count"}}))                                                       \
     M(tiflash_system_seconds,                                                                                                       \
       "system calls duration in seconds",                                                                                           \
       Histogram,                                                                                                                    \
       F(type_fsync, {{"type", "fsync"}}, ExpBuckets{0.0001, 2, 20}))                                                                \
     M(tiflash_storage_mvcc_index_cache, "", Counter, F(type_hit, {"type", "hit"}), F(type_miss, {"type", "miss"}))                  \
     M(tiflash_resource_group,                                                                                                       \
-      "meta info of resource group",                                                                                                \
+      "RU usage of each resource group",                                                                                            \
       Gauge,                                                                                                                        \
       F(type_remaining_tokens, {"type", "remaining_tokens"}),                                                                       \
       F(type_avg_speed, {"type", "avg_speed"}),                                                                                     \
-      F(type_total_consumption, {"type", "total_consumption"}),                                                                     \
       F(type_low_token_threshold, {"type", "low_token_threshold"}),                                                                 \
-      F(type_request_gac_count, {"type", "request_gac_count"}),                                                                     \
-      F(type_enter_degrade_mode, {"type", "enter_degrade_mode"}),                                                                   \
       F(type_bucket_fill_rate, {"type", "bucket_fill_rate"}),                                                                       \
       F(type_bucket_capacity, {"type", "bucket_capacity"}),                                                                         \
+      F(type_gac_req_acquire_tokens, {"type", "gac_req_acquire_tokens"}),                                                           \
+      F(type_gac_resp_tokens, {"type", "gac_resp_tokens"}),                                                                         \
+      F(type_gac_resp_capacity, {"type", "gac_resp_capacity"}))                                                                     \
+    M(tiflash_resource_group_counter,                                                                                               \
+      "RU usage of each resource group",                                                                                            \
+      Counter,                                                                                                                      \
+      F(type_total_consumption, {"type", "total_consumption"}),                                                                     \
+      F(type_request_gac_count, {"type", "request_gac_count"}),                                                                     \
+      F(type_enter_degrade_mode, {"type", "enter_degrade_mode"}),                                                                   \
       F(type_compute_ru_consumption, {"type", "compute_ru_consumption"}),                                                           \
       F(type_storage_ru_consumption, {"type", "storage_ru_consumption"}),                                                           \
       F(type_compute_ru_exhausted, {"type", "compute_ru_exhausted"}),                                                               \
-      F(type_gac_req_acquire_tokens, {"type", "gac_req_acquire_tokens"}),                                                           \
-      F(type_gac_req_ru_consumption_delta, {"type", "gac_req_ru_consumption_delta"}),                                               \
-      F(type_gac_resp_tokens, {"type", "gac_resp_tokens"}),                                                                         \
-      F(type_gac_resp_capacity, {"type", "gac_resp_capacity"}))                                                                     \
+      F(type_gac_req_ru_consumption_delta, {"type", "gac_req_ru_consumption_delta"}))                                               \
     M(tiflash_request_count_per_resource_group,                                                                                     \
       "mpp request count for each resource group",                                                                                  \
       Counter,                                                                                                                      \
@@ -939,13 +1032,6 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_load_dmfile_local, {{"type", "load_dmfile_local"}}, ExpBuckets{0.001, 2, 20}),                                         \
       F(type_load_dmfile_s3, {{"type", "load_dmfile_s3"}}, ExpBuckets{0.001, 2, 20}),                                               \
       F(type_search, {{"type", "search"}}, ExpBuckets{0.001, 2, 20}))                                                               \
-    M(tiflash_storage_io_limiter_pending_count,                                                                                     \
-      "I/O limiter pending count",                                                                                                  \
-      Counter,                                                                                                                      \
-      F(type_fg_read, {"type", "fg_read"}),                                                                                         \
-      F(type_bg_read, {"type", "bg_read"}),                                                                                         \
-      F(type_fg_write, {"type", "fg_write"}),                                                                                       \
-      F(type_bg_write, {"type", "bg_write"}))                                                                                       \
     M(tiflash_read_thread_internal_us,                                                                                              \
       "Durations of read thread internal components",                                                                               \
       Histogram,                                                                                                                    \
@@ -1248,6 +1334,8 @@ namespace tests
 struct TiFlashMetricsHelper;
 }
 
+using KeyspaceID = UInt32;
+
 /// Centralized registry of TiFlash metrics.
 /// Cope with MetricsPrometheus by registering
 /// profile events, current metrics and customized metrics (as individual member for caller to access) into registry ahead of being updated.
@@ -1256,6 +1344,35 @@ class TiFlashMetrics
 {
 public:
     static TiFlashMetrics & instance();
+
+    enum class RemoteCacheFileTypeMetric : size_t
+    {
+        Merged = 0,
+        ColData,
+        Other,
+        Count,
+    };
+
+    enum class RemoteCacheWaitResultMetric : size_t
+    {
+        Hit = 0,
+        Timeout,
+        Failed,
+        Count,
+    };
+
+    enum class RemoteCacheRejectReasonMetric : size_t
+    {
+        TooManyDownload = 0,
+        Count,
+    };
+
+    enum class RemoteCacheDownloadStageMetric : size_t
+    {
+        QueueWait = 0,
+        Download,
+        Count,
+    };
 
     void addReplicaSyncRU(UInt32 keyspace_id, UInt64 ru);
     UInt64 debugQueryReplicaSyncRU(UInt32 keyspace_id);
@@ -1271,6 +1388,28 @@ public:
     void registerProxyThreadMemory(const std::string & k);
     void registerStorageThreadMemory(const std::string & k);
     void setProvideProxyProcessMetrics(bool v);
+
+    prometheus::Counter & getStorageRUReadBytesCounter(
+        KeyspaceID keyspace,
+        const String & resource_group,
+        const DM::ReadRUType type);
+
+    void setS3StoreSummaryBytes(UInt64 store_id, UInt64 data_file_bytes, UInt64 dt_file_bytes);
+    prometheus::Counter & getRemoteCacheWaitOnDownloadingResultCounter(
+        RemoteCacheFileTypeMetric file_type,
+        RemoteCacheWaitResultMetric result);
+    prometheus::Counter & getRemoteCacheWaitOnDownloadingBytesCounter(
+        RemoteCacheFileTypeMetric file_type,
+        RemoteCacheWaitResultMetric result);
+    prometheus::Histogram & getRemoteCacheWaitOnDownloadingSecondsHistogram(
+        RemoteCacheFileTypeMetric file_type,
+        RemoteCacheWaitResultMetric result);
+    prometheus::Histogram & getRemoteCacheBgDownloadStageSecondsHistogram(
+        RemoteCacheFileTypeMetric file_type,
+        RemoteCacheDownloadStageMetric stage);
+    prometheus::Counter & getRemoteCacheRejectCounter(
+        RemoteCacheFileTypeMetric file_type,
+        RemoteCacheRejectReasonMetric reason);
 
 private:
     TiFlashMetrics();
@@ -1292,7 +1431,6 @@ private:
     std::unordered_map<std::string, prometheus::Gauge *> registered_async_metrics;
 
     prometheus::Family<prometheus::Gauge> * registered_keypace_store_used_family;
-    using KeyspaceID = UInt32;
     std::unordered_map<KeyspaceID, prometheus::Gauge *> registered_keypace_store_used_metrics;
     prometheus::Gauge * store_used_total_metric;
 
@@ -1308,6 +1446,46 @@ private:
     prometheus::Family<prometheus::Gauge> * registered_storage_thread_memory_usage_family;
     std::shared_mutex storage_thread_report_mtx;
     std::unordered_map<std::string, prometheus::Gauge *> registered_storage_thread_memory_usage_metrics;
+
+    prometheus::Family<prometheus::Counter> * registered_storage_ru_read_bytes_family;
+    std::shared_mutex storage_ru_read_bytes_mtx;
+    // {keyspace}_{resource_group}_{type} -> Counter
+    std::unordered_map<std::string, prometheus::Counter *> registered_storage_ru_read_bytes_metrics;
+
+    struct S3StoreSummaryBytesMetrics
+    {
+        prometheus::Gauge * data_file_bytes;
+        prometheus::Gauge * dt_file_bytes;
+    };
+    prometheus::Family<prometheus::Gauge> * registered_s3_store_summary_bytes_family;
+    std::shared_mutex s3_store_summary_bytes_mtx;
+    std::unordered_map<UInt64, S3StoreSummaryBytesMetrics> registered_s3_store_summary_bytes_metrics;
+
+    prometheus::Family<prometheus::Counter> * registered_remote_cache_wait_on_downloading_result_family;
+    std::array<
+        std::array<prometheus::Counter *, static_cast<size_t>(RemoteCacheWaitResultMetric::Count)>,
+        static_cast<size_t>(RemoteCacheFileTypeMetric::Count)>
+        remote_cache_wait_on_downloading_result_metrics{};
+    prometheus::Family<prometheus::Counter> * registered_remote_cache_wait_on_downloading_bytes_family;
+    std::array<
+        std::array<prometheus::Counter *, static_cast<size_t>(RemoteCacheWaitResultMetric::Count)>,
+        static_cast<size_t>(RemoteCacheFileTypeMetric::Count)>
+        remote_cache_wait_on_downloading_bytes_metrics{};
+    prometheus::Family<prometheus::Histogram> * registered_remote_cache_wait_on_downloading_seconds_family;
+    std::array<
+        std::array<prometheus::Histogram *, static_cast<size_t>(RemoteCacheWaitResultMetric::Count)>,
+        static_cast<size_t>(RemoteCacheFileTypeMetric::Count)>
+        remote_cache_wait_on_downloading_seconds_metrics{};
+    prometheus::Family<prometheus::Histogram> * registered_remote_cache_bg_download_stage_seconds_family;
+    std::array<
+        std::array<prometheus::Histogram *, static_cast<size_t>(RemoteCacheDownloadStageMetric::Count)>,
+        static_cast<size_t>(RemoteCacheFileTypeMetric::Count)>
+        remote_cache_bg_download_stage_seconds_metrics{};
+    prometheus::Family<prometheus::Counter> * registered_remote_cache_reject_family;
+    std::array<
+        std::array<prometheus::Counter *, static_cast<size_t>(RemoteCacheRejectReasonMetric::Count)>,
+        static_cast<size_t>(RemoteCacheFileTypeMetric::Count)>
+        remote_cache_reject_metrics{};
 
 public:
 #define MAKE_METRIC_MEMBER_M(family_name, help, type, ...) \

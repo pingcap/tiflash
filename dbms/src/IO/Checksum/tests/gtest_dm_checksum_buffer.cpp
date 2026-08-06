@@ -27,6 +27,7 @@
 #include <Storages/Page/PageUtil.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <fmt/format.h>
+#include <unistd.h>
 
 #include <ext/scope_guard.h>
 #include <random>
@@ -162,7 +163,8 @@ void runSeekingTest()
             {
                 auto [offset, whence, length, next] = randomOperation(size, current);
                 current = next;
-                buffer.seek(offset, whence);
+                auto ret = buffer.seek(offset, whence);
+                ASSERT_GE(ret, 0);
                 ASSERT_EQ(current, buffer.getPositionInFile());
                 std::vector<char> data_slice(length);
                 std::vector<char> file_slice(length);
@@ -219,7 +221,8 @@ void runReadBigTest()
     {
         auto file = provider->newRandomAccessFile(filename, {"/tmp/test.enc", "test.enc"}, limiter->getReadLimiter());
         auto buffer = FramedChecksumReadBuffer<D>(file);
-        buffer.seek(static_cast<ssize_t>(i));
+        auto ret = buffer.seek(static_cast<ssize_t>(i));
+        ASSERT_GE(ret, 0);
         buffer.readBig(compare.data(), i);
         ASSERT_EQ(std::memcmp(compare.data(), data.data() + i, i), 0) << "seed: " << seed;
     }
@@ -334,7 +337,7 @@ void runStackedSeekingTest()
             auto x = buffer->count(); // compressed position
             auto y = compression_buffer.offset(); // uncompressed position
             compression_buffer.write(slice.data(), slice.size());
-            slices.template emplace_back(std::move(slice), x, y);
+            slices.emplace_back(std::move(slice), x, y);
         }
     }
     {
@@ -371,13 +374,23 @@ TEST_STACKED_SEEKING(CRC64)
 TEST_STACKED_SEEKING(City128)
 TEST_STACKED_SEEKING(XXH3)
 
+std::string makeUniqueCompressedSeekTestPath()
+{
+    const auto * test_info = ::testing::UnitTest::GetInstance()->current_test_info();
+    return fmt::format(
+        "/tmp/tiflash_compressed_seek_test_{}_{}_{}.dat",
+        test_info->test_case_name(),
+        test_info->name(),
+        ::getpid());
+}
+
 template <ChecksumAlgo D>
 void runCompressedSeekableReaderBufferTest()
 try
 {
     auto log = Logger::get();
-    // Create a temporary file for testing
-    const std::string temp_file_path = "/tmp/tiflash_compressed_seek_test.dat";
+    // Create a unique temporary file path to avoid conflicts in parallel tests
+    const auto temp_file_path = makeUniqueCompressedSeekTestPath();
     SCOPE_EXIT({
         Poco::File file(temp_file_path);
         if (file.exists())
@@ -494,5 +507,30 @@ TEST_COMPRESSEDSEEKABLE(CRC32)
 TEST_COMPRESSEDSEEKABLE(CRC64)
 TEST_COMPRESSEDSEEKABLE(City128)
 TEST_COMPRESSEDSEEKABLE(XXH3)
+
+template <ChecksumAlgo D>
+void runEmptyCompressedSeekableReaderBufferTest()
+{
+    auto config = DM::DMChecksumConfig{{}, TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE, D};
+    auto compressed_in = CompressedReadBufferFromFileBuilder::build(
+        String{},
+        "empty-compressed-buffer",
+        config.getChecksumAlgorithm(),
+        config.getChecksumFrameLength());
+
+    compressed_in->seek(0, 0);
+}
+
+#define TEST_EMPTY_COMPRESSEDSEEKABLE(ALGO)                               \
+    TEST(DMChecksumBuffer##ALGO, EmptyCompressedSeekable)                 \
+    {                                                                     \
+        runEmptyCompressedSeekableReaderBufferTest<ChecksumAlgo::ALGO>(); \
+    } // NOLINT(cert-err58-cpp)
+
+TEST_EMPTY_COMPRESSEDSEEKABLE(None)
+TEST_EMPTY_COMPRESSEDSEEKABLE(CRC32)
+TEST_EMPTY_COMPRESSEDSEEKABLE(CRC64)
+TEST_EMPTY_COMPRESSEDSEEKABLE(City128)
+TEST_EMPTY_COMPRESSEDSEEKABLE(XXH3)
 
 } // namespace DB::tests

@@ -15,15 +15,18 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Common/config.h> // For ENABLE_NEXT_GEN_COLUMNAR
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/Context_fwd.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/ColumnDefine_fwd.h>
 #include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers_fwd.h>
+#include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <Storages/DeltaMerge/SegmentReadTask.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/IStorage.h>
@@ -38,6 +41,9 @@ namespace DB
 {
 class DAGContext;
 
+// StorageDisaggregated is a virtual IStorage which will that handle reading Block data  for tiflash-compute node under the disaggregated architecture. It will be used in two scenarios:
+// 1. For deployed with tiflash-write, StorageDisaggregated will build a `DisaggReadSnapshot` from tiflash-write and read data from the snapshot.
+// 2. For deployed with tikv columnar, StorageDisaggregated will read data from the columnar proxy.
 class StorageDisaggregated : public IStorage
 {
 public:
@@ -68,15 +74,24 @@ public:
         unsigned num_streams) override;
 
 private:
-    // helper functions for building the task read from a shared remote storage system (e.g. S3)
-    BlockInputStreams readThroughS3(const Context & db_context, unsigned num_streams);
-    void readThroughS3(
+    // helper functions for building the task read from the disagg tiflash-write nodes
+    BlockInputStreams readThroughTiFlashWrite(const Context & db_context, unsigned num_streams);
+    void readThroughTiFlashWrite(
         PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         const Context & db_context,
         unsigned num_streams);
 
-    DM::SegmentReadTasks buildReadTaskWithBackoff(const Context & db_context);
+    bool isReadColumnar();
+    // helper functions for building the task read from the columnar proxy nodes
+    BlockInputStreams readThroughColumnar(const Context & db_context, unsigned num_streams);
+    void readThroughColumnar(
+        PipelineExecutorContext & exec_context,
+        PipelineExecGroupBuilder & group_builder,
+        const Context & db_context,
+        unsigned num_streams);
+
+    DM::SegmentReadTasks buildReadTaskWithBackoff(const Context & db_context, const DM::ScanContextPtr & scan_context);
 
     DM::SegmentReadTasks buildReadTask(const Context & db_context, const DM::ScanContextPtr & scan_context);
 
@@ -107,23 +122,26 @@ private:
     std::tuple<DM::RSOperatorPtr, DM::ColumnRangePtr> buildRSOperatorAndColumnRange(
         const Context & db_context,
         const DM::ColumnDefinesPtr & columns_to_read);
-    std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> packSegmentReadTasks(
+    std::tuple<std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr>, DM::ColumnDefinesPtr> packSegmentReadTasks(
         const Context & db_context,
         DM::SegmentReadTasks && read_tasks,
         const DM::ColumnDefinesPtr & column_defines,
+        const DM::ScanContextPtr & scan_context,
         size_t num_streams,
         int extra_table_id_index);
     void buildRemoteSegmentInputStreams(
         const Context & db_context,
         DM::SegmentReadTasks && read_tasks,
         size_t num_streams,
-        DAGPipeline & pipeline);
+        DAGPipeline & pipeline,
+        const DM::ScanContextPtr & scan_context);
     void buildRemoteSegmentSourceOps(
         PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         const Context & db_context,
         DM::SegmentReadTasks && read_tasks,
-        size_t num_streams);
+        size_t num_streams,
+        const DM::ScanContextPtr & scan_context);
 
     using RemoteTableRange = std::pair<TableID, pingcap::coprocessor::KeyRanges>;
     std::tuple<std::vector<RemoteTableRange>, UInt64> buildRemoteTableRanges();
@@ -136,12 +154,25 @@ private:
         PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         DAGExpressionAnalyzer & analyzer);
-    ExpressionActionsPtr getExtraCastExpr(DAGExpressionAnalyzer & analyzer);
-    void extraCast(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline);
-    void extraCast(
+#if ENABLE_NEXT_GEN_COLUMNAR
+    void filterConditionsWithPushedDownFilters(DAGExpressionAnalyzer & analyzer, DAGPipeline & pipeline);
+    void filterConditionsWithPushedDownFilters(
         PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
         DAGExpressionAnalyzer & analyzer);
+#endif
+    ExpressionActionsPtr getExtraCastExpr(
+        DAGExpressionAnalyzer & analyzer,
+        bool include_pushed_down_filter_columns = false);
+    void extraCast(
+        DAGExpressionAnalyzer & analyzer,
+        DAGPipeline & pipeline,
+        bool include_pushed_down_filter_columns = false);
+    void extraCast(
+        PipelineExecutorContext & exec_context,
+        PipelineExecGroupBuilder & group_builder,
+        DAGExpressionAnalyzer & analyzer,
+        bool include_pushed_down_filter_columns = false);
     tipb::Executor buildTableScanTiPB();
 
     size_t getBuildTaskRPCTimeout() const;
@@ -157,5 +188,7 @@ private:
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
     static constexpr auto ZONE_LABEL_KEY = "zone";
     std::optional<String> zone_label;
+    // For generated column, just need a placeholder, and TiDB will fill this column.
+    std::vector<std::tuple<UInt64, String, DataTypePtr>> generated_column_infos;
 };
 } // namespace DB

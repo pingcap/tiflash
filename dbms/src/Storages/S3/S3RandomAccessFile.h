@@ -16,12 +16,15 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Common/Stopwatch.h>
 #include <IO/BaseFile/RandomAccessFile.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
+#include <Storages/S3/S3ReadLimiter_fwd.h>
 #include <aws/s3/model/GetObjectResult.h>
 #include <common/types.h>
 
 #include <ext/scope_guard.h>
+#include <istream>
 
 /// Remove the population of thread_local from Poco
 #ifdef thread_local
@@ -31,34 +34,45 @@
 namespace DB::S3
 {
 class TiFlashS3Client;
-}
+} // namespace DB::S3
 
 namespace DB::ErrorCodes
 {
 extern const int NOT_IMPLEMENTED;
-}
+extern const int S3_ERROR;
+} // namespace DB::ErrorCodes
 
 namespace DB::S3
 {
 class S3RandomAccessFile final : public RandomAccessFile
 {
 public:
+    /// Create a random-access S3 file reader for the remote object key.
     static RandomAccessFilePtr create(const String & remote_fname);
 
-    S3RandomAccessFile(std::shared_ptr<TiFlashS3Client> client_ptr_, const String & remote_fname_);
+    S3RandomAccessFile(
+        std::shared_ptr<TiFlashS3Client> client_ptr_,
+        const String & remote_fname_,
+        const DM::ScanContextPtr & scan_context_);
 
-    // Can only seek forward.
-    off_t seek(off_t offset, int whence) override;
+    ~S3RandomAccessFile() override;
 
-    ssize_t read(char * buf, size_t size) override;
+    /// Seek to `offset` with `SEEK_SET`.
+    /// Forward seeks may reuse the current stream or reopen it depending on the implementation path.
+    /// Throws `ErrorCodes::S3_ERROR` when the remote stream keeps failing after the bounded retry budget is exhausted.
+    [[nodiscard]] off_t seek(off_t offset, int whence) override;
 
-    // Note that this will return "{S3Client.bucket_name}/{remote_fname}"
+    /// Read up to `size` bytes from the current offset and advance on success.
+    /// Throws `ErrorCodes::S3_ERROR` when the remote stream keeps failing after the bounded retry budget is exhausted.
+    [[nodiscard]] ssize_t read(char * buf, size_t size) override;
+
+    /// Return the fully qualified remote path as "{bucket}/{remote_fname}".
     std::string getFileName() const override;
 
-    // Return "remote_fname"
+    /// Return the object key without the bucket prefix.
     std::string getInitialFileName() const override;
 
-    ssize_t pread(char * /*buf*/, size_t /*size*/, off_t /*offset*/) const override
+    [[nodiscard]] ssize_t pread(char * /*buf*/, size_t /*size*/, off_t /*offset*/) const override
     {
         throw Exception("S3RandomAccessFile not support pread", ErrorCodes::NOT_IMPLEMENTED);
     }
@@ -81,13 +95,33 @@ public:
         return ext::make_scope_guard([]() { read_file_info.reset(); });
     }
 
+    /// Return a short diagnostic string for logging and tests.
     String summary() const;
 
 private:
-    bool initialize();
+    /// Open or reopen the body stream for the current `cur_offset`.
+    void initialize(std::string_view action);
+    /// Reopen the object stream from `target_offset` and reset per-initialize retry state.
+    void reopenAt(off_t target_offset, std::string_view action);
+    /// Convert the final retry-exhausted remote read/seek failure into a stable S3-specific error code.
+    [[noreturn]] void throwRetryExhaustedError(std::string_view action, int ret, int err) const;
     off_t seekImpl(off_t offset, int whence);
     ssize_t readImpl(char * buf, size_t size);
     String readRangeOfObject();
+    ssize_t readChunked(char * buf, size_t size);
+    ssize_t finalizeRead(size_t requested_size, size_t actual_size, const Stopwatch & sw, std::istream & istr);
+    off_t recordSuccessfulSeek(
+        off_t target_offset,
+        size_t logical_seek_size,
+        size_t remote_read_bytes,
+        const Stopwatch & sw);
+    off_t finalizeSeek(
+        off_t target_offset,
+        size_t requested_size,
+        size_t actual_size,
+        const Stopwatch & sw,
+        std::istream & istr);
+    off_t seekChunked(off_t offset);
 
     // When reading, it is necessary to pass the extra information of file, such file size, to S3RandomAccessFile::create.
     // It is troublesome to pass parameters layer by layer. So currently, use thread_local global variable to pass parameters.
@@ -100,12 +134,16 @@ private:
     off_t cur_offset;
     Aws::S3::Model::GetObjectResult read_result;
     Int64 content_length = 0;
+    std::shared_ptr<S3ReadLimiter> read_limiter;
+    std::shared_ptr<S3ReadMetricsRecorder> read_metrics_recorder;
 
     DB::LoggerPtr log;
     bool is_close = false;
 
+    /// Count GetObject failures within the current initialize session only.
     Int32 cur_retry = 0;
     static constexpr Int32 max_retry = 3;
+    DM::ScanContextPtr scan_context;
 };
 
 using S3RandomAccessFilePtr = std::shared_ptr<S3RandomAccessFile>;

@@ -1,0 +1,83 @@
+From 916e60c4a997279fa85e4b08d36b71614737e810 Mon Sep 17 00:00:00 2001
+From: JaySon-Huang <tshent@qq.com>
+Date: Sat, 11 Oct 2025 23:36:00 +0800
+Subject: [PATCH] Allow set Alibaba cloud oss format for LifecycleRule
+
+Signed-off-by: JaySon-Huang <tshent@qq.com>
+---
+ .../include/aws/s3/model/LifecycleRule.h      |  5 ++++
+ .../source/model/LifecycleRule.cpp            | 28 +++++++++++++++++--
+ 2 files changed, 31 insertions(+), 2 deletions(-)
+
+diff --git a/generated/src/aws-cpp-sdk-s3/include/aws/s3/model/LifecycleRule.h b/generated/src/aws-cpp-sdk-s3/include/aws/s3/model/LifecycleRule.h
+index 486bfdba907..c5feb080c19 100644
+--- a/generated/src/aws-cpp-sdk-s3/include/aws/s3/model/LifecycleRule.h
++++ b/generated/src/aws-cpp-sdk-s3/include/aws/s3/model/LifecycleRule.h
+@@ -386,6 +386,9 @@ namespace Model
+     
+     inline LifecycleRule& WithAbortIncompleteMultipartUpload(AbortIncompleteMultipartUpload&& value) { SetAbortIncompleteMultipartUpload(std::move(value)); return *this;}
+ 
++    inline bool GetAliOssFormat() const { return m_ali_oss_format; }
++    inline LifecycleRule& SetAliOssFormat(bool value) { m_ali_oss_format = value; return *this; }
++
+   private:
+ 
+     LifecycleExpiration m_expiration;
+@@ -411,6 +414,8 @@ namespace Model
+ 
+     AbortIncompleteMultipartUpload m_abortIncompleteMultipartUpload;
+     bool m_abortIncompleteMultipartUploadHasBeenSet = false;
++
++    bool m_ali_oss_format = false;
+   };
+ 
+ } // namespace Model
+diff --git a/generated/src/aws-cpp-sdk-s3/source/model/LifecycleRule.cpp b/generated/src/aws-cpp-sdk-s3/source/model/LifecycleRule.cpp
+index 1289af84081..95afab82e09 100644
+--- a/generated/src/aws-cpp-sdk-s3/source/model/LifecycleRule.cpp
++++ b/generated/src/aws-cpp-sdk-s3/source/model/LifecycleRule.cpp
+@@ -113,6 +113,25 @@ LifecycleRule& LifecycleRule::operator =(const XmlNode& xmlNode)
+       m_abortIncompleteMultipartUpload = abortIncompleteMultipartUploadNode;
+       m_abortIncompleteMultipartUploadHasBeenSet = true;
+     }
++
++    // Alibaba cloud OSS specific. "Tag" and "Prefix" are directly under the rule node.
++    XmlNode tagNode = resultNode.FirstChild("Tag");
++    if(!tagNode.IsNull())
++    {
++        m_ali_oss_format = true;
++        Aws::S3::Model::Tag tmp_tag = tagNode;
++        m_filter.SetTag(std::move(tmp_tag));
++        m_filterHasBeenSet = true;
++    }
++    XmlNode prefixNode = resultNode.FirstChild("Prefix");
++    if (!prefixNode.IsNull())
++    {
++        m_ali_oss_format = true;
++        Aws::String tmp_prefix = Aws::Utils::Xml::DecodeEscapedXmlText(prefixNode.GetText());
++        m_filter.SetPrefix(std::move(tmp_prefix));
++        m_filterHasBeenSet = true;
++    }
++
+   }
+ 
+   return *this;
+@@ -135,8 +154,13 @@ void LifecycleRule::AddToNode(XmlNode& parentNode) const
+ 
+   if(m_filterHasBeenSet)
+   {
+-   XmlNode filterNode = parentNode.CreateChildElement("Filter");
+-   m_filter.AddToNode(filterNode);
++    if (m_ali_oss_format) {
++      // for Alibaba cloud oss, the filter node is directly added under the rule node
++      m_filter.AddToNode(parentNode);
++    } else {
++      XmlNode filterNode = parentNode.CreateChildElement("Filter");
++      m_filter.AddToNode(filterNode);
++    }
+   }
+ 
+   if(m_statusHasBeenSet)
+-- 
+2.43.5
+

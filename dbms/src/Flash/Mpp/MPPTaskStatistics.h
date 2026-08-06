@@ -61,6 +61,8 @@ public:
     tipb::TiFlashExecutionInfo genTiFlashExecutionInfo();
 
 private:
+    void syncRUInfoToExecutorStatisticsCollector();
+
     void recordInputBytes(DAGContext & dag_context);
 
     const LoggerPtr log;
@@ -89,6 +91,10 @@ private:
     // executor dag
     bool is_root = false;
     String sender_executor_id;
+    UInt64 connection_id = 0;
+    String connection_alias;
+    String sql_digest;
+    String plan_digest;
 
     // resource
     RUConsumption ru_info{.cpu_ru = 0.0, .cpu_time_ns = 0, .read_ru = 0.0, .read_bytes = 0};

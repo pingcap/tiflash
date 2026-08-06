@@ -17,6 +17,7 @@
 #include <Flash/EstablishCall.h>
 #include <Interpreters/Context.h>
 #include <Server/FlashGrpcServerHolder.h>
+#include <pingcap/Exception.h>
 
 // In order to include grpc::SecureServerCredentials which used in
 // sslServerCredentialsWithFetcher()

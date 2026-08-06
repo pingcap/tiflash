@@ -426,7 +426,12 @@ public:
                 .dir = fmt::format("{}/fs_cache", getTemporaryPath()),
                 .capacity = 1 * 1000 * 1000 * 1000,
             };
-            FileCache::initialize(global_context.getPathCapacity(), file_cache_config);
+            UInt16 vcores = 8;
+            FileCache::initialize(
+                global_context.getPathCapacity(),
+                file_cache_config,
+                vcores,
+                global_context.getIORateLimiter());
         }
 
         table_columns = DMTestEnv::getDefaultColumns();
@@ -513,7 +518,7 @@ protected:
     ColumnDefinesPtr table_columns;
     DM::DeltaMergeStore::Settings settings;
 
-    NamespaceID ns_id = 100;
+    TableID ns_id = 100;
 
     // the segment we are going to test
     SegmentPtr wn_segment;

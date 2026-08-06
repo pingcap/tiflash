@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/AggregateFunctions/Helpers.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,6 +16,7 @@
 
 #pragma once
 
+#include <AggregateFunctions/AggregateFunctionAvg.h>
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeDecimal.h>
@@ -61,17 +64,6 @@
 
 namespace DB
 {
-template <template <typename, typename> class AggregateFunctionTemplate, typename ResultType, typename... TArgs>
-static IAggregateFunction * createWithDecimalType(const IDataType & argument_type, TArgs &&... args)
-{
-#define DISPATCH(FIELDTYPE, DATATYPE)                  \
-    if (typeid_cast<const DATATYPE *>(&argument_type)) \
-        return new AggregateFunctionTemplate<FIELDTYPE, ResultType>(std::forward<TArgs>(args)...);
-    FOR_DECIMAL_TYPES(DISPATCH)
-#undef DISPATCH
-    return nullptr;
-}
-
 template <
     template <typename, typename, typename>
     class AggregateSumTemplate,

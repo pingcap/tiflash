@@ -31,6 +31,7 @@ namespace DB
 {
 class FastAddPeerContext;
 using FastAddPeerContextPtr = std::shared_ptr<FastAddPeerContext>;
+struct TiFlashRaftProxyHelper;
 
 /**
  * A shared context containing disaggregated mode related things.
@@ -49,6 +50,7 @@ struct SharedContextDisagg : private boost::noncopyable
 
     // Only meaningful in DisaggregatedComputeMode.
     bool use_autoscaler = false;
+    bool use_columnar = false;
 
     /// For both read node (downloading) and write node (uploading).
     DM::Remote::IDataStorePtr remote_data_store;
@@ -68,6 +70,9 @@ struct SharedContextDisagg : private boost::noncopyable
     /// Only for read node.
     /// It is a cache for the mvcc index, stores in the memory.
     DB::DM::Remote::RNMVCCIndexCachePtr rn_mvcc_index_cache;
+
+    /// Only for next-gen columnar compute path.
+    const TiFlashRaftProxyHelper * columnar_proxy_helper = nullptr;
 
     static SharedContextDisaggPtr create(Context & global_context_)
     {
@@ -98,6 +103,10 @@ struct SharedContextDisagg : private boost::noncopyable
     bool isDisaggregatedStorageMode() const { return disaggregated_mode == DisaggregatedMode::Storage; }
 
     bool notDisaggregatedMode() const { return disaggregated_mode == DisaggregatedMode::None; }
+
+    void setColumnarProxyHelper(const TiFlashRaftProxyHelper * helper) { columnar_proxy_helper = helper; }
+
+    const TiFlashRaftProxyHelper * getColumnarProxyHelper() const { return columnar_proxy_helper; }
 };
 
 } // namespace DB

@@ -652,6 +652,13 @@ try
 
     // stable
     {
+        // skip_check_segment_update prevents write() from scheduling background
+        // flush/merge tasks, avoiding a race where background placeDeltaIndex or
+        // merge delta holds is_updating and causes mergeDeltaAll() to fail silently.
+        FailPointHelper::enableFailPoint(FailPoints::skip_check_segment_update);
+        auto fp_guard
+            = ext::make_scope_guard([]() { FailPointHelper::disableFailPoint(FailPoints::skip_check_segment_update); });
+
         auto block = DMTestEnv::prepareSimpleWriteBlock(0, 4096, false);
         store->write(*db_context, db_context->getSettingsRef(), block);
         store->mergeDeltaAll(*db_context);

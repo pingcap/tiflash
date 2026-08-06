@@ -118,6 +118,32 @@ try
 }
 CATCH
 
+TEST_F(TestMPPTaskManager, testDuplicatePendingAsyncTunnel)
+try
+{
+    auto context = createContextForTest();
+
+    mpp::EstablishMPPConnectionRequest establish_req;
+    auto gather_id = MPPGatherId(1, MPPQueryId(1, 1, 1, 1, "", 1, ""));
+    auto * receiver_meta = establish_req.mutable_receiver_meta();
+    fillTaskMeta(receiver_meta, 2, gather_id);
+    auto * sender_meta = establish_req.mutable_sender_meta();
+    fillTaskMeta(sender_meta, 1, gather_id);
+    auto mpp_task_manager = context->getTMTContext().getMPPTaskManager();
+
+    EstablishCallData first_call_data;
+    auto find_tunnel_result = mpp_task_manager->findAsyncTunnel(&establish_req, &first_call_data, nullptr, *context);
+    ASSERT_TRUE(find_tunnel_result.first == nullptr && find_tunnel_result.second.empty());
+    ASSERT_TRUE(first_call_data.isWaitingTunnelState());
+
+    EstablishCallData duplicate_call_data;
+    find_tunnel_result = mpp_task_manager->findAsyncTunnel(&establish_req, &duplicate_call_data, nullptr, *context);
+    ASSERT_TRUE(find_tunnel_result.first == nullptr);
+    ASSERT_TRUE(!find_tunnel_result.second.empty());
+    ASSERT_FALSE(duplicate_call_data.isWaitingTunnelState());
+}
+CATCH
+
 TEST_F(TestMPPTaskManager, testDuplicateMPPTaskId)
 try
 {

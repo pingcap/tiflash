@@ -49,7 +49,7 @@ public:
             FailPointHelper::enableFailPoint(FailPoints::force_ingest_via_delta);
     }
 
-    ~StoreIngestTest()
+    ~StoreIngestTest() override
     {
         if (ingest_by_split)
             FailPointHelper::disableFailPoint(FailPoints::force_ingest_via_replace);
@@ -257,7 +257,9 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             "",
-            /* keep_order= */ true)[0];
+            DMReadOptions{
+                .keep_order = true,
+            })[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name}),

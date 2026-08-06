@@ -25,36 +25,35 @@ namespace DB
 template <class ExchangeWriterPtr>
 BroadcastOrPassThroughWriter<ExchangeWriterPtr>::BroadcastOrPassThroughWriter(
     ExchangeWriterPtr writer_,
-    Int64 batch_send_min_limit_,
+    Int64 max_buffered_rows_,
+    UInt64 max_buffered_bytes_,
     DAGContext & dag_context_,
     MPPDataPacketVersion data_codec_version_,
     tipb::CompressionMode compression_mode_,
     tipb::ExchangeType exchange_type_)
     : DAGResponseWriter(/*records_per_chunk=*/-1, dag_context_)
-    , batch_send_min_limit(batch_send_min_limit_)
     , writer(writer_)
     , exchange_type(exchange_type_)
     , data_codec_version(data_codec_version_)
     , compression_method(ToInternalCompressionMethod(compression_mode_))
 {
-    rows_in_blocks = 0;
     RUNTIME_CHECK(dag_context.encode_type == tipb::EncodeType::TypeCHBlock);
     RUNTIME_CHECK(exchange_type == tipb::ExchangeType::Broadcast || exchange_type == tipb::ExchangeType::PassThrough);
 
     switch (data_codec_version)
     {
     case MPPDataPacketV0:
-        if (batch_send_min_limit <= 0)
-            batch_send_min_limit = 1;
+        if (max_buffered_rows_ <= 0)
+            max_buffered_rows_ = 1;
         break;
     case MPPDataPacketV1:
     default:
     {
         // make `batch_send_min_limit` always GT 0
-        if (batch_send_min_limit <= 0)
+        if (max_buffered_rows_ <= 0)
         {
             // set upper limit if not specified
-            batch_send_min_limit = 8 * 1024 /* 8K */;
+            max_buffered_rows_ = 8 * 1024 /* 8K */;
         }
         for (const auto & field_type : dag_context.result_field_types)
         {
@@ -63,13 +62,15 @@ BroadcastOrPassThroughWriter<ExchangeWriterPtr>::BroadcastOrPassThroughWriter(
         break;
     }
     }
+    max_buffered_rows = static_cast<UInt64>(max_buffered_rows_);
+    max_buffered_bytes = max_buffered_bytes_;
 }
 
 template <class ExchangeWriterPtr>
 WriteResult BroadcastOrPassThroughWriter<ExchangeWriterPtr>::flush()
 {
     has_pending_flush = false;
-    if (rows_in_blocks > 0)
+    if (buffered_rows > 0)
     {
         auto wait_res = waitForWritable();
         if (wait_res == WaitResult::Ready)
@@ -102,11 +103,12 @@ WriteResult BroadcastOrPassThroughWriter<ExchangeWriterPtr>::write(const Block &
     size_t rows = block.rows();
     if (rows > 0)
     {
-        rows_in_blocks += rows;
+        buffered_rows += rows;
+        buffered_bytes += block.allocatedBytes();
         blocks.push_back(block);
     }
 
-    if (static_cast<Int64>(rows_in_blocks) >= batch_send_min_limit)
+    if (needFlush())
     {
         return flush();
     }
@@ -130,7 +132,8 @@ void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::writeBlocks()
     else
         writer->passThroughWrite(blocks, data_codec_version, compression_method);
     blocks.clear();
-    rows_in_blocks = 0;
+    buffered_rows = 0;
+    buffered_bytes = 0;
 }
 
 template class BroadcastOrPassThroughWriter<SyncMPPTunnelSetWriterPtr>;

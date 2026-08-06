@@ -86,4 +86,22 @@ bool AddExtraTableIDColumnTransformAction::transform(Block & block, TableID phys
     return true;
 }
 
+bool AddExtraTableIDColumnTransformAction::fill(Block & block, TableID physical_table_id)
+{
+    if (unlikely(!block))
+        return true;
+
+    if (extra_table_id_index != MutSup::invalid_col_id)
+    {
+        size_t row_number = block.rows();
+        auto & col = block.getByPosition(extra_table_id_index);
+        auto col_data = col.type->createColumnConst(row_number, Field(physical_table_id));
+        col.column = std::move(col_data);
+    }
+
+    total_rows += block.rows();
+
+    return true;
+}
+
 } // namespace DB

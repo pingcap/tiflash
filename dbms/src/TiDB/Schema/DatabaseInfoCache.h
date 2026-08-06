@@ -23,6 +23,7 @@
 namespace DB
 {
 
+// DatabaseInfoCache is a thread-safe cache for DatabaseID -> TiDB::DBInfo
 class DatabaseInfoCache
 {
 public:

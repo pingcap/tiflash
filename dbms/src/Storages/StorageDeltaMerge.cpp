@@ -51,6 +51,7 @@
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/TiKVHelpers/PDTiKVClient.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
 #include <Storages/KVStore/Types.h>
 #include <Storages/MutableSupport.h>
@@ -722,11 +723,15 @@ void checkStartTs(UInt64 start_ts, const Context & context, const String & req_i
     auto pd_client = tmt.getPDClient();
     if (unlikely(pd_client->isMock()))
         return;
+    // Query paths only consume the last safepoint observed by TiFlash. Cache
+    // advancement is still handled by the existing non-query callers so that
+    // PD traffic does not scale with read concurrency.
     auto safe_point = PDClientHelper::getGCSafePointWithRetry(
         pd_client,
         keyspace_id,
-        /* ignore_cache= */ false,
-        context.getSettingsRef().safe_point_update_interval_seconds);
+        context.getSettingsRef().safe_point_update_interval_seconds,
+        context.getSettingsRef().safe_point_get_max_backoff_ms,
+        GCSafepointFetchStrategy::CacheOnly);
     if (start_ts < safe_point)
     {
         throw TiFlashException(
@@ -801,7 +806,7 @@ DM::RowKeyRanges parseMvccQueryInfo(
     return ranges;
 }
 
-RuntimeFilteList parseRuntimeFilterList(
+RuntimeFilterList parseRuntimeFilterList(
     const SelectQueryInfo & query_info,
     const DM::ColumnDefines & table_column_defines,
     const Context & db_context,
@@ -895,8 +900,11 @@ BlockInputStreams StorageDeltaMerge::read(
         runtime_filter_list,
         query_info.dag_query ? query_info.dag_query->rf_max_wait_time_ms : 0,
         query_info.req_id,
-        query_info.keep_order,
-        /* is_fast_scan */ query_info.is_fast_scan,
+        DMReadOptions{
+            .keep_order = query_info.keep_order,
+            .is_fast_scan = query_info.is_fast_scan,
+            .has_multiple_partitions = query_info.has_multiple_partitions,
+        },
         max_block_size,
         parseSegmentSet(select_query.segment_expression_list),
         extra_table_id_index,
@@ -988,8 +996,11 @@ void StorageDeltaMerge::read(
         runtime_filter_list,
         query_info.dag_query ? query_info.dag_query->rf_max_wait_time_ms : 0,
         query_info.req_id,
-        query_info.keep_order,
-        /* is_fast_scan */ query_info.is_fast_scan,
+        DMReadOptions{
+            .keep_order = query_info.keep_order,
+            .is_fast_scan = query_info.is_fast_scan,
+            .has_multiple_partitions = query_info.has_multiple_partitions,
+        },
         max_block_size,
         parseSegmentSet(select_query.segment_expression_list),
         extra_table_id_index,
@@ -1151,7 +1162,7 @@ size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM
         std::vector<RuntimeFilterPtr>(),
         0,
         /*tracing_id*/ "getRows",
-        /*keep_order*/ false)[0];
+        DMReadOptions{})[0];
     stream->readPrefix();
     Block block;
     while ((block = stream->read()))
@@ -1179,7 +1190,7 @@ DM::RowKeyRange getRange(DM::DeltaMergeStorePtr & store, const Context & context
             std::vector<RuntimeFilterPtr>(),
             0,
             /*tracing_id*/ "getRange",
-            /*keep_order*/ false)[0];
+            DMReadOptions{})[0];
         stream->readPrefix();
         Block block;
         size_t index = 0;

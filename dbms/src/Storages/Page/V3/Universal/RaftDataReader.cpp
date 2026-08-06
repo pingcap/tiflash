@@ -26,7 +26,7 @@ char RaftDataReader::raft_data_end_key[1] = {0x03};
 
 Page RaftDataReader::read(const UniversalPageId & page_id) const
 {
-    auto snapshot = uni_ps.getSnapshot(fmt::format("read_r_{}", page_id));
+    auto snapshot = uni_ps.getGeneralSnapshot(fmt::format("read_r_{}", page_id));
     return uni_ps.read(page_id, nullptr, snapshot, /*throw_on_not_exist*/ false);
 }
 
@@ -38,7 +38,7 @@ std::optional<raft_serverpb::RaftApplyState> RaftDataReader::readRegionApplyStat
     };
     assert(keys.size() == 2);
 
-    auto snap = uni_ps.getSnapshot(fmt::format("region_apply_state_{}", region_id));
+    auto snap = uni_ps.getGeneralSnapshot(fmt::format("region_apply_state_{}", region_id));
     const auto page_map = uni_ps.read(keys, nullptr, snap, /*throw_on_not_exist*/ false);
 
     raft_serverpb::RaftApplyState region_apply_state;
@@ -65,7 +65,7 @@ void RaftDataReader::traverse(
     const std::function<void(const UniversalPageId & page_id, DB::Page page)> & acceptor)
 {
     auto transformed_end = end.empty() ? UniversalPageId(raft_data_end_key, 1) : end;
-    auto snapshot = uni_ps.getSnapshot(fmt::format("scan_r_{}_{}", start, transformed_end));
+    auto snapshot = uni_ps.getGeneralSnapshot(fmt::format("scan_r_{}_{}", start, transformed_end));
     const auto page_ids = uni_ps.page_directory->getAllPageIdsInRange(start, transformed_end, snapshot);
     for (const auto & page_id : page_ids)
     {
@@ -90,7 +90,7 @@ void RaftDataReader::traverseRemoteRaftLogForRegion(
 {
     auto start = UniversalPageIdFormat::toFullRaftLogPrefix(region_id);
     auto end = UniversalPageIdFormat::toFullRaftLogScanEnd(region_id);
-    auto snapshot = uni_ps.getSnapshot(fmt::format("scan_r_{}_{}", start, end));
+    auto snapshot = uni_ps.getGeneralSnapshot(fmt::format("scan_r_{}_{}", start, end));
     const auto page_ids = uni_ps.page_directory->getAllPageIdsInRange(start, end, snapshot);
     if (!precheck(page_ids.size()))
     {
@@ -109,7 +109,7 @@ void RaftDataReader::traverseRemoteRaftLogForRegion(
 
 std::optional<UniversalPageId> RaftDataReader::getLowerBound(const UniversalPageId & page_id)
 {
-    auto snapshot = uni_ps.getSnapshot(fmt::format("lower_bound_r_{}", page_id));
+    auto snapshot = uni_ps.getGeneralSnapshot(fmt::format("lower_bound_r_{}", page_id));
     return uni_ps.page_directory->getLowerBound(page_id, snapshot);
 }
 
@@ -120,7 +120,7 @@ std::optional<UInt64> RaftDataReader::tryParseRegionId(const UniversalPageId & p
     {
         return {};
     }
-    // 11 = 1(RAFT_PREFIX/KV_PREIFIX) + 2(RAFT_DATA_PREFIX) + 8(region id)
+    // 11 = 1(RAFT_PREFIX/KV_PREFIX) + 2(RAFT_DATA_PREFIX) + 8(region id)
     if (page_id.size() < 11)
     {
         return {};
@@ -136,7 +136,7 @@ std::optional<UInt64> RaftDataReader::tryParseRaftLogIndex(const UniversalPageId
     {
         return {};
     }
-    // 20 = 1(RAFT_PREFIX/KV_PREIFIX) + 2(RAFT_DATA_PREFIX) + 8(region id) + 1(RAFT_LOG_SUFFIX) + 8(raft log index)
+    // 20 = 1(RAFT_PREFIX/KV_PREFIX) + 2(RAFT_DATA_PREFIX) + 8(region id) + 1(RAFT_LOG_SUFFIX) + 8(raft log index)
     if (page_id.size() < 20)
     {
         return {};

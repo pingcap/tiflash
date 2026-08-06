@@ -89,4 +89,5 @@ std::optional<std::pair<HandleType, HandleType>> loadDMFileHandleRange(
     const DMContext & dm_context,
     const DMFile & dmfile);
 
+void addUserReadBytes(const DMContext & dm_context, size_t bytes);
 } // namespace DB::DM

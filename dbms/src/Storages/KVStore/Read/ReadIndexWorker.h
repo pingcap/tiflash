@@ -21,8 +21,6 @@
 #include <common/logger_useful.h>
 #include <kvproto/kvrpcpb.pb.h>
 
-#include <algorithm>
-#include <condition_variable>
 #include <memory>
 #include <thread>
 
@@ -32,6 +30,7 @@ namespace tests
 {
 class ReadIndexTest;
 } // namespace tests
+class KVStore;
 
 struct AsyncWaker
 {
@@ -95,9 +94,8 @@ public:
     void runOneRound(SteadyClock::duration min_dur, size_t id);
     void stop();
     ~ReadIndexWorkerManager();
-    BatchReadIndexRes batchReadIndex(
-        const std::vector<kvrpcpb::ReadIndexRequest> & reqs,
-        uint64_t timeout_ms = 10 * 1000);
+    BatchReadIndexRes batchReadIndex(const std::vector<kvrpcpb::ReadIndexRequest> & reqs, uint64_t timeout_ms);
+    void invalidateReadIndexCache(RegionID region_id);
 
     static std::unique_ptr<ReadIndexWorkerManager> newReadIndexWorkerManager(
         const TiFlashRaftProxyHelper & proxy_helper,
@@ -240,6 +238,8 @@ struct ReadIndexDataNode : MutexLockWrap
 
     void consume(const TiFlashRaftProxyHelper & helper, Timestamp ts);
 
+    void invalidateReadIndexCache();
+
     void runOneRound(const TiFlashRaftProxyHelper & helper, const ReadIndexNotifyCtrlPtr & notify);
 
     ReadIndexFuturePtr insertTask(const kvrpcpb::ReadIndexRequest & req);
@@ -283,6 +283,8 @@ struct ReadIndexWorker
     void consumeRegionNotifies(SteadyClock::duration min_dur);
 
     ReadIndexFuturePtr genReadIndexFuture(const kvrpcpb::ReadIndexRequest & req);
+
+    void invalidateReadIndexCache(RegionID region_id) const;
 
     // try to consume read-index response notifications & region waiting list
     void runOneRound(SteadyClock::duration min_dur);

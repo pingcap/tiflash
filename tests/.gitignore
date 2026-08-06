@@ -15,3 +15,13 @@ tidb-ci/log
 
 fullstack-test-next-gen/data
 fullstack-test-next-gen/log
+# Refer to https://gist.github.com/JaySon-Huang/c5fd4aaabbfed73d0bc216ff49e04ba2#build-the-docker-image-for-running-ci-on-rockylinux-9
+fullstack-test-next-gen/Dockerfile-tiflash-ci-base-20250529
+fullstack-test-next-gen/*.rocky9.yaml
+
+fullstack-test-next-gen-columnar/data
+fullstack-test-next-gen-columnar/log
+fullstack-test-next-gen-columnar/Dockerfile-tiflash-ci-base-20250529
+fullstack-test-next-gen-columnar/*.rocky9.yaml
+
+*.log

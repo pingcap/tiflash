@@ -202,7 +202,8 @@ void AggregationBinder::buildAggFunc(tipb::Expr * agg_func, const ASTFunction * 
     auto agg_sig = agg_sig_it->second;
     agg_func->set_tp(agg_sig);
 
-    if (agg_sig == tipb::ExprType::Count || agg_sig == tipb::ExprType::Sum)
+    if (agg_sig == tipb::ExprType::Count || agg_sig == tipb::ExprType::Sum || agg_sig == tipb::ExprType::SumInt
+        || agg_sig == tipb::ExprType::MinCount || agg_sig == tipb::ExprType::MaxCount)
     {
         auto * ft = agg_func->mutable_field_type();
         ft->set_tp(TiDB::TypeLongLong);
@@ -269,14 +270,14 @@ ExecutorBinderPtr compileAggregation(
             }
 
             TiDB::ColumnInfo ci;
-            if (func->name == "count")
+            if (func->name == "count" || func->name == "max_count" || func->name == "min_count")
             {
                 ci.tp = TiDB::TypeLongLong;
                 ci.flag = TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull;
             }
             else if (
                 func->name == "max" || func->name == "min" || func->name == "first_row" || func->name == "sum"
-                || func->name == "avg")
+                || func->name == "sum_int" || func->name == "avg")
             {
                 ci = children_ci[0];
                 ci.flag &= ~TiDB::ColumnFlagNotNull;

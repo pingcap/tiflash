@@ -29,6 +29,7 @@
 #include <Storages/KVStore/StorageEngineType.h>
 
 #include <magic_enum.hpp>
+#include <string_view>
 
 namespace TiDB
 {
@@ -111,7 +112,10 @@ static_assert(magic_enum::enum_count<PersistRegionReason>() == sizeof(PersistReg
 struct ProxyConfigSummary
 {
     bool valid = false;
+    // The max concurrency of PreHandleSnapshot tasks in proxy.
     size_t snap_handle_pool_size = 0;
+    // The max concurrency of IngestSST tasks in proxy.
+    size_t apply_low_priority_pool_size = 0;
     std::string engine_addr;
 };
 
@@ -142,7 +146,7 @@ public:
     metapb::Store & debugMutStoreMeta();
     FileUsageStatistics getFileUsageStatistics() const;
     // Proxy will validate and refit the config items from the toml file.
-    const ProxyConfigSummary & getProxyConfigSummay() const { return proxy_config_summary; }
+    const ProxyConfigSummary & getProxyConfigSummary() const { return proxy_config_summary; }
     void reportThreadAllocInfo(std::string_view, ReportThreadAllocateInfoType type, uint64_t value) const;
     static void reportThreadAllocBatch(std::string_view, ReportThreadAllocateInfoBatch data);
     JointThreadInfoJeallocMapPtr getJointThreadInfoJeallocMap() const { return joint_memory_allocation_map; }
@@ -150,6 +154,7 @@ public:
 
 public: // Region Management
     void restore(PathPool & path_pool, const TiFlashRaftProxyHelper *);
+    void restoreProxyHelper(const TiFlashRaftProxyHelper * helper) { proxy_helper = helper; }
     void gcPersistedRegion(Seconds gc_persist_period = Seconds(60 * 5));
     RegionMap getRegionsByRangeOverlap(const RegionRange & range) const;
     void traverseRegions(std::function<void(RegionID, const RegionPtr &)> && callback) const;
@@ -244,13 +249,14 @@ public: // Raft Snapshot
     size_t getOngoingPrehandleTaskCount() const;
     size_t getOngoingPrehandleSubtaskCount() const;
     EngineStoreApplyRes handleIngestSST(UInt64 region_id, SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
-    size_t getMaxParallelPrehandleSize() const;
-    size_t getMaxPrehandleSubtaskSize() const;
+    size_t getMaxParallelPrehandleSize(DM::FileConvertJobType job_type) const;
+    size_t getMaxPrehandleSubtaskSize(DM::FileConvertJobType job_type) const;
 
 public: // Raft Read
     void addReadIndexEvent(Int64 f) { read_index_event_flag += f; }
     Int64 getReadIndexEvent() const { return read_index_event_flag; }
     BatchReadIndexRes batchReadIndex(const std::vector<kvrpcpb::ReadIndexRequest> & req, uint64_t timeout_ms) const;
+    void invalidateReadIndexCache(RegionID region_id) const;
     /// Initialize read-index worker context. It only can be invoked once.
     /// `worker_coefficient` means `worker_coefficient * runner_cnt` workers will be created.
     /// `runner_cnt` means number of runner which controls behavior of worker.
@@ -369,13 +375,14 @@ private:
         TMTContext & tmt,
         const RegionTaskLock & region_task_lock,
         UInt64 index,
-        UInt64 term) const;
+        UInt64 term,
+        std::string_view persist_extra_msg) const;
 
     void persistRegion(
         const Region & region,
         const RegionTaskLock & region_task_lock,
         PersistRegionReason reason,
-        const char * extra_msg) const;
+        std::string_view extra_msg) const;
 
     bool tryRegisterEagerRaftLogGCTask(const RegionPtr & region, RegionTaskLock &);
 

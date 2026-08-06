@@ -1815,7 +1815,7 @@ private:
     WrapperType wrapper_function;
     const char * name;
     bool in_union;
-    const tipb::FieldType & tidb_tp;
+    tipb::FieldType tidb_tp;
     const Context & context;
 };
 
@@ -1896,7 +1896,7 @@ private:
     DataTypePtr return_type;
 
     bool in_union;
-    const tipb::FieldType & tidb_tp;
+    tipb::FieldType tidb_tp;
 
     template <typename FromDataType>
     static bool getMinPrecForHoldingInteger(

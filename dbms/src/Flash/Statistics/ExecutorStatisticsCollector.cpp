@@ -14,6 +14,7 @@
 
 #include <Common/FmtUtils.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
+#include <Flash/Coprocessor/ColumnarScanContext.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/RemoteExecutionSummary.h>
 #include <Flash/Statistics/CommonExecutorImpl.h>
@@ -155,7 +156,14 @@ tipb::TiFlashExecutionInfo ExecutorStatisticsCollector::genTiFlashExecutionInfo(
 
 void ExecutorStatisticsCollector::setLocalRUConsumption(const RUConsumption & ru_info)
 {
-    local_ru = std::make_optional<resource_manager::Consumption>();
+    if (!local_ru)
+    {
+        local_ru.emplace();
+    }
+    else
+    {
+        local_ru->Clear();
+    }
     local_ru->set_r_r_u(ru_info.cpu_ru + ru_info.read_ru);
     local_ru->set_total_cpu_time_ms(toCPUTimeMillisecond(ru_info.cpu_time_ns));
     local_ru->set_read_bytes(ru_info.read_bytes);
@@ -175,6 +183,13 @@ void ExecutorStatisticsCollector::fillExecutionSummary(
     // merge detailed table scan profile
     if (const auto & iter = scan_context_map.find(executor_id); iter != scan_context_map.end())
         current.scan_context->merge(*(iter->second));
+    if (const auto & iter = dag_context->columnar_scan_context_map.find(executor_id);
+        iter != dag_context->columnar_scan_context_map.end() && iter->second)
+    {
+        if (!current.columnar_scan_context)
+            current.columnar_scan_context = std::make_shared<ColumnarScanContext>();
+        current.columnar_scan_context->merge(*iter->second);
+    }
 
     current.time_processed_ns += dag_context->compile_time_ns;
     current.time_processed_ns += dag_context->minTSO_wait_time_ns;

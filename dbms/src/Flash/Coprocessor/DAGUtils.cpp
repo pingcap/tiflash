@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
+#include <Common/ThresholdUtils.h>
 #include <Common/TiFlashException.h>
 #include <Core/Types.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -60,8 +61,11 @@ const std::unordered_map<tipb::ExprType, String> agg_func_map_for_window({
 const std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::Count, "count"},
     {tipb::ExprType::Sum, "sum"},
+    {tipb::ExprType::SumInt, "sum"},
     {tipb::ExprType::Min, "min"},
     {tipb::ExprType::Max, "max"},
+    {tipb::ExprType::MinCount, "min_count"},
+    {tipb::ExprType::MaxCount, "max_count"},
     {tipb::ExprType::First, "first_row"},
     {tipb::ExprType::ApproxCountDistinct, uniq_raw_res_name},
     {tipb::ExprType::GroupConcat, "groupArray"},
@@ -222,13 +226,14 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::NEJson, "notEquals"},
     {tipb::ScalarFuncSig::NEVectorFloat32, "notEquals"},
 
-    //{tipb::ScalarFuncSig::NullEQInt, "cast"},
-    //{tipb::ScalarFuncSig::NullEQReal, "cast"},
-    //{tipb::ScalarFuncSig::NullEQString, "cast"},
-    //{tipb::ScalarFuncSig::NullEQDecimal, "cast"},
-    //{tipb::ScalarFuncSig::NullEQTime, "cast"},
-    //{tipb::ScalarFuncSig::NullEQDuration, "cast"},
-    //{tipb::ScalarFuncSig::NullEQJson, "cast"},
+    {tipb::ScalarFuncSig::NullEQInt, "tidbNullEQ"},
+    {tipb::ScalarFuncSig::NullEQReal, "tidbNullEQ"},
+    {tipb::ScalarFuncSig::NullEQString, "tidbNullEQ"},
+    {tipb::ScalarFuncSig::NullEQDecimal, "tidbNullEQ"},
+    {tipb::ScalarFuncSig::NullEQTime, "tidbNullEQ"},
+    {tipb::ScalarFuncSig::NullEQDuration, "tidbNullEQ"},
+    //{tipb::ScalarFuncSig::NullEQJson, "tidbNullEQ"},
+    {tipb::ScalarFuncSig::NullEQVectorFloat32, "tidbNullEQ"},
 
     {tipb::ScalarFuncSig::PlusReal, "plus"},
     {tipb::ScalarFuncSig::PlusDecimal, "plus"},
@@ -328,9 +333,9 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::UnaryNotDecimal, "not"},
     {tipb::ScalarFuncSig::UnaryNotInt, "not"},
     {tipb::ScalarFuncSig::UnaryNotReal, "not"},
-    {tipb::ScalarFuncSig::UnaryMinusInt, "negate"},
-    {tipb::ScalarFuncSig::UnaryMinusReal, "negate"},
-    {tipb::ScalarFuncSig::UnaryMinusDecimal, "negate"},
+    {tipb::ScalarFuncSig::UnaryMinusInt, "tidbUnaryMinusInt"},
+    {tipb::ScalarFuncSig::UnaryMinusReal, "tidbUnaryMinusReal"},
+    {tipb::ScalarFuncSig::UnaryMinusDecimal, "tidbUnaryMinusDecimal"},
     {tipb::ScalarFuncSig::DecimalIsNull, "isNull"},
     {tipb::ScalarFuncSig::DurationIsNull, "isNull"},
     {tipb::ScalarFuncSig::RealIsNull, "isNull"},
@@ -471,7 +476,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::JsonReplaceSig, "cast"},
     //{tipb::ScalarFuncSig::JsonRemoveSig, "cast"},
     //{tipb::ScalarFuncSig::JsonMergeSig, "cast"},
-    //{tipb::ScalarFuncSig::JsonObjectSig, "cast"},
+    {tipb::ScalarFuncSig::JsonObjectSig, "json_object"},
     {tipb::ScalarFuncSig::JsonArraySig, "json_array"},
     {tipb::ScalarFuncSig::JsonValidJsonSig, "json_valid_json"},
     {tipb::ScalarFuncSig::JsonValidOthersSig, "json_valid_others"},
@@ -1028,9 +1033,12 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
         return getColumnNameForColumnExpr(expr, input_col);
     case tipb::ExprType::Count:
     case tipb::ExprType::Sum:
+    case tipb::ExprType::SumInt:
     case tipb::ExprType::Avg:
     case tipb::ExprType::Min:
     case tipb::ExprType::Max:
+    case tipb::ExprType::MinCount:
+    case tipb::ExprType::MaxCount:
     case tipb::ExprType::First:
     case tipb::ExprType::ApproxCountDistinct:
     case tipb::ExprType::GroupConcat:
@@ -1084,9 +1092,12 @@ bool isAggFunctionExpr(const tipb::Expr & expr)
     {
     case tipb::ExprType::Count:
     case tipb::ExprType::Sum:
+    case tipb::ExprType::SumInt:
     case tipb::ExprType::Avg:
     case tipb::ExprType::Min:
     case tipb::ExprType::Max:
+    case tipb::ExprType::MinCount:
+    case tipb::ExprType::MaxCount:
     case tipb::ExprType::First:
     case tipb::ExprType::GroupConcat:
     case tipb::ExprType::Agg_BitAnd:
@@ -1605,4 +1616,19 @@ tipb::ScalarFuncSig reverseGetFuncSigByFuncName(const String & name)
         throw Exception(fmt::format("Unsupported function {}", name));
     return func_name_sig_map[name];
 }
+
+constexpr ssize_t MAX_BATCH_SEND_MIN_LIMIT_MEM_SIZE
+    = 1024 * 1024 * 32; // 32MB (8192 Rows * 256 Byte/row * 16 partitions)
+
+UInt64 getMaxBufferedBytesInResponseWriter(Int64 max_buffered_bytes_in_executor, size_t concurrency)
+{
+    // max buffered bytes in ExchangeSender, we don't want to send too many small chunks so there is a minimum limit of MAX_BATCH_SEND_MIN_LIMIT_MEM_SIZE
+    UInt64 ret = MAX_BATCH_SEND_MIN_LIMIT_MEM_SIZE;
+    if (max_buffered_bytes_in_executor > 0)
+    {
+        ret = std::max(ret, getAverageThreshold(max_buffered_bytes_in_executor, concurrency));
+    }
+    return ret;
+}
+
 } // namespace DB

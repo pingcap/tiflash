@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/DataStreams/IProfilingBlockInputStream.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -218,7 +220,7 @@ private:
     /// The successors must implement this function.
     virtual Block readImpl() = 0;
 
-    virtual Block readImpl(FilterPtr & /*res_filter*/, bool /*return_filter*/) { return readImpl(); };
+    virtual Block readImpl(FilterPtr & /*res_filter*/, bool /*return_filter*/) { return readImpl(); }
 
     /// Here you can do a preliminary initialization.
     virtual void readPrefixImpl() {}

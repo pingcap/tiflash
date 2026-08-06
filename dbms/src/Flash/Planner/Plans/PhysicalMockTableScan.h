@@ -71,7 +71,7 @@ private:
 
     void buildRuntimeFilterInLocalStream(Context & context);
 
-    RuntimeFilteList getRuntimeFilterList(Context & context);
+    RuntimeFilterList getRuntimeFilterList(Context & context);
 
 private:
     FilterConditions filter_conditions;

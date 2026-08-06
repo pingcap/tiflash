@@ -75,7 +75,13 @@ void BlobFile::read(char * buffer, size_t offset, size_t size, const ReadLimiter
     PageUtil::readFile(wrfile, offset, buffer, size, read_limiter, background);
 }
 
-void BlobFile::write(char * buffer, size_t offset, size_t size, const WriteLimiterPtr & write_limiter, bool background)
+void BlobFile::write(
+    char * buffer,
+    size_t offset,
+    size_t size,
+    const WriteLimiterPtr & write_limiter,
+    bool background,
+    bool do_fsync)
 {
     /**
      * Precautions:
@@ -121,7 +127,10 @@ void BlobFile::write(char * buffer, size_t offset, size_t size, const WriteLimit
         /*truncate_if_failed=*/false,
         /*enable_failpoint=*/false);
 #endif
-    PageUtil::syncFile(wrfile);
+    if (likely(do_fsync))
+    {
+        PageUtil::syncFile(wrfile);
+    }
 
     UInt64 expand_size = 0;
     {

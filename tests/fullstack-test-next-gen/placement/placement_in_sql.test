@@ -17,6 +17,7 @@ mysql> drop table if exists test.t1
 mysql> create table test.t1 (a int, b int, c int, d int);
 mysql> insert into test.t1 values(1,2,3,4);
 
+mysql> DROP PLACEMENT POLICY IF EXISTS evict_sata_dw;
 # creating placement policy should NOT lead to TiFlash compute node or TiFlash write node panic
 mysql> CREATE PLACEMENT POLICY evict_sata_dw CONSTRAINTS='[-disk=sata, -disk=dw-ssd]' SURVIVAL_PREFERENCES='[host]';
 mysql> ALTER TABLE test.t1 PLACEMENT POLICY=evict_sata_dw;

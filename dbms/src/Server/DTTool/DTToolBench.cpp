@@ -418,6 +418,7 @@ int benchEntry(const std::vector<std::string> & opts)
             opt.emplace(std::map<std::string, std::string>{}, frame, algorithm);
             if (version == 2)
             {
+                // frame checksum
                 DB::STORAGE_FORMAT_CURRENT = DB::STORAGE_FORMAT_V3;
             }
             else if (version == 3)
@@ -443,13 +444,13 @@ int benchEntry(const std::vector<std::string> & opts)
                 = genBlocks(random_seed, num_rows, num_cols, field, sparse_ratio, logger);
         }
 
-        size_t write_cost_ms = 0;
+        TableID table_id = 1;
         auto settings = DB::Settings();
         auto db_context = env.getContext();
         auto path_pool
             = std::make_shared<DB::StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
         auto storage_pool
-            = std::make_shared<DB::DM::StoragePool>(*db_context, NullspaceID, /*ns_id*/ 1, *path_pool, "test.t1");
+            = std::make_shared<DB::DM::StoragePool>(*db_context, NullspaceID, table_id, *path_pool, "test.t1");
         auto dm_settings = DB::DM::DeltaMergeStore::Settings{};
         auto dm_context = DB::DM::DMContext::createUnique(
             *db_context,
@@ -457,7 +458,7 @@ int benchEntry(const std::vector<std::string> & opts)
             storage_pool,
             /*min_version_*/ 0,
             NullspaceID,
-            /*physical_table_id*/ 1,
+            table_id,
             /*pk_col_id*/ 0,
             false,
             1,
@@ -469,6 +470,7 @@ int benchEntry(const std::vector<std::string> & opts)
         // Write
         if (write_repeat > 0)
         {
+            size_t write_cost_ms = 0;
             LOG_INFO(logger, "start writing");
             for (size_t i = 0; i < write_repeat; ++i)
             {
@@ -489,15 +491,17 @@ int benchEntry(const std::vector<std::string> & opts)
                 write_cost_ms += duration;
                 LOG_INFO(logger, "attempt {} finished in {} ms", i, duration);
             }
+            size_t effective_size_on_disk = dmfile->getBytesOnDisk();
             LOG_INFO(
                 logger,
                 "average write time: {} ms",
                 (static_cast<double>(write_cost_ms) / static_cast<double>(repeat)));
             LOG_INFO(
                 logger,
-                "throughput (MB/s): {:.3f}",
-                (static_cast<double>(effective_size) * 1'000 * static_cast<double>(repeat)
-                 / static_cast<double>(write_cost_ms) / 1024 / 1024));
+                "write throughput by uncompressed size: {:.3f}MiB/s;"
+                " write throughput by compressed size: {:.3f}MiB/s",
+                (effective_size * 1'000.0 * repeat / write_cost_ms / 1024 / 1024),
+                (effective_size_on_disk * 1'000.0 * repeat / write_cost_ms / 1024 / 1024));
         }
 
         // Read
@@ -548,12 +552,10 @@ int benchEntry(const std::vector<std::string> & opts)
         LOG_INFO(logger, "average read time: {} ms", (static_cast<double>(read_cost_ms) / static_cast<double>(repeat)));
         LOG_INFO(
             logger,
-            "throughput by deserialized bytes (MB/s): {:.3f}"
-            " throughput by compressed bytes (MB/s): {:.3f}",
-            (static_cast<double>(effective_size_read) * 1'000 * static_cast<double>(repeat)
-             / static_cast<double>(read_cost_ms) / 1024 / 1024),
-            (static_cast<double>(effective_size_on_disk) * 1'000 * static_cast<double>(repeat)
-             / static_cast<double>(read_cost_ms) / 1024 / 1024));
+            "read throughput by uncompressed bytes: {:.3f}MiB/s;"
+            " read throughput by compressed bytes: {:.3f}MiB/s",
+            (effective_size_read * 1'000.0 * repeat / read_cost_ms / 1024 / 1024),
+            (effective_size_on_disk * 1'000.0 * repeat / read_cost_ms / 1024 / 1024));
     }
     catch (const boost::wrapexcept<boost::bad_any_cast> & e)
     {

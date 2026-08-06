@@ -1,0 +1,84 @@
+# Copyright 2026 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Regression for tidbcloud/tiflash-cse#487. On next-gen columnar with late
+# materialization, TIMESTAMP filters pushed to TableScan must respect session
+# timezone, and filtered TIMESTAMP columns should display in session timezone.
+
+mysql> drop table if exists test.share_ip_record;
+
+mysql> create table test.share_ip_record (sid int unsigned not null, type int unsigned not null default 1, ip varchar(128) not null default '', web_sign varchar(128) default '', created_at timestamp not null default current_timestamp, updated_at timestamp not null default current_timestamp, key idx_ip (ip));
+
+mysql> set session tidb_isolation_read_engines='tikv';insert into test.share_ip_record (sid, type, ip, web_sign, created_at, updated_at) values (1001, 1, '192.168.1.10', 'sign_abc_001', '2025-03-03 18:00:00', '2025-03-03 18:00:00'), (1002, 2, '192.168.1.11', 'sign_def_002', '2025-03-03 18:05:00', '2025-03-03 18:05:00'), (1003, 1, '10.0.0.5', 'sign_ghi_003', '2025-03-03 18:10:00', '2025-03-03 18:10:00'), (1004, 3, '172.16.0.20', 'sign_jkl_004', '2025-03-03 18:15:00', '2025-03-03 18:15:00'), (1005, 1, '192.168.1.15', 'sign_mno_005', '2025-03-03 18:20:00', '2025-03-03 18:20:00'), (1006, 2, '10.0.0.8', 'sign_pqr_006', '2025-03-03 18:25:00', '2025-03-03 18:25:00'), (1007, 1, '192.168.1.22', 'sign_stu_007', '2025-03-03 18:30:00', '2025-03-03 18:30:00'), (1008, 4, '172.16.0.55', 'sign_vwx_008', '2025-03-03 18:35:00', '2025-03-03 18:35:00'), (1009, 1, '10.0.0.12', 'sign_yza_009', '2025-03-03 18:40:00', '2025-03-03 18:40:00'), (1010, 2, '192.168.1.30', 'sign_bcd_010', '2025-03-03 18:45:00', '2025-03-03 18:45:00');
+
+# Duplicate to >10k rows so TiDB can push late-materialization filters to TableScan.
+mysql> insert into test.share_ip_record select sid, type, ip, web_sign, created_at, updated_at from test.share_ip_record;
+mysql> insert into test.share_ip_record select sid, type, ip, web_sign, created_at, updated_at from test.share_ip_record;
+mysql> insert into test.share_ip_record select sid, type, ip, web_sign, created_at, updated_at from test.share_ip_record;
+mysql> insert into test.share_ip_record select sid, type, ip, web_sign, created_at, updated_at from test.share_ip_record;
+mysql> insert into test.share_ip_record select sid, type, ip, web_sign, created_at, updated_at from test.share_ip_record;
+mysql> insert into test.share_ip_record select sid, type, ip, web_sign, created_at, updated_at from test.share_ip_record;
+mysql> insert into test.share_ip_record select sid, type, ip, web_sign, created_at, updated_at from test.share_ip_record;
+mysql> insert into test.share_ip_record select sid, type, ip, web_sign, created_at, updated_at from test.share_ip_record;
+mysql> insert into test.share_ip_record select sid, type, ip, web_sign, created_at, updated_at from test.share_ip_record;
+mysql> insert into test.share_ip_record select sid, type, ip, web_sign, created_at, updated_at from test.share_ip_record;
+mysql> insert into test.share_ip_record select sid, type, ip, web_sign, created_at, updated_at from test.share_ip_record;
+
+mysql> alter table test.share_ip_record set tiflash replica 1;
+mysql> analyze table test.share_ip_record all columns;
+
+func> wait_table test share_ip_record
+
+mysql> set time_zone = 'Asia/Singapore'; insert into test.share_ip_record (sid, type, ip, web_sign, created_at, updated_at) values (2001, 1, '192.168.1.10', 'sign_abc_001', '2026-03-03 18:00:00', '2026-03-03 18:00:00'), (2002, 2, '192.168.1.11', 'sign_def_002', '2026-03-03 18:05:00', '2026-03-03 18:05:00'), (2003, 1, '10.0.0.5', 'sign_ghi_003', '2026-03-03 18:10:00', '2026-03-03 18:10:00'), (2004, 3, '172.16.0.20', 'sign_jkl_004', '2026-03-03 18:15:00', '2026-03-03 18:15:00'), (2005, 1, '192.168.1.15', 'sign_mno_005', '2026-03-03 18:20:00', '2026-03-03 18:20:00'), (2006, 2, '10.0.0.8', 'sign_pqr_006', '2026-03-03 18:25:00', '2026-03-03 18:25:00'), (2007, 1, '192.168.1.22', 'sign_stu_007', '2026-03-03 18:30:00', '2026-03-03 18:30:00'), (2008, 4, '172.16.0.55', 'sign_vwx_008', '2026-03-03 18:35:00', '2026-03-03 18:35:00'), (2009, 1, '10.0.0.12', 'sign_yza_009', '2026-03-03 18:40:00', '2026-03-03 18:40:00'), (2010, 2, '192.168.1.30', 'sign_bcd_010', '2026-03-03 18:45:00', '2026-03-03 18:45:00');
+
+func> wait_table test share_ip_record
+
+mysql> set time_zone = 'Asia/Singapore'; set tidb_enforce_mpp=1; set tidb_opt_enable_late_materialization=1; set tidb_isolation_read_engines='tiflash'; select count(*) as c from test.share_ip_record where created_at > '2026-03-01 00:00:00';
++----+
+| c  |
++----+
+| 10 |
++----+
+
+mysql> set time_zone = 'Asia/Singapore'; set tidb_enforce_mpp=1; set tidb_opt_enable_late_materialization=1; set tidb_isolation_read_engines='tiflash'; select count(*) as c from test.share_ip_record where created_at > '2026-03-01 00:00:00' and created_at <> updated_at;
++---+
+| c |
++---+
+| 0 |
++---+
+
+mysql> set time_zone = 'Asia/Singapore'; set tidb_enforce_mpp=1; set tidb_opt_enable_late_materialization=1; set tidb_isolation_read_engines='tikv'; select count(*) as c from test.share_ip_record where created_at > '2026-03-01 00:00:00';
++----+
+| c  |
++----+
+| 10 |
++----+
+
+mysql> set time_zone = 'Asia/Singapore'; set tidb_enforce_mpp=1; set tidb_opt_enable_late_materialization=1; set tidb_isolation_read_engines='tiflash'; select sid from test.share_ip_record where created_at > '2026-03-01 00:00:00' order by sid;
++------+
+| sid  |
++------+
+| 2001 |
+| 2002 |
+| 2003 |
+| 2004 |
+| 2005 |
+| 2006 |
+| 2007 |
+| 2008 |
+| 2009 |
+| 2010 |
++------+
+
+mysql> drop table if exists test.share_ip_record;

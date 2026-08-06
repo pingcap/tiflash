@@ -76,6 +76,7 @@ struct LogFilenameCmp
         return lhs.log_num < rhs.log_num;
     }
 };
+// Sort log filename by <log_num, level_num> in increasing order
 using LogFilenameSet = std::set<LogFilename, LogFilenameCmp>;
 
 } // namespace DB::PS::V3

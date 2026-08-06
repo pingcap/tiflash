@@ -1,0 +1,49 @@
+# Copyright 2026 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mysql> drop table if exists test.t_issue10809_varchar_null;
+mysql> drop table if exists test.t_issue10809_varchar_empty;
+
+# Negative regressions for #10809 on StringV2-backed SQL types.
+# Unlike Nullable(Array(...)), nullable varchar values and empty strings should
+# not trigger compact-time crashes in TiFlash.
+
+mysql> create table test.t_issue10809_varchar_null (`id` int primary key, `v` varchar(32) default null);
+mysql> alter table test.t_issue10809_varchar_null set tiflash replica 1;
+mysql> insert into test.t_issue10809_varchar_null with recursive seq as (select 1 as n union all select n + 1 from seq where n < 128) select n, null from seq;
+func> wait_table test t_issue10809_varchar_null
+
+mysql> alter table test.t_issue10809_varchar_null compact tiflash replica;
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*), count(v) from test.t_issue10809_varchar_null;
++----------+----------+
+| count(*) | count(v) |
++----------+----------+
+|      128 |        0 |
++----------+----------+
+
+mysql> create table test.t_issue10809_varchar_empty (`id` int primary key, `v` varchar(32) not null);
+mysql> alter table test.t_issue10809_varchar_empty set tiflash replica 1;
+mysql> insert into test.t_issue10809_varchar_empty with recursive seq as (select 1 as n union all select n + 1 from seq where n < 128) select n, '' from seq;
+func> wait_table test t_issue10809_varchar_empty
+
+mysql> alter table test.t_issue10809_varchar_empty compact tiflash replica;
+mysql> set session tidb_isolation_read_engines='tiflash'; select count(*), sum(length(v)) from test.t_issue10809_varchar_empty;
++----------+----------------+
+| count(*) | sum(length(v)) |
++----------+----------------+
+|      128 |              0 |
++----------+----------------+
+
+mysql> drop table if exists test.t_issue10809_varchar_null;
+mysql> drop table if exists test.t_issue10809_varchar_empty;

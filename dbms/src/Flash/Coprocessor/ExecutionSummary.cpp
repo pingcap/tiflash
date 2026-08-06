@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Flash/Coprocessor/ColumnarScanContext.h>
 #include <Flash/Coprocessor/ExecutionSummary.h>
 #include <Flash/Statistics/BaseRuntimeStatistics.h>
 #include <Storages/DeltaMerge/ScanContext.h>
@@ -43,6 +44,12 @@ void ExecutionSummary::merge(const ExecutionSummary & other)
     inter_zone_receive_bytes += other.inter_zone_receive_bytes;
     ru_consumption = mergeRUConsumption(ru_consumption, other.ru_consumption);
     scan_context->merge(*other.scan_context);
+    if (other.columnar_scan_context)
+    {
+        if (!columnar_scan_context)
+            columnar_scan_context = std::make_shared<ColumnarScanContext>();
+        columnar_scan_context->merge(*other.columnar_scan_context);
+    }
 }
 
 void ExecutionSummary::merge(const tipb::ExecutorExecutionSummary & other)
@@ -62,7 +69,14 @@ void ExecutionSummary::merge(const tipb::ExecutorExecutionSummary & other)
     inter_zone_send_bytes += other.tiflash_network_summary().inter_zone_send_bytes();
     inter_zone_receive_bytes += other.tiflash_network_summary().inter_zone_receive_bytes();
     ru_consumption = mergeRUConsumption(ru_consumption, parseRUConsumption(other));
-    scan_context->merge(other.tiflash_scan_context());
+    if (other.has_tiflash_scan_context())
+        scan_context->merge(other.tiflash_scan_context());
+    if (other.has_columnar_scan_context())
+    {
+        if (!columnar_scan_context)
+            columnar_scan_context = std::make_shared<ColumnarScanContext>();
+        columnar_scan_context->merge(other.columnar_scan_context());
+    }
 }
 
 void ExecutionSummary::fill(const BaseRuntimeStatistics & other)
@@ -94,7 +108,13 @@ void ExecutionSummary::init(const tipb::ExecutorExecutionSummary & other)
     inter_zone_send_bytes = other.tiflash_network_summary().inter_zone_send_bytes();
     inter_zone_receive_bytes = other.tiflash_network_summary().inter_zone_receive_bytes();
     ru_consumption = parseRUConsumption(other);
-    scan_context->deserialize(other.tiflash_scan_context());
+    if (other.has_tiflash_scan_context())
+        scan_context->deserialize(other.tiflash_scan_context());
+    if (other.has_columnar_scan_context())
+    {
+        columnar_scan_context = std::make_shared<ColumnarScanContext>();
+        columnar_scan_context->deserialize(other.columnar_scan_context());
+    }
 }
 
 resource_manager::Consumption parseRUConsumption(const tipb::ExecutorExecutionSummary & pb)

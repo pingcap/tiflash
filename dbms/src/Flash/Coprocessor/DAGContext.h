@@ -32,6 +32,7 @@
 #include <Core/TaskOperatorSpillContexts.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/Coprocessor/ColumnarScanContext_fwd.h>
 #include <Flash/Coprocessor/DAGRequest.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Coprocessor/RuntimeFilterMgr.h>
@@ -361,6 +362,8 @@ public:
 
     UInt64 getConnectionID() const { return connection_id; }
     const String & getConnectionAlias() const { return connection_alias; }
+    const String & getSQLDigest() const { return sql_digest; }
+    const String & getPlanDigest() const { return plan_digest; }
 
     MPPReceiverSetPtr getMPPReceiverSet() const { return mpp_receiver_set; }
 
@@ -471,6 +474,7 @@ public:
     /// While when we support collcate join later, scan_context_map.size() may > 1,
     /// thus we need to pay attention to scan_context_map usage that time.
     std::unordered_map<String, DM::ScanContextPtr> scan_context_map;
+    std::unordered_map<String, ColumnarScanContextPtr> columnar_scan_context_map;
 
     RuntimeFilterMgr runtime_filter_mgr;
 
@@ -544,6 +548,8 @@ private:
     UInt64 connection_id;
     // It's the session alias between mysql client and tidb
     String connection_alias;
+    String sql_digest;
+    String plan_digest;
 
     String query_id_and_cte_id_for_sink;
     std::unordered_map<size_t, String> query_id_and_cte_id_for_sources;

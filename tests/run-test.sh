@@ -62,28 +62,35 @@ function run_file()
 	local verbose="$7"
 
 	local ext=${path##*.}
+	local ret=0
 
 	echo "$path: Running"
 	start_time=$(date +"%s.%N")
 	if [ "$ext" == "test" ]; then
-		${PY} run-test.py "$dbc" "$path" "$fuzz" "$mysql_client" "$verbose"
+		${PY} run-test.py "$dbc" "$path" "$fuzz" "$mysql_client" "$verbose" || ret=$?
 	else
 		if [ "$ext" == "visual" ]; then
-			${PY} run-test-gen-from-visual.py "$path" "$skip_raw_test" "$verbose"
-			if [ $? != 0 ]; then
-				echo "Generate test files failed: $file" >&2
-				exit 1
+			${PY} run-test-gen-from-visual.py "$path" "$skip_raw_test" "$verbose" || ret=$?
+			if [ $ret != 0 ]; then
+				echo "Generate test files failed: $path" >&2
+				FAILED_TESTS=$((FAILED_TESTS + 1))
+				if [ "$continue_on_error" != "true" ]; then
+					exit 1
+				fi
+				return
 			fi
 			run_dir "$dbc" "$path.test" "$continue_on_error" "$fuzz" "$skip_raw_test" "$mysql_client" "$verbose"
+			return
 		fi
 	fi
 
-	if [ $? == 0 ]; then
+	if [ $ret == 0 ]; then
 		end_time=$(date +"%s.%N")
 		elapse_s=$(get_elapse_s $start_time $end_time)
 		echo "$path: OK [$elapse_s s]"
 	else
 		echo "$path: Failed"
+		FAILED_TESTS=$((FAILED_TESTS + 1))
 		if [ "$continue_on_error" != "true" ]; then
 			exit 1
 		fi
@@ -100,25 +107,19 @@ function run_dir()
 	local mysql_client="$6"
 	local verbose="$7"
 
-	find "$path" -maxdepth 1 -name "*.test" -type f | sort | while read file; do
+	local file
+	while IFS= read -r file; do
 		if [ -f "$file" ]; then
 			run_file "$dbc" "$file" "$continue_on_error" "$fuzz" "$skip_raw_test" "$mysql_client" "$verbose"
 		fi
-	done
+	done < <(find "$path" -maxdepth 1 -name "*.test" -type f | sort)
 
-	if [ $? != 0 ]; then
-		exit 1
-	fi
-
-	find "$path" -maxdepth 1 -type d | sort -r | while read dir; do
+	local dir
+	while IFS= read -r dir; do
 		if [ -d "$dir" ] && [ "$dir" != "$path" ]; then
 			run_dir "$dbc" "$dir" "$continue_on_error" "$fuzz" "$skip_raw_test" "$mysql_client" "$verbose"
 		fi
-	done
-
-	if [ $? != 0 ]; then
-		exit 1
-	fi
+	done < <(find "$path" -maxdepth 1 -type d | sort -r)
 }
 
 function run_path()
@@ -145,6 +146,8 @@ function run_path()
 
 set -e
 
+FAILED_TESTS=0
+
 # Export the `PY` env so that it can be
 # used when the function `wait_table` is
 # called from subprocess.
@@ -164,7 +167,9 @@ fullstack="$2"
 fuzz="$3"
 skip_raw_test="$4"
 debug="$5"
-continue_on_error="$6"
+if [ -z "$continue_on_error" ]; then
+	continue_on_error="$6"
+fi
 dbc="$7"
 verbose="${verbose:-8}"
 
@@ -201,7 +206,16 @@ if [ -z "$continue_on_error" ]; then
 	continue_on_error="false"
 fi
 
-if [ -z "fullstack" ]; then
+case "$continue_on_error" in
+	true|1|yes|TRUE|Yes)
+		continue_on_error="true"
+		;;
+	*)
+		continue_on_error="false"
+		;;
+esac
+
+if [ -z "$fullstack" ]; then
 	fullstack="false"
 fi
 
@@ -224,3 +238,8 @@ if [ "$fullstack" = true ]; then
 fi
 
 run_path "$dbc" "$target" "$continue_on_error" "$fuzz" "$skip_raw_test" "$mysql_client" "$verbose"
+
+if [ "$FAILED_TESTS" -gt 0 ]; then
+	echo "Total failed: $FAILED_TESTS test(s)" >&2
+	exit 1
+fi

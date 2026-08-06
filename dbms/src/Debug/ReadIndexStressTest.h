@@ -57,7 +57,7 @@ public:
 
 private:
     const TMTContext & tmt;
-    Poco::Logger * logger{&Poco::Logger::get("ReadIndexStressTest")};
+    LoggerPtr logger;
 };
 
 

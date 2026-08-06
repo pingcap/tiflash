@@ -41,8 +41,11 @@
 #include <simdjson.h>
 #include <tipb/expression.pb.h>
 
+#include <algorithm>
 #include <ext/range.h>
+#include <limits>
 #include <magic_enum.hpp>
+#include <optional>
 #include <string_view>
 #include <type_traits>
 
@@ -63,6 +66,8 @@ namespace DB
 
 namespace ErrorCodes
 {
+extern const int ARGUMENT_OUT_OF_BOUND;
+extern const int BAD_ARGUMENTS;
 extern const int ILLEGAL_COLUMN;
 extern const int UNKNOWN_TYPE;
 } // namespace ErrorCodes
@@ -431,7 +436,7 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void setOutputTiDBFieldType(const tipb::FieldType & tidb_tp_) { tidb_tp = &tidb_tp_; }
+    void setOutputTiDBFieldType(const tipb::FieldType & tidb_tp_) { tidb_tp = tidb_tp_; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -459,7 +464,7 @@ public:
             ColumnUInt8::MutablePtr col_null_map = ColumnUInt8::create(rows, 0);
             ColumnUInt8::Container & vec_null_map = col_null_map->getData();
             JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to);
-            if likely (tidb_tp->flen() < 0)
+            if likely (!tidb_tp.has_value() || tidb_tp->flen() < 0)
             {
                 size_t current_offset = 0;
                 for (size_t i = 0; i < block.rows(); ++i)
@@ -522,7 +527,7 @@ public:
     }
 
 private:
-    const tipb::FieldType * tidb_tp = nullptr;
+    std::optional<tipb::FieldType> tidb_tp;
     const Context & context;
 };
 
@@ -976,6 +981,208 @@ private:
 };
 
 
+class FunctionJsonObject : public IFunction
+{
+public:
+    static constexpr auto name = "json_object";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionJsonObject>(); }
+
+    String getName() const override { return name; }
+
+    size_t getNumberOfArguments() const override { return 0; }
+
+    bool isVariadic() const override { return true; }
+
+    bool useDefaultImplementationForNulls() const override { return false; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (unlikely(arguments.size() % 2 != 0))
+        {
+            throw Exception(
+                fmt::format("Incorrect parameter count in the call to native function '{}'", getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+        for (const auto arg_idx : ext::range(0, arguments.size()))
+        {
+            if (arg_idx % 2 == 0 && arguments[arg_idx]->onlyNull())
+                throw Exception("JSON documents may not contain NULL member names.", ErrorCodes::BAD_ARGUMENTS);
+
+            if (!arguments[arg_idx]->onlyNull())
+            {
+                const auto * arg = removeNullable(arguments[arg_idx]).get();
+                if (!arg->isStringOrFixedString())
+                    throw Exception(
+                        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                        "Illegal type {} of argument {} of function {}",
+                        arg->getName(),
+                        arg_idx + 1,
+                        getName());
+            }
+        }
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        if (arguments.empty())
+        {
+            // clang-format off
+            const UInt8 empty_object_json_value[] = {
+                JsonBinary::TYPE_CODE_OBJECT, // object_type
+                0x0, 0x0, 0x0, 0x0, // element_count
+                0x8, 0x0, 0x0, 0x0}; // total_size
+            // clang-format on
+            auto empty_object_json = ColumnString::create();
+            empty_object_json->insertData(
+                reinterpret_cast<const char *>(empty_object_json_value),
+                sizeof(empty_object_json_value) / sizeof(UInt8));
+            block.getByPosition(result).column = ColumnConst::create(std::move(empty_object_json), block.rows());
+            return;
+        }
+
+        auto nested_block = createBlockWithNestedColumns(block, arguments);
+        StringSources sources;
+        for (auto column_number : arguments)
+        {
+            sources.push_back(
+                block.getByPosition(column_number).column->onlyNull()
+                    ? nullptr
+                    : createDynamicStringSource(*nested_block.getByPosition(column_number).column));
+        }
+
+        auto rows = block.rows();
+        auto col_to = ColumnString::create();
+        auto & data_to = col_to->getChars();
+        auto & offsets_to = col_to->getOffsets();
+        offsets_to.resize(rows);
+
+        std::vector<const NullMap *> nullmaps;
+        nullmaps.reserve(sources.size());
+        bool is_input_nullable = false;
+        for (auto column_number : arguments)
+        {
+            const auto & col = block.getByPosition(column_number).column;
+            if (col->isColumnNullable())
+            {
+                const auto & column_nullable = static_cast<const ColumnNullable &>(*col);
+                nullmaps.push_back(&(column_nullable.getNullMapData()));
+                is_input_nullable = true;
+            }
+            else
+            {
+                nullmaps.push_back(nullptr);
+            }
+        }
+
+        if (is_input_nullable)
+            doExecuteImpl<true>(sources, rows, data_to, offsets_to, nullmaps);
+        else
+            doExecuteImpl<false>(sources, rows, data_to, offsets_to, nullmaps);
+
+        block.getByPosition(result).column = std::move(col_to);
+    }
+
+private:
+    template <bool is_input_nullable>
+    static void doExecuteImpl(
+        StringSources & sources,
+        size_t rows,
+        ColumnString::Chars_t & data_to,
+        ColumnString::Offsets & offsets_to,
+        const std::vector<const NullMap *> & nullmaps)
+    {
+        struct JsonObjectEntry
+        {
+            StringRef key;
+            JsonBinary value;
+            size_t input_order;
+        };
+
+        const size_t pair_count = sources.size() / 2;
+        size_t reserve_size = rows * (1 + pair_count * 16);
+        for (const auto & source : sources)
+            reserve_size += source ? source->getSizeForReserve() : rows;
+        JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
+
+        std::vector<JsonObjectEntry> entries;
+        std::vector<StringRef> keys;
+        std::vector<JsonBinary> values;
+        entries.reserve(pair_count);
+        keys.reserve(pair_count);
+        values.reserve(pair_count);
+
+        for (size_t i = 0; i < rows; ++i)
+        {
+            entries.clear();
+            for (size_t col = 0; col < sources.size(); col += 2)
+            {
+                if constexpr (is_input_nullable)
+                {
+                    const auto * key_nullmap = nullmaps[col];
+                    if (!sources[col] || (key_nullmap && (*key_nullmap)[i]))
+                        throw Exception("JSON documents may not contain NULL member names.", ErrorCodes::BAD_ARGUMENTS);
+                }
+
+                assert(sources[col]);
+                const auto & key_from = sources[col]->getWhole();
+                if (unlikely(key_from.size > std::numeric_limits<UInt16>::max()))
+                    throw Exception(
+                        "TiDB/TiFlash does not yet support JSON objects with the key length >= 65536",
+                        ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+                StringRef key{key_from.data, key_from.size};
+
+                JsonBinary value(JsonBinary::TYPE_CODE_LITERAL, StringRef(&JsonBinary::LITERAL_NIL, 1));
+                if constexpr (is_input_nullable)
+                {
+                    const auto * value_nullmap = nullmaps[col + 1];
+                    if (sources[col + 1] && !(value_nullmap && (*value_nullmap)[i]))
+                    {
+                        const auto & data_from = sources[col + 1]->getWhole();
+                        value = JsonBinary(data_from.data[0], StringRef(&data_from.data[1], data_from.size - 1));
+                    }
+                }
+                else
+                {
+                    assert(sources[col + 1]);
+                    const auto & data_from = sources[col + 1]->getWhole();
+                    value = JsonBinary(data_from.data[0], StringRef(&data_from.data[1], data_from.size - 1));
+                }
+
+                entries.push_back({key, value, col >> 1});
+            }
+
+            std::sort(entries.begin(), entries.end(), [](const auto & lhs, const auto & rhs) {
+                return lhs.key == rhs.key ? lhs.input_order < rhs.input_order : lhs.key < rhs.key;
+            });
+
+            keys.clear();
+            values.clear();
+            for (size_t entry_idx = 0; entry_idx < entries.size();)
+            {
+                size_t last_idx = entry_idx;
+                while (last_idx + 1 < entries.size() && entries[last_idx + 1].key == entries[entry_idx].key)
+                    ++last_idx;
+
+                keys.push_back(entries[last_idx].key);
+                values.push_back(entries[last_idx].value);
+                entry_idx = last_idx + 1;
+            }
+
+            JsonBinary::buildBinaryJsonObjectInBuffer(keys, values, write_buffer);
+            writeChar(0, write_buffer);
+            offsets_to[i] = write_buffer.count();
+
+            for (const auto & source : sources)
+            {
+                if (source)
+                    source->next();
+            }
+        }
+    }
+};
+
+
 class FunctionCastJsonAsJson : public IFunction
 {
 public:
@@ -1158,7 +1365,7 @@ public:
     bool useDefaultImplementationForNulls() const override { return true; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void setInputTiDBFieldType(const tipb::FieldType & tidb_tp_) { input_tidb_tp = &tidb_tp_; }
+    void setInputTiDBFieldType(const tipb::FieldType & tidb_tp_) { input_tidb_tp = tidb_tp_; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -1184,7 +1391,7 @@ public:
             using IntFieldType = typename IntType::FieldType;
             const auto & from = block.getByPosition(arguments[0]);
             // In raw function test, input_tidb_tp is nullptr.
-            if (unlikely(input_tidb_tp == nullptr) || !hasIsBooleanFlag(*input_tidb_tp))
+            if (unlikely(!input_tidb_tp.has_value()) || !hasIsBooleanFlag(*input_tidb_tp))
             {
                 if constexpr (std::is_unsigned_v<IntFieldType>)
                     doExecute<IntFieldType, UInt64>(data_to, offsets_to, from.column);
@@ -1248,7 +1455,7 @@ private:
     }
 
 private:
-    const tipb::FieldType * input_tidb_tp = nullptr;
+    std::optional<tipb::FieldType> input_tidb_tp;
 };
 
 class FunctionCastStringAsJson : public IFunction
@@ -1264,8 +1471,8 @@ public:
     bool useDefaultImplementationForNulls() const override { return false; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void setInputTiDBFieldType(const tipb::FieldType & tidb_tp_) { input_tidb_tp = &tidb_tp_; }
-    void setOutputTiDBFieldType(const tipb::FieldType & tidb_tp_) { output_tidb_tp = &tidb_tp_; }
+    void setInputTiDBFieldType(const tipb::FieldType & tidb_tp_) { input_tidb_tp = tidb_tp_; }
+    void setOutputTiDBFieldType(const tipb::FieldType & tidb_tp_) { output_tidb_tp = tidb_tp_; }
     void setCollator(const TiDB::TiDBCollatorPtr & collator_) override { collator = collator_; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
@@ -1306,7 +1513,7 @@ public:
         // In raw function test, input_tidb_tp/output_tidb_tp is nullptr.
         if (collator && collator->isBinary())
         {
-            if (unlikely(input_tidb_tp == nullptr))
+            if (unlikely(!input_tidb_tp.has_value()))
             {
                 doExecuteForBinary<false, false>(
                     data_to,
@@ -1355,7 +1562,7 @@ public:
                     block.rows());
             }
         }
-        else if ((unlikely(output_tidb_tp == nullptr)) || hasParseToJSONFlag(*output_tidb_tp))
+        else if (unlikely(!output_tidb_tp.has_value()) || hasParseToJSONFlag(*output_tidb_tp))
         {
             if (from.column->isColumnNullable())
             {
@@ -1548,8 +1755,8 @@ private:
     }
 
 private:
-    const tipb::FieldType * input_tidb_tp = nullptr;
-    const tipb::FieldType * output_tidb_tp = nullptr;
+    std::optional<tipb::FieldType> input_tidb_tp;
+    std::optional<tipb::FieldType> output_tidb_tp;
     TiDB::TiDBCollatorPtr collator = nullptr;
 };
 
@@ -1566,7 +1773,7 @@ public:
     bool useDefaultImplementationForNulls() const override { return true; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    void setInputTiDBFieldType(const tipb::FieldType & tidb_tp_) { input_tidb_tp = &tidb_tp_; }
+    void setInputTiDBFieldType(const tipb::FieldType & tidb_tp_) { input_tidb_tp = tidb_tp_; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -1589,7 +1796,7 @@ public:
         if (checkDataType<DataTypeMyDateTime>(from.type.get()))
         {
             // In raw function test, input_tidb_tp is nullptr.
-            bool is_timestamp = (unlikely(input_tidb_tp == nullptr)) || input_tidb_tp->tp() == TiDB::TypeTimestamp;
+            bool is_timestamp = unlikely(!input_tidb_tp.has_value()) || input_tidb_tp->tp() == TiDB::TypeTimestamp;
             if (is_timestamp)
                 doExecute<DataTypeMyDateTime, true>(data_to, offsets_to, from.column);
             else
@@ -1639,7 +1846,7 @@ private:
     }
 
 private:
-    const tipb::FieldType * input_tidb_tp = nullptr;
+    std::optional<tipb::FieldType> input_tidb_tp;
 };
 
 class FunctionCastDurationAsJson : public IFunction

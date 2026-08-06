@@ -21,7 +21,7 @@
 #include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/StorageEngineType.h>
 #include <Storages/KVStore/TMTStorages.h>
-#include <Storages/KVStore/TiKVHelpers/PDTiKVClient.h>
+#include <pingcap/kv/Cluster.h>
 
 #include <memory>
 
@@ -127,6 +127,8 @@ public:
     CTEManager * getCTEManager();
 
     void shutdown();
+
+    void shutdownStorageGc();
 
     void restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper = nullptr);
 

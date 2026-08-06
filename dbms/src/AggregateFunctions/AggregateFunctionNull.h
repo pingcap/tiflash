@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/AggregateFunctions/AggregateFunctionNull.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -33,6 +35,7 @@
 #include <common/mem_utils.h>
 
 #include <array>
+#include <vector>
 
 namespace DB
 {
@@ -471,7 +474,7 @@ public:
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
         /// This container stores the columns we really pass to the nested function.
-        const IColumn * nested_columns[number_of_arguments];
+        std::vector<const IColumn *> nested_columns(number_of_arguments);
 
         for (size_t i = 0; i < number_of_arguments; ++i)
         {
@@ -491,7 +494,7 @@ public:
         }
 
         this->setFlag(place);
-        this->nested_function->add(this->nestedPlace(place), nested_columns, row_num, arena);
+        this->nested_function->add(this->nestedPlace(place), nested_columns.data(), row_num, arena);
     }
 
     bool allocatesMemoryInArena() const override { return this->nested_function->allocatesMemoryInArena(); }

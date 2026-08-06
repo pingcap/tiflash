@@ -28,7 +28,7 @@ void KVStore::persistRegion(
     const Region & region,
     const RegionTaskLock & region_task_lock,
     PersistRegionReason reason,
-    const char * extra_msg) const
+    std::string_view extra_msg) const
 {
     RUNTIME_CHECK_MSG(
         region_persister,
@@ -36,7 +36,9 @@ void KVStore::persistRegion(
         StackTrace().toString());
 
     auto reason_id = magic_enum::enum_underlying(reason);
-    std::string caller = fmt::format("{} {}", PersistRegionReasonMap[reason_id], extra_msg);
+    std::string caller = fmt::format("{}", PersistRegionReasonMap[reason_id]);
+    if (!extra_msg.empty())
+        caller = fmt::format("{} {}", caller, extra_msg);
     LOG_INFO(
         log,
         "Start to persist {}, cache size: {} bytes for `{}`",
@@ -130,13 +132,16 @@ bool KVStore::tryFlushRegionData(
 
     // force persist
     auto & curr_region = *curr_region_ptr;
-    LOG_DEBUG(
-        log,
-        "flush region due to tryFlushRegionData by force, region_id={} term={} index={}",
-        curr_region.id(),
-        term,
-        index);
-    if (!forceFlushRegionDataImpl(curr_region, try_until_succeed, tmt, region_task_lock, index, term))
+    const auto force_persist_msg = fmt::format("by force, term={} index={}", term, index);
+    LOG_DEBUG(log, "{} flush region due to tryFlushRegionData {}", curr_region.toString(false), force_persist_msg);
+    if (!forceFlushRegionDataImpl(
+            curr_region,
+            try_until_succeed,
+            tmt,
+            region_task_lock,
+            index,
+            term,
+            force_persist_msg))
     {
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Force flush region failed, region_id={}", region_id);
     }
@@ -215,11 +220,9 @@ bool KVStore::canFlushRegionDataImpl(
     if (can_flush && flush_if_possible)
     {
         // This rarely happens when there are too may raft logs, which don't trigger a proactive flush.
-        LOG_INFO(
-            log,
-            "{} flush region due to tryFlushRegionData, index {} term {} truncated_index {} truncated_term {}"
-            " gap {}/{} table_in_mem_size={} table_id={} keyspace={}",
-            curr_region.toString(false),
+        const auto flush_msg = fmt::format(
+            "index {} term {} truncated_index {} truncated_term {} gap {}/{} table_in_mem_size={} table_id={} "
+            "keyspace={}",
             index,
             term,
             truncated_index,
@@ -229,8 +232,9 @@ bool KVStore::canFlushRegionDataImpl(
             curr_region_ptr->getRegionTableSize(),
             curr_region_ptr->getMappedTableID(),
             curr_region_ptr->getKeyspaceID());
+        LOG_DEBUG(log, "{} flush region due to tryFlushRegionData, {}", curr_region.toString(false), flush_msg);
         GET_METRIC(tiflash_raft_region_flush_bytes, type_flushed).Observe(size_bytes);
-        return forceFlushRegionDataImpl(curr_region, try_until_succeed, tmt, region_task_lock, index, term);
+        return forceFlushRegionDataImpl(curr_region, try_until_succeed, tmt, region_task_lock, index, term, flush_msg);
     }
     else
     {
@@ -246,7 +250,8 @@ bool KVStore::forceFlushRegionDataImpl(
     TMTContext & tmt,
     const RegionTaskLock & region_task_lock,
     UInt64 index,
-    UInt64 term) const
+    UInt64 term,
+    std::string_view persist_extra_msg) const
 {
     Stopwatch watch;
     if (index)
@@ -261,7 +266,7 @@ bool KVStore::forceFlushRegionDataImpl(
     }
 
     // flush cache in storage level is done, persist the region info
-    persistRegion(curr_region, region_task_lock, PersistRegionReason::Flush, "");
+    persistRegion(curr_region, region_task_lock, PersistRegionReason::Flush, persist_extra_msg);
     // CompactLog will be done in proxy soon, we advance the eager truncate index in TiFlash
     curr_region.updateRaftLogEagerIndex(index);
     curr_region.cleanApproxMemCacheInfo();
