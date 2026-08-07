@@ -20,6 +20,7 @@
 #include <Core/Types.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeFixedString.h>
 #include <DataTypes/DataTypeString.h>
@@ -93,6 +94,13 @@ private:
         Generic,
     };
 
+    template <typename T>
+    static constexpr bool isDecimalFieldType()
+    {
+        return std::is_same_v<T, DecimalField<Decimal32>> || std::is_same_v<T, DecimalField<Decimal64>>
+            || std::is_same_v<T, DecimalField<Decimal128>> || std::is_same_v<T, DecimalField<Decimal256>>;
+    }
+
     static ValueGroupType getGroupType(const Field & field)
     {
         switch (field.getType())
@@ -117,17 +125,10 @@ private:
     template <typename T>
     static constexpr ValueGroupType getGroupType()
     {
-        if constexpr (is_arithmetic_v<T>)
-            return Number;
-        else if constexpr (
-            // clang-format off
-            std::is_same_v<T, DecimalField<Decimal32>>
-            || std::is_same_v<T, DecimalField<Decimal64>>
-            || std::is_same_v<T, DecimalField<Decimal128>>
-            || std::is_same_v<T, DecimalField<Decimal256>>
-            // clang-format on
-        )
+        if constexpr (IsDecimal<T> || isDecimalFieldType<T>())
             return Decimal;
+        else if constexpr (is_arithmetic_v<T>)
+            return Number;
         else if constexpr (std::is_same_v<T, std::string>)
             return String;
         else
@@ -150,20 +151,13 @@ private:
         }
         else if constexpr (LeftGroupType == Decimal || RightGroupType == Decimal)
         {
-            // TODO: support decimal comparison.
             // clang-format off
-//            if (!(compareDecimalLeftType<Field::Types::Which::UInt64, UInt64, Number>(left_field, right, res)
-//                  || compareDecimalLeftType<Field::Types::Which::Int64, Int64, Number>(left_field, right, res)
-//                  || compareDecimalLeftType<Field::Types::Which::Float64, Float64, Number>(left_field, right, res)
-//                  || compareDecimalLeftType<Field::Types::Which::Int128, Int128, Number>(left_field, right, res)
-//                  || compareDecimalLeftType<Field::Types::Which::Int256, Int256, Number>(left_field, right, res)
-//                  || compareDecimalLeftType<Field::Types::Which::Decimal32, DecimalField<Decimal32>, Decimal>(left_field, right, res)
-//                  || compareDecimalLeftType<Field::Types::Which::Decimal64, DecimalField<Decimal64>, Decimal>(left_field, right, res)
-//                  || compareDecimalLeftType<Field::Types::Which::Decimal128, DecimalField<Decimal128>, Decimal>(left_field, right, res)
-//                  || compareDecimalLeftType<Field::Types::Which::Decimal256, DecimalField<Decimal256>, Decimal>(left_field, right, res)))
-//                throw Exception("Illegal compare " + std::string(left_field.getTypeName()) + " with " + compareTypeToString(right));
+            if (compareDecimalLeftType<Field::Types::Which::Decimal32, Decimal32>(left_field, right_type, right, res)
+                || compareDecimalLeftType<Field::Types::Which::Decimal64, Decimal64>(left_field, right_type, right, res)
+                || compareDecimalLeftType<Field::Types::Which::Decimal128, Decimal128>(left_field, right_type, right, res)
+                || compareDecimalLeftType<Field::Types::Which::Decimal256, Decimal256>(left_field, right_type, right, res))
+                return true;
             // clang-format on
-            // return true;
             return false;
         }
         else if constexpr (LeftGroupType == String && RightGroupType == String)
@@ -218,30 +212,31 @@ private:
     template <
         Field::Types::Which LeftFieldType,
         typename Left,
-        ValueGroupType LeftGroupType,
         typename Right,
         ValueGroupType RightGroupType = getGroupType<Right>()>
-    static bool compareDecimalLeftType(const Field & left_field, const Right & right, bool & res)
+    static bool compareDecimalLeftType(
+        const Field & left_field,
+        const DataTypePtr & right_type,
+        const Right & right,
+        bool & res)
     {
         if (left_field.getType() != LeftFieldType)
             return false;
-        if constexpr (LeftGroupType != Decimal && RightGroupType != Decimal)
+        if constexpr (RightGroupType != Decimal || !IsDecimal<Right>)
+        {
             return false;
+        }
+        else
+        {
+            const auto & left = left_field.safeGet<DecimalField<Left>>();
+            res = DecimalComparison<Left, Right, Op, true>::compare(
+                left.getValue(),
+                right,
+                left.getScale(),
+                getDecimalScale(*right_type, 0));
 
-        auto & left = left_field.safeGet<Left>();
-        UInt32 left_scale = 1;
-        UInt32 right_scale = 1;
-
-        if constexpr (LeftGroupType == Decimal)
-            left_scale = left.getScale();
-        if constexpr (RightGroupType == Decimal)
-            right_scale = right.getScale();
-        else if constexpr (
-            (LeftGroupType == Number || LeftGroupType == Decimal)
-            && (RightGroupType == Number || RightGroupType == Decimal))
-            res = DecimalComparison<Left, Right, Op, true>::compare(left, right, left_scale, right_scale);
-
-        return true;
+            return true;
+        }
     }
 
     static void compareStringLeftType(const Field & left_field, const std::string & right, bool & res)

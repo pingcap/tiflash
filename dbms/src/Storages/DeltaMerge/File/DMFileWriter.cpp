@@ -60,10 +60,12 @@ DMFileWriter::DMFileWriter(
 
     for (auto & cd : write_columns)
     {
-        // TODO: currently we only generate index for Integers, Date, DateTime types, and this should be configurable by user.
+        // TODO: currently we only generate index for Integers, Date, DateTime, Decimal types, and this should be
+        // configurable by user.
         /// for handle column always generate index
         auto type = removeNullable(cd.type);
-        bool do_index = cd.id == EXTRA_HANDLE_COLUMN_ID || type->isInteger() || type->isDateOrDateTime();
+        bool do_index
+            = cd.id == EXTRA_HANDLE_COLUMN_ID || type->isInteger() || type->isDateOrDateTime() || type->isDecimal();
 
         addStreams(cd.id, cd.type, do_index);
         dmfile->meta->getColumnStats().emplace(
