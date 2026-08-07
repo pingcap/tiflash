@@ -228,12 +228,16 @@ private:
         }
         else
         {
+            const auto * decimal_type = typeid_cast<const DataTypeDecimal<Right> *>(right_type.get());
+            if (decimal_type == nullptr)
+                return false;
+
             const auto & left = left_field.safeGet<DecimalField<Left>>();
             res = DecimalComparison<Left, Right, Op, true>::compare(
                 left.getValue(),
                 right,
                 left.getScale(),
-                getDecimalScale(*right_type, 0));
+                decimal_type->getScale());
 
             return true;
         }
