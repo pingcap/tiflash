@@ -342,6 +342,8 @@ pub struct CloudHelper {
     pd_client: Arc<PdClientWithCache>,
     vector_index_cache: VectorIndexCache,
     columnar_file_cache: ColumnarFileCache,
+    /// Process-global TableMeta cache shared across snaps.
+    columnar_meta_cache: ColumnarMetaCache,
     fts_cache: FtsCache,
     fts_delta_cache: FtsDeltaCache,
     block_cache: BlockCache,
@@ -387,6 +389,10 @@ impl CloudHelper {
         let cache_cap = columnar_file_cache_config.cache_cap.as_memory_size();
         let columnar_file_cache =
             ColumnarFileCache::new(columnar_file_cache_config.cache_size, cache_cap);
+        // Process-global TableMeta cache shared across snaps. Keep the same default
+        // capacity as ColumnarMetaCache::default() / WN (mem/500). Tunable later via config.
+        let mem_limit = SysQuota::memory_limit_in_bytes();
+        let columnar_meta_cache = ColumnarMetaCache::new(mem_limit / 500);
         // Use the same cache capacity for meta file cache.
         let meta_file_cache = new_meta_file_cache(cache_cap);
         let fts_cache = FtsCache::new(fts_cache_config, runtime.handle().clone());
@@ -410,6 +416,7 @@ impl CloudHelper {
             pd_client: Arc::new(PdClientWithCache::new(backends.pd_client)),
             vector_index_cache,
             columnar_file_cache,
+            columnar_meta_cache,
             fts_cache,
             fts_delta_cache,
             block_cache,
@@ -545,6 +552,7 @@ impl CloudHelper {
         let shared_snap_access_cache = self.shared_snap_access_cache.clone();
         let meta_file_cache = self.meta_file_cache.clone();
         let columnar_file_cache = self.columnar_file_cache.clone();
+        let columnar_meta_cache = self.columnar_meta_cache.clone();
         let fts_cache = self.fts_cache.clone();
         let fts_delta_cache = self.fts_delta_cache.clone();
         let block_cache = self.block_cache.clone();
@@ -559,6 +567,7 @@ impl CloudHelper {
                 ia_ctx,
                 vector_index_cache,
                 columnar_file_cache,
+                columnar_meta_cache,
                 snap_cache,
                 snap_cache_capable_stores,
                 meta_file_cache,
@@ -713,6 +722,7 @@ async fn request_snapshot_from_leader(
     ia_ctx: IaCtx,
     vector_index_cache: VectorIndexCache,
     columnar_file_cache: ColumnarFileCache,
+    columnar_meta_cache: ColumnarMetaCache,
     snap_cache: SnapCache,
     snap_cache_capable_stores: Arc<DashMap<u64, ()>>,
     meta_file_cache: Arc<Cache<u64, Arc<dyn File>, MetaFileCacheWeighter>>,
@@ -888,7 +898,7 @@ async fn request_snapshot_from_leader(
                     ia_ctx,
                     prepare_type,
                     read_columnar: true,
-                    columnar_meta_cache: ColumnarMetaCache::default(),
+                    columnar_meta_cache: columnar_meta_cache.clone(),
                     encryption_key_manager: Arc::new(cloud_encryption::EncryptionKeyManager::new()),
                     strict_file_memory_quota_wait_timeout: Duration::from_secs(30),
                     strict_file_memory_quota: Arc::new(MemoryQuota::new(usize::MAX)),
@@ -1263,6 +1273,7 @@ async fn get_or_request_shared_snapshot(
     ia_ctx: IaCtx,
     vector_index_cache: VectorIndexCache,
     columnar_file_cache: ColumnarFileCache,
+    columnar_meta_cache: ColumnarMetaCache,
     snap_cache: SnapCache,
     snap_cache_capable_stores: Arc<DashMap<u64, ()>>,
     meta_file_cache: Arc<Cache<u64, Arc<dyn File>, MetaFileCacheWeighter>>,
@@ -1325,6 +1336,7 @@ async fn get_or_request_shared_snapshot(
         ia_ctx,
         vector_index_cache,
         columnar_file_cache,
+        columnar_meta_cache,
         snap_cache,
         snap_cache_capable_stores,
         meta_file_cache,
