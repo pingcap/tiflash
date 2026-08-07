@@ -373,10 +373,10 @@ String genErrMsgForLocalRead(const KeyspaceID keyspace_id, const TableID & table
     return table_id == logical_table_id
         ? fmt::format("(while creating read sources from storage, keyspace={} table_id={})", keyspace_id, table_id)
         : fmt::format(
-              "(while creating read sources from storage, keyspace={} table_id={} logical_table_id={})",
-              keyspace_id,
-              table_id,
-              logical_table_id);
+            "(while creating read sources from storage, keyspace={} table_id={} logical_table_id={})",
+            keyspace_id,
+            table_id,
+            logical_table_id);
 }
 } // namespace
 

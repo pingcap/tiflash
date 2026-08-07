@@ -112,7 +112,11 @@ String UnavailableRegions::toDebugString(size_t num_show) const
             end_it = lock_region_ids.end();
         else
             end_it = std::next(beg_it, std::min(num_show, lock_region_ids.size()));
-        buffer.joinStr(beg_it, end_it, [](const auto & v, FmtBuffer & f) { f.fmtAppend("{}", v); }, "|");
+        buffer.joinStr(
+            beg_it,
+            end_it,
+            [](const auto & v, FmtBuffer & f) { f.fmtAppend("{}", v); },
+            "|");
     }
     buffer.append("] locks=[");
     {
@@ -483,8 +487,11 @@ void LearnerReadWorker::waitIndex(
 
         // Wait index timeout is disabled; or timeout is enabled but not happen yet, wait index for
         // a specify Region.
-        const auto [wait_res, time_cost]
-            = region->waitIndex(index_to_wait, timeout_ms, [this]() { return tmt.checkRunning(); }, log);
+        const auto [wait_res, time_cost] = region->waitIndex(
+            index_to_wait,
+            timeout_ms,
+            [this]() { return tmt.checkRunning(); },
+            log);
         if (wait_res != WaitIndexStatus::Finished)
         {
             auto current = region->appliedIndex();
