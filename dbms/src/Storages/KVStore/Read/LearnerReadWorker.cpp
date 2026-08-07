@@ -39,7 +39,7 @@ void UnavailableRegions::tryThrowRegionException()
     if (!batch_cop && !region_locks.empty())
         throw LockException(std::move(region_locks));
 
-    if (!unavailable_ids.empty())
+    if (!unavailable_ids.empty() || !lock_region_ids.empty())
     {
         RegionException::UnavailableRegions ids;
         RegionException::RegionReadStatus status = RegionException::RegionReadStatus::NOT_FOUND;
@@ -54,7 +54,7 @@ void UnavailableRegions::tryThrowRegionException()
                 extra_msg = desc.extra_msg;
             }
         }
-        throw RegionException(std::move(ids), status, extra_msg.c_str());
+        throw RegionException(std::move(ids), std::move(lock_region_ids), std::move(locks), status, extra_msg.c_str());
     }
 }
 
@@ -104,6 +104,16 @@ String UnavailableRegions::toDebugString(size_t num_show) const
             },
             "|");
     }
+    buffer.append("] lock_ids=[");
+    {
+        auto beg_it = lock_region_ids.begin();
+        auto end_it = beg_it;
+        if (num_show == 0) // show all
+            end_it = lock_region_ids.end();
+        else
+            end_it = std::next(beg_it, std::min(num_show, lock_region_ids.size()));
+        buffer.joinStr(beg_it, end_it, [](const auto & v, FmtBuffer & f) { f.fmtAppend("{}", v); }, "|");
+    }
     buffer.append("] locks=[");
     {
         auto beg_it = region_locks.begin();
@@ -113,9 +123,11 @@ String UnavailableRegions::toDebugString(size_t num_show) const
         else
             end_it = std::next(beg_it, std::min(num_show, region_locks.size()));
         buffer.joinStr(
-            region_locks.begin(),
-            region_locks.end(),
-            [](const auto & v, FmtBuffer & f) { f.fmtAppend("{}({})", v.first, v.second->DebugString()); },
+            beg_it,
+            end_it,
+            [](const auto & v, FmtBuffer & f) {
+                f.fmtAppend("{}({})", v.first, v.second ? v.second->DebugString() : "null");
+            },
             "|");
     }
     buffer.append("]}");
@@ -383,7 +395,7 @@ void LearnerReadWorker::recordReadIndexError(
         else if (resp.has_locked())
         {
             GET_METRIC(tiflash_raft_learner_read_failures_count, type_tikv_lock).Increment();
-            unavailable_regions.addRegionLock(region_id, LockInfoPtr(resp.release_locked()));
+            unavailable_regions.addReadIndexLockAsUnavailableRegion(region_id, LockInfoPtr(resp.release_locked()));
         }
         else
         {
@@ -471,11 +483,8 @@ void LearnerReadWorker::waitIndex(
 
         // Wait index timeout is disabled; or timeout is enabled but not happen yet, wait index for
         // a specify Region.
-        const auto [wait_res, time_cost] = region->waitIndex(
-            index_to_wait,
-            timeout_ms,
-            [this]() { return tmt.checkRunning(); },
-            log);
+        const auto [wait_res, time_cost]
+            = region->waitIndex(index_to_wait, timeout_ms, [this]() { return tmt.checkRunning(); }, log);
         if (wait_res != WaitIndexStatus::Finished)
         {
             auto current = region->appliedIndex();
