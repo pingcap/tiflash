@@ -342,7 +342,6 @@ pub struct CloudHelper {
     pd_client: Arc<PdClientWithCache>,
     vector_index_cache: VectorIndexCache,
     columnar_file_cache: ColumnarFileCache,
-    /// Process-global TableMeta cache shared across snaps.
     columnar_meta_cache: ColumnarMetaCache,
     fts_cache: FtsCache,
     fts_delta_cache: FtsDeltaCache,
@@ -390,7 +389,7 @@ impl CloudHelper {
         let columnar_file_cache =
             ColumnarFileCache::new(columnar_file_cache_config.cache_size, cache_cap);
         // Process-global TableMeta cache shared across snaps. Keep the same default
-        // capacity as ColumnarMetaCache::default() / WN (mem/500). Tunable later via config.
+        // capacity as cloud-storage-engine. Tunable later via config.
         let mem_limit = SysQuota::memory_limit_in_bytes();
         let columnar_meta_cache = ColumnarMetaCache::new(mem_limit / 500);
         // Use the same cache capacity for meta file cache.
