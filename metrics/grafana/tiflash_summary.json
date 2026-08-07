@@ -9144,7 +9144,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_proxy_kv_engine_ia_remote_read_segment_cache_hit{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
+              "expr": "sum(rate(tiflash_proxy_kv_engine_ia_remote_read_segment_cache_hit{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[1m])) by ($additional_groupby)",
               "format": "time_series",
               "hide": false,
               "interval": "",
@@ -9154,7 +9154,7 @@
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_proxy_kv_engine_ia_remote_read_segment_cache_miss{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
+              "expr": "sum(rate(tiflash_proxy_kv_engine_ia_remote_read_segment_cache_miss{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[1m])) by ($additional_groupby)",
               "hide": false,
               "interval": "",
               "legendFormat": "cache-miss {{$additional_groupby}}",
@@ -9377,7 +9377,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_proxy_kv_engine_columnar_file_cache_hit{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
+              "expr": "sum(rate(tiflash_proxy_kv_engine_columnar_file_cache_hit{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[1m])) by ($additional_groupby)",
               "format": "time_series",
               "hide": false,
               "interval": "",
@@ -9387,7 +9387,7 @@
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_proxy_kv_engine_columnar_file_cache_miss{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
+              "expr": "sum(rate(tiflash_proxy_kv_engine_columnar_file_cache_miss{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[1m])) by ($additional_groupby)",
               "hide": false,
               "interval": "",
               "legendFormat": "file-cache-miss {{$additional_groupby}}",
@@ -9731,7 +9731,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_proxy_kv_engine_columnar_fetch_snapshot_retry_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
+              "expr": "sum(rate(tiflash_proxy_kv_engine_columnar_fetch_snapshot_retry_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[1m])) by ($additional_groupby)",
               "format": "time_series",
               "hide": false,
               "interval": "",
@@ -9956,7 +9956,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_proxy_kv_engine_columnar_meta_cache_hit{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
+              "expr": "sum(rate(tiflash_proxy_kv_engine_columnar_meta_cache_hit{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[1m])) by ($additional_groupby)",
               "format": "time_series",
               "hide": false,
               "interval": "",
@@ -9966,7 +9966,7 @@
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_proxy_kv_engine_columnar_meta_cache_miss{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
+              "expr": "sum(rate(tiflash_proxy_kv_engine_columnar_meta_cache_miss{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[1m])) by ($additional_groupby)",
               "hide": false,
               "interval": "",
               "legendFormat": "miss {{$additional_groupby}}",
@@ -9974,7 +9974,7 @@
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_proxy_kv_engine_columnar_meta_cache_parse{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
+              "expr": "sum(rate(tiflash_proxy_kv_engine_columnar_meta_cache_parse{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[1m])) by ($additional_groupby)",
               "hide": false,
               "interval": "",
               "legendFormat": "parse {{$additional_groupby}}",
@@ -26585,7 +26585,7 @@
       "type": "row"
     }
   ],
-  "refresh": "1m",
+  "refresh": false,
   "schemaVersion": 27,
   "style": "dark",
   "tags": [],
@@ -26702,7 +26702,7 @@
       {
         "allValue": null,
         "current": {
-          "selected": false,
+          "selected": true,
           "text": "none",
           "value": "none"
         },
@@ -26733,7 +26733,7 @@
       {
         "allValue": null,
         "current": {
-          "selected": false,
+          "selected": true,
           "text": "All",
           "value": ".*"
         },
@@ -26769,8 +26769,8 @@
     ]
   },
   "time": {
-    "from": "now-1h",
-    "to": "now"
+    "from": "2026-08-07T08:40:03.969Z",
+    "to": "2026-08-07T09:05:57.814Z"
   },
   "timepicker": {
     "refresh_intervals": [
