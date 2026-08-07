@@ -446,6 +446,7 @@ fn set_heap_profile_active_to_resp(active: bool) -> hyper::Result<Response<Body>
             } else {
                 "heap profiling deactivated"
             };
+            info!("{}", body);
             Ok(make_response(StatusCode::OK, body))
         }
         Err(err) => Ok(make_response(StatusCode::INTERNAL_SERVER_ERROR, err)),
