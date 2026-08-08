@@ -57,6 +57,19 @@ Prefer `common.band` / `common.buildRow` instead of hand-written `x/y/w`:
 
 N panels in a band are equally divided across width 24 unless you pass explicit `w`.
 
+## PromQL helpers (L1)
+
+Prefer `common.expr.*` instead of hand-written selector strings:
+
+```jsonnet
+common.expr.sumRate('tiflash_stale_read_count', common.selector, by=['instance'])
+common.expr.histogramQuantile('0.99', 'tiflash_storage_s3_request_seconds', common.selector, by=['type'])
+common.expr.histogramAvg('tiflash_storage_s3_request_seconds', common.selector, by=['type'])
+```
+
+`histogramQuantile` / `histogramAvg` take the metric **base name** (no `_bucket` / `_sum` / `_count`).
+Extra matchers go in `labels=`, e.g. `labels='type="decode"'`. Default range is `$__rate_interval`.
+
 ## Duration histogram helpers
 
 For `*_seconds_bucket` latency panels (default show p9999/p99; hide max/p999/p80/avg), prefer:

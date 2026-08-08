@@ -4,6 +4,7 @@ local defaultH = 8;
 local grafana = import 'grafonnet/grafana.libsonnet';
 local graphPanel = grafana.graphPanel;
 local prometheus = grafana.prometheus;
+local promql = import 'promql.libsonnet';
 
 local normalizeItem(item) =
   if std.type(item) == 'object' && std.objectHas(item, 'panel') then
@@ -52,26 +53,12 @@ local s3StyleQuantiles = [
   { name: 'avg', hide: true, avg: true },
 ];
 
-local byClause(byLabels) =
-  std.join(', ', ['le'] + byLabels + ['$additional_groupby']);
-
-local avgByClause(byLabels) =
-  std.join(', ', byLabels + ['$additional_groupby']);
-
-local durationExpr(metric, selector, byLabels, q, range, maxHack) =
-  local metricSel = metric + '{' + selector + '}';
-  local by = byClause(byLabels);
-  if maxHack then
-    'histogram_quantile(' + q + ', sum(round(1000000000*rate(' + metricSel + '[' + range + ']))) by (' + by + ') / 1000000000)'
+// durationPanel still accepts metric ending with `_bucket`; strip for promql helpers.
+local stripBucket(metric) =
+  if std.endsWith(metric, '_bucket') then
+    std.substr(metric, 0, std.length(metric) - std.length('_bucket'))
   else
-    'histogram_quantile(' + q + ', sum(rate(' + metricSel + '[' + range + '])) by (' + by + '))';
-
-// avg = rate(sum) / rate(count); metric is expected to end with `_bucket`.
-local avgExpr(metric, selector, byLabels, range) =
-  local sumMetric = std.strReplace(metric, '_bucket', '_sum');
-  local countMetric = std.strReplace(metric, '_bucket', '_count');
-  local by = avgByClause(byLabels);
-  '(sum(rate(' + sumMetric + '{' + selector + '}[' + range + '])) by (' + by + ') / sum(rate(' + countMetric + '{' + selector + '}[' + range + '])) by (' + by + '))';
+    metric;
 
 local makeDurationTarget(expr, legend, intervalFactor, hide) =
   if intervalFactor == null then
@@ -92,6 +79,9 @@ local makeDurationTarget(expr, legend, intervalFactor, hide) =
   // Common PromQL label matchers used by most TiFlash panels.
   selector:: 'k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"',
   proxySelector:: 'k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"',
+
+  // L1: PromQL expression builders (see promql.libsonnet).
+  expr:: promql,
 
   gridW:: gridW,
   panelH:: defaultH,
@@ -135,20 +125,21 @@ local makeDurationTarget(expr, legend, intervalFactor, hide) =
     intervalFactor=2,
     quantiles=s3StyleQuantiles,
   )::
+    local metricBase = stripBucket(metric);
     std.map(
       function(q)
         local isAvg = std.objectHas(q, 'avg') && q.avg;
         makeDurationTarget(
           if isAvg then
-            avgExpr(metric, selector, by, range)
+            promql.histogramAvg(metricBase, selector, by=by, range=range)
           else
-            durationExpr(
-              metric,
-              selector,
-              by,
+            promql.histogramQuantile(
               q.q,
-              range,
-              std.objectHas(q, 'maxHack') && q.maxHack,
+              metricBase,
+              selector,
+              by=by,
+              range=range,
+              maxHack=std.objectHas(q, 'maxHack') && q.maxHack,
             ),
           legend % q.name,
           intervalFactor,
