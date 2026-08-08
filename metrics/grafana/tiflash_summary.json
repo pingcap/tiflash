@@ -26585,7 +26585,7 @@
       "type": "row"
     }
   ],
-  "refresh": false,
+  "refresh": "1m",
   "schemaVersion": 27,
   "style": "dark",
   "tags": [],
@@ -26702,7 +26702,7 @@
       {
         "allValue": null,
         "current": {
-          "selected": true,
+          "selected": false,
           "text": "none",
           "value": "none"
         },
@@ -26733,7 +26733,7 @@
       {
         "allValue": null,
         "current": {
-          "selected": true,
+          "selected": false,
           "text": "All",
           "value": ".*"
         },
@@ -26769,8 +26769,8 @@
     ]
   },
   "time": {
-    "from": "2026-08-07T08:40:03.969Z",
-    "to": "2026-08-07T09:05:57.814Z"
+    "from": "now-1h",
+    "to": "now"
   },
   "timepicker": {
     "refresh_intervals": [
