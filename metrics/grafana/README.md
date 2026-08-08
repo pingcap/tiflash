@@ -94,7 +94,9 @@ Extra matchers go in `labels=`, e.g. `labels='type="decode"'`. Default range is 
 ## Graph style helpers (L2)
 
 Prefer `common.graph` / `common.target` / `common.override` instead of repeating
-`graphPanel.new` + legend/yaxes boilerplate:
+`graphPanel.new` + legend/`resetYaxes`/`addYaxis` boilerplate. `common.graph` sets
+table legend + dual Y axes; pass only what differs (`fill`, `yLeft`/`yRight`,
+`legendHideZero`, `decimals`, `stack`, …):
 
 ```jsonnet
 common.graph(
