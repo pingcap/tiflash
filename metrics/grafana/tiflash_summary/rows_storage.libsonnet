@@ -175,31 +175,13 @@ local subTasks_Write_Throughput_rowsP = graphPanel.new(
   show=false,
 );
 
-local small_Internal_Tasks_OPSP = graphPanel.new(
-  title='Small Internal Tasks OPS',
-  datasource=common.datasource,
-  description='Total number of storage\'s internal sub tasks',
-  fill=0,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_storage_subtask_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type!~"(delta_merge|seg_merge|seg_split).*"}[$__rate_interval])) by (type)',
-    legendFormat='{{type}}',
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='ops',
-  min='0',
-  decimals=1,
-)
-.addYaxis(
-  format='opm',
-  min='0',
-  show=false,
+local small_Internal_Tasks_OPSP = common.opsPanel(
+  'Small Internal Tasks OPS',
+  'tiflash_storage_subtask_count',
+  by=['type'],
+  labels='type!~"(delta_merge|seg_merge|seg_split).*"',
+  description="Total number of storage's internal sub tasks",
+  yRight='opm',
 );
 
 local small_Internal_Tasks_DurationP = common.durationPanel(
@@ -211,31 +193,13 @@ local small_Internal_Tasks_DurationP = common.durationPanel(
   description="Duration of storage's internal sub tasks",
 );
 
-local large_Internal_Tasks_OPSP = graphPanel.new(
-  title='Large Internal Tasks OPS',
-  datasource=common.datasource,
-  description='Total number of storage\'s internal sub tasks',
-  fill=0,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_storage_subtask_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"(delta_merge|seg_merge|seg_split).*"}[$__rate_interval])) by (type)',
-    legendFormat='{{type}}',
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='ops',
-  min='0',
-  decimals=1,
-)
-.addYaxis(
-  format='opm',
-  min='0',
-  show=false,
+local large_Internal_Tasks_OPSP = common.opsPanel(
+  'Large Internal Tasks OPS',
+  'tiflash_storage_subtask_count',
+  by=['type'],
+  labels='type=~"(delta_merge|seg_merge|seg_split).*"',
+  description="Total number of storage's internal sub tasks",
+  yRight='opm',
 );
 
 local large_Internal_Tasks_DurationP = common.durationPanel(

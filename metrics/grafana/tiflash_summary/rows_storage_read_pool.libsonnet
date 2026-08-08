@@ -9,32 +9,11 @@ local common = import 'common.libsonnet';
 
 local rowObj = row.new(collapse=true, title='Storage Read Pool & Data Sharing');
 
-local read_Tasks_OPSP = graphPanel.new(
-  title='Read Tasks OPS',
-  datasource=common.datasource,
+local read_Tasks_OPSP = common.opsPanel(
+  'Read Tasks OPS',
+  'tiflash_storage_read_tasks_count',
+  by=['instance'],
   description='Total number of storage engine read tasks',
-  fill=0,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_avg=true,
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_storage_read_tasks_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance)',
-    legendFormat='{{instance}}',
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='ops',
-  min='0',
-)
-.addYaxis(
-  format='none',
 );
 
 local read_SnapshotsP = graphPanel.new(

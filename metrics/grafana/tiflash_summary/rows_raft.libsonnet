@@ -9,92 +9,28 @@ local common = import 'common.libsonnet';
 
 local rowObj = row.new(collapse=true, title='Raft');
 
-local stale_Read_OPSP = graphPanel.new(
-  title='Stale Read OPS',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null as zero',
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_stale_read_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance)',
-    legendFormat='{{instance}}',
-    intervalFactor=1,
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='ops',
-  min='0',
-)
-.addYaxis(
-  format='none',
+local stale_Read_OPSP = common.opsPanel(
+  'Stale Read OPS',
+  'tiflash_stale_read_count',
+  by=['instance'],
 );
 
-local raft_Read_Index_OPSP = graphPanel.new(
-  title='Raft Read Index OPS',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null as zero',
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_raft_read_index_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance)',
-    legendFormat='{{instance}}',
-    intervalFactor=1,
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='ops',
-  min='0',
-)
-.addYaxis(
-  format='none',
+local raft_Read_Index_OPSP = common.opsPanel(
+  'Raft Read Index OPS',
+  'tiflash_raft_read_index_count',
+  by=['instance'],
 );
 
-local learner_Read_FailuresP = graphPanel.new(
-  title='Learner Read Failures',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null as zero',
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_raft_learner_read_failures_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type)',
-    legendFormat='{{type}}',
-    intervalFactor=1,
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='ops',
-  min='0',
-)
-.addYaxis(
-  format='none',
+local learner_Read_FailuresP = common.opsPanel(
+  'Learner Read Failures',
+  'tiflash_raft_learner_read_failures_count',
+  by=['type'],
 );
 
-local read_Index_EventsP = graphPanel.new(
-  title='Read Index Events',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null as zero',
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_raft_read_index_events_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type)',
-    legendFormat='{{type}}',
-    intervalFactor=1,
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='ops',
-  min='0',
-)
-.addYaxis(
-  format='none',
+local read_Index_EventsP = common.opsPanel(
+  'Read Index Events',
+  'tiflash_raft_read_index_events_count',
+  by=['type'],
 );
 
 local raft_Wait_Index_DurationP = graphPanel.new(
@@ -298,48 +234,16 @@ local apply_Raft_admin_logs_Duration_HeatmapP = heatmapPanel.new(
   )
 );
 
-local raft_Events_QPSP = graphPanel.new(
-  title='Raft Events QPS',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null as zero',
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_raft_raft_events_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
-    legendFormat='{{instance}}',
-    intervalFactor=1,
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='ops',
-  min='0',
-)
-.addYaxis(
-  format='none',
+local raft_Events_QPSP = common.opsPanel(
+  'Raft Events QPS',
+  'tiflash_raft_raft_events_count',
+  by=['type'],
 );
 
-local raft_Frequent_Events_QPSP = graphPanel.new(
-  title='Raft Frequent Events QPS',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null as zero',
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_raft_raft_frequent_events_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
-    legendFormat='{{instance}}',
-    intervalFactor=1,
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='ops',
-  min='0',
-)
-.addYaxis(
-  format='none',
+local raft_Frequent_Events_QPSP = common.opsPanel(
+  'Raft Frequent Events QPS',
+  'tiflash_raft_raft_frequent_events_count',
+  by=['type'],
 );
 
 local raft_Log_Gap_HeatmapP = heatmapPanel.new(
@@ -447,26 +351,10 @@ local write_Committed_Size_HeatmapP = heatmapPanel.new(
   )
 );
 
-local raft_Eager_GC_OPSP = graphPanel.new(
-  title='Raft Eager GC OPS',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null as zero',
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_raft_eager_gc_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
-    legendFormat='{{instance}}',
-    intervalFactor=1,
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='ops',
-  min='0',
-)
-.addYaxis(
-  format='none',
+local raft_Eager_GC_OPSP = common.opsPanel(
+  'Raft Eager GC OPS',
+  'tiflash_raft_eager_gc_count',
+  by=['type'],
 );
 
 local raft_Eager_GC_DurationP = common.durationPanel(

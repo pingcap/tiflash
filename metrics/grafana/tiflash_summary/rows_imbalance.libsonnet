@@ -87,33 +87,12 @@ local segment_ReaderP = graphPanel.new(
   show=false,
 );
 
-local request_QPS_by_instanceP = graphPanel.new(
-  title='Request QPS by instance',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='current',
-  legend_sortDesc=true,
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_coprocessor_request_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, instance)',
-    legendFormat='{{type}}-{{instance}}',
-    intervalFactor=1,
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='none',
-  min='0',
-)
-.addYaxis(
-  format='none',
+local request_QPS_by_instanceP = common.opsPanel(
+  'Request QPS by instance',
+  'tiflash_coprocessor_request_count',
+  by=['type', 'instance'],
+  legend='{{type}}-{{instance}}',
+  yLeft='none',
 );
 
 local read_Throughput_by_instanceP = graphPanel.new(

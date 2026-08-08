@@ -56,36 +56,14 @@ local checkpoint_Upload_flowP = graphPanel.new(
   min='0',
 );
 
-local checkpoint_Upload_keys_speed_by_type_allP = graphPanel.new(
-  title='Checkpoint Upload keys speed by type (all)',
-  datasource=common.datasource,
+local checkpoint_Upload_keys_speed_by_type_allP = common.opsPanel(
+  'Checkpoint Upload keys speed by type (all)',
+  'tiflash_storage_checkpoint_keys_by_types',
+  by=['type', '$additional_groupby'],
+  legend='{{type}} {{$additional_groupby}}',
   description='The keys of checkpoint operations. All keys are uploaded in the checkpoint. Grouped by key types.',
   fill=1,
-  nullPointMode='null',
-  decimals=1,
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_hideZero=true,
-  legend_sort='current',
-  legend_sortDesc=true,
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_storage_checkpoint_keys_by_types{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-    legendFormat='{{type}} {{$additional_groupby}}',
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='ops',
-  min='0',
-)
-.addYaxis(
-  format='short',
-  min='0',
+  yRight='short',
 );
 
 local checkpoint_Upload_flow_by_type_incremental_compactionP = graphPanel.new(
@@ -193,32 +171,12 @@ local remote_Store_UsageP = graphPanel.new(
   max='1.1',
 );
 
-local remote_Object_Lock_Request_QPSP = graphPanel.new(
-  title='Remote Object Lock Request QPS',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_hideEmpty=true,
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_disaggregated_object_lock_request_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-    legendFormat='{{type}} {{$additional_groupby}}',
-    intervalFactor=1,
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='none',
-  min='0',
-)
-.addYaxis(
-  format='none',
+local remote_Object_Lock_Request_QPSP = common.opsPanel(
+  'Remote Object Lock Request QPS',
+  'tiflash_disaggregated_object_lock_request_count',
+  by=['type', '$additional_groupby'],
+  legend='{{type}} {{$additional_groupby}}',
+  yLeft='none',
 );
 
 local remote_Object_Lock_DurationP = common.durationPanel(
@@ -325,32 +283,12 @@ local local_Lock_Manager_statusP = graphPanel.new(
   format='short',
 );
 
-local local_Lock_Manager_QPSP = graphPanel.new(
-  title='Local Lock Manager QPS',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_hideEmpty=true,
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_storage_s3_lock_mgr_counter{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-    legendFormat='{{type}} {{$additional_groupby}}',
-    intervalFactor=1,
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='none',
-  min='0',
-)
-.addYaxis(
-  format='none',
+local local_Lock_Manager_QPSP = common.opsPanel(
+  'Local Lock Manager QPS',
+  'tiflash_storage_s3_lock_mgr_counter',
+  by=['type', '$additional_groupby'],
+  legend='{{type}} {{$additional_groupby}}',
+  yLeft='none',
 );
 
 local fAP_resultP = graphPanel.new(

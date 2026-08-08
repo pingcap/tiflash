@@ -69,31 +69,12 @@ local task_CountP = graphPanel.new(
   format='short',
 );
 
-local task_Status_Change_OPSP = graphPanel.new(
-  title='Task Status Change OPS',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_pipeline_task_change_to_status{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type)',
-    legendFormat='{{type}}',
-    intervalFactor=1,
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='none',
-  min='0',
-)
-.addYaxis(
-  format='short',
+local task_Status_Change_OPSP = common.opsPanel(
+  'Task Status Change OPS',
+  'tiflash_pipeline_task_change_to_status',
+  by=['type'],
+  yLeft='none',
+  yRight='short',
 );
 
 local task_DurationP = graphPanel.new(

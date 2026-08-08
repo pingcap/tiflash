@@ -197,34 +197,13 @@ local columnar_Prefetch_Cache_Hit_DurationP = graphPanel.new(
   format='short',
 );
 
-local columnar_Fetch_Snapshot_RetryP = graphPanel.new(
-  title='Columnar Fetch Snapshot Retry',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_proxy_kv_engine_columnar_fetch_snapshot_retry_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m])) by ($additional_groupby)',
-    legendFormat='retry {{$additional_groupby}}',
-    intervalFactor=1,
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='ops',
-  min='0',
-)
-.addYaxis(
-  format='opm',
-  min='0',
+local columnar_Fetch_Snapshot_RetryP = common.opsPanel(
+  'Columnar Fetch Snapshot Retry',
+  'tiflash_proxy_kv_engine_columnar_fetch_snapshot_retry_count',
+  by=['$additional_groupby'],
+  legend='retry {{$additional_groupby}}',
+  selector=common.proxySelector,
+  yRight='opm',
 );
 
 local columnar_Fetch_Snapshot_DurationP = common.durationPanel(

@@ -330,4 +330,40 @@ local mkGraph(
       yRight='short',
       yLeftMin='0',
     ),
+
+  // L3a: single-metric sum(rate) OPS/QPS panel.
+  opsPanel(
+    title,
+    metric,
+    by=[],
+    legend=null,
+    labels='',
+    selector=self.selector,
+    description=null,
+    yLeft='ops',
+    yRight='none',
+    fill=0,
+    range='$__rate_interval',
+  )::
+    local leg =
+      if legend != null then
+        legend
+      else if std.length(by) == 0 then
+        'value'
+      else
+        promql.byLegend(by);
+    self.graph(
+      title,
+      [
+        self.target(
+          promql.sumRate(metric, selector, by=by, labels=labels, range=range),
+          leg,
+        ),
+      ],
+      description=description,
+      fill=fill,
+      nullPointMode='null as zero',
+      yLeft=yLeft,
+      yRight=yRight,
+    ),
 }

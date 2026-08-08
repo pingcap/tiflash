@@ -87,6 +87,19 @@ common.graph(
 )
 ```
 
+For single-metric OPS/QPS panels, prefer `common.opsPanel`:
+
+```jsonnet
+common.opsPanel('Stale Read OPS', 'tiflash_stale_read_count', by=['instance'])
+common.opsPanel(
+  'Small Internal Tasks OPS',
+  'tiflash_storage_subtask_count',
+  by=['type'],
+  labels='type!~"(delta_merge|seg_merge|seg_split).*"',
+  yRight='opm',
+)
+```
+
 ## Duration histogram helpers
 
 For `*_seconds_bucket` latency panels (default show p9999/p99; hide max/p999/p80/avg), prefer:

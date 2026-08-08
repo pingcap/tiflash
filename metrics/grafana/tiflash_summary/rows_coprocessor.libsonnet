@@ -9,62 +9,18 @@ local common = import 'common.libsonnet';
 
 local rowObj = row.new(collapse=true, title='Coprocessor');
 
-local request_QPSP = graphPanel.new(
-  title='Request QPS',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_coprocessor_request_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type)',
-    legendFormat='{{type}}',
-    intervalFactor=1,
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='none',
-  min='0',
-)
-.addYaxis(
-  format='none',
+local request_QPSP = common.opsPanel(
+  'Request QPS',
+  'tiflash_coprocessor_request_count',
+  by=['type'],
+  yLeft='none',
 );
 
-local executor_QPSP = graphPanel.new(
-  title='Executor QPS',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_coprocessor_executor_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type)',
-    legendFormat='{{type}}',
-    intervalFactor=1,
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='none',
-  min='0',
-)
-.addYaxis(
-  format='none',
+local executor_QPSP = common.opsPanel(
+  'Executor QPS',
+  'tiflash_coprocessor_executor_count',
+  by=['type'],
+  yLeft='none',
 );
 
 local request_DurationP = common.durationPanel(
@@ -74,31 +30,12 @@ local request_DurationP = common.durationPanel(
   legend='%s-{{type}} {{$additional_groupby}}',
 );
 
-local error_QPSP = graphPanel.new(
-  title='Error QPS',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_coprocessor_request_error{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (reason)',
-    legendFormat='{{reason}}',
-    intervalFactor=1,
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='none',
-  min='0',
-)
-.addYaxis(
-  format='none',
+local error_QPSP = common.opsPanel(
+  'Error QPS',
+  'tiflash_coprocessor_request_error',
+  by=['reason'],
+  legend='{{reason}}',
+  yLeft='none',
 );
 
 local request_Handle_DurationP = common.durationPanel(
