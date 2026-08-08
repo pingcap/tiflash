@@ -127,6 +127,8 @@ local mkGraph(
   yRightDecimals=null,
   yRightShow=false,
   seriesOverrides=[],
+  // Tooltip hover sort: 0=none, 1/'increasing', 2/'decreasing' (grafonnet graphPanel.sort).
+  tooltipSort=0,
 ) =
   local base = graphPanel.new(
     title=title,
@@ -139,6 +141,7 @@ local mkGraph(
     points=points,
     pointradius=pointradius,
     stack=stack,
+    sort=tooltipSort,
     legend_alignAsTable=true,
     legend_rightSide=true,
     legend_values=true,
@@ -236,6 +239,7 @@ local mkGraph(
     yRightDecimals=null,
     yRightShow=false,
     seriesOverrides=[],
+    tooltipSort=0,
   )::
     mkGraph(
       title,
@@ -267,6 +271,7 @@ local mkGraph(
       yRightDecimals=yRightDecimals,
       yRightShow=yRightShow,
       seriesOverrides=seriesOverrides,
+      tooltipSort=tooltipSort,
     ),
 
   gridW:: gridW,
@@ -393,6 +398,7 @@ local mkGraph(
       yLeftMin='0',
       yRightShow=std.length(seriesOverrides) > 0,
       seriesOverrides=seriesOverrides,
+      tooltipSort='decreasing',
     ),
 
   // L3a: single-metric sum(rate) OPS/QPS panel.
@@ -431,6 +437,7 @@ local mkGraph(
       yRight=yRight,
       // Single-series OPS panels do not use the right axis.
       yRightShow=false,
+      tooltipSort='decreasing',
     ),
 
   // L3b: histogram heatmap (tsbuckets + spectral).

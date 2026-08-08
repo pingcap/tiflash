@@ -3068,7 +3068,7 @@
           "title": "Request QPS",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -3155,7 +3155,7 @@
           "title": "Executor QPS",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -3281,7 +3281,7 @@
           "title": "Request Duration",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -3368,7 +3368,7 @@
           "title": "Error QPS",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -3494,7 +3494,7 @@
           "title": "Request Handle Duration",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -5255,7 +5255,7 @@
           "title": "Task Waiting Duration",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -5608,7 +5608,7 @@
           "title": "Schema Apply Duration",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -5922,7 +5922,7 @@
           "title": "Request QPS by instance",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -7680,7 +7680,7 @@
           "title": "IA Segments Memory Wait",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -7900,7 +7900,7 @@
           "title": "IA Segments Remote Read Duration",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -8120,7 +8120,7 @@
           "title": "Columnar Prefetch Duration",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -8246,7 +8246,7 @@
           "title": "Columnar Prefetch Cache Hit Duration",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -8333,7 +8333,7 @@
           "title": "Columnar Fetch Snapshot Retry",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -8459,7 +8459,7 @@
           "title": "Columnar Fetch Snapshot Duration",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -9180,7 +9180,7 @@
           "title": "Small Internal Tasks OPS",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -9307,7 +9307,7 @@
           "title": "Small Internal Tasks Duration",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -9395,7 +9395,7 @@
           "title": "Large Internal Tasks OPS",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -9522,7 +9522,7 @@
           "title": "Large Internal Tasks Duration",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -10629,7 +10629,7 @@
           "title": "Read Tasks OPS",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -10925,7 +10925,7 @@
           "title": "Read Thread Internal Duration",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -11345,7 +11345,7 @@
           "title": "Segment MergedTask Duration",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -11471,7 +11471,7 @@
           "title": "VersionChain",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -11969,7 +11969,7 @@
           "title": "Page write Duration",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -12183,7 +12183,7 @@
           "title": "Page GC Duration",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -13293,7 +13293,7 @@
           "title": "I/O Limiter Pending Duration",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -13445,7 +13445,7 @@
           "title": "Write Stall Duration",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -13945,7 +13945,7 @@
           "title": "Stale Read OPS",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -14032,7 +14032,7 @@
           "title": "Raft Read Index OPS",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -14119,7 +14119,7 @@
           "title": "Learner Read Failures",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -14206,7 +14206,7 @@
           "title": "Read Index Events",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -14344,7 +14344,7 @@
           "title": "Raft Wait Index Duration",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -14471,7 +14471,7 @@
           "title": "Raft Batch Read Index Duration",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -14626,7 +14626,7 @@
           "title": "Apply Raft write logs Duration",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -14937,7 +14937,7 @@
           "title": "Raft Events QPS",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -15024,7 +15024,7 @@
           "title": "Raft Frequent Events QPS",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -15401,7 +15401,7 @@
           "title": "Raft Eager GC OPS",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -15528,7 +15528,7 @@
           "title": "Raft Eager GC Duration",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -15887,7 +15887,7 @@
           "title": "Upstream Latency",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -16118,7 +16118,7 @@
           "title": "Heavy Raft Apply Duration",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -17107,7 +17107,7 @@
           "title": "Checkpoint Upload Duration",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -17292,7 +17292,7 @@
           "title": "Checkpoint Upload keys speed by type (all)",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -17667,7 +17667,7 @@
           "title": "Remote Object Lock Request QPS",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -17793,7 +17793,7 @@
           "title": "Remote Object Lock Duration",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -18021,7 +18021,7 @@
           "title": "Remote GC Duration Breakdown",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -18286,7 +18286,7 @@
           "title": "Local Lock Manager QPS",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -18597,7 +18597,7 @@
           "title": "FAP time by stage",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -18833,7 +18833,7 @@
           "title": "Read Duration Breakdown",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -19159,7 +19159,7 @@
           "title": "Remote Cache BG Download Duration",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -19285,7 +19285,7 @@
           "title": "Remote Cache Wait on Downloading Duration",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -20095,7 +20095,7 @@
           "title": "PlaceIndex Tasks Duration",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -20832,7 +20832,7 @@
           "title": "S3 Request Duration",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -21110,7 +21110,7 @@
           "title": "S3 HTTP Request Duration",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -21604,7 +21604,7 @@
           "title": "Task Status Change OPS",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -21765,7 +21765,7 @@
           "title": "Task Duration",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
@@ -22727,7 +22727,7 @@
           "title": "Status API Request Duration",
           "tooltip": {
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "type": "graph",
