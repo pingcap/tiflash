@@ -64,47 +64,10 @@ local iA_usageP = graphPanel.new(
   show=false,
 );
 
-local iA_Segments_Memory_WaitP = graphPanel.new(
-  title='IA Segments Memory Wait',
-  datasource=common.datasource,
-  fill=1,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_proxy_kv_engine_ia_manager_segments_memory_wait_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m]))) by (le, $additional_groupby) / 1000000000)',
-    legendFormat='max {{$additional_groupby}}',
-    intervalFactor=1,
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.9999, sum(rate(tiflash_proxy_kv_engine_ia_manager_segments_memory_wait_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m])) by (le, $additional_groupby))',
-    legendFormat='9999 {{$additional_groupby}}',
-    intervalFactor=1,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.99, sum(rate(tiflash_proxy_kv_engine_ia_manager_segments_memory_wait_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m])) by (le, $additional_groupby))',
-    legendFormat='99 {{$additional_groupby}}',
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='s',
-  min='0',
-)
-.addYaxis(
-  format='short',
+local iA_Segments_Memory_WaitP = common.durationPanel(
+  'IA Segments Memory Wait',
+  'tiflash_proxy_kv_engine_ia_manager_segments_memory_wait_duration_seconds_bucket',
+  selector=common.proxySelector,
 );
 
 local iA_Segment_Remote_Read_CacheP = graphPanel.new(
@@ -143,47 +106,10 @@ local iA_Segment_Remote_Read_CacheP = graphPanel.new(
   min='0',
 );
 
-local iA_Segments_Remote_Read_DurationP = graphPanel.new(
-  title='IA Segments Remote Read Duration',
-  datasource=common.datasource,
-  fill=1,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_proxy_kv_engine_ia_remote_read_segment_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m]))) by (le, $additional_groupby) / 1000000000)',
-    legendFormat='max {{$additional_groupby}}',
-    intervalFactor=1,
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.9999, sum(rate(tiflash_proxy_kv_engine_ia_remote_read_segment_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m])) by (le, $additional_groupby))',
-    legendFormat='9999 {{$additional_groupby}}',
-    intervalFactor=1,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.99, sum(rate(tiflash_proxy_kv_engine_ia_remote_read_segment_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m])) by (le, $additional_groupby))',
-    legendFormat='99 {{$additional_groupby}}',
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='s',
-  min='0',
-)
-.addYaxis(
-  format='short',
+local iA_Segments_Remote_Read_DurationP = common.durationPanel(
+  'IA Segments Remote Read Duration',
+  'tiflash_proxy_kv_engine_ia_remote_read_segment_duration_seconds_bucket',
+  selector=common.proxySelector,
 );
 
 local columnarFile_CacheP = graphPanel.new(
@@ -222,47 +148,10 @@ local columnarFile_CacheP = graphPanel.new(
   min='0',
 );
 
-local columnar_Prefetch_DurationP = graphPanel.new(
-  title='Columnar Prefetch Duration',
-  datasource=common.datasource,
-  fill=1,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_proxy_kv_engine_columnar_prefetch_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m]))) by (le, $additional_groupby) / 1000000000)',
-    legendFormat='max {{$additional_groupby}}',
-    intervalFactor=1,
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.9999, sum(rate(tiflash_proxy_kv_engine_columnar_prefetch_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m])) by (le, $additional_groupby))',
-    legendFormat='9999 {{$additional_groupby}}',
-    intervalFactor=1,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.99, sum(rate(tiflash_proxy_kv_engine_columnar_prefetch_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m])) by (le, $additional_groupby))',
-    legendFormat='99 {{$additional_groupby}}',
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='s',
-  min='0',
-)
-.addYaxis(
-  format='short',
+local columnar_Prefetch_DurationP = common.durationPanel(
+  'Columnar Prefetch Duration',
+  'tiflash_proxy_kv_engine_columnar_prefetch_duration_seconds_bucket',
+  selector=common.proxySelector,
 );
 
 local columnar_Prefetch_Cache_Hit_DurationP = graphPanel.new(
@@ -338,47 +227,10 @@ local columnar_Fetch_Snapshot_RetryP = graphPanel.new(
   min='0',
 );
 
-local columnar_Fetch_Snapshot_DurationP = graphPanel.new(
-  title='Columnar Fetch Snapshot Duration',
-  datasource=common.datasource,
-  fill=1,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_proxy_kv_engine_columnar_fetch_snapshot_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m]))) by (le, $additional_groupby) / 1000000000)',
-    legendFormat='max {{$additional_groupby}}',
-    intervalFactor=1,
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.9999, sum(rate(tiflash_proxy_kv_engine_columnar_fetch_snapshot_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m])) by (le, $additional_groupby))',
-    legendFormat='9999 {{$additional_groupby}}',
-    intervalFactor=1,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.99, sum(rate(tiflash_proxy_kv_engine_columnar_fetch_snapshot_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m])) by (le, $additional_groupby))',
-    legendFormat='99 {{$additional_groupby}}',
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='s',
-  min='0',
-)
-.addYaxis(
-  format='short',
+local columnar_Fetch_Snapshot_DurationP = common.durationPanel(
+  'Columnar Fetch Snapshot Duration',
+  'tiflash_proxy_kv_engine_columnar_fetch_snapshot_duration_seconds_bucket',
+  selector=common.proxySelector,
 );
 
 local columnar_Meta_CacheP = graphPanel.new(

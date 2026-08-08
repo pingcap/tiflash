@@ -215,48 +215,12 @@ local s3_Retry_OPSP = graphPanel.new(
   min='0',
 );
 
-local s3_Request_DurationP = graphPanel.new(
-  title='S3 Request Duration',
-  datasource=common.datasource,
+local s3_Request_DurationP = common.durationPanel(
+  'S3 Request Duration',
+  'tiflash_storage_s3_request_seconds_bucket',
+  by=['type'],
+  legend='{{type}}-%s {{$additional_groupby}}',
   description='S3 Request Duration',
-  fill=1,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_s3_request_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))) by (le, type, $additional_groupby) / 1000000000)',
-    legendFormat='{{type}}-max {{$additional_groupby}}',
-    intervalFactor=1,
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.9999, sum(rate(tiflash_storage_s3_request_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type, $additional_groupby))',
-    legendFormat='{{type}}-9999 {{$additional_groupby}}',
-    intervalFactor=1,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.99, sum(rate(tiflash_storage_s3_request_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type, $additional_groupby))',
-    legendFormat='{{type}}-99 {{$additional_groupby}}',
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='s',
-  min='0',
-)
-.addYaxis(
-  format='short',
 );
 
 local s3_HTTP_OPSP = graphPanel.new(
@@ -343,47 +307,12 @@ local s3_HTTP_OPSP = graphPanel.new(
   min='0',
 );
 
-local s3_HTTP_Request_DurationP = graphPanel.new(
-  title='S3 HTTP Request Duration',
-  datasource=common.datasource,
+local s3_HTTP_Request_DurationP = common.durationPanel(
+  'S3 HTTP Request Duration',
+  'tiflash_storage_s3_http_request_seconds_bucket',
+  by=['type'],
+  legend='{{type}}-%s {{$additional_groupby}}',
   description='S3 HTTP Request Duration',
-  fill=1,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_s3_http_request_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))) by (le, type, $additional_groupby) / 1000000000)',
-    legendFormat='{{type}}-max {{$additional_groupby}}',
-    intervalFactor=1,
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.9999, sum(rate(tiflash_storage_s3_http_request_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type, $additional_groupby))',
-    legendFormat='{{type}}-9999 {{$additional_groupby}}',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.99, sum(rate(tiflash_storage_s3_http_request_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type, $additional_groupby))',
-    legendFormat='{{type}}-99 {{$additional_groupby}}',
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='s',
-  min='0',
-)
-.addYaxis(
-  format='short',
 );
 
 local s3_on_going_instancesP = graphPanel.new(

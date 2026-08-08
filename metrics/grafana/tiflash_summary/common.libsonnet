@@ -1,6 +1,10 @@
 local gridW = 24;
 local defaultH = 8;
 
+local grafana = import 'grafonnet/grafana.libsonnet';
+local graphPanel = grafana.graphPanel;
+local prometheus = grafana.prometheus;
+
 local normalizeItem(item) =
   if std.type(item) == 'object' && std.objectHas(item, 'panel') then
     item
@@ -37,6 +41,37 @@ local applyBand(rowObj, band, y) =
     nextY: y + h,
   };
 
+// Default quantiles used by S3-style duration panels:
+// hidden max + p9999 + hidden p999 + p99.
+local s3StyleQuantiles = [
+  { q: '1.00', name: 'max', hide: true, maxHack: true },
+  { q: '0.9999', name: '9999' },
+  { q: '0.999', name: '999', hide: true },
+  { q: '0.99', name: '99' },
+];
+
+local byClause(byLabels) =
+  std.join(', ', ['le'] + byLabels + ['$additional_groupby']);
+
+local durationExpr(metric, selector, byLabels, q, range, maxHack) =
+  local metricSel = metric + '{' + selector + '}';
+  local by = byClause(byLabels);
+  if maxHack then
+    'histogram_quantile(' + q + ', sum(round(1000000000*rate(' + metricSel + '[' + range + ']))) by (' + by + ') / 1000000000)'
+  else
+    'histogram_quantile(' + q + ', sum(rate(' + metricSel + '[' + range + '])) by (' + by + '))';
+
+local makeDurationTarget(expr, legend, intervalFactor, hide) =
+  if intervalFactor == null then
+    if hide then
+      prometheus.target(expr, legendFormat=legend, hide=true)
+    else
+      prometheus.target(expr, legendFormat=legend)
+  else if hide then
+    prometheus.target(expr, legendFormat=legend, intervalFactor=intervalFactor, hide=true)
+  else
+    prometheus.target(expr, legendFormat=legend, intervalFactor=intervalFactor);
+
 {
   // Shared helpers for TiFlash Summary dashboard (grafonnet-lib).
 
@@ -44,7 +79,7 @@ local applyBand(rowObj, band, y) =
 
   // Common PromQL label matchers used by most TiFlash panels.
   selector:: 'k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"',
-  proxySelector:: 'k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance"',
+  proxySelector:: 'k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"',
 
   gridW:: gridW,
   panelH:: defaultH,
@@ -74,4 +109,78 @@ local applyBand(rowObj, band, y) =
       bands,
       { row: rowObj, y: startY }
     ).row,
+
+  // Build prometheus targets for histogram duration panels (xxx_seconds_bucket).
+  // legend: format string, "%s" is replaced by quantile name (max/9999/99).
+  // by: extra labels besides le and $additional_groupby (e.g. ['type']).
+  durationQuantileTargets(
+    metric,
+    selector=self.selector,
+    by=[],
+    legend='%s {{$additional_groupby}}',
+    range='$__rate_interval',
+    intervalFactor=2,
+    quantiles=s3StyleQuantiles,
+  )::
+    std.map(
+      function(q)
+        makeDurationTarget(
+          durationExpr(
+            metric,
+            selector,
+            by,
+            q.q,
+            range,
+            std.objectHas(q, 'maxHack') && q.maxHack,
+          ),
+          legend % q.name,
+          intervalFactor,
+          std.objectHas(q, 'hide') && q.hide,
+        ),
+      quantiles
+    ),
+
+  // Full graph panel for S3-style duration histograms
+  // (hidden max + p9999 + hidden p999 + p99).
+  // Fixed style: intervalFactor=2, fill=1, legend sorted by max desc.
+  // Y-axes: left s/min0, right short.
+  durationPanel(
+    title,
+    metric,
+    selector=self.selector,
+    by=[],
+    legend='%s {{$additional_groupby}}',
+    range='$__rate_interval',
+    description=null,
+  )::
+    local targets = self.durationQuantileTargets(
+      metric,
+      selector=selector,
+      by=by,
+      legend=legend,
+      range=range,
+      intervalFactor=2,
+    );
+    local panel = graphPanel.new(
+      title=title,
+      datasource=self.datasource,
+      description=description,
+      fill=1,
+      nullPointMode='null as zero',
+      legend_alignAsTable=true,
+      legend_rightSide=true,
+      legend_values=true,
+      legend_current=true,
+      legend_max=true,
+      legend_sort='max',
+      legend_sortDesc=true,
+    );
+    std.foldl(
+      function(p, t) p.addTarget(t),
+      targets,
+      panel
+    )
+    .resetYaxes()
+    .addYaxis(format='s', min='0')
+    .addYaxis(format='short'),
 }

@@ -56,3 +56,19 @@ Prefer `common.band` / `common.buildRow` instead of hand-written `x/y/w`:
 ```
 
 N panels in a band are equally divided across width 24 unless you pass explicit `w`.
+
+## Duration histogram helpers
+
+For `*_seconds_bucket` latency panels (hidden max + p9999 + hidden p999 + p99), prefer:
+
+```jsonnet
+local s3_Request_DurationP = common.durationPanel(
+  'S3 Request Duration',
+  'tiflash_storage_s3_request_seconds_bucket',
+  by=['type'],
+  legend='{{type}}-%s {{$additional_groupby}}',
+  description='S3 Request Duration',
+);
+```
+
+`%s` in `legend` is replaced by `max` / `9999` / `999` / `99`. Use `selector=common.proxySelector` for proxy metrics.

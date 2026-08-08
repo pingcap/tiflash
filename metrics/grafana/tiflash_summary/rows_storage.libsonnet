@@ -202,47 +202,13 @@ local small_Internal_Tasks_OPSP = graphPanel.new(
   show=false,
 );
 
-local small_Internal_Tasks_DurationP = graphPanel.new(
-  title='Small Internal Tasks Duration',
-  datasource=common.datasource,
-  description='Duration of storage\'s internal sub tasks',
-  fill=0,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type!~"(delta_merge|seg_merge|seg_split).*"}[$__rate_interval]))) by (le,type, $additional_groupby) / 1000000000)',
-    legendFormat='max-{{type}} {{$additional_groupby}}',
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.9999, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type!~"(delta_merge|seg_merge|seg_split).*"}[$__rate_interval])) by (le, type, $additional_groupby))',
-    legendFormat='9999-{{type}} {{$additional_groupby}}',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.99, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type!~"(delta_merge|seg_merge|seg_split).*"}[$__rate_interval])) by (le, type, $additional_groupby))',
-    legendFormat='99-{{type}} {{$additional_groupby}}',
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='s',
-  min='0',
-  decimals=1,
-)
-.addYaxis(
-  format='s',
-  min='0',
-  show=false,
+local small_Internal_Tasks_DurationP = common.durationPanel(
+  'Small Internal Tasks Duration',
+  'tiflash_storage_subtask_duration_seconds_bucket',
+  selector=common.selector + ', type!~"(delta_merge|seg_merge|seg_split).*"',
+  by=['type'],
+  legend='%s-{{type}} {{$additional_groupby}}',
+  description="Duration of storage's internal sub tasks",
 );
 
 local large_Internal_Tasks_OPSP = graphPanel.new(
@@ -272,47 +238,13 @@ local large_Internal_Tasks_OPSP = graphPanel.new(
   show=false,
 );
 
-local large_Internal_Tasks_DurationP = graphPanel.new(
-  title='Large Internal Tasks Duration',
-  datasource=common.datasource,
-  description='Duration of storage\'s internal sub tasks',
-  fill=0,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"(delta_merge|seg_merge|seg_split).*"}[$__rate_interval]))) by (le,type, $additional_groupby) / 1000000000)',
-    legendFormat='max-{{type}} {{$additional_groupby}}',
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.9999, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"(delta_merge|seg_merge|seg_split).*"}[$__rate_interval])) by (le, type, $additional_groupby))',
-    legendFormat='9999-{{type}} {{$additional_groupby}}',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.99, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"(delta_merge|seg_merge|seg_split).*"}[$__rate_interval])) by (le, type, $additional_groupby))',
-    legendFormat='99-{{type}} {{$additional_groupby}}',
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='s',
-  min='0',
-  decimals=1,
-)
-.addYaxis(
-  format='s',
-  min='0',
-  show=false,
+local large_Internal_Tasks_DurationP = common.durationPanel(
+  'Large Internal Tasks Duration',
+  'tiflash_storage_subtask_duration_seconds_bucket',
+  selector=common.selector + ', type=~"(delta_merge|seg_merge|seg_split).*"',
+  by=['type'],
+  legend='%s-{{type}} {{$additional_groupby}}',
+  description="Duration of storage's internal sub tasks",
 );
 
 local current_Data_Management_TasksP = graphPanel.new(
