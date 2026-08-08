@@ -9,7 +9,7 @@ local common = import 'common.libsonnet';
 
 local rowObj = row.new(collapse=true, title='Task Scheduler');
 
-local min_TSOP = graphPanel.new(
+local panelMinTso = graphPanel.new(
   title='Min TSO',
   datasource=common.datasource,
   description='the min_tso of each instance',
@@ -39,7 +39,7 @@ local min_TSOP = graphPanel.new(
   format='short',
 );
 
-local estimated_Thread_Usage_and_LimitP = graphPanel.new(
+local panelEstimatedThreadUsageAndLimit = graphPanel.new(
   title='Estimated Thread Usage and Limit',
   datasource=common.datasource,
   description='estimated thread usage in min-tso scheduler, and the sort/hard limit of estimated thread in scheduler.',
@@ -91,7 +91,7 @@ local estimated_Thread_Usage_and_LimitP = graphPanel.new(
   format='short',
 );
 
-local active_and_Waiting_Queries_CountP = graphPanel.new(
+local panelActiveAndWaitingQueriesCount = graphPanel.new(
   title='Active and Waiting Queries Count',
   datasource=common.datasource,
   description='the count of active/ waiting queries',
@@ -128,7 +128,7 @@ local active_and_Waiting_Queries_CountP = graphPanel.new(
   format='short',
 );
 
-local active_and_Waiting_Tasks_CountP = graphPanel.new(
+local panelActiveAndWaitingTasksCount = graphPanel.new(
   title='Active and Waiting Tasks Count',
   datasource=common.datasource,
   description='the count of active/ waiting tasks',
@@ -165,7 +165,7 @@ local active_and_Waiting_Tasks_CountP = graphPanel.new(
   format='short',
 );
 
-local hard_Limit_Exceeded_CountP = graphPanel.new(
+local panelHardLimitExceededCount = graphPanel.new(
   title='Hard Limit Exceeded Count',
   datasource=common.datasource,
   description='the usage of estimated threads exceeded the hard limit where errors occur.',
@@ -192,7 +192,7 @@ local hard_Limit_Exceeded_CountP = graphPanel.new(
   format='short',
 );
 
-local task_Waiting_DurationP = common.durationPanel(
+local panelTaskWaitingDuration = common.durationPanel(
   'Task Waiting Duration',
   'tiflash_task_scheduler_waiting_duration_seconds_bucket',
   by=['instance', 'resource_group'],
@@ -205,9 +205,9 @@ local task_Waiting_DurationP = common.durationPanel(
   row: common.buildRow(
     rowObj,
     [
-      common.band([min_TSOP, estimated_Thread_Usage_and_LimitP]),
-      common.band([active_and_Waiting_Queries_CountP, active_and_Waiting_Tasks_CountP]),
-      common.band([hard_Limit_Exceeded_CountP, task_Waiting_DurationP])
+      common.band([panelMinTso, panelEstimatedThreadUsageAndLimit]),
+      common.band([panelActiveAndWaitingQueriesCount, panelActiveAndWaitingTasksCount]),
+      common.band([panelHardLimitExceededCount, panelTaskWaitingDuration])
     ],
   ),
 }

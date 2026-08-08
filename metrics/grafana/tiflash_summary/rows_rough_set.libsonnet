@@ -9,7 +9,7 @@ local common = import 'common.libsonnet';
 
 local rowObj = row.new(collapse=true, title='Rough Set Filter Rate Histogram');
 
-local rough_Set_Filter_RateP = graphPanel.new(
+local panelRoughSetFilterRate = graphPanel.new(
   title='Rough Set Filter Rate',
   datasource=common.datasource,
   fill=0,
@@ -70,7 +70,7 @@ local rough_Set_Filter_RateP = graphPanel.new(
   format='short',
 );
 
-local rough_Set_Filter_Rate_HistogramP = common.heatmap(
+local panelRoughSetFilterRateHistogram = common.heatmap(
   'Rough Set Filter Rate Histogram',
   'tiflash_storage_rough_set_filter_rate_bucket',
   yFormat='percent',
@@ -80,7 +80,7 @@ local rough_Set_Filter_Rate_HistogramP = common.heatmap(
   row: common.buildRow(
     rowObj,
     [
-      common.band([rough_Set_Filter_RateP, rough_Set_Filter_Rate_HistogramP])
+      common.band([panelRoughSetFilterRate, panelRoughSetFilterRateHistogram])
     ],
   ),
 }

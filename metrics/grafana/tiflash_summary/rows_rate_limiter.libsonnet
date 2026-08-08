@@ -9,7 +9,7 @@ local common = import 'common.libsonnet';
 
 local rowObj = row.new(collapse=true, title='Rate Limiter');
 
-local i_O_Limiter_ThroughputP = graphPanel.new(
+local panelIOLimiterThroughput = graphPanel.new(
   title='I/O Limiter Throughput',
   datasource=common.datasource,
   description='The storage I/O limiter metrics.',
@@ -41,7 +41,7 @@ local i_O_Limiter_ThroughputP = graphPanel.new(
   format='short',
 );
 
-local i_O_Limiter_ThresholdP = graphPanel.new(
+local panelIOLimiterThreshold = graphPanel.new(
   title='I/O Limiter Threshold',
   datasource=common.datasource,
   description='Current limit bytes per second of Storage I/O limiter',
@@ -69,7 +69,7 @@ local i_O_Limiter_ThresholdP = graphPanel.new(
   format='short',
 );
 
-local i_O_Limiter_Current_Pending_GaugeP = graphPanel.new(
+local panelIOLimiterCurrentPendingGauge = graphPanel.new(
   title='I/O Limiter Current Pending Gauge',
   datasource=common.datasource,
   description='I/O Limiter current pending gauge.',
@@ -127,7 +127,7 @@ local i_O_Limiter_Current_Pending_GaugeP = graphPanel.new(
   format='s',
 );
 
-local i_O_Limiter_Pending_OPSP = graphPanel.new(
+local panelIOLimiterPendingOps = graphPanel.new(
   title='I/O Limiter Pending OPS',
   datasource=common.datasource,
   description='The storage I/O limiter metrics.',
@@ -160,7 +160,7 @@ local i_O_Limiter_Pending_OPSP = graphPanel.new(
   format='s',
 );
 
-local i_O_Limiter_Pending_DurationP = common.durationPanel(
+local panelIOLimiterPendingDuration = common.durationPanel(
   'I/O Limiter Pending Duration',
   'tiflash_storage_io_limiter_pending_seconds_bucket',
   by=['type'],
@@ -173,8 +173,8 @@ local i_O_Limiter_Pending_DurationP = common.durationPanel(
   row: common.buildRow(
     rowObj,
     [
-      common.band([i_O_Limiter_ThroughputP, i_O_Limiter_ThresholdP]),
-      common.band([i_O_Limiter_Current_Pending_GaugeP, i_O_Limiter_Pending_OPSP, i_O_Limiter_Pending_DurationP])
+      common.band([panelIOLimiterThroughput, panelIOLimiterThreshold]),
+      common.band([panelIOLimiterCurrentPendingGauge, panelIOLimiterPendingOps, panelIOLimiterPendingDuration])
     ],
   ),
 }

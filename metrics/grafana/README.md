@@ -62,9 +62,9 @@ Prefer `common.band` / `common.buildRow` instead of hand-written `x/y/w`:
   row: common.buildRow(
     rowObj,
     [
-      common.band([store_sizeP, available_sizeP, capacity_sizeP]),  // 3 equal columns
-      common.band([uptimeP, regionP]),                              // 2 equal columns
-      common.band([fullWidthP]),                                    // 1 full-width panel
+      common.band([panelStoreSize, panelAvailableSize, panelCapacitySize]),  // 3 equal columns
+      common.band([panelUptime, panelRegion]),                              // 2 equal columns
+      common.band([panelFullWidth]),                                        // 1 full-width panel
       common.band([{ panel: a, w: 8 }, { panel: b, w: 16 }], h=7), // custom widths/height
     ],
   ),
@@ -72,6 +72,8 @@ Prefer `common.band` / `common.buildRow` instead of hand-written `x/y/w`:
 ```
 
 N panels in a band are equally divided across width 24 unless you pass explicit `w`.
+
+Panel locals use `panel` prefix + `UpperCamelCase` body (e.g. `panelStaleReadOps`, `panelCpuUsage`, `panelRequestQps`).
 
 ## PromQL helpers (L1)
 
@@ -152,7 +154,7 @@ common.opsHitRatioPanel(
 For `*_seconds_bucket` latency panels (default show p9999/p99; hide max/p999/p80/avg), prefer:
 
 ```jsonnet
-local s3_Request_DurationP = common.durationPanel(
+local panelS3RequestDuration = common.durationPanel(
   'S3 Request Duration',
   'tiflash_storage_s3_request_seconds_bucket',
   by=['type'],

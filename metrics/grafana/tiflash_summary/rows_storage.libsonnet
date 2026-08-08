@@ -9,7 +9,7 @@ local common = import 'common.libsonnet';
 
 local rowObj = row.new(collapse=true, title='Storage');
 
-local write_Command_OPSP = graphPanel.new(
+local panelWriteCommandOps = graphPanel.new(
   title='Write Command OPS',
   datasource=common.datasource,
   description='The total count of different kinds of commands received',
@@ -40,7 +40,7 @@ local write_Command_OPSP = graphPanel.new(
   min='0',
 );
 
-local write_AmplificationP = graphPanel.new(
+local panelWriteAmplification = graphPanel.new(
   title='Write Amplification',
   datasource=common.datasource,
   fill=0,
@@ -107,7 +107,7 @@ local write_AmplificationP = graphPanel.new(
   format='binBps',
 );
 
-local subTasks_Write_Throughput_bytesP = graphPanel.new(
+local panelSubtasksWriteThroughputBytes = graphPanel.new(
   title='SubTasks Write Throughput (bytes)',
   datasource=common.datasource,
   description='The throughput of (maybe foreground) tasks of storage in bytes',
@@ -141,7 +141,7 @@ local subTasks_Write_Throughput_bytesP = graphPanel.new(
   show=false,
 );
 
-local subTasks_Write_Throughput_rowsP = graphPanel.new(
+local panelSubtasksWriteThroughputRows = graphPanel.new(
   title='SubTasks Write Throughput (rows)',
   datasource=common.datasource,
   description='The throughput of (maybe foreground) tasks of storage in rows',
@@ -175,7 +175,7 @@ local subTasks_Write_Throughput_rowsP = graphPanel.new(
   show=false,
 );
 
-local small_Internal_Tasks_OPSP = common.opsPanel(
+local panelSmallInternalTasksOps = common.opsPanel(
   'Small Internal Tasks OPS',
   'tiflash_storage_subtask_count',
   by=['type'],
@@ -184,7 +184,7 @@ local small_Internal_Tasks_OPSP = common.opsPanel(
   yRight='opm',
 );
 
-local small_Internal_Tasks_DurationP = common.durationPanel(
+local panelSmallInternalTasksDuration = common.durationPanel(
   'Small Internal Tasks Duration',
   'tiflash_storage_subtask_duration_seconds_bucket',
   selector=common.selector + ', type!~"(delta_merge|seg_merge|seg_split).*"',
@@ -193,7 +193,7 @@ local small_Internal_Tasks_DurationP = common.durationPanel(
   description="Duration of storage's internal sub tasks",
 );
 
-local large_Internal_Tasks_OPSP = common.opsPanel(
+local panelLargeInternalTasksOps = common.opsPanel(
   'Large Internal Tasks OPS',
   'tiflash_storage_subtask_count',
   by=['type'],
@@ -202,7 +202,7 @@ local large_Internal_Tasks_OPSP = common.opsPanel(
   yRight='opm',
 );
 
-local large_Internal_Tasks_DurationP = common.durationPanel(
+local panelLargeInternalTasksDuration = common.durationPanel(
   'Large Internal Tasks Duration',
   'tiflash_storage_subtask_duration_seconds_bucket',
   selector=common.selector + ', type=~"(delta_merge|seg_merge|seg_split).*"',
@@ -211,7 +211,7 @@ local large_Internal_Tasks_DurationP = common.durationPanel(
   description="Duration of storage's internal sub tasks",
 );
 
-local current_Data_Management_TasksP = graphPanel.new(
+local panelCurrentDataManagementTasks = graphPanel.new(
   title='Current Data Management Tasks',
   datasource=common.datasource,
   description='The current processing number of  segments\' background management',
@@ -254,7 +254,7 @@ local current_Data_Management_TasksP = graphPanel.new(
   format='none',
 );
 
-local opened_File_CountP = graphPanel.new(
+local panelOpenedFileCount = graphPanel.new(
   title='Opened File Count',
   datasource=common.datasource,
   description='The number of currently opened file descriptors.\n(Only counting storage engine of TiFlash by now. Not including TiFlash-Proxy)',
@@ -308,7 +308,7 @@ local opened_File_CountP = graphPanel.new(
   show=false,
 );
 
-local file_Open_OPSP = graphPanel.new(
+local panelFileOpenOps = graphPanel.new(
   title='File Open OPS',
   datasource=common.datasource,
   description='The number of open file descriptors action.\n(Only counting storage engine of TiFlash by now. Not including TiFlash-Proxy)',
@@ -349,7 +349,7 @@ local file_Open_OPSP = graphPanel.new(
   show=false,
 );
 
-local fSync_StatusP = graphPanel.new(
+local panelFsyncStatus = graphPanel.new(
   title='FSync Status',
   datasource=common.datasource,
   description='OPS and duration of fsync operations.\n(Only counting storage engine of TiFlash by now. Not including TiFlash-Proxy)',
@@ -387,7 +387,7 @@ local fSync_StatusP = graphPanel.new(
   format='s',
 );
 
-local disk_Write_OPSP = graphPanel.new(
+local panelDiskWriteOps = graphPanel.new(
   title='Disk Write OPS',
   datasource=common.datasource,
   description='The number of different kinds of read operations',
@@ -429,7 +429,7 @@ local disk_Write_OPSP = graphPanel.new(
   format='none',
 );
 
-local disk_Read_OPSP = graphPanel.new(
+local panelDiskReadOps = graphPanel.new(
   title='Disk Read OPS',
   datasource=common.datasource,
   description='The number of different kinds of read operations',
@@ -471,7 +471,7 @@ local disk_Read_OPSP = graphPanel.new(
   format='none',
 );
 
-local write_flowP = graphPanel.new(
+local panelWriteFlow = graphPanel.new(
   title='Write flow',
   datasource=common.datasource,
   description='The flow of different kinds of write operations',
@@ -517,7 +517,7 @@ local write_flowP = graphPanel.new(
   min='0',
 );
 
-local read_flowP = graphPanel.new(
+local panelReadFlow = graphPanel.new(
   title='Read flow',
   datasource=common.datasource,
   description='The flow of different kinds of read operations',
@@ -563,7 +563,7 @@ local read_flowP = graphPanel.new(
   min='0',
 );
 
-local compression_RatioP = graphPanel.new(
+local panelCompressionRatio = graphPanel.new(
   title='Compression Ratio',
   datasource=common.datasource,
   description='The compression ratio of different compression algorithm',
@@ -596,7 +596,7 @@ local compression_RatioP = graphPanel.new(
   format='short',
 );
 
-local compression_Algorithm_CountP = graphPanel.new(
+local panelCompressionAlgorithmCount = graphPanel.new(
   title='Compression Algorithm Count',
   datasource=common.datasource,
   description='The count of the compression algorithm used by each data part',
@@ -628,15 +628,15 @@ local compression_Algorithm_CountP = graphPanel.new(
   row: common.buildRow(
     rowObj,
     [
-      common.band([write_Command_OPSP, write_AmplificationP]),
-      common.band([subTasks_Write_Throughput_bytesP, subTasks_Write_Throughput_rowsP]),
-      common.band([small_Internal_Tasks_OPSP, small_Internal_Tasks_DurationP], h=5),
-      common.band([large_Internal_Tasks_OPSP, large_Internal_Tasks_DurationP], h=5),
-      common.band([current_Data_Management_TasksP]),
-      common.band([opened_File_CountP, file_Open_OPSP, fSync_StatusP]),
-      common.band([disk_Write_OPSP, disk_Read_OPSP]),
-      common.band([write_flowP, read_flowP]),
-      common.band([compression_RatioP, compression_Algorithm_CountP])
+      common.band([panelWriteCommandOps, panelWriteAmplification]),
+      common.band([panelSubtasksWriteThroughputBytes, panelSubtasksWriteThroughputRows]),
+      common.band([panelSmallInternalTasksOps, panelSmallInternalTasksDuration], h=5),
+      common.band([panelLargeInternalTasksOps, panelLargeInternalTasksDuration], h=5),
+      common.band([panelCurrentDataManagementTasks]),
+      common.band([panelOpenedFileCount, panelFileOpenOps, panelFsyncStatus]),
+      common.band([panelDiskWriteOps, panelDiskReadOps]),
+      common.band([panelWriteFlow, panelReadFlow]),
+      common.band([panelCompressionRatio, panelCompressionAlgorithmCount])
     ],
   ),
 }

@@ -9,7 +9,7 @@ local common = import 'common.libsonnet';
 
 local rowObj = row.new(collapse=true, title='TiFlash Resource Control');
 
-local tiFlash_Resource_GroupP = graphPanel.new(
+local panelTiflashResourceGroup = graphPanel.new(
   title='TiFlash Resource Group',
   datasource=common.datasource,
   description='Metas of resource group',
@@ -92,7 +92,7 @@ local tiFlash_Resource_GroupP = graphPanel.new(
   format='short',
 );
 
-local request_UnitP = graphPanel.new(
+local panelRequestUnit = graphPanel.new(
   title='Request Unit',
   datasource=common.datasource,
   description='Request Unit for tidb-serverless charging',
@@ -152,7 +152,7 @@ local request_UnitP = graphPanel.new(
   row: common.buildRow(
     rowObj,
     [
-      common.band([tiFlash_Resource_GroupP, request_UnitP])
+      common.band([panelTiflashResourceGroup, panelRequestUnit])
     ],
   ),
 }

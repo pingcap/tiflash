@@ -9,7 +9,7 @@ local common = import 'common.libsonnet';
 
 local rowObj = row.new(collapse=true, title='Server');
 
-local store_sizeP = graphPanel.new(
+local panelStoreSize = graphPanel.new(
   title='Store size',
   datasource=common.datasource,
   description='The storage size per TiFlash instance.\n(Not including some disk usage of TiFlash-Proxy by now)',
@@ -48,7 +48,7 @@ local store_sizeP = graphPanel.new(
   format='short',
 );
 
-local available_sizeP = graphPanel.new(
+local panelAvailableSize = graphPanel.new(
   title='Available size',
   datasource=common.datasource,
   description='The available capacity size per TiFlash instance',
@@ -79,7 +79,7 @@ local available_sizeP = graphPanel.new(
   format='short',
 );
 
-local capacity_sizeP = graphPanel.new(
+local panelCapacitySize = graphPanel.new(
   title='Capacity size',
   datasource=common.datasource,
   description='The capacity size per TiFlash instance',
@@ -110,7 +110,7 @@ local capacity_sizeP = graphPanel.new(
   format='short',
 );
 
-local uptimeP = graphPanel.new(
+local panelUptime = graphPanel.new(
   title='Uptime',
   datasource=common.datasource,
   description='TiFlash uptime since last restart',
@@ -138,7 +138,7 @@ local uptimeP = graphPanel.new(
   format='short',
 );
 
-local regionP = graphPanel.new(
+local panelRegion = graphPanel.new(
   title='Region',
   datasource=common.datasource,
   description='The number of Regions on each TiFlash instance',
@@ -176,7 +176,7 @@ local regionP = graphPanel.new(
   show=false,
 );
 
-local cPU_UsageP = graphPanel.new(
+local panelCpuUsage = graphPanel.new(
   title='CPU Usage',
   datasource=common.datasource,
   description='TiFlash CPU usage calculated with process CPU running seconds.',
@@ -215,7 +215,7 @@ local cPU_UsageP = graphPanel.new(
   show=false,
 );
 
-local memoryP = graphPanel.new(
+local panelMemory = graphPanel.new(
   title='Memory',
   datasource=common.datasource,
   description='The memory usage per TiFlash instance',
@@ -333,7 +333,7 @@ local memoryP = graphPanel.new(
   show=false,
 );
 
-local iO_ThroughputP = graphPanel.new(
+local panelIoThroughput = graphPanel.new(
   title='IO Throughput',
   datasource=common.datasource,
   fill=0,
@@ -364,7 +364,7 @@ local iO_ThroughputP = graphPanel.new(
   show=false,
 );
 
-local remote_Store_Summary_Disagg_archP = graphPanel.new(
+local panelRemoteStoreSummaryDisaggArch = graphPanel.new(
   title='Remote Store Summary (Disagg arch)',
   datasource=common.datasource,
   fill=0,
@@ -398,10 +398,10 @@ local remote_Store_Summary_Disagg_archP = graphPanel.new(
   row: common.buildRow(
     rowObj,
     [
-      common.band([store_sizeP, available_sizeP, capacity_sizeP]),
-      common.band([uptimeP, regionP]),
-      common.band([cPU_UsageP, memoryP]),
-      common.band([iO_ThroughputP, remote_Store_Summary_Disagg_archP])
+      common.band([panelStoreSize, panelAvailableSize, panelCapacitySize]),
+      common.band([panelUptime, panelRegion]),
+      common.band([panelCpuUsage, panelMemory]),
+      common.band([panelIoThroughput, panelRemoteStoreSummaryDisaggArch])
     ],
   ),
 }

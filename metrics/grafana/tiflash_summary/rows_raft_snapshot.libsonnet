@@ -9,14 +9,14 @@ local common = import 'common.libsonnet';
 
 local rowObj = row.new(collapse=true, title='Raft Snapshot / IngestSST');
 
-local heavy_Raft_Apply_DurationP = common.durationPanel(
+local panelHeavyRaftApplyDuration = common.durationPanel(
   'Heavy Raft Apply Duration',
   'tiflash_raft_command_duration_seconds_bucket',
   by=['type'],
   legend='%s-{{type}} {{$additional_groupby}}',
 );
 
-local applying_snapshots_CountP = graphPanel.new(
+local panelApplyingSnapshotsCount = graphPanel.new(
   title='Applying snapshots Count',
   datasource=common.datasource,
   description='The number of currently applying snapshots.',
@@ -66,7 +66,7 @@ local applying_snapshots_CountP = graphPanel.new(
   format='short',
 );
 
-local snapshot_Uncommitted_Size_HeatmapP = common.heatmap(
+local panelSnapshotUncommittedSizeHeatmap = common.heatmap(
   'Snapshot Uncommitted Size Heatmap',
   'tiflash_raft_write_flow_bytes_bucket',
   yFormat='bytes',
@@ -74,7 +74,7 @@ local snapshot_Uncommitted_Size_HeatmapP = common.heatmap(
   by=['le', 'type'],
 );
 
-local ongoing_raft_snapshotP = graphPanel.new(
+local panelOngoingRaftSnapshot = graphPanel.new(
   title='Ongoing raft snapshot',
   datasource=common.datasource,
   fill=1,
@@ -95,14 +95,14 @@ local ongoing_raft_snapshotP = graphPanel.new(
   format='short',
 );
 
-local snapshot_Size_HeatmapP = common.heatmap(
+local panelSnapshotSizeHeatmap = common.heatmap(
   'Snapshot Size Heatmap',
   'tiflash_raft_snapshot_total_bytes_bucket',
   yFormat='bytes',
   labels='type="approx_raft_snapshot"',
 );
 
-local snapshot_Predecode_DurationP = common.heatmap(
+local panelSnapshotPredecodeDuration = common.heatmap(
   'Snapshot Predecode Duration',
   'tiflash_raft_command_duration_seconds_bucket',
   yFormat='s',
@@ -110,14 +110,14 @@ local snapshot_Predecode_DurationP = common.heatmap(
   description='Duration of pre-decode when applying region snapshot',
 );
 
-local snapshot_Prehandle_Throughput_HeatmapP = common.heatmap(
+local panelSnapshotPrehandleThroughputHeatmap = common.heatmap(
   'Snapshot Prehandle Throughput Heatmap',
   'tiflash_raft_command_throughput_seconds_bucket',
   yFormat='bytes',
   labels='type="prehandle_snapshot"',
 );
 
-local snapshot_Flush_DurationP = common.heatmap(
+local panelSnapshotFlushDuration = common.heatmap(
   'Snapshot Flush Duration',
   'tiflash_raft_command_duration_seconds_bucket',
   yFormat='s',
@@ -125,7 +125,7 @@ local snapshot_Flush_DurationP = common.heatmap(
   description='Duration of pre-decode when applying region snapshot',
 );
 
-local ingest_Uncommitted_Size_HeatmapP = common.heatmap(
+local panelIngestUncommittedSizeHeatmap = common.heatmap(
   'Ingest Uncommitted Size Heatmap',
   'tiflash_raft_write_flow_bytes_bucket',
   yFormat='bytes',
@@ -133,7 +133,7 @@ local ingest_Uncommitted_Size_HeatmapP = common.heatmap(
   by=['le', 'type'],
 );
 
-local snapshot_Predecode_SST_to_DT_DurationP = common.heatmap(
+local panelSnapshotPredecodeSstToDtDuration = common.heatmap(
   'Snapshot Predecode SST to DT Duration',
   'tiflash_raft_command_duration_seconds_bucket',
   yFormat='s',
@@ -141,7 +141,7 @@ local snapshot_Predecode_SST_to_DT_DurationP = common.heatmap(
   description='Duration of SST to DT in pre-decode when applying region snapshot',
 );
 
-local ingest_SST_DurationP = common.heatmap(
+local panelIngestSstDuration = common.heatmap(
   'Ingest SST Duration',
   'tiflash_raft_command_duration_seconds_bucket',
   yFormat='s',
@@ -153,13 +153,13 @@ local ingest_SST_DurationP = common.heatmap(
   row: common.buildRow(
     rowObj,
     [
-      common.band([heavy_Raft_Apply_DurationP]),
-      common.band([applying_snapshots_CountP]),
-      common.band([snapshot_Uncommitted_Size_HeatmapP, ongoing_raft_snapshotP]),
-      common.band([snapshot_Size_HeatmapP, snapshot_Predecode_DurationP]),
-      common.band([snapshot_Prehandle_Throughput_HeatmapP, snapshot_Flush_DurationP]),
-      common.band([ingest_Uncommitted_Size_HeatmapP, snapshot_Predecode_SST_to_DT_DurationP]),
-      common.band([{ panel: ingest_SST_DurationP, w: 12 }])
+      common.band([panelHeavyRaftApplyDuration]),
+      common.band([panelApplyingSnapshotsCount]),
+      common.band([panelSnapshotUncommittedSizeHeatmap, panelOngoingRaftSnapshot]),
+      common.band([panelSnapshotSizeHeatmap, panelSnapshotPredecodeDuration]),
+      common.band([panelSnapshotPrehandleThroughputHeatmap, panelSnapshotFlushDuration]),
+      common.band([panelIngestUncommittedSizeHeatmap, panelSnapshotPredecodeSstToDtDuration]),
+      common.band([{ panel: panelIngestSstDuration, w: 12 }])
     ],
   ),
 }

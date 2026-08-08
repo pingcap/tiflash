@@ -9,28 +9,28 @@ local common = import 'common.libsonnet';
 
 local rowObj = row.new(collapse=true, title='Coprocessor');
 
-local request_QPSP = common.opsPanel(
+local panelRequestQps = common.opsPanel(
   'Request QPS',
   'tiflash_coprocessor_request_count',
   by=['type'],
   yLeft='none',
 );
 
-local executor_QPSP = common.opsPanel(
+local panelExecutorQps = common.opsPanel(
   'Executor QPS',
   'tiflash_coprocessor_executor_count',
   by=['type'],
   yLeft='none',
 );
 
-local request_DurationP = common.durationPanel(
+local panelRequestDuration = common.durationPanel(
   'Request Duration',
   'tiflash_coprocessor_request_duration_seconds_bucket',
   by=['type'],
   legend='%s-{{type}} {{$additional_groupby}}',
 );
 
-local error_QPSP = common.opsPanel(
+local panelErrorQps = common.opsPanel(
   'Error QPS',
   'tiflash_coprocessor_request_error',
   by=['reason'],
@@ -38,14 +38,14 @@ local error_QPSP = common.opsPanel(
   yLeft='none',
 );
 
-local request_Handle_DurationP = common.durationPanel(
+local panelRequestHandleDuration = common.durationPanel(
   'Request Handle Duration',
   'tiflash_coprocessor_request_handle_seconds_bucket',
   by=['type'],
   legend='%s-{{type}} {{$additional_groupby}}',
 );
 
-local response_Bytes_SecondsP = graphPanel.new(
+local panelResponseBytesSeconds = graphPanel.new(
   title='Response Bytes/Seconds',
   datasource=common.datasource,
   fill=0,
@@ -74,7 +74,7 @@ local response_Bytes_SecondsP = graphPanel.new(
   format='short',
 );
 
-local cop_task_memory_usageP = graphPanel.new(
+local panelCopTaskMemoryUsage = graphPanel.new(
   title='Cop task memory usage',
   datasource=common.datasource,
   fill=1,
@@ -118,7 +118,7 @@ local cop_task_memory_usageP = graphPanel.new(
   format='short',
 );
 
-local exchange_Bytes_SecondsP = graphPanel.new(
+local panelExchangeBytesSeconds = graphPanel.new(
   title='Exchange Bytes/Seconds',
   datasource=common.datasource,
   fill=0,
@@ -147,7 +147,7 @@ local exchange_Bytes_SecondsP = graphPanel.new(
   format='short',
 );
 
-local threads_of_RpcP = graphPanel.new(
+local panelThreadsOfRpc = graphPanel.new(
   title='Threads of Rpc',
   datasource=common.datasource,
   fill=0,
@@ -174,7 +174,7 @@ local threads_of_RpcP = graphPanel.new(
   format='short',
 );
 
-local handling_Request_NumberP = graphPanel.new(
+local panelHandlingRequestNumber = graphPanel.new(
   title='Handling Request Number',
   datasource=common.datasource,
   fill=0,
@@ -201,7 +201,7 @@ local handling_Request_NumberP = graphPanel.new(
   format='none',
 );
 
-local threadsP = graphPanel.new(
+local panelThreads = graphPanel.new(
   title='Threads',
   datasource=common.datasource,
   fill=0,
@@ -228,7 +228,7 @@ local threadsP = graphPanel.new(
   format='short',
 );
 
-local max_Threads_of_RpcP = graphPanel.new(
+local panelMaxThreadsOfRpc = graphPanel.new(
   title='Max Threads of Rpc',
   datasource=common.datasource,
   fill=0,
@@ -255,7 +255,7 @@ local max_Threads_of_RpcP = graphPanel.new(
   format='short',
 );
 
-local mPP_Query_countP = graphPanel.new(
+local panelMppQueryCount = graphPanel.new(
   title='MPP Query count',
   datasource=common.datasource,
   description='The MPP query count in TiFlash',
@@ -283,7 +283,7 @@ local mPP_Query_countP = graphPanel.new(
   format='short',
 );
 
-local max_ThreadsP = graphPanel.new(
+local panelMaxThreads = graphPanel.new(
   title='Max Threads',
   datasource=common.datasource,
   fill=0,
@@ -310,7 +310,7 @@ local max_ThreadsP = graphPanel.new(
   format='short',
 );
 
-local time_of_the_Longest_Live_MPP_TaskP = graphPanel.new(
+local panelTimeOfTheLongestLiveMppTask = graphPanel.new(
   title='Time of the Longest Live MPP Task',
   datasource=common.datasource,
   fill=0,
@@ -337,7 +337,7 @@ local time_of_the_Longest_Live_MPP_TaskP = graphPanel.new(
   format='short',
 );
 
-local data_size_in_send_and_receive_queueP = graphPanel.new(
+local panelDataSizeInSendAndReceiveQueue = graphPanel.new(
   title='Data size in send and receive queue',
   datasource=common.datasource,
   fill=0,
@@ -366,7 +366,7 @@ local data_size_in_send_and_receive_queueP = graphPanel.new(
   format='short',
 );
 
-local network_TransmissionP = graphPanel.new(
+local panelNetworkTransmission = graphPanel.new(
   title='Network Transmission',
   datasource=common.datasource,
   fill=0,
@@ -393,7 +393,7 @@ local network_TransmissionP = graphPanel.new(
   format='short',
 );
 
-local establish_calldata_detailsP = graphPanel.new(
+local panelEstablishCalldataDetails = graphPanel.new(
   title='Establish calldata details',
   datasource=common.datasource,
   description='The establish calldata details',
@@ -428,15 +428,15 @@ local establish_calldata_detailsP = graphPanel.new(
   row: common.buildRow(
     rowObj,
     [
-      common.band([request_QPSP, executor_QPSP]),
-      common.band([request_DurationP, error_QPSP]),
-      common.band([request_Handle_DurationP, response_Bytes_SecondsP]),
-      common.band([cop_task_memory_usageP, exchange_Bytes_SecondsP]),
-      common.band([threads_of_RpcP, handling_Request_NumberP]),
-      common.band([threadsP, max_Threads_of_RpcP]),
-      common.band([mPP_Query_countP, max_ThreadsP]),
-      common.band([time_of_the_Longest_Live_MPP_TaskP, data_size_in_send_and_receive_queueP]),
-      common.band([network_TransmissionP, establish_calldata_detailsP])
+      common.band([panelRequestQps, panelExecutorQps]),
+      common.band([panelRequestDuration, panelErrorQps]),
+      common.band([panelRequestHandleDuration, panelResponseBytesSeconds]),
+      common.band([panelCopTaskMemoryUsage, panelExchangeBytesSeconds]),
+      common.band([panelThreadsOfRpc, panelHandlingRequestNumber]),
+      common.band([panelThreads, panelMaxThreadsOfRpc]),
+      common.band([panelMppQueryCount, panelMaxThreads]),
+      common.band([panelTimeOfTheLongestLiveMppTask, panelDataSizeInSendAndReceiveQueue]),
+      common.band([panelNetworkTransmission, panelEstablishCalldataDetails])
     ],
   ),
 }

@@ -9,7 +9,7 @@ local common = import 'common.libsonnet';
 
 local rowObj = row.new(collapse=true, title='Vector Search');
 
-local in_Memory_Vector_Index_InstancesP = graphPanel.new(
+local panelInMemoryVectorIndexInstances = graphPanel.new(
   title='In-Memory Vector Index Instances',
   datasource=common.datasource,
   fill=0,
@@ -43,7 +43,7 @@ local in_Memory_Vector_Index_InstancesP = graphPanel.new(
   show=false,
 );
 
-local vector_Index_Estimated_Memory_UsageP = graphPanel.new(
+local panelVectorIndexEstimatedMemoryUsage = graphPanel.new(
   title='Vector Index Estimated Memory Usage',
   datasource=common.datasource,
   fill=0,
@@ -83,7 +83,7 @@ local vector_Index_Estimated_Memory_UsageP = graphPanel.new(
   show=false,
 );
 
-local p_99_9_Vector_Search_Duration_Per_RequestP = graphPanel.new(
+local panelP999VectorSearchDurationPerRequest = graphPanel.new(
   title='99.9% Vector Search Duration (Per Request)',
   datasource=common.datasource,
   fill=0,
@@ -116,7 +116,7 @@ local p_99_9_Vector_Search_Duration_Per_RequestP = graphPanel.new(
   decimals=1,
 );
 
-local p_99_9_Vector_Index_Build_Duration_Per_DMFile_ColumnP = graphPanel.new(
+local panelP999VectorIndexBuildDurationPerDmfileColumn = graphPanel.new(
   title='99.9% Vector Index Build Duration (Per DMFile Column)',
   datasource=common.datasource,
   fill=0,
@@ -154,8 +154,8 @@ local p_99_9_Vector_Index_Build_Duration_Per_DMFile_ColumnP = graphPanel.new(
   row: common.buildRow(
     rowObj,
     [
-      common.band([in_Memory_Vector_Index_InstancesP, vector_Index_Estimated_Memory_UsageP]),
-      common.band([p_99_9_Vector_Search_Duration_Per_RequestP, p_99_9_Vector_Index_Build_Duration_Per_DMFile_ColumnP])
+      common.band([panelInMemoryVectorIndexInstances, panelVectorIndexEstimatedMemoryUsage]),
+      common.band([panelP999VectorSearchDurationPerRequest, panelP999VectorIndexBuildDurationPerDmfileColumn])
     ],
   ),
 }

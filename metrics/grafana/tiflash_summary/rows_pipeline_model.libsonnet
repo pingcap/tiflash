@@ -9,7 +9,7 @@ local common = import 'common.libsonnet';
 
 local rowObj = row.new(collapse=true, title='Pipeline Model');
 
-local task_Thread_Pool_SizeP = graphPanel.new(
+local panelTaskThreadPoolSize = graphPanel.new(
   title='Task Thread Pool Size',
   datasource=common.datasource,
   fill=0,
@@ -36,7 +36,7 @@ local task_Thread_Pool_SizeP = graphPanel.new(
   format='short',
 );
 
-local task_CountP = graphPanel.new(
+local panelTaskCount = graphPanel.new(
   title='Task Count',
   datasource=common.datasource,
   fill=0,
@@ -69,7 +69,7 @@ local task_CountP = graphPanel.new(
   format='short',
 );
 
-local task_Status_Change_OPSP = common.opsPanel(
+local panelTaskStatusChangeOps = common.opsPanel(
   'Task Status Change OPS',
   'tiflash_pipeline_task_change_to_status',
   by=['type'],
@@ -77,7 +77,7 @@ local task_Status_Change_OPSP = common.opsPanel(
   yRight='short',
 );
 
-local task_DurationP = common.durationPanel(
+local panelTaskDuration = common.durationPanel(
   'Task Duration',
   'tiflash_pipeline_task_duration_seconds_bucket',
   by=['type'],
@@ -111,7 +111,7 @@ local task_DurationP = common.durationPanel(
   ],
 );
 
-local task_Max_Execute_Time_Per_RoundP = graphPanel.new(
+local panelTaskMaxExecuteTimePerRound = graphPanel.new(
   title='Task Max Execute Time Per Round',
   datasource=common.datasource,
   fill=1,
@@ -169,25 +169,25 @@ local task_Max_Execute_Time_Per_RoundP = graphPanel.new(
   format='short',
 );
 
-local threads_CPU_of_CPU_Task_Thread_PoolP = common.cpuWithLimitPanel(
+local panelThreadsCpuOfCpuTaskThreadPool = common.cpuWithLimitPanel(
   'Threads CPU of CPU Task Thread Pool',
   'cpu_pool',
   legend='{{name}} {{instance}}',
 );
 
-local threads_CPU_of_IO_Task_Thread_PoolP = common.cpuWithLimitPanel(
+local panelThreadsCpuOfIoTaskThreadPool = common.cpuWithLimitPanel(
   'Threads CPU of IO Task Thread Pool',
   'io_pool',
   legend='{{name}} {{instance}}',
 );
 
-local threads_CPU_of_Wait_ReactorP = common.cpuWithLimitPanel(
+local panelThreadsCpuOfWaitReactor = common.cpuWithLimitPanel(
   'Threads CPU of Wait Reactor',
   'WaitReactor',
   legend='{{name}} {{instance}}',
 );
 
-local wait_notify_task_detailsP = graphPanel.new(
+local panelWaitNotifyTaskDetails = graphPanel.new(
   title='Wait notify task details',
   datasource=common.datasource,
   description='wait notify task details',
@@ -226,11 +226,11 @@ local wait_notify_task_detailsP = graphPanel.new(
   row: common.buildRow(
     rowObj,
     [
-      common.band([task_Thread_Pool_SizeP, task_CountP]),
-      common.band([task_Status_Change_OPSP, task_DurationP]),
-      common.band([task_Max_Execute_Time_Per_RoundP, threads_CPU_of_CPU_Task_Thread_PoolP]),
-      common.band([threads_CPU_of_IO_Task_Thread_PoolP, threads_CPU_of_Wait_ReactorP]),
-      common.band([{ panel: wait_notify_task_detailsP, w: 12 }])
+      common.band([panelTaskThreadPoolSize, panelTaskCount]),
+      common.band([panelTaskStatusChangeOps, panelTaskDuration]),
+      common.band([panelTaskMaxExecuteTimePerRound, panelThreadsCpuOfCpuTaskThreadPool]),
+      common.band([panelThreadsCpuOfIoTaskThreadPool, panelThreadsCpuOfWaitReactor]),
+      common.band([{ panel: panelWaitNotifyTaskDetails, w: 12 }])
     ],
   ),
 }

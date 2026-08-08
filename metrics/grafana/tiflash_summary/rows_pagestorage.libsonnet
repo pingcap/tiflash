@@ -9,7 +9,7 @@ local common = import 'common.libsonnet';
 
 local rowObj = row.new(collapse=true, title='PageStorage');
 
-local pageStorage_Disk_UsageP = graphPanel.new(
+local panelPagestorageDiskUsage = graphPanel.new(
   title='PageStorage Disk Usage',
   datasource=common.datasource,
   description='The disk usage of PageStorage instances in each TiFlash node',
@@ -58,7 +58,7 @@ local pageStorage_Disk_UsageP = graphPanel.new(
   max='1.1',
 );
 
-local pageStorage_File_NumP = graphPanel.new(
+local panelPagestorageFileNum = graphPanel.new(
   title='PageStorage File Num',
   datasource=common.datasource,
   description='The number of files of PageStorage instances in each TiFlash node',
@@ -93,21 +93,21 @@ local pageStorage_File_NumP = graphPanel.new(
   max='1.1',
 );
 
-local pageStorage_WriteBatch_SizeP = common.heatmap(
+local panelPagestorageWritebatchSize = common.heatmap(
   'PageStorage WriteBatch Size',
   'tiflash_storage_page_write_batch_size_bucket',
   yFormat='bytes',
   labels='type="v3"',
 );
 
-local page_write_DurationP = common.durationPanel(
+local panelPageWriteDuration = common.durationPanel(
   'Page write Duration',
   'tiflash_storage_page_write_duration_seconds_bucket',
   by=['type'],
   legend='{{type}}-%s {{$additional_groupby}}',
 );
 
-local page_GC_Tasks_OPMP = graphPanel.new(
+local panelPageGcTasksOpm = graphPanel.new(
   title='Page GC Tasks OPM',
   datasource=common.datasource,
   fill=1,
@@ -132,14 +132,14 @@ local page_GC_Tasks_OPMP = graphPanel.new(
   format='short',
 );
 
-local page_GC_DurationP = common.durationPanel(
+local panelPageGcDuration = common.durationPanel(
   'Page GC Duration',
   'tiflash_storage_page_gc_duration_seconds_bucket',
   by=['type'],
   legend='{{type}}-%s {{$additional_groupby}}',
 );
 
-local numer_of_PagesP = graphPanel.new(
+local panelNumerOfPages = graphPanel.new(
   title='Numer of Pages',
   datasource=common.datasource,
   description='The number of pages of all TiFlash instance',
@@ -174,7 +174,7 @@ local numer_of_PagesP = graphPanel.new(
   format='short',
 );
 
-local pageStorage_Pending_Writers_NumP = graphPanel.new(
+local panelPagestoragePendingWritersNum = graphPanel.new(
   title='PageStorage Pending Writers Num',
   datasource=common.datasource,
   description='The num of pending writers in PageStorage',
@@ -206,7 +206,7 @@ local pageStorage_Pending_Writers_NumP = graphPanel.new(
   show=false,
 );
 
-local pageStorage_stored_bytes_by_typeP = graphPanel.new(
+local panelPagestorageStoredBytesByType = graphPanel.new(
   title='PageStorage stored bytes by type',
   datasource=common.datasource,
   fill=1,
@@ -237,7 +237,7 @@ local pageStorage_stored_bytes_by_typeP = graphPanel.new(
   min='0',
 );
 
-local number_of_TablesP = graphPanel.new(
+local panelNumberOfTables = graphPanel.new(
   title='Number of Tables',
   datasource=common.datasource,
   description='The number of tables running under different mode in DeltaTree',
@@ -286,7 +286,7 @@ local number_of_TablesP = graphPanel.new(
   format='short',
 );
 
-local pS_Command_OPS_By_InstanceP = graphPanel.new(
+local panelPsCommandOpsByInstance = graphPanel.new(
   title='PS Command OPS By Instance',
   datasource=common.datasource,
   fill=0,
@@ -316,7 +316,7 @@ local pS_Command_OPS_By_InstanceP = graphPanel.new(
   min='0',
 );
 
-local pS_Apply_edits_OPS_By_InstanceP = graphPanel.new(
+local panelPsApplyEditsOpsByInstance = graphPanel.new(
   title='PS Apply edits OPS By Instance',
   datasource=common.datasource,
   fill=0,
@@ -351,13 +351,13 @@ local pS_Apply_edits_OPS_By_InstanceP = graphPanel.new(
   row: common.buildRow(
     rowObj,
     [
-      common.band([pageStorage_Disk_UsageP, pageStorage_File_NumP]),
-      common.band([pageStorage_WriteBatch_SizeP, page_write_DurationP]),
-      common.band([page_GC_Tasks_OPMP, page_GC_DurationP]),
-      common.band([numer_of_PagesP, pageStorage_Pending_Writers_NumP]),
-      common.band([pageStorage_stored_bytes_by_typeP, number_of_TablesP]),
-      common.band([pS_Command_OPS_By_InstanceP]),
-      common.band([pS_Apply_edits_OPS_By_InstanceP])
+      common.band([panelPagestorageDiskUsage, panelPagestorageFileNum]),
+      common.band([panelPagestorageWritebatchSize, panelPageWriteDuration]),
+      common.band([panelPageGcTasksOpm, panelPageGcDuration]),
+      common.band([panelNumerOfPages, panelPagestoragePendingWritersNum]),
+      common.band([panelPagestorageStoredBytesByType, panelNumberOfTables]),
+      common.band([panelPsCommandOpsByInstance]),
+      common.band([panelPsApplyEditsOpsByInstance])
     ],
   ),
 }

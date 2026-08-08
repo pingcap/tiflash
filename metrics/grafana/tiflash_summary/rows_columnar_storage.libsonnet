@@ -9,7 +9,7 @@ local common = import 'common.libsonnet';
 
 local rowObj = row.new(collapse=true, title='Columnar Storage');
 
-local iA_usageP = graphPanel.new(
+local panelIaUsage = graphPanel.new(
   title='IA usage',
   datasource=common.datasource,
   fill=0,
@@ -64,13 +64,13 @@ local iA_usageP = graphPanel.new(
   show=false,
 );
 
-local iA_Segments_Memory_WaitP = common.durationPanel(
+local panelIaSegmentsMemoryWait = common.durationPanel(
   'IA Segments Memory Wait',
   'tiflash_proxy_kv_engine_ia_manager_segments_memory_wait_duration_seconds_bucket',
   selector=common.proxySelector,
 );
 
-local iA_Segment_Remote_Read_CacheP = graphPanel.new(
+local panelIaSegmentRemoteReadCache = graphPanel.new(
   title='IA Segment Remote Read Cache',
   datasource=common.datasource,
   fill=0,
@@ -106,13 +106,13 @@ local iA_Segment_Remote_Read_CacheP = graphPanel.new(
   min='0',
 );
 
-local iA_Segments_Remote_Read_DurationP = common.durationPanel(
+local panelIaSegmentsRemoteReadDuration = common.durationPanel(
   'IA Segments Remote Read Duration',
   'tiflash_proxy_kv_engine_ia_remote_read_segment_duration_seconds_bucket',
   selector=common.proxySelector,
 );
 
-local columnarFile_CacheP = graphPanel.new(
+local panelColumnarfileCache = graphPanel.new(
   title='ColumnarFile Cache',
   datasource=common.datasource,
   fill=0,
@@ -148,19 +148,19 @@ local columnarFile_CacheP = graphPanel.new(
   min='0',
 );
 
-local columnar_Prefetch_DurationP = common.durationPanel(
+local panelColumnarPrefetchDuration = common.durationPanel(
   'Columnar Prefetch Duration',
   'tiflash_proxy_kv_engine_columnar_prefetch_duration_seconds_bucket',
   selector=common.proxySelector,
 );
 
-local columnar_Prefetch_Cache_Hit_DurationP = common.durationPanel(
+local panelColumnarPrefetchCacheHitDuration = common.durationPanel(
   'Columnar Prefetch Cache Hit Duration',
   'tiflash_proxy_kv_engine_columnar_prefetch_cache_hit_bucket',
   selector=common.proxySelector,
 );
 
-local columnar_Fetch_Snapshot_RetryP = common.opsPanel(
+local panelColumnarFetchSnapshotRetry = common.opsPanel(
   'Columnar Fetch Snapshot Retry',
   'tiflash_proxy_kv_engine_columnar_fetch_snapshot_retry_count',
   by=['$additional_groupby'],
@@ -169,13 +169,13 @@ local columnar_Fetch_Snapshot_RetryP = common.opsPanel(
   yRight='opm',
 );
 
-local columnar_Fetch_Snapshot_DurationP = common.durationPanel(
+local panelColumnarFetchSnapshotDuration = common.durationPanel(
   'Columnar Fetch Snapshot Duration',
   'tiflash_proxy_kv_engine_columnar_fetch_snapshot_duration_seconds_bucket',
   selector=common.proxySelector,
 );
 
-local columnar_Meta_CacheP = graphPanel.new(
+local panelColumnarMetaCache = graphPanel.new(
   title='Columnar Meta Cache',
   datasource=common.datasource,
   fill=0,
@@ -217,7 +217,7 @@ local columnar_Meta_CacheP = graphPanel.new(
   min='0',
 );
 
-local columnar_Meta_Cache_GaugeP = graphPanel.new(
+local panelColumnarMetaCacheGauge = graphPanel.new(
   title='Columnar Meta Cache Gauge',
   datasource=common.datasource,
   fill=0,
@@ -256,11 +256,11 @@ local columnar_Meta_Cache_GaugeP = graphPanel.new(
   row: common.buildRow(
     rowObj,
     [
-      common.band([iA_usageP, iA_Segments_Memory_WaitP]),
-      common.band([iA_Segment_Remote_Read_CacheP, iA_Segments_Remote_Read_DurationP]),
-      common.band([columnarFile_CacheP, columnar_Prefetch_DurationP, columnar_Prefetch_Cache_Hit_DurationP]),
-      common.band([columnar_Fetch_Snapshot_RetryP, columnar_Fetch_Snapshot_DurationP]),
-      common.band([columnar_Meta_CacheP, columnar_Meta_Cache_GaugeP])
+      common.band([panelIaUsage, panelIaSegmentsMemoryWait]),
+      common.band([panelIaSegmentRemoteReadCache, panelIaSegmentsRemoteReadDuration]),
+      common.band([panelColumnarfileCache, panelColumnarPrefetchDuration, panelColumnarPrefetchCacheHitDuration]),
+      common.band([panelColumnarFetchSnapshotRetry, panelColumnarFetchSnapshotDuration]),
+      common.band([panelColumnarMetaCache, panelColumnarMetaCacheGauge])
     ],
   ),
 }

@@ -9,7 +9,7 @@ local common = import 'common.libsonnet';
 
 local rowObj = row.new(collapse=true, title='DDL');
 
-local schema_Internal_DDL_OPMP = graphPanel.new(
+local panelSchemaInternalDdlOpm = graphPanel.new(
   title='Schema Internal DDL OPM',
   datasource=common.datasource,
   description='Executed DDL jobs per minute',
@@ -55,7 +55,7 @@ local schema_Internal_DDL_OPMP = graphPanel.new(
   format='none',
 );
 
-local schema_Apply_OPMP = graphPanel.new(
+local panelSchemaApplyOpm = graphPanel.new(
   title='Schema Apply OPM',
   datasource=common.datasource,
   description='Executed DDL apply jobs per minute',
@@ -78,7 +78,7 @@ local schema_Apply_OPMP = graphPanel.new(
   format='none',
 );
 
-local schema_Apply_DurationP = common.durationPanel(
+local panelSchemaApplyDuration = common.durationPanel(
   'Schema Apply Duration',
   'tiflash_schema_apply_duration_seconds_bucket',
   by=['type'],
@@ -103,8 +103,8 @@ local schema_Apply_DurationP = common.durationPanel(
   row: common.buildRow(
     rowObj,
     [
-      common.band([schema_Internal_DDL_OPMP, schema_Apply_OPMP]),
-      common.band([{ panel: schema_Apply_DurationP, w: 12 }])
+      common.band([panelSchemaInternalDdlOpm, panelSchemaApplyOpm]),
+      common.band([{ panel: panelSchemaApplyDuration, w: 12 }])
     ],
   ),
 }

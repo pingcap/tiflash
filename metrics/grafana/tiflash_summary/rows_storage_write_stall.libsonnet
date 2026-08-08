@@ -9,7 +9,7 @@ local common = import 'common.libsonnet';
 
 local rowObj = row.new(collapse=true, title='Storage Write Stall');
 
-local write_Stall_DurationP = common.durationPanel(
+local panelWriteStallDuration = common.durationPanel(
   'Write Stall Duration',
   'tiflash_storage_write_stall_duration_seconds_bucket',
   by=['type', 'instance'],
@@ -18,7 +18,7 @@ local write_Stall_DurationP = common.durationPanel(
 )
 .addSeriesOverride({ alias: '99-delta_merge', yaxis: 2 });
 
-local write_Delta_Management_ThroughputP = graphPanel.new(
+local panelWriteDeltaManagementThroughput = graphPanel.new(
   title='Write & Delta Management Throughput',
   datasource=common.datasource,
   description='The throughput of write and delta\'s background management',
@@ -58,7 +58,7 @@ local write_Delta_Management_ThroughputP = graphPanel.new(
   show=false,
 );
 
-local write_Delta_Management_TotalP = graphPanel.new(
+local panelWriteDeltaManagementTotal = graphPanel.new(
   title='Write & Delta Management Total',
   datasource=common.datasource,
   description='The throughput of write and delta\'s background management',
@@ -98,7 +98,7 @@ local write_Delta_Management_TotalP = graphPanel.new(
   show=false,
 );
 
-local write_Throughput_By_InstanceP = graphPanel.new(
+local panelWriteThroughputByInstance = graphPanel.new(
   title='Write Throughput By Instance',
   datasource=common.datasource,
   description='The throughput of write by instance',
@@ -139,7 +139,7 @@ local write_Throughput_By_InstanceP = graphPanel.new(
   show=false,
 );
 
-local write_Command_OPS_By_InstanceP = graphPanel.new(
+local panelWriteCommandOpsByInstance = graphPanel.new(
   title='Write Command OPS By Instance',
   datasource=common.datasource,
   description='The total count of different kinds of commands received',
@@ -182,10 +182,10 @@ local write_Command_OPS_By_InstanceP = graphPanel.new(
   row: common.buildRow(
     rowObj,
     [
-      common.band([write_Stall_DurationP]),
-      common.band([write_Delta_Management_ThroughputP, write_Delta_Management_TotalP]),
-      common.band([write_Throughput_By_InstanceP]),
-      common.band([write_Command_OPS_By_InstanceP])
+      common.band([panelWriteStallDuration]),
+      common.band([panelWriteDeltaManagementThroughput, panelWriteDeltaManagementTotal]),
+      common.band([panelWriteThroughputByInstance]),
+      common.band([panelWriteCommandOpsByInstance])
     ],
   ),
 }

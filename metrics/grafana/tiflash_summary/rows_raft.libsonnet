@@ -9,31 +9,31 @@ local common = import 'common.libsonnet';
 
 local rowObj = row.new(collapse=true, title='Raft');
 
-local stale_Read_OPSP = common.opsPanel(
+local panelStaleReadOps = common.opsPanel(
   'Stale Read OPS',
   'tiflash_stale_read_count',
   by=['instance'],
 );
 
-local raft_Read_Index_OPSP = common.opsPanel(
+local panelRaftReadIndexOps = common.opsPanel(
   'Raft Read Index OPS',
   'tiflash_raft_read_index_count',
   by=['instance'],
 );
 
-local learner_Read_FailuresP = common.opsPanel(
+local panelLearnerReadFailures = common.opsPanel(
   'Learner Read Failures',
   'tiflash_raft_learner_read_failures_count',
   by=['type'],
 );
 
-local read_Index_EventsP = common.opsPanel(
+local panelReadIndexEvents = common.opsPanel(
   'Read Index Events',
   'tiflash_raft_read_index_events_count',
   by=['type'],
 );
 
-local raft_Wait_Index_DurationP = common.durationPanel(
+local panelRaftWaitIndexDuration = common.durationPanel(
   'Raft Wait Index Duration',
   'tiflash_raft_wait_index_duration_seconds_bucket',
   yRight='opm',
@@ -52,13 +52,13 @@ local raft_Wait_Index_DurationP = common.durationPanel(
   ],
 );
 
-local raft_Batch_Read_Index_DurationP = common.durationPanel(
+local panelRaftBatchReadIndexDuration = common.durationPanel(
   'Raft Batch Read Index Duration',
   'tiflash_raft_read_index_duration_seconds_bucket',
   description='The number of currently applying snapshots.',
 );
 
-local apply_Raft_write_logs_DurationP = common.durationPanel(
+local panelApplyRaftWriteLogsDuration = common.durationPanel(
   'Apply Raft write logs Duration',
   'tiflash_raft_apply_write_command_duration_seconds_bucket',
   by=['type'],
@@ -88,7 +88,7 @@ local apply_Raft_write_logs_DurationP = common.durationPanel(
   ],
 );
 
-local region_write_Duration_decodeP = common.heatmap(
+local panelRegionWriteDurationDecode = common.heatmap(
   'Region write Duration (decode)',
   'tiflash_raft_write_data_to_storage_duration_seconds_bucket',
   yFormat='s',
@@ -96,7 +96,7 @@ local region_write_Duration_decodeP = common.heatmap(
   description='Duration of decoding Region data into blocks when writing Region data to the storage layer. (Mixed with "write logs" and "apply Snapshot" operations)',
 );
 
-local region_write_Duration_write_blocksP = common.heatmap(
+local panelRegionWriteDurationWriteBlocks = common.heatmap(
   'Region write Duration (write blocks)',
   'tiflash_raft_write_data_to_storage_duration_seconds_bucket',
   yFormat='s',
@@ -104,7 +104,7 @@ local region_write_Duration_write_blocksP = common.heatmap(
   description='Duration of writing Region data blocks to the storage layer (Mixed with "write logs" and "apply Snapshot" operations)',
 );
 
-local apply_Raft_write_logs_Duration_HeatmapP = common.heatmap(
+local panelApplyRaftWriteLogsDurationHeatmap = common.heatmap(
   'Apply Raft write logs Duration [Heatmap]',
   'tiflash_raft_apply_write_command_duration_seconds_bucket',
   yFormat='s',
@@ -112,7 +112,7 @@ local apply_Raft_write_logs_Duration_HeatmapP = common.heatmap(
   description='Duration of applying Raft write logs',
 );
 
-local apply_Raft_admin_logs_Duration_HeatmapP = common.heatmap(
+local panelApplyRaftAdminLogsDurationHeatmap = common.heatmap(
   'Apply Raft admin logs Duration [Heatmap]',
   'tiflash_raft_apply_write_command_duration_seconds_bucket',
   yFormat='s',
@@ -120,19 +120,19 @@ local apply_Raft_admin_logs_Duration_HeatmapP = common.heatmap(
   description='Duration of applying Raft write logs',
 );
 
-local raft_Events_QPSP = common.opsPanel(
+local panelRaftEventsQps = common.opsPanel(
   'Raft Events QPS',
   'tiflash_raft_raft_events_count',
   by=['type'],
 );
 
-local raft_Frequent_Events_QPSP = common.opsPanel(
+local panelRaftFrequentEventsQps = common.opsPanel(
   'Raft Frequent Events QPS',
   'tiflash_raft_raft_frequent_events_count',
   by=['type'],
 );
 
-local raft_Log_Gap_HeatmapP = heatmapPanel.new(
+local panelRaftLogGapHeatmap = heatmapPanel.new(
   title='Raft Log Gap Heatmap',
   datasource=common.datasource,
   dataFormat='tsbuckets',
@@ -157,7 +157,7 @@ local raft_Log_Gap_HeatmapP = heatmapPanel.new(
   )
 );
 
-local raft_Entry_Batch_Size_HeatmapP = common.heatmap(
+local panelRaftEntryBatchSizeHeatmap = common.heatmap(
   'Raft Entry Batch Size Heatmap',
   'tiflash_raft_entry_size_bucket',
   yFormat='none',
@@ -165,7 +165,7 @@ local raft_Entry_Batch_Size_HeatmapP = common.heatmap(
   by=['le', 'type'],
 );
 
-local region_Size_by_event_HeatmapP = heatmapPanel.new(
+local panelRegionSizeByEventHeatmap = heatmapPanel.new(
   title='Region Size (by event) Heatmap',
   datasource=common.datasource,
   dataFormat='tsbuckets',
@@ -191,7 +191,7 @@ local region_Size_by_event_HeatmapP = heatmapPanel.new(
   )
 );
 
-local big_Write_To_Region_Size_HeatmapP = common.heatmap(
+local panelBigWriteToRegionSizeHeatmap = common.heatmap(
   'Big Write To Region Size Heatmap',
   'tiflash_raft_write_flow_bytes_bucket',
   yFormat='bytes',
@@ -199,7 +199,7 @@ local big_Write_To_Region_Size_HeatmapP = common.heatmap(
   by=['le', 'type'],
 );
 
-local write_Committed_Size_HeatmapP = common.heatmap(
+local panelWriteCommittedSizeHeatmap = common.heatmap(
   'Write Committed Size Heatmap',
   'tiflash_raft_write_flow_bytes_bucket',
   yFormat='bytes',
@@ -207,13 +207,13 @@ local write_Committed_Size_HeatmapP = common.heatmap(
   by=['le', 'type'],
 );
 
-local raft_Eager_GC_OPSP = common.opsPanel(
+local panelRaftEagerGcOps = common.opsPanel(
   'Raft Eager GC OPS',
   'tiflash_raft_eager_gc_count',
   by=['type'],
 );
 
-local raft_Eager_GC_DurationP = common.durationPanel(
+local panelRaftEagerGcDuration = common.durationPanel(
   'Raft Eager GC Duration',
   'tiflash_raft_eager_gc_duration_seconds_bucket',
   by=['type'],
@@ -221,7 +221,7 @@ local raft_Eager_GC_DurationP = common.durationPanel(
   description='Duration of Raft logs eager GC tasks',
 );
 
-local keys_flowP = graphPanel.new(
+local panelKeysFlow = graphPanel.new(
   title='Keys flow',
   datasource=common.datasource,
   description='The keys flow of different kinds of Raft operations',
@@ -252,7 +252,7 @@ local keys_flowP = graphPanel.new(
   min='0',
 );
 
-local raft_throughputP = graphPanel.new(
+local panelRaftThroughput = graphPanel.new(
   title='Raft throughput',
   datasource=common.datasource,
   fill=1,
@@ -282,21 +282,21 @@ local raft_throughputP = graphPanel.new(
   min='0',
 );
 
-local upstream_Latency_HeatmapP = common.heatmap(
+local panelUpstreamLatencyHeatmap = common.heatmap(
   'Upstream Latency [Heatmap]',
   'tiflash_raft_upstream_latency_bucket',
   yFormat='s',
   description='Latency that TiKV sends raft log to TiFlash.',
 );
 
-local upstream_LatencyP = common.durationPanel(
+local panelUpstreamLatency = common.durationPanel(
   'Upstream Latency',
   'tiflash_raft_upstream_latency_bucket',
   description='Latency that TiKV sends raft log to TiFlash.',
   showAvg=true,
 );
 
-local log_Replication_RejectedP = graphPanel.new(
+local panelLogReplicationRejected = graphPanel.new(
   title='Log Replication Rejected',
   datasource=common.datasource,
   fill=0,
@@ -323,21 +323,21 @@ local log_Replication_RejectedP = graphPanel.new(
   row: common.buildRow(
     rowObj,
     [
-      common.band([stale_Read_OPSP, raft_Read_Index_OPSP]),
-      common.band([learner_Read_FailuresP, read_Index_EventsP]),
-      common.band([raft_Wait_Index_DurationP, raft_Batch_Read_Index_DurationP]),
-      common.band([apply_Raft_write_logs_DurationP]),
-      common.band([region_write_Duration_decodeP, region_write_Duration_write_blocksP]),
-      common.band([apply_Raft_write_logs_Duration_HeatmapP, apply_Raft_admin_logs_Duration_HeatmapP]),
-      common.band([raft_Events_QPSP, raft_Frequent_Events_QPSP]),
-      common.band([raft_Log_Gap_HeatmapP, raft_Entry_Batch_Size_HeatmapP]),
-      common.band([region_Size_by_event_HeatmapP, big_Write_To_Region_Size_HeatmapP]),
-      common.band([write_Committed_Size_HeatmapP]),
-      common.band([raft_Eager_GC_OPSP, raft_Eager_GC_DurationP]),
-      common.band([keys_flowP]),
-      common.band([raft_throughputP]),
-      common.band([upstream_Latency_HeatmapP, upstream_LatencyP]),
-      common.band([{ panel: log_Replication_RejectedP, w: 12 }])
+      common.band([panelStaleReadOps, panelRaftReadIndexOps]),
+      common.band([panelLearnerReadFailures, panelReadIndexEvents]),
+      common.band([panelRaftWaitIndexDuration, panelRaftBatchReadIndexDuration]),
+      common.band([panelApplyRaftWriteLogsDuration]),
+      common.band([panelRegionWriteDurationDecode, panelRegionWriteDurationWriteBlocks]),
+      common.band([panelApplyRaftWriteLogsDurationHeatmap, panelApplyRaftAdminLogsDurationHeatmap]),
+      common.band([panelRaftEventsQps, panelRaftFrequentEventsQps]),
+      common.band([panelRaftLogGapHeatmap, panelRaftEntryBatchSizeHeatmap]),
+      common.band([panelRegionSizeByEventHeatmap, panelBigWriteToRegionSizeHeatmap]),
+      common.band([panelWriteCommittedSizeHeatmap]),
+      common.band([panelRaftEagerGcOps, panelRaftEagerGcDuration]),
+      common.band([panelKeysFlow]),
+      common.band([panelRaftThroughput]),
+      common.band([panelUpstreamLatencyHeatmap, panelUpstreamLatency]),
+      common.band([{ panel: panelLogReplicationRejected, w: 12 }])
     ],
   ),
 }

@@ -9,14 +9,14 @@ local common = import 'common.libsonnet';
 
 local rowObj = row.new(collapse=true, title='Disaggregated-Compute');
 
-local read_Duration_BreakdownP = common.durationPanel(
+local panelReadDurationBreakdown = common.durationPanel(
   'Read Duration Breakdown',
   'tiflash_disaggregated_breakdown_duration_seconds_bucket',
   by=['type'],
   legend='%s-{{type}} {{$additional_groupby}}',
 );
 
-local remote_Cache_OperationsP = common.opsHitRatioPanel(
+local panelRemoteCacheOperations = common.opsHitRatioPanel(
   'Remote Cache Operations',
   'tiflash_storage_remote_cache',
   [
@@ -36,7 +36,7 @@ local remote_Cache_OperationsP = common.opsHitRatioPanel(
   description='Remote Cache Operations',
 );
 
-local remote_Cache_FlowP = graphPanel.new(
+local panelRemoteCacheFlow = graphPanel.new(
   title='Remote Cache Flow',
   datasource=common.datasource,
   description='Remote Cache Flow',
@@ -69,21 +69,21 @@ local remote_Cache_FlowP = graphPanel.new(
   show=false,
 );
 
-local remote_Cache_BG_Download_DurationP = common.durationPanel(
+local panelRemoteCacheBgDownloadDuration = common.durationPanel(
   'Remote Cache BG Download Duration',
   'tiflash_storage_remote_cache_bg_download_stage_seconds_bucket',
   by=['stage', 'file_type'],
   legend='%s-{{stage}}-{{file_type}} {{$additional_groupby}}',
 );
 
-local remote_Cache_Wait_on_Downloading_DurationP = common.durationPanel(
+local panelRemoteCacheWaitOnDownloadingDuration = common.durationPanel(
   'Remote Cache Wait on Downloading Duration',
   'tiflash_storage_remote_cache_wait_on_downloading_seconds_bucket',
   by=['result', 'file_type'],
   legend='%s-{{result}}-{{file_type}} {{$additional_groupby}}',
 );
 
-local remote_Cache_Wait_on_Downloading_OPSP = graphPanel.new(
+local panelRemoteCacheWaitOnDownloadingOps = graphPanel.new(
   title='Remote Cache Wait on Downloading OPS',
   datasource=common.datasource,
   fill=1,
@@ -115,7 +115,7 @@ local remote_Cache_Wait_on_Downloading_OPSP = graphPanel.new(
   format='s',
 );
 
-local remote_Cache_Wait_on_Downloading_FlowP = graphPanel.new(
+local panelRemoteCacheWaitOnDownloadingFlow = graphPanel.new(
   title='Remote Cache Wait on Downloading Flow',
   datasource=common.datasource,
   fill=0,
@@ -147,7 +147,7 @@ local remote_Cache_Wait_on_Downloading_FlowP = graphPanel.new(
   show=false,
 );
 
-local remote_Cache_GaugeP = graphPanel.new(
+local panelRemoteCacheGauge = graphPanel.new(
   title='Remote Cache Gauge',
   datasource=common.datasource,
   fill=1,
@@ -177,7 +177,7 @@ local remote_Cache_GaugeP = graphPanel.new(
   format='short',
 );
 
-local remote_Cache_Reject_Download_Type_OPSP = graphPanel.new(
+local panelRemoteCacheRejectDownloadTypeOps = graphPanel.new(
   title='Remote Cache Reject Download Type OPS',
   datasource=common.datasource,
   fill=1,
@@ -209,7 +209,7 @@ local remote_Cache_Reject_Download_Type_OPSP = graphPanel.new(
   format='s',
 );
 
-local remote_Cache_UsageP = graphPanel.new(
+local panelRemoteCacheUsage = graphPanel.new(
   title='Remote Cache Usage',
   datasource=common.datasource,
   description='Remote Cache Usage',
@@ -258,7 +258,7 @@ local remote_Cache_UsageP = graphPanel.new(
   show=false,
 );
 
-local memory_Usage_of_Storage_TasksP = graphPanel.new(
+local panelMemoryUsageOfStorageTasks = graphPanel.new(
   title='Memory Usage of Storage Tasks',
   datasource=common.datasource,
   description='Memory Usage of Storage Tasks',
@@ -305,7 +305,7 @@ local memory_Usage_of_Storage_TasksP = graphPanel.new(
   show=false,
 );
 
-local mVCCIndexCacheP = common.opsHitRatioPanel(
+local panelMvccIndexCache = common.opsHitRatioPanel(
   'MVCCIndexCache',
   'tiflash_storage_mvcc_index_cache',
   [
@@ -322,7 +322,7 @@ local mVCCIndexCacheP = common.opsHitRatioPanel(
   description='DeltaIndex cache of ReadNodes',
 );
 
-local placeIndex_Tasks_DurationP = common.durationPanel(
+local panelPlaceindexTasksDuration = common.durationPanel(
   'PlaceIndex Tasks Duration',
   'tiflash_storage_subtask_duration_seconds_bucket',
   selector=common.selector + ', type="place_index_update"',
@@ -331,7 +331,7 @@ local placeIndex_Tasks_DurationP = common.durationPanel(
   description="Duration of storage's internal sub tasks",
 );
 
-local placeIndexTask_Reuse_OPSP = graphPanel.new(
+local panelPlaceindextaskReuseOps = graphPanel.new(
   title='PlaceIndexTask/Reuse OPS',
   datasource=common.datasource,
   description='Total number of storage\'s internal sub tasks',
@@ -367,7 +367,7 @@ local placeIndexTask_Reuse_OPSP = graphPanel.new(
   show=false,
 );
 
-local placeIndex_update_rows_deletesP = graphPanel.new(
+local panelPlaceindexUpdateRowsDeletes = graphPanel.new(
   title='PlaceIndex update rows/deletes',
   datasource=common.datasource,
   fill=1,
@@ -419,14 +419,14 @@ local placeIndex_update_rows_deletesP = graphPanel.new(
   row: common.buildRow(
     rowObj,
     [
-      common.band([read_Duration_BreakdownP]),
-      common.band([remote_Cache_OperationsP, remote_Cache_FlowP]),
-      common.band([remote_Cache_BG_Download_DurationP, remote_Cache_Wait_on_Downloading_DurationP]),
-      common.band([remote_Cache_Wait_on_Downloading_OPSP, remote_Cache_Wait_on_Downloading_FlowP]),
-      common.band([remote_Cache_GaugeP, remote_Cache_Reject_Download_Type_OPSP]),
-      common.band([remote_Cache_UsageP, memory_Usage_of_Storage_TasksP]),
-      common.band([mVCCIndexCacheP, placeIndex_Tasks_DurationP]),
-      common.band([placeIndexTask_Reuse_OPSP, placeIndex_update_rows_deletesP])
+      common.band([panelReadDurationBreakdown]),
+      common.band([panelRemoteCacheOperations, panelRemoteCacheFlow]),
+      common.band([panelRemoteCacheBgDownloadDuration, panelRemoteCacheWaitOnDownloadingDuration]),
+      common.band([panelRemoteCacheWaitOnDownloadingOps, panelRemoteCacheWaitOnDownloadingFlow]),
+      common.band([panelRemoteCacheGauge, panelRemoteCacheRejectDownloadTypeOps]),
+      common.band([panelRemoteCacheUsage, panelMemoryUsageOfStorageTasks]),
+      common.band([panelMvccIndexCache, panelPlaceindexTasksDuration]),
+      common.band([panelPlaceindextaskReuseOps, panelPlaceindexUpdateRowsDeletes])
     ],
   ),
 }

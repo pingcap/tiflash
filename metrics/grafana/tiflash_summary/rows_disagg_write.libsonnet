@@ -9,7 +9,7 @@ local common = import 'common.libsonnet';
 
 local rowObj = row.new(collapse=true, title='Disaggregated-Write');
 
-local checkpoint_Upload_DurationP = common.durationPanel(
+local panelCheckpointUploadDuration = common.durationPanel(
   'Checkpoint Upload Duration',
   'tiflash_storage_checkpoint_seconds_bucket',
   by=['type'],
@@ -17,7 +17,7 @@ local checkpoint_Upload_DurationP = common.durationPanel(
   description='PageStorage Checkpoint Duration',
 );
 
-local checkpoint_Upload_flowP = graphPanel.new(
+local panelCheckpointUploadFlow = graphPanel.new(
   title='Checkpoint Upload flow',
   datasource=common.datasource,
   description='The flow of checkpoint operations',
@@ -56,7 +56,7 @@ local checkpoint_Upload_flowP = graphPanel.new(
   min='0',
 );
 
-local checkpoint_Upload_keys_speed_by_type_allP = common.opsPanel(
+local panelCheckpointUploadKeysSpeedByTypeAll = common.opsPanel(
   'Checkpoint Upload keys speed by type (all)',
   'tiflash_storage_checkpoint_keys_by_types',
   by=['type', '$additional_groupby'],
@@ -66,7 +66,7 @@ local checkpoint_Upload_keys_speed_by_type_allP = common.opsPanel(
   yRight='short',
 );
 
-local checkpoint_Upload_flow_by_type_incremental_compactionP = graphPanel.new(
+local panelCheckpointUploadFlowByTypeIncrementalCompaction = graphPanel.new(
   title='Checkpoint Upload flow by type (incremental+compaction)',
   datasource=common.datasource,
   description='The flow of checkpoint operations. Group by key types',
@@ -98,7 +98,7 @@ local checkpoint_Upload_flow_by_type_incremental_compactionP = graphPanel.new(
   min='0',
 );
 
-local remote_File_NumP = graphPanel.new(
+local panelRemoteFileNum = graphPanel.new(
   title='Remote File Num',
   datasource=common.datasource,
   description='The number of files of owned by each TiFlash node',
@@ -127,7 +127,7 @@ local remote_File_NumP = graphPanel.new(
   max='1.1',
 );
 
-local remote_Store_UsageP = graphPanel.new(
+local panelRemoteStoreUsage = graphPanel.new(
   title='Remote Store Usage',
   datasource=common.datasource,
   description='The remote store usage owned by each TiFlash node',
@@ -171,7 +171,7 @@ local remote_Store_UsageP = graphPanel.new(
   max='1.1',
 );
 
-local remote_Object_Lock_Request_QPSP = common.opsPanel(
+local panelRemoteObjectLockRequestQps = common.opsPanel(
   'Remote Object Lock Request QPS',
   'tiflash_disaggregated_object_lock_request_count',
   by=['type', '$additional_groupby'],
@@ -179,14 +179,14 @@ local remote_Object_Lock_Request_QPSP = common.opsPanel(
   yLeft='none',
 );
 
-local remote_Object_Lock_DurationP = common.durationPanel(
+local panelRemoteObjectLockDuration = common.durationPanel(
   'Remote Object Lock Duration',
   'tiflash_disaggregated_object_lock_request_duration_seconds_bucket',
   by=['type'],
   legend='%s-{{type}} {{$additional_groupby}}',
 );
 
-local remote_Store_SummaryP = graphPanel.new(
+local panelRemoteStoreSummary = graphPanel.new(
   title='Remote Store Summary',
   datasource=common.datasource,
   fill=0,
@@ -215,7 +215,7 @@ local remote_Store_SummaryP = graphPanel.new(
   format='short',
 );
 
-local remote_GC_Duration_BreakdownP = common.durationPanel(
+local panelRemoteGcDurationBreakdown = common.durationPanel(
   'Remote GC Duration Breakdown',
   'tiflash_storage_s3_gc_seconds_bucket',
   by=['type'],
@@ -225,7 +225,7 @@ local remote_GC_Duration_BreakdownP = common.durationPanel(
 .addSeriesOverride({ alias: '/one_store/', yaxis: 2 })
 .addSeriesOverride({ alias: '/clean_locks/', yaxis: 2 });
 
-local remote_GC_StatusP = graphPanel.new(
+local panelRemoteGcStatus = graphPanel.new(
   title='Remote GC Status',
   datasource=common.datasource,
   fill=0,
@@ -254,7 +254,7 @@ local remote_GC_StatusP = graphPanel.new(
   format='short',
 );
 
-local local_Lock_Manager_statusP = graphPanel.new(
+local panelLocalLockManagerStatus = graphPanel.new(
   title='Local Lock Manager status',
   datasource=common.datasource,
   fill=0,
@@ -283,7 +283,7 @@ local local_Lock_Manager_statusP = graphPanel.new(
   format='short',
 );
 
-local local_Lock_Manager_QPSP = common.opsPanel(
+local panelLocalLockManagerQps = common.opsPanel(
   'Local Lock Manager QPS',
   'tiflash_storage_s3_lock_mgr_counter',
   by=['type', '$additional_groupby'],
@@ -291,7 +291,7 @@ local local_Lock_Manager_QPSP = common.opsPanel(
   yLeft='none',
 );
 
-local fAP_resultP = graphPanel.new(
+local panelFapResult = graphPanel.new(
   title='FAP result',
   datasource=common.datasource,
   fill=0,
@@ -319,7 +319,7 @@ local fAP_resultP = graphPanel.new(
   min='0',
 );
 
-local fAP_stateP = graphPanel.new(
+local panelFapState = graphPanel.new(
   title='FAP state',
   datasource=common.datasource,
   fill=0,
@@ -347,7 +347,7 @@ local fAP_stateP = graphPanel.new(
   min='0',
 );
 
-local fAP_time_by_stageP = common.durationPanel(
+local panelFapTimeByStage = common.durationPanel(
   'FAP time by stage',
   'tiflash_fap_task_duration_seconds_bucket',
   by=['type'],
@@ -355,7 +355,7 @@ local fAP_time_by_stageP = common.durationPanel(
 )
 .addSeriesOverride({ alias: '/hit_ratio/', yaxis: 2 });
 
-local fAP_no_match_reasonP = graphPanel.new(
+local panelFapNoMatchReason = graphPanel.new(
   title='FAP no match reason',
   datasource=common.datasource,
   fill=0,
@@ -388,14 +388,14 @@ local fAP_no_match_reasonP = graphPanel.new(
   row: common.buildRow(
     rowObj,
     [
-      common.band([checkpoint_Upload_DurationP, checkpoint_Upload_flowP]),
-      common.band([checkpoint_Upload_keys_speed_by_type_allP, checkpoint_Upload_flow_by_type_incremental_compactionP]),
-      common.band([remote_File_NumP, remote_Store_UsageP]),
-      common.band([remote_Object_Lock_Request_QPSP, remote_Object_Lock_DurationP]),
-      common.band([remote_Store_SummaryP, remote_GC_Duration_BreakdownP, remote_GC_StatusP]),
-      common.band([local_Lock_Manager_statusP, local_Lock_Manager_QPSP]),
-      common.band([fAP_resultP, fAP_stateP]),
-      common.band([fAP_time_by_stageP, fAP_no_match_reasonP])
+      common.band([panelCheckpointUploadDuration, panelCheckpointUploadFlow]),
+      common.band([panelCheckpointUploadKeysSpeedByTypeAll, panelCheckpointUploadFlowByTypeIncrementalCompaction]),
+      common.band([panelRemoteFileNum, panelRemoteStoreUsage]),
+      common.band([panelRemoteObjectLockRequestQps, panelRemoteObjectLockDuration]),
+      common.band([panelRemoteStoreSummary, panelRemoteGcDurationBreakdown, panelRemoteGcStatus]),
+      common.band([panelLocalLockManagerStatus, panelLocalLockManagerQps]),
+      common.band([panelFapResult, panelFapState]),
+      common.band([panelFapTimeByStage, panelFapNoMatchReason])
     ],
   ),
 }

@@ -9,14 +9,14 @@ local common = import 'common.libsonnet';
 
 local rowObj = row.new(collapse=true, title='Storage Read Pool & Data Sharing');
 
-local read_Tasks_OPSP = common.opsPanel(
+local panelReadTasksOps = common.opsPanel(
   'Read Tasks OPS',
   'tiflash_storage_read_tasks_count',
   by=['instance'],
   description='Total number of storage engine read tasks',
 );
 
-local read_SnapshotsP = graphPanel.new(
+local panelReadSnapshots = graphPanel.new(
   title='Read Snapshots',
   datasource=common.datasource,
   fill=1,
@@ -127,7 +127,7 @@ local read_SnapshotsP = graphPanel.new(
   min='0',
 );
 
-local read_Thread_Internal_DurationP = common.durationPanel(
+local panelReadThreadInternalDuration = common.durationPanel(
   'Read Thread Internal Duration',
   'tiflash_read_thread_internal_us_bucket',
   by=['type'],
@@ -135,7 +135,7 @@ local read_Thread_Internal_DurationP = common.durationPanel(
   unit='µs',
 );
 
-local read_Thread_SchedulingP = graphPanel.new(
+local panelReadThreadScheduling = graphPanel.new(
   title='Read Thread Scheduling',
   datasource=common.datasource,
   description='The information of read thread scheduling.',
@@ -161,7 +161,7 @@ local read_Thread_SchedulingP = graphPanel.new(
   min='0',
 );
 
-local data_SharingP = common.opsHitRatioPanel(
+local panelDataSharing = common.opsHitRatioPanel(
   'Data Sharing',
   'tiflash_storage_read_thread_counter',
   [
@@ -187,7 +187,7 @@ local data_SharingP = common.opsHitRatioPanel(
   description='The information of data sharing cache hit ratio. Data sharing cache is purpose-built for OLAP workload that can reduce repeated data reads of concurrent table scanning.',
 );
 
-local segment_MergedTaskP = graphPanel.new(
+local panelSegmentMergedtask = graphPanel.new(
   title='Segment MergedTask',
   datasource=common.datasource,
   fill=0,
@@ -216,14 +216,14 @@ local segment_MergedTaskP = graphPanel.new(
   min='0',
 );
 
-local segment_MergedTask_DurationP = common.durationPanel(
+local panelSegmentMergedtaskDuration = common.durationPanel(
   'Segment MergedTask Duration',
   'tiflash_storage_read_thread_seconds_bucket',
   by=['type'],
   legend='%s-{{type}} {{$additional_groupby}}',
 );
 
-local versionChainP = common.durationPanel(
+local panelVersionChain = common.durationPanel(
   'VersionChain',
   'tiflash_storage_version_chain_ms_bucket',
   by=['type'],
@@ -231,7 +231,7 @@ local versionChainP = common.durationPanel(
   unit='ms',
 );
 
-local deltaIndexErrorP = graphPanel.new(
+local panelDeltaIndexError = graphPanel.new(
   title='DeltaIndexError',
   datasource=common.datasource,
   description='Errors of DeltaIndex',
@@ -265,10 +265,10 @@ local deltaIndexErrorP = graphPanel.new(
   row: common.buildRow(
     rowObj,
     [
-      common.band([read_Tasks_OPSP, read_SnapshotsP]),
-      common.band([read_Thread_Internal_DurationP, read_Thread_SchedulingP]),
-      common.band([data_SharingP, segment_MergedTaskP, segment_MergedTask_DurationP]),
-      common.band([versionChainP, deltaIndexErrorP])
+      common.band([panelReadTasksOps, panelReadSnapshots]),
+      common.band([panelReadThreadInternalDuration, panelReadThreadScheduling]),
+      common.band([panelDataSharing, panelSegmentMergedtask, panelSegmentMergedtaskDuration]),
+      common.band([panelVersionChain, panelDeltaIndexError])
     ],
   ),
 }

@@ -9,7 +9,7 @@ local common = import 'common.libsonnet';
 
 local rowObj = row.new(collapse=true, title='Imbalance read/write');
 
-local cPU_Usage_irateP = graphPanel.new(
+local panelCpuUsageIrate = graphPanel.new(
   title='CPU Usage (irate)',
   datasource=common.datasource,
   description='TiFlash CPU usage calculated with process CPU running seconds.',
@@ -49,13 +49,13 @@ local cPU_Usage_irateP = graphPanel.new(
   show=false,
 );
 
-local segment_ReaderP = common.cpuWithLimitPanel(
+local panelSegmentReader = common.cpuWithLimitPanel(
   'Segment Reader',
   'SegmentReader.*',
   legend='{{name}} {{instance}}',
 );
 
-local request_QPS_by_instanceP = common.opsPanel(
+local panelRequestQpsByInstance = common.opsPanel(
   'Request QPS by instance',
   'tiflash_coprocessor_request_count',
   by=['type', 'instance'],
@@ -63,7 +63,7 @@ local request_QPS_by_instanceP = common.opsPanel(
   yLeft='none',
 );
 
-local read_Throughput_by_instanceP = graphPanel.new(
+local panelReadThroughputByInstance = graphPanel.new(
   title='Read Throughput by instance',
   datasource=common.datasource,
   description='The flow of different kinds of read operations',
@@ -109,7 +109,7 @@ local read_Throughput_by_instanceP = graphPanel.new(
   min='0',
 );
 
-local write_Command_OPS_By_InstanceP = graphPanel.new(
+local panelWriteCommandOpsByInstance = graphPanel.new(
   title='Write Command OPS By Instance',
   datasource=common.datasource,
   description='The total count of different kinds of commands received',
@@ -146,7 +146,7 @@ local write_Command_OPS_By_InstanceP = graphPanel.new(
   min='0',
 );
 
-local write_Throughput_By_InstanceP = graphPanel.new(
+local panelWriteThroughputByInstance = graphPanel.new(
   title='Write Throughput By Instance',
   datasource=common.datasource,
   description='The throughput of write by instance',
@@ -191,9 +191,9 @@ local write_Throughput_By_InstanceP = graphPanel.new(
   row: common.buildRow(
     rowObj,
     [
-      common.band([cPU_Usage_irateP, segment_ReaderP]),
-      common.band([request_QPS_by_instanceP, read_Throughput_by_instanceP]),
-      common.band([write_Command_OPS_By_InstanceP, write_Throughput_By_InstanceP])
+      common.band([panelCpuUsageIrate, panelSegmentReader]),
+      common.band([panelRequestQpsByInstance, panelReadThroughputByInstance]),
+      common.band([panelWriteCommandOpsByInstance, panelWriteThroughputByInstance])
     ],
   ),
 }

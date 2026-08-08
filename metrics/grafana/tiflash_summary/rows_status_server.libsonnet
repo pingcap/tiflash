@@ -9,7 +9,7 @@ local common = import 'common.libsonnet';
 
 local rowObj = row.new(collapse=true, title='Status Server');
 
-local status_API_Request_DurationP = common.durationPanel(
+local panelStatusApiRequestDuration = common.durationPanel(
   'Status API Request Duration',
   'tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket',
   selector=common.proxySelector,
@@ -17,7 +17,7 @@ local status_API_Request_DurationP = common.durationPanel(
   legend='%s-{{path}} {{$additional_groupby}}',
 );
 
-local status_API_Request_op_sP = graphPanel.new(
+local panelStatusApiRequestOpS = graphPanel.new(
   title='Status API Request (op/s)',
   datasource=common.datasource,
   fill=1,
@@ -50,7 +50,7 @@ local status_API_Request_op_sP = graphPanel.new(
   row: common.buildRow(
     rowObj,
     [
-      common.band([status_API_Request_DurationP, status_API_Request_op_sP])
+      common.band([panelStatusApiRequestDuration, panelStatusApiRequestOpS])
     ],
   ),
 }

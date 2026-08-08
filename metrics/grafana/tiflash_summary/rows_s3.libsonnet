@@ -9,7 +9,7 @@ local common = import 'common.libsonnet';
 
 local rowObj = row.new(collapse=true, title='S3');
 
-local s3_BytesP = graphPanel.new(
+local panelS3Bytes = graphPanel.new(
   title='S3 Bytes',
   datasource=common.datasource,
   description='S3 read/write throughput',
@@ -52,7 +52,7 @@ local s3_BytesP = graphPanel.new(
   min='0',
 );
 
-local s3_OPSP = graphPanel.new(
+local panelS3Ops = graphPanel.new(
   title='S3 OPS',
   datasource=common.datasource,
   description='S3 OPS',
@@ -151,7 +151,7 @@ local s3_OPSP = graphPanel.new(
   min='0',
 );
 
-local s3_Retry_OPSP = graphPanel.new(
+local panelS3RetryOps = graphPanel.new(
   title='S3 Retry OPS',
   datasource=common.datasource,
   description='S3 Retry OPS',
@@ -215,7 +215,7 @@ local s3_Retry_OPSP = graphPanel.new(
   min='0',
 );
 
-local s3_Request_DurationP = common.durationPanel(
+local panelS3RequestDuration = common.durationPanel(
   'S3 Request Duration',
   'tiflash_storage_s3_request_seconds_bucket',
   by=['type'],
@@ -223,7 +223,7 @@ local s3_Request_DurationP = common.durationPanel(
   description='S3 Request Duration',
 );
 
-local s3_HTTP_OPSP = graphPanel.new(
+local panelS3HttpOps = graphPanel.new(
   title='S3 HTTP OPS',
   datasource=common.datasource,
   description='S3 HTTP OPS',
@@ -307,7 +307,7 @@ local s3_HTTP_OPSP = graphPanel.new(
   min='0',
 );
 
-local s3_HTTP_Request_DurationP = common.durationPanel(
+local panelS3HttpRequestDuration = common.durationPanel(
   'S3 HTTP Request Duration',
   'tiflash_storage_s3_http_request_seconds_bucket',
   by=['type'],
@@ -315,7 +315,7 @@ local s3_HTTP_Request_DurationP = common.durationPanel(
   description='S3 HTTP Request Duration',
 );
 
-local s3_on_going_instancesP = graphPanel.new(
+local panelS3OnGoingInstances = graphPanel.new(
   title='S3 on-going instances',
   datasource=common.datasource,
   description='S3 HTTP OPS',
@@ -351,7 +351,7 @@ local s3_on_going_instancesP = graphPanel.new(
   min='0',
 );
 
-local s3RandomAccessFile_OPSP = graphPanel.new(
+local panelS3randomaccessfileOps = graphPanel.new(
   title='S3RandomAccessFile OPS',
   datasource=common.datasource,
   fill=0,
@@ -414,10 +414,10 @@ local s3RandomAccessFile_OPSP = graphPanel.new(
   row: common.buildRow(
     rowObj,
     [
-      common.band([s3_BytesP, s3_OPSP]),
-      common.band([s3_Retry_OPSP, s3_Request_DurationP]),
-      common.band([s3_HTTP_OPSP, s3_HTTP_Request_DurationP]),
-      common.band([s3_on_going_instancesP, s3RandomAccessFile_OPSP])
+      common.band([panelS3Bytes, panelS3Ops]),
+      common.band([panelS3RetryOps, panelS3RequestDuration]),
+      common.band([panelS3HttpOps, panelS3HttpRequestDuration]),
+      common.band([panelS3OnGoingInstances, panelS3randomaccessfileOps])
     ],
   ),
 }

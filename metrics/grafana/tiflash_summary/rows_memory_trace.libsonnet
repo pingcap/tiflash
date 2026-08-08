@@ -9,7 +9,7 @@ local common = import 'common.libsonnet';
 
 local rowObj = row.new(collapse=true, title='Memory trace');
 
-local number_of_KeyspacesP = graphPanel.new(
+local panelNumberOfKeyspaces = graphPanel.new(
   title='Number of Keyspaces',
   datasource=common.datasource,
   fill=1,
@@ -37,7 +37,7 @@ local number_of_KeyspacesP = graphPanel.new(
   show=false,
 );
 
-local number_of_Physical_TablesP = graphPanel.new(
+local panelNumberOfPhysicalTables = graphPanel.new(
   title='Number of Physical Tables',
   datasource=common.datasource,
   fill=1,
@@ -73,7 +73,7 @@ local number_of_Physical_TablesP = graphPanel.new(
   show=false,
 );
 
-local number_of_SegmentsP = graphPanel.new(
+local panelNumberOfSegments = graphPanel.new(
   title='Number of Segments',
   datasource=common.datasource,
   fill=1,
@@ -108,7 +108,7 @@ local number_of_SegmentsP = graphPanel.new(
   show=false,
 );
 
-local bytes_of_MemTablesP = graphPanel.new(
+local panelBytesOfMemtables = graphPanel.new(
   title='Bytes of MemTables',
   datasource=common.datasource,
   fill=1,
@@ -143,7 +143,7 @@ local bytes_of_MemTablesP = graphPanel.new(
   show=false,
 );
 
-local mark_Cache_and_Minmax_Index_Cache_Memory_UsageP = graphPanel.new(
+local panelMarkCacheAndMinmaxIndexCacheMemoryUsage = graphPanel.new(
   title='Mark Cache and Minmax Index Cache Memory Usage',
   datasource=common.datasource,
   description='The memory usage of mark cache and minmax index cache',
@@ -187,7 +187,7 @@ local mark_Cache_and_Minmax_Index_Cache_Memory_UsageP = graphPanel.new(
   show=false,
 );
 
-local effectiveness_of_Mark_CacheP = graphPanel.new(
+local panelEffectivenessOfMarkCache = graphPanel.new(
   title='Effectiveness of Mark Cache',
   datasource=common.datasource,
   description='cache misses or cache hits of mark_cache.\nBased on this infactor, we can check whether mark_cache is large enough',
@@ -216,7 +216,7 @@ local effectiveness_of_Mark_CacheP = graphPanel.new(
   show=false,
 );
 
-local schema_of_Column_FileP = graphPanel.new(
+local panelSchemaOfColumnFile = graphPanel.new(
   title='Schema of Column File',
   datasource=common.datasource,
   description='Information about schema of column file, to learn the memory usage of schema',
@@ -262,7 +262,7 @@ local schema_of_Column_FileP = graphPanel.new(
   format='short',
 );
 
-local read_SnapshotsP = graphPanel.new(
+local panelReadSnapshots = graphPanel.new(
   title='Read Snapshots',
   datasource=common.datasource,
   fill=1,
@@ -300,7 +300,7 @@ local read_SnapshotsP = graphPanel.new(
   min='0',
 );
 
-local memory_by_threadP = graphPanel.new(
+local panelMemoryByThread = graphPanel.new(
   title='Memory by thread',
   datasource=common.datasource,
   fill=1,
@@ -341,7 +341,7 @@ local memory_by_threadP = graphPanel.new(
   format='short',
 );
 
-local memory_by_thread_proxyP = graphPanel.new(
+local panelMemoryByThreadProxy = graphPanel.new(
   title='Memory by thread (proxy)',
   datasource=common.datasource,
   fill=1,
@@ -384,7 +384,7 @@ local memory_by_thread_proxyP = graphPanel.new(
   format='short',
 );
 
-local memory_by_classP = graphPanel.new(
+local panelMemoryByClass = graphPanel.new(
   title='Memory by class',
   datasource=common.datasource,
   fill=1,
@@ -412,7 +412,7 @@ local memory_by_classP = graphPanel.new(
   format='short',
 );
 
-local kVStore_memoryP = graphPanel.new(
+local panelKvstoreMemory = graphPanel.new(
   title='KVStore memory',
   datasource=common.datasource,
   fill=1,
@@ -438,12 +438,12 @@ local kVStore_memoryP = graphPanel.new(
   row: common.buildRow(
     rowObj,
     [
-      common.band([number_of_KeyspacesP, number_of_Physical_TablesP]),
-      common.band([number_of_SegmentsP, bytes_of_MemTablesP]),
-      common.band([mark_Cache_and_Minmax_Index_Cache_Memory_UsageP, effectiveness_of_Mark_CacheP]),
-      common.band([schema_of_Column_FileP, read_SnapshotsP]),
-      common.band([memory_by_threadP, memory_by_thread_proxyP]),
-      common.band([memory_by_classP, kVStore_memoryP])
+      common.band([panelNumberOfKeyspaces, panelNumberOfPhysicalTables]),
+      common.band([panelNumberOfSegments, panelBytesOfMemtables]),
+      common.band([panelMarkCacheAndMinmaxIndexCacheMemoryUsage, panelEffectivenessOfMarkCache]),
+      common.band([panelSchemaOfColumnFile, panelReadSnapshots]),
+      common.band([panelMemoryByThread, panelMemoryByThreadProxy]),
+      common.band([panelMemoryByClass, panelKvstoreMemory])
     ],
   ),
 }

@@ -9,7 +9,7 @@ local common = import 'common.libsonnet';
 
 local rowObj = row.new(collapse=true, title='Threads CPU');
 
-local sST_Import_ServiceP = graphPanel.new(
+local panelSstImportService = graphPanel.new(
   title='SST Import Service',
   datasource=common.datasource,
   description='Involved when importing data.',
@@ -41,92 +41,92 @@ local sST_Import_ServiceP = graphPanel.new(
   show=false,
 );
 
-local sST_ApplyP = common.cpuWithLimitPanel(
+local panelSstApply = common.cpuWithLimitPanel(
   'SST Apply',
   'apply_low_.*',
   description='Involved when importing data.',
 );
 
-local region_TaskP = common.cpuWithLimitPanel(
+local panelRegionTask = common.cpuWithLimitPanel(
   'Region Task',
   'region_task.*',
   legend='{{name}} {{instance}}',
 );
 
-local region_WorkerP = common.cpuWithLimitPanel(
+local panelRegionWorker = common.cpuWithLimitPanel(
   'Region Worker',
   'region_worker.*',
   legend='{{name}} {{instance}}',
 );
 
-local raft_StoreP = common.cpuWithLimitPanel(
+local panelRaftStore = common.cpuWithLimitPanel(
   'Raft Store',
   'raftstore_.*',
   legend='{{name}} {{instance}}',
 );
 
-local apply_WorkerP = common.cpuWithLimitPanel(
+local panelApplyWorker = common.cpuWithLimitPanel(
   'Apply Worker',
   'apply_.*',
   legend='{{name}} {{instance}}',
 );
 
-local storage_Background_Small_TasksP = common.cpuWithLimitPanel(
+local panelStorageBackgroundSmallTasks = common.cpuWithLimitPanel(
   'Storage Background (Small Tasks)',
   'bg_\\d+',
   legend='{{name}} {{instance}}',
 );
 
-local storage_Background_Large_TasksP = common.cpuWithLimitPanel(
+local panelStorageBackgroundLargeTasks = common.cpuWithLimitPanel(
   'Storage Background (Large Tasks)',
   'bg_block_\\d+',
   legend='{{name}} {{instance}}',
 );
 
-local manual_CompactionP = common.cpuWithLimitPanel(
+local panelManualCompaction = common.cpuWithLimitPanel(
   'Manual Compaction',
   'm_compact_pool',
   description='Involved when manually compacting the data.',
   legend='{{name}} {{instance}}',
 );
 
-local gRPC_Async_ServerP = common.cpuWithLimitPanel(
+local panelGrpcAsyncServer = common.cpuWithLimitPanel(
   'GRPC Async Server',
   'async_poller.*',
   legend='{{name}} {{instance}}',
 );
 
-local gRPC_Async_ClientP = common.cpuWithLimitPanel(
+local panelGrpcAsyncClient = common.cpuWithLimitPanel(
   'GRPC Async Client',
   'GRPCComp.*',
   legend='{{name}} {{instance}}',
 );
 
-local fAP_builderP = common.cpuWithLimitPanel(
+local panelFapBuilder = common.cpuWithLimitPanel(
   'FAP builder',
   'fap_builder.*',
   legend='{{name}} {{instance}}',
 );
 
-local snapshot_SenderP = common.cpuWithLimitPanel(
+local panelSnapshotSender = common.cpuWithLimitPanel(
   'Snapshot Sender',
   'snap_sender.*',
   legend='{{name}} {{instance}}',
 );
 
-local segment_SchedulerP = common.cpuWithLimitPanel(
+local panelSegmentScheduler = common.cpuWithLimitPanel(
   'Segment Scheduler',
   'segment_sched.*',
   legend='{{name}} {{instance}}',
 );
 
-local local_Index_PoolP = common.cpuWithLimitPanel(
+local panelLocalIndexPool = common.cpuWithLimitPanel(
   'Local Index Pool',
   'LocalIndexPool*',
   legend='pool-{{instance}}',
 );
 
-local segment_ReaderP = common.cpuWithLimitPanel(
+local panelSegmentReader = common.cpuWithLimitPanel(
   'Segment Reader',
   'SegmentReader.*',
   legend='{{name}} {{instance}}',
@@ -136,14 +136,14 @@ local segment_ReaderP = common.cpuWithLimitPanel(
   row: common.buildRow(
     rowObj,
     [
-      common.band([sST_Import_ServiceP, sST_ApplyP]),
-      common.band([region_TaskP, region_WorkerP]),
-      common.band([raft_StoreP, apply_WorkerP]),
-      common.band([storage_Background_Small_TasksP, storage_Background_Large_TasksP]),
-      common.band([manual_CompactionP, gRPC_Async_ServerP]),
-      common.band([gRPC_Async_ClientP, fAP_builderP]),
-      common.band([snapshot_SenderP, segment_SchedulerP]),
-      common.band([local_Index_PoolP, segment_ReaderP])
+      common.band([panelSstImportService, panelSstApply]),
+      common.band([panelRegionTask, panelRegionWorker]),
+      common.band([panelRaftStore, panelApplyWorker]),
+      common.band([panelStorageBackgroundSmallTasks, panelStorageBackgroundLargeTasks]),
+      common.band([panelManualCompaction, panelGrpcAsyncServer]),
+      common.band([panelGrpcAsyncClient, panelFapBuilder]),
+      common.band([panelSnapshotSender, panelSegmentScheduler]),
+      common.band([panelLocalIndexPool, panelSegmentReader])
     ],
   ),
 }

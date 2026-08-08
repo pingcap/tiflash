@@ -9,7 +9,7 @@ local common = import 'common.libsonnet';
 
 local rowObj = row.new(collapse=true, title='Threads');
 
-local threads_stateP = graphPanel.new(
+local panelThreadsState = graphPanel.new(
   title='Threads state',
   datasource=common.datasource,
   fill=1,
@@ -46,7 +46,7 @@ local threads_stateP = graphPanel.new(
   format='short',
 );
 
-local threads_IOP = graphPanel.new(
+local panelThreadsIo = graphPanel.new(
   title='Threads IO',
   datasource=common.datasource,
   fill=1,
@@ -77,7 +77,7 @@ local threads_IOP = graphPanel.new(
   format='short',
 );
 
-local thread_Voluntary_Context_SwitchesP = graphPanel.new(
+local panelThreadVoluntaryContextSwitches = graphPanel.new(
   title='Thread Voluntary Context Switches',
   datasource=common.datasource,
   fill=1,
@@ -108,7 +108,7 @@ local thread_Voluntary_Context_SwitchesP = graphPanel.new(
   format='short',
 );
 
-local thread_Nonvoluntary_Context_SwitchesP = graphPanel.new(
+local panelThreadNonvoluntaryContextSwitches = graphPanel.new(
   title='Thread Nonvoluntary Context Switches',
   datasource=common.datasource,
   fill=1,
@@ -144,8 +144,8 @@ local thread_Nonvoluntary_Context_SwitchesP = graphPanel.new(
   row: common.buildRow(
     rowObj,
     [
-      common.band([threads_stateP, threads_IOP]),
-      common.band([thread_Voluntary_Context_SwitchesP, thread_Nonvoluntary_Context_SwitchesP])
+      common.band([panelThreadsState, panelThreadsIo]),
+      common.band([panelThreadVoluntaryContextSwitches, panelThreadNonvoluntaryContextSwitches])
     ],
   ),
 }
