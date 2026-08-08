@@ -117,6 +117,20 @@ common.cpuWithLimitPanel('SST Apply', 'apply_low_.*', description='Involved when
 common.cpuWithLimitPanel('Region Task', 'region_task.*', legend='{{name}} {{instance}}')
 ```
 
+For OPS + hit-ratio dual-axis panels, prefer `common.opsHitRatioPanel`:
+
+```jsonnet
+common.opsHitRatioPanel(
+  'Remote Cache Operations',
+  'tiflash_storage_remote_cache',
+  [
+    { hitLabels: 'type=~"dtfile_hit"', totalLabels: 'type=~"dtfile_hit|dtfile_miss"', legend: 'dtfile_cache_hit_ratio' },
+  ],
+  by=['type', '$additional_groupby'],
+  legend='{{type}} {{$additional_groupby}}',
+)
+```
+
 ## Duration histogram helpers
 
 For `*_seconds_bucket` latency panels (default show p9999/p99; hide max/p999/p80/avg), prefer:

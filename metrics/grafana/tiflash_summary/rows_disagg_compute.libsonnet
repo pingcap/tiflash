@@ -16,50 +16,24 @@ local read_Duration_BreakdownP = common.durationPanel(
   legend='%s-{{type}} {{$additional_groupby}}',
 );
 
-local remote_Cache_OperationsP = graphPanel.new(
-  title='Remote Cache Operations',
-  datasource=common.datasource,
+local remote_Cache_OperationsP = common.opsHitRatioPanel(
+  'Remote Cache Operations',
+  'tiflash_storage_remote_cache',
+  [
+    {
+      hitLabels: 'type=~"dtfile_hit"',
+      totalLabels: 'type=~"dtfile_hit|dtfile_miss"',
+      legend: 'dtfile_cache_hit_ratio',
+    },
+    {
+      hitLabels: 'type=~"page_hit"',
+      totalLabels: 'type=~"page_hit|page_miss"',
+      legend: 'page_cache_hit_ratio',
+    },
+  ],
+  by=['type', '$additional_groupby'],
+  legend='{{type}} {{$additional_groupby}}',
   description='Remote Cache Operations',
-  fill=0,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_hideZero=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_storage_remote_cache{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-    legendFormat='{{type}} {{$additional_groupby}}',
-    intervalFactor=1,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_storage_remote_cache{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"dtfile_hit"}[1m]))/sum(rate(tiflash_storage_remote_cache{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"dtfile_hit|dtfile_miss"}[1m]))',
-    legendFormat='dtfile_cache_hit_ratio',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_storage_remote_cache{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"page_hit"}[1m]))/sum(rate(tiflash_storage_remote_cache{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"page_hit|page_miss"}[1m]))',
-    legendFormat='page_cache_hit_ratio',
-  )
-)
-.addSeriesOverride({ alias: 'dtfile_cache_hit_ratio', yaxis: 2 })
-.addSeriesOverride({ alias: 'page_cache_hit_ratio', yaxis: 2 })
-.resetYaxes()
-.addYaxis(
-  format='ops',
-  min='0',
-)
-.addYaxis(
-  format='percentunit',
-  min='0',
 );
 
 local remote_Cache_FlowP = graphPanel.new(
@@ -331,41 +305,21 @@ local memory_Usage_of_Storage_TasksP = graphPanel.new(
   show=false,
 );
 
-local mVCCIndexCacheP = graphPanel.new(
-  title='MVCCIndexCache',
-  datasource=common.datasource,
+local mVCCIndexCacheP = common.opsHitRatioPanel(
+  'MVCCIndexCache',
+  'tiflash_storage_mvcc_index_cache',
+  [
+    {
+      hitLabels: 'type=~"hit"',
+      totalLabels: '',
+      legend: 'hit_ratio-{{instance}}',
+      overrideAlias: '/hit_ratio/',
+      by: ['instance'],
+    },
+  ],
+  by=['type', 'instance'],
+  legend='{{type}}-{{instance}}',
   description='DeltaIndex cache of ReadNodes',
-  fill=0,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_avg=true,
-  legend_hideZero=true,
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_storage_mvcc_index_cache{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, instance)',
-    legendFormat='{{type}}-{{instance}}',
-    intervalFactor=1,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_storage_mvcc_index_cache{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"hit"}[1m])) by (instance) /sum(rate(tiflash_storage_mvcc_index_cache{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance)',
-    legendFormat='hit_ratio-{{instance}}',
-  )
-)
-.addSeriesOverride({ alias: '/hit_ratio/', yaxis: 2 })
-.resetYaxes()
-.addYaxis(
-  format='ops',
-  min='0',
-)
-.addYaxis(
-  format='percentunit',
-  min='0',
 );
 
 local placeIndex_Tasks_DurationP = common.durationPanel(

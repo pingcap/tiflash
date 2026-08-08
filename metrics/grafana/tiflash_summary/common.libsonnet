@@ -443,4 +443,66 @@ local mkGraph(
         ),
       ],
     ),
+
+  // L3d: OPS series + hit-ratio series on the right (percentunit) axis.
+  // ratios: [{ hitLabels, totalLabels, legend, hide?, by?, metric? }, ...]
+  opsHitRatioPanel(
+    title,
+    metric,
+    ratios,
+    by=[],
+    legend=null,
+    labels='',
+    selector=self.selector,
+    description=null,
+    yLeft='ops',
+    fill=0,
+    range='$__rate_interval',
+  )::
+    local opsLegend =
+      if legend != null then
+        legend
+      else if std.length(by) == 0 then
+        'ops'
+      else
+        promql.byLegend(by);
+    local opsTarget = self.target(
+      promql.sumRate(metric, selector, by=by, labels=labels, range=range),
+      opsLegend,
+    );
+    local ratioTargets = std.map(
+      function(r)
+        local rMetric = if std.objectHas(r, 'metric') then r.metric else metric;
+        local rBy = if std.objectHas(r, 'by') then r.by else [];
+        local hitLabels = if std.objectHas(r, 'hitLabels') then r.hitLabels else '';
+        local totalLabels = if std.objectHas(r, 'totalLabels') then r.totalLabels else '';
+        local hide = std.objectHas(r, 'hide') && r.hide;
+        self.target(
+          '(' + promql.sumRate(rMetric, selector, by=rBy, labels=hitLabels, range=range)
+          + ' / ' + promql.sumRate(rMetric, selector, by=rBy, labels=totalLabels, range=range) + ')',
+          r.legend,
+          hide=hide,
+        ),
+      ratios
+    );
+    local overrides = std.map(
+      function(r)
+        local alias =
+          if std.objectHas(r, 'overrideAlias') then
+            r.overrideAlias
+          else
+            r.legend;
+        self.override(alias, yaxis=2),
+      ratios
+    );
+    self.graph(
+      title,
+      [opsTarget] + ratioTargets,
+      description=description,
+      fill=fill,
+      nullPointMode='null as zero',
+      yLeft=yLeft,
+      yRight='percentunit',
+      seriesOverrides=overrides,
+    ),
 }

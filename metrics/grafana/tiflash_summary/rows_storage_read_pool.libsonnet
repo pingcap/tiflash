@@ -203,43 +203,30 @@ local read_Thread_SchedulingP = graphPanel.new(
   min='0',
 );
 
-local data_SharingP = graphPanel.new(
-  title='Data Sharing',
-  datasource=common.datasource,
+local data_SharingP = common.opsHitRatioPanel(
+  'Data Sharing',
+  'tiflash_storage_read_thread_counter',
+  [
+    {
+      metric: 'tiflash_storage_column_cache_packs',
+      hitLabels: 'type=~"data_sharing_hit"',
+      totalLabels: 'type=~"data_sharing_hit|data_sharing_miss"',
+      legend: 'data_sharing_cache_hit_ratio',
+      overrideAlias: '/cache_hit_ratio/',
+    },
+    {
+      metric: 'tiflash_storage_column_cache_packs',
+      hitLabels: 'type=~"extra_column_hit"',
+      totalLabels: 'type=~"extra_column_hit|extra_column_miss"',
+      legend: 'extra_column_cache_hit_ratio',
+      overrideAlias: '/cache_hit_ratio/',
+      hide: true,
+    },
+  ],
+  by=['type'],
+  labels='type=~"add_cache_total_bytes_limit"',
+  legend='{{type}}',
   description='The information of data sharing cache hit ratio. Data sharing cache is purpose-built for OLAP workload that can reduce repeated data reads of concurrent table scanning.',
-  fill=0,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_storage_read_thread_counter{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"add_cache_total_bytes_limit"}[1m])) by (type)',
-    legendFormat='{{type}}',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_storage_column_cache_packs{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"data_sharing_hit"}[1m]))/sum(rate(tiflash_storage_column_cache_packs{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"data_sharing_hit|data_sharing_miss"}[1m]))',
-    legendFormat='data_sharing_cache_hit_ratio',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_storage_column_cache_packs{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"extra_column_hit"}[1m]))/sum(rate(tiflash_storage_column_cache_packs{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"extra_column_hit|extra_column_miss"}[1m]))',
-    legendFormat='extra_column_cache_hit_ratio',
-    hide=true,
-  )
-)
-.addSeriesOverride({ alias: '/cache_hit_ratio/', yaxis: 2 })
-.resetYaxes()
-.addYaxis(
-  format='ops',
-  min='0',
-)
-.addYaxis(
-  format='percentunit',
-  min='0',
 );
 
 local segment_MergedTaskP = graphPanel.new(
