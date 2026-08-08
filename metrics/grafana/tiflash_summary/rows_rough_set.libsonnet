@@ -70,23 +70,11 @@ local rough_Set_Filter_RateP = graphPanel.new(
   format='short',
 );
 
-local rough_Set_Filter_Rate_HistogramP = heatmapPanel.new(
-  title='Rough Set Filter Rate Histogram',
-  datasource=common.datasource,
-  dataFormat='tsbuckets',
-  yAxis_format='percent',
-  hideZeroBuckets=true,
-  color_mode='spectrum',
-  color_colorScheme='interpolateOranges',
-)
-.addTarget(
-  prometheus.target(
-    'sum(delta(tiflash_storage_rough_set_filter_rate_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le)',
-    format='heatmap',
-    legendFormat='{{le}}',
-  )
+local rough_Set_Filter_Rate_HistogramP = common.heatmap(
+  'Rough Set Filter Rate Histogram',
+  'tiflash_storage_rough_set_filter_rate_bucket',
+  yFormat='percent',
 );
-
 
 {
   row: common.buildRow(

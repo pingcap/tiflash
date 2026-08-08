@@ -158,80 +158,36 @@ local apply_Raft_write_logs_DurationP = graphPanel.new(
   format='short',
 );
 
-local region_write_Duration_decodeP = heatmapPanel.new(
-  title='Region write Duration (decode)',
-  datasource=common.datasource,
-  dataFormat='tsbuckets',
-  yAxis_format='s',
-  hideZeroBuckets=true,
-  color_mode='spectrum',
-  color_colorScheme='interpolateSpectral',
+local region_write_Duration_decodeP = common.heatmap(
+  'Region write Duration (decode)',
+  'tiflash_raft_write_data_to_storage_duration_seconds_bucket',
+  yFormat='s',
+  labels='type="decode"',
   description='Duration of decoding Region data into blocks when writing Region data to the storage layer. (Mixed with "write logs" and "apply Snapshot" operations)',
-  legend_show=true,
-)
-.addTarget(
-  prometheus.target(
-    'sum(delta(tiflash_raft_write_data_to_storage_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="decode"}[1m])) by (le)',
-    format='heatmap',
-    legendFormat='{{le}}',
-  )
 );
 
-local region_write_Duration_write_blocksP = heatmapPanel.new(
-  title='Region write Duration (write blocks)',
-  datasource=common.datasource,
-  dataFormat='tsbuckets',
-  yAxis_format='s',
-  hideZeroBuckets=true,
-  color_mode='spectrum',
-  color_colorScheme='interpolateSpectral',
+local region_write_Duration_write_blocksP = common.heatmap(
+  'Region write Duration (write blocks)',
+  'tiflash_raft_write_data_to_storage_duration_seconds_bucket',
+  yFormat='s',
+  labels='type="write"',
   description='Duration of writing Region data blocks to the storage layer (Mixed with "write logs" and "apply Snapshot" operations)',
-  legend_show=true,
-)
-.addTarget(
-  prometheus.target(
-    'sum(delta(tiflash_raft_write_data_to_storage_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="write"}[1m])) by (le)',
-    format='heatmap',
-    legendFormat='{{le}}',
-  )
 );
 
-local apply_Raft_write_logs_Duration_HeatmapP = heatmapPanel.new(
-  title='Apply Raft write logs Duration [Heatmap]',
-  datasource=common.datasource,
-  dataFormat='tsbuckets',
-  yAxis_format='s',
-  hideZeroBuckets=true,
-  color_mode='spectrum',
-  color_colorScheme='interpolateSpectral',
+local apply_Raft_write_logs_Duration_HeatmapP = common.heatmap(
+  'Apply Raft write logs Duration [Heatmap]',
+  'tiflash_raft_apply_write_command_duration_seconds_bucket',
+  yFormat='s',
+  labels='type="write"',
   description='Duration of applying Raft write logs',
-  legend_show=true,
-)
-.addTarget(
-  prometheus.target(
-    'sum(delta(tiflash_raft_apply_write_command_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="write"}[1m])) by (le)',
-    format='heatmap',
-    legendFormat='{{le}}',
-  )
 );
 
-local apply_Raft_admin_logs_Duration_HeatmapP = heatmapPanel.new(
-  title='Apply Raft admin logs Duration [Heatmap]',
-  datasource=common.datasource,
-  dataFormat='tsbuckets',
-  yAxis_format='s',
-  hideZeroBuckets=true,
-  color_mode='spectrum',
-  color_colorScheme='interpolateSpectral',
+local apply_Raft_admin_logs_Duration_HeatmapP = common.heatmap(
+  'Apply Raft admin logs Duration [Heatmap]',
+  'tiflash_raft_apply_write_command_duration_seconds_bucket',
+  yFormat='s',
+  labels='type="admin"',
   description='Duration of applying Raft write logs',
-  legend_show=true,
-)
-.addTarget(
-  prometheus.target(
-    'sum(delta(tiflash_raft_apply_write_command_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="admin"}[1m])) by (le)',
-    format='heatmap',
-    legendFormat='{{le}}',
-  )
 );
 
 local raft_Events_QPSP = common.opsPanel(
@@ -271,22 +227,12 @@ local raft_Log_Gap_HeatmapP = heatmapPanel.new(
   )
 );
 
-local raft_Entry_Batch_Size_HeatmapP = heatmapPanel.new(
-  title='Raft Entry Batch Size Heatmap',
-  datasource=common.datasource,
-  dataFormat='tsbuckets',
-  yAxis_format='none',
-  hideZeroBuckets=true,
-  color_mode='spectrum',
-  color_colorScheme='interpolateSpectral',
-  legend_show=true,
-)
-.addTarget(
-  prometheus.target(
-    'sum(delta(tiflash_raft_entry_size_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"normal"}[1m])) by (le, type)',
-    format='heatmap',
-    legendFormat='{{le}}',
-  )
+local raft_Entry_Batch_Size_HeatmapP = common.heatmap(
+  'Raft Entry Batch Size Heatmap',
+  'tiflash_raft_entry_size_bucket',
+  yFormat='none',
+  labels='type=~"normal"',
+  by=['le', 'type'],
 );
 
 local region_Size_by_event_HeatmapP = heatmapPanel.new(
@@ -315,40 +261,20 @@ local region_Size_by_event_HeatmapP = heatmapPanel.new(
   )
 );
 
-local big_Write_To_Region_Size_HeatmapP = heatmapPanel.new(
-  title='Big Write To Region Size Heatmap',
-  datasource=common.datasource,
-  dataFormat='tsbuckets',
-  yAxis_format='bytes',
-  hideZeroBuckets=true,
-  color_mode='spectrum',
-  color_colorScheme='interpolateSpectral',
-  legend_show=true,
-)
-.addTarget(
-  prometheus.target(
-    'sum(delta(tiflash_raft_write_flow_bytes_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"big_write_to_region"}[1m])) by (le, type)',
-    format='heatmap',
-    legendFormat='{{le}}',
-  )
+local big_Write_To_Region_Size_HeatmapP = common.heatmap(
+  'Big Write To Region Size Heatmap',
+  'tiflash_raft_write_flow_bytes_bucket',
+  yFormat='bytes',
+  labels='type=~"big_write_to_region"',
+  by=['le', 'type'],
 );
 
-local write_Committed_Size_HeatmapP = heatmapPanel.new(
-  title='Write Committed Size Heatmap',
-  datasource=common.datasource,
-  dataFormat='tsbuckets',
-  yAxis_format='bytes',
-  hideZeroBuckets=true,
-  color_mode='spectrum',
-  color_colorScheme='interpolateSpectral',
-  legend_show=true,
-)
-.addTarget(
-  prometheus.target(
-    'sum(delta(tiflash_raft_write_flow_bytes_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"write_committed"}[1m])) by (le, type)',
-    format='heatmap',
-    legendFormat='{{le}}',
-  )
+local write_Committed_Size_HeatmapP = common.heatmap(
+  'Write Committed Size Heatmap',
+  'tiflash_raft_write_flow_bytes_bucket',
+  yFormat='bytes',
+  labels='type=~"write_committed"',
+  by=['le', 'type'],
 );
 
 local raft_Eager_GC_OPSP = common.opsPanel(
@@ -426,23 +352,11 @@ local raft_throughputP = graphPanel.new(
   min='0',
 );
 
-local upstream_Latency_HeatmapP = heatmapPanel.new(
-  title='Upstream Latency [Heatmap]',
-  datasource=common.datasource,
-  dataFormat='tsbuckets',
-  yAxis_format='s',
-  hideZeroBuckets=true,
-  color_mode='spectrum',
-  color_colorScheme='interpolateSpectral',
+local upstream_Latency_HeatmapP = common.heatmap(
+  'Upstream Latency [Heatmap]',
+  'tiflash_raft_upstream_latency_bucket',
+  yFormat='s',
   description='Latency that TiKV sends raft log to TiFlash.',
-  legend_show=true,
-)
-.addTarget(
-  prometheus.target(
-    'sum(delta(tiflash_raft_upstream_latency_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le)',
-    format='heatmap',
-    legendFormat='{{le}}',
-  )
 );
 
 local upstream_LatencyP = graphPanel.new(

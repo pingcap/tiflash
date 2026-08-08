@@ -100,6 +100,16 @@ common.opsPanel(
 )
 ```
 
+For histogram heatmaps, prefer `common.heatmap`:
+
+```jsonnet
+common.heatmap(
+  'Region write Duration (decode)',
+  'tiflash_raft_write_data_to_storage_duration_seconds_bucket',
+  labels='type="decode"',
+)
+```
+
 ## Duration histogram helpers
 
 For `*_seconds_bucket` latency panels (default show p9999/p99; hide max/p999/p80/avg), prefer:

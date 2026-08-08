@@ -3,6 +3,7 @@ local defaultH = 8;
 
 local grafana = import 'grafonnet/grafana.libsonnet';
 local graphPanel = grafana.graphPanel;
+local heatmapPanel = grafana.heatmapPanel;
 local prometheus = grafana.prometheus;
 local promql = import 'promql.libsonnet';
 
@@ -365,5 +366,42 @@ local mkGraph(
       nullPointMode='null as zero',
       yLeft=yLeft,
       yRight=yRight,
+    ),
+
+  // L3b: histogram heatmap (tsbuckets + spectral).
+  // metric should end with `_bucket`. Default aggregation is sum(delta(...)) by (le).
+  heatmap(
+    title,
+    metric,
+    yFormat='s',
+    labels='',
+    by=['le'],
+    selector=self.selector,
+    description=null,
+    range='$__rate_interval',
+    func='delta',
+  )::
+    local expr =
+      if func == 'increase' then
+        promql.sumIncrease(metric, selector, by=by, labels=labels, range=range)
+      else
+        promql.sumDelta(metric, selector, by=by, labels=labels, range=range);
+    heatmapPanel.new(
+      title=title,
+      datasource=self.datasource,
+      description=description,
+      dataFormat='tsbuckets',
+      yAxis_format=yFormat,
+      hideZeroBuckets=true,
+      color_mode='spectrum',
+      color_colorScheme='interpolateSpectral',
+      legend_show=true,
+    )
+    .addTarget(
+      prometheus.target(
+        expr,
+        format='heatmap',
+        legendFormat='{{le}}',
+      )
     ),
 }

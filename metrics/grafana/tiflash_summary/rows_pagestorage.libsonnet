@@ -93,22 +93,11 @@ local pageStorage_File_NumP = graphPanel.new(
   max='1.1',
 );
 
-local pageStorage_WriteBatch_SizeP = heatmapPanel.new(
-  title='PageStorage WriteBatch Size',
-  datasource=common.datasource,
-  dataFormat='tsbuckets',
-  yAxis_format='bytes',
-  hideZeroBuckets=true,
-  color_mode='spectrum',
-  color_colorScheme='interpolateSpectral',
-  legend_show=true,
-)
-.addTarget(
-  prometheus.target(
-    'sum(delta(tiflash_storage_page_write_batch_size_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="v3"}[1m])) by (le)',
-    format='heatmap',
-    legendFormat='{{le}}',
-  )
+local pageStorage_WriteBatch_SizeP = common.heatmap(
+  'PageStorage WriteBatch Size',
+  'tiflash_storage_page_write_batch_size_bucket',
+  yFormat='bytes',
+  labels='type="v3"',
 );
 
 local page_write_DurationP = common.durationPanel(

@@ -66,22 +66,12 @@ local applying_snapshots_CountP = graphPanel.new(
   format='short',
 );
 
-local snapshot_Uncommitted_Size_HeatmapP = heatmapPanel.new(
-  title='Snapshot Uncommitted Size Heatmap',
-  datasource=common.datasource,
-  dataFormat='tsbuckets',
-  yAxis_format='bytes',
-  hideZeroBuckets=true,
-  color_mode='spectrum',
-  color_colorScheme='interpolateSpectral',
-  legend_show=true,
-)
-.addTarget(
-  prometheus.target(
-    'sum(delta(tiflash_raft_write_flow_bytes_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"snapshot_uncommitted"}[1m])) by (le, type)',
-    format='heatmap',
-    legendFormat='{{le}}',
-  )
+local snapshot_Uncommitted_Size_HeatmapP = common.heatmap(
+  'Snapshot Uncommitted Size Heatmap',
+  'tiflash_raft_write_flow_bytes_bucket',
+  yFormat='bytes',
+  labels='type=~"snapshot_uncommitted"',
+  by=['le', 'type'],
 );
 
 local ongoing_raft_snapshotP = graphPanel.new(
@@ -105,136 +95,59 @@ local ongoing_raft_snapshotP = graphPanel.new(
   format='short',
 );
 
-local snapshot_Size_HeatmapP = heatmapPanel.new(
-  title='Snapshot Size Heatmap',
-  datasource=common.datasource,
-  dataFormat='tsbuckets',
-  yAxis_format='bytes',
-  hideZeroBuckets=true,
-  color_mode='spectrum',
-  color_colorScheme='interpolateSpectral',
-  legend_show=true,
-)
-.addTarget(
-  prometheus.target(
-    'sum(delta(tiflash_raft_snapshot_total_bytes_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="approx_raft_snapshot"}[1m])) by (le)',
-    format='heatmap',
-    legendFormat='{{le}}',
-  )
+local snapshot_Size_HeatmapP = common.heatmap(
+  'Snapshot Size Heatmap',
+  'tiflash_raft_snapshot_total_bytes_bucket',
+  yFormat='bytes',
+  labels='type="approx_raft_snapshot"',
 );
 
-local snapshot_Predecode_DurationP = heatmapPanel.new(
-  title='Snapshot Predecode Duration',
-  datasource=common.datasource,
-  dataFormat='tsbuckets',
-  yAxis_format='s',
-  hideZeroBuckets=true,
-  color_mode='spectrum',
-  color_colorScheme='interpolateSpectral',
+local snapshot_Predecode_DurationP = common.heatmap(
+  'Snapshot Predecode Duration',
+  'tiflash_raft_command_duration_seconds_bucket',
+  yFormat='s',
+  labels='type="snapshot_predecode"',
   description='Duration of pre-decode when applying region snapshot',
-  legend_show=true,
-)
-.addTarget(
-  prometheus.target(
-    'sum(delta(tiflash_raft_command_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="snapshot_predecode"}[1m])) by (le)',
-    format='heatmap',
-    legendFormat='{{le}}',
-  )
 );
 
-local snapshot_Prehandle_Throughput_HeatmapP = heatmapPanel.new(
-  title='Snapshot Prehandle Throughput Heatmap',
-  datasource=common.datasource,
-  dataFormat='tsbuckets',
-  yAxis_format='bytes',
-  hideZeroBuckets=true,
-  color_mode='spectrum',
-  color_colorScheme='interpolateSpectral',
-  legend_show=true,
-)
-.addTarget(
-  prometheus.target(
-    'sum(delta(tiflash_raft_command_throughput_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="prehandle_snapshot"}[1m])) by (le)',
-    format='heatmap',
-    legendFormat='{{le}}',
-  )
+local snapshot_Prehandle_Throughput_HeatmapP = common.heatmap(
+  'Snapshot Prehandle Throughput Heatmap',
+  'tiflash_raft_command_throughput_seconds_bucket',
+  yFormat='bytes',
+  labels='type="prehandle_snapshot"',
 );
 
-local snapshot_Flush_DurationP = heatmapPanel.new(
-  title='Snapshot Flush Duration',
-  datasource=common.datasource,
-  dataFormat='tsbuckets',
-  yAxis_format='s',
-  hideZeroBuckets=true,
-  color_mode='spectrum',
-  color_colorScheme='interpolateSpectral',
+local snapshot_Flush_DurationP = common.heatmap(
+  'Snapshot Flush Duration',
+  'tiflash_raft_command_duration_seconds_bucket',
+  yFormat='s',
+  labels='type="snapshot_flush"',
   description='Duration of pre-decode when applying region snapshot',
-  legend_show=true,
-)
-.addTarget(
-  prometheus.target(
-    'sum(delta(tiflash_raft_command_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="snapshot_flush"}[1m])) by (le)',
-    format='heatmap',
-    legendFormat='{{le}}',
-  )
 );
 
-local ingest_Uncommitted_Size_HeatmapP = heatmapPanel.new(
-  title='Ingest Uncommitted Size Heatmap',
-  datasource=common.datasource,
-  dataFormat='tsbuckets',
-  yAxis_format='bytes',
-  hideZeroBuckets=true,
-  color_mode='spectrum',
-  color_colorScheme='interpolateSpectral',
-  legend_show=true,
-)
-.addTarget(
-  prometheus.target(
-    'sum(delta(tiflash_raft_write_flow_bytes_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"ingest_uncommitted"}[1m])) by (le, type)',
-    format='heatmap',
-    legendFormat='{{le}}',
-  )
+local ingest_Uncommitted_Size_HeatmapP = common.heatmap(
+  'Ingest Uncommitted Size Heatmap',
+  'tiflash_raft_write_flow_bytes_bucket',
+  yFormat='bytes',
+  labels='type=~"ingest_uncommitted"',
+  by=['le', 'type'],
 );
 
-local snapshot_Predecode_SST_to_DT_DurationP = heatmapPanel.new(
-  title='Snapshot Predecode SST to DT Duration',
-  datasource=common.datasource,
-  dataFormat='tsbuckets',
-  yAxis_format='s',
-  hideZeroBuckets=true,
-  color_mode='spectrum',
-  color_colorScheme='interpolateSpectral',
+local snapshot_Predecode_SST_to_DT_DurationP = common.heatmap(
+  'Snapshot Predecode SST to DT Duration',
+  'tiflash_raft_command_duration_seconds_bucket',
+  yFormat='s',
+  labels='type="snapshot_predecode_sst2dt"',
   description='Duration of SST to DT in pre-decode when applying region snapshot',
-  legend_show=true,
-)
-.addTarget(
-  prometheus.target(
-    'sum(delta(tiflash_raft_command_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="snapshot_predecode_sst2dt"}[1m])) by (le)',
-    format='heatmap',
-    legendFormat='{{le}}',
-  )
 );
 
-local ingest_SST_DurationP = heatmapPanel.new(
-  title='Ingest SST Duration',
-  datasource=common.datasource,
-  dataFormat='tsbuckets',
-  yAxis_format='s',
-  hideZeroBuckets=true,
-  color_mode='spectrum',
-  color_colorScheme='interpolateSpectral',
+local ingest_SST_DurationP = common.heatmap(
+  'Ingest SST Duration',
+  'tiflash_raft_command_duration_seconds_bucket',
+  yFormat='s',
+  labels='type="ingest_sst"',
   description='Duration of ingesting SST',
-  legend_show=true,
-)
-.addTarget(
-  prometheus.target(
-    'sum(delta(tiflash_raft_command_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="ingest_sst"}[1m])) by (le)',
-    format='heatmap',
-    legendFormat='{{le}}',
-  )
 );
-
 
 {
   row: common.buildRow(
