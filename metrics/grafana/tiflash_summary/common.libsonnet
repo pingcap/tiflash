@@ -306,6 +306,11 @@ local mkGraph(
   // (hidden max/p999/p80/avg + visible p9999/p99).
   // Fixed style: intervalFactor=2, fill=1, legend sorted by max desc.
   // Y-axes: left s/min0, right short.
+  // Default quantile set for durationPanel (hidden max/p999/p80/avg + visible p9999/p99).
+  defaultDurationQuantiles:: s3StyleQuantiles,
+
+  // Full graph panel for duration histograms.
+  // metric may end with `_bucket`. Optional: unit, quantiles, showAvg, extraTargets, seriesOverrides.
   durationPanel(
     title,
     metric,
@@ -314,7 +319,26 @@ local mkGraph(
     legend='%s {{$additional_groupby}}',
     range='$__rate_interval',
     description=null,
+    unit='s',
+    yRight='short',
+    quantiles=null,
+    showAvg=null,
+    extraTargets=[],
+    seriesOverrides=[],
   )::
+    local baseQs = if quantiles == null then s3StyleQuantiles else quantiles;
+    local qs =
+      if showAvg == null then
+        baseQs
+      else
+        std.map(
+          function(q)
+            if std.objectHas(q, 'avg') && q.avg then
+              q { hide: !showAvg }
+            else
+              q,
+          baseQs
+        );
     self.graph(
       title,
       self.durationQuantileTargets(
@@ -324,15 +348,17 @@ local mkGraph(
         legend=legend,
         range=range,
         intervalFactor=2,
-      ),
+        quantiles=qs,
+      ) + extraTargets,
       description=description,
       fill=1,
       nullPointMode='null as zero',
       legendSort='max',
       legendSortDesc=true,
-      yLeft='s',
-      yRight='short',
+      yLeft=unit,
+      yRight=yRight,
       yLeftMin='0',
+      seriesOverrides=seriesOverrides,
     ),
 
   // L3a: single-metric sum(rate) OPS/QPS panel.

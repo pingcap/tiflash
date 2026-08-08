@@ -77,74 +77,38 @@ local task_Status_Change_OPSP = common.opsPanel(
   yRight='short',
 );
 
-local task_DurationP = graphPanel.new(
-  title='Task Duration',
-  datasource=common.datasource,
-  fill=1,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='current',
-  legend_sortDesc=true,
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.95, sum(rate(tiflash_pipeline_task_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat='95-{{type}}',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.95, sum(rate(tiflash_pipeline_task_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat='99-{{type}}',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.99, sum(rate(tiflash_pipeline_task_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat='999-{{type}}',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_pipeline_task_duration_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="cpu_execute"}[1m])) / sum(rate(tiflash_pipeline_task_duration_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="cpu_execute"}[1m]))',
-    legendFormat='avg-cpu_execute',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_pipeline_task_duration_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="cpu_queue"}[1m])) / sum(rate(tiflash_pipeline_task_duration_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="cpu_queue"}[1m]))',
-    legendFormat='avg-cpu_queue',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_pipeline_task_duration_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="io_execute"}[1m])) / sum(rate(tiflash_pipeline_task_duration_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="io_execute"}[1m]))',
-    legendFormat='avg-io_execute',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_pipeline_task_duration_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="io_queue"}[1m])) / sum(rate(tiflash_pipeline_task_duration_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="io_queue"}[1m]))',
-    legendFormat='avg-io_queue',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_pipeline_task_duration_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="await"}[1m])) / sum(rate(tiflash_pipeline_task_duration_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="await"}[1m]))',
-    legendFormat='avg-await',
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='s',
-  min='0',
-)
-.addYaxis(
-  format='short',
+local task_DurationP = common.durationPanel(
+  'Task Duration',
+  'tiflash_pipeline_task_duration_seconds_bucket',
+  by=['type'],
+  legend='%s-{{type}} {{$additional_groupby}}',
+  extraTargets=[
+    common.target(
+      '(' + common.expr.sumRate('tiflash_pipeline_task_duration_seconds_sum', common.selector, labels='type="cpu_execute"')
+      + ' / ' + common.expr.sumRate('tiflash_pipeline_task_duration_seconds_count', common.selector, labels='type="cpu_execute"') + ')',
+      'avg-cpu_execute',
+    ),
+    common.target(
+      '(' + common.expr.sumRate('tiflash_pipeline_task_duration_seconds_sum', common.selector, labels='type="cpu_queue"')
+      + ' / ' + common.expr.sumRate('tiflash_pipeline_task_duration_seconds_count', common.selector, labels='type="cpu_queue"') + ')',
+      'avg-cpu_queue',
+    ),
+    common.target(
+      '(' + common.expr.sumRate('tiflash_pipeline_task_duration_seconds_sum', common.selector, labels='type="io_execute"')
+      + ' / ' + common.expr.sumRate('tiflash_pipeline_task_duration_seconds_count', common.selector, labels='type="io_execute"') + ')',
+      'avg-io_execute',
+    ),
+    common.target(
+      '(' + common.expr.sumRate('tiflash_pipeline_task_duration_seconds_sum', common.selector, labels='type="io_queue"')
+      + ' / ' + common.expr.sumRate('tiflash_pipeline_task_duration_seconds_count', common.selector, labels='type="io_queue"') + ')',
+      'avg-io_queue',
+    ),
+    common.target(
+      '(' + common.expr.sumRate('tiflash_pipeline_task_duration_seconds_sum', common.selector, labels='type="await"')
+      + ' / ' + common.expr.sumRate('tiflash_pipeline_task_duration_seconds_count', common.selector, labels='type="await"') + ')',
+      'avg-await',
+    ),
+  ],
 );
 
 local task_Max_Execute_Time_Per_RoundP = graphPanel.new(

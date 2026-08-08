@@ -78,59 +78,24 @@ local schema_Apply_OPMP = graphPanel.new(
   format='none',
 );
 
-local schema_Apply_DurationP = graphPanel.new(
-  title='Schema Apply Duration',
-  datasource=common.datasource,
-  fill=1,
-  nullPointMode='null as zero',
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.999, sum(rate(tiflash_schema_apply_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat='999-{{type}}',
-    intervalFactor=1,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.99, sum(rate(tiflash_schema_apply_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat='99-{{type}}',
-    intervalFactor=1,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.95, sum(rate(tiflash_schema_apply_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat='95-{{type}}',
-    intervalFactor=1,
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.80, sum(rate(tiflash_schema_apply_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", keyspace!=""}[1m])) by (le, type, keyspace))',
-    legendFormat='80-{{type}}',
-    intervalFactor=1,
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'sum(tiflash_sync_schema_applying{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"$type"}) by (instance)',
-    legendFormat='applying-{{instance}}',
-    intervalFactor=1,
-  )
-)
-.addSeriesOverride({ alias: '/^applying/', yaxis: 2 })
-.resetYaxes()
-.addYaxis(
-  format='s',
-  min='0',
-)
-.addYaxis(
-  format='short',
-  min='0',
-  max='2',
+local schema_Apply_DurationP = common.durationPanel(
+  'Schema Apply Duration',
+  'tiflash_schema_apply_duration_seconds_bucket',
+  by=['type'],
+  legend='%s-{{type}} {{$additional_groupby}}',
+  extraTargets=[
+    common.target(
+      common.expr.sum(
+        'tiflash_sync_schema_applying',
+        common.selector + ', type=~"$type"',
+        by=['instance'],
+      ),
+      'applying-{{instance}}',
+    ),
+  ],
+  seriesOverrides=[
+    common.override('/^applying/', yaxis=2),
+  ],
 );
 
 

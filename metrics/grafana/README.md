@@ -146,3 +146,5 @@ local s3_Request_DurationP = common.durationPanel(
 ```
 
 `%s` in `legend` is replaced by `max` / `9999` / `999` / `99` / `80` / `avg`. Use `selector=common.proxySelector` for proxy metrics.
+
+Optional kwargs: `unit=` (default `s`), `yRight=`, `quantiles=`, `showAvg=`, `extraTargets=`, `seriesOverrides=` for Class C panels that need extra series.

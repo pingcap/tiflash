@@ -33,64 +33,23 @@ local read_Index_EventsP = common.opsPanel(
   by=['type'],
 );
 
-local raft_Wait_Index_DurationP = graphPanel.new(
-  title='Raft Wait Index Duration',
-  datasource=common.datasource,
-  fill=1,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_raft_wait_index_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))) by (le, $additional_groupby) / 1000000000)',
-    legendFormat='max {{$additional_groupby}}',
-    intervalFactor=1,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.99, sum(rate(tiflash_raft_wait_index_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, $additional_groupby))',
-    legendFormat='99 {{$additional_groupby}}',
-    intervalFactor=1,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.95, sum(rate(tiflash_raft_wait_index_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, $additional_groupby))',
-    legendFormat='95 {{$additional_groupby}}',
-    intervalFactor=1,
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.80, sum(rate(tiflash_raft_wait_index_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, $additional_groupby))',
-    legendFormat='80 {{$additional_groupby}}',
-    intervalFactor=1,
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'sum(increase(tiflash_system_profile_event_RaftWaitIndexTimeout{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance)',
-    legendFormat='{{instance}}-timeout',
-    intervalFactor=1,
-  )
-)
-.addSeriesOverride({ alias: '/timeout/', yaxis: 2 })
-.resetYaxes()
-.addYaxis(
-  format='s',
-  min='0',
-)
-.addYaxis(
-  format='opm',
-  min='0',
-  decimals=2,
+local raft_Wait_Index_DurationP = common.durationPanel(
+  'Raft Wait Index Duration',
+  'tiflash_raft_wait_index_duration_seconds_bucket',
+  yRight='opm',
+  extraTargets=[
+    common.target(
+      common.expr.sumIncrease(
+        'tiflash_system_profile_event_RaftWaitIndexTimeout',
+        common.selector,
+        by=['instance'],
+      ),
+      '{{instance}}-timeout',
+    ),
+  ],
+  seriesOverrides=[
+    common.override('/timeout/', yaxis=2),
+  ],
 );
 
 local raft_Batch_Read_Index_DurationP = common.durationPanel(
@@ -99,63 +58,34 @@ local raft_Batch_Read_Index_DurationP = common.durationPanel(
   description='The number of currently applying snapshots.',
 );
 
-local apply_Raft_write_logs_DurationP = graphPanel.new(
-  title='Apply Raft write logs Duration',
-  datasource=common.datasource,
+local apply_Raft_write_logs_DurationP = common.durationPanel(
+  'Apply Raft write logs Duration',
+  'tiflash_raft_apply_write_command_duration_seconds_bucket',
+  by=['type'],
+  legend='%s-{{type}} {{$additional_groupby}}',
   description='Duration of applying Raft write logs',
-  fill=1,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='current',
-  legend_sortDesc=true,
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_raft_apply_write_command_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))) by (le, type) / 1000000000)',
-    legendFormat=' 100%-{{type}}',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.99, sum(rate(tiflash_raft_apply_write_command_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat=' 99%-{{type}}',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_raft_apply_write_command_duration_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="write"}[1m])) / sum(rate(tiflash_raft_apply_write_command_duration_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="write"}[1m]))',
-    legendFormat='avg-write',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_raft_apply_write_command_duration_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="admin"}[1m])) / sum(rate(tiflash_raft_apply_write_command_duration_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="admin"}[1m]))',
-    legendFormat='avg-admin',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_raft_apply_write_command_duration_seconds_sum{k8s_cluster="$k8s_cluster", cluster_id=~".*$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="flush_region"}[1m])) / sum(rate(tiflash_raft_apply_write_command_duration_seconds_count{k8s_cluster="$k8s_cluster", cluster_id=~".*$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="flush_region"}[1m]))',
-    legendFormat='avg-flush_region',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_raft_write_data_to_storage_duration_seconds_sum{k8s_cluster="$k8s_cluster", cluster_id=~".*$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="decode"}[1m])) / sum(rate(tiflash_raft_write_data_to_storage_duration_seconds_count{k8s_cluster="$k8s_cluster", cluster_id=~".*$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="decode"}[1m]) )',
-    legendFormat='avg-decode',
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='s',
-  min='0',
-)
-.addYaxis(
-  format='short',
+  extraTargets=[
+    common.target(
+      '(' + common.expr.sumRate('tiflash_raft_apply_write_command_duration_seconds_sum', common.selector, labels='type="write"')
+      + ' / ' + common.expr.sumRate('tiflash_raft_apply_write_command_duration_seconds_count', common.selector, labels='type="write"') + ')',
+      'avg-write',
+    ),
+    common.target(
+      '(' + common.expr.sumRate('tiflash_raft_apply_write_command_duration_seconds_sum', common.selector, labels='type="admin"')
+      + ' / ' + common.expr.sumRate('tiflash_raft_apply_write_command_duration_seconds_count', common.selector, labels='type="admin"') + ')',
+      'avg-admin',
+    ),
+    common.target(
+      '(' + common.expr.sumRate('tiflash_raft_apply_write_command_duration_seconds_sum', common.selector, labels='type="flush_region"')
+      + ' / ' + common.expr.sumRate('tiflash_raft_apply_write_command_duration_seconds_count', common.selector, labels='type="flush_region"') + ')',
+      'avg-flush_region',
+    ),
+    common.target(
+      '(' + common.expr.sumRate('tiflash_raft_write_data_to_storage_duration_seconds_sum', common.selector, labels='type="decode"')
+      + ' / ' + common.expr.sumRate('tiflash_raft_write_data_to_storage_duration_seconds_count', common.selector, labels='type="decode"') + ')',
+      'avg-decode',
+    ),
+  ],
 );
 
 local region_write_Duration_decodeP = common.heatmap(
@@ -359,52 +289,11 @@ local upstream_Latency_HeatmapP = common.heatmap(
   description='Latency that TiKV sends raft log to TiFlash.',
 );
 
-local upstream_LatencyP = graphPanel.new(
-  title='Upstream Latency',
-  datasource=common.datasource,
+local upstream_LatencyP = common.durationPanel(
+  'Upstream Latency',
+  'tiflash_raft_upstream_latency_bucket',
   description='Latency that TiKV sends raft log to TiFlash.',
-  fill=1,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='current',
-  legend_sortDesc=true,
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_raft_upstream_latency_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))) by (le) / 1000000000)',
-    legendFormat=' 100%',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.99, sum(rate(tiflash_raft_upstream_latency_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le))',
-    legendFormat=' 99%',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.95, sum(rate(tiflash_raft_upstream_latency_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le))',
-    legendFormat='95%',
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_raft_upstream_latency_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) / sum(rate(tiflash_raft_upstream_latency_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))',
-    legendFormat='avg',
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='s',
-  min='0',
-)
-.addYaxis(
-  format='short',
+  showAvg=true,
 );
 
 local log_Replication_RejectedP = graphPanel.new(

@@ -127,54 +127,12 @@ local read_SnapshotsP = graphPanel.new(
   min='0',
 );
 
-local read_Thread_Internal_DurationP = graphPanel.new(
-  title='Read Thread Internal Duration',
-  datasource=common.datasource,
-  fill=1,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_avg=true,
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.999, sum(rate(tiflash_read_thread_internal_us_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat='999-{{type}}',
-    intervalFactor=1,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.99, sum(rate(tiflash_read_thread_internal_us_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat='99-{{type}}',
-    intervalFactor=1,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.95, sum(rate(tiflash_read_thread_internal_us_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat='95-{{type}}',
-    intervalFactor=1,
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.80, sum(rate(tiflash_read_thread_internal_us_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat='80-{{type}}',
-    intervalFactor=1,
-    hide=true,
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='µs',
-  min='0',
-)
-.addYaxis(
-  format='short',
-  show=false,
+local read_Thread_Internal_DurationP = common.durationPanel(
+  'Read Thread Internal Duration',
+  'tiflash_read_thread_internal_us_bucket',
+  by=['type'],
+  legend='%s-{{type}} {{$additional_groupby}}',
+  unit='µs',
 );
 
 local read_Thread_SchedulingP = graphPanel.new(
@@ -265,55 +223,12 @@ local segment_MergedTask_DurationP = common.durationPanel(
   legend='%s-{{type}} {{$additional_groupby}}',
 );
 
-local versionChainP = graphPanel.new(
-  title='VersionChain',
-  datasource=common.datasource,
-  fill=1,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_avg=true,
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.999, sum(rate(tiflash_storage_version_chain_ms_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat='999-{{type}}',
-    intervalFactor=1,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.99, sum(rate(tiflash_storage_version_chain_ms_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat='99-{{type}}',
-    intervalFactor=1,
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.95, sum(rate(tiflash_storage_version_chain_ms_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat='95-{{type}}',
-    intervalFactor=1,
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.80, sum(rate(tiflash_storage_version_chain_ms_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat='80-{{type}}',
-    intervalFactor=1,
-    hide=true,
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='ms',
-  min='0',
-)
-.addYaxis(
-  format='short',
-  show=false,
+local versionChainP = common.durationPanel(
+  'VersionChain',
+  'tiflash_storage_version_chain_ms_bucket',
+  by=['type'],
+  legend='%s-{{type}} {{$additional_groupby}}',
+  unit='ms',
 );
 
 local deltaIndexErrorP = graphPanel.new(
