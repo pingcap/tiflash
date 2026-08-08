@@ -12,9 +12,6 @@ local sST_Import_ServiceP = graphPanel.new(
   title='SST Import Service',
   datasource=common.datasource,
   description='Involved when importing data.',
-  formatY1='percentunit',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -31,15 +28,22 @@ local sST_Import_ServiceP = graphPanel.new(
     'sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"sst_importer.*", instance=~"$tiflash_role"}[1m]))',
     legendFormat='{{instance}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='percentunit',
+  min='0',
+  decimals=1,
+)
+.addYaxis(
+  format='short',
+  show=false,
 );
 
 local sST_ApplyP = graphPanel.new(
   title='SST Apply',
   datasource=common.datasource,
   description='Involved when importing data.',
-  formatY1='percentunit',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -63,14 +67,21 @@ local sST_ApplyP = graphPanel.new(
     legendFormat='Limit',
   )
 )
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' });
+.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
+.resetYaxes()
+.addYaxis(
+  format='percentunit',
+  min='0',
+  decimals=1,
+)
+.addYaxis(
+  format='short',
+  show=false,
+);
 
 local region_TaskP = graphPanel.new(
   title='Region Task',
   datasource=common.datasource,
-  formatY1='percentunit',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -94,14 +105,21 @@ local region_TaskP = graphPanel.new(
     legendFormat='Limit',
   )
 )
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' });
+.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
+.resetYaxes()
+.addYaxis(
+  format='percentunit',
+  min='0',
+  decimals=1,
+)
+.addYaxis(
+  format='short',
+  show=false,
+);
 
 local region_WorkerP = graphPanel.new(
   title='Region Worker',
   datasource=common.datasource,
-  formatY1='percentunit',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -125,14 +143,21 @@ local region_WorkerP = graphPanel.new(
     legendFormat='Limit',
   )
 )
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' });
+.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
+.resetYaxes()
+.addYaxis(
+  format='percentunit',
+  min='0',
+  decimals=1,
+)
+.addYaxis(
+  format='short',
+  show=false,
+);
 
 local raft_StoreP = graphPanel.new(
   title='Raft Store',
   datasource=common.datasource,
-  formatY1='percentunit',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -156,14 +181,21 @@ local raft_StoreP = graphPanel.new(
     legendFormat='Limit',
   )
 )
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' });
+.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
+.resetYaxes()
+.addYaxis(
+  format='percentunit',
+  min='0',
+  decimals=1,
+)
+.addYaxis(
+  format='short',
+  show=false,
+);
 
 local apply_WorkerP = graphPanel.new(
   title='Apply Worker',
   datasource=common.datasource,
-  formatY1='percentunit',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -187,14 +219,21 @@ local apply_WorkerP = graphPanel.new(
     legendFormat='Limit',
   )
 )
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' });
+.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
+.resetYaxes()
+.addYaxis(
+  format='percentunit',
+  min='0',
+  decimals=1,
+)
+.addYaxis(
+  format='short',
+  show=false,
+);
 
 local storage_Background_Small_TasksP = graphPanel.new(
   title='Storage Background (Small Tasks)',
   datasource=common.datasource,
-  formatY1='percentunit',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -218,14 +257,21 @@ local storage_Background_Small_TasksP = graphPanel.new(
     legendFormat='Limit',
   )
 )
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' });
+.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
+.resetYaxes()
+.addYaxis(
+  format='percentunit',
+  min='0',
+  decimals=1,
+)
+.addYaxis(
+  format='short',
+  show=false,
+);
 
 local storage_Background_Large_TasksP = graphPanel.new(
   title='Storage Background (Large Tasks)',
   datasource=common.datasource,
-  formatY1='percentunit',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -249,15 +295,22 @@ local storage_Background_Large_TasksP = graphPanel.new(
     legendFormat='Limit',
   )
 )
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' });
+.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
+.resetYaxes()
+.addYaxis(
+  format='percentunit',
+  min='0',
+  decimals=1,
+)
+.addYaxis(
+  format='short',
+  show=false,
+);
 
 local manual_CompactionP = graphPanel.new(
   title='Manual Compaction',
   datasource=common.datasource,
   description='Involved when manually compacting the data.',
-  formatY1='percentunit',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -281,14 +334,21 @@ local manual_CompactionP = graphPanel.new(
     legendFormat='Limit',
   )
 )
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' });
+.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
+.resetYaxes()
+.addYaxis(
+  format='percentunit',
+  min='0',
+  decimals=1,
+)
+.addYaxis(
+  format='short',
+  show=false,
+);
 
 local gRPC_Async_ServerP = graphPanel.new(
   title='GRPC Async Server',
   datasource=common.datasource,
-  formatY1='percentunit',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -312,14 +372,21 @@ local gRPC_Async_ServerP = graphPanel.new(
     legendFormat='Limit',
   )
 )
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' });
+.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
+.resetYaxes()
+.addYaxis(
+  format='percentunit',
+  min='0',
+  decimals=1,
+)
+.addYaxis(
+  format='short',
+  show=false,
+);
 
 local gRPC_Async_ClientP = graphPanel.new(
   title='GRPC Async Client',
   datasource=common.datasource,
-  formatY1='percentunit',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -343,14 +410,21 @@ local gRPC_Async_ClientP = graphPanel.new(
     legendFormat='Limit',
   )
 )
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' });
+.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
+.resetYaxes()
+.addYaxis(
+  format='percentunit',
+  min='0',
+  decimals=1,
+)
+.addYaxis(
+  format='short',
+  show=false,
+);
 
 local fAP_builderP = graphPanel.new(
   title='FAP builder',
   datasource=common.datasource,
-  formatY1='percentunit',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -374,14 +448,21 @@ local fAP_builderP = graphPanel.new(
     legendFormat='Limit',
   )
 )
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' });
+.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
+.resetYaxes()
+.addYaxis(
+  format='percentunit',
+  min='0',
+  decimals=1,
+)
+.addYaxis(
+  format='short',
+  show=false,
+);
 
 local snapshot_SenderP = graphPanel.new(
   title='Snapshot Sender',
   datasource=common.datasource,
-  formatY1='percentunit',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -405,14 +486,21 @@ local snapshot_SenderP = graphPanel.new(
     legendFormat='Limit',
   )
 )
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' });
+.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
+.resetYaxes()
+.addYaxis(
+  format='percentunit',
+  min='0',
+  decimals=1,
+)
+.addYaxis(
+  format='short',
+  show=false,
+);
 
 local segment_SchedulerP = graphPanel.new(
   title='Segment Scheduler',
   datasource=common.datasource,
-  formatY1='percentunit',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -436,14 +524,21 @@ local segment_SchedulerP = graphPanel.new(
     legendFormat='Limit',
   )
 )
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' });
+.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
+.resetYaxes()
+.addYaxis(
+  format='percentunit',
+  min='0',
+  decimals=1,
+)
+.addYaxis(
+  format='short',
+  show=false,
+);
 
 local local_Index_PoolP = graphPanel.new(
   title='Local Index Pool',
   datasource=common.datasource,
-  formatY1='percentunit',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -474,14 +569,21 @@ local local_Index_PoolP = graphPanel.new(
     legendFormat='sched-{{instance}}',
   )
 )
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' });
+.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
+.resetYaxes()
+.addYaxis(
+  format='percentunit',
+  min='0',
+  decimals=1,
+)
+.addYaxis(
+  format='short',
+  show=false,
+);
 
 local segment_ReaderP = graphPanel.new(
   title='Segment Reader',
   datasource=common.datasource,
-  formatY1='percentunit',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -505,7 +607,17 @@ local segment_ReaderP = graphPanel.new(
     legendFormat='Limit',
   )
 )
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' });
+.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
+.resetYaxes()
+.addYaxis(
+  format='percentunit',
+  min='0',
+  decimals=1,
+)
+.addYaxis(
+  format='short',
+  show=false,
+);
 
 
 {

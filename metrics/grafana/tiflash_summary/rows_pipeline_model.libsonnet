@@ -11,9 +11,6 @@ local rowObj = row.new(collapse=true, title='Pipeline Model');
 local task_Thread_Pool_SizeP = graphPanel.new(
   title='Task Thread Pool Size',
   datasource=common.datasource,
-  formatY1='none',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -28,14 +25,19 @@ local task_Thread_Pool_SizeP = graphPanel.new(
     legendFormat='{{instance}}-{{type}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='none',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local task_CountP = graphPanel.new(
   title='Task Count',
   datasource=common.datasource,
-  formatY1='none',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -56,14 +58,19 @@ local task_CountP = graphPanel.new(
     'sum(tiflash_pipeline_scheduler{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~".*_tasks_count"}) by (type)',
     legendFormat='sum({{type}})',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='none',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local task_Status_Change_OPSP = graphPanel.new(
   title='Task Status Change OPS',
   datasource=common.datasource,
-  formatY1='none',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -78,14 +85,19 @@ local task_Status_Change_OPSP = graphPanel.new(
     legendFormat='{{type}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='none',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local task_DurationP = graphPanel.new(
   title='Task Duration',
   datasource=common.datasource,
-  formatY1='s',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -143,14 +155,19 @@ local task_DurationP = graphPanel.new(
     'sum(rate(tiflash_pipeline_task_duration_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="await"}[1m])) / sum(rate(tiflash_pipeline_task_duration_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="await"}[1m]))',
     legendFormat='avg-await',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='s',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local task_Max_Execute_Time_Per_RoundP = graphPanel.new(
   title='Task Max Execute Time Per Round',
   datasource=common.datasource,
-  formatY1='s',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -196,14 +213,19 @@ local task_Max_Execute_Time_Per_RoundP = graphPanel.new(
     'sum(rate(tiflash_pipeline_task_execute_max_time_seconds_per_round_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="io"}[1m])) / sum(rate(tiflash_pipeline_task_execute_max_time_seconds_per_round_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="io"}[1m]))',
     legendFormat='avg-io',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='s',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local threads_CPU_of_CPU_Task_Thread_PoolP = graphPanel.new(
   title='Threads CPU of CPU Task Thread Pool',
   datasource=common.datasource,
-  formatY1='percentunit',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -227,14 +249,21 @@ local threads_CPU_of_CPU_Task_Thread_PoolP = graphPanel.new(
     legendFormat='Limit',
   )
 )
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' });
+.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
+.resetYaxes()
+.addYaxis(
+  format='percentunit',
+  min='0',
+  decimals=1,
+)
+.addYaxis(
+  format='short',
+  show=false,
+);
 
 local threads_CPU_of_IO_Task_Thread_PoolP = graphPanel.new(
   title='Threads CPU of IO Task Thread Pool',
   datasource=common.datasource,
-  formatY1='percentunit',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -258,14 +287,21 @@ local threads_CPU_of_IO_Task_Thread_PoolP = graphPanel.new(
     legendFormat='Limit',
   )
 )
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' });
+.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
+.resetYaxes()
+.addYaxis(
+  format='percentunit',
+  min='0',
+  decimals=1,
+)
+.addYaxis(
+  format='short',
+  show=false,
+);
 
 local threads_CPU_of_Wait_ReactorP = graphPanel.new(
   title='Threads CPU of Wait Reactor',
   datasource=common.datasource,
-  formatY1='percentunit',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -289,15 +325,22 @@ local threads_CPU_of_Wait_ReactorP = graphPanel.new(
     legendFormat='Limit',
   )
 )
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' });
+.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
+.resetYaxes()
+.addYaxis(
+  format='percentunit',
+  min='0',
+  decimals=1,
+)
+.addYaxis(
+  format='short',
+  show=false,
+);
 
 local wait_notify_task_detailsP = graphPanel.new(
   title='Wait notify task details',
   datasource=common.datasource,
   description='wait notify task details',
-  formatY1='none',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -318,6 +361,14 @@ local wait_notify_task_detailsP = graphPanel.new(
     'sum(tiflash_pipeline_wait_on_notify_tasks{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (type)',
     legendFormat='sum({{type}})',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='none',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 

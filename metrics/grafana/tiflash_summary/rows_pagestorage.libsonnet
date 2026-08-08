@@ -12,9 +12,6 @@ local pageStorage_Disk_UsageP = graphPanel.new(
   title='PageStorage Disk Usage',
   datasource=common.datasource,
   description='The disk usage of PageStorage instances in each TiFlash node',
-  formatY1='bytes',
-  formatY2='percentunit',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   decimals=1,
@@ -48,15 +45,22 @@ local pageStorage_Disk_UsageP = graphPanel.new(
   )
 )
 .addSeriesOverride({ alias: '/^valid_rate/', yaxis: 2 })
-.addSeriesOverride({ alias: '/size/', linewidth: 3 });
+.addSeriesOverride({ alias: '/size/', linewidth: 3 })
+.resetYaxes()
+.addYaxis(
+  format='bytes',
+  min='0',
+)
+.addYaxis(
+  format='percentunit',
+  min='0',
+  max='1.1',
+);
 
 local pageStorage_File_NumP = graphPanel.new(
   title='PageStorage File Num',
   datasource=common.datasource,
   description='The number of files of PageStorage instances in each TiFlash node',
-  formatY1='short',
-  formatY2='percentunit',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   decimals=1,
@@ -76,6 +80,16 @@ local pageStorage_File_NumP = graphPanel.new(
     'sum(tiflash_system_asynchronous_metric_LogNums{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
     legendFormat='log_file-{{instance}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='short',
+  min='0',
+)
+.addYaxis(
+  format='percentunit',
+  min='0',
+  max='1.1',
 );
 
 local pageStorage_WriteBatch_SizeP = heatmapPanel.new(
@@ -99,9 +113,6 @@ local pageStorage_WriteBatch_SizeP = heatmapPanel.new(
 local page_write_DurationP = graphPanel.new(
   title='Page write Duration',
   datasource=common.datasource,
-  formatY1='s',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -147,14 +158,19 @@ local page_write_DurationP = graphPanel.new(
     legendFormat='{{type}}-80',
     hide=true,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='s',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local page_GC_Tasks_OPMP = graphPanel.new(
   title='Page GC Tasks OPM',
   datasource=common.datasource,
-  formatY1='opm',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null as zero',
   legend_hideZero=true,
@@ -167,14 +183,19 @@ local page_GC_Tasks_OPMP = graphPanel.new(
     legendFormat='{{type}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='opm',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local page_GC_DurationP = graphPanel.new(
   title='Page GC Duration',
   datasource=common.datasource,
-  formatY1='s',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -200,15 +221,20 @@ local page_GC_DurationP = graphPanel.new(
     intervalFactor=1,
     hide=true,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='s',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local numer_of_PagesP = graphPanel.new(
   title='Numer of Pages',
   datasource=common.datasource,
   description='The number of pages of all TiFlash instance',
-  formatY1='short',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   decimals=1,
@@ -230,15 +256,20 @@ local numer_of_PagesP = graphPanel.new(
     'tiflash_system_asynchronous_metric_VersionedEntries{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
     legendFormat='num_entries-{{instance}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='short',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local pageStorage_Pending_Writers_NumP = graphPanel.new(
   title='PageStorage Pending Writers Num',
   datasource=common.datasource,
   description='The num of pending writers in PageStorage',
-  formatY1='none',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -256,14 +287,20 @@ local pageStorage_Pending_Writers_NumP = graphPanel.new(
     legendFormat='size-{{instance}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='none',
+  min='0',
+)
+.addYaxis(
+  format='short',
+  show=false,
 );
 
 local pageStorage_stored_bytes_by_typeP = graphPanel.new(
   title='PageStorage stored bytes by type',
   datasource=common.datasource,
-  formatY1='bytes',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null',
   decimals=1,
@@ -281,14 +318,21 @@ local pageStorage_stored_bytes_by_typeP = graphPanel.new(
     'sum(tiflash_storage_page_data_by_types{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (type)',
     legendFormat='{{type}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='bytes',
+  min='0',
+)
+.addYaxis(
+  format='short',
+  min='0',
 );
 
 local number_of_TablesP = graphPanel.new(
   title='Number of Tables',
   datasource=common.datasource,
   description='The number of tables running under different mode in DeltaTree',
-  formatY1='short',
-  formatY2='short',
   fill=0,
   nullPointMode='null as zero',
   decimals=1,
@@ -325,14 +369,18 @@ local number_of_TablesP = graphPanel.new(
     'sum(tiflash_system_current_metric_StoragePoolUniPS{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
     legendFormat='UniPS-{{instance}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='short',
+)
+.addYaxis(
+  format='short',
 );
 
 local pS_Command_OPS_By_InstanceP = graphPanel.new(
   title='PS Command OPS By Instance',
   datasource=common.datasource,
-  formatY1='ops',
-  formatY2='opm',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -349,14 +397,20 @@ local pS_Command_OPS_By_InstanceP = graphPanel.new(
     intervalFactor=1,
   )
 )
-.addSeriesOverride({ yaxis: 2 });
+.addSeriesOverride({ yaxis: 2 })
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='opm',
+  min='0',
+);
 
 local pS_Apply_edits_OPS_By_InstanceP = graphPanel.new(
   title='PS Apply edits OPS By Instance',
   datasource=common.datasource,
-  formatY1='ops',
-  formatY2='opm',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -373,7 +427,16 @@ local pS_Apply_edits_OPS_By_InstanceP = graphPanel.new(
     intervalFactor=1,
   )
 )
-.addSeriesOverride({ yaxis: 2 });
+.addSeriesOverride({ yaxis: 2 })
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='opm',
+  min='0',
+);
 
 
 {

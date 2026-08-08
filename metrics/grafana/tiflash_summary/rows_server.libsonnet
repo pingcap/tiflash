@@ -12,9 +12,6 @@ local store_sizeP = graphPanel.new(
   title='Store size',
   datasource=common.datasource,
   description='The storage size per TiFlash instance.\n(Not including some disk usage of TiFlash-Proxy by now)',
-  formatY1='bytes',
-  formatY2='short',
-  min='0',
   fill=5,
   linewidth=0,
   nullPointMode='null as zero',
@@ -40,15 +37,20 @@ local store_sizeP = graphPanel.new(
     'sum(tiflash_system_current_metric_StoreSizeUsedRemote{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
     legendFormat='{{instance}}-remote',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='bytes',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local available_sizeP = graphPanel.new(
   title='Available size',
   datasource=common.datasource,
   description='The available capacity size per TiFlash instance',
-  formatY1='bytes',
-  formatY2='short',
-  min='0',
   fill=5,
   linewidth=0,
   nullPointMode='null as zero',
@@ -66,15 +68,20 @@ local available_sizeP = graphPanel.new(
     'sum(tiflash_system_current_metric_StoreSizeAvailable{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
     legendFormat='{{instance}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='bytes',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local capacity_sizeP = graphPanel.new(
   title='Capacity size',
   datasource=common.datasource,
   description='The capacity size per TiFlash instance',
-  formatY1='bytes',
-  formatY2='short',
-  min='0',
   fill=5,
   linewidth=0,
   nullPointMode='null as zero',
@@ -92,14 +99,20 @@ local capacity_sizeP = graphPanel.new(
     'sum(tiflash_system_current_metric_StoreSizeCapacity{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
     legendFormat='{{instance}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='bytes',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local uptimeP = graphPanel.new(
   title='Uptime',
   datasource=common.datasource,
   description='TiFlash uptime since last restart',
-  formatY1='dtdurations',
-  formatY2='short',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -115,14 +128,19 @@ local uptimeP = graphPanel.new(
     legendFormat='{{instance}}',
   )
 )
-.addSeriesOverride({ alias: 'total', fill: 0, lines: false });
+.addSeriesOverride({ alias: 'total', fill: 0, lines: false })
+.resetYaxes()
+.addYaxis(
+  format='dtdurations',
+)
+.addYaxis(
+  format='short',
+);
 
 local regionP = graphPanel.new(
   title='Region',
   datasource=common.datasource,
   description='The number of Regions on each TiFlash instance',
-  formatY1='short',
-  formatY2='short',
   fill=0,
   nullPointMode='null',
   decimals=1,
@@ -147,15 +165,20 @@ local regionP = graphPanel.new(
     legendFormat='{{instance}}-{{state}}',
     hide=true,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='short',
+)
+.addYaxis(
+  format='short',
+  show=false,
 );
 
 local cPU_UsageP = graphPanel.new(
   title='CPU Usage',
   datasource=common.datasource,
   description='TiFlash CPU usage calculated with process CPU running seconds.',
-  formatY1='percentunit',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -179,15 +202,22 @@ local cPU_UsageP = graphPanel.new(
     intervalFactor=1,
   )
 )
-.addSeriesOverride({ alias: '/limit/', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2 });
+.addSeriesOverride({ alias: '/limit/', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2 })
+.resetYaxes()
+.addYaxis(
+  format='percentunit',
+  min='0',
+  decimals=1,
+)
+.addYaxis(
+  format='short',
+  show=false,
+);
 
 local memoryP = graphPanel.new(
   title='Memory',
   datasource=common.datasource,
   description='The memory usage per TiFlash instance',
-  formatY1='bytes',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -291,14 +321,20 @@ local memoryP = graphPanel.new(
     hide=true,
   )
 )
-.addSeriesOverride({ alias: '/limit/', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2 });
+.addSeriesOverride({ alias: '/limit/', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2 })
+.resetYaxes()
+.addYaxis(
+  format='bytes',
+  min='0',
+)
+.addYaxis(
+  format='short',
+  show=false,
+);
 
 local iO_ThroughputP = graphPanel.new(
   title='IO Throughput',
   datasource=common.datasource,
-  formatY1='bytes',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -315,14 +351,21 @@ local iO_ThroughputP = graphPanel.new(
     legendFormat='{{instance}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='bytes',
+  min='0',
+  decimals=0,
+)
+.addYaxis(
+  format='short',
+  show=false,
 );
 
 local remote_Store_Summary_Disagg_archP = graphPanel.new(
   title='Remote Store Summary (Disagg arch)',
   datasource=common.datasource,
-  formatY1='bytes',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   decimals=1,
@@ -339,6 +382,14 @@ local remote_Store_Summary_Disagg_archP = graphPanel.new(
     'sum(tiflash_storage_s3_store_summary_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance, store_id,type)',
     legendFormat='store-{{store_id}}-{{type}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='bytes',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 

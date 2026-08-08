@@ -12,8 +12,6 @@ local tiFlash_Resource_GroupP = graphPanel.new(
   title='TiFlash Resource Group',
   datasource=common.datasource,
   description='Metas of resource group',
-  formatY1='short',
-  formatY2='short',
   fill=1,
   nullPointMode='null',
   pointradius=2,
@@ -84,15 +82,19 @@ local tiFlash_Resource_GroupP = graphPanel.new(
     legendFormat='storage_ru_consumption-{{instance}}-{{resource_group}}',
     hide=true,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='short',
+)
+.addYaxis(
+  format='short',
 );
 
 local request_UnitP = graphPanel.new(
   title='Request Unit',
   datasource=common.datasource,
   description='Request Unit for tidb-serverless charging',
-  formatY1='cps',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   decimals=1,
@@ -133,7 +135,16 @@ local request_UnitP = graphPanel.new(
     legendFormat='storage-{{keyspace}}_{{resource_group}}_{{type}} {{$additional_groupby}}',
   )
 )
-.addSeriesOverride({ alias: '/sum/', yaxis: 2 });
+.addSeriesOverride({ alias: '/sum/', yaxis: 2 })
+.resetYaxes()
+.addYaxis(
+  format='cps',
+  min='0',
+)
+.addYaxis(
+  format='short',
+  min='0',
+);
 
 
 {

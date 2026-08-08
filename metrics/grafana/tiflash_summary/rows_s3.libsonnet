@@ -12,9 +12,6 @@ local s3_BytesP = graphPanel.new(
   title='S3 Bytes',
   datasource=common.datasource,
   description='S3 read/write throughput',
-  formatY1='binBps',
-  formatY2='opm',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -43,15 +40,21 @@ local s3_BytesP = graphPanel.new(
     'sum(rate(tiflash_system_profile_event_S3WriteDMFileBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
     legendFormat='S3WriteDMFileBytes {{$additional_groupby}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='binBps',
+  min='0',
+)
+.addYaxis(
+  format='opm',
+  min='0',
 );
 
 local s3_OPSP = graphPanel.new(
   title='S3 OPS',
   datasource=common.datasource,
   description='S3 OPS',
-  formatY1='ops',
-  formatY2='opm',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -136,15 +139,21 @@ local s3_OPSP = graphPanel.new(
     legendFormat='S3IOSeek {{$additional_groupby}}',
     hide=true,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='opm',
+  min='0',
 );
 
 local s3_Retry_OPSP = graphPanel.new(
   title='S3 Retry OPS',
   datasource=common.datasource,
   description='S3 Retry OPS',
-  formatY1='ops',
-  formatY2='opm',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -194,15 +203,21 @@ local s3_Retry_OPSP = graphPanel.new(
     legendFormat='S3IOSeekBackward {{$additional_groupby}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='opm',
+  min='0',
 );
 
 local s3_Request_DurationP = graphPanel.new(
   title='S3 Request Duration',
   datasource=common.datasource,
   description='S3 Request Duration',
-  formatY1='s',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -233,15 +248,20 @@ local s3_Request_DurationP = graphPanel.new(
     'histogram_quantile(0.99, sum(rate(tiflash_storage_s3_request_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type, $additional_groupby))',
     legendFormat='{{type}}-99 {{$additional_groupby}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='s',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local s3_HTTP_OPSP = graphPanel.new(
   title='S3 HTTP OPS',
   datasource=common.datasource,
   description='S3 HTTP OPS',
-  formatY1='ops',
-  formatY2='opm',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -311,15 +331,21 @@ local s3_HTTP_OPSP = graphPanel.new(
     'sum(rate(tiflash_system_profile_event_S3WriteRequestsNotFound{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
     legendFormat='write-notfound {{$additional_groupby}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='opm',
+  min='0',
 );
 
 local s3_HTTP_Request_DurationP = graphPanel.new(
   title='S3 HTTP Request Duration',
   datasource=common.datasource,
   description='S3 HTTP Request Duration',
-  formatY1='s',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -349,15 +375,20 @@ local s3_HTTP_Request_DurationP = graphPanel.new(
     'histogram_quantile(0.99, sum(rate(tiflash_storage_s3_http_request_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type, $additional_groupby))',
     legendFormat='{{type}}-99 {{$additional_groupby}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='s',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local s3_on_going_instancesP = graphPanel.new(
   title='S3 on-going instances',
   datasource=common.datasource,
   description='S3 HTTP OPS',
-  formatY1='none',
-  formatY2='opm',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -379,14 +410,20 @@ local s3_on_going_instancesP = graphPanel.new(
     'sum by (type, $additional_groupby) (tiflash_system_current_metric_S3RandomAccessFile{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"})',
     legendFormat='S3RandomAccessFile {{$additional_groupby}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='none',
+  min='0',
+)
+.addYaxis(
+  format='opm',
+  min='0',
 );
 
 local s3RandomAccessFile_OPSP = graphPanel.new(
   title='S3RandomAccessFile OPS',
   datasource=common.datasource,
-  formatY1='ops',
-  formatY2='opm',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -431,6 +468,15 @@ local s3RandomAccessFile_OPSP = graphPanel.new(
     legendFormat='S3IOSeek {{$additional_groupby}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='opm',
+  min='0',
 );
 
 

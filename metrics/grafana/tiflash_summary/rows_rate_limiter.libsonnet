@@ -12,9 +12,6 @@ local i_O_Limiter_ThroughputP = graphPanel.new(
   title='I/O Limiter Throughput',
   datasource=common.datasource,
   description='The storage I/O limiter metrics.',
-  formatY1='binBps',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null as zero',
   pointradius=2,
@@ -32,14 +29,21 @@ local i_O_Limiter_ThroughputP = graphPanel.new(
     'sum(rate(tiflash_storage_io_limiter{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, instance)',
     legendFormat='{{type}}-{{instance}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='binBps',
+  min='0',
+  decimals=0,
+)
+.addYaxis(
+  format='short',
 );
 
 local i_O_Limiter_ThresholdP = graphPanel.new(
   title='I/O Limiter Threshold',
   datasource=common.datasource,
   description='Current limit bytes per second of Storage I/O limiter',
-  formatY1='bytes',
-  formatY2='short',
   fill=1,
   nullPointMode='null as zero',
   pointradius=2,
@@ -54,14 +58,20 @@ local i_O_Limiter_ThresholdP = graphPanel.new(
     'sum(tiflash_storage_io_limiter_curr{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (type, instance)',
     legendFormat='{{type}}-{{instance}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='bytes',
+  decimals=0,
+)
+.addYaxis(
+  format='short',
 );
 
 local i_O_Limiter_Current_Pending_GaugeP = graphPanel.new(
   title='I/O Limiter Current Pending Gauge',
   datasource=common.datasource,
   description='I/O Limiter current pending gauge.',
-  formatY1='short',
-  formatY2='s',
   fill=1,
   nullPointMode='null',
   pointradius=2,
@@ -106,15 +116,20 @@ local i_O_Limiter_Current_Pending_GaugeP = graphPanel.new(
     legendFormat='fgread-current-{{instance}}',
   )
 )
-.addSeriesOverride({ alias: '/pending/', yaxis: 2 });
+.addSeriesOverride({ alias: '/pending/', yaxis: 2 })
+.resetYaxes()
+.addYaxis(
+  format='short',
+  decimals=0,
+)
+.addYaxis(
+  format='s',
+);
 
 local i_O_Limiter_Pending_OPSP = graphPanel.new(
   title='I/O Limiter Pending OPS',
   datasource=common.datasource,
   description='The storage I/O limiter metrics.',
-  formatY1='ops',
-  formatY2='s',
-  min='0',
   fill=1,
   nullPointMode='null as zero',
   pointradius=2,
@@ -133,14 +148,21 @@ local i_O_Limiter_Pending_OPSP = graphPanel.new(
     legendFormat='{{type}}-{{instance}}',
   )
 )
-.addSeriesOverride({ alias: '', yaxis: 2 });
+.addSeriesOverride({ alias: '', yaxis: 2 })
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+  decimals=0,
+)
+.addYaxis(
+  format='s',
+);
 
 local i_O_Limiter_Pending_DurationP = graphPanel.new(
   title='I/O Limiter Pending Duration',
   datasource=common.datasource,
   description='I/O Limiter pending duration.',
-  formatY1='s',
-  formatY2='s',
   fill=1,
   nullPointMode='null',
   pointradius=2,
@@ -171,6 +193,14 @@ local i_O_Limiter_Pending_DurationP = graphPanel.new(
     'histogram_quantile(0.99, sum(rate(tiflash_storage_io_limiter_pending_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
     legendFormat='{{type}}-pending-P99',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='s',
+  decimals=0,
+)
+.addYaxis(
+  format='s',
 );
 
 

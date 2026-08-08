@@ -11,9 +11,6 @@ local rowObj = row.new(collapse=true, title='Rough Set Filter Rate Histogram');
 local rough_Set_Filter_RateP = graphPanel.new(
   title='Rough Set Filter Rate',
   datasource=common.datasource,
-  formatY1='percentunit',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -62,7 +59,15 @@ local rough_Set_Filter_RateP = graphPanel.new(
 )
 .addSeriesOverride({ alias: '/^RS Filter/', yaxis: 2 })
 .addSeriesOverride({ alias: '/^PK/', yaxis: 2 })
-.addSeriesOverride({ alias: '/^No Filter/', yaxis: 2 });
+.addSeriesOverride({ alias: '/^No Filter/', yaxis: 2 })
+.resetYaxes()
+.addYaxis(
+  format='percentunit',
+  min='0',
+)
+.addYaxis(
+  format='short',
+);
 
 local rough_Set_Filter_Rate_HistogramP = heatmapPanel.new(
   title='Rough Set Filter Rate Histogram',

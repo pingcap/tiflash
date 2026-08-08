@@ -11,9 +11,6 @@ local rowObj = row.new(collapse=true, title='Raft');
 local stale_Read_OPSP = graphPanel.new(
   title='Stale Read OPS',
   datasource=common.datasource,
-  formatY1='ops',
-  formatY2='none',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
 )
@@ -23,14 +20,19 @@ local stale_Read_OPSP = graphPanel.new(
     legendFormat='{{instance}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='none',
 );
 
 local raft_Read_Index_OPSP = graphPanel.new(
   title='Raft Read Index OPS',
   datasource=common.datasource,
-  formatY1='ops',
-  formatY2='none',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
 )
@@ -40,14 +42,19 @@ local raft_Read_Index_OPSP = graphPanel.new(
     legendFormat='{{instance}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='none',
 );
 
 local learner_Read_FailuresP = graphPanel.new(
   title='Learner Read Failures',
   datasource=common.datasource,
-  formatY1='ops',
-  formatY2='none',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
 )
@@ -57,14 +64,19 @@ local learner_Read_FailuresP = graphPanel.new(
     legendFormat='{{type}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='none',
 );
 
 local read_Index_EventsP = graphPanel.new(
   title='Read Index Events',
   datasource=common.datasource,
-  formatY1='ops',
-  formatY2='none',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
 )
@@ -74,14 +86,19 @@ local read_Index_EventsP = graphPanel.new(
     legendFormat='{{type}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='none',
 );
 
 local raft_Wait_Index_DurationP = graphPanel.new(
   title='Raft Wait Index Duration',
   datasource=common.datasource,
-  formatY1='s',
-  formatY2='opm',
-  min='0',
   fill=1,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -127,15 +144,22 @@ local raft_Wait_Index_DurationP = graphPanel.new(
     intervalFactor=1,
   )
 )
-.addSeriesOverride({ alias: '/timeout/', yaxis: 2 });
+.addSeriesOverride({ alias: '/timeout/', yaxis: 2 })
+.resetYaxes()
+.addYaxis(
+  format='s',
+  min='0',
+)
+.addYaxis(
+  format='opm',
+  min='0',
+  decimals=2,
+);
 
 local raft_Batch_Read_Index_DurationP = graphPanel.new(
   title='Raft Batch Read Index Duration',
   datasource=common.datasource,
   description='The number of currently applying snapshots.',
-  formatY1='s',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -173,15 +197,20 @@ local raft_Batch_Read_Index_DurationP = graphPanel.new(
     intervalFactor=1,
     hide=true,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='s',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local apply_Raft_write_logs_DurationP = graphPanel.new(
   title='Apply Raft write logs Duration',
   datasource=common.datasource,
   description='Duration of applying Raft write logs',
-  formatY1='s',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -227,6 +256,14 @@ local apply_Raft_write_logs_DurationP = graphPanel.new(
     'sum(rate(tiflash_raft_write_data_to_storage_duration_seconds_sum{k8s_cluster="$k8s_cluster", cluster_id=~".*$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="decode"}[1m])) / sum(rate(tiflash_raft_write_data_to_storage_duration_seconds_count{k8s_cluster="$k8s_cluster", cluster_id=~".*$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="decode"}[1m]) )',
     legendFormat='avg-decode',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='s',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local region_write_Duration_decodeP = heatmapPanel.new(
@@ -308,9 +345,6 @@ local apply_Raft_admin_logs_Duration_HeatmapP = heatmapPanel.new(
 local raft_Events_QPSP = graphPanel.new(
   title='Raft Events QPS',
   datasource=common.datasource,
-  formatY1='ops',
-  formatY2='none',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
 )
@@ -320,14 +354,19 @@ local raft_Events_QPSP = graphPanel.new(
     legendFormat='{{instance}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='none',
 );
 
 local raft_Frequent_Events_QPSP = graphPanel.new(
   title='Raft Frequent Events QPS',
   datasource=common.datasource,
-  formatY1='ops',
-  formatY2='none',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
 )
@@ -337,6 +376,14 @@ local raft_Frequent_Events_QPSP = graphPanel.new(
     legendFormat='{{instance}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='none',
 );
 
 local raft_Log_Gap_HeatmapP = heatmapPanel.new(
@@ -447,9 +494,6 @@ local write_Committed_Size_HeatmapP = heatmapPanel.new(
 local raft_Eager_GC_OPSP = graphPanel.new(
   title='Raft Eager GC OPS',
   datasource=common.datasource,
-  formatY1='ops',
-  formatY2='none',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
 )
@@ -459,15 +503,20 @@ local raft_Eager_GC_OPSP = graphPanel.new(
     legendFormat='{{instance}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='none',
 );
 
 local raft_Eager_GC_DurationP = graphPanel.new(
   title='Raft Eager GC Duration',
   datasource=common.datasource,
   description='Duration of Raft logs eager GC tasks',
-  formatY1='s',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -503,15 +552,20 @@ local raft_Eager_GC_DurationP = graphPanel.new(
     legendFormat=' 100%-{{type}}',
     hide=true,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='s',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local keys_flowP = graphPanel.new(
   title='Keys flow',
   datasource=common.datasource,
   description='The keys flow of different kinds of Raft operations',
-  formatY1='short',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null',
   decimals=1,
@@ -528,14 +582,20 @@ local keys_flowP = graphPanel.new(
     'sum(rate(tiflash_raft_process_keys{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type)',
     legendFormat='{{type}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='short',
+  min='0',
+)
+.addYaxis(
+  format='short',
+  min='0',
 );
 
 local raft_throughputP = graphPanel.new(
   title='Raft throughput',
   datasource=common.datasource,
-  formatY1='short',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null',
   decimals=1,
@@ -552,6 +612,15 @@ local raft_throughputP = graphPanel.new(
     'sum(rate(tiflash_raft_throughput_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type)',
     legendFormat='{{type}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='short',
+  min='0',
+)
+.addYaxis(
+  format='short',
+  min='0',
 );
 
 local upstream_Latency_HeatmapP = heatmapPanel.new(
@@ -577,9 +646,6 @@ local upstream_LatencyP = graphPanel.new(
   title='Upstream Latency',
   datasource=common.datasource,
   description='Latency that TiKV sends raft log to TiFlash.',
-  formatY1='s',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -614,14 +680,19 @@ local upstream_LatencyP = graphPanel.new(
     'sum(rate(tiflash_raft_upstream_latency_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) / sum(rate(tiflash_raft_upstream_latency_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))',
     legendFormat='avg',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='s',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local log_Replication_RejectedP = graphPanel.new(
   title='Log Replication Rejected',
   datasource=common.datasource,
-  formatY1='ops',
-  formatY2='none',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
 )
@@ -631,6 +702,14 @@ local log_Replication_RejectedP = graphPanel.new(
     legendFormat='{{instance}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='none',
 );
 
 

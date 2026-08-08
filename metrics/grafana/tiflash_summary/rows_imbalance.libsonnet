@@ -12,9 +12,6 @@ local cPU_Usage_irateP = graphPanel.new(
   title='CPU Usage (irate)',
   datasource=common.datasource,
   description='TiFlash CPU usage calculated with process CPU running seconds.',
-  formatY1='percentunit',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -39,14 +36,21 @@ local cPU_Usage_irateP = graphPanel.new(
     intervalFactor=1,
   )
 )
-.addSeriesOverride({ alias: '/limit/', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2 });
+.addSeriesOverride({ alias: '/limit/', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2 })
+.resetYaxes()
+.addYaxis(
+  format='percentunit',
+  min='0',
+  decimals=1,
+)
+.addYaxis(
+  format='short',
+  show=false,
+);
 
 local segment_ReaderP = graphPanel.new(
   title='Segment Reader',
   datasource=common.datasource,
-  formatY1='percentunit',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -70,14 +74,21 @@ local segment_ReaderP = graphPanel.new(
     legendFormat='Limit',
   )
 )
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' });
+.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
+.resetYaxes()
+.addYaxis(
+  format='percentunit',
+  min='0',
+  decimals=1,
+)
+.addYaxis(
+  format='short',
+  show=false,
+);
 
 local request_QPS_by_instanceP = graphPanel.new(
   title='Request QPS by instance',
   datasource=common.datasource,
-  formatY1='none',
-  formatY2='none',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -94,15 +105,20 @@ local request_QPS_by_instanceP = graphPanel.new(
     legendFormat='{{type}}-{{instance}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='none',
+  min='0',
+)
+.addYaxis(
+  format='none',
 );
 
 local read_Throughput_by_instanceP = graphPanel.new(
   title='Read Throughput by instance',
   datasource=common.datasource,
   description='The flow of different kinds of read operations',
-  formatY1='binBps',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null',
   decimals=1,
@@ -134,15 +150,21 @@ local read_Throughput_by_instanceP = graphPanel.new(
     legendFormat='PageBackGround-{{instance}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='binBps',
+  min='0',
+)
+.addYaxis(
+  format='short',
+  min='0',
 );
 
 local write_Command_OPS_By_InstanceP = graphPanel.new(
   title='Write Command OPS By Instance',
   datasource=common.datasource,
   description='The total count of different kinds of commands received',
-  formatY1='ops',
-  formatY2='opm',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -165,15 +187,21 @@ local write_Command_OPS_By_InstanceP = graphPanel.new(
     intervalFactor=1,
   )
 )
-.addSeriesOverride({ alias: '/delete_range|ingest/', yaxis: 2 });
+.addSeriesOverride({ alias: '/delete_range|ingest/', yaxis: 2 })
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='opm',
+  min='0',
+);
 
 local write_Throughput_By_InstanceP = graphPanel.new(
   title='Write Throughput By Instance',
   datasource=common.datasource,
   description='The throughput of write by instance',
-  formatY1='binBps',
-  formatY2='bytes',
-  min='0',
   fill=0,
   nullPointMode='null',
   decimals=1,
@@ -199,7 +227,16 @@ local write_Throughput_By_InstanceP = graphPanel.new(
     legendFormat='ingest-{{instance}}',
   )
 )
-.addSeriesOverride({ alias: '/total/', yaxis: 2 });
+.addSeriesOverride({ alias: '/total/', yaxis: 2 })
+.resetYaxes()
+.addYaxis(
+  format='binBps',
+  min='0',
+)
+.addYaxis(
+  format='bytes',
+  show=false,
+);
 
 
 {

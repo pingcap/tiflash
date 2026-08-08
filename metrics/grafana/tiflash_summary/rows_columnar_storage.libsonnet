@@ -11,9 +11,6 @@ local rowObj = row.new(collapse=true, title='Columnar Storage');
 local iA_usageP = graphPanel.new(
   title='IA usage',
   datasource=common.datasource,
-  formatY1='bytes',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -55,14 +52,20 @@ local iA_usageP = graphPanel.new(
     legendFormat='segments-disk-size-{{instance}}',
   )
 )
-.addSeriesOverride({ alias: '/limit/', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2 });
+.addSeriesOverride({ alias: '/limit/', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2 })
+.resetYaxes()
+.addYaxis(
+  format='bytes',
+  min='0',
+)
+.addYaxis(
+  format='short',
+  show=false,
+);
 
 local iA_Segments_Memory_WaitP = graphPanel.new(
   title='IA Segments Memory Wait',
   datasource=common.datasource,
-  formatY1='s',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -93,14 +96,19 @@ local iA_Segments_Memory_WaitP = graphPanel.new(
     'histogram_quantile(0.99, sum(rate(tiflash_proxy_kv_engine_ia_manager_segments_memory_wait_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m])) by (le, $additional_groupby))',
     legendFormat='99 {{$additional_groupby}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='s',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local iA_Segment_Remote_Read_CacheP = graphPanel.new(
   title='IA Segment Remote Read Cache',
   datasource=common.datasource,
-  formatY1='ops',
-  formatY2='opm',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -123,14 +131,20 @@ local iA_Segment_Remote_Read_CacheP = graphPanel.new(
     'sum(rate(tiflash_proxy_kv_engine_ia_remote_read_segment_cache_miss{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m])) by ($additional_groupby)',
     legendFormat='cache-miss {{$additional_groupby}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='opm',
+  min='0',
 );
 
 local iA_Segments_Remote_Read_DurationP = graphPanel.new(
   title='IA Segments Remote Read Duration',
   datasource=common.datasource,
-  formatY1='s',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -161,14 +175,19 @@ local iA_Segments_Remote_Read_DurationP = graphPanel.new(
     'histogram_quantile(0.99, sum(rate(tiflash_proxy_kv_engine_ia_remote_read_segment_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m])) by (le, $additional_groupby))',
     legendFormat='99 {{$additional_groupby}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='s',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local columnarFile_CacheP = graphPanel.new(
   title='ColumnarFile Cache',
   datasource=common.datasource,
-  formatY1='ops',
-  formatY2='opm',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -191,14 +210,20 @@ local columnarFile_CacheP = graphPanel.new(
     'sum(rate(tiflash_proxy_kv_engine_columnar_file_cache_miss{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m])) by ($additional_groupby)',
     legendFormat='file-cache-miss {{$additional_groupby}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='opm',
+  min='0',
 );
 
 local columnar_Prefetch_DurationP = graphPanel.new(
   title='Columnar Prefetch Duration',
   datasource=common.datasource,
-  formatY1='s',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -229,14 +254,19 @@ local columnar_Prefetch_DurationP = graphPanel.new(
     'histogram_quantile(0.99, sum(rate(tiflash_proxy_kv_engine_columnar_prefetch_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m])) by (le, $additional_groupby))',
     legendFormat='99 {{$additional_groupby}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='s',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local columnar_Prefetch_Cache_Hit_DurationP = graphPanel.new(
   title='Columnar Prefetch Cache Hit Duration',
   datasource=common.datasource,
-  formatY1='s',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -267,14 +297,19 @@ local columnar_Prefetch_Cache_Hit_DurationP = graphPanel.new(
     'histogram_quantile(0.99, sum(rate(tiflash_proxy_kv_engine_columnar_prefetch_cache_hit_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m])) by (le, $additional_groupby))',
     legendFormat='99 {{$additional_groupby}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='s',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local columnar_Fetch_Snapshot_RetryP = graphPanel.new(
   title='Columnar Fetch Snapshot Retry',
   datasource=common.datasource,
-  formatY1='ops',
-  formatY2='opm',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -291,14 +326,20 @@ local columnar_Fetch_Snapshot_RetryP = graphPanel.new(
     legendFormat='retry {{$additional_groupby}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='opm',
+  min='0',
 );
 
 local columnar_Fetch_Snapshot_DurationP = graphPanel.new(
   title='Columnar Fetch Snapshot Duration',
   datasource=common.datasource,
-  formatY1='s',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -329,14 +370,19 @@ local columnar_Fetch_Snapshot_DurationP = graphPanel.new(
     'histogram_quantile(0.99, sum(rate(tiflash_proxy_kv_engine_columnar_fetch_snapshot_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m])) by (le, $additional_groupby))',
     legendFormat='99 {{$additional_groupby}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='s',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local columnar_Meta_CacheP = graphPanel.new(
   title='Columnar Meta Cache',
   datasource=common.datasource,
-  formatY1='ops',
-  formatY2='opm',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -365,14 +411,20 @@ local columnar_Meta_CacheP = graphPanel.new(
     'sum(rate(tiflash_proxy_kv_engine_columnar_meta_cache_parse{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m])) by ($additional_groupby)',
     legendFormat='parse {{$additional_groupby}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='opm',
+  min='0',
 );
 
 local columnar_Meta_Cache_GaugeP = graphPanel.new(
   title='Columnar Meta Cache Gauge',
   datasource=common.datasource,
-  formatY1='bytes',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -394,7 +446,15 @@ local columnar_Meta_Cache_GaugeP = graphPanel.new(
     legendFormat='weighted_size-{{instance}}',
   )
 )
-.addSeriesOverride({ alias: '/entries/', yaxis: 2 });
+.addSeriesOverride({ alias: '/entries/', yaxis: 2 })
+.resetYaxes()
+.addYaxis(
+  format='bytes',
+  min='0',
+)
+.addYaxis(
+  format='short',
+);
 
 
 {

@@ -12,9 +12,6 @@ local write_Command_OPSP = graphPanel.new(
   title='Write Command OPS',
   datasource=common.datasource,
   description='The total count of different kinds of commands received',
-  formatY1='ops',
-  formatY2='opm',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
 )
@@ -31,14 +28,20 @@ local write_Command_OPSP = graphPanel.new(
     intervalFactor=1,
   )
 )
-.addSeriesOverride({ alias: '/delete_range|ingest/', yaxis: 2 });
+.addSeriesOverride({ alias: '/delete_range|ingest/', yaxis: 2 })
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='opm',
+  min='0',
+);
 
 local write_AmplificationP = graphPanel.new(
   title='Write Amplification',
   datasource=common.datasource,
-  formatY1='short',
-  formatY2='binBps',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -92,15 +95,21 @@ local write_AmplificationP = graphPanel.new(
     hide=true,
   )
 )
-.addSeriesOverride({ alias: '/fs|write/', yaxis: 2 });
+.addSeriesOverride({ alias: '/fs|write/', yaxis: 2 })
+.resetYaxes()
+.addYaxis(
+  format='short',
+  min='0',
+  max='20',
+)
+.addYaxis(
+  format='binBps',
+);
 
 local subTasks_Write_Throughput_bytesP = graphPanel.new(
   title='SubTasks Write Throughput (bytes)',
   datasource=common.datasource,
   description='The throughput of (maybe foreground) tasks of storage in bytes',
-  formatY1='binBps',
-  formatY2='bytes',
-  min='0',
   fill=0,
   nullPointMode='null',
   decimals=1,
@@ -120,15 +129,21 @@ local subTasks_Write_Throughput_bytesP = graphPanel.new(
     intervalFactor=1,
   )
 )
-.addSeriesOverride({ alias: '/total/', yaxis: 2 });
+.addSeriesOverride({ alias: '/total/', yaxis: 2 })
+.resetYaxes()
+.addYaxis(
+  format='binBps',
+  min='0',
+)
+.addYaxis(
+  format='bytes',
+  show=false,
+);
 
 local subTasks_Write_Throughput_rowsP = graphPanel.new(
   title='SubTasks Write Throughput (rows)',
   datasource=common.datasource,
   description='The throughput of (maybe foreground) tasks of storage in rows',
-  formatY1='none',
-  formatY2='bytes',
-  min='0',
   fill=0,
   nullPointMode='null',
   decimals=1,
@@ -148,15 +163,21 @@ local subTasks_Write_Throughput_rowsP = graphPanel.new(
     intervalFactor=1,
   )
 )
-.addSeriesOverride({ alias: '/total/', yaxis: 2 });
+.addSeriesOverride({ alias: '/total/', yaxis: 2 })
+.resetYaxes()
+.addYaxis(
+  format='none',
+  min='0',
+)
+.addYaxis(
+  format='bytes',
+  show=false,
+);
 
 local small_Internal_Tasks_OPSP = graphPanel.new(
   title='Small Internal Tasks OPS',
   datasource=common.datasource,
   description='Total number of storage\'s internal sub tasks',
-  formatY1='ops',
-  formatY2='opm',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -167,15 +188,23 @@ local small_Internal_Tasks_OPSP = graphPanel.new(
     'sum(rate(tiflash_storage_subtask_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type!~"(delta_merge|seg_merge|seg_split).*"}[$__rate_interval])) by (type)',
     legendFormat='{{type}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+  decimals=1,
+)
+.addYaxis(
+  format='opm',
+  min='0',
+  show=false,
 );
 
 local small_Internal_Tasks_DurationP = graphPanel.new(
   title='Small Internal Tasks Duration',
   datasource=common.datasource,
   description='Duration of storage\'s internal sub tasks',
-  formatY1='s',
-  formatY2='s',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -202,15 +231,23 @@ local small_Internal_Tasks_DurationP = graphPanel.new(
     'histogram_quantile(0.99, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type!~"(delta_merge|seg_merge|seg_split).*"}[$__rate_interval])) by (le, type, $additional_groupby))',
     legendFormat='99-{{type}} {{$additional_groupby}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='s',
+  min='0',
+  decimals=1,
+)
+.addYaxis(
+  format='s',
+  min='0',
+  show=false,
 );
 
 local large_Internal_Tasks_OPSP = graphPanel.new(
   title='Large Internal Tasks OPS',
   datasource=common.datasource,
   description='Total number of storage\'s internal sub tasks',
-  formatY1='ops',
-  formatY2='opm',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -221,15 +258,23 @@ local large_Internal_Tasks_OPSP = graphPanel.new(
     'sum(rate(tiflash_storage_subtask_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"(delta_merge|seg_merge|seg_split).*"}[$__rate_interval])) by (type)',
     legendFormat='{{type}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+  decimals=1,
+)
+.addYaxis(
+  format='opm',
+  min='0',
+  show=false,
 );
 
 local large_Internal_Tasks_DurationP = graphPanel.new(
   title='Large Internal Tasks Duration',
   datasource=common.datasource,
   description='Duration of storage\'s internal sub tasks',
-  formatY1='s',
-  formatY2='s',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -256,15 +301,23 @@ local large_Internal_Tasks_DurationP = graphPanel.new(
     'histogram_quantile(0.99, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"(delta_merge|seg_merge|seg_split).*"}[$__rate_interval])) by (le, type, $additional_groupby))',
     legendFormat='99-{{type}} {{$additional_groupby}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='s',
+  min='0',
+  decimals=1,
+)
+.addYaxis(
+  format='s',
+  min='0',
+  show=false,
 );
 
 local current_Data_Management_TasksP = graphPanel.new(
   title='Current Data Management Tasks',
   datasource=common.datasource,
   description='The current processing number of  segments\' background management',
-  formatY1='short',
-  formatY2='none',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -293,15 +346,21 @@ local current_Data_Management_TasksP = graphPanel.new(
     legendFormat='seg_merge-{{instance}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='short',
+  min='0',
+  decimals=0,
+)
+.addYaxis(
+  format='none',
 );
 
 local opened_File_CountP = graphPanel.new(
   title='Opened File Count',
   datasource=common.datasource,
   description='The number of currently opened file descriptors.\n(Only counting storage engine of TiFlash by now. Not including TiFlash-Proxy)',
-  formatY1='none',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -341,15 +400,21 @@ local opened_File_CountP = graphPanel.new(
     legendFormat='RW-{{instance}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='none',
+  min='0',
+)
+.addYaxis(
+  format='short',
+  show=false,
 );
 
 local file_Open_OPSP = graphPanel.new(
   title='File Open OPS',
   datasource=common.datasource,
   description='The number of open file descriptors action.\n(Only counting storage engine of TiFlash by now. Not including TiFlash-Proxy)',
-  formatY1='ops',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -376,15 +441,21 @@ local file_Open_OPSP = graphPanel.new(
     legendFormat='OpenFail-{{instance}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='short',
+  show=false,
 );
 
 local fSync_StatusP = graphPanel.new(
   title='FSync Status',
   datasource=common.datasource,
   description='OPS and duration of fsync operations.\n(Only counting storage engine of TiFlash by now. Not including TiFlash-Proxy)',
-  formatY1='ops',
-  formatY2='s',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -409,15 +480,20 @@ local fSync_StatusP = graphPanel.new(
     legendFormat='max-fsync-{{instance}}',
   )
 )
-.addSeriesOverride({ alias: '/max-fsync/', yaxis: 2 });
+.addSeriesOverride({ alias: '/max-fsync/', yaxis: 2 })
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='s',
+);
 
 local disk_Write_OPSP = graphPanel.new(
   title='Disk Write OPS',
   datasource=common.datasource,
   description='The number of different kinds of read operations',
-  formatY1='ops',
-  formatY2='none',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -446,15 +522,20 @@ local disk_Write_OPSP = graphPanel.new(
     legendFormat='File Descriptor',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='none',
 );
 
 local disk_Read_OPSP = graphPanel.new(
   title='Disk Read OPS',
   datasource=common.datasource,
   description='The number of different kinds of read operations',
-  formatY1='ops',
-  formatY2='none',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -483,15 +564,20 @@ local disk_Read_OPSP = graphPanel.new(
     legendFormat='File Descriptor',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='none',
 );
 
 local write_flowP = graphPanel.new(
   title='Write flow',
   datasource=common.datasource,
   description='The flow of different kinds of write operations',
-  formatY1='binBps',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null',
   decimals=1,
@@ -523,15 +609,21 @@ local write_flowP = graphPanel.new(
     legendFormat='PageBackGround',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='binBps',
+  min='0',
+)
+.addYaxis(
+  format='short',
+  min='0',
 );
 
 local read_flowP = graphPanel.new(
   title='Read flow',
   datasource=common.datasource,
   description='The flow of different kinds of read operations',
-  formatY1='binBps',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null',
   decimals=1,
@@ -563,14 +655,21 @@ local read_flowP = graphPanel.new(
     legendFormat='PageBackGround',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='binBps',
+  min='0',
+)
+.addYaxis(
+  format='short',
+  min='0',
 );
 
 local compression_RatioP = graphPanel.new(
   title='Compression Ratio',
   datasource=common.datasource,
   description='The compression ratio of different compression algorithm',
-  formatY1='short',
-  formatY2='short',
   fill=1,
   nullPointMode='null',
   pointradius=2,
@@ -591,14 +690,19 @@ local compression_RatioP = graphPanel.new(
     'sum(rate(tiflash_storage_pack_compression_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"lightweight_uncompressed_bytes"}[1m]))/sum(rate(tiflash_storage_pack_compression_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"lightweight_compressed_bytes"}[1m]))',
     legendFormat='lightweight',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='short',
+)
+.addYaxis(
+  format='short',
 );
 
 local compression_Algorithm_CountP = graphPanel.new(
   title='Compression Algorithm Count',
   datasource=common.datasource,
   description='The count of the compression algorithm used by each data part',
-  formatY1='short',
-  formatY2='short',
   fill=1,
   nullPointMode='null',
   pointradius=2,
@@ -613,6 +717,13 @@ local compression_Algorithm_CountP = graphPanel.new(
     'sum(rate(tiflash_storage_pack_compression_algorithm_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type)',
     legendFormat='{{type}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='short',
+)
+.addYaxis(
+  format='short',
 );
 
 

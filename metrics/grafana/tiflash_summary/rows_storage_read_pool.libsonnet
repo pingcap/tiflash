@@ -12,9 +12,6 @@ local read_Tasks_OPSP = graphPanel.new(
   title='Read Tasks OPS',
   datasource=common.datasource,
   description='Total number of storage engine read tasks',
-  formatY1='ops',
-  formatY2='none',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -29,14 +26,19 @@ local read_Tasks_OPSP = graphPanel.new(
     'sum(rate(tiflash_storage_read_tasks_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance)',
     legendFormat='{{instance}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='none',
 );
 
 local read_SnapshotsP = graphPanel.new(
   title='Read Snapshots',
   datasource=common.datasource,
-  formatY1='short',
-  formatY2='s',
-  min='0',
   fill=1,
   nullPointMode='null',
   pointradius=2,
@@ -134,14 +136,20 @@ local read_SnapshotsP = graphPanel.new(
     intervalFactor=1,
   )
 )
-.addSeriesOverride({ alias: '/max_snapshot_lifetime/', yaxis: 2 });
+.addSeriesOverride({ alias: '/max_snapshot_lifetime/', yaxis: 2 })
+.resetYaxes()
+.addYaxis(
+  format='short',
+  min='0',
+)
+.addYaxis(
+  format='s',
+  min='0',
+);
 
 local read_Thread_Internal_DurationP = graphPanel.new(
   title='Read Thread Internal Duration',
   datasource=common.datasource,
-  formatY1='µs',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -178,15 +186,21 @@ local read_Thread_Internal_DurationP = graphPanel.new(
     intervalFactor=1,
     hide=true,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='µs',
+  min='0',
+)
+.addYaxis(
+  format='short',
+  show=false,
 );
 
 local read_Thread_SchedulingP = graphPanel.new(
   title='Read Thread Scheduling',
   datasource=common.datasource,
   description='The information of read thread scheduling.',
-  formatY1='ops',
-  formatY2='binBps',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -198,15 +212,21 @@ local read_Thread_SchedulingP = graphPanel.new(
     legendFormat='{{type}}',
   )
 )
-.addSeriesOverride({ alias: '/push_block/', yaxis: 2 });
+.addSeriesOverride({ alias: '/push_block/', yaxis: 2 })
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='binBps',
+  min='0',
+);
 
 local data_SharingP = graphPanel.new(
   title='Data Sharing',
   datasource=common.datasource,
   description='The information of data sharing cache hit ratio. Data sharing cache is purpose-built for OLAP workload that can reduce repeated data reads of concurrent table scanning.',
-  formatY1='ops',
-  formatY2='percentunit',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -231,14 +251,20 @@ local data_SharingP = graphPanel.new(
     hide=true,
   )
 )
-.addSeriesOverride({ alias: '/cache_hit_ratio/', yaxis: 2 });
+.addSeriesOverride({ alias: '/cache_hit_ratio/', yaxis: 2 })
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='percentunit',
+  min='0',
+);
 
 local segment_MergedTaskP = graphPanel.new(
   title='Segment MergedTask',
   datasource=common.datasource,
-  formatY1='ops',
-  formatY2='percentunit',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -254,14 +280,20 @@ local segment_MergedTaskP = graphPanel.new(
     legendFormat='{{type}} {{$additional_groupby}}',
   )
 )
-.addSeriesOverride({ alias: '/cache_hit_ratio/', yaxis: 2 });
+.addSeriesOverride({ alias: '/cache_hit_ratio/', yaxis: 2 })
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='percentunit',
+  min='0',
+);
 
 local segment_MergedTask_DurationP = graphPanel.new(
   title='Segment MergedTask Duration',
   datasource=common.datasource,
-  formatY1='s',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -291,14 +323,20 @@ local segment_MergedTask_DurationP = graphPanel.new(
     intervalFactor=1,
     hide=true,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='s',
+  min='0',
+)
+.addYaxis(
+  format='short',
+  show=false,
 );
 
 local versionChainP = graphPanel.new(
   title='VersionChain',
   datasource=common.datasource,
-  formatY1='ms',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -336,15 +374,21 @@ local versionChainP = graphPanel.new(
     intervalFactor=1,
     hide=true,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='ms',
+  min='0',
+)
+.addYaxis(
+  format='short',
+  show=false,
 );
 
 local deltaIndexErrorP = graphPanel.new(
   title='DeltaIndexError',
   datasource=common.datasource,
   description='Errors of DeltaIndex',
-  formatY1='cps',
-  formatY2='opm',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -358,6 +402,16 @@ local deltaIndexErrorP = graphPanel.new(
     legendFormat='DeltaIndexError-{{instance}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='cps',
+  min='0',
+)
+.addYaxis(
+  format='opm',
+  min='0',
+  show=false,
 );
 
 

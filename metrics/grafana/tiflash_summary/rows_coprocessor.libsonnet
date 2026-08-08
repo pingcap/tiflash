@@ -11,9 +11,6 @@ local rowObj = row.new(collapse=true, title='Coprocessor');
 local request_QPSP = graphPanel.new(
   title='Request QPS',
   datasource=common.datasource,
-  formatY1='none',
-  formatY2='none',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -30,14 +27,19 @@ local request_QPSP = graphPanel.new(
     legendFormat='{{type}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='none',
+  min='0',
+)
+.addYaxis(
+  format='none',
 );
 
 local executor_QPSP = graphPanel.new(
   title='Executor QPS',
   datasource=common.datasource,
-  formatY1='none',
-  formatY2='none',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -54,14 +56,19 @@ local executor_QPSP = graphPanel.new(
     legendFormat='{{type}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='none',
+  min='0',
+)
+.addYaxis(
+  format='none',
 );
 
 local request_DurationP = graphPanel.new(
   title='Request Duration',
   datasource=common.datasource,
-  formatY1='s',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -100,14 +107,19 @@ local request_DurationP = graphPanel.new(
     intervalFactor=1,
     hide=true,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='s',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local error_QPSP = graphPanel.new(
   title='Error QPS',
   datasource=common.datasource,
-  formatY1='none',
-  formatY2='none',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -122,14 +134,19 @@ local error_QPSP = graphPanel.new(
     legendFormat='{{reason}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='none',
+  min='0',
+)
+.addYaxis(
+  format='none',
 );
 
 local request_Handle_DurationP = graphPanel.new(
   title='Request Handle Duration',
   datasource=common.datasource,
-  formatY1='s',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null as zero',
 )
@@ -160,14 +177,19 @@ local request_Handle_DurationP = graphPanel.new(
     legendFormat='80-{{type}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='s',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local response_Bytes_SecondsP = graphPanel.new(
   title='Response Bytes/Seconds',
   datasource=common.datasource,
-  formatY1='bytes',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -184,14 +206,19 @@ local response_Bytes_SecondsP = graphPanel.new(
     legendFormat='{{type}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='bytes',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local cop_task_memory_usageP = graphPanel.new(
   title='Cop task memory usage',
   datasource=common.datasource,
-  formatY1='bytes',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null as zero',
   pointradius=2,
@@ -223,14 +250,19 @@ local cop_task_memory_usageP = graphPanel.new(
     legendFormat='80-{{type}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='bytes',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local exchange_Bytes_SecondsP = graphPanel.new(
   title='Exchange Bytes/Seconds',
   datasource=common.datasource,
-  formatY1='bytes',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -247,14 +279,19 @@ local exchange_Bytes_SecondsP = graphPanel.new(
     legendFormat='{{type}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='bytes',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local threads_of_RpcP = graphPanel.new(
   title='Threads of Rpc',
   datasource=common.datasource,
-  formatY1='none',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -269,14 +306,19 @@ local threads_of_RpcP = graphPanel.new(
     legendFormat='{{instance}}-{{type}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='none',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local handling_Request_NumberP = graphPanel.new(
   title='Handling Request Number',
   datasource=common.datasource,
-  formatY1='none',
-  formatY2='none',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -291,14 +333,19 @@ local handling_Request_NumberP = graphPanel.new(
     legendFormat='{{type}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='none',
+  min='0',
+)
+.addYaxis(
+  format='none',
 );
 
 local threadsP = graphPanel.new(
   title='Threads',
   datasource=common.datasource,
-  formatY1='none',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -313,14 +360,19 @@ local threadsP = graphPanel.new(
     legendFormat='{{instance}}-{{type}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='none',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local max_Threads_of_RpcP = graphPanel.new(
   title='Max Threads of Rpc',
   datasource=common.datasource,
-  formatY1='none',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -335,15 +387,20 @@ local max_Threads_of_RpcP = graphPanel.new(
     legendFormat='{{instance}}-{{type}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='none',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local mPP_Query_countP = graphPanel.new(
   title='MPP Query count',
   datasource=common.datasource,
   description='The MPP query count in TiFlash',
-  formatY1='none',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -358,14 +415,19 @@ local mPP_Query_countP = graphPanel.new(
     legendFormat='{{instance}}-{{type}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='none',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local max_ThreadsP = graphPanel.new(
   title='Max Threads',
   datasource=common.datasource,
-  formatY1='none',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -380,14 +442,19 @@ local max_ThreadsP = graphPanel.new(
     legendFormat='{{instance}}-{{type}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='none',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local time_of_the_Longest_Live_MPP_TaskP = graphPanel.new(
   title='Time of the Longest Live MPP Task',
   datasource=common.datasource,
-  formatY1='s',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -402,14 +469,19 @@ local time_of_the_Longest_Live_MPP_TaskP = graphPanel.new(
     legendFormat='{{instance}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='s',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local data_size_in_send_and_receive_queueP = graphPanel.new(
   title='Data size in send and receive queue',
   datasource=common.datasource,
-  formatY1='bytes',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -426,14 +498,19 @@ local data_size_in_send_and_receive_queueP = graphPanel.new(
     legendFormat='{{type}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='bytes',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local network_TransmissionP = graphPanel.new(
   title='Network Transmission',
   datasource=common.datasource,
-  formatY1='bytes',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -448,15 +525,20 @@ local network_TransmissionP = graphPanel.new(
     legendFormat='{{type}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='bytes',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local establish_calldata_detailsP = graphPanel.new(
   title='Establish calldata details',
   datasource=common.datasource,
   description='The establish calldata details',
-  formatY1='none',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -473,6 +555,14 @@ local establish_calldata_detailsP = graphPanel.new(
     legendFormat='{{instance}}-{{type}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='none',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 

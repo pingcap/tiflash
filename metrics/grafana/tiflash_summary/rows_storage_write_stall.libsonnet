@@ -12,9 +12,6 @@ local write_Stall_DurationP = graphPanel.new(
   title='Write Stall Duration',
   datasource=common.datasource,
   description='The stall duration of write and delete range',
-  formatY1='s',
-  formatY2='s',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -41,15 +38,21 @@ local write_Stall_DurationP = graphPanel.new(
     intervalFactor=1,
   )
 )
-.addSeriesOverride({ alias: '99-delta_merge', yaxis: 2 });
+.addSeriesOverride({ alias: '99-delta_merge', yaxis: 2 })
+.resetYaxes()
+.addYaxis(
+  format='s',
+  min='0',
+)
+.addYaxis(
+  format='s',
+  min='0',
+);
 
 local write_Delta_Management_ThroughputP = graphPanel.new(
   title='Write & Delta Management Throughput',
   datasource=common.datasource,
   description='The throughput of write and delta\'s background management',
-  formatY1='binBps',
-  formatY2='bytes',
-  min='0',
   fill=0,
   nullPointMode='null',
   decimals=1,
@@ -75,15 +78,21 @@ local write_Delta_Management_ThroughputP = graphPanel.new(
     legendFormat='ManageDelta',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='binBps',
+  min='0',
+)
+.addYaxis(
+  format='bytes',
+  show=false,
 );
 
 local write_Delta_Management_TotalP = graphPanel.new(
   title='Write & Delta Management Total',
   datasource=common.datasource,
   description='The throughput of write and delta\'s background management',
-  formatY1='bytes',
-  formatY2='bytes',
-  min='0',
   fill=0,
   nullPointMode='null',
   decimals=1,
@@ -109,15 +118,21 @@ local write_Delta_Management_TotalP = graphPanel.new(
     legendFormat='ManageDelta',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='bytes',
+  min='0',
+)
+.addYaxis(
+  format='bytes',
+  show=false,
 );
 
 local write_Throughput_By_InstanceP = graphPanel.new(
   title='Write Throughput By Instance',
   datasource=common.datasource,
   description='The throughput of write by instance',
-  formatY1='binBps',
-  formatY2='bytes',
-  min='0',
   fill=0,
   nullPointMode='null',
   decimals=1,
@@ -144,15 +159,21 @@ local write_Throughput_By_InstanceP = graphPanel.new(
     legendFormat='ingest-{{instance}}',
   )
 )
-.addSeriesOverride({ alias: '/total/', yaxis: 2 });
+.addSeriesOverride({ alias: '/total/', yaxis: 2 })
+.resetYaxes()
+.addYaxis(
+  format='binBps',
+  min='0',
+)
+.addYaxis(
+  format='bytes',
+  show=false,
+);
 
 local write_Command_OPS_By_InstanceP = graphPanel.new(
   title='Write Command OPS By Instance',
   datasource=common.datasource,
   description='The total count of different kinds of commands received',
-  formatY1='ops',
-  formatY2='opm',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -176,7 +197,16 @@ local write_Command_OPS_By_InstanceP = graphPanel.new(
     intervalFactor=1,
   )
 )
-.addSeriesOverride({ alias: '/delete_range|ingest/', yaxis: 2 });
+.addSeriesOverride({ alias: '/delete_range|ingest/', yaxis: 2 })
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='opm',
+  min='0',
+);
 
 
 {

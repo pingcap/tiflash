@@ -125,6 +125,36 @@ def emit_series_override(o: dict) -> str:
     return "{ " + ", ".join(parts) + " }"
 
 
+def emit_yaxis(axis: dict | None, default_format: str = "short") -> str:
+    """Emit graphPanel.addYaxis(...) args from an original yaxes[] entry."""
+    axis = axis or {}
+    args = [f"format={jstr(axis.get('format') or default_format)}"]
+    amin = axis.get("min")
+    if amin is not None and amin != "":
+        if isinstance(amin, (int, float)) and not isinstance(amin, bool):
+            args.append(f"min={amin}")
+        else:
+            args.append(f"min={jstr(str(amin))}")
+    amax = axis.get("max")
+    if amax is not None and amax != "":
+        if isinstance(amax, (int, float)) and not isinstance(amax, bool):
+            args.append(f"max={amax}")
+        else:
+            args.append(f"max={jstr(str(amax))}")
+    label = axis.get("label")
+    if label:
+        args.append(f"label={jstr(label)}")
+    if axis.get("show") is False:
+        args.append("show=false")
+    log_base = axis.get("logBase")
+    if log_base not in (None, 1):
+        args.append(f"logBase={log_base}")
+    decimals = axis.get("decimals")
+    if decimals is not None:
+        args.append(f"decimals={decimals}")
+    return "addYaxis(\n  " + ",\n  ".join(args) + ",\n)"
+
+
 def emit_graph(p: dict, var: str) -> str:
     yaxes = p.get("yaxes") or []
     y1 = yaxes[0] if yaxes else {}
@@ -137,15 +167,6 @@ def emit_graph(p: dict, var: str) -> str:
     ]
     if p.get("description"):
         kwargs.append(f"description={jstr_or_multiline(p['description'])}")
-
-    fmt1 = y1.get("format") or "short"
-    fmt2 = y2.get("format") or "short"
-    kwargs.append(f"formatY1={jstr(fmt1)}")
-    kwargs.append(f"formatY2={jstr(fmt2)}")
-
-    min1 = y1.get("min")
-    if min1 is not None and min1 != "":
-        kwargs.append(f"min={jstr(str(min1)) if not isinstance(min1, (int, float)) else min1}")
 
     fill = p.get("fill", 1)
     kwargs.append(f"fill={fill}")
@@ -206,6 +227,11 @@ def emit_graph(p: dict, var: str) -> str:
         body += "\n.addTarget(\n  " + emit_target(t) + "\n)"
     for o in p.get("seriesOverrides") or []:
         body += "\n.addSeriesOverride(" + emit_series_override(o) + ")"
+    # Rebuild y-axes per original panel so label/show/logBase/min stay accurate.
+    # graphPanel.new() shares one min across both axes and always show=true.
+    body += "\n.resetYaxes()"
+    body += "\n." + emit_yaxis(y1, default_format="short")
+    body += "\n." + emit_yaxis(y2, default_format="short")
     return f"local {var} = {body};\n"
 
 

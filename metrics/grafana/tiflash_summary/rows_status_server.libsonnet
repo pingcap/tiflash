@@ -11,9 +11,6 @@ local rowObj = row.new(collapse=true, title='Status Server');
 local status_API_Request_DurationP = graphPanel.new(
   title='Status API Request Duration',
   datasource=common.datasource,
-  formatY1='s',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -43,14 +40,19 @@ local status_API_Request_DurationP = graphPanel.new(
     intervalFactor=1,
     hide=true,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='s',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local status_API_Request_op_sP = graphPanel.new(
   title='Status API Request (op/s)',
   datasource=common.datasource,
-  formatY1='ops',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -66,6 +68,14 @@ local status_API_Request_op_sP = graphPanel.new(
     'sum(rate( tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_count {k8s_cluster="$k8s_cluster",tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"} [$__rate_interval] )) by (path, $additional_groupby)',
     legendFormat='{{path}} {{$additional_groupby}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 

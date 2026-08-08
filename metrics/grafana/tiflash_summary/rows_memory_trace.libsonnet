@@ -11,8 +11,6 @@ local rowObj = row.new(collapse=true, title='Memory trace');
 local number_of_KeyspacesP = graphPanel.new(
   title='Number of Keyspaces',
   datasource=common.datasource,
-  formatY1='short',
-  formatY2='s',
   fill=1,
   nullPointMode='null',
   pointradius=2,
@@ -28,13 +26,19 @@ local number_of_KeyspacesP = graphPanel.new(
     legendFormat='keyspace-{{instance}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='short',
+)
+.addYaxis(
+  format='s',
+  show=false,
 );
 
 local number_of_Physical_TablesP = graphPanel.new(
   title='Number of Physical Tables',
   datasource=common.datasource,
-  formatY1='short',
-  formatY2='s',
   fill=1,
   nullPointMode='null',
   pointradius=2,
@@ -58,13 +62,19 @@ local number_of_Physical_TablesP = graphPanel.new(
     intervalFactor=1,
     hide=true,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='short',
+)
+.addYaxis(
+  format='s',
+  show=false,
 );
 
 local number_of_SegmentsP = graphPanel.new(
   title='Number of Segments',
   datasource=common.datasource,
-  formatY1='short',
-  formatY2='s',
   fill=1,
   nullPointMode='null',
   pointradius=2,
@@ -87,13 +97,19 @@ local number_of_SegmentsP = graphPanel.new(
     legendFormat='mem_table-{{instance}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='short',
+)
+.addYaxis(
+  format='s',
+  show=false,
 );
 
 local bytes_of_MemTablesP = graphPanel.new(
   title='Bytes of MemTables',
   datasource=common.datasource,
-  formatY1='bytes',
-  formatY2='s',
   fill=1,
   nullPointMode='null',
   pointradius=2,
@@ -116,15 +132,20 @@ local bytes_of_MemTablesP = graphPanel.new(
     legendFormat='bytes-allocated-{{instance}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='bytes',
+)
+.addYaxis(
+  format='s',
+  show=false,
 );
 
 local mark_Cache_and_Minmax_Index_Cache_Memory_UsageP = graphPanel.new(
   title='Mark Cache and Minmax Index Cache Memory Usage',
   datasource=common.datasource,
   description='The memory usage of mark cache and minmax index cache',
-  formatY1='bytes',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -154,14 +175,21 @@ local mark_Cache_and_Minmax_Index_Cache_Memory_UsageP = graphPanel.new(
     legendFormat='rn_mvcc_index_cache_{{instance}}',
   )
 )
-.addSeriesOverride({ alias: '/limit/', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2 });
+.addSeriesOverride({ alias: '/limit/', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2 })
+.resetYaxes()
+.addYaxis(
+  format='bytes',
+  min='0',
+)
+.addYaxis(
+  format='short',
+  show=false,
+);
 
 local effectiveness_of_Mark_CacheP = graphPanel.new(
   title='Effectiveness of Mark Cache',
   datasource=common.datasource,
   description='cache misses or cache hits of mark_cache.\nBased on this infactor, we can check whether mark_cache is large enough',
-  formatY1='percentunit',
-  formatY2='percent',
   fill=1,
   nullPointMode='null',
   pointradius=2,
@@ -177,14 +205,20 @@ local effectiveness_of_Mark_CacheP = graphPanel.new(
     'max(tiflash_system_profile_event_MarkCacheHits{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
     legendFormat='mark cache hits',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='percentunit',
+)
+.addYaxis(
+  format='percent',
+  show=false,
 );
 
 local schema_of_Column_FileP = graphPanel.new(
   title='Schema of Column File',
   datasource=common.datasource,
   description='Information about schema of column file, to learn the memory usage of schema',
-  formatY1='short',
-  formatY2='short',
   fill=1,
   nullPointMode='null',
   pointradius=2,
@@ -218,14 +252,18 @@ local schema_of_Column_FileP = graphPanel.new(
     'sum(rate(tiflash_shared_block_schemas{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"miss_count"}[1m])) by (instance)',
     legendFormat='miss_count_ops-{{instance}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='short',
+)
+.addYaxis(
+  format='short',
 );
 
 local read_SnapshotsP = graphPanel.new(
   title='Read Snapshots',
   datasource=common.datasource,
-  formatY1='short',
-  formatY2='s',
-  min='0',
   fill=1,
   nullPointMode='null',
   pointradius=2,
@@ -250,13 +288,20 @@ local read_SnapshotsP = graphPanel.new(
     intervalFactor=1,
   )
 )
-.addSeriesOverride({ alias: '/max_snapshot_lifetime/', yaxis: 2 });
+.addSeriesOverride({ alias: '/max_snapshot_lifetime/', yaxis: 2 })
+.resetYaxes()
+.addYaxis(
+  format='short',
+  min='0',
+)
+.addYaxis(
+  format='s',
+  min='0',
+);
 
 local memory_by_threadP = graphPanel.new(
   title='Memory by thread',
   datasource=common.datasource,
-  formatY1='bytes',
-  formatY2='short',
   fill=1,
   nullPointMode='null',
   pointradius=2,
@@ -286,13 +331,18 @@ local memory_by_threadP = graphPanel.new(
     legendFormat='{{instance}}-{{type}}-tot',
     hide=true,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='bytes',
+)
+.addYaxis(
+  format='short',
 );
 
 local memory_by_thread_proxyP = graphPanel.new(
   title='Memory by thread (proxy)',
   datasource=common.datasource,
-  formatY1='bytes',
-  formatY2='short',
   fill=1,
   nullPointMode='null',
   pointradius=2,
@@ -324,13 +374,18 @@ local memory_by_thread_proxyP = graphPanel.new(
     legendFormat='{{instance}}-{{type}}-tot',
     hide=true,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='bytes',
+)
+.addYaxis(
+  format='short',
 );
 
 local memory_by_classP = graphPanel.new(
   title='Memory by class',
   datasource=common.datasource,
-  formatY1='bytes',
-  formatY2='short',
   fill=1,
   nullPointMode='null',
   pointradius=2,
@@ -347,13 +402,18 @@ local memory_by_classP = graphPanel.new(
     legendFormat='{{instance}}-{{type}}-rate',
     hide=true,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='bytes',
+)
+.addYaxis(
+  format='short',
 );
 
 local kVStore_memoryP = graphPanel.new(
   title='KVStore memory',
   datasource=common.datasource,
-  formatY1='bytes',
-  formatY2='short',
   fill=1,
   nullPointMode='null',
   pointradius=2,
@@ -363,6 +423,13 @@ local kVStore_memoryP = graphPanel.new(
     'sum(tiflash_system_current_metric_MemoryTrackingKVStore{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
     legendFormat='{{instance}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='bytes',
+)
+.addYaxis(
+  format='short',
 );
 
 

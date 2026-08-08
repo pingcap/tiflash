@@ -11,9 +11,6 @@ local rowObj = row.new(collapse=true, title='Raft Snapshot / IngestSST');
 local heavy_Raft_Apply_DurationP = graphPanel.new(
   title='Heavy Raft Apply Duration',
   datasource=common.datasource,
-  formatY1='s',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -29,15 +26,20 @@ local heavy_Raft_Apply_DurationP = graphPanel.new(
     'histogram_quantile(0.99, sum(rate(tiflash_raft_command_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
     legendFormat='99%-{{type}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='s',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local applying_snapshots_CountP = graphPanel.new(
   title='Applying snapshots Count',
   datasource=common.datasource,
   description='The number of currently applying snapshots.',
-  formatY1='none',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -74,6 +76,14 @@ local applying_snapshots_CountP = graphPanel.new(
     legendFormat='Pending-ParallelTasks-{{instance}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='none',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local snapshot_Uncommitted_Size_HeatmapP = heatmapPanel.new(
@@ -97,8 +107,6 @@ local snapshot_Uncommitted_Size_HeatmapP = heatmapPanel.new(
 local ongoing_raft_snapshotP = graphPanel.new(
   title='Ongoing raft snapshot',
   datasource=common.datasource,
-  formatY1='bytes',
-  formatY2='short',
   fill=1,
   nullPointMode='null',
   pointradius=2,
@@ -108,6 +116,13 @@ local ongoing_raft_snapshotP = graphPanel.new(
     'sum(rate(tiflash_raft_ongoing_snapshot_total_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
     legendFormat='{{le}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='bytes',
+)
+.addYaxis(
+  format='short',
 );
 
 local snapshot_Size_HeatmapP = heatmapPanel.new(

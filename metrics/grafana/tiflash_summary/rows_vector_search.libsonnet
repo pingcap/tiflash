@@ -11,9 +11,6 @@ local rowObj = row.new(collapse=true, title='Vector Search');
 local in_Memory_Vector_Index_InstancesP = graphPanel.new(
   title='In-Memory Vector Index Instances',
   datasource=common.datasource,
-  formatY1='short',
-  formatY2='ops',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   decimals=0,
@@ -32,14 +29,22 @@ local in_Memory_Vector_Index_InstancesP = graphPanel.new(
     legendFormat='{{instance}}-{{type}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='short',
+  min='0',
+  decimals=0,
+)
+.addYaxis(
+  format='ops',
+  min='0',
+  show=false,
 );
 
 local vector_Index_Estimated_Memory_UsageP = graphPanel.new(
   title='Vector Index Estimated Memory Usage',
   datasource=common.datasource,
-  formatY1='bytes',
-  formatY2='ops',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   decimals=0,
@@ -64,14 +69,22 @@ local vector_Index_Estimated_Memory_UsageP = graphPanel.new(
     'tiflash_process_rss_by_type_bytes{ k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="file" }',
     legendFormat='{{instance}}-RssFile',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='bytes',
+  min='0',
+  decimals=0,
+)
+.addYaxis(
+  format='ops',
+  min='0',
+  show=false,
 );
 
 local p_99_9_Vector_Search_Duration_Per_RequestP = graphPanel.new(
   title='99.9% Vector Search Duration (Per Request)',
   datasource=common.datasource,
-  formatY1='s',
-  formatY2='s',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   decimals=1,
@@ -89,14 +102,22 @@ local p_99_9_Vector_Search_Duration_Per_RequestP = graphPanel.new(
     intervalFactor=1,
   )
 )
-.addSeriesOverride({ alias: '/download/', yaxis: 2 });
+.addSeriesOverride({ alias: '/download/', yaxis: 2 })
+.resetYaxes()
+.addYaxis(
+  format='s',
+  min='0',
+  decimals=1,
+)
+.addYaxis(
+  format='s',
+  min='0',
+  decimals=1,
+);
 
 local p_99_9_Vector_Index_Build_Duration_Per_DMFile_ColumnP = graphPanel.new(
   title='99.9% Vector Index Build Duration (Per DMFile Column)',
   datasource=common.datasource,
-  formatY1='s',
-  formatY2='s',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   decimals=1,
@@ -113,6 +134,18 @@ local p_99_9_Vector_Index_Build_Duration_Per_DMFile_ColumnP = graphPanel.new(
     legendFormat='{{type}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='s',
+  min='0',
+  decimals=1,
+)
+.addYaxis(
+  format='s',
+  min='0',
+  show=false,
+  decimals=1,
 );
 
 

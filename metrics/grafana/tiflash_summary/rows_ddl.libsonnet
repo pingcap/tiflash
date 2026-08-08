@@ -12,9 +12,6 @@ local schema_Internal_DDL_OPMP = graphPanel.new(
   title='Schema Internal DDL OPM',
   datasource=common.datasource,
   description='Executed DDL jobs per minute',
-  formatY1='opm',
-  formatY2='none',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
 )
@@ -47,15 +44,20 @@ local schema_Internal_DDL_OPMP = graphPanel.new(
     intervalFactor=1,
     hide=true,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='opm',
+  min='0',
+)
+.addYaxis(
+  format='none',
 );
 
 local schema_Apply_OPMP = graphPanel.new(
   title='Schema Apply OPM',
   datasource=common.datasource,
   description='Executed DDL apply jobs per minute',
-  formatY1='opm',
-  formatY2='none',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
 )
@@ -65,14 +67,19 @@ local schema_Apply_OPMP = graphPanel.new(
     legendFormat='triggle-by-{{type}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='opm',
+  min='0',
+)
+.addYaxis(
+  format='none',
 );
 
 local schema_Apply_DurationP = graphPanel.new(
   title='Schema Apply Duration',
   datasource=common.datasource,
-  formatY1='s',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null as zero',
 )
@@ -113,7 +120,17 @@ local schema_Apply_DurationP = graphPanel.new(
     intervalFactor=1,
   )
 )
-.addSeriesOverride({ alias: '/^applying/', yaxis: 2 });
+.addSeriesOverride({ alias: '/^applying/', yaxis: 2 })
+.resetYaxes()
+.addYaxis(
+  format='s',
+  min='0',
+)
+.addYaxis(
+  format='short',
+  min='0',
+  max='2',
+);
 
 
 {

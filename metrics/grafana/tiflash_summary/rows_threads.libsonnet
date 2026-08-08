@@ -11,8 +11,6 @@ local rowObj = row.new(collapse=true, title='Threads');
 local threads_stateP = graphPanel.new(
   title='Threads state',
   datasource=common.datasource,
-  formatY1='none',
-  formatY2='short',
   fill=1,
   nullPointMode='null',
   points=true,
@@ -38,13 +36,18 @@ local threads_stateP = graphPanel.new(
     'sum(tiflash_proxy_threads_state{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}) by (instance)',
     legendFormat='{{instance}}-total',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='none',
+)
+.addYaxis(
+  format='short',
 );
 
 local threads_IOP = graphPanel.new(
   title='Threads IO',
   datasource=common.datasource,
-  formatY1='Bps',
-  formatY2='short',
   fill=1,
   nullPointMode='null',
   points=true,
@@ -64,13 +67,18 @@ local threads_IOP = graphPanel.new(
     legendFormat='{{name}}-{{io}} {{$additional_groupby}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='Bps',
+)
+.addYaxis(
+  format='short',
 );
 
 local thread_Voluntary_Context_SwitchesP = graphPanel.new(
   title='Thread Voluntary Context Switches',
   datasource=common.datasource,
-  formatY1='none',
-  formatY2='short',
   fill=1,
   nullPointMode='null',
   points=true,
@@ -90,13 +98,18 @@ local thread_Voluntary_Context_SwitchesP = graphPanel.new(
     legendFormat='{{instance}} - {{name}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='none',
+)
+.addYaxis(
+  format='short',
 );
 
 local thread_Nonvoluntary_Context_SwitchesP = graphPanel.new(
   title='Thread Nonvoluntary Context Switches',
   datasource=common.datasource,
-  formatY1='none',
-  formatY2='short',
   fill=1,
   nullPointMode='null',
   points=true,
@@ -116,6 +129,13 @@ local thread_Nonvoluntary_Context_SwitchesP = graphPanel.new(
     legendFormat='{{instance}} - {{name}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='none',
+)
+.addYaxis(
+  format='short',
 );
 
 

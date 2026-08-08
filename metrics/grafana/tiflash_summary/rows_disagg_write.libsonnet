@@ -12,9 +12,6 @@ local checkpoint_Upload_DurationP = graphPanel.new(
   title='Checkpoint Upload Duration',
   datasource=common.datasource,
   description='PageStorage Checkpoint Duration',
-  formatY1='s',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -45,15 +42,20 @@ local checkpoint_Upload_DurationP = graphPanel.new(
     legendFormat='{{type}}-99 {{$additional_groupby}}',
     hide=true,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='s',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local checkpoint_Upload_flowP = graphPanel.new(
   title='Checkpoint Upload flow',
   datasource=common.datasource,
   description='The flow of checkpoint operations',
-  formatY1='binBps',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null',
   decimals=1,
@@ -78,15 +80,21 @@ local checkpoint_Upload_flowP = graphPanel.new(
     legendFormat='compaction {{$additional_groupby}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='binBps',
+  min='0',
+)
+.addYaxis(
+  format='short',
+  min='0',
 );
 
 local checkpoint_Upload_keys_speed_by_type_allP = graphPanel.new(
   title='Checkpoint Upload keys speed by type (all)',
   datasource=common.datasource,
   description='The keys of checkpoint operations. All keys are uploaded in the checkpoint. Grouped by key types.',
-  formatY1='ops',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null',
   decimals=1,
@@ -104,15 +112,21 @@ local checkpoint_Upload_keys_speed_by_type_allP = graphPanel.new(
     'sum(rate(tiflash_storage_checkpoint_keys_by_types{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
     legendFormat='{{type}} {{$additional_groupby}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='short',
+  min='0',
 );
 
 local checkpoint_Upload_flow_by_type_incremental_compactionP = graphPanel.new(
   title='Checkpoint Upload flow by type (incremental+compaction)',
   datasource=common.datasource,
   description='The flow of checkpoint operations. Group by key types',
-  formatY1='binBps',
-  formatY2='short',
-  min='0',
   fill=1,
   nullPointMode='null',
   decimals=1,
@@ -130,15 +144,21 @@ local checkpoint_Upload_flow_by_type_incremental_compactionP = graphPanel.new(
     'sum(rate(tiflash_storage_checkpoint_flow_by_types{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
     legendFormat='{{type}} {{$additional_groupby}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='binBps',
+  min='0',
+)
+.addYaxis(
+  format='short',
+  min='0',
 );
 
 local remote_File_NumP = graphPanel.new(
   title='Remote File Num',
   datasource=common.datasource,
   description='The number of files of owned by each TiFlash node',
-  formatY1='short',
-  formatY2='percentunit',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   decimals=1,
@@ -152,15 +172,22 @@ local remote_File_NumP = graphPanel.new(
     'sum(tiflash_storage_remote_stats{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="num_files"}) by (instance)',
     legendFormat='checkpoint_data-{{instance}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='short',
+  min='0',
+)
+.addYaxis(
+  format='percentunit',
+  min='0',
+  max='1.1',
 );
 
 local remote_Store_UsageP = graphPanel.new(
   title='Remote Store Usage',
   datasource=common.datasource,
   description='The remote store usage owned by each TiFlash node',
-  formatY1='bytes',
-  formatY2='percentunit',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   decimals=1,
@@ -189,14 +216,21 @@ local remote_Store_UsageP = graphPanel.new(
   )
 )
 .addSeriesOverride({ alias: '/^valid_rate/', yaxis: 2 })
-.addSeriesOverride({ alias: '/size/', linewidth: 3 });
+.addSeriesOverride({ alias: '/size/', linewidth: 3 })
+.resetYaxes()
+.addYaxis(
+  format='bytes',
+  min='0',
+)
+.addYaxis(
+  format='percentunit',
+  min='0',
+  max='1.1',
+);
 
 local remote_Object_Lock_Request_QPSP = graphPanel.new(
   title='Remote Object Lock Request QPS',
   datasource=common.datasource,
-  formatY1='none',
-  formatY2='none',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -212,14 +246,19 @@ local remote_Object_Lock_Request_QPSP = graphPanel.new(
     legendFormat='{{type}} {{$additional_groupby}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='none',
+  min='0',
+)
+.addYaxis(
+  format='none',
 );
 
 local remote_Object_Lock_DurationP = graphPanel.new(
   title='Remote Object Lock Duration',
   datasource=common.datasource,
-  formatY1='s',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null',
   pointradius=2,
@@ -235,14 +274,19 @@ local remote_Object_Lock_DurationP = graphPanel.new(
     'histogram_quantile(0.99, sum(rate(tiflash_disaggregated_object_lock_request_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type, $additional_groupby))',
     legendFormat='99%-{{type}} {{$additional_groupby}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='s',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local remote_Store_SummaryP = graphPanel.new(
   title='Remote Store Summary',
   datasource=common.datasource,
-  formatY1='bytes',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   decimals=1,
@@ -259,14 +303,19 @@ local remote_Store_SummaryP = graphPanel.new(
     'sum(tiflash_storage_s3_store_summary_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance, store_id,type)',
     legendFormat='store-{{store_id}}-{{type}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='bytes',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local remote_GC_Duration_BreakdownP = graphPanel.new(
   title='Remote GC Duration Breakdown',
   datasource=common.datasource,
-  formatY1='s',
-  formatY2='s',
-  min='0',
   fill=0,
   nullPointMode='null',
   pointradius=2,
@@ -292,14 +341,19 @@ local remote_GC_Duration_BreakdownP = graphPanel.new(
 )
 .addSeriesOverride({ alias: '/total/', yaxis: 2 })
 .addSeriesOverride({ alias: '/one_store/', yaxis: 2 })
-.addSeriesOverride({ alias: '/clean_locks/', yaxis: 2 });
+.addSeriesOverride({ alias: '/clean_locks/', yaxis: 2 })
+.resetYaxes()
+.addYaxis(
+  format='s',
+  min='0',
+)
+.addYaxis(
+  format='s',
+);
 
 local remote_GC_StatusP = graphPanel.new(
   title='Remote GC Status',
   datasource=common.datasource,
-  formatY1='short',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   decimals=1,
@@ -316,14 +370,19 @@ local remote_GC_StatusP = graphPanel.new(
     'sum(tiflash_storage_s3_gc_status{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance,type)',
     legendFormat='{{instance}}-{{type}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='short',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local local_Lock_Manager_statusP = graphPanel.new(
   title='Local Lock Manager status',
   datasource=common.datasource,
-  formatY1='short',
-  formatY2='short',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   decimals=1,
@@ -340,14 +399,19 @@ local local_Lock_Manager_statusP = graphPanel.new(
     'sum(tiflash_storage_s3_lock_mgr_status{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance,type)',
     legendFormat='{{instance}}-{{type}}',
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='short',
+  min='0',
+)
+.addYaxis(
+  format='short',
 );
 
 local local_Lock_Manager_QPSP = graphPanel.new(
   title='Local Lock Manager QPS',
   datasource=common.datasource,
-  formatY1='none',
-  formatY2='none',
-  min='0',
   fill=0,
   nullPointMode='null',
   legend_alignAsTable=true,
@@ -363,14 +427,19 @@ local local_Lock_Manager_QPSP = graphPanel.new(
     legendFormat='{{type}} {{$additional_groupby}}',
     intervalFactor=1,
   )
+)
+.resetYaxes()
+.addYaxis(
+  format='none',
+  min='0',
+)
+.addYaxis(
+  format='none',
 );
 
 local fAP_resultP = graphPanel.new(
   title='FAP result',
   datasource=common.datasource,
-  formatY1='ops',
-  formatY2='percentunit',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -385,14 +454,20 @@ local fAP_resultP = graphPanel.new(
     intervalFactor=1,
   )
 )
-.addSeriesOverride({ alias: '/hit_ratio/', yaxis: 2 });
+.addSeriesOverride({ alias: '/hit_ratio/', yaxis: 2 })
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='percentunit',
+  min='0',
+);
 
 local fAP_stateP = graphPanel.new(
   title='FAP state',
   datasource=common.datasource,
-  formatY1='ops',
-  formatY2='percentunit',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -407,14 +482,20 @@ local fAP_stateP = graphPanel.new(
     intervalFactor=1,
   )
 )
-.addSeriesOverride({ alias: '/hit_ratio/', yaxis: 2 });
+.addSeriesOverride({ alias: '/hit_ratio/', yaxis: 2 })
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='percentunit',
+  min='0',
+);
 
 local fAP_time_by_stageP = graphPanel.new(
   title='FAP time by stage',
   datasource=common.datasource,
-  formatY1='s',
-  formatY2='percentunit',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -429,14 +510,20 @@ local fAP_time_by_stageP = graphPanel.new(
     intervalFactor=1,
   )
 )
-.addSeriesOverride({ alias: '/hit_ratio/', yaxis: 2 });
+.addSeriesOverride({ alias: '/hit_ratio/', yaxis: 2 })
+.resetYaxes()
+.addYaxis(
+  format='s',
+  min='0',
+)
+.addYaxis(
+  format='percentunit',
+  min='0',
+);
 
 local fAP_no_match_reasonP = graphPanel.new(
   title='FAP no match reason',
   datasource=common.datasource,
-  formatY1='ops',
-  formatY2='percentunit',
-  min='0',
   fill=0,
   nullPointMode='null as zero',
   legend_alignAsTable=true,
@@ -451,7 +538,16 @@ local fAP_no_match_reasonP = graphPanel.new(
     intervalFactor=1,
   )
 )
-.addSeriesOverride({ alias: '/hit_ratio/', yaxis: 2 });
+.addSeriesOverride({ alias: '/hit_ratio/', yaxis: 2 })
+.resetYaxes()
+.addYaxis(
+  format='ops',
+  min='0',
+)
+.addYaxis(
+  format='percentunit',
+  min='0',
+);
 
 
 {
