@@ -44,15 +44,15 @@ local rowServer = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_current_metric_StoreSizeUsed{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~""}) by (instance)',
-      legendFormat='{{instance}}-local',
+    common.target(
+      common.expr.sum('tiflash_system_current_metric_StoreSizeUsed', common.selector, labels='type=~""', by=['instance']),
+      '{{instance}}-local',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_current_metric_StoreSizeUsedRemote{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-      legendFormat='{{instance}}-remote',
+    common.target(
+      common.expr.sum('tiflash_system_current_metric_StoreSizeUsedRemote', common.selector, by=['instance']),
+      '{{instance}}-remote',
     )
   )
   .resetYaxes()
@@ -81,9 +81,9 @@ local rowServer = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_current_metric_StoreSizeAvailable{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-      legendFormat='{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_system_current_metric_StoreSizeAvailable', common.selector, by=['instance']),
+      '{{instance}}',
     )
   )
   .resetYaxes()
@@ -112,9 +112,9 @@ local rowServer = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_current_metric_StoreSizeCapacity{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-      legendFormat='{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_system_current_metric_StoreSizeCapacity', common.selector, by=['instance']),
+      '{{instance}}',
     )
   )
   .resetYaxes()
@@ -171,15 +171,15 @@ local rowServer = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_proxy_tikv_raftstore_region_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="region", instance=~"$proxy_instance", instance=~"$tiflash_role"}) by (instance)',
-      legendFormat='{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_proxy_tikv_raftstore_region_count', 'k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="region", instance=~"$proxy_instance", instance=~"$tiflash_role"', by=['instance']),
+      '{{instance}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_proxy_tikv_raftstore_hibernated_peer_state{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}) by (instance, state)',
-      legendFormat='{{instance}}-{{state}}',
+    common.target(
+      common.expr.sum('tiflash_proxy_tikv_raftstore_hibernated_peer_state', common.proxySelector, by=['instance', 'state']),
+      '{{instance}}-{{state}}',
       hide=true,
     )
   )
@@ -213,9 +213,9 @@ local rowServer = (
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_current_metric_LogicalCPUCores{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-      legendFormat='limit-{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_system_current_metric_LogicalCPUCores', common.selector, by=['instance']),
+      'limit-{{instance}}',
       intervalFactor=1,
     )
   )
@@ -253,89 +253,89 @@ local rowServer = (
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_current_metric_MemoryCapacity{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-      legendFormat='limit-{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_system_current_metric_MemoryCapacity', common.selector, by=['instance']),
+      'limit-{{instance}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_asynchronous_metric_jemalloc_retained{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"})',
-      legendFormat='retained',
-      intervalFactor=1,
+    common.target(
+      common.expr.sum('tiflash_system_asynchronous_metric_jemalloc_retained', common.selector),
+      'retained',
       hide=true,
+      intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_asynchronous_metric_jemalloc_mapped{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"})',
-      legendFormat='mapped',
-      intervalFactor=1,
+    common.target(
+      common.expr.sum('tiflash_system_asynchronous_metric_jemalloc_mapped', common.selector),
+      'mapped',
       hide=true,
+      intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_asynchronous_metric_jemalloc_resident{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"})',
-      legendFormat='resident',
-      intervalFactor=1,
+    common.target(
+      common.expr.sum('tiflash_system_asynchronous_metric_jemalloc_resident', common.selector),
+      'resident',
       hide=true,
+      intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_asynchronous_metric_jemalloc_allocated{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"})',
-      legendFormat='allocated',
-      intervalFactor=1,
+    common.target(
+      common.expr.sum('tiflash_system_asynchronous_metric_jemalloc_allocated', common.selector),
+      'allocated',
       hide=true,
+      intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_asynchronous_metric_jemalloc_active{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"})',
-      legendFormat='active',
-      intervalFactor=1,
+    common.target(
+      common.expr.sum('tiflash_system_asynchronous_metric_jemalloc_active', common.selector),
+      'active',
       hide=true,
+      intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_asynchronous_metric_jemalloc_metadata_thp{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"})',
-      legendFormat='metadata_thp',
-      intervalFactor=1,
+    common.target(
+      common.expr.sum('tiflash_system_asynchronous_metric_jemalloc_metadata_thp', common.selector),
+      'metadata_thp',
       hide=true,
+      intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_asynchronous_metric_jemalloc_metadata{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"})',
-      legendFormat='metadata',
-      intervalFactor=1,
+    common.target(
+      common.expr.sum('tiflash_system_asynchronous_metric_jemalloc_metadata', common.selector),
+      'metadata',
       hide=true,
+      intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_asynchronous_metric_mimalloc_current_rss{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", job=~".*tiflash", instance=~"$instance", instance=~"$tiflash_role"})',
-      legendFormat='mimalloc_rss',
-      intervalFactor=1,
+    common.target(
+      common.expr.sum('tiflash_system_asynchronous_metric_mimalloc_current_rss', 'k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", job=~".*tiflash", instance=~"$instance", instance=~"$tiflash_role"'),
+      'mimalloc_rss',
       hide=true,
+      intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_asynchronous_metric_mimalloc_current_commit{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", job=~".*tiflash", instance=~"$instance", instance=~"$tiflash_role"})',
-      legendFormat='mimalloc_commit',
-      intervalFactor=1,
+    common.target(
+      common.expr.sum('tiflash_system_asynchronous_metric_mimalloc_current_commit', 'k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", job=~".*tiflash", instance=~"$instance", instance=~"$tiflash_role"'),
+      'mimalloc_commit',
       hide=true,
+      intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_asynchronous_metric_mmap_alive{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", job=~".*tiflash", instance=~"$instance", instance=~"$tiflash_role"})',
-      legendFormat='mmap',
-      intervalFactor=1,
+    common.target(
+      common.expr.sum('tiflash_system_asynchronous_metric_mmap_alive', 'k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", job=~".*tiflash", instance=~"$instance", instance=~"$tiflash_role"'),
+      'mmap',
       hide=true,
+      intervalFactor=1,
     )
   )
   .addSeriesOverride({ alias: '/limit/', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2 })
@@ -395,9 +395,9 @@ local rowServer = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_storage_s3_store_summary_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance, store_id,type)',
-      legendFormat='store-{{store_id}}-{{type}}',
+    common.target(
+      common.expr.sum('tiflash_storage_s3_store_summary_bytes', common.selector, by=['instance', 'store_id', 'type']),
+      'store-{{store_id}}-{{type}}',
     )
   )
   .resetYaxes()
@@ -440,9 +440,9 @@ local rowThreadsCpu = (
     legend_sideWidth=250,
   )
   .addTarget(
-    prometheus.target(
-      'sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"sst_importer.*", instance=~"$tiflash_role"}[1m]))',
-      legendFormat='{{instance}}',
+    common.target(
+      common.expr.sumRate('tiflash_proxy_thread_cpu_seconds_total', 'k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"sst_importer.*", instance=~"$tiflash_role"', by=['instance'], range='1m'),
+      '{{instance}}',
     )
   )
   .resetYaxes()
@@ -582,16 +582,16 @@ local rowThreads = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_proxy_threads_state{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}) by (instance, state)',
-      legendFormat='{{instance}}-{{state}}',
+    common.target(
+      common.expr.sum('tiflash_proxy_threads_state', common.proxySelector, by=['instance', 'state']),
+      '{{instance}}-{{state}}',
       intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_proxy_threads_state{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}) by (instance)',
-      legendFormat='{{instance}}-total',
+    common.target(
+      common.expr.sum('tiflash_proxy_threads_state', common.proxySelector, by=['instance']),
+      '{{instance}}-total',
     )
   )
   .resetYaxes()
@@ -758,9 +758,9 @@ local rowCoprocessor = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_coprocessor_response_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type)',
-      legendFormat='{{type}}',
+    common.target(
+      common.expr.sumRate('tiflash_coprocessor_response_bytes', common.selector, by=['type'], range='1m'),
+      '{{type}}',
       intervalFactor=1,
     )
   )
@@ -831,9 +831,9 @@ local rowCoprocessor = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_exchange_data_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type)',
-      legendFormat='{{type}}',
+    common.target(
+      common.expr.sumRate('tiflash_exchange_data_bytes', common.selector, by=['type'], range='1m'),
+      '{{type}}',
       intervalFactor=1,
     )
   )
@@ -885,9 +885,9 @@ local rowCoprocessor = (
     legend_max=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_coprocessor_handling_request_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (type)',
-      legendFormat='{{type}}',
+    common.target(
+      common.expr.sum('tiflash_coprocessor_handling_request_count', common.selector, by=['type']),
+      '{{type}}',
       intervalFactor=1,
     )
   )
@@ -1077,9 +1077,9 @@ local rowCoprocessor = (
     legend_max=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_network_transmission_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type)',
-      legendFormat='{{type}}',
+    common.target(
+      common.expr.sumRate('tiflash_network_transmission_bytes', common.selector, by=['type'], range='1m'),
+      '{{type}}',
       intervalFactor=1,
     )
   )
@@ -1471,9 +1471,9 @@ local rowImbalanceReadWrite = (
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_current_metric_LogicalCPUCores{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-      legendFormat='limit-{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_system_current_metric_LogicalCPUCores', common.selector, by=['instance']),
+      'limit-{{instance}}',
       intervalFactor=1,
     )
   )
@@ -1520,22 +1520,22 @@ local rowImbalanceReadWrite = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_ReadBufferFromFileDescriptorReadBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance)',
-      legendFormat='File Descriptor-{{instance}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_ReadBufferFromFileDescriptorReadBytes', common.selector, by=['instance'], range='1m'),
+      'File Descriptor-{{instance}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_PSMReadBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance)',
-      legendFormat='Page-{{instance}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_PSMReadBytes', common.selector, by=['instance'], range='1m'),
+      'Page-{{instance}}',
       intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_PSMBackgroundReadBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance)',
-      legendFormat='PageBackGround-{{instance}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_PSMBackgroundReadBytes', common.selector, by=['instance'], range='1m'),
+      'PageBackGround-{{instance}}',
       intervalFactor=1,
     )
   )
@@ -1562,9 +1562,9 @@ local rowImbalanceReadWrite = (
     legend_max=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_DMWriteBlock{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance, type)',
-      legendFormat='write block-{{instance}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_DMWriteBlock', common.selector, by=['instance', 'type'], range='1m'),
+      'write block-{{instance}}',
       intervalFactor=1,
     )
   )
@@ -1603,16 +1603,16 @@ local rowImbalanceReadWrite = (
     legend_sideWidth=250,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_storage_throughput_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"write"}[1m])) by (instance)',
-      legendFormat='write-{{instance}}',
+    common.target(
+      common.expr.sumRate('tiflash_storage_throughput_bytes', common.selector, labels='type=~"write"', by=['instance'], range='1m'),
+      'write-{{instance}}',
       intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_storage_throughput_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"ingest"}[1m])) by (instance)',
-      legendFormat='ingest-{{instance}}',
+    common.target(
+      common.expr.sumRate('tiflash_storage_throughput_bytes', common.selector, labels='type=~"ingest"', by=['instance'], range='1m'),
+      'ingest-{{instance}}',
     )
   )
   .addSeriesOverride({ alias: '/total/', yaxis: 2 })
@@ -1868,9 +1868,9 @@ local rowMemoryTrace = (
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_shared_block_schemas{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"hit_count"}[1m])) by (instance)',
-      legendFormat='hit_count_ops-{{instance}}',
+    common.target(
+      common.expr.sumRate('tiflash_shared_block_schemas', common.selector, labels='type=~"hit_count"', by=['instance'], range='1m'),
+      'hit_count_ops-{{instance}}',
     )
   )
   .addTarget(
@@ -1880,9 +1880,9 @@ local rowMemoryTrace = (
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_shared_block_schemas{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"miss_count"}[1m])) by (instance)',
-      legendFormat='miss_count_ops-{{instance}}',
+    common.target(
+      common.expr.sumRate('tiflash_shared_block_schemas', common.selector, labels='type=~"miss_count"', by=['instance'], range='1m'),
+      'miss_count_ops-{{instance}}',
     )
   )
   .resetYaxes()
@@ -2051,9 +2051,9 @@ local rowMemoryTrace = (
     pointradius=2,
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_current_metric_MemoryTrackingKVStore{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-      legendFormat='{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_system_current_metric_MemoryTrackingKVStore', common.selector, by=['instance']),
+      '{{instance}}',
     )
   )
   .resetYaxes()
@@ -2156,16 +2156,16 @@ local rowColumnarStorage = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_proxy_kv_engine_ia_remote_read_segment_cache_hit{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m])) by ($additional_groupby)',
-      legendFormat='cache-hit {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_proxy_kv_engine_ia_remote_read_segment_cache_hit', common.proxySelector, by=['$additional_groupby'], range='1m'),
+      'cache-hit {{$additional_groupby}}',
       intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_proxy_kv_engine_ia_remote_read_segment_cache_miss{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m])) by ($additional_groupby)',
-      legendFormat='cache-miss {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_proxy_kv_engine_ia_remote_read_segment_cache_miss', common.proxySelector, by=['$additional_groupby'], range='1m'),
+      'cache-miss {{$additional_groupby}}',
     )
   )
   .resetYaxes()
@@ -2198,16 +2198,16 @@ local rowColumnarStorage = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_proxy_kv_engine_columnar_file_cache_hit{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m])) by ($additional_groupby)',
-      legendFormat='file-cache-hit {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_proxy_kv_engine_columnar_file_cache_hit', common.proxySelector, by=['$additional_groupby'], range='1m'),
+      'file-cache-hit {{$additional_groupby}}',
       intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_proxy_kv_engine_columnar_file_cache_miss{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m])) by ($additional_groupby)',
-      legendFormat='file-cache-miss {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_proxy_kv_engine_columnar_file_cache_miss', common.proxySelector, by=['$additional_groupby'], range='1m'),
+      'file-cache-miss {{$additional_groupby}}',
     )
   )
   .resetYaxes()
@@ -2261,22 +2261,22 @@ local rowColumnarStorage = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_proxy_kv_engine_columnar_meta_cache_hit{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m])) by ($additional_groupby)',
-      legendFormat='hit {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_proxy_kv_engine_columnar_meta_cache_hit', common.proxySelector, by=['$additional_groupby'], range='1m'),
+      'hit {{$additional_groupby}}',
       intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_proxy_kv_engine_columnar_meta_cache_miss{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m])) by ($additional_groupby)',
-      legendFormat='miss {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_proxy_kv_engine_columnar_meta_cache_miss', common.proxySelector, by=['$additional_groupby'], range='1m'),
+      'miss {{$additional_groupby}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_proxy_kv_engine_columnar_meta_cache_parse{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m])) by ($additional_groupby)',
-      legendFormat='parse {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_proxy_kv_engine_columnar_meta_cache_parse', common.proxySelector, by=['$additional_groupby'], range='1m'),
+      'parse {{$additional_groupby}}',
     )
   )
   .resetYaxes()
@@ -2353,9 +2353,9 @@ local rowStorage = (
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_DMWriteBlock{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type)',
-      legendFormat='write block',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_DMWriteBlock', common.selector, by=['type'], range='1m'),
+      'write block',
       intervalFactor=1,
     )
   )
@@ -2454,9 +2454,9 @@ local rowStorage = (
     legend_sideWidth=250,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_storage_subtask_throughput_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type)',
-      legendFormat='{{type}}',
+    common.target(
+      common.expr.sumRate('tiflash_storage_subtask_throughput_bytes', common.selector, by=['type'], range='1m'),
+      '{{type}}',
       intervalFactor=1,
     )
   )
@@ -2488,9 +2488,9 @@ local rowStorage = (
     legend_sideWidth=250,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_storage_subtask_throughput_rows{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type)',
-      legendFormat='{{type}}',
+    common.target(
+      common.expr.sumRate('tiflash_storage_subtask_throughput_rows', common.selector, by=['type'], range='1m'),
+      '{{type}}',
       intervalFactor=1,
     )
   )
@@ -2608,23 +2608,23 @@ local rowStorage = (
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_current_metric_OpenFileForWrite{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-      legendFormat='W-{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_system_current_metric_OpenFileForWrite', common.selector, by=['instance']),
+      'W-{{instance}}',
       intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_current_metric_OpenFileForRead{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-      legendFormat='R-{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_system_current_metric_OpenFileForRead', common.selector, by=['instance']),
+      'R-{{instance}}',
       intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_current_metric_OpenFileForReadWrite{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-      legendFormat='RW-{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_system_current_metric_OpenFileForReadWrite', common.selector, by=['instance']),
+      'RW-{{instance}}',
       intervalFactor=1,
     )
   )
@@ -2656,16 +2656,16 @@ local rowStorage = (
     legend_sideWidth=250,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_FileOpen{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance)',
-      legendFormat='Open-{{instance}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_FileOpen', common.selector, by=['instance'], range='1m'),
+      'Open-{{instance}}',
       intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_FileOpenFailed{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance)',
-      legendFormat='OpenFail-{{instance}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_FileOpenFailed', common.selector, by=['instance'], range='1m'),
+      'OpenFail-{{instance}}',
       intervalFactor=1,
     )
   )
@@ -2695,9 +2695,9 @@ local rowStorage = (
     legend_sideWidth=250,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_FileFSync{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance)',
-      legendFormat='ops-fsync-{{instance}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_FileFSync', common.selector, by=['instance'], range='1m'),
+      'ops-fsync-{{instance}}',
       intervalFactor=1,
     )
   )
@@ -2731,22 +2731,22 @@ local rowStorage = (
     legend_hideZero=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_PSMWriteIOCalls{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type)',
-      legendFormat='Page',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_PSMWriteIOCalls', common.selector, by=['type'], range='1m'),
+      'Page',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_PSMWritePages{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))',
-      legendFormat='PageFile',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_PSMWritePages', common.selector, range='1m'),
+      'PageFile',
       hide=true,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWrite{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))',
-      legendFormat='File Descriptor',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_WriteBufferFromFileDescriptorWrite', common.selector, range='1m'),
+      'File Descriptor',
       intervalFactor=1,
     )
   )
@@ -2773,22 +2773,22 @@ local rowStorage = (
     legend_hideZero=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_PSMReadIOCalls{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))',
-      legendFormat='Page',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_PSMReadIOCalls', common.selector, range='1m'),
+      'Page',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_PSMReadPages{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))',
-      legendFormat='PageFile',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_PSMReadPages', common.selector, range='1m'),
+      'PageFile',
       hide=true,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_ReadBufferFromFileDescriptorRead{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))',
-      legendFormat='File Descriptor',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_ReadBufferFromFileDescriptorRead', common.selector, range='1m'),
+      'File Descriptor',
       intervalFactor=1,
     )
   )
@@ -2818,22 +2818,22 @@ local rowStorage = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWriteBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))',
-      legendFormat='File Descriptor',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_WriteBufferFromFileDescriptorWriteBytes', common.selector, range='1m'),
+      'File Descriptor',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_PSMWriteBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))',
-      legendFormat='Page',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_PSMWriteBytes', common.selector, range='1m'),
+      'Page',
       intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_PSMBackgroundWriteBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))',
-      legendFormat='PageBackGround',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_PSMBackgroundWriteBytes', common.selector, range='1m'),
+      'PageBackGround',
       intervalFactor=1,
     )
   )
@@ -2864,22 +2864,22 @@ local rowStorage = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_ReadBufferFromFileDescriptorReadBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))',
-      legendFormat='File Descriptor',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_ReadBufferFromFileDescriptorReadBytes', common.selector, range='1m'),
+      'File Descriptor',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_PSMReadBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))',
-      legendFormat='Page',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_PSMReadBytes', common.selector, range='1m'),
+      'Page',
       intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_PSMBackgroundReadBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))',
-      legendFormat='PageBackGround',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_PSMBackgroundReadBytes', common.selector, range='1m'),
+      'PageBackGround',
       intervalFactor=1,
     )
   )
@@ -2907,15 +2907,15 @@ local rowStorage = (
     legend_avg=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_storage_pack_compression_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"lz4_uncompressed_bytes"}[1m]))/sum(rate(tiflash_storage_pack_compression_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"lz4_compressed_bytes"}[1m]))',
-      legendFormat='lz4',
+    common.target(
+      common.expr.sumRate('tiflash_storage_pack_compression_bytes', common.selector, labels='type=~"lz4_uncompressed_bytes"}[1m]))/sum(rate(tiflash_storage_pack_compression_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"lz4_compressed_bytes"', range='1m'),
+      'lz4',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_storage_pack_compression_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"lightweight_uncompressed_bytes"}[1m]))/sum(rate(tiflash_storage_pack_compression_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"lightweight_compressed_bytes"}[1m]))',
-      legendFormat='lightweight',
+    common.target(
+      common.expr.sumRate('tiflash_storage_pack_compression_bytes', common.selector, labels='type=~"lightweight_uncompressed_bytes"}[1m]))/sum(rate(tiflash_storage_pack_compression_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"lightweight_compressed_bytes"', range='1m'),
+      'lightweight',
     )
   )
   .resetYaxes()
@@ -2940,9 +2940,9 @@ local rowStorage = (
     legend_total=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_storage_pack_compression_algorithm_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type)',
-      legendFormat='{{type}}',
+    common.target(
+      common.expr.sumRate('tiflash_storage_pack_compression_algorithm_count', common.selector, by=['type'], range='1m'),
+      '{{type}}',
     )
   )
   .resetYaxes()
@@ -3109,9 +3109,9 @@ local rowStorageReadPoolDataSharing = (
     legend_rightSide=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_storage_read_thread_counter{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"ru_exhausted|sche_active_segment_limit|sche_from_cache|sche_new_task|sche_no_pool|sche_no_ru|sche_no_segment|sche_no_slot|push_block_bytes"}[1m])) by (type)',
-      legendFormat='{{type}}',
+    common.target(
+      common.expr.sumRate('tiflash_storage_read_thread_counter', common.selector, labels='type=~"ru_exhausted|sche_active_segment_limit|sche_from_cache|sche_new_task|sche_no_pool|sche_no_ru|sche_no_segment|sche_no_slot|push_block_bytes"', by=['type'], range='1m'),
+      '{{type}}',
     )
   )
   .addSeriesOverride({ alias: '/push_block/', yaxis: 2 })
@@ -3164,9 +3164,9 @@ local rowStorageReadPoolDataSharing = (
     legend_hideZero=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum by (type,$additional_groupby) (tiflash_storage_read_thread_gauge{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"})',
-      legendFormat='{{type}} {{$additional_groupby}}',
+    common.target(
+      common.expr.sum('tiflash_storage_read_thread_gauge', common.selector, by=['type', '$additional_groupby']),
+      '{{type}} {{$additional_groupby}}',
     )
   )
   .addSeriesOverride({ alias: '/cache_hit_ratio/', yaxis: 2 })
@@ -3207,9 +3207,9 @@ local rowStorageReadPoolDataSharing = (
     legend_max=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_DTDeltaIndexError{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance)',
-      legendFormat='DeltaIndexError-{{instance}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_DTDeltaIndexError', common.selector, by=['instance'], range='1m'),
+      'DeltaIndexError-{{instance}}',
       intervalFactor=1,
     )
   )
@@ -3258,9 +3258,9 @@ local rowPagestorage = (
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_asynchronous_metric_BlobValidBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-      legendFormat='blob_valid_size-{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_system_asynchronous_metric_BlobValidBytes', common.selector, by=['instance']),
+      'blob_valid_size-{{instance}}',
     )
   )
   .addTarget(
@@ -3301,15 +3301,15 @@ local rowPagestorage = (
     legend_current=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_asynchronous_metric_BlobFileNums{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-      legendFormat='blob_file-{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_system_asynchronous_metric_BlobFileNums', common.selector, by=['instance']),
+      'blob_file-{{instance}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_asynchronous_metric_LogNums{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-      legendFormat='log_file-{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_system_asynchronous_metric_LogNums', common.selector, by=['instance']),
+      'log_file-{{instance}}',
     )
   )
   .resetYaxes()
@@ -3420,9 +3420,9 @@ local rowPagestorage = (
     legend_sideWidth=250,
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_current_metric_PSPendingWriterNum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-      legendFormat='size-{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_system_current_metric_PSPendingWriterNum', common.selector, by=['instance']),
+      'size-{{instance}}',
       intervalFactor=1,
     )
   )
@@ -3452,9 +3452,9 @@ local rowPagestorage = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_storage_page_data_by_types{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (type)',
-      legendFormat='{{type}}',
+    common.target(
+      common.expr.sum('tiflash_storage_page_data_by_types', common.selector, by=['type']),
+      '{{type}}',
     )
   )
   .resetYaxes()
@@ -3483,29 +3483,29 @@ local rowPagestorage = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_current_metric_StoragePoolV2Only{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-      legendFormat='V2-{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_system_current_metric_StoragePoolV2Only', common.selector, by=['instance']),
+      'V2-{{instance}}',
       hide=true,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_current_metric_StoragePoolV3Only{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-      legendFormat='V3-{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_system_current_metric_StoragePoolV3Only', common.selector, by=['instance']),
+      'V3-{{instance}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_current_metric_StoragePoolMixMode{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-      legendFormat='Mix-{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_system_current_metric_StoragePoolMixMode', common.selector, by=['instance']),
+      'Mix-{{instance}}',
       hide=true,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_current_metric_StoragePoolUniPS{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-      legendFormat='UniPS-{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_system_current_metric_StoragePoolUniPS', common.selector, by=['instance']),
+      'UniPS-{{instance}}',
     )
   )
   .resetYaxes()
@@ -3529,9 +3529,9 @@ local rowPagestorage = (
     legend_hideZero=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_storage_page_command_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance, type)',
-      legendFormat='{{type}}-{{instance}}',
+    common.target(
+      common.expr.sumRate('tiflash_storage_page_command_count', common.selector, by=['instance', 'type'], range='1m'),
+      '{{type}}-{{instance}}',
       intervalFactor=1,
     )
   )
@@ -3559,9 +3559,9 @@ local rowPagestorage = (
     legend_hideZero=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_storage_page_apply_edit_type{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance, type)',
-      legendFormat='{{type}}-{{instance}}',
+    common.target(
+      common.expr.sumRate('tiflash_storage_page_apply_edit_type', common.selector, by=['instance', 'type'], range='1m'),
+      '{{type}}-{{instance}}',
       intervalFactor=1,
     )
   )
@@ -3611,9 +3611,9 @@ local rowRateLimiter = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_storage_io_limiter{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, instance)',
-      legendFormat='{{type}}-{{instance}}',
+    common.target(
+      common.expr.sumRate('tiflash_storage_io_limiter', common.selector, by=['type', 'instance'], range='1m'),
+      '{{type}}-{{instance}}',
     )
   )
   .resetYaxes()
@@ -3640,9 +3640,9 @@ local rowRateLimiter = (
     legend_hideZero=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_storage_io_limiter_curr{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (type, instance)',
-      legendFormat='{{type}}-{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_storage_io_limiter_curr', common.selector, by=['type', 'instance']),
+      '{{type}}-{{instance}}',
     )
   )
   .resetYaxes()
@@ -3729,9 +3729,9 @@ local rowRateLimiter = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_storage_io_limiter_pending_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, instance)',
-      legendFormat='{{type}}-{{instance}}',
+    common.target(
+      common.expr.sumRate('tiflash_storage_io_limiter_pending_count', common.selector, by=['type', 'instance'], range='1m'),
+      '{{type}}-{{instance}}',
     )
   )
   .addSeriesOverride({ alias: '', yaxis: 2 })
@@ -3792,16 +3792,16 @@ local rowStorageWriteStall = (
     legend_sideWidth=250,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_storage_throughput_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"write|ingest"}[1m]))',
-      legendFormat='write+ingest',
+    common.target(
+      common.expr.sumRate('tiflash_storage_throughput_bytes', common.selector, labels='type=~"write|ingest"', range='1m'),
+      'write+ingest',
       intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_storage_throughput_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type!~"write|ingest"}[1m]))',
-      legendFormat='ManageDelta',
+    common.target(
+      common.expr.sumRate('tiflash_storage_throughput_bytes', common.selector, labels='type!~"write|ingest"', range='1m'),
+      'ManageDelta',
       intervalFactor=1,
     )
   )
@@ -3832,16 +3832,16 @@ local rowStorageWriteStall = (
     legend_sideWidth=250,
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_storage_throughput_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"write|ingest"})',
-      legendFormat='write+ingest',
+    common.target(
+      common.expr.sum('tiflash_storage_throughput_bytes', common.selector, labels='type=~"write|ingest"'),
+      'write+ingest',
       intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_storage_throughput_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type!~"write|ingest"})',
-      legendFormat='ManageDelta',
+    common.target(
+      common.expr.sum('tiflash_storage_throughput_bytes', common.selector, labels='type!~"write|ingest"'),
+      'ManageDelta',
       intervalFactor=1,
     )
   )
@@ -3873,16 +3873,16 @@ local rowStorageWriteStall = (
     legend_sideWidth=250,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_storage_throughput_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"write"}[1m])) by (instance)',
-      legendFormat='write-{{instance}}',
+    common.target(
+      common.expr.sumRate('tiflash_storage_throughput_bytes', common.selector, labels='type=~"write"', by=['instance'], range='1m'),
+      'write-{{instance}}',
       intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_storage_throughput_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"ingest"}[1m])) by (instance)',
-      legendFormat='ingest-{{instance}}',
+    common.target(
+      common.expr.sumRate('tiflash_storage_throughput_bytes', common.selector, labels='type=~"ingest"', by=['instance'], range='1m'),
+      'ingest-{{instance}}',
     )
   )
   .addSeriesOverride({ alias: '/total/', yaxis: 2 })
@@ -3910,9 +3910,9 @@ local rowStorageWriteStall = (
     legend_hideZero=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_DMWriteBlock{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance, type)',
-      legendFormat='write block-{{instance}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_DMWriteBlock', common.selector, by=['instance', 'type'], range='1m'),
+      'write block-{{instance}}',
       intervalFactor=1,
     )
   )
@@ -4177,9 +4177,9 @@ local rowRaft = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_raft_process_keys{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type)',
-      legendFormat='{{type}}',
+    common.target(
+      common.expr.sumRate('tiflash_raft_process_keys', common.selector, by=['type'], range='1m'),
+      '{{type}}',
     )
   )
   .resetYaxes()
@@ -4207,9 +4207,9 @@ local rowRaft = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_raft_throughput_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type)',
-      legendFormat='{{type}}',
+    common.target(
+      common.expr.sumRate('tiflash_raft_throughput_bytes', common.selector, by=['type'], range='1m'),
+      '{{type}}',
     )
   )
   .resetYaxes()
@@ -4243,9 +4243,9 @@ local rowRaft = (
     nullPointMode='null as zero',
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_proxy_tikv_server_raft_append_rejects{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$tiflash_role"}[1m])) by (instance)',
-      legendFormat='{{instance}}',
+    common.target(
+      common.expr.sumRate('tiflash_proxy_tikv_server_raft_append_rejects', 'k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$tiflash_role"', by=['instance'], range='1m'),
+      '{{instance}}',
       intervalFactor=1,
     )
   )
@@ -4305,30 +4305,30 @@ local rowRaftSnapshotIngestsst = (
     legend_hideZero=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_current_metric_RaftNumSnapshotsPendingApply{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-      legendFormat='Pending-{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_system_current_metric_RaftNumSnapshotsPendingApply', common.selector, by=['instance']),
+      'Pending-{{instance}}',
       intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_current_metric_RaftNumPrehandlingSubTasks{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-      legendFormat='PrehandleSubtasks-{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_system_current_metric_RaftNumPrehandlingSubTasks', common.selector, by=['instance']),
+      'PrehandleSubtasks-{{instance}}',
       intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_current_metric_RaftNumParallelPrehandlingTasks{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-      legendFormat='ParallelTasks-{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_system_current_metric_RaftNumParallelPrehandlingTasks', common.selector, by=['instance']),
+      'ParallelTasks-{{instance}}',
       intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_current_metric_RaftNumWaitedParallelPrehandlingTasks{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-      legendFormat='Pending-ParallelTasks-{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_system_current_metric_RaftNumWaitedParallelPrehandlingTasks', common.selector, by=['instance']),
+      'Pending-ParallelTasks-{{instance}}',
       intervalFactor=1,
     )
   )
@@ -4357,9 +4357,9 @@ local rowRaftSnapshotIngestsst = (
     pointradius=2,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_raft_ongoing_snapshot_total_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
-      legendFormat='{{le}}',
+    common.target(
+      common.expr.sumRate('tiflash_raft_ongoing_snapshot_total_bytes', common.selector, by=['type']),
+      '{{le}}',
     )
   )
   .resetYaxes()
@@ -4467,27 +4467,27 @@ local rowRoughSetFilterRateHistogram = (
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_DMFileFilterNoFilter{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance)',
-      legendFormat='No Filter-{{instance}}',
-      intervalFactor=1,
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_DMFileFilterNoFilter', common.selector, by=['instance'], range='1m'),
+      'No Filter-{{instance}}',
       hide=true,
+      intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance)',
-      legendFormat='PK Filter-{{instance}}',
-      intervalFactor=1,
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_DMFileFilterAftPKAndPackSet', common.selector, by=['instance'], range='1m'),
+      'PK Filter-{{instance}}',
       hide=true,
+      intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_DMFileFilterAftRoughSet{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance)',
-      legendFormat='RS Filter-{{instance}}',
-      intervalFactor=1,
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_DMFileFilterAftRoughSet', common.selector, by=['instance'], range='1m'),
+      'RS Filter-{{instance}}',
       hide=true,
+      intervalFactor=1,
     )
   )
   .addSeriesOverride({ alias: '/^RS Filter/', yaxis: 2 })
@@ -4544,15 +4544,15 @@ local rowDisaggregatedWrite = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_storage_checkpoint_flow{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="incremental"}[1m])) by ($additional_groupby)',
-      legendFormat='incremental {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_storage_checkpoint_flow', common.selector, labels='type="incremental"', by=['$additional_groupby'], range='1m'),
+      'incremental {{$additional_groupby}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_storage_checkpoint_flow{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="compaction"}[1m])) by ($additional_groupby)',
-      legendFormat='compaction {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_storage_checkpoint_flow', common.selector, labels='type="compaction"', by=['$additional_groupby'], range='1m'),
+      'compaction {{$additional_groupby}}',
       intervalFactor=1,
     )
   )
@@ -4593,9 +4593,9 @@ local rowDisaggregatedWrite = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_storage_checkpoint_flow_by_types{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='{{type}} {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_storage_checkpoint_flow_by_types', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      '{{type}} {{$additional_groupby}}',
     )
   )
   .resetYaxes()
@@ -4621,9 +4621,9 @@ local rowDisaggregatedWrite = (
     legend_current=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_storage_remote_stats{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="num_files"}) by (instance)',
-      legendFormat='checkpoint_data-{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_storage_remote_stats', common.selector, labels='type="num_files"', by=['instance']),
+      'checkpoint_data-{{instance}}',
     )
   )
   .resetYaxes()
@@ -4650,15 +4650,15 @@ local rowDisaggregatedWrite = (
     legend_current=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_storage_remote_stats{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="total_size"}) by (instance)',
-      legendFormat='remote_size-{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_storage_remote_stats', common.selector, labels='type="total_size"', by=['instance']),
+      'remote_size-{{instance}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_storage_remote_stats{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="valid_size"}) by (instance)',
-      legendFormat='valid_size-{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_storage_remote_stats', common.selector, labels='type="valid_size"', by=['instance']),
+      'valid_size-{{instance}}',
     )
   )
   .addTarget(
@@ -4711,9 +4711,9 @@ local rowDisaggregatedWrite = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_storage_s3_store_summary_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance, store_id,type)',
-      legendFormat='store-{{store_id}}-{{type}}',
+    common.target(
+      common.expr.sum('tiflash_storage_s3_store_summary_bytes', common.selector, by=['instance', 'store_id', 'type']),
+      'store-{{store_id}}-{{type}}',
     )
   )
   .resetYaxes()
@@ -4750,9 +4750,9 @@ local rowDisaggregatedWrite = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_storage_s3_gc_status{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance,type)',
-      legendFormat='{{instance}}-{{type}}',
+    common.target(
+      common.expr.sum('tiflash_storage_s3_gc_status', common.selector, by=['instance', 'type']),
+      '{{instance}}-{{type}}',
     )
   )
   .resetYaxes()
@@ -4779,9 +4779,9 @@ local rowDisaggregatedWrite = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_storage_s3_lock_mgr_status{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance,type)',
-      legendFormat='{{instance}}-{{type}}',
+    common.target(
+      common.expr.sum('tiflash_storage_s3_lock_mgr_status', common.selector, by=['instance', 'type']),
+      '{{instance}}-{{type}}',
     )
   )
   .resetYaxes()
@@ -4812,9 +4812,9 @@ local rowDisaggregatedWrite = (
     legend_current=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_fap_task_result{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='{{type}} {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_fap_task_result', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      '{{type}} {{$additional_groupby}}',
       intervalFactor=1,
     )
   )
@@ -4840,9 +4840,9 @@ local rowDisaggregatedWrite = (
     legend_current=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_fap_task_state{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='{{type}} {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_fap_task_state', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      '{{type}} {{$additional_groupby}}',
       intervalFactor=1,
     )
   )
@@ -4876,9 +4876,9 @@ local rowDisaggregatedWrite = (
     legend_current=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_fap_nomatch_reason{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='{{type}} {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_fap_nomatch_reason', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      '{{type}} {{$additional_groupby}}',
       intervalFactor=1,
     )
   )
@@ -4955,9 +4955,9 @@ local rowDisaggregatedCompute = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_storage_remote_cache_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='{{type}} {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_storage_remote_cache_bytes', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      '{{type}} {{$additional_groupby}}',
       intervalFactor=1,
     )
   )
@@ -5002,9 +5002,9 @@ local rowDisaggregatedCompute = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_storage_remote_cache_wait_on_downloading_result{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (result, file_type , $additional_groupby)',
-      legendFormat='{{result}}-{{file_type}} {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_storage_remote_cache_wait_on_downloading_result', common.selector, by=['result', 'file_type', '$additional_groupby'], range='1m'),
+      '{{result}}-{{file_type}} {{$additional_groupby}}',
     )
   )
   .addSeriesOverride({ alias: '', yaxis: 2 })
@@ -5033,9 +5033,9 @@ local rowDisaggregatedCompute = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_storage_remote_cache_wait_on_downloading_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (result, file_type , $additional_groupby)',
-      legendFormat='{{result}}-{{file_type}} {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_storage_remote_cache_wait_on_downloading_bytes', common.selector, by=['result', 'file_type', '$additional_groupby'], range='1m'),
+      '{{result}}-{{file_type}} {{$additional_groupby}}',
       intervalFactor=1,
     )
   )
@@ -5066,9 +5066,9 @@ local rowDisaggregatedCompute = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_storage_remote_cache_status{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (type, instance)',
-      legendFormat='{{type}}-{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_storage_remote_cache_status', common.selector, by=['type', 'instance']),
+      '{{type}}-{{instance}}',
     )
   )
   .resetYaxes()
@@ -5096,9 +5096,9 @@ local rowDisaggregatedCompute = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_storage_remote_cache_reject{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (reason, file_type, $additional_groupby)',
-      legendFormat='{{reason}}-{{file_type}} {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_storage_remote_cache_reject', common.selector, by=['reason', 'file_type', '$additional_groupby'], range='1m'),
+      '{{reason}}-{{file_type}} {{$additional_groupby}}',
     )
   )
   .addSeriesOverride({ alias: '', yaxis: 2 })
@@ -5127,27 +5127,27 @@ local rowDisaggregatedCompute = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_current_metric_DTFileCacheCapacity{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-      legendFormat='DTFileCapacity-{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_system_current_metric_DTFileCacheCapacity', common.selector, by=['instance']),
+      'DTFileCapacity-{{instance}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_current_metric_DTFileCacheUsed{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-      legendFormat='DTFileUsed-{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_system_current_metric_DTFileCacheUsed', common.selector, by=['instance']),
+      'DTFileUsed-{{instance}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_current_metric_PageCacheCapacity{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-      legendFormat='PageCapacity-{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_system_current_metric_PageCacheCapacity', common.selector, by=['instance']),
+      'PageCapacity-{{instance}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_current_metric_PageCacheUsed{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-      legendFormat='PageUsed-{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_system_current_metric_PageCacheUsed', common.selector, by=['instance']),
+      'PageUsed-{{instance}}',
     )
   )
   .resetYaxes()
@@ -5174,27 +5174,27 @@ local rowDisaggregatedCompute = (
     legend_hideZero=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_current_metric_MemoryTrackingQueryStorageTask{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-      legendFormat='MemoryTrackingQueryStorageTask-{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_system_current_metric_MemoryTrackingQueryStorageTask', common.selector, by=['instance']),
+      'MemoryTrackingQueryStorageTask-{{instance}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_current_metric_MemoryTrackingFetchPages{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-      legendFormat='MemoryTrackingFetchPages-{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_system_current_metric_MemoryTrackingFetchPages', common.selector, by=['instance']),
+      'MemoryTrackingFetchPages-{{instance}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_current_metric_DT_DeltaIndexCacheSize{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-      legendFormat='DeltaIndexCacheSize-{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_system_current_metric_DT_DeltaIndexCacheSize', common.selector, by=['instance']),
+      'DeltaIndexCacheSize-{{instance}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_system_current_metric_MemoryTrackingSharedColumnData{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-      legendFormat='SharedColumnData-{{instance}}',
+    common.target(
+      common.expr.sum('tiflash_system_current_metric_MemoryTrackingSharedColumnData', common.selector, by=['instance']),
+      'SharedColumnData-{{instance}}',
     )
   )
   .resetYaxes()
@@ -5247,15 +5247,15 @@ local rowDisaggregatedCompute = (
     legend_max=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_storage_place_index_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
-      legendFormat='{{type}} {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_storage_place_index_count', common.selector, by=['type', '$additional_groupby']),
+      '{{type}} {{$additional_groupby}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_storage_subtask_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"place_index_update"}[$__rate_interval])) by (type, $additional_groupby)',
-      legendFormat='{{type}} {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_storage_subtask_count', common.selector, labels='type=~"place_index_update"', by=['type', '$additional_groupby']),
+      '{{type}} {{$additional_groupby}}',
     )
   )
   .resetYaxes()
@@ -5351,22 +5351,22 @@ local rowS3 = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3WriteBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='S3WriteBytes {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3WriteBytes', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'S3WriteBytes {{$additional_groupby}}',
       intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3ReadBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='S3ReadBytes {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3ReadBytes', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'S3ReadBytes {{$additional_groupby}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3WriteDMFileBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='S3WriteDMFileBytes {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3WriteDMFileBytes', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'S3WriteDMFileBytes {{$additional_groupby}}',
     )
   )
   .resetYaxes()
@@ -5394,77 +5394,77 @@ local rowS3 = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3PutObject{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='S3PutObject {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3PutObject', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'S3PutObject {{$additional_groupby}}',
       intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3GetObject{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='S3GetObject {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3GetObject', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'S3GetObject {{$additional_groupby}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3HeadObject{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='S3HeadObject {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3HeadObject', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'S3HeadObject {{$additional_groupby}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3ListObjects{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='S3ListObjects {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3ListObjects', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'S3ListObjects {{$additional_groupby}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3DeleteObject{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='S3DeleteObject {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3DeleteObject', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'S3DeleteObject {{$additional_groupby}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3CopyObject{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='S3CopyObject {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3CopyObject', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'S3CopyObject {{$additional_groupby}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3CreateMultipartUpload{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='S3CreateMultipartUpload {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3CreateMultipartUpload', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'S3CreateMultipartUpload {{$additional_groupby}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3UploadPart{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='S3UploadPart {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3UploadPart', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'S3UploadPart {{$additional_groupby}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3CompleteMultipartUpload{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='S3CompleteMultipartUpload {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3CompleteMultipartUpload', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'S3CompleteMultipartUpload {{$additional_groupby}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3PutDMFile{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='S3PutDMFile {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3PutDMFile', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'S3PutDMFile {{$additional_groupby}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3IORead{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='S3IORead {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3IORead', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'S3IORead {{$additional_groupby}}',
       hide=true,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3IOSeek{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='S3IOSeek {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3IOSeek', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'S3IOSeek {{$additional_groupby}}',
       hide=true,
     )
   )
@@ -5493,42 +5493,42 @@ local rowS3 = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3GetObjectRetry{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='S3GetObjectRetry {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3GetObjectRetry', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'S3GetObjectRetry {{$additional_groupby}}',
       intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3PutObjectRetry{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='S3PutObjectRetry {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3PutObjectRetry', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'S3PutObjectRetry {{$additional_groupby}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3PutDMFileRetry{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='S3PutDMFileRetry {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3PutDMFileRetry', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'S3PutDMFileRetry {{$additional_groupby}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3IOReadError{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='S3IOReadError {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3IOReadError', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'S3IOReadError {{$additional_groupby}}',
       intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3IOSeekError{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='S3IOSeekError {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3IOSeekError', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'S3IOSeekError {{$additional_groupby}}',
       intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3IOSeekBackward{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='S3IOSeekBackward {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3IOSeekBackward', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'S3IOSeekBackward {{$additional_groupby}}',
       intervalFactor=1,
     )
   )
@@ -5565,63 +5565,63 @@ local rowS3 = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3ReadRequestsCount{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='read-count {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3ReadRequestsCount', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'read-count {{$additional_groupby}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3WriteRequestsCount{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='write-count {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3WriteRequestsCount', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'write-count {{$additional_groupby}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3ReadRequestsErrors{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='read-error {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3ReadRequestsErrors', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'read-error {{$additional_groupby}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3WriteRequestsErrors{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='write-error {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3WriteRequestsErrors', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'write-error {{$additional_groupby}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3ReadRequestsThrottling{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='read-throttling {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3ReadRequestsThrottling', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'read-throttling {{$additional_groupby}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3WriteRequestsThrottling{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='write-throttling {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3WriteRequestsThrottling', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'write-throttling {{$additional_groupby}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3ReadRequestsRedirects{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='read-redirects {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3ReadRequestsRedirects', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'read-redirects {{$additional_groupby}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3WriteRequestsRedirects{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='write-redirects {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3WriteRequestsRedirects', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'write-redirects {{$additional_groupby}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3ReadRequestsNotFound{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='read-notfound {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3ReadRequestsNotFound', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'read-notfound {{$additional_groupby}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3WriteRequestsNotFound{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='write-notfound {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3WriteRequestsNotFound', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'write-notfound {{$additional_groupby}}',
     )
   )
   .resetYaxes()
@@ -5657,15 +5657,15 @@ local rowS3 = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum by (type, $additional_groupby) (tiflash_system_current_metric_S3Requests{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"})',
-      legendFormat='S3Requests {{$additional_groupby}}',
+    common.target(
+      common.expr.sum('tiflash_system_current_metric_S3Requests', common.selector, by=['type', '$additional_groupby']),
+      'S3Requests {{$additional_groupby}}',
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum by (type, $additional_groupby) (tiflash_system_current_metric_S3RandomAccessFile{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"})',
-      legendFormat='S3RandomAccessFile {{$additional_groupby}}',
+    common.target(
+      common.expr.sum('tiflash_system_current_metric_S3RandomAccessFile', common.selector, by=['type', '$additional_groupby']),
+      'S3RandomAccessFile {{$additional_groupby}}',
     )
   )
   .resetYaxes()
@@ -5692,37 +5692,37 @@ local rowS3 = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3IOReadError{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='S3IOReadError {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3IOReadError', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'S3IOReadError {{$additional_groupby}}',
       intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3IOSeekError{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='S3IOSeekError {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3IOSeekError', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'S3IOSeekError {{$additional_groupby}}',
       intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3IOSeekBackward{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='S3IOSeekBackward {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3IOSeekBackward', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'S3IOSeekBackward {{$additional_groupby}}',
       intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3IORead{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='S3IORead {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3IORead', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'S3IORead {{$additional_groupby}}',
       intervalFactor=1,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_system_profile_event_S3IOSeek{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
-      legendFormat='S3IOSeek {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_system_profile_event_S3IOSeek', common.selector, by=['type', '$additional_groupby'], range='1m'),
+      'S3IOSeek {{$additional_groupby}}',
       intervalFactor=1,
     )
   )
@@ -5797,9 +5797,9 @@ local rowPipelineModel = (
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_pipeline_scheduler{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~".*_tasks_count"}) by (type)',
-      legendFormat='sum({{type}})',
+    common.target(
+      common.expr.sum('tiflash_pipeline_scheduler', common.selector, labels='type=~".*_tasks_count"', by=['type']),
+      'sum({{type}})',
     )
   )
   .resetYaxes()
@@ -5949,9 +5949,9 @@ local rowPipelineModel = (
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(tiflash_pipeline_wait_on_notify_tasks{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (type)',
-      legendFormat='sum({{type}})',
+    common.target(
+      common.expr.sum('tiflash_pipeline_wait_on_notify_tasks', common.selector, by=['type']),
+      'sum({{type}})',
     )
   )
   .resetYaxes()
@@ -6006,9 +6006,9 @@ local rowTiflashResourceControl = (
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_resource_group_counter{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="total_consumption", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance,resource_group)',
-      legendFormat='total_consumption-{{instance}}-{{resource_group}}',
+    common.target(
+      common.expr.sumRate('tiflash_resource_group_counter', 'k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="total_consumption", instance=~"$instance", instance=~"$tiflash_role"', by=['instance', 'resource_group'], range='1m'),
+      'total_consumption-{{instance}}-{{resource_group}}',
       hide=true,
     )
   )
@@ -6027,30 +6027,30 @@ local rowTiflashResourceControl = (
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_resource_group_counter{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="request_gac_count", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance,resource_group)',
-      legendFormat='request_gac_count-{{instance}}-{{resource_group}}',
+    common.target(
+      common.expr.sumRate('tiflash_resource_group_counter', 'k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="request_gac_count", instance=~"$instance", instance=~"$tiflash_role"', by=['instance', 'resource_group'], range='1m'),
+      'request_gac_count-{{instance}}-{{resource_group}}',
       hide=true,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_resource_group_counter{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="gac_req_ru_consumption_delta", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance,resource_group)',
-      legendFormat='gac_req_ru_consumption_delta-{{instance}}-{{resource_group}}',
+    common.target(
+      common.expr.sumRate('tiflash_resource_group_counter', 'k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="gac_req_ru_consumption_delta", instance=~"$instance", instance=~"$tiflash_role"', by=['instance', 'resource_group'], range='1m'),
+      'gac_req_ru_consumption_delta-{{instance}}-{{resource_group}}',
       hide=true,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_resource_group_counter{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="compute_ru_consumption", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance,resource_group)',
-      legendFormat='compute_ru_consumption-{{instance}}-{{resource_group}}',
+    common.target(
+      common.expr.sumRate('tiflash_resource_group_counter', 'k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="compute_ru_consumption", instance=~"$instance", instance=~"$tiflash_role"', by=['instance', 'resource_group'], range='1m'),
+      'compute_ru_consumption-{{instance}}-{{resource_group}}',
       hide=true,
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_resource_group_counter{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="storage_ru_consumption", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance,resource_group)',
-      legendFormat='storage_ru_consumption-{{instance}}-{{resource_group}}',
+    common.target(
+      common.expr.sumRate('tiflash_resource_group_counter', 'k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="storage_ru_consumption", instance=~"$instance", instance=~"$tiflash_role"', by=['instance', 'resource_group'], range='1m'),
+      'storage_ru_consumption-{{instance}}-{{resource_group}}',
       hide=true,
     )
   )
@@ -6077,9 +6077,9 @@ local rowTiflashResourceControl = (
     legend_sortDesc=true,
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_storage_sync_replica_ru{instance=~"$tiflash_role"}[1m])) by (keyspace_id, $additional_groupby)',
-      legendFormat='replica-sync-rate-{{keyspace_id}}',
+    common.target(
+      common.expr.sumRate('tiflash_storage_sync_replica_ru', 'instance=~"$tiflash_role"', by=['keyspace_id', '$additional_groupby'], range='1m'),
+      'replica-sync-rate-{{keyspace_id}}',
     )
   )
   .addTarget(
@@ -6089,9 +6089,9 @@ local rowTiflashResourceControl = (
     )
   )
   .addTarget(
-    prometheus.target(
-      'sum(rate(tiflash_compute_request_unit{instance=~"$tiflash_role"}[1m])) by (cluster_id, $additional_groupby)',
-      legendFormat='query-rate-{{cluster_id}} {{$additional_groupby}}',
+    common.target(
+      common.expr.sumRate('tiflash_compute_request_unit', 'instance=~"$tiflash_role"', by=['cluster_id', '$additional_groupby'], range='1m'),
+      'query-rate-{{cluster_id}} {{$additional_groupby}}',
     )
   )
   .addTarget(
