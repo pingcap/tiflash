@@ -10,21 +10,23 @@ Use [go-jsonnet](https://github.com/google/go-jsonnet) and
 Why jsonnet?
 
 1. The exported Grafana JSON is too large to maintain by hand (~27k lines).
-2. Jsonnet + grafonnet-lib keep panel queries / layout reviewable in small files.
+2. Jsonnet + grafonnet-lib keep panel queries / layout reviewable as source.
 
 ## Layout
 
 ```text
 metrics/grafana/
-  tiflash_summary.jsonnet          # dashboard entry (templates + row assembly)
-  tiflash_summary/
+  tiflash_summary.jsonnet          # dashboard source (templates + all rows in order)
+  tiflashnet/
     common.libsonnet               # shared helpers (layout / graph / domain panels)
     promql.libsonnet               # PromQL expression builders (L1)
-    rows_*.libsonnet               # one file per dashboard row
   generate_json.sh                 # regenerate tiflash_summary.json
   scripts/compare_dashboards.py    # semantic diff vs previous JSON
-  scripts/gen_jsonnet_from_dashboard.py  # one-shot / refresh codegen from JSON
+  scripts/gen_jsonnet_from_dashboard.py  # legacy one-shot bootstrap from JSON
 ```
+
+Each dashboard row is defined inline in `tiflash_summary.jsonnet` (in display order)
+inside a scoped `local rowXxx = ( ... );` block, then attached with `.addPanel(rowXxx, ...)`.
 
 ## Authoring helpers (prefer these)
 
@@ -43,7 +45,7 @@ New panels should use these helpers; hand-written `graphPanel.new` only for one-
 
 ## Usage
 
-1. Edit the relevant `tiflash_summary/*.libsonnet` (or the entry jsonnet).
+1. Edit `tiflash_summary.jsonnet` (and helpers under `tiflashnet/` if needed).
 2. Run `./generate_json.sh` to regenerate `tiflash_summary.json`.
 3. Optionally compare against the previous generated file (or git HEAD):  
    `python3 scripts/compare_dashboards.py scripts/tiflash_summary.original.json tiflash_summary.json`
@@ -51,7 +53,8 @@ New panels should use these helpers; hand-written `graphPanel.new` only for one-
 
 Do **not** hand-edit `tiflash_summary.json` — it is a generated artifact.
 
-`scripts/gen_jsonnet_from_dashboard.py` is only for bootstrapping / refreshing row files from a dashboard JSON export. Day-to-day edits should be made in the `*.libsonnet` / `tiflash_summary.jsonnet` sources.
+`scripts/gen_jsonnet_from_dashboard.py` is a legacy bootstrap helper from dashboard JSON
+exports. Day-to-day edits should be made in `tiflash_summary.jsonnet` / `tiflashnet/*.libsonnet`.
 
 ## Layout helpers
 

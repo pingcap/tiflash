@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Generate grafonnet-lib jsonnet sources from tiflash_summary.json.
+"""Legacy bootstrap: generate grafonnet-lib jsonnet from tiflash_summary.json.
 
-Re-run after intentional dashboard JSON edits to refresh row libsonnet files.
-Source of truth after migration is the generated *.libsonnet / *.jsonnet.
+Day-to-day source of truth is metrics/grafana/tiflash_summary.jsonnet (all rows
+inline) plus tiflashnet/{common,promql}.libsonnet. This script may still
+emit rows_*.libsonnet for one-shot recovery; prefer editing the entry jsonnet.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DASHBOARD_JSON = ROOT / "scripts" / "tiflash_summary.original.json"
 if not DASHBOARD_JSON.exists():
     DASHBOARD_JSON = ROOT / "tiflash_summary.json"
-OUT_DIR = ROOT / "tiflash_summary"
+OUT_DIR = ROOT / "tiflashnet"
 ENTRY = ROOT / "tiflash_summary.jsonnet"
 
 ROW_FILE_NAMES = {
@@ -347,7 +348,7 @@ def slug(title: str) -> str:
 
 def emit_entry(row_files: list[tuple[str, str]]) -> str:
     imports = "\n".join(
-        f"local {safe_import_name(title)} = import 'tiflash_summary/{fname}';"
+        f"local {safe_import_name(title)} = import 'tiflashnet/{fname}';"
         for title, fname in row_files
     )
     add_panels = "\n".join(
@@ -371,7 +372,7 @@ def emit_entry(row_files: list[tuple[str, str]]) -> str:
 local grafana = import 'grafonnet/grafana.libsonnet';
 local dashboard = grafana.dashboard;
 local template = grafana.template;
-local common = import 'tiflash_summary/common.libsonnet';
+local common = import 'tiflashnet/common.libsonnet';
 
 {imports}
 
