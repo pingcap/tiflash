@@ -291,22 +291,11 @@ local rowServer = (
 local rowThreadsCpu = (
   local rowObj = row.new(collapse=true, title='Threads CPU');
 
-  local panelSstImportService = common.graph(
+  local panelSstImportService = common.cpuWithLimitPanel(
     'SST Import Service',
-    [
-      common.target(
-        common.expr.sumRate('tiflash_proxy_thread_cpu_seconds_total', 'k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"sst_importer.*", instance=~"$tiflash_role"', by=['instance'], range='1m'),
-        '{{instance}}',
-      ),
-    ],
+    'sst_importer.*',
     description='Involved when importing data.',
-    fill=0,
-    nullPointMode='null',
-    sideWidth=250,
-    yLeft='percentunit',
-    yLeftDecimals=1,
-    yRight='short',
-    yRightShow=false,
+    hideLimit=true,
   );
 
   local panelSstApply = common.cpuWithLimitPanel(
@@ -339,15 +328,16 @@ local rowThreadsCpu = (
     legend='{{name}} {{instance}}',
   );
 
+  // PromQL string literals need \\d for regex \d → jsonnet '\\\\d'.
   local panelStorageBackgroundSmallTasks = common.cpuWithLimitPanel(
     'Storage Background (Small Tasks)',
-    'bg_\\d+',
+    'bg_\\\\d+',
     legend='{{name}} {{instance}}',
   );
 
   local panelStorageBackgroundLargeTasks = common.cpuWithLimitPanel(
     'Storage Background (Large Tasks)',
-    'bg_block_\\d+',
+    'bg_block_\\\\d+',
     legend='{{name}} {{instance}}',
   );
 

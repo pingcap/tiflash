@@ -467,7 +467,9 @@ local mkGraph(
     ),
 
   // L3c: thread CPU usage + Limit red line (count of matching series).
-  // nameRegex is matched against the `name` label of tiflash_proxy_thread_cpu_seconds_total.
+  // nameRegex is placed inside PromQL name=~"..."; escape for PromQL strings
+  // (e.g. regex \d needs jsonnet '\\\\d').
+  // hideLimit=true: only the CPU usage series (no Limit count line).
   cpuWithLimitPanel(
     title,
     nameRegex,
@@ -475,31 +477,29 @@ local mkGraph(
     legend='{{instance}}',
     metric='tiflash_proxy_thread_cpu_seconds_total',
     range='$__rate_interval',
+    hideLimit=false,
   )::
     local sel = 'k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"' + nameRegex + '", instance=~"$tiflash_role"';
+    local usageTarget = self.target(promql.sumRate(metric, sel, by=['instance'], range=range), legend);
+    local limitTarget = self.target(promql.count(metric, sel, by=['instance']), 'Limit');
+    local limitOverride = self.override(
+      'Limit',
+      color='#F2495C',
+      hideTooltip=true,
+      legend=false,
+      linewidth=2,
+      nullPointMode='connected',
+    );
     self.graph(
       title,
-      [
-        self.target(promql.sumRate(metric, sel, by=['instance'], range=range), legend),
-        self.target(promql.count(metric, sel, by=['instance']), 'Limit'),
-      ],
+      if hideLimit then [usageTarget] else [usageTarget, limitTarget],
       description=description,
       fill=0,
       nullPointMode='null',
-      sideWidth=250,
       yLeft='percentunit',
       yRight='short',
       yRightShow=false,
-      seriesOverrides=[
-        self.override(
-          'Limit',
-          color='#F2495C',
-          hideTooltip=true,
-          legend=false,
-          linewidth=2,
-          nullPointMode='connected',
-        ),
-      ],
+      seriesOverrides=if hideLimit then [] else [limitOverride],
     ),
 
   // L3d: OPS series + hit-ratio series on the right (percentunit) axis.
