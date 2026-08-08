@@ -60,16 +60,103 @@ local stripBucket(metric) =
   else
     metric;
 
-local makeDurationTarget(expr, legend, intervalFactor, hide) =
-  if intervalFactor == null then
-    if hide then
-      prometheus.target(expr, legendFormat=legend, hide=true)
-    else
-      prometheus.target(expr, legendFormat=legend)
-  else if hide then
+// L2: prometheus target factory.
+local mkTarget(expr, legend, hide=false, intervalFactor=2) =
+  if hide then
     prometheus.target(expr, legendFormat=legend, intervalFactor=intervalFactor, hide=true)
   else
     prometheus.target(expr, legendFormat=legend, intervalFactor=intervalFactor);
+
+// L2: series override object (null fields pruned).
+local mkOverride(
+  alias,
+  yaxis=null,
+  color=null,
+  linewidth=null,
+  fill=null,
+  hideTooltip=null,
+  legend=null,
+  nullPointMode=null,
+  dashes=null,
+  zindex=null,
+)::
+  std.prune({
+    alias: alias,
+    yaxis: yaxis,
+    color: color,
+    linewidth: linewidth,
+    fill: fill,
+    hideTooltip: hideTooltip,
+    legend: legend,
+    nullPointMode: nullPointMode,
+    dashes: dashes,
+    zindex: zindex,
+  });
+
+// L2: graph panel style factory.
+local mkGraph(
+  title,
+  targets,
+  datasource,
+  description=null,
+  fill=1,
+  nullPointMode='null as zero',
+  legendSort='max',
+  legendSortDesc=true,
+  legendCurrent=true,
+  legendMax=true,
+  sideWidth=null,
+  yLeft='short',
+  yRight='short',
+  yLeftMin='0',
+  seriesOverrides=[],
+) =
+  local base =
+    if sideWidth == null then
+      graphPanel.new(
+        title=title,
+        datasource=datasource,
+        description=description,
+        fill=fill,
+        nullPointMode=nullPointMode,
+        legend_alignAsTable=true,
+        legend_rightSide=true,
+        legend_values=true,
+        legend_current=legendCurrent,
+        legend_max=legendMax,
+        legend_sort=legendSort,
+        legend_sortDesc=legendSortDesc,
+      )
+    else
+      graphPanel.new(
+        title=title,
+        datasource=datasource,
+        description=description,
+        fill=fill,
+        nullPointMode=nullPointMode,
+        legend_alignAsTable=true,
+        legend_rightSide=true,
+        legend_values=true,
+        legend_current=legendCurrent,
+        legend_max=legendMax,
+        legend_sort=legendSort,
+        legend_sortDesc=legendSortDesc,
+        legend_sideWidth=sideWidth,
+      );
+  local withTargets = std.foldl(
+    function(p, t) p.addTarget(t),
+    targets,
+    base
+  );
+  local withAxes = withTargets
+    .resetYaxes()
+    .addYaxis(format=yLeft, min=yLeftMin)
+    .addYaxis(format=yRight);
+  std.foldl(
+    function(p, o) p.addSeriesOverride(o),
+    seriesOverrides,
+    withAxes
+  );
 
 {
   // Shared helpers for TiFlash Summary dashboard (grafonnet-lib).
@@ -82,6 +169,69 @@ local makeDurationTarget(expr, legend, intervalFactor, hide) =
 
   // L1: PromQL expression builders (see promql.libsonnet).
   expr:: promql,
+
+  // L2: target / graph / override factories.
+  target(expr, legend, hide=false, intervalFactor=2)::
+    mkTarget(expr, legend, hide=hide, intervalFactor=intervalFactor),
+
+  override(
+    alias,
+    yaxis=null,
+    color=null,
+    linewidth=null,
+    fill=null,
+    hideTooltip=null,
+    legend=null,
+    nullPointMode=null,
+    dashes=null,
+    zindex=null,
+  )::
+    mkOverride(
+      alias,
+      yaxis=yaxis,
+      color=color,
+      linewidth=linewidth,
+      fill=fill,
+      hideTooltip=hideTooltip,
+      legend=legend,
+      nullPointMode=nullPointMode,
+      dashes=dashes,
+      zindex=zindex,
+    ),
+
+  graph(
+    title,
+    targets,
+    description=null,
+    fill=1,
+    nullPointMode='null as zero',
+    legendSort='max',
+    legendSortDesc=true,
+    legendCurrent=true,
+    legendMax=true,
+    sideWidth=null,
+    yLeft='short',
+    yRight='short',
+    yLeftMin='0',
+    seriesOverrides=[],
+  )::
+    mkGraph(
+      title,
+      targets,
+      self.datasource,
+      description=description,
+      fill=fill,
+      nullPointMode=nullPointMode,
+      legendSort=legendSort,
+      legendSortDesc=legendSortDesc,
+      legendCurrent=legendCurrent,
+      legendMax=legendMax,
+      sideWidth=sideWidth,
+      yLeft=yLeft,
+      yRight=yRight,
+      yLeftMin=yLeftMin,
+      seriesOverrides=seriesOverrides,
+    ),
 
   gridW:: gridW,
   panelH:: defaultH,
@@ -129,7 +279,7 @@ local makeDurationTarget(expr, legend, intervalFactor, hide) =
     std.map(
       function(q)
         local isAvg = std.objectHas(q, 'avg') && q.avg;
-        makeDurationTarget(
+        mkTarget(
           if isAvg then
             promql.histogramAvg(metricBase, selector, by=by, range=range)
           else
@@ -142,8 +292,8 @@ local makeDurationTarget(expr, legend, intervalFactor, hide) =
               maxHack=std.objectHas(q, 'maxHack') && q.maxHack,
             ),
           legend % q.name,
-          intervalFactor,
-          std.objectHas(q, 'hide') && q.hide,
+          hide=std.objectHas(q, 'hide') && q.hide,
+          intervalFactor=intervalFactor,
         ),
       quantiles
     ),
@@ -161,34 +311,23 @@ local makeDurationTarget(expr, legend, intervalFactor, hide) =
     range='$__rate_interval',
     description=null,
   )::
-    local targets = self.durationQuantileTargets(
-      metric,
-      selector=selector,
-      by=by,
-      legend=legend,
-      range=range,
-      intervalFactor=2,
-    );
-    local panel = graphPanel.new(
-      title=title,
-      datasource=self.datasource,
+    self.graph(
+      title,
+      self.durationQuantileTargets(
+        metric,
+        selector=selector,
+        by=by,
+        legend=legend,
+        range=range,
+        intervalFactor=2,
+      ),
       description=description,
       fill=1,
       nullPointMode='null as zero',
-      legend_alignAsTable=true,
-      legend_rightSide=true,
-      legend_values=true,
-      legend_current=true,
-      legend_max=true,
-      legend_sort='max',
-      legend_sortDesc=true,
-    );
-    std.foldl(
-      function(p, t) p.addTarget(t),
-      targets,
-      panel
-    )
-    .resetYaxes()
-    .addYaxis(format='s', min='0')
-    .addYaxis(format='short'),
+      legendSort='max',
+      legendSortDesc=true,
+      yLeft='s',
+      yRight='short',
+      yLeftMin='0',
+    ),
 }

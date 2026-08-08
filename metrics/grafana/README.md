@@ -70,6 +70,23 @@ common.expr.histogramAvg('tiflash_storage_s3_request_seconds', common.selector, 
 `histogramQuantile` / `histogramAvg` take the metric **base name** (no `_bucket` / `_sum` / `_count`).
 Extra matchers go in `labels=`, e.g. `labels='type="decode"'`. Default range is `$__rate_interval`.
 
+## Graph style helpers (L2)
+
+Prefer `common.graph` / `common.target` / `common.override` instead of repeating
+`graphPanel.new` + legend/yaxes boilerplate:
+
+```jsonnet
+common.graph(
+  'Example',
+  [
+    common.target(common.expr.sumRate('metric', common.selector, by=['instance']), '{{instance}}'),
+  ],
+  yLeft='ops',
+  yRight='none',
+  fill=0,
+)
+```
+
 ## Duration histogram helpers
 
 For `*_seconds_bucket` latency panels (default show p9999/p99; hide max/p999/p80/avg), prefer:
