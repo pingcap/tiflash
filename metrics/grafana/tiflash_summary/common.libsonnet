@@ -79,7 +79,7 @@ local mkOverride(
   nullPointMode=null,
   dashes=null,
   zindex=null,
-)::
+) =
   std.prune({
     alias: alias,
     yaxis: yaxis,
