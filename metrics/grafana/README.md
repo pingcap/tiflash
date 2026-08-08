@@ -18,12 +18,28 @@ Why jsonnet?
 metrics/grafana/
   tiflash_summary.jsonnet          # dashboard entry (templates + row assembly)
   tiflash_summary/
-    common.libsonnet               # shared datasource / gridPos helpers
+    common.libsonnet               # shared helpers (layout / graph / domain panels)
+    promql.libsonnet               # PromQL expression builders (L1)
     rows_*.libsonnet               # one file per dashboard row
   generate_json.sh                 # regenerate tiflash_summary.json
   scripts/compare_dashboards.py    # semantic diff vs previous JSON
   scripts/gen_jsonnet_from_dashboard.py  # one-shot / refresh codegen from JSON
 ```
+
+## Authoring helpers (prefer these)
+
+| Helper | Use for |
+|--------|---------|
+| `common.band` / `common.buildRow` | Row layout (no hand-written x/y/w) |
+| `common.expr.*` | PromQL (`sumRate`, `histogramQuantile`, …) |
+| `common.graph` / `common.target` / `common.override` | Shared graph style |
+| `common.opsPanel` | Single-metric OPS/QPS |
+| `common.heatmap` | Histogram heatmaps |
+| `common.cpuWithLimitPanel` | Threads CPU + Limit line |
+| `common.opsHitRatioPanel` | OPS + hit-ratio dual axis |
+| `common.durationPanel` | Latency histograms (`*_bucket`) |
+
+New panels should use these helpers; hand-written `graphPanel.new` only for one-off cases.
 
 ## Usage
 
