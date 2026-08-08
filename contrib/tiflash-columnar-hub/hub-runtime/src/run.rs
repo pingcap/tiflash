@@ -1445,6 +1445,7 @@ pub unsafe fn run_proxy(argc: c_int, argv: *const *const c_char, helper_ptr: *co
         )
     });
     let data_dir_str = data_dir.to_string_lossy().to_string();
+    tikv_util::set_panic_hook(false, &data_dir_str);
     let hub_config_str = serde_json::to_string(&HubConfigSummary {
         server: HubServerSummary {
             engine_addr: resolve_engine_addr(&config),

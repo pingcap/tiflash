@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <Common/FmtUtils.h>
 #include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Storages/KVStore/Read/RegionLockInfo.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVKeyValue.h>
@@ -40,7 +41,11 @@ public:
         for (const auto & lock : locks)
             locked_regions.insert(lock.first);
 
-        this->message(fmt::format("Key is locked ({} locks in regions {})", locks.size(), locked_regions));
+        this->message(fmt::format(
+            "Key is locked ({} locks in regions {}, first_lock_info={})",
+            locks.size(),
+            locked_regions,
+            firstLockInfoToDebugString(locks)));
 #else
         std::set<std::string> keys;
         std::set<std::string> primary_keys;
@@ -62,6 +67,23 @@ public:
     }
 
     std::vector<std::pair<RegionID, LockInfoPtr>> locks;
+
+private:
+    static String firstLockInfoToDebugString(const std::vector<std::pair<RegionID, LockInfoPtr>> & locks)
+    {
+        if (locks.empty())
+            return "<none>";
+
+        FmtBuffer buffer;
+        const auto & lock = locks.front();
+        buffer.fmtAppend("{}(", lock.first);
+        if (lock.second)
+            buffer.append(lock.second->ShortDebugString());
+        else
+            buffer.append("<null>");
+        buffer.append(")");
+        return buffer.toString();
+    }
 };
 
 } // namespace DB
