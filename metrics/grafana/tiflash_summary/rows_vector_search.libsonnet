@@ -1,4 +1,5 @@
 // Generated from tiflash_summary.json — edit carefully or regenerate.
+// Layout: use common.band / common.buildRow (do not hand-write x/y/w).
 local grafana = import 'grafonnet/grafana.libsonnet';
 local row = grafana.row;
 local graphPanel = grafana.graphPanel;
@@ -150,16 +151,11 @@ local p_99_9_Vector_Index_Build_Duration_Per_DMFile_ColumnP = graphPanel.new(
 
 
 {
-  row: rowObj
-  .addPanel(in_Memory_Vector_Index_InstancesP, gridPos=common.pos(12, 8, x=0, y=205))
-  .addPanel(vector_Index_Estimated_Memory_UsageP, gridPos=common.pos(12, 8, x=12, y=205))
-  .addPanel(p_99_9_Vector_Search_Duration_Per_RequestP, gridPos=common.pos(12, 8, x=0, y=213))
-  .addPanel(p_99_9_Vector_Index_Build_Duration_Per_DMFile_ColumnP, gridPos=common.pos(12, 8, x=12, y=213))
-  ,
-  panels: [
-    { panel: in_Memory_Vector_Index_InstancesP, w: 12, h: 8, x: 0, y: 205 },
-    { panel: vector_Index_Estimated_Memory_UsageP, w: 12, h: 8, x: 12, y: 205 },
-    { panel: p_99_9_Vector_Search_Duration_Per_RequestP, w: 12, h: 8, x: 0, y: 213 },
-    { panel: p_99_9_Vector_Index_Build_Duration_Per_DMFile_ColumnP, w: 12, h: 8, x: 12, y: 213 }
-  ],
+  row: common.buildRow(
+    rowObj,
+    [
+      common.band([in_Memory_Vector_Index_InstancesP, vector_Index_Estimated_Memory_UsageP]),
+      common.band([p_99_9_Vector_Search_Duration_Per_RequestP, p_99_9_Vector_Index_Build_Duration_Per_DMFile_ColumnP])
+    ],
+  ),
 }

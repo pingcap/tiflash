@@ -1,4 +1,5 @@
 // Generated from tiflash_summary.json — edit carefully or regenerate.
+// Layout: use common.band / common.buildRow (do not hand-write x/y/w).
 local grafana = import 'grafonnet/grafana.libsonnet';
 local row = grafana.row;
 local graphPanel = grafana.graphPanel;
@@ -205,18 +206,11 @@ local i_O_Limiter_Pending_DurationP = graphPanel.new(
 
 
 {
-  row: rowObj
-  .addPanel(i_O_Limiter_ThroughputP, gridPos=common.pos(12, 8, x=0, y=12))
-  .addPanel(i_O_Limiter_ThresholdP, gridPos=common.pos(12, 8, x=12, y=12))
-  .addPanel(i_O_Limiter_Current_Pending_GaugeP, gridPos=common.pos(8, 8, x=0, y=20))
-  .addPanel(i_O_Limiter_Pending_OPSP, gridPos=common.pos(8, 8, x=8, y=20))
-  .addPanel(i_O_Limiter_Pending_DurationP, gridPos=common.pos(8, 8, x=16, y=20))
-  ,
-  panels: [
-    { panel: i_O_Limiter_ThroughputP, w: 12, h: 8, x: 0, y: 12 },
-    { panel: i_O_Limiter_ThresholdP, w: 12, h: 8, x: 12, y: 12 },
-    { panel: i_O_Limiter_Current_Pending_GaugeP, w: 8, h: 8, x: 0, y: 20 },
-    { panel: i_O_Limiter_Pending_OPSP, w: 8, h: 8, x: 8, y: 20 },
-    { panel: i_O_Limiter_Pending_DurationP, w: 8, h: 8, x: 16, y: 20 }
-  ],
+  row: common.buildRow(
+    rowObj,
+    [
+      common.band([i_O_Limiter_ThroughputP, i_O_Limiter_ThresholdP]),
+      common.band([i_O_Limiter_Current_Pending_GaugeP, i_O_Limiter_Pending_OPSP, i_O_Limiter_Pending_DurationP])
+    ],
+  ),
 }

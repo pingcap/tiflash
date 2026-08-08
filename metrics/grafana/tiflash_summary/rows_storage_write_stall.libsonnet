@@ -1,4 +1,5 @@
 // Generated from tiflash_summary.json — edit carefully or regenerate.
+// Layout: use common.band / common.buildRow (do not hand-write x/y/w).
 local grafana = import 'grafonnet/grafana.libsonnet';
 local row = grafana.row;
 local graphPanel = grafana.graphPanel;
@@ -210,18 +211,13 @@ local write_Command_OPS_By_InstanceP = graphPanel.new(
 
 
 {
-  row: rowObj
-  .addPanel(write_Stall_DurationP, gridPos=common.pos(24, 8, x=0, y=61))
-  .addPanel(write_Delta_Management_ThroughputP, gridPos=common.pos(12, 8, x=0, y=69))
-  .addPanel(write_Delta_Management_TotalP, gridPos=common.pos(12, 8, x=12, y=69))
-  .addPanel(write_Throughput_By_InstanceP, gridPos=common.pos(24, 9, x=0, y=77))
-  .addPanel(write_Command_OPS_By_InstanceP, gridPos=common.pos(24, 9, x=0, y=86))
-  ,
-  panels: [
-    { panel: write_Stall_DurationP, w: 24, h: 8, x: 0, y: 61 },
-    { panel: write_Delta_Management_ThroughputP, w: 12, h: 8, x: 0, y: 69 },
-    { panel: write_Delta_Management_TotalP, w: 12, h: 8, x: 12, y: 69 },
-    { panel: write_Throughput_By_InstanceP, w: 24, h: 9, x: 0, y: 77 },
-    { panel: write_Command_OPS_By_InstanceP, w: 24, h: 9, x: 0, y: 86 }
-  ],
+  row: common.buildRow(
+    rowObj,
+    [
+      common.band([write_Stall_DurationP]),
+      common.band([write_Delta_Management_ThroughputP, write_Delta_Management_TotalP]),
+      common.band([write_Throughput_By_InstanceP]),
+      common.band([write_Command_OPS_By_InstanceP])
+    ],
+  ),
 }

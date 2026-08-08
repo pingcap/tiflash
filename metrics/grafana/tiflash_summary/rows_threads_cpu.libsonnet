@@ -1,4 +1,5 @@
 // Generated from tiflash_summary.json — edit carefully or regenerate.
+// Layout: use common.band / common.buildRow (do not hand-write x/y/w).
 local grafana = import 'grafonnet/grafana.libsonnet';
 local row = grafana.row;
 local graphPanel = grafana.graphPanel;
@@ -621,40 +622,17 @@ local segment_ReaderP = graphPanel.new(
 
 
 {
-  row: rowObj
-  .addPanel(sST_Import_ServiceP, gridPos=common.pos(12, 7, x=0, y=34))
-  .addPanel(sST_ApplyP, gridPos=common.pos(12, 7, x=12, y=34))
-  .addPanel(region_TaskP, gridPos=common.pos(12, 7, x=0, y=41))
-  .addPanel(region_WorkerP, gridPos=common.pos(12, 7, x=12, y=41))
-  .addPanel(raft_StoreP, gridPos=common.pos(12, 7, x=0, y=48))
-  .addPanel(apply_WorkerP, gridPos=common.pos(12, 7, x=12, y=48))
-  .addPanel(storage_Background_Small_TasksP, gridPos=common.pos(12, 7, x=0, y=55))
-  .addPanel(storage_Background_Large_TasksP, gridPos=common.pos(12, 7, x=12, y=55))
-  .addPanel(manual_CompactionP, gridPos=common.pos(12, 7, x=0, y=62))
-  .addPanel(gRPC_Async_ServerP, gridPos=common.pos(12, 7, x=12, y=62))
-  .addPanel(gRPC_Async_ClientP, gridPos=common.pos(12, 7, x=0, y=69))
-  .addPanel(fAP_builderP, gridPos=common.pos(12, 7, x=12, y=69))
-  .addPanel(snapshot_SenderP, gridPos=common.pos(12, 7, x=0, y=76))
-  .addPanel(segment_SchedulerP, gridPos=common.pos(12, 7, x=12, y=76))
-  .addPanel(local_Index_PoolP, gridPos=common.pos(12, 7, x=0, y=83))
-  .addPanel(segment_ReaderP, gridPos=common.pos(12, 7, x=12, y=83))
-  ,
-  panels: [
-    { panel: sST_Import_ServiceP, w: 12, h: 7, x: 0, y: 34 },
-    { panel: sST_ApplyP, w: 12, h: 7, x: 12, y: 34 },
-    { panel: region_TaskP, w: 12, h: 7, x: 0, y: 41 },
-    { panel: region_WorkerP, w: 12, h: 7, x: 12, y: 41 },
-    { panel: raft_StoreP, w: 12, h: 7, x: 0, y: 48 },
-    { panel: apply_WorkerP, w: 12, h: 7, x: 12, y: 48 },
-    { panel: storage_Background_Small_TasksP, w: 12, h: 7, x: 0, y: 55 },
-    { panel: storage_Background_Large_TasksP, w: 12, h: 7, x: 12, y: 55 },
-    { panel: manual_CompactionP, w: 12, h: 7, x: 0, y: 62 },
-    { panel: gRPC_Async_ServerP, w: 12, h: 7, x: 12, y: 62 },
-    { panel: gRPC_Async_ClientP, w: 12, h: 7, x: 0, y: 69 },
-    { panel: fAP_builderP, w: 12, h: 7, x: 12, y: 69 },
-    { panel: snapshot_SenderP, w: 12, h: 7, x: 0, y: 76 },
-    { panel: segment_SchedulerP, w: 12, h: 7, x: 12, y: 76 },
-    { panel: local_Index_PoolP, w: 12, h: 7, x: 0, y: 83 },
-    { panel: segment_ReaderP, w: 12, h: 7, x: 12, y: 83 }
-  ],
+  row: common.buildRow(
+    rowObj,
+    [
+      common.band([sST_Import_ServiceP, sST_ApplyP]),
+      common.band([region_TaskP, region_WorkerP]),
+      common.band([raft_StoreP, apply_WorkerP]),
+      common.band([storage_Background_Small_TasksP, storage_Background_Large_TasksP]),
+      common.band([manual_CompactionP, gRPC_Async_ServerP]),
+      common.band([gRPC_Async_ClientP, fAP_builderP]),
+      common.band([snapshot_SenderP, segment_SchedulerP]),
+      common.band([local_Index_PoolP, segment_ReaderP])
+    ],
+  ),
 }

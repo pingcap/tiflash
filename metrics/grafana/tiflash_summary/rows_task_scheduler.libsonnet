@@ -1,4 +1,5 @@
 // Generated from tiflash_summary.json — edit carefully or regenerate.
+// Layout: use common.band / common.buildRow (do not hand-write x/y/w).
 local grafana = import 'grafonnet/grafana.libsonnet';
 local row = grafana.row;
 local graphPanel = grafana.graphPanel;
@@ -234,20 +235,12 @@ local task_Waiting_DurationP = graphPanel.new(
 
 
 {
-  row: rowObj
-  .addPanel(min_TSOP, gridPos=common.pos(12, 8, x=0, y=37))
-  .addPanel(estimated_Thread_Usage_and_LimitP, gridPos=common.pos(12, 8, x=12, y=37))
-  .addPanel(active_and_Waiting_Queries_CountP, gridPos=common.pos(12, 8, x=0, y=45))
-  .addPanel(active_and_Waiting_Tasks_CountP, gridPos=common.pos(12, 8, x=12, y=45))
-  .addPanel(hard_Limit_Exceeded_CountP, gridPos=common.pos(12, 8, x=0, y=53))
-  .addPanel(task_Waiting_DurationP, gridPos=common.pos(12, 8, x=12, y=53))
-  ,
-  panels: [
-    { panel: min_TSOP, w: 12, h: 8, x: 0, y: 37 },
-    { panel: estimated_Thread_Usage_and_LimitP, w: 12, h: 8, x: 12, y: 37 },
-    { panel: active_and_Waiting_Queries_CountP, w: 12, h: 8, x: 0, y: 45 },
-    { panel: active_and_Waiting_Tasks_CountP, w: 12, h: 8, x: 12, y: 45 },
-    { panel: hard_Limit_Exceeded_CountP, w: 12, h: 8, x: 0, y: 53 },
-    { panel: task_Waiting_DurationP, w: 12, h: 8, x: 12, y: 53 }
-  ],
+  row: common.buildRow(
+    rowObj,
+    [
+      common.band([min_TSOP, estimated_Thread_Usage_and_LimitP]),
+      common.band([active_and_Waiting_Queries_CountP, active_and_Waiting_Tasks_CountP]),
+      common.band([hard_Limit_Exceeded_CountP, task_Waiting_DurationP])
+    ],
+  ),
 }

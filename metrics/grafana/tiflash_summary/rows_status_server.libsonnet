@@ -1,4 +1,5 @@
 // Generated from tiflash_summary.json — edit carefully or regenerate.
+// Layout: use common.band / common.buildRow (do not hand-write x/y/w).
 local grafana = import 'grafonnet/grafana.libsonnet';
 local row = grafana.row;
 local graphPanel = grafana.graphPanel;
@@ -80,12 +81,10 @@ local status_API_Request_op_sP = graphPanel.new(
 
 
 {
-  row: rowObj
-  .addPanel(status_API_Request_DurationP, gridPos=common.pos(12, 7, x=0, y=204))
-  .addPanel(status_API_Request_op_sP, gridPos=common.pos(12, 7, x=12, y=204))
-  ,
-  panels: [
-    { panel: status_API_Request_DurationP, w: 12, h: 7, x: 0, y: 204 },
-    { panel: status_API_Request_op_sP, w: 12, h: 7, x: 12, y: 204 }
-  ],
+  row: common.buildRow(
+    rowObj,
+    [
+      common.band([status_API_Request_DurationP, status_API_Request_op_sP])
+    ],
+  ),
 }

@@ -268,7 +268,8 @@ def emit_row_file(row: dict) -> str:
     title = row["title"]
     used: set[str] = set()
     panels_code = []
-    panel_vars = []
+    # (var, w, h, x, y) in original order
+    panel_vars: list[tuple[str, int, int, int, int]] = []
     for p in row.get("panels") or []:
         var = ident(p.get("title") or "panel", used) + "P"
         if p.get("type") == "heatmap":
@@ -276,15 +277,44 @@ def emit_row_file(row: dict) -> str:
         else:
             panels_code.append(emit_graph(p, var))
         gp = p.get("gridPos") or {}
-        w = gp.get("w", 12)
-        h = gp.get("h", 7)
-        x = gp.get("x", 0)
-        y = gp.get("y", 0)
-        panel_vars.append((var, w, h, x, y))
+        panel_vars.append(
+            (
+                var,
+                int(gp.get("w", 12)),
+                int(gp.get("h", 8)),
+                int(gp.get("x", 0)),
+                int(gp.get("y", 0)),
+            )
+        )
 
-    row_var = "rowObj"
+    # Group into horizontal bands by original y; sort each band by x.
+    by_y: dict[int, list[tuple[str, int, int, int]]] = {}
+    for var, w, h, x, y in panel_vars:
+        by_y.setdefault(y, []).append((var, w, h, x))
+    bands = []
+    for y in sorted(by_y):
+        items = sorted(by_y[y], key=lambda t: t[3])  # by x
+        h = items[0][2]
+        widths = [it[1] for it in items]
+        n = len(items)
+        band_h = "" if h == 8 else f", h={h}"
+        # Only auto-equalize when the band spans the full 24-wide grid with
+        # identical widths (1/2/3/4 columns). Otherwise keep explicit w.
+        equal_full_row = sum(widths) == 24 and len(set(widths)) == 1
+        if equal_full_row:
+            names = ", ".join(it[0] for it in items)
+            bands.append(f"      common.band([{names}]{band_h})")
+        else:
+            parts = ", ".join(
+                f"{{ panel: {it[0]}, w: {it[1]} }}" for it in items
+            )
+            bands.append(f"      common.band([{parts}]{band_h})")
+
+    bands_block = ",\n".join(bands)
+
     lines = [
         "// Generated from tiflash_summary.json — edit carefully or regenerate.",
+        "// Layout: use common.band / common.buildRow (do not hand-write x/y/w).",
         "local grafana = import 'grafonnet/grafana.libsonnet';",
         "local row = grafana.row;",
         "local graphPanel = grafana.graphPanel;",
@@ -292,25 +322,18 @@ def emit_row_file(row: dict) -> str:
         "local prometheus = grafana.prometheus;",
         "local common = import 'common.libsonnet';",
         "",
-        f"local {row_var} = row.new(collapse=true, title={jstr(title)});",
+        f"local rowObj = row.new(collapse=true, title={jstr(title)});",
         "",
     ]
     lines.extend(panels_code)
     lines.append("")
     lines.append("{")
-    lines.append(f"  row: {row_var}")
-    for var, w, h, x, y in panel_vars:
-        lines.append(
-            f"  .addPanel({var}, gridPos=common.pos({w}, {h}, x={x}, y={y}))"
-        )
-    lines.append("  ,")
-    lines.append("  panels: [")
-    for i, (var, w, h, x, y) in enumerate(panel_vars):
-        comma = "," if i + 1 < len(panel_vars) else ""
-        lines.append(
-            f"    {{ panel: {var}, w: {w}, h: {h}, x: {x}, y: {y} }}{comma}"
-        )
-    lines.append("  ],")
+    lines.append("  row: common.buildRow(")
+    lines.append("    rowObj,")
+    lines.append("    [")
+    lines.append(bands_block)
+    lines.append("    ],")
+    lines.append("  ),")
     lines.append("}")
     lines.append("")
     return "\n".join(lines)

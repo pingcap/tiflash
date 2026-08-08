@@ -1,4 +1,5 @@
 // Generated from tiflash_summary.json — edit carefully or regenerate.
+// Layout: use common.band / common.buildRow (do not hand-write x/y/w).
 local grafana = import 'grafonnet/grafana.libsonnet';
 local row = grafana.row;
 local graphPanel = grafana.graphPanel;
@@ -551,42 +552,17 @@ local fAP_no_match_reasonP = graphPanel.new(
 
 
 {
-  row: rowObj
-  .addPanel(checkpoint_Upload_DurationP, gridPos=common.pos(12, 8, x=0, y=33))
-  .addPanel(checkpoint_Upload_flowP, gridPos=common.pos(12, 8, x=12, y=33))
-  .addPanel(checkpoint_Upload_keys_speed_by_type_allP, gridPos=common.pos(12, 8, x=0, y=41))
-  .addPanel(checkpoint_Upload_flow_by_type_incremental_compactionP, gridPos=common.pos(12, 8, x=12, y=41))
-  .addPanel(remote_File_NumP, gridPos=common.pos(12, 8, x=0, y=49))
-  .addPanel(remote_Store_UsageP, gridPos=common.pos(12, 8, x=12, y=49))
-  .addPanel(remote_Object_Lock_Request_QPSP, gridPos=common.pos(12, 8, x=0, y=57))
-  .addPanel(remote_Object_Lock_DurationP, gridPos=common.pos(12, 8, x=12, y=57))
-  .addPanel(remote_Store_SummaryP, gridPos=common.pos(8, 8, x=0, y=65))
-  .addPanel(remote_GC_Duration_BreakdownP, gridPos=common.pos(9, 8, x=8, y=65))
-  .addPanel(remote_GC_StatusP, gridPos=common.pos(7, 8, x=17, y=65))
-  .addPanel(local_Lock_Manager_statusP, gridPos=common.pos(12, 8, x=0, y=73))
-  .addPanel(local_Lock_Manager_QPSP, gridPos=common.pos(12, 8, x=12, y=73))
-  .addPanel(fAP_resultP, gridPos=common.pos(12, 8, x=0, y=81))
-  .addPanel(fAP_stateP, gridPos=common.pos(12, 8, x=12, y=81))
-  .addPanel(fAP_time_by_stageP, gridPos=common.pos(12, 8, x=0, y=89))
-  .addPanel(fAP_no_match_reasonP, gridPos=common.pos(12, 8, x=12, y=89))
-  ,
-  panels: [
-    { panel: checkpoint_Upload_DurationP, w: 12, h: 8, x: 0, y: 33 },
-    { panel: checkpoint_Upload_flowP, w: 12, h: 8, x: 12, y: 33 },
-    { panel: checkpoint_Upload_keys_speed_by_type_allP, w: 12, h: 8, x: 0, y: 41 },
-    { panel: checkpoint_Upload_flow_by_type_incremental_compactionP, w: 12, h: 8, x: 12, y: 41 },
-    { panel: remote_File_NumP, w: 12, h: 8, x: 0, y: 49 },
-    { panel: remote_Store_UsageP, w: 12, h: 8, x: 12, y: 49 },
-    { panel: remote_Object_Lock_Request_QPSP, w: 12, h: 8, x: 0, y: 57 },
-    { panel: remote_Object_Lock_DurationP, w: 12, h: 8, x: 12, y: 57 },
-    { panel: remote_Store_SummaryP, w: 8, h: 8, x: 0, y: 65 },
-    { panel: remote_GC_Duration_BreakdownP, w: 9, h: 8, x: 8, y: 65 },
-    { panel: remote_GC_StatusP, w: 7, h: 8, x: 17, y: 65 },
-    { panel: local_Lock_Manager_statusP, w: 12, h: 8, x: 0, y: 73 },
-    { panel: local_Lock_Manager_QPSP, w: 12, h: 8, x: 12, y: 73 },
-    { panel: fAP_resultP, w: 12, h: 8, x: 0, y: 81 },
-    { panel: fAP_stateP, w: 12, h: 8, x: 12, y: 81 },
-    { panel: fAP_time_by_stageP, w: 12, h: 8, x: 0, y: 89 },
-    { panel: fAP_no_match_reasonP, w: 12, h: 8, x: 12, y: 89 }
-  ],
+  row: common.buildRow(
+    rowObj,
+    [
+      common.band([checkpoint_Upload_DurationP, checkpoint_Upload_flowP]),
+      common.band([checkpoint_Upload_keys_speed_by_type_allP, checkpoint_Upload_flow_by_type_incremental_compactionP]),
+      common.band([remote_File_NumP, remote_Store_UsageP]),
+      common.band([remote_Object_Lock_Request_QPSP, remote_Object_Lock_DurationP]),
+      common.band([remote_Store_SummaryP, remote_GC_Duration_BreakdownP, remote_GC_StatusP]),
+      common.band([local_Lock_Manager_statusP, local_Lock_Manager_QPSP]),
+      common.band([fAP_resultP, fAP_stateP]),
+      common.band([fAP_time_by_stageP, fAP_no_match_reasonP])
+    ],
+  ),
 }

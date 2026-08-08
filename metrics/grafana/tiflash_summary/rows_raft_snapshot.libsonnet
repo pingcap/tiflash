@@ -1,4 +1,5 @@
 // Generated from tiflash_summary.json — edit carefully or regenerate.
+// Layout: use common.band / common.buildRow (do not hand-write x/y/w).
 local grafana = import 'grafonnet/grafana.libsonnet';
 local row = grafana.row;
 local graphPanel = grafana.graphPanel;
@@ -257,30 +258,16 @@ local ingest_SST_DurationP = heatmapPanel.new(
 
 
 {
-  row: rowObj
-  .addPanel(heavy_Raft_Apply_DurationP, gridPos=common.pos(24, 7, x=0, y=63))
-  .addPanel(applying_snapshots_CountP, gridPos=common.pos(24, 7, x=0, y=70))
-  .addPanel(snapshot_Uncommitted_Size_HeatmapP, gridPos=common.pos(12, 7, x=0, y=77))
-  .addPanel(ongoing_raft_snapshotP, gridPos=common.pos(12, 7, x=12, y=77))
-  .addPanel(snapshot_Size_HeatmapP, gridPos=common.pos(12, 7, x=0, y=84))
-  .addPanel(snapshot_Predecode_DurationP, gridPos=common.pos(12, 7, x=12, y=84))
-  .addPanel(snapshot_Prehandle_Throughput_HeatmapP, gridPos=common.pos(12, 7, x=0, y=91))
-  .addPanel(snapshot_Flush_DurationP, gridPos=common.pos(12, 7, x=12, y=91))
-  .addPanel(ingest_Uncommitted_Size_HeatmapP, gridPos=common.pos(12, 7, x=0, y=98))
-  .addPanel(snapshot_Predecode_SST_to_DT_DurationP, gridPos=common.pos(12, 7, x=12, y=98))
-  .addPanel(ingest_SST_DurationP, gridPos=common.pos(12, 7, x=0, y=105))
-  ,
-  panels: [
-    { panel: heavy_Raft_Apply_DurationP, w: 24, h: 7, x: 0, y: 63 },
-    { panel: applying_snapshots_CountP, w: 24, h: 7, x: 0, y: 70 },
-    { panel: snapshot_Uncommitted_Size_HeatmapP, w: 12, h: 7, x: 0, y: 77 },
-    { panel: ongoing_raft_snapshotP, w: 12, h: 7, x: 12, y: 77 },
-    { panel: snapshot_Size_HeatmapP, w: 12, h: 7, x: 0, y: 84 },
-    { panel: snapshot_Predecode_DurationP, w: 12, h: 7, x: 12, y: 84 },
-    { panel: snapshot_Prehandle_Throughput_HeatmapP, w: 12, h: 7, x: 0, y: 91 },
-    { panel: snapshot_Flush_DurationP, w: 12, h: 7, x: 12, y: 91 },
-    { panel: ingest_Uncommitted_Size_HeatmapP, w: 12, h: 7, x: 0, y: 98 },
-    { panel: snapshot_Predecode_SST_to_DT_DurationP, w: 12, h: 7, x: 12, y: 98 },
-    { panel: ingest_SST_DurationP, w: 12, h: 7, x: 0, y: 105 }
-  ],
+  row: common.buildRow(
+    rowObj,
+    [
+      common.band([heavy_Raft_Apply_DurationP]),
+      common.band([applying_snapshots_CountP]),
+      common.band([snapshot_Uncommitted_Size_HeatmapP, ongoing_raft_snapshotP]),
+      common.band([snapshot_Size_HeatmapP, snapshot_Predecode_DurationP]),
+      common.band([snapshot_Prehandle_Throughput_HeatmapP, snapshot_Flush_DurationP]),
+      common.band([ingest_Uncommitted_Size_HeatmapP, snapshot_Predecode_SST_to_DT_DurationP]),
+      common.band([{ panel: ingest_SST_DurationP, w: 12 }])
+    ],
+  ),
 }

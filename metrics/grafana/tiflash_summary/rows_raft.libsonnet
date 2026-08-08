@@ -1,4 +1,5 @@
 // Generated from tiflash_summary.json — edit carefully or regenerate.
+// Layout: use common.band / common.buildRow (do not hand-write x/y/w).
 local grafana = import 'grafonnet/grafana.libsonnet';
 local row = grafana.row;
 local graphPanel = grafana.graphPanel;
@@ -714,58 +715,24 @@ local log_Replication_RejectedP = graphPanel.new(
 
 
 {
-  row: rowObj
-  .addPanel(stale_Read_OPSP, gridPos=common.pos(12, 7, x=0, y=62))
-  .addPanel(raft_Read_Index_OPSP, gridPos=common.pos(12, 7, x=12, y=62))
-  .addPanel(learner_Read_FailuresP, gridPos=common.pos(12, 7, x=0, y=69))
-  .addPanel(read_Index_EventsP, gridPos=common.pos(12, 7, x=12, y=69))
-  .addPanel(raft_Wait_Index_DurationP, gridPos=common.pos(12, 7, x=0, y=76))
-  .addPanel(raft_Batch_Read_Index_DurationP, gridPos=common.pos(12, 7, x=12, y=76))
-  .addPanel(apply_Raft_write_logs_DurationP, gridPos=common.pos(24, 7, x=0, y=83))
-  .addPanel(region_write_Duration_decodeP, gridPos=common.pos(12, 7, x=0, y=90))
-  .addPanel(region_write_Duration_write_blocksP, gridPos=common.pos(12, 7, x=12, y=90))
-  .addPanel(apply_Raft_write_logs_Duration_HeatmapP, gridPos=common.pos(12, 7, x=0, y=97))
-  .addPanel(apply_Raft_admin_logs_Duration_HeatmapP, gridPos=common.pos(12, 7, x=12, y=97))
-  .addPanel(raft_Events_QPSP, gridPos=common.pos(12, 7, x=0, y=104))
-  .addPanel(raft_Frequent_Events_QPSP, gridPos=common.pos(12, 7, x=12, y=104))
-  .addPanel(raft_Log_Gap_HeatmapP, gridPos=common.pos(12, 7, x=0, y=111))
-  .addPanel(raft_Entry_Batch_Size_HeatmapP, gridPos=common.pos(12, 7, x=12, y=111))
-  .addPanel(region_Size_by_event_HeatmapP, gridPos=common.pos(12, 7, x=0, y=118))
-  .addPanel(big_Write_To_Region_Size_HeatmapP, gridPos=common.pos(12, 7, x=12, y=118))
-  .addPanel(write_Committed_Size_HeatmapP, gridPos=common.pos(24, 7, x=0, y=125))
-  .addPanel(raft_Eager_GC_OPSP, gridPos=common.pos(12, 7, x=0, y=132))
-  .addPanel(raft_Eager_GC_DurationP, gridPos=common.pos(12, 7, x=12, y=132))
-  .addPanel(keys_flowP, gridPos=common.pos(24, 7, x=0, y=139))
-  .addPanel(raft_throughputP, gridPos=common.pos(24, 7, x=0, y=146))
-  .addPanel(upstream_Latency_HeatmapP, gridPos=common.pos(12, 7, x=0, y=153))
-  .addPanel(upstream_LatencyP, gridPos=common.pos(12, 7, x=12, y=153))
-  .addPanel(log_Replication_RejectedP, gridPos=common.pos(12, 7, x=0, y=160))
-  ,
-  panels: [
-    { panel: stale_Read_OPSP, w: 12, h: 7, x: 0, y: 62 },
-    { panel: raft_Read_Index_OPSP, w: 12, h: 7, x: 12, y: 62 },
-    { panel: learner_Read_FailuresP, w: 12, h: 7, x: 0, y: 69 },
-    { panel: read_Index_EventsP, w: 12, h: 7, x: 12, y: 69 },
-    { panel: raft_Wait_Index_DurationP, w: 12, h: 7, x: 0, y: 76 },
-    { panel: raft_Batch_Read_Index_DurationP, w: 12, h: 7, x: 12, y: 76 },
-    { panel: apply_Raft_write_logs_DurationP, w: 24, h: 7, x: 0, y: 83 },
-    { panel: region_write_Duration_decodeP, w: 12, h: 7, x: 0, y: 90 },
-    { panel: region_write_Duration_write_blocksP, w: 12, h: 7, x: 12, y: 90 },
-    { panel: apply_Raft_write_logs_Duration_HeatmapP, w: 12, h: 7, x: 0, y: 97 },
-    { panel: apply_Raft_admin_logs_Duration_HeatmapP, w: 12, h: 7, x: 12, y: 97 },
-    { panel: raft_Events_QPSP, w: 12, h: 7, x: 0, y: 104 },
-    { panel: raft_Frequent_Events_QPSP, w: 12, h: 7, x: 12, y: 104 },
-    { panel: raft_Log_Gap_HeatmapP, w: 12, h: 7, x: 0, y: 111 },
-    { panel: raft_Entry_Batch_Size_HeatmapP, w: 12, h: 7, x: 12, y: 111 },
-    { panel: region_Size_by_event_HeatmapP, w: 12, h: 7, x: 0, y: 118 },
-    { panel: big_Write_To_Region_Size_HeatmapP, w: 12, h: 7, x: 12, y: 118 },
-    { panel: write_Committed_Size_HeatmapP, w: 24, h: 7, x: 0, y: 125 },
-    { panel: raft_Eager_GC_OPSP, w: 12, h: 7, x: 0, y: 132 },
-    { panel: raft_Eager_GC_DurationP, w: 12, h: 7, x: 12, y: 132 },
-    { panel: keys_flowP, w: 24, h: 7, x: 0, y: 139 },
-    { panel: raft_throughputP, w: 24, h: 7, x: 0, y: 146 },
-    { panel: upstream_Latency_HeatmapP, w: 12, h: 7, x: 0, y: 153 },
-    { panel: upstream_LatencyP, w: 12, h: 7, x: 12, y: 153 },
-    { panel: log_Replication_RejectedP, w: 12, h: 7, x: 0, y: 160 }
-  ],
+  row: common.buildRow(
+    rowObj,
+    [
+      common.band([stale_Read_OPSP, raft_Read_Index_OPSP]),
+      common.band([learner_Read_FailuresP, read_Index_EventsP]),
+      common.band([raft_Wait_Index_DurationP, raft_Batch_Read_Index_DurationP]),
+      common.band([apply_Raft_write_logs_DurationP]),
+      common.band([region_write_Duration_decodeP, region_write_Duration_write_blocksP]),
+      common.band([apply_Raft_write_logs_Duration_HeatmapP, apply_Raft_admin_logs_Duration_HeatmapP]),
+      common.band([raft_Events_QPSP, raft_Frequent_Events_QPSP]),
+      common.band([raft_Log_Gap_HeatmapP, raft_Entry_Batch_Size_HeatmapP]),
+      common.band([region_Size_by_event_HeatmapP, big_Write_To_Region_Size_HeatmapP]),
+      common.band([write_Committed_Size_HeatmapP]),
+      common.band([raft_Eager_GC_OPSP, raft_Eager_GC_DurationP]),
+      common.band([keys_flowP]),
+      common.band([raft_throughputP]),
+      common.band([upstream_Latency_HeatmapP, upstream_LatencyP]),
+      common.band([{ panel: log_Replication_RejectedP, w: 12 }])
+    ],
+  ),
 }

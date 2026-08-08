@@ -1,4 +1,5 @@
 // Generated from tiflash_summary.json — edit carefully or regenerate.
+// Layout: use common.band / common.buildRow (do not hand-write x/y/w).
 local grafana = import 'grafonnet/grafana.libsonnet';
 local row = grafana.row;
 local graphPanel = grafana.graphPanel;
@@ -579,38 +580,17 @@ local placeIndex_update_rows_deletesP = graphPanel.new(
 
 
 {
-  row: rowObj
-  .addPanel(read_Duration_BreakdownP, gridPos=common.pos(24, 8, x=0, y=34))
-  .addPanel(remote_Cache_OperationsP, gridPos=common.pos(12, 8, x=0, y=42))
-  .addPanel(remote_Cache_FlowP, gridPos=common.pos(12, 8, x=12, y=42))
-  .addPanel(remote_Cache_BG_Download_DurationP, gridPos=common.pos(12, 8, x=0, y=50))
-  .addPanel(remote_Cache_Wait_on_Downloading_DurationP, gridPos=common.pos(12, 8, x=12, y=50))
-  .addPanel(remote_Cache_Wait_on_Downloading_OPSP, gridPos=common.pos(12, 8, x=0, y=58))
-  .addPanel(remote_Cache_Wait_on_Downloading_FlowP, gridPos=common.pos(12, 8, x=12, y=58))
-  .addPanel(remote_Cache_GaugeP, gridPos=common.pos(12, 8, x=0, y=66))
-  .addPanel(remote_Cache_Reject_Download_Type_OPSP, gridPos=common.pos(12, 8, x=12, y=66))
-  .addPanel(remote_Cache_UsageP, gridPos=common.pos(12, 8, x=0, y=74))
-  .addPanel(memory_Usage_of_Storage_TasksP, gridPos=common.pos(12, 8, x=12, y=74))
-  .addPanel(mVCCIndexCacheP, gridPos=common.pos(12, 7, x=0, y=82))
-  .addPanel(placeIndex_Tasks_DurationP, gridPos=common.pos(12, 7, x=12, y=82))
-  .addPanel(placeIndexTask_Reuse_OPSP, gridPos=common.pos(12, 7, x=0, y=89))
-  .addPanel(placeIndex_update_rows_deletesP, gridPos=common.pos(12, 7, x=12, y=89))
-  ,
-  panels: [
-    { panel: read_Duration_BreakdownP, w: 24, h: 8, x: 0, y: 34 },
-    { panel: remote_Cache_OperationsP, w: 12, h: 8, x: 0, y: 42 },
-    { panel: remote_Cache_FlowP, w: 12, h: 8, x: 12, y: 42 },
-    { panel: remote_Cache_BG_Download_DurationP, w: 12, h: 8, x: 0, y: 50 },
-    { panel: remote_Cache_Wait_on_Downloading_DurationP, w: 12, h: 8, x: 12, y: 50 },
-    { panel: remote_Cache_Wait_on_Downloading_OPSP, w: 12, h: 8, x: 0, y: 58 },
-    { panel: remote_Cache_Wait_on_Downloading_FlowP, w: 12, h: 8, x: 12, y: 58 },
-    { panel: remote_Cache_GaugeP, w: 12, h: 8, x: 0, y: 66 },
-    { panel: remote_Cache_Reject_Download_Type_OPSP, w: 12, h: 8, x: 12, y: 66 },
-    { panel: remote_Cache_UsageP, w: 12, h: 8, x: 0, y: 74 },
-    { panel: memory_Usage_of_Storage_TasksP, w: 12, h: 8, x: 12, y: 74 },
-    { panel: mVCCIndexCacheP, w: 12, h: 7, x: 0, y: 82 },
-    { panel: placeIndex_Tasks_DurationP, w: 12, h: 7, x: 12, y: 82 },
-    { panel: placeIndexTask_Reuse_OPSP, w: 12, h: 7, x: 0, y: 89 },
-    { panel: placeIndex_update_rows_deletesP, w: 12, h: 7, x: 12, y: 89 }
-  ],
+  row: common.buildRow(
+    rowObj,
+    [
+      common.band([read_Duration_BreakdownP]),
+      common.band([remote_Cache_OperationsP, remote_Cache_FlowP]),
+      common.band([remote_Cache_BG_Download_DurationP, remote_Cache_Wait_on_Downloading_DurationP]),
+      common.band([remote_Cache_Wait_on_Downloading_OPSP, remote_Cache_Wait_on_Downloading_FlowP]),
+      common.band([remote_Cache_GaugeP, remote_Cache_Reject_Download_Type_OPSP]),
+      common.band([remote_Cache_UsageP, memory_Usage_of_Storage_TasksP]),
+      common.band([mVCCIndexCacheP, placeIndex_Tasks_DurationP]),
+      common.band([placeIndexTask_Reuse_OPSP, placeIndex_update_rows_deletesP])
+    ],
+  ),
 }

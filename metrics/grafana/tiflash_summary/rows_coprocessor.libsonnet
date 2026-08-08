@@ -1,4 +1,5 @@
 // Generated from tiflash_summary.json — edit carefully or regenerate.
+// Layout: use common.band / common.buildRow (do not hand-write x/y/w).
 local grafana = import 'grafonnet/grafana.libsonnet';
 local row = grafana.row;
 local graphPanel = grafana.graphPanel;
@@ -567,44 +568,18 @@ local establish_calldata_detailsP = graphPanel.new(
 
 
 {
-  row: rowObj
-  .addPanel(request_QPSP, gridPos=common.pos(12, 7, x=0, y=36))
-  .addPanel(executor_QPSP, gridPos=common.pos(12, 7, x=12, y=36))
-  .addPanel(request_DurationP, gridPos=common.pos(12, 7, x=0, y=43))
-  .addPanel(error_QPSP, gridPos=common.pos(12, 7, x=12, y=43))
-  .addPanel(request_Handle_DurationP, gridPos=common.pos(12, 7, x=0, y=50))
-  .addPanel(response_Bytes_SecondsP, gridPos=common.pos(12, 7, x=12, y=50))
-  .addPanel(cop_task_memory_usageP, gridPos=common.pos(12, 7, x=0, y=57))
-  .addPanel(exchange_Bytes_SecondsP, gridPos=common.pos(12, 7, x=12, y=57))
-  .addPanel(threads_of_RpcP, gridPos=common.pos(12, 7, x=0, y=64))
-  .addPanel(handling_Request_NumberP, gridPos=common.pos(12, 7, x=12, y=64))
-  .addPanel(threadsP, gridPos=common.pos(12, 7, x=0, y=71))
-  .addPanel(max_Threads_of_RpcP, gridPos=common.pos(12, 7, x=12, y=71))
-  .addPanel(mPP_Query_countP, gridPos=common.pos(12, 7, x=0, y=78))
-  .addPanel(max_ThreadsP, gridPos=common.pos(12, 7, x=12, y=78))
-  .addPanel(time_of_the_Longest_Live_MPP_TaskP, gridPos=common.pos(12, 7, x=0, y=85))
-  .addPanel(data_size_in_send_and_receive_queueP, gridPos=common.pos(12, 7, x=12, y=85))
-  .addPanel(network_TransmissionP, gridPos=common.pos(12, 7, x=0, y=92))
-  .addPanel(establish_calldata_detailsP, gridPos=common.pos(12, 7, x=12, y=92))
-  ,
-  panels: [
-    { panel: request_QPSP, w: 12, h: 7, x: 0, y: 36 },
-    { panel: executor_QPSP, w: 12, h: 7, x: 12, y: 36 },
-    { panel: request_DurationP, w: 12, h: 7, x: 0, y: 43 },
-    { panel: error_QPSP, w: 12, h: 7, x: 12, y: 43 },
-    { panel: request_Handle_DurationP, w: 12, h: 7, x: 0, y: 50 },
-    { panel: response_Bytes_SecondsP, w: 12, h: 7, x: 12, y: 50 },
-    { panel: cop_task_memory_usageP, w: 12, h: 7, x: 0, y: 57 },
-    { panel: exchange_Bytes_SecondsP, w: 12, h: 7, x: 12, y: 57 },
-    { panel: threads_of_RpcP, w: 12, h: 7, x: 0, y: 64 },
-    { panel: handling_Request_NumberP, w: 12, h: 7, x: 12, y: 64 },
-    { panel: threadsP, w: 12, h: 7, x: 0, y: 71 },
-    { panel: max_Threads_of_RpcP, w: 12, h: 7, x: 12, y: 71 },
-    { panel: mPP_Query_countP, w: 12, h: 7, x: 0, y: 78 },
-    { panel: max_ThreadsP, w: 12, h: 7, x: 12, y: 78 },
-    { panel: time_of_the_Longest_Live_MPP_TaskP, w: 12, h: 7, x: 0, y: 85 },
-    { panel: data_size_in_send_and_receive_queueP, w: 12, h: 7, x: 12, y: 85 },
-    { panel: network_TransmissionP, w: 12, h: 7, x: 0, y: 92 },
-    { panel: establish_calldata_detailsP, w: 12, h: 7, x: 12, y: 92 }
-  ],
+  row: common.buildRow(
+    rowObj,
+    [
+      common.band([request_QPSP, executor_QPSP]),
+      common.band([request_DurationP, error_QPSP]),
+      common.band([request_Handle_DurationP, response_Bytes_SecondsP]),
+      common.band([cop_task_memory_usageP, exchange_Bytes_SecondsP]),
+      common.band([threads_of_RpcP, handling_Request_NumberP]),
+      common.band([threadsP, max_Threads_of_RpcP]),
+      common.band([mPP_Query_countP, max_ThreadsP]),
+      common.band([time_of_the_Longest_Live_MPP_TaskP, data_size_in_send_and_receive_queueP]),
+      common.band([network_TransmissionP, establish_calldata_detailsP])
+    ],
+  ),
 }

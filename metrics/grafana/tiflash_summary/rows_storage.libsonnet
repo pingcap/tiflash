@@ -1,4 +1,5 @@
 // Generated from tiflash_summary.json — edit carefully or regenerate.
+// Layout: use common.band / common.buildRow (do not hand-write x/y/w).
 local grafana = import 'grafonnet/grafana.libsonnet';
 local row = grafana.row;
 local graphPanel = grafana.graphPanel;
@@ -728,44 +729,18 @@ local compression_Algorithm_CountP = graphPanel.new(
 
 
 {
-  row: rowObj
-  .addPanel(write_Command_OPSP, gridPos=common.pos(12, 8, x=0, y=41))
-  .addPanel(write_AmplificationP, gridPos=common.pos(12, 8, x=12, y=41))
-  .addPanel(subTasks_Write_Throughput_bytesP, gridPos=common.pos(12, 8, x=0, y=49))
-  .addPanel(subTasks_Write_Throughput_rowsP, gridPos=common.pos(12, 8, x=12, y=49))
-  .addPanel(small_Internal_Tasks_OPSP, gridPos=common.pos(12, 5, x=0, y=57))
-  .addPanel(small_Internal_Tasks_DurationP, gridPos=common.pos(12, 5, x=12, y=57))
-  .addPanel(large_Internal_Tasks_OPSP, gridPos=common.pos(12, 5, x=0, y=62))
-  .addPanel(large_Internal_Tasks_DurationP, gridPos=common.pos(12, 5, x=12, y=62))
-  .addPanel(current_Data_Management_TasksP, gridPos=common.pos(24, 7, x=0, y=67))
-  .addPanel(opened_File_CountP, gridPos=common.pos(8, 7, x=0, y=74))
-  .addPanel(file_Open_OPSP, gridPos=common.pos(8, 7, x=8, y=74))
-  .addPanel(fSync_StatusP, gridPos=common.pos(8, 7, x=16, y=74))
-  .addPanel(disk_Write_OPSP, gridPos=common.pos(12, 7, x=0, y=81))
-  .addPanel(disk_Read_OPSP, gridPos=common.pos(12, 7, x=12, y=81))
-  .addPanel(write_flowP, gridPos=common.pos(12, 8, x=0, y=88))
-  .addPanel(read_flowP, gridPos=common.pos(12, 8, x=12, y=88))
-  .addPanel(compression_RatioP, gridPos=common.pos(12, 7, x=0, y=96))
-  .addPanel(compression_Algorithm_CountP, gridPos=common.pos(12, 7, x=12, y=96))
-  ,
-  panels: [
-    { panel: write_Command_OPSP, w: 12, h: 8, x: 0, y: 41 },
-    { panel: write_AmplificationP, w: 12, h: 8, x: 12, y: 41 },
-    { panel: subTasks_Write_Throughput_bytesP, w: 12, h: 8, x: 0, y: 49 },
-    { panel: subTasks_Write_Throughput_rowsP, w: 12, h: 8, x: 12, y: 49 },
-    { panel: small_Internal_Tasks_OPSP, w: 12, h: 5, x: 0, y: 57 },
-    { panel: small_Internal_Tasks_DurationP, w: 12, h: 5, x: 12, y: 57 },
-    { panel: large_Internal_Tasks_OPSP, w: 12, h: 5, x: 0, y: 62 },
-    { panel: large_Internal_Tasks_DurationP, w: 12, h: 5, x: 12, y: 62 },
-    { panel: current_Data_Management_TasksP, w: 24, h: 7, x: 0, y: 67 },
-    { panel: opened_File_CountP, w: 8, h: 7, x: 0, y: 74 },
-    { panel: file_Open_OPSP, w: 8, h: 7, x: 8, y: 74 },
-    { panel: fSync_StatusP, w: 8, h: 7, x: 16, y: 74 },
-    { panel: disk_Write_OPSP, w: 12, h: 7, x: 0, y: 81 },
-    { panel: disk_Read_OPSP, w: 12, h: 7, x: 12, y: 81 },
-    { panel: write_flowP, w: 12, h: 8, x: 0, y: 88 },
-    { panel: read_flowP, w: 12, h: 8, x: 12, y: 88 },
-    { panel: compression_RatioP, w: 12, h: 7, x: 0, y: 96 },
-    { panel: compression_Algorithm_CountP, w: 12, h: 7, x: 12, y: 96 }
-  ],
+  row: common.buildRow(
+    rowObj,
+    [
+      common.band([write_Command_OPSP, write_AmplificationP]),
+      common.band([subTasks_Write_Throughput_bytesP, subTasks_Write_Throughput_rowsP]),
+      common.band([small_Internal_Tasks_OPSP, small_Internal_Tasks_DurationP], h=5),
+      common.band([large_Internal_Tasks_OPSP, large_Internal_Tasks_DurationP], h=5),
+      common.band([current_Data_Management_TasksP]),
+      common.band([opened_File_CountP, file_Open_OPSP, fSync_StatusP]),
+      common.band([disk_Write_OPSP, disk_Read_OPSP]),
+      common.band([write_flowP, read_flowP]),
+      common.band([compression_RatioP, compression_Algorithm_CountP])
+    ],
+  ),
 }

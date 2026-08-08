@@ -1,4 +1,5 @@
 // Generated from tiflash_summary.json — edit carefully or regenerate.
+// Layout: use common.band / common.buildRow (do not hand-write x/y/w).
 local grafana = import 'grafonnet/grafana.libsonnet';
 local row = grafana.row;
 local graphPanel = grafana.graphPanel;
@@ -481,24 +482,13 @@ local s3RandomAccessFile_OPSP = graphPanel.new(
 
 
 {
-  row: rowObj
-  .addPanel(s3_BytesP, gridPos=common.pos(12, 8, x=0, y=36))
-  .addPanel(s3_OPSP, gridPos=common.pos(12, 8, x=12, y=36))
-  .addPanel(s3_Retry_OPSP, gridPos=common.pos(12, 8, x=0, y=44))
-  .addPanel(s3_Request_DurationP, gridPos=common.pos(12, 8, x=12, y=44))
-  .addPanel(s3_HTTP_OPSP, gridPos=common.pos(12, 8, x=0, y=52))
-  .addPanel(s3_HTTP_Request_DurationP, gridPos=common.pos(12, 8, x=12, y=52))
-  .addPanel(s3_on_going_instancesP, gridPos=common.pos(12, 8, x=0, y=60))
-  .addPanel(s3RandomAccessFile_OPSP, gridPos=common.pos(12, 8, x=12, y=60))
-  ,
-  panels: [
-    { panel: s3_BytesP, w: 12, h: 8, x: 0, y: 36 },
-    { panel: s3_OPSP, w: 12, h: 8, x: 12, y: 36 },
-    { panel: s3_Retry_OPSP, w: 12, h: 8, x: 0, y: 44 },
-    { panel: s3_Request_DurationP, w: 12, h: 8, x: 12, y: 44 },
-    { panel: s3_HTTP_OPSP, w: 12, h: 8, x: 0, y: 52 },
-    { panel: s3_HTTP_Request_DurationP, w: 12, h: 8, x: 12, y: 52 },
-    { panel: s3_on_going_instancesP, w: 12, h: 8, x: 0, y: 60 },
-    { panel: s3RandomAccessFile_OPSP, w: 12, h: 8, x: 12, y: 60 }
-  ],
+  row: common.buildRow(
+    rowObj,
+    [
+      common.band([s3_BytesP, s3_OPSP]),
+      common.band([s3_Retry_OPSP, s3_Request_DurationP]),
+      common.band([s3_HTTP_OPSP, s3_HTTP_Request_DurationP]),
+      common.band([s3_on_going_instancesP, s3RandomAccessFile_OPSP])
+    ],
+  ),
 }

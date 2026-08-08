@@ -1,4 +1,5 @@
 // Generated from tiflash_summary.json — edit carefully or regenerate.
+// Layout: use common.band / common.buildRow (do not hand-write x/y/w).
 local grafana = import 'grafonnet/grafana.libsonnet';
 local row = grafana.row;
 local graphPanel = grafana.graphPanel;
@@ -458,30 +459,14 @@ local columnar_Meta_Cache_GaugeP = graphPanel.new(
 
 
 {
-  row: rowObj
-  .addPanel(iA_usageP, gridPos=common.pos(12, 8, x=0, y=9))
-  .addPanel(iA_Segments_Memory_WaitP, gridPos=common.pos(12, 8, x=12, y=9))
-  .addPanel(iA_Segment_Remote_Read_CacheP, gridPos=common.pos(12, 8, x=0, y=17))
-  .addPanel(iA_Segments_Remote_Read_DurationP, gridPos=common.pos(12, 8, x=12, y=17))
-  .addPanel(columnarFile_CacheP, gridPos=common.pos(8, 8, x=0, y=25))
-  .addPanel(columnar_Prefetch_DurationP, gridPos=common.pos(8, 8, x=8, y=25))
-  .addPanel(columnar_Prefetch_Cache_Hit_DurationP, gridPos=common.pos(8, 8, x=16, y=25))
-  .addPanel(columnar_Fetch_Snapshot_RetryP, gridPos=common.pos(12, 8, x=0, y=33))
-  .addPanel(columnar_Fetch_Snapshot_DurationP, gridPos=common.pos(12, 8, x=12, y=33))
-  .addPanel(columnar_Meta_CacheP, gridPos=common.pos(12, 8, x=0, y=41))
-  .addPanel(columnar_Meta_Cache_GaugeP, gridPos=common.pos(12, 8, x=12, y=41))
-  ,
-  panels: [
-    { panel: iA_usageP, w: 12, h: 8, x: 0, y: 9 },
-    { panel: iA_Segments_Memory_WaitP, w: 12, h: 8, x: 12, y: 9 },
-    { panel: iA_Segment_Remote_Read_CacheP, w: 12, h: 8, x: 0, y: 17 },
-    { panel: iA_Segments_Remote_Read_DurationP, w: 12, h: 8, x: 12, y: 17 },
-    { panel: columnarFile_CacheP, w: 8, h: 8, x: 0, y: 25 },
-    { panel: columnar_Prefetch_DurationP, w: 8, h: 8, x: 8, y: 25 },
-    { panel: columnar_Prefetch_Cache_Hit_DurationP, w: 8, h: 8, x: 16, y: 25 },
-    { panel: columnar_Fetch_Snapshot_RetryP, w: 12, h: 8, x: 0, y: 33 },
-    { panel: columnar_Fetch_Snapshot_DurationP, w: 12, h: 8, x: 12, y: 33 },
-    { panel: columnar_Meta_CacheP, w: 12, h: 8, x: 0, y: 41 },
-    { panel: columnar_Meta_Cache_GaugeP, w: 12, h: 8, x: 12, y: 41 }
-  ],
+  row: common.buildRow(
+    rowObj,
+    [
+      common.band([iA_usageP, iA_Segments_Memory_WaitP]),
+      common.band([iA_Segment_Remote_Read_CacheP, iA_Segments_Remote_Read_DurationP]),
+      common.band([columnarFile_CacheP, columnar_Prefetch_DurationP, columnar_Prefetch_Cache_Hit_DurationP]),
+      common.band([columnar_Fetch_Snapshot_RetryP, columnar_Fetch_Snapshot_DurationP]),
+      common.band([columnar_Meta_CacheP, columnar_Meta_Cache_GaugeP])
+    ],
+  ),
 }

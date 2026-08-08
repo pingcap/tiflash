@@ -1,4 +1,5 @@
 // Generated from tiflash_summary.json — edit carefully or regenerate.
+// Layout: use common.band / common.buildRow (do not hand-write x/y/w).
 local grafana = import 'grafonnet/grafana.libsonnet';
 local row = grafana.row;
 local graphPanel = grafana.graphPanel;
@@ -416,26 +417,13 @@ local deltaIndexErrorP = graphPanel.new(
 
 
 {
-  row: rowObj
-  .addPanel(read_Tasks_OPSP, gridPos=common.pos(12, 8, x=0, y=42))
-  .addPanel(read_SnapshotsP, gridPos=common.pos(12, 8, x=12, y=42))
-  .addPanel(read_Thread_Internal_DurationP, gridPos=common.pos(12, 8, x=0, y=50))
-  .addPanel(read_Thread_SchedulingP, gridPos=common.pos(12, 8, x=12, y=50))
-  .addPanel(data_SharingP, gridPos=common.pos(8, 8, x=0, y=58))
-  .addPanel(segment_MergedTaskP, gridPos=common.pos(8, 8, x=8, y=58))
-  .addPanel(segment_MergedTask_DurationP, gridPos=common.pos(8, 8, x=16, y=58))
-  .addPanel(versionChainP, gridPos=common.pos(12, 8, x=0, y=66))
-  .addPanel(deltaIndexErrorP, gridPos=common.pos(12, 8, x=12, y=66))
-  ,
-  panels: [
-    { panel: read_Tasks_OPSP, w: 12, h: 8, x: 0, y: 42 },
-    { panel: read_SnapshotsP, w: 12, h: 8, x: 12, y: 42 },
-    { panel: read_Thread_Internal_DurationP, w: 12, h: 8, x: 0, y: 50 },
-    { panel: read_Thread_SchedulingP, w: 12, h: 8, x: 12, y: 50 },
-    { panel: data_SharingP, w: 8, h: 8, x: 0, y: 58 },
-    { panel: segment_MergedTaskP, w: 8, h: 8, x: 8, y: 58 },
-    { panel: segment_MergedTask_DurationP, w: 8, h: 8, x: 16, y: 58 },
-    { panel: versionChainP, w: 12, h: 8, x: 0, y: 66 },
-    { panel: deltaIndexErrorP, w: 12, h: 8, x: 12, y: 66 }
-  ],
+  row: common.buildRow(
+    rowObj,
+    [
+      common.band([read_Tasks_OPSP, read_SnapshotsP]),
+      common.band([read_Thread_Internal_DurationP, read_Thread_SchedulingP]),
+      common.band([data_SharingP, segment_MergedTaskP, segment_MergedTask_DurationP]),
+      common.band([versionChainP, deltaIndexErrorP])
+    ],
+  ),
 }

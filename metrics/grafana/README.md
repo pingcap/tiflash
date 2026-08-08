@@ -37,8 +37,22 @@ Do **not** hand-edit `tiflash_summary.json` — it is a generated artifact.
 
 `scripts/gen_jsonnet_from_dashboard.py` is only for bootstrapping / refreshing row files from a dashboard JSON export. Day-to-day edits should be made in the `*.libsonnet` / `tiflash_summary.jsonnet` sources.
 
-## Notes
+## Layout helpers
 
-- Panel types remain legacy `graph` / `heatmap` for clinic-grafana compatibility.
-- Migrating to the newer [grafana/grafonnet](https://github.com/grafana/grafonnet)
-  is intentionally deferred (same as TiDB's current TODO).
+Prefer `common.band` / `common.buildRow` instead of hand-written `x/y/w`:
+
+```jsonnet
+{
+  row: common.buildRow(
+    rowObj,
+    [
+      common.band([store_sizeP, available_sizeP, capacity_sizeP]),  // 3 equal columns
+      common.band([uptimeP, regionP]),                              // 2 equal columns
+      common.band([fullWidthP]),                                    // 1 full-width panel
+      common.band([{ panel: a, w: 8 }, { panel: b, w: 16 }], h=7), // custom widths/height
+    ],
+  ),
+}
+```
+
+N panels in a band are equally divided across width 24 unless you pass explicit `w`.

@@ -1,4 +1,5 @@
 // Generated from tiflash_summary.json — edit carefully or regenerate.
+// Layout: use common.band / common.buildRow (do not hand-write x/y/w).
 local grafana = import 'grafonnet/grafana.libsonnet';
 local row = grafana.row;
 local graphPanel = grafana.graphPanel;
@@ -134,14 +135,11 @@ local schema_Apply_DurationP = graphPanel.new(
 
 
 {
-  row: rowObj
-  .addPanel(schema_Internal_DDL_OPMP, gridPos=common.pos(12, 7, x=0, y=38))
-  .addPanel(schema_Apply_OPMP, gridPos=common.pos(12, 7, x=12, y=38))
-  .addPanel(schema_Apply_DurationP, gridPos=common.pos(12, 7, x=0, y=45))
-  ,
-  panels: [
-    { panel: schema_Internal_DDL_OPMP, w: 12, h: 7, x: 0, y: 38 },
-    { panel: schema_Apply_OPMP, w: 12, h: 7, x: 12, y: 38 },
-    { panel: schema_Apply_DurationP, w: 12, h: 7, x: 0, y: 45 }
-  ],
+  row: common.buildRow(
+    rowObj,
+    [
+      common.band([schema_Internal_DDL_OPMP, schema_Apply_OPMP]),
+      common.band([{ panel: schema_Apply_DurationP, w: 12 }])
+    ],
+  ),
 }

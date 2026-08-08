@@ -1,4 +1,5 @@
 // Generated from tiflash_summary.json — edit carefully or regenerate.
+// Layout: use common.band / common.buildRow (do not hand-write x/y/w).
 local grafana = import 'grafonnet/grafana.libsonnet';
 local row = grafana.row;
 local graphPanel = grafana.graphPanel;
@@ -440,32 +441,16 @@ local pS_Apply_edits_OPS_By_InstanceP = graphPanel.new(
 
 
 {
-  row: rowObj
-  .addPanel(pageStorage_Disk_UsageP, gridPos=common.pos(12, 8, x=0, y=43))
-  .addPanel(pageStorage_File_NumP, gridPos=common.pos(12, 8, x=12, y=43))
-  .addPanel(pageStorage_WriteBatch_SizeP, gridPos=common.pos(12, 8, x=0, y=51))
-  .addPanel(page_write_DurationP, gridPos=common.pos(12, 8, x=12, y=51))
-  .addPanel(page_GC_Tasks_OPMP, gridPos=common.pos(12, 8, x=0, y=59))
-  .addPanel(page_GC_DurationP, gridPos=common.pos(12, 8, x=12, y=59))
-  .addPanel(numer_of_PagesP, gridPos=common.pos(12, 8, x=0, y=67))
-  .addPanel(pageStorage_Pending_Writers_NumP, gridPos=common.pos(12, 8, x=12, y=67))
-  .addPanel(pageStorage_stored_bytes_by_typeP, gridPos=common.pos(12, 8, x=0, y=75))
-  .addPanel(number_of_TablesP, gridPos=common.pos(12, 8, x=12, y=75))
-  .addPanel(pS_Command_OPS_By_InstanceP, gridPos=common.pos(24, 9, x=0, y=83))
-  .addPanel(pS_Apply_edits_OPS_By_InstanceP, gridPos=common.pos(24, 9, x=0, y=92))
-  ,
-  panels: [
-    { panel: pageStorage_Disk_UsageP, w: 12, h: 8, x: 0, y: 43 },
-    { panel: pageStorage_File_NumP, w: 12, h: 8, x: 12, y: 43 },
-    { panel: pageStorage_WriteBatch_SizeP, w: 12, h: 8, x: 0, y: 51 },
-    { panel: page_write_DurationP, w: 12, h: 8, x: 12, y: 51 },
-    { panel: page_GC_Tasks_OPMP, w: 12, h: 8, x: 0, y: 59 },
-    { panel: page_GC_DurationP, w: 12, h: 8, x: 12, y: 59 },
-    { panel: numer_of_PagesP, w: 12, h: 8, x: 0, y: 67 },
-    { panel: pageStorage_Pending_Writers_NumP, w: 12, h: 8, x: 12, y: 67 },
-    { panel: pageStorage_stored_bytes_by_typeP, w: 12, h: 8, x: 0, y: 75 },
-    { panel: number_of_TablesP, w: 12, h: 8, x: 12, y: 75 },
-    { panel: pS_Command_OPS_By_InstanceP, w: 24, h: 9, x: 0, y: 83 },
-    { panel: pS_Apply_edits_OPS_By_InstanceP, w: 24, h: 9, x: 0, y: 92 }
-  ],
+  row: common.buildRow(
+    rowObj,
+    [
+      common.band([pageStorage_Disk_UsageP, pageStorage_File_NumP]),
+      common.band([pageStorage_WriteBatch_SizeP, page_write_DurationP]),
+      common.band([page_GC_Tasks_OPMP, page_GC_DurationP]),
+      common.band([numer_of_PagesP, pageStorage_Pending_Writers_NumP]),
+      common.band([pageStorage_stored_bytes_by_typeP, number_of_TablesP]),
+      common.band([pS_Command_OPS_By_InstanceP]),
+      common.band([pS_Apply_edits_OPS_By_InstanceP])
+    ],
+  ),
 }

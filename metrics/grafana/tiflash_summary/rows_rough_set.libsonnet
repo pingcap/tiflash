@@ -1,4 +1,5 @@
 // Generated from tiflash_summary.json — edit carefully or regenerate.
+// Layout: use common.band / common.buildRow (do not hand-write x/y/w).
 local grafana = import 'grafonnet/grafana.libsonnet';
 local row = grafana.row;
 local graphPanel = grafana.graphPanel;
@@ -88,12 +89,10 @@ local rough_Set_Filter_Rate_HistogramP = heatmapPanel.new(
 
 
 {
-  row: rowObj
-  .addPanel(rough_Set_Filter_RateP, gridPos=common.pos(12, 8, x=0, y=64))
-  .addPanel(rough_Set_Filter_Rate_HistogramP, gridPos=common.pos(12, 8, x=12, y=64))
-  ,
-  panels: [
-    { panel: rough_Set_Filter_RateP, w: 12, h: 8, x: 0, y: 64 },
-    { panel: rough_Set_Filter_Rate_HistogramP, w: 12, h: 8, x: 12, y: 64 }
-  ],
+  row: common.buildRow(
+    rowObj,
+    [
+      common.band([rough_Set_Filter_RateP, rough_Set_Filter_Rate_HistogramP])
+    ],
+  ),
 }

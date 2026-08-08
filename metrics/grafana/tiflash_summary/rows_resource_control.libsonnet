@@ -1,4 +1,5 @@
 // Generated from tiflash_summary.json — edit carefully or regenerate.
+// Layout: use common.band / common.buildRow (do not hand-write x/y/w).
 local grafana = import 'grafonnet/grafana.libsonnet';
 local row = grafana.row;
 local graphPanel = grafana.graphPanel;
@@ -148,12 +149,10 @@ local request_UnitP = graphPanel.new(
 
 
 {
-  row: rowObj
-  .addPanel(tiFlash_Resource_GroupP, gridPos=common.pos(12, 8, x=0, y=203))
-  .addPanel(request_UnitP, gridPos=common.pos(12, 8, x=12, y=203))
-  ,
-  panels: [
-    { panel: tiFlash_Resource_GroupP, w: 12, h: 8, x: 0, y: 203 },
-    { panel: request_UnitP, w: 12, h: 8, x: 12, y: 203 }
-  ],
+  row: common.buildRow(
+    rowObj,
+    [
+      common.band([tiFlash_Resource_GroupP, request_UnitP])
+    ],
+  ),
 }
