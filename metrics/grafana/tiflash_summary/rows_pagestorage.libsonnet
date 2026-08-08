@@ -111,62 +111,11 @@ local pageStorage_WriteBatch_SizeP = heatmapPanel.new(
   )
 );
 
-local page_write_DurationP = graphPanel.new(
-  title='Page write Duration',
-  datasource=common.datasource,
-  fill=1,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_page_write_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))) by (le, type) / 1000000000)',
-    legendFormat='{{type}}-max',
-    intervalFactor=1,
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.999, sum(rate(tiflash_storage_page_write_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat='{{type}}-999',
-    intervalFactor=1,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.99, sum(rate(tiflash_storage_page_write_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat='{{type}}-99',
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.95, sum(rate(tiflash_storage_page_write_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat='{{type}}-95',
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.80, sum(rate(tiflash_storage_page_write_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat='{{type}}-80',
-    hide=true,
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='s',
-  min='0',
-)
-.addYaxis(
-  format='short',
+local page_write_DurationP = common.durationPanel(
+  'Page write Duration',
+  'tiflash_storage_page_write_duration_seconds_bucket',
+  by=['type'],
+  legend='{{type}}-%s {{$additional_groupby}}',
 );
 
 local page_GC_Tasks_OPMP = graphPanel.new(
@@ -194,42 +143,11 @@ local page_GC_Tasks_OPMP = graphPanel.new(
   format='short',
 );
 
-local page_GC_DurationP = graphPanel.new(
-  title='Page GC Duration',
-  datasource=common.datasource,
-  fill=1,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_hideZero=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_page_gc_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))) by (le, type) / 1000000000)',
-    legendFormat='{{type}}-max',
-    intervalFactor=1,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.99, sum(rate(tiflash_storage_page_gc_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat='{{type}}-99',
-    intervalFactor=1,
-    hide=true,
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='s',
-  min='0',
-)
-.addYaxis(
-  format='short',
+local page_GC_DurationP = common.durationPanel(
+  'Page GC Duration',
+  'tiflash_storage_page_gc_duration_seconds_bucket',
+  by=['type'],
+  legend='{{type}}-%s {{$additional_groupby}}',
 );
 
 local numer_of_PagesP = graphPanel.new(

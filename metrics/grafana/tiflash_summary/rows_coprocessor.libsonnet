@@ -67,55 +67,11 @@ local executor_QPSP = graphPanel.new(
   format='none',
 );
 
-local request_DurationP = graphPanel.new(
-  title='Request Duration',
-  datasource=common.datasource,
-  fill=1,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.999, sum(rate(tiflash_coprocessor_request_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat='999-{{type}}',
-    intervalFactor=1,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.99, sum(rate(tiflash_coprocessor_request_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat='99-{{type}}',
-    intervalFactor=1,
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.95, sum(rate(tiflash_coprocessor_request_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat='95-{{type}}',
-    intervalFactor=1,
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.80, sum(rate(tiflash_coprocessor_request_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat='80-{{type}}',
-    intervalFactor=1,
-    hide=true,
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='s',
-  min='0',
-)
-.addYaxis(
-  format='short',
+local request_DurationP = common.durationPanel(
+  'Request Duration',
+  'tiflash_coprocessor_request_duration_seconds_bucket',
+  by=['type'],
+  legend='%s-{{type}} {{$additional_groupby}}',
 );
 
 local error_QPSP = graphPanel.new(
@@ -145,47 +101,11 @@ local error_QPSP = graphPanel.new(
   format='none',
 );
 
-local request_Handle_DurationP = graphPanel.new(
-  title='Request Handle Duration',
-  datasource=common.datasource,
-  fill=1,
-  nullPointMode='null as zero',
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.999, sum(rate(tiflash_coprocessor_request_handle_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat='999-{{type}}',
-    intervalFactor=1,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.99, sum(rate(tiflash_coprocessor_request_handle_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat='99-{{type}}',
-    intervalFactor=1,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.95, sum(rate(tiflash_coprocessor_request_handle_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat='95-{{type}}',
-    intervalFactor=1,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.80, sum(rate(tiflash_coprocessor_request_handle_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat='80-{{type}}',
-    intervalFactor=1,
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='s',
-  min='0',
-)
-.addYaxis(
-  format='short',
+local request_Handle_DurationP = common.durationPanel(
+  'Request Handle Duration',
+  'tiflash_coprocessor_request_handle_seconds_bucket',
+  by=['type'],
+  legend='%s-{{type}} {{$additional_groupby}}',
 );
 
 local response_Bytes_SecondsP = graphPanel.new(

@@ -157,55 +157,10 @@ local raft_Wait_Index_DurationP = graphPanel.new(
   decimals=2,
 );
 
-local raft_Batch_Read_Index_DurationP = graphPanel.new(
-  title='Raft Batch Read Index Duration',
-  datasource=common.datasource,
+local raft_Batch_Read_Index_DurationP = common.durationPanel(
+  'Raft Batch Read Index Duration',
+  'tiflash_raft_read_index_duration_seconds_bucket',
   description='The number of currently applying snapshots.',
-  fill=1,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_raft_read_index_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))) by (le, $additional_groupby) / 1000000000)',
-    legendFormat='max {{$additional_groupby}}',
-    intervalFactor=1,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.99, sum(rate(tiflash_raft_read_index_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, $additional_groupby))',
-    legendFormat='99 {{$additional_groupby}}',
-    intervalFactor=1,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.95, sum(rate(tiflash_raft_read_index_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le))',
-    legendFormat='95',
-    intervalFactor=1,
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.80, sum(rate(tiflash_raft_read_index_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le))',
-    legendFormat='80',
-    intervalFactor=1,
-    hide=true,
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='s',
-  min='0',
-)
-.addYaxis(
-  format='short',
 );
 
 local apply_Raft_write_logs_DurationP = graphPanel.new(
@@ -514,53 +469,12 @@ local raft_Eager_GC_OPSP = graphPanel.new(
   format='none',
 );
 
-local raft_Eager_GC_DurationP = graphPanel.new(
-  title='Raft Eager GC Duration',
-  datasource=common.datasource,
+local raft_Eager_GC_DurationP = common.durationPanel(
+  'Raft Eager GC Duration',
+  'tiflash_raft_eager_gc_duration_seconds_bucket',
+  by=['type'],
+  legend='%s-{{type}} {{$additional_groupby}}',
   description='Duration of Raft logs eager GC tasks',
-  fill=1,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='current',
-  legend_sortDesc=true,
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.99, sum(rate(tiflash_raft_eager_gc_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat=' 99%-{{type}}',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.95, sum(rate(tiflash_raft_eager_gc_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat='95%-{{type}}',
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'sum(rate(tiflash_raft_eager_gc_duration_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type) / sum(rate(tiflash_raft_eager_gc_duration_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type)',
-    legendFormat='avg-{{type}}',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_raft_eager_gc_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))) by (le, type) / 1000000000)',
-    legendFormat=' 100%-{{type}}',
-    hide=true,
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='s',
-  min='0',
-)
-.addYaxis(
-  format='short',
 );
 
 local keys_flowP = graphPanel.new(

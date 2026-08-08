@@ -9,46 +9,14 @@ local common = import 'common.libsonnet';
 
 local rowObj = row.new(collapse=true, title='Storage Write Stall');
 
-local write_Stall_DurationP = graphPanel.new(
-  title='Write Stall Duration',
-  datasource=common.datasource,
+local write_Stall_DurationP = common.durationPanel(
+  'Write Stall Duration',
+  'tiflash_storage_write_stall_duration_seconds_bucket',
+  by=['type', 'instance'],
+  legend='%s-{{type}}-{{instance}}',
   description='The stall duration of write and delete range',
-  fill=0,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-  legend_sideWidth=250,
 )
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.99, sum(rate(tiflash_storage_write_stall_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type, instance))',
-    legendFormat='99-{{type}}-{{instance}}',
-    intervalFactor=1,
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_write_stall_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))) by (le, type, instance) / 1000000000)',
-    legendFormat='max-{{type}}-{{instance}}',
-    intervalFactor=1,
-  )
-)
-.addSeriesOverride({ alias: '99-delta_merge', yaxis: 2 })
-.resetYaxes()
-.addYaxis(
-  format='s',
-  min='0',
-)
-.addYaxis(
-  format='s',
-  min='0',
-);
+.addSeriesOverride({ alias: '99-delta_merge', yaxis: 2 });
 
 local write_Delta_Management_ThroughputP = graphPanel.new(
   title='Write & Delta Management Throughput',

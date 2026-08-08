@@ -292,47 +292,11 @@ local segment_MergedTaskP = graphPanel.new(
   min='0',
 );
 
-local segment_MergedTask_DurationP = graphPanel.new(
-  title='Segment MergedTask Duration',
-  datasource=common.datasource,
-  fill=1,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_avg=true,
-  legend_hideZero=true,
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.999, sum(rate(tiflash_storage_read_thread_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type,$additional_groupby))',
-    legendFormat='999-{{type}} {{$additional_groupby}}',
-    intervalFactor=1,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.99, sum(rate(tiflash_storage_read_thread_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type,$additional_groupby))',
-    legendFormat='99-{{type}} {{$additional_groupby}}',
-    intervalFactor=1,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.80, sum(rate(tiflash_storage_read_thread_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type,$additional_groupby))',
-    legendFormat='80-{{type}} {{$additional_groupby}}',
-    intervalFactor=1,
-    hide=true,
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='s',
-  min='0',
-)
-.addYaxis(
-  format='short',
-  show=false,
+local segment_MergedTask_DurationP = common.durationPanel(
+  'Segment MergedTask Duration',
+  'tiflash_storage_read_thread_seconds_bucket',
+  by=['type'],
+  legend='%s-{{type}} {{$additional_groupby}}',
 );
 
 local versionChainP = graphPanel.new(

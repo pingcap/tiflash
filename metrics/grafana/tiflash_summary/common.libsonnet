@@ -41,17 +41,22 @@ local applyBand(rowObj, band, y) =
     nextY: y + h,
   };
 
-// Default quantiles used by S3-style duration panels:
-// hidden max + p9999 + hidden p999 + p99.
+// Default quantiles for duration panels.
+// Only p9999 and p99 are shown by default; others (incl. avg) are hidden.
 local s3StyleQuantiles = [
   { q: '1.00', name: 'max', hide: true, maxHack: true },
   { q: '0.9999', name: '9999' },
   { q: '0.999', name: '999', hide: true },
   { q: '0.99', name: '99' },
+  { q: '0.80', name: '80', hide: true },
+  { name: 'avg', hide: true, avg: true },
 ];
 
 local byClause(byLabels) =
   std.join(', ', ['le'] + byLabels + ['$additional_groupby']);
+
+local avgByClause(byLabels) =
+  std.join(', ', byLabels + ['$additional_groupby']);
 
 local durationExpr(metric, selector, byLabels, q, range, maxHack) =
   local metricSel = metric + '{' + selector + '}';
@@ -60,6 +65,13 @@ local durationExpr(metric, selector, byLabels, q, range, maxHack) =
     'histogram_quantile(' + q + ', sum(round(1000000000*rate(' + metricSel + '[' + range + ']))) by (' + by + ') / 1000000000)'
   else
     'histogram_quantile(' + q + ', sum(rate(' + metricSel + '[' + range + '])) by (' + by + '))';
+
+// avg = rate(sum) / rate(count); metric is expected to end with `_bucket`.
+local avgExpr(metric, selector, byLabels, range) =
+  local sumMetric = std.strReplace(metric, '_bucket', '_sum');
+  local countMetric = std.strReplace(metric, '_bucket', '_count');
+  local by = avgByClause(byLabels);
+  '(sum(rate(' + sumMetric + '{' + selector + '}[' + range + '])) by (' + by + ') / sum(rate(' + countMetric + '{' + selector + '}[' + range + '])) by (' + by + '))';
 
 local makeDurationTarget(expr, legend, intervalFactor, hide) =
   if intervalFactor == null then
@@ -111,8 +123,9 @@ local makeDurationTarget(expr, legend, intervalFactor, hide) =
     ).row,
 
   // Build prometheus targets for histogram duration panels (xxx_seconds_bucket).
-  // legend: format string, "%s" is replaced by quantile name (max/9999/99).
+  // legend: format string, "%s" is replaced by quantile/avg name (max/9999/99/avg).
   // by: extra labels besides le and $additional_groupby (e.g. ['type']).
+  // Entries with avg=true emit sum/count average (no `le` in by).
   durationQuantileTargets(
     metric,
     selector=self.selector,
@@ -124,15 +137,19 @@ local makeDurationTarget(expr, legend, intervalFactor, hide) =
   )::
     std.map(
       function(q)
+        local isAvg = std.objectHas(q, 'avg') && q.avg;
         makeDurationTarget(
-          durationExpr(
-            metric,
-            selector,
-            by,
-            q.q,
-            range,
-            std.objectHas(q, 'maxHack') && q.maxHack,
-          ),
+          if isAvg then
+            avgExpr(metric, selector, by, range)
+          else
+            durationExpr(
+              metric,
+              selector,
+              by,
+              q.q,
+              range,
+              std.objectHas(q, 'maxHack') && q.maxHack,
+            ),
           legend % q.name,
           intervalFactor,
           std.objectHas(q, 'hide') && q.hide,
@@ -140,8 +157,8 @@ local makeDurationTarget(expr, legend, intervalFactor, hide) =
       quantiles
     ),
 
-  // Full graph panel for S3-style duration histograms
-  // (hidden max + p9999 + hidden p999 + p99).
+  // Full graph panel for duration histograms
+  // (hidden max/p999/p80/avg + visible p9999/p99).
   // Fixed style: intervalFactor=2, fill=1, legend sorted by max desc.
   // Y-axes: left s/min0, right short.
   durationPanel(

@@ -9,48 +9,12 @@ local common = import 'common.libsonnet';
 
 local rowObj = row.new(collapse=true, title='Disaggregated-Write');
 
-local checkpoint_Upload_DurationP = graphPanel.new(
-  title='Checkpoint Upload Duration',
-  datasource=common.datasource,
+local checkpoint_Upload_DurationP = common.durationPanel(
+  'Checkpoint Upload Duration',
+  'tiflash_storage_checkpoint_seconds_bucket',
+  by=['type'],
+  legend='{{type}}-%s {{$additional_groupby}}',
   description='PageStorage Checkpoint Duration',
-  fill=1,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_checkpoint_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))) by (le, type, $additional_groupby) / 1000000000)',
-    legendFormat='{{type}} {{$additional_groupby}}',
-    intervalFactor=1,
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.999, sum(rate(tiflash_storage_checkpoint_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type, $additional_groupby))',
-    legendFormat='{{type}}-999 {{$additional_groupby}}',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.99, sum(rate(tiflash_storage_checkpoint_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type, $additional_groupby))',
-    legendFormat='{{type}}-99 {{$additional_groupby}}',
-    hide=true,
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='s',
-  min='0',
-)
-.addYaxis(
-  format='short',
 );
 
 local checkpoint_Upload_flowP = graphPanel.new(
@@ -257,32 +221,11 @@ local remote_Object_Lock_Request_QPSP = graphPanel.new(
   format='none',
 );
 
-local remote_Object_Lock_DurationP = graphPanel.new(
-  title='Remote Object Lock Duration',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null',
-  pointradius=2,
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.99, sum(rate(tiflash_disaggregated_object_lock_request_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type, $additional_groupby))',
-    legendFormat='99%-{{type}} {{$additional_groupby}}',
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='s',
-  min='0',
-)
-.addYaxis(
-  format='short',
+local remote_Object_Lock_DurationP = common.durationPanel(
+  'Remote Object Lock Duration',
+  'tiflash_disaggregated_object_lock_request_duration_seconds_bucket',
+  by=['type'],
+  legend='%s-{{type}} {{$additional_groupby}}',
 );
 
 local remote_Store_SummaryP = graphPanel.new(
@@ -314,43 +257,15 @@ local remote_Store_SummaryP = graphPanel.new(
   format='short',
 );
 
-local remote_GC_Duration_BreakdownP = graphPanel.new(
-  title='Remote GC Duration Breakdown',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null',
-  pointradius=2,
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.999, sum(rate(tiflash_storage_s3_gc_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type, $additional_groupby))',
-    legendFormat='99%-{{type}} {{$additional_groupby}}',
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.99, sum(rate(tiflash_storage_s3_gc_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type, $additional_groupby))',
-    legendFormat='90%-{{type}} {{$additional_groupby}}',
-  )
+local remote_GC_Duration_BreakdownP = common.durationPanel(
+  'Remote GC Duration Breakdown',
+  'tiflash_storage_s3_gc_seconds_bucket',
+  by=['type'],
+  legend='%s-{{type}} {{$additional_groupby}}',
 )
 .addSeriesOverride({ alias: '/total/', yaxis: 2 })
 .addSeriesOverride({ alias: '/one_store/', yaxis: 2 })
-.addSeriesOverride({ alias: '/clean_locks/', yaxis: 2 })
-.resetYaxes()
-.addYaxis(
-  format='s',
-  min='0',
-)
-.addYaxis(
-  format='s',
-);
+.addSeriesOverride({ alias: '/clean_locks/', yaxis: 2 });
 
 local remote_GC_StatusP = graphPanel.new(
   title='Remote GC Status',
@@ -494,33 +409,13 @@ local fAP_stateP = graphPanel.new(
   min='0',
 );
 
-local fAP_time_by_stageP = graphPanel.new(
-  title='FAP time by stage',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
+local fAP_time_by_stageP = common.durationPanel(
+  'FAP time by stage',
+  'tiflash_fap_task_duration_seconds_bucket',
+  by=['type'],
+  legend='{{type}}-%s {{$additional_groupby}}',
 )
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.999, sum(round(1000000000*rate(tiflash_fap_task_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))) by (le, type, $additional_groupby) / 1000000000)',
-    legendFormat='{{type}} {{$additional_groupby}}',
-    intervalFactor=1,
-  )
-)
-.addSeriesOverride({ alias: '/hit_ratio/', yaxis: 2 })
-.resetYaxes()
-.addYaxis(
-  format='s',
-  min='0',
-)
-.addYaxis(
-  format='percentunit',
-  min='0',
-);
+.addSeriesOverride({ alias: '/hit_ratio/', yaxis: 2 });
 
 local fAP_no_match_reasonP = graphPanel.new(
   title='FAP no match reason',

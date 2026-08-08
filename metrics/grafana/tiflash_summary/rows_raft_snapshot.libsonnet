@@ -9,32 +9,11 @@ local common = import 'common.libsonnet';
 
 local rowObj = row.new(collapse=true, title='Raft Snapshot / IngestSST');
 
-local heavy_Raft_Apply_DurationP = graphPanel.new(
-  title='Heavy Raft Apply Duration',
-  datasource=common.datasource,
-  fill=1,
-  nullPointMode='null as zero',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='current',
-  legend_sortDesc=true,
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.99, sum(rate(tiflash_raft_command_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat='99%-{{type}}',
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='s',
-  min='0',
-)
-.addYaxis(
-  format='short',
+local heavy_Raft_Apply_DurationP = common.durationPanel(
+  'Heavy Raft Apply Duration',
+  'tiflash_raft_command_duration_seconds_bucket',
+  by=['type'],
+  legend='%s-{{type}} {{$additional_groupby}}',
 );
 
 local applying_snapshots_CountP = graphPanel.new(

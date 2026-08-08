@@ -192,45 +192,12 @@ local hard_Limit_Exceeded_CountP = graphPanel.new(
   format='short',
 );
 
-local task_Waiting_DurationP = graphPanel.new(
-  title='Task Waiting Duration',
-  datasource=common.datasource,
+local task_Waiting_DurationP = common.durationPanel(
+  'Task Waiting Duration',
+  'tiflash_task_scheduler_waiting_duration_seconds_bucket',
+  by=['instance', 'resource_group'],
+  legend='{{instance}}-{{resource_group}}-%s',
   description='the time of waiting for schedule',
-  fill=0,
-  nullPointMode='null as zero',
-  pointradius=1,
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.80, max(rate(tiflash_task_scheduler_waiting_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance,le,resource_group))',
-    legendFormat='{{instance}}-{{resource_group}}-80',
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.90, max(rate(tiflash_task_scheduler_waiting_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance,le,resource_group))',
-    legendFormat='{{instance}}-{{resource_group}}-90',
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(1.00, max(rate(tiflash_task_scheduler_waiting_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance,le,resource_group))',
-    legendFormat='{{instance}}-{{resource_group}}-100',
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='s',
-  label='Time',
-)
-.addYaxis(
-  format='short',
 );
 
 

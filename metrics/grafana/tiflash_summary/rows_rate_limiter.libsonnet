@@ -160,48 +160,12 @@ local i_O_Limiter_Pending_OPSP = graphPanel.new(
   format='s',
 );
 
-local i_O_Limiter_Pending_DurationP = graphPanel.new(
-  title='I/O Limiter Pending Duration',
-  datasource=common.datasource,
+local i_O_Limiter_Pending_DurationP = common.durationPanel(
+  'I/O Limiter Pending Duration',
+  'tiflash_storage_io_limiter_pending_seconds_bucket',
+  by=['type'],
+  legend='{{type}}-pending-%s',
   description='I/O Limiter pending duration.',
-  fill=1,
-  nullPointMode='null',
-  pointradius=2,
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_hideZero=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_io_limiter_pending_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))) by (le, type) / 1000000000)',
-    legendFormat='{{type}}-pending-max',
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.999, sum(rate(tiflash_storage_io_limiter_pending_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat='{{type}}-pending-P999',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.99, sum(rate(tiflash_storage_io_limiter_pending_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
-    legendFormat='{{type}}-pending-P99',
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='s',
-  decimals=0,
-)
-.addYaxis(
-  format='s',
 );
 
 

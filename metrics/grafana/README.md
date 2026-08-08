@@ -59,7 +59,7 @@ N panels in a band are equally divided across width 24 unless you pass explicit 
 
 ## Duration histogram helpers
 
-For `*_seconds_bucket` latency panels (hidden max + p9999 + hidden p999 + p99), prefer:
+For `*_seconds_bucket` latency panels (default show p9999/p99; hide max/p999/p80/avg), prefer:
 
 ```jsonnet
 local s3_Request_DurationP = common.durationPanel(
@@ -71,4 +71,4 @@ local s3_Request_DurationP = common.durationPanel(
 );
 ```
 
-`%s` in `legend` is replaced by `max` / `9999` / `999` / `99`. Use `selector=common.proxySelector` for proxy metrics.
+`%s` in `legend` is replaced by `max` / `9999` / `999` / `99` / `80` / `avg`. Use `selector=common.proxySelector` for proxy metrics.

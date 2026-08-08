@@ -9,32 +9,11 @@ local common = import 'common.libsonnet';
 
 local rowObj = row.new(collapse=true, title='Disaggregated-Compute');
 
-local read_Duration_BreakdownP = graphPanel.new(
-  title='Read Duration Breakdown',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null',
-  pointradius=2,
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.99, sum(rate(tiflash_disaggregated_breakdown_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type, $additional_groupby))',
-    legendFormat='99%-{{type}} {{$additional_groupby}}',
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='s',
-  min='0',
-)
-.addYaxis(
-  format='short',
+local read_Duration_BreakdownP = common.durationPanel(
+  'Read Duration Breakdown',
+  'tiflash_disaggregated_breakdown_duration_seconds_bucket',
+  by=['type'],
+  legend='%s-{{type}} {{$additional_groupby}}',
 );
 
 local remote_Cache_OperationsP = graphPanel.new(
@@ -116,81 +95,18 @@ local remote_Cache_FlowP = graphPanel.new(
   show=false,
 );
 
-local remote_Cache_BG_Download_DurationP = graphPanel.new(
-  title='Remote Cache BG Download Duration',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null',
-  pointradius=2,
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.999, sum(rate(tiflash_storage_remote_cache_bg_download_stage_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, stage, file_type, $additional_groupby))',
-    legendFormat='999%-{{stage}}-{{file_type}} {{$additional_groupby}}',
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.99, sum(rate(tiflash_storage_remote_cache_bg_download_stage_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, stage, file_type, $additional_groupby))',
-    legendFormat='99%-{{stage}}-{{file_type}} {{$additional_groupby}}',
-  )
-)
-.addTarget(
-  prometheus.target(
-    '(sum(rate( tiflash_storage_remote_cache_bg_download_stage_seconds_sum {k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"} [$__rate_interval] )) by (stage, file_type, $additional_groupby) / sum(rate( tiflash_storage_remote_cache_bg_download_stage_seconds_count {k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"} [$__rate_interval] )) by (stage, file_type, $additional_groupby) )',
-    legendFormat='avg-{{stage}}-{{file_type}} {{$additional_groupby}}',
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='s',
-  min='0',
-)
-.addYaxis(
-  format='short',
+local remote_Cache_BG_Download_DurationP = common.durationPanel(
+  'Remote Cache BG Download Duration',
+  'tiflash_storage_remote_cache_bg_download_stage_seconds_bucket',
+  by=['stage', 'file_type'],
+  legend='%s-{{stage}}-{{file_type}} {{$additional_groupby}}',
 );
 
-local remote_Cache_Wait_on_Downloading_DurationP = graphPanel.new(
-  title='Remote Cache Wait on Downloading Duration',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null',
-  pointradius=2,
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.999, sum(rate(tiflash_storage_remote_cache_wait_on_downloading_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, result, file_type, $additional_groupby))',
-    legendFormat='999%-{{result}}-{{file_type}} {{$additional_groupby}}',
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.99, sum(rate(tiflash_storage_remote_cache_wait_on_downloading_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, result, file_type, $additional_groupby))',
-    legendFormat='99%-{{result}}-{{file_type}} {{$additional_groupby}}',
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='s',
-  min='0',
-)
-.addYaxis(
-  format='short',
+local remote_Cache_Wait_on_Downloading_DurationP = common.durationPanel(
+  'Remote Cache Wait on Downloading Duration',
+  'tiflash_storage_remote_cache_wait_on_downloading_seconds_bucket',
+  by=['result', 'file_type'],
+  legend='%s-{{result}}-{{file_type}} {{$additional_groupby}}',
 );
 
 local remote_Cache_Wait_on_Downloading_OPSP = graphPanel.new(

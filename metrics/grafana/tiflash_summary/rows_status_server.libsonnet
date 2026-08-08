@@ -9,46 +9,12 @@ local common = import 'common.libsonnet';
 
 local rowObj = row.new(collapse=true, title='Status Server');
 
-local status_API_Request_DurationP = graphPanel.new(
-  title='Status API Request Duration',
-  datasource=common.datasource,
-  fill=1,
-  nullPointMode='null',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.999, sum(rate( tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket {k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval] )) by (le, path, $additional_groupby))',
-    legendFormat='999-{{path}} {{$additional_groupby}}',
-    intervalFactor=1,
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'histogram_quantile(0.99, sum(rate( tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket {k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval] )) by (le, path, $additional_groupby))',
-    legendFormat='99-{{path}} {{$additional_groupby}}',
-    intervalFactor=1,
-  )
-)
-.addTarget(
-  prometheus.target(
-    '(sum(rate( tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket {k8s_cluster="$k8s_cluster",tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"} [$__rate_interval] )) by (path, $additional_groupby) / sum(rate( tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket {k8s_cluster="$k8s_cluster",tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"} [$__rate_interval] )) by (path, $additional_groupby) )',
-    legendFormat='avg-{{path}} {{$additional_groupby}}',
-    intervalFactor=1,
-    hide=true,
-  )
-)
-.resetYaxes()
-.addYaxis(
-  format='s',
-  min='0',
-)
-.addYaxis(
-  format='short',
+local status_API_Request_DurationP = common.durationPanel(
+  'Status API Request Duration',
+  'tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket',
+  selector=common.proxySelector,
+  by=['path'],
+  legend='%s-{{path}} {{$additional_groupby}}',
 );
 
 local status_API_Request_op_sP = graphPanel.new(
