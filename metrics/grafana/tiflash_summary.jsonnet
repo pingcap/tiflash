@@ -122,14 +122,13 @@ local rowServer = (
     legendSort='current',
     yLeft='short',
     yLeftMin=null,
-    yRight='short',
   );
 
   local panelCpuUsage = common.graph(
     'CPU Usage',
     [
       prometheus.target(
-        'rate(tiflash_proxy_process_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", job=~".*tiflash", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m])',
+        'rate(tiflash_proxy_process_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", job=~".*tiflash", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])',
         legendFormat='{{instance}}',
       ),
       common.target(
@@ -146,7 +145,6 @@ local rowServer = (
     ],
     yLeft='percentunit',
     yLeftDecimals=1,
-    yRight='short',
   );
 
   local panelMemory = common.graph(
@@ -234,7 +232,6 @@ local rowServer = (
       { alias: '/limit/', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2 },
     ],
     yLeft='bytes',
-    yRight='short',
   );
 
   local panelIoThroughput = common.graph(
@@ -255,7 +252,6 @@ local rowServer = (
     nullPointMode='null',
     yLeft='bytes',
     yLeftDecimals=0,
-    yRight='short',
   );
 
   local panelRemoteStoreSummaryDisaggArch = common.graph(
@@ -272,7 +268,6 @@ local rowServer = (
     legendHideZero=true,
     legendSort='current',
     yLeft='bytes',
-    yRight='short',
   );
 
   common.buildRow(
@@ -427,7 +422,6 @@ local rowThreads = (
     legendSort='current',
     yLeft='none',
     yLeftMin=null,
-    yRight='short',
   );
 
   local panelThreadsIo = common.graph(
@@ -445,7 +439,6 @@ local rowThreads = (
     pointradius=2,
     yLeft='Bps',
     yLeftMin=null,
-    yRight='short',
   );
 
   local panelThreadVoluntaryContextSwitches = common.graph(
@@ -463,7 +456,6 @@ local rowThreads = (
     pointradius=2,
     yLeft='none',
     yLeftMin=null,
-    yRight='short',
   );
 
   local panelThreadNonvoluntaryContextSwitches = common.graph(
@@ -481,7 +473,6 @@ local rowThreads = (
     pointradius=2,
     yLeft='none',
     yLeftMin=null,
-    yRight='short',
   );
 
   common.buildRow(
@@ -537,14 +528,13 @@ local rowCoprocessor = (
     'Response Bytes/Seconds',
     [
       common.target(
-        common.expr.sumRate('tiflash_coprocessor_response_bytes', common.selector, by=['type'], range='1m'),
+        common.expr.sumRate('tiflash_coprocessor_response_bytes', common.selector, by=['type']),
         '{{type}}',
         intervalFactor=1,
       ),
     ],
     fill=0,
     yLeft='bytes',
-    yRight='short',
   );
 
   local panelCopTaskMemoryUsage = graphPanel.new(
@@ -556,28 +546,28 @@ local rowCoprocessor = (
   )
   .addTarget(
     prometheus.target(
-      'histogram_quantile(0.999, sum(rate(tiflash_coprocessor_request_memory_usage_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
+      'histogram_quantile(0.999, sum(rate(tiflash_coprocessor_request_memory_usage_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type))',
       legendFormat='999-{{type}}',
       intervalFactor=1,
     )
   )
   .addTarget(
     prometheus.target(
-      'histogram_quantile(0.99, sum(rate(tiflash_coprocessor_request_memory_usage_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
+      'histogram_quantile(0.99, sum(rate(tiflash_coprocessor_request_memory_usage_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type))',
       legendFormat='99-{{type}}',
       intervalFactor=1,
     )
   )
   .addTarget(
     prometheus.target(
-      'histogram_quantile(0.95, sum(rate(tiflash_coprocessor_request_memory_usage_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
+      'histogram_quantile(0.95, sum(rate(tiflash_coprocessor_request_memory_usage_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type))',
       legendFormat='95-{{type}}',
       intervalFactor=1,
     )
   )
   .addTarget(
     prometheus.target(
-      'histogram_quantile(0.80, sum(rate(tiflash_coprocessor_request_memory_usage_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
+      'histogram_quantile(0.80, sum(rate(tiflash_coprocessor_request_memory_usage_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type))',
       legendFormat='80-{{type}}',
       intervalFactor=1,
     )
@@ -596,14 +586,13 @@ local rowCoprocessor = (
     'Exchange Bytes/Seconds',
     [
       common.target(
-        common.expr.sumRate('tiflash_exchange_data_bytes', common.selector, by=['type'], range='1m'),
+        common.expr.sumRate('tiflash_exchange_data_bytes', common.selector, by=['type']),
         '{{type}}',
         intervalFactor=1,
       ),
     ],
     fill=0,
     yLeft='bytes',
-    yRight='short',
   );
 
   local panelThreadsOfRpc = common.graph(
@@ -619,7 +608,6 @@ local rowCoprocessor = (
     legendSort=null,
     legendSortDesc=null,
     yLeft='none',
-    yRight='short',
   );
 
   local panelHandlingRequestNumber = common.graph(
@@ -651,7 +639,6 @@ local rowCoprocessor = (
     legendSort=null,
     legendSortDesc=null,
     yLeft='none',
-    yRight='short',
   );
 
   local panelMaxThreadsOfRpc = common.graph(
@@ -667,7 +654,6 @@ local rowCoprocessor = (
     legendSort=null,
     legendSortDesc=null,
     yLeft='none',
-    yRight='short',
   );
 
   local panelMppQueryCount = common.graph(
@@ -684,7 +670,6 @@ local rowCoprocessor = (
     legendSort=null,
     legendSortDesc=null,
     yLeft='none',
-    yRight='short',
   );
 
   local panelMaxThreads = common.graph(
@@ -700,7 +685,6 @@ local rowCoprocessor = (
     legendSort=null,
     legendSortDesc=null,
     yLeft='none',
-    yRight='short',
   );
 
   local panelTimeOfTheLongestLiveMppTask = common.graph(
@@ -716,7 +700,6 @@ local rowCoprocessor = (
     legendSort=null,
     legendSortDesc=null,
     yLeft='s',
-    yRight='short',
   );
 
   local panelDataSizeInSendAndReceiveQueue = common.graph(
@@ -730,14 +713,13 @@ local rowCoprocessor = (
     ],
     fill=0,
     yLeft='bytes',
-    yRight='short',
   );
 
   local panelNetworkTransmission = common.graph(
     'Network Transmission',
     [
       common.target(
-        common.expr.sumRate('tiflash_network_transmission_bytes', common.selector, by=['type'], range='1m'),
+        common.expr.sumRate('tiflash_network_transmission_bytes', common.selector, by=['type']),
         '{{type}}',
         intervalFactor=1,
       ),
@@ -746,7 +728,6 @@ local rowCoprocessor = (
     legendSort=null,
     legendSortDesc=null,
     yLeft='bytes',
-    yRight='short',
   );
 
   local panelEstablishCalldataDetails = common.graph(
@@ -761,7 +742,6 @@ local rowCoprocessor = (
     description='The establish calldata details',
     fill=0,
     yLeft='none',
-    yRight='short',
   );
 
   common.buildRow(
@@ -959,7 +939,6 @@ local rowTaskScheduler = (
     legendSortDesc=null,
     yLeft='none',
     yLeftMin=null,
-    yRight='short',
   );
 
   local panelTaskWaitingDuration = common.durationPanel(
@@ -993,21 +972,21 @@ local rowDdl = (
   )
   .addTarget(
     prometheus.target(
-      'avg(increase(tiflash_schema_internal_ddl_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type)',
+      'avg(increase(tiflash_schema_internal_ddl_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
       legendFormat='{{type}}',
       intervalFactor=1,
     )
   )
   .addTarget(
     prometheus.target(
-      'sum(increase(tiflash_schema_internal_ddl_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))',
+      'sum(increase(tiflash_schema_internal_ddl_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))',
       legendFormat='total',
       intervalFactor=1,
     )
   )
   .addTarget(
     prometheus.target(
-      'sum(increase(tiflash_schema_internal_ddl_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type,instance)',
+      'sum(increase(tiflash_schema_internal_ddl_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type,instance)',
       legendFormat='{{type}}-{{instance}}',
       intervalFactor=1,
       hide=true,
@@ -1015,7 +994,7 @@ local rowDdl = (
   )
   .addTarget(
     prometheus.target(
-      'sum(increase(tiflash_schema_internal_ddl_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance)',
+      'sum(increase(tiflash_schema_internal_ddl_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
       legendFormat='total-{{instance}}',
       intervalFactor=1,
       hide=true,
@@ -1040,7 +1019,7 @@ local rowDdl = (
   )
   .addTarget(
     prometheus.target(
-      'avg(increase(tiflash_schema_trigger_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type)',
+      'avg(increase(tiflash_schema_trigger_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
       legendFormat='triggle-by-{{type}}',
       intervalFactor=1,
     )
@@ -1092,7 +1071,7 @@ local rowImbalanceReadWrite = (
     'CPU Usage (irate)',
     [
       prometheus.target(
-        'irate(tiflash_proxy_process_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", job=~".*tiflash", instance=~"$tiflash_role"}[1m])',
+        'irate(tiflash_proxy_process_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", job=~".*tiflash", instance=~"$tiflash_role"}[$__rate_interval])',
         legendFormat='{{instance}}',
       ),
       common.target(
@@ -1110,7 +1089,6 @@ local rowImbalanceReadWrite = (
     ],
     yLeft='percentunit',
     yLeftDecimals=1,
-    yRight='short',
   );
 
   local panelSegmentReader = common.cpuWithLimitPanel(
@@ -1131,16 +1109,16 @@ local rowImbalanceReadWrite = (
     'Read Throughput by instance',
     [
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_ReadBufferFromFileDescriptorReadBytes', common.selector, by=['instance'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_ReadBufferFromFileDescriptorReadBytes', common.selector, by=['instance']),
         'File Descriptor-{{instance}}',
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_PSMReadBytes', common.selector, by=['instance'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_PSMReadBytes', common.selector, by=['instance']),
         'Page-{{instance}}',
         intervalFactor=1,
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_PSMBackgroundReadBytes', common.selector, by=['instance'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_PSMBackgroundReadBytes', common.selector, by=['instance']),
         'PageBackGround-{{instance}}',
         intervalFactor=1,
       ),
@@ -1151,7 +1129,6 @@ local rowImbalanceReadWrite = (
     legendHideZero=true,
     legendSort='current',
     yLeft='binBps',
-    yRight='short',
     yRightMin='0',
   );
 
@@ -1159,12 +1136,12 @@ local rowImbalanceReadWrite = (
     'Write Command OPS By Instance',
     [
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_DMWriteBlock', common.selector, by=['instance', 'type'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_DMWriteBlock', common.selector, by=['instance', 'type']),
         'write block-{{instance}}',
         intervalFactor=1,
       ),
       prometheus.target(
-        'sum(increase(tiflash_storage_command_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance, type)',
+        'sum(increase(tiflash_storage_command_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance, type)',
         legendFormat='{{type}}-{{instance}}',
         intervalFactor=1,
       ),
@@ -1186,12 +1163,12 @@ local rowImbalanceReadWrite = (
     'Write Throughput By Instance',
     [
       common.target(
-        common.expr.sumRate('tiflash_storage_throughput_bytes', common.selector, labels='type=~"write"', by=['instance'], range='1m'),
+        common.expr.sumRate('tiflash_storage_throughput_bytes', common.selector, labels='type=~"write"', by=['instance']),
         'write-{{instance}}',
         intervalFactor=1,
       ),
       common.target(
-        common.expr.sumRate('tiflash_storage_throughput_bytes', common.selector, labels='type=~"ingest"', by=['instance'], range='1m'),
+        common.expr.sumRate('tiflash_storage_throughput_bytes', common.selector, labels='type=~"ingest"', by=['instance']),
         'ingest-{{instance}}',
       ),
     ],
@@ -1334,7 +1311,6 @@ local rowMemoryTrace = (
       { alias: '/limit/', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2 },
     ],
     yLeft='bytes',
-    yRight='short',
   );
 
   local panelEffectivenessOfMarkCache = graphPanel.new(
@@ -1374,7 +1350,7 @@ local rowMemoryTrace = (
         legendFormat='current_size-{{instance}}',
       ),
       common.target(
-        common.expr.sumRate('tiflash_shared_block_schemas', common.selector, labels='type=~"hit_count"', by=['instance'], range='1m'),
+        common.expr.sumRate('tiflash_shared_block_schemas', common.selector, labels='type=~"hit_count"', by=['instance']),
         'hit_count_ops-{{instance}}',
       ),
       prometheus.target(
@@ -1382,7 +1358,7 @@ local rowMemoryTrace = (
         legendFormat='still_used_when_evict-{{instance}}',
       ),
       common.target(
-        common.expr.sumRate('tiflash_shared_block_schemas', common.selector, labels='type=~"miss_count"', by=['instance'], range='1m'),
+        common.expr.sumRate('tiflash_shared_block_schemas', common.selector, labels='type=~"miss_count"', by=['instance']),
         'miss_count_ops-{{instance}}',
       ),
     ],
@@ -1393,7 +1369,6 @@ local rowMemoryTrace = (
     legendSort='current',
     yLeft='short',
     yLeftMin=null,
-    yRight='short',
   );
 
   local panelReadSnapshots = common.graph(
@@ -1613,7 +1588,6 @@ local rowColumnarStorage = (
       { alias: '/limit/', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2 },
     ],
     yLeft='bytes',
-    yRight='short',
   );
 
   local panelIaSegmentsMemoryWait = common.durationPanel(
@@ -1626,12 +1600,12 @@ local rowColumnarStorage = (
     'IA Segment Remote Read Cache',
     [
       common.target(
-        common.expr.sumRate('tiflash_proxy_kv_engine_ia_remote_read_segment_cache_hit', common.proxySelector, by=['$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_proxy_kv_engine_ia_remote_read_segment_cache_hit', common.proxySelector, by=['$additional_groupby']),
         'cache-hit {{$additional_groupby}}',
         intervalFactor=1,
       ),
       common.target(
-        common.expr.sumRate('tiflash_proxy_kv_engine_ia_remote_read_segment_cache_miss', common.proxySelector, by=['$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_proxy_kv_engine_ia_remote_read_segment_cache_miss', common.proxySelector, by=['$additional_groupby']),
         'cache-miss {{$additional_groupby}}',
       ),
     ],
@@ -1651,12 +1625,12 @@ local rowColumnarStorage = (
     'ColumnarFile Cache',
     [
       common.target(
-        common.expr.sumRate('tiflash_proxy_kv_engine_columnar_file_cache_hit', common.proxySelector, by=['$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_proxy_kv_engine_columnar_file_cache_hit', common.proxySelector, by=['$additional_groupby']),
         'file-cache-hit {{$additional_groupby}}',
         intervalFactor=1,
       ),
       common.target(
-        common.expr.sumRate('tiflash_proxy_kv_engine_columnar_file_cache_miss', common.proxySelector, by=['$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_proxy_kv_engine_columnar_file_cache_miss', common.proxySelector, by=['$additional_groupby']),
         'file-cache-miss {{$additional_groupby}}',
       ),
     ],
@@ -1697,16 +1671,16 @@ local rowColumnarStorage = (
     'Columnar Meta Cache',
     [
       common.target(
-        common.expr.sumRate('tiflash_proxy_kv_engine_columnar_meta_cache_hit', common.proxySelector, by=['$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_proxy_kv_engine_columnar_meta_cache_hit', common.proxySelector, by=['$additional_groupby']),
         'hit {{$additional_groupby}}',
         intervalFactor=1,
       ),
       common.target(
-        common.expr.sumRate('tiflash_proxy_kv_engine_columnar_meta_cache_miss', common.proxySelector, by=['$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_proxy_kv_engine_columnar_meta_cache_miss', common.proxySelector, by=['$additional_groupby']),
         'miss {{$additional_groupby}}',
       ),
       common.target(
-        common.expr.sumRate('tiflash_proxy_kv_engine_columnar_meta_cache_parse', common.proxySelector, by=['$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_proxy_kv_engine_columnar_meta_cache_parse', common.proxySelector, by=['$additional_groupby']),
         'parse {{$additional_groupby}}',
       ),
     ],
@@ -1766,13 +1740,13 @@ local rowStorage = (
   )
   .addTarget(
     prometheus.target(
-      'sum(increase(tiflash_storage_command_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type)',
+      'sum(increase(tiflash_storage_command_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
       legendFormat='{{type}}',
     )
   )
   .addTarget(
     common.target(
-      common.expr.sumRate('tiflash_system_profile_event_DMWriteBlock', common.selector, by=['type'], range='1m'),
+      common.expr.sumRate('tiflash_system_profile_event_DMWriteBlock', common.selector, by=['type']),
       'write block',
       intervalFactor=1,
     )
@@ -1844,7 +1818,7 @@ local rowStorage = (
     'SubTasks Write Throughput (bytes)',
     [
       common.target(
-        common.expr.sumRate('tiflash_storage_subtask_throughput_bytes', common.selector, by=['type'], range='1m'),
+        common.expr.sumRate('tiflash_storage_subtask_throughput_bytes', common.selector, by=['type']),
         '{{type}}',
         intervalFactor=1,
       ),
@@ -1866,7 +1840,7 @@ local rowStorage = (
     'SubTasks Write Throughput (rows)',
     [
       common.target(
-        common.expr.sumRate('tiflash_storage_subtask_throughput_rows', common.selector, by=['type'], range='1m'),
+        common.expr.sumRate('tiflash_storage_subtask_throughput_rows', common.selector, by=['type']),
         '{{type}}',
         intervalFactor=1,
       ),
@@ -1978,19 +1952,18 @@ local rowStorage = (
     nullPointMode='null',
     sideWidth=250,
     yLeft='none',
-    yRight='short',
   );
 
   local panelFileOpenOps = common.graph(
     'File Open OPS',
     [
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_FileOpen', common.selector, by=['instance'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_FileOpen', common.selector, by=['instance']),
         'Open-{{instance}}',
         intervalFactor=1,
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_FileOpenFailed', common.selector, by=['instance'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_FileOpenFailed', common.selector, by=['instance']),
         'OpenFail-{{instance}}',
         intervalFactor=1,
       ),
@@ -2002,14 +1975,13 @@ local rowStorage = (
     legendHideEmpty=true,
     sideWidth=250,
     yLeft='ops',
-    yRight='short',
   );
 
   local panelFsyncStatus = common.graph(
     'FSync Status',
     [
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_FileFSync', common.selector, by=['instance'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_FileFSync', common.selector, by=['instance']),
         'ops-fsync-{{instance}}',
         intervalFactor=1,
       ),
@@ -2033,16 +2005,16 @@ local rowStorage = (
     'Disk Write OPS',
     [
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_PSMWriteIOCalls', common.selector, by=['type'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_PSMWriteIOCalls', common.selector, by=['type']),
         'Page',
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_PSMWritePages', common.selector, range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_PSMWritePages', common.selector),
         'PageFile',
         hide=true,
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_WriteBufferFromFileDescriptorWrite', common.selector, range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_WriteBufferFromFileDescriptorWrite', common.selector),
         'File Descriptor',
         intervalFactor=1,
       ),
@@ -2060,16 +2032,16 @@ local rowStorage = (
     'Disk Read OPS',
     [
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_PSMReadIOCalls', common.selector, range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_PSMReadIOCalls', common.selector),
         'Page',
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_PSMReadPages', common.selector, range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_PSMReadPages', common.selector),
         'PageFile',
         hide=true,
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_ReadBufferFromFileDescriptorRead', common.selector, range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_ReadBufferFromFileDescriptorRead', common.selector),
         'File Descriptor',
         intervalFactor=1,
       ),
@@ -2087,16 +2059,16 @@ local rowStorage = (
     'Write flow',
     [
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_WriteBufferFromFileDescriptorWriteBytes', common.selector, range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_WriteBufferFromFileDescriptorWriteBytes', common.selector),
         'File Descriptor',
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_PSMWriteBytes', common.selector, range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_PSMWriteBytes', common.selector),
         'Page',
         intervalFactor=1,
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_PSMBackgroundWriteBytes', common.selector, range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_PSMBackgroundWriteBytes', common.selector),
         'PageBackGround',
         intervalFactor=1,
       ),
@@ -2107,7 +2079,6 @@ local rowStorage = (
     legendHideZero=true,
     legendSort='current',
     yLeft='binBps',
-    yRight='short',
     yRightMin='0',
   );
 
@@ -2115,16 +2086,16 @@ local rowStorage = (
     'Read flow',
     [
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_ReadBufferFromFileDescriptorReadBytes', common.selector, range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_ReadBufferFromFileDescriptorReadBytes', common.selector),
         'File Descriptor',
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_PSMReadBytes', common.selector, range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_PSMReadBytes', common.selector),
         'Page',
         intervalFactor=1,
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_PSMBackgroundReadBytes', common.selector, range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_PSMBackgroundReadBytes', common.selector),
         'PageBackGround',
         intervalFactor=1,
       ),
@@ -2135,7 +2106,6 @@ local rowStorage = (
     legendHideZero=true,
     legendSort='current',
     yLeft='binBps',
-    yRight='short',
     yRightMin='0',
   );
 
@@ -2143,11 +2113,11 @@ local rowStorage = (
     'Compression Ratio',
     [
       common.target(
-        common.expr.sumRate('tiflash_storage_pack_compression_bytes', common.selector, labels='type=~"lz4_uncompressed_bytes"}[1m]))/sum(rate(tiflash_storage_pack_compression_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"lz4_compressed_bytes"', range='1m'),
+        common.expr.sumRate('tiflash_storage_pack_compression_bytes', common.selector, labels='type=~"lz4_uncompressed_bytes"}[$__rate_interval]))/sum(rate(tiflash_storage_pack_compression_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"lz4_compressed_bytes"'),
         'lz4',
       ),
       common.target(
-        common.expr.sumRate('tiflash_storage_pack_compression_bytes', common.selector, labels='type=~"lightweight_uncompressed_bytes"}[1m]))/sum(rate(tiflash_storage_pack_compression_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"lightweight_compressed_bytes"', range='1m'),
+        common.expr.sumRate('tiflash_storage_pack_compression_bytes', common.selector, labels='type=~"lightweight_uncompressed_bytes"}[$__rate_interval]))/sum(rate(tiflash_storage_pack_compression_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"lightweight_compressed_bytes"'),
         'lightweight',
       ),
     ],
@@ -2160,7 +2130,6 @@ local rowStorage = (
     legendSortDesc=null,
     yLeft='short',
     yLeftMin=null,
-    yRight='short',
   );
 
   local panelCompressionAlgorithmCount = graphPanel.new(
@@ -2178,7 +2147,7 @@ local rowStorage = (
   )
   .addTarget(
     common.target(
-      common.expr.sumRate('tiflash_storage_pack_compression_algorithm_count', common.selector, by=['type'], range='1m'),
+      common.expr.sumRate('tiflash_storage_pack_compression_algorithm_count', common.selector, by=['type']),
       '{{type}}',
     )
   )
@@ -2320,7 +2289,7 @@ local rowStorageReadPoolDataSharing = (
   )
   .addTarget(
     common.target(
-      common.expr.sumRate('tiflash_storage_read_thread_counter', common.selector, labels='type=~"ru_exhausted|sche_active_segment_limit|sche_from_cache|sche_new_task|sche_no_pool|sche_no_ru|sche_no_segment|sche_no_slot|push_block_bytes"', by=['type'], range='1m'),
+      common.expr.sumRate('tiflash_storage_read_thread_counter', common.selector, labels='type=~"ru_exhausted|sche_active_segment_limit|sche_from_cache|sche_new_task|sche_no_pool|sche_no_ru|sche_no_segment|sche_no_slot|push_block_bytes"', by=['type']),
       '{{type}}',
     )
   )
@@ -2401,7 +2370,7 @@ local rowStorageReadPoolDataSharing = (
     'DeltaIndexError',
     [
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_DTDeltaIndexError', common.selector, by=['instance'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_DTDeltaIndexError', common.selector, by=['instance']),
         'DeltaIndexError-{{instance}}',
         intervalFactor=1,
       ),
@@ -2557,7 +2526,6 @@ local rowPagestorage = (
     legendMax=false,
     legendSort='current',
     yLeft='short',
-    yRight='short',
   );
 
   local panelPagestoragePendingWritersNum = common.graph(
@@ -2574,7 +2542,6 @@ local rowPagestorage = (
     nullPointMode='null',
     sideWidth=250,
     yLeft='none',
-    yRight='short',
   );
 
   local panelPagestorageStoredBytesByType = common.graph(
@@ -2590,7 +2557,6 @@ local rowPagestorage = (
     legendHideZero=true,
     legendSort='current',
     yLeft='bytes',
-    yRight='short',
     yRightMin='0',
   );
 
@@ -2624,14 +2590,13 @@ local rowPagestorage = (
     legendSort='current',
     yLeft='short',
     yLeftMin=null,
-    yRight='short',
   );
 
   local panelPsCommandOpsByInstance = common.graph(
     'PS Command OPS By Instance',
     [
       common.target(
-        common.expr.sumRate('tiflash_storage_page_command_count', common.selector, by=['instance', 'type'], range='1m'),
+        common.expr.sumRate('tiflash_storage_page_command_count', common.selector, by=['instance', 'type']),
         '{{type}}-{{instance}}',
         intervalFactor=1,
       ),
@@ -2653,7 +2618,7 @@ local rowPagestorage = (
     'PS Apply edits OPS By Instance',
     [
       common.target(
-        common.expr.sumRate('tiflash_storage_page_apply_edit_type', common.selector, by=['instance', 'type'], range='1m'),
+        common.expr.sumRate('tiflash_storage_page_apply_edit_type', common.selector, by=['instance', 'type']),
         '{{type}}-{{instance}}',
         intervalFactor=1,
       ),
@@ -2693,7 +2658,7 @@ local rowRateLimiter = (
     'I/O Limiter Throughput',
     [
       common.target(
-        common.expr.sumRate('tiflash_storage_io_limiter', common.selector, by=['type', 'instance'], range='1m'),
+        common.expr.sumRate('tiflash_storage_io_limiter', common.selector, by=['type', 'instance']),
         '{{type}}-{{instance}}',
       ),
     ],
@@ -2703,7 +2668,6 @@ local rowRateLimiter = (
     legendSort='current',
     yLeft='binBps',
     yLeftDecimals=0,
-    yRight='short',
   );
 
   local panelIOLimiterThreshold = common.graph(
@@ -2723,7 +2687,6 @@ local rowRateLimiter = (
     yLeft='bytes',
     yLeftMin=null,
     yLeftDecimals=0,
-    yRight='short',
   );
 
   local panelIOLimiterCurrentPendingGauge = common.graph(
@@ -2770,7 +2733,7 @@ local rowRateLimiter = (
     'I/O Limiter Pending OPS',
     [
       common.target(
-        common.expr.sumRate('tiflash_storage_io_limiter_pending_count', common.selector, by=['type', 'instance'], range='1m'),
+        common.expr.sumRate('tiflash_storage_io_limiter_pending_count', common.selector, by=['type', 'instance']),
         '{{type}}-{{instance}}',
       ),
     ],
@@ -2822,12 +2785,12 @@ local rowStorageWriteStall = (
     'Write & Delta Management Throughput',
     [
       common.target(
-        common.expr.sumRate('tiflash_storage_throughput_bytes', common.selector, labels='type=~"write|ingest"', range='1m'),
+        common.expr.sumRate('tiflash_storage_throughput_bytes', common.selector, labels='type=~"write|ingest"'),
         'write+ingest',
         intervalFactor=1,
       ),
       common.target(
-        common.expr.sumRate('tiflash_storage_throughput_bytes', common.selector, labels='type!~"write|ingest"', range='1m'),
+        common.expr.sumRate('tiflash_storage_throughput_bytes', common.selector, labels='type!~"write|ingest"'),
         'ManageDelta',
         intervalFactor=1,
       ),
@@ -2868,12 +2831,12 @@ local rowStorageWriteStall = (
     'Write Throughput By Instance',
     [
       common.target(
-        common.expr.sumRate('tiflash_storage_throughput_bytes', common.selector, labels='type=~"write"', by=['instance'], range='1m'),
+        common.expr.sumRate('tiflash_storage_throughput_bytes', common.selector, labels='type=~"write"', by=['instance']),
         'write-{{instance}}',
         intervalFactor=1,
       ),
       common.target(
-        common.expr.sumRate('tiflash_storage_throughput_bytes', common.selector, labels='type=~"ingest"', by=['instance'], range='1m'),
+        common.expr.sumRate('tiflash_storage_throughput_bytes', common.selector, labels='type=~"ingest"', by=['instance']),
         'ingest-{{instance}}',
       ),
     ],
@@ -2895,12 +2858,12 @@ local rowStorageWriteStall = (
     'Write Command OPS By Instance',
     [
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_DMWriteBlock', common.selector, by=['instance', 'type'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_DMWriteBlock', common.selector, by=['instance', 'type']),
         'write block-{{instance}}',
         intervalFactor=1,
       ),
       prometheus.target(
-        'sum(increase(tiflash_storage_command_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance, type)',
+        'sum(increase(tiflash_storage_command_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance, type)',
         legendFormat='{{type}}-{{instance}}',
         intervalFactor=1,
       ),
@@ -3069,14 +3032,14 @@ local rowRaft = (
   )
   .addTarget(
     prometheus.target(
-      'sum(delta(tiflash_raft_raft_log_gap_count_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"applied_index"}[1m])) by (le, type)',
+      'sum(delta(tiflash_raft_raft_log_gap_count_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"applied_index"}[$__rate_interval])) by (le, type)',
       format='heatmap',
       legendFormat='{{le}}',
     )
   )
   .addTarget(
     prometheus.target(
-      'sum(delta(tiflash_raft_raft_log_gap_count_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"compact_index"}[1m])) by (le, type)',
+      'sum(delta(tiflash_raft_raft_log_gap_count_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"compact_index"}[$__rate_interval])) by (le, type)',
       format='heatmap',
       legendFormat='{{le}}',
     )
@@ -3102,14 +3065,14 @@ local rowRaft = (
   )
   .addTarget(
     prometheus.target(
-      'sum(delta(tiflash_raft_region_flush_bytes_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"unflushed"}[1m])) by (le, type)',
+      'sum(delta(tiflash_raft_region_flush_bytes_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"unflushed"}[$__rate_interval])) by (le, type)',
       format='heatmap',
       legendFormat='{{le}}',
     )
   )
   .addTarget(
     prometheus.target(
-      'sum(delta(tiflash_raft_region_flush_bytes_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"flushed"}[1m])) by (le, type)',
+      'sum(delta(tiflash_raft_region_flush_bytes_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"flushed"}[$__rate_interval])) by (le, type)',
       format='heatmap',
       legendFormat='{{le}}',
       hide=true,
@@ -3150,7 +3113,7 @@ local rowRaft = (
     'Keys flow',
     [
       common.target(
-        common.expr.sumRate('tiflash_raft_process_keys', common.selector, by=['type'], range='1m'),
+        common.expr.sumRate('tiflash_raft_process_keys', common.selector, by=['type']),
         '{{type}}',
       ),
     ],
@@ -3159,7 +3122,6 @@ local rowRaft = (
     nullPointMode='null',
     legendSort='current',
     yLeft='short',
-    yRight='short',
     yRightMin='0',
   );
 
@@ -3167,7 +3129,7 @@ local rowRaft = (
     'Raft throughput',
     [
       common.target(
-        common.expr.sumRate('tiflash_raft_throughput_bytes', common.selector, by=['type'], range='1m'),
+        common.expr.sumRate('tiflash_raft_throughput_bytes', common.selector, by=['type']),
         '{{type}}',
       ),
     ],
@@ -3175,7 +3137,6 @@ local rowRaft = (
     nullPointMode='null',
     legendSort='current',
     yLeft='short',
-    yRight='short',
     yRightMin='0',
   );
 
@@ -3201,7 +3162,7 @@ local rowRaft = (
   )
   .addTarget(
     common.target(
-      common.expr.sumRate('tiflash_proxy_tikv_server_raft_append_rejects', 'k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$tiflash_role"', by=['instance'], range='1m'),
+      common.expr.sumRate('tiflash_proxy_tikv_server_raft_append_rejects', 'k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$tiflash_role"', by=['instance']),
       '{{instance}}',
       intervalFactor=1,
     )
@@ -3278,7 +3239,6 @@ local rowRaftSnapshotIngestsst = (
     legendSort=null,
     legendSortDesc=null,
     yLeft='none',
-    yRight='short',
   );
 
   local panelSnapshotUncommittedSizeHeatmap = common.heatmap(
@@ -3386,7 +3346,7 @@ local rowRoughSetFilterRateHistogram = (
     'Rough Set Filter Rate',
     [
       prometheus.target(
-        'avg((rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]) - rate(tiflash_system_profile_event_DMFileFilterAftRoughSet{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) / (rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))) by (instance)',
+        'avg((rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]) - rate(tiflash_system_profile_event_DMFileFilterAftRoughSet{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) / (rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (instance)',
         legendFormat='1min-{{instance}}',
         intervalFactor=1,
       ),
@@ -3397,19 +3357,19 @@ local rowRoughSetFilterRateHistogram = (
         hide=true,
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_DMFileFilterNoFilter', common.selector, by=['instance'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_DMFileFilterNoFilter', common.selector, by=['instance']),
         'No Filter-{{instance}}',
         hide=true,
         intervalFactor=1,
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_DMFileFilterAftPKAndPackSet', common.selector, by=['instance'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_DMFileFilterAftPKAndPackSet', common.selector, by=['instance']),
         'PK Filter-{{instance}}',
         hide=true,
         intervalFactor=1,
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_DMFileFilterAftRoughSet', common.selector, by=['instance'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_DMFileFilterAftRoughSet', common.selector, by=['instance']),
         'RS Filter-{{instance}}',
         hide=true,
         intervalFactor=1,
@@ -3458,11 +3418,11 @@ local rowDisaggregatedWrite = (
     'Checkpoint Upload flow',
     [
       common.target(
-        common.expr.sumRate('tiflash_storage_checkpoint_flow', common.selector, labels='type="incremental"', by=['$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_storage_checkpoint_flow', common.selector, labels='type="incremental"', by=['$additional_groupby']),
         'incremental {{$additional_groupby}}',
       ),
       common.target(
-        common.expr.sumRate('tiflash_storage_checkpoint_flow', common.selector, labels='type="compaction"', by=['$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_storage_checkpoint_flow', common.selector, labels='type="compaction"', by=['$additional_groupby']),
         'compaction {{$additional_groupby}}',
         intervalFactor=1,
       ),
@@ -3473,7 +3433,6 @@ local rowDisaggregatedWrite = (
     legendHideZero=true,
     legendSort='current',
     yLeft='binBps',
-    yRight='short',
     yRightMin='0',
   );
 
@@ -3484,14 +3443,13 @@ local rowDisaggregatedWrite = (
     legend='{{type}} {{$additional_groupby}}',
     description='The keys of checkpoint operations. All keys are uploaded in the checkpoint. Grouped by key types.',
     fill=1,
-    yRight='short',
   );
 
   local panelCheckpointUploadFlowByTypeIncrementalCompaction = common.graph(
     'Checkpoint Upload flow by type (incremental+compaction)',
     [
       common.target(
-        common.expr.sumRate('tiflash_storage_checkpoint_flow_by_types', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_storage_checkpoint_flow_by_types', common.selector, by=['type', '$additional_groupby']),
         '{{type}} {{$additional_groupby}}',
       ),
     ],
@@ -3501,7 +3459,6 @@ local rowDisaggregatedWrite = (
     legendHideZero=true,
     legendSort='current',
     yLeft='binBps',
-    yRight='short',
     yRightMin='0',
   );
 
@@ -3588,7 +3545,6 @@ local rowDisaggregatedWrite = (
     legendHideZero=true,
     legendSort='current',
     yLeft='bytes',
-    yRight='short',
   );
 
   local panelRemoteGcDurationBreakdown = common.durationPanel(
@@ -3617,7 +3573,6 @@ local rowDisaggregatedWrite = (
     legendHideZero=true,
     legendSort='current',
     yLeft='short',
-    yRight='short',
   );
 
   local panelLocalLockManagerStatus = common.graph(
@@ -3634,7 +3589,6 @@ local rowDisaggregatedWrite = (
     legendHideZero=true,
     legendSort='current',
     yLeft='short',
-    yRight='short',
   );
 
   local panelLocalLockManagerQps = common.opsPanel(
@@ -3649,7 +3603,7 @@ local rowDisaggregatedWrite = (
     'FAP result',
     [
       common.target(
-        common.expr.sumRate('tiflash_fap_task_result', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_fap_task_result', common.selector, by=['type', '$additional_groupby']),
         '{{type}} {{$additional_groupby}}',
         intervalFactor=1,
       ),
@@ -3671,7 +3625,7 @@ local rowDisaggregatedWrite = (
     'FAP state',
     [
       common.target(
-        common.expr.sumRate('tiflash_fap_task_state', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_fap_task_state', common.selector, by=['type', '$additional_groupby']),
         '{{type}} {{$additional_groupby}}',
         intervalFactor=1,
       ),
@@ -3703,7 +3657,7 @@ local rowDisaggregatedWrite = (
     'FAP no match reason',
     [
       common.target(
-        common.expr.sumRate('tiflash_fap_nomatch_reason', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_fap_nomatch_reason', common.selector, by=['type', '$additional_groupby']),
         '{{type}} {{$additional_groupby}}',
         intervalFactor=1,
       ),
@@ -3771,7 +3725,7 @@ local rowDisaggregatedCompute = (
     'Remote Cache Flow',
     [
       common.target(
-        common.expr.sumRate('tiflash_storage_remote_cache_bytes', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_storage_remote_cache_bytes', common.selector, by=['type', '$additional_groupby']),
         '{{type}} {{$additional_groupby}}',
         intervalFactor=1,
       ),
@@ -3802,7 +3756,7 @@ local rowDisaggregatedCompute = (
     'Remote Cache Wait on Downloading OPS',
     [
       common.target(
-        common.expr.sumRate('tiflash_storage_remote_cache_wait_on_downloading_result', common.selector, by=['result', 'file_type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_storage_remote_cache_wait_on_downloading_result', common.selector, by=['result', 'file_type', '$additional_groupby']),
         '{{result}}-{{file_type}} {{$additional_groupby}}',
       ),
     ],
@@ -3821,7 +3775,7 @@ local rowDisaggregatedCompute = (
     'Remote Cache Wait on Downloading Flow',
     [
       common.target(
-        common.expr.sumRate('tiflash_storage_remote_cache_wait_on_downloading_bytes', common.selector, by=['result', 'file_type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_storage_remote_cache_wait_on_downloading_bytes', common.selector, by=['result', 'file_type', '$additional_groupby']),
         '{{result}}-{{file_type}} {{$additional_groupby}}',
         intervalFactor=1,
       ),
@@ -3846,14 +3800,13 @@ local rowDisaggregatedCompute = (
     yLeft='short',
     yLeftMin=null,
     yLeftDecimals=0,
-    yRight='short',
   );
 
   local panelRemoteCacheRejectDownloadTypeOps = common.graph(
     'Remote Cache Reject Download Type OPS',
     [
       common.target(
-        common.expr.sumRate('tiflash_storage_remote_cache_reject', common.selector, by=['reason', 'file_type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_storage_remote_cache_reject', common.selector, by=['reason', 'file_type', '$additional_groupby']),
         '{{reason}}-{{file_type}} {{$additional_groupby}}',
       ),
     ],
@@ -3981,19 +3934,19 @@ local rowDisaggregatedCompute = (
     'PlaceIndex update rows/deletes',
     [
       prometheus.target(
-        'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_place_index_stats_count_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))) by (le, $additional_groupby) / 1000000000)',
+        'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_place_index_stats_count_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, $additional_groupby) / 1000000000)',
         legendFormat='max {{$additional_groupby}}',
         intervalFactor=1,
         hide=true,
       ),
       prometheus.target(
-        'histogram_quantile(0.99, sum(rate(tiflash_storage_place_index_stats_count_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type, $additional_groupby))',
+        'histogram_quantile(0.99, sum(rate(tiflash_storage_place_index_stats_count_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
         legendFormat='99-{{type}} {{$additional_groupby}}',
         intervalFactor=1,
         hide=true,
       ),
       prometheus.target(
-        'sum by (type, $additional_groupby) (rate(tiflash_storage_place_index_stats_count_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) / sum by (type, $additional_groupby) (rate(tiflash_storage_place_index_stats_count_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))',
+        'sum by (type, $additional_groupby) (rate(tiflash_storage_place_index_stats_count_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) / sum by (type, $additional_groupby) (rate(tiflash_storage_place_index_stats_count_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))',
         legendFormat='avg-{{type}} {{$additional_groupby}}',
         intervalFactor=1,
       ),
@@ -4027,16 +3980,16 @@ local rowS3 = (
     'S3 Bytes',
     [
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3WriteBytes', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3WriteBytes', common.selector, by=['type', '$additional_groupby']),
         'S3WriteBytes {{$additional_groupby}}',
         intervalFactor=1,
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3ReadBytes', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3ReadBytes', common.selector, by=['type', '$additional_groupby']),
         'S3ReadBytes {{$additional_groupby}}',
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3WriteDMFileBytes', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3WriteDMFileBytes', common.selector, by=['type', '$additional_groupby']),
         'S3WriteDMFileBytes {{$additional_groupby}}',
       ),
     ],
@@ -4051,53 +4004,53 @@ local rowS3 = (
     'S3 OPS',
     [
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3PutObject', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3PutObject', common.selector, by=['type', '$additional_groupby']),
         'S3PutObject {{$additional_groupby}}',
         intervalFactor=1,
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3GetObject', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3GetObject', common.selector, by=['type', '$additional_groupby']),
         'S3GetObject {{$additional_groupby}}',
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3HeadObject', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3HeadObject', common.selector, by=['type', '$additional_groupby']),
         'S3HeadObject {{$additional_groupby}}',
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3ListObjects', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3ListObjects', common.selector, by=['type', '$additional_groupby']),
         'S3ListObjects {{$additional_groupby}}',
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3DeleteObject', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3DeleteObject', common.selector, by=['type', '$additional_groupby']),
         'S3DeleteObject {{$additional_groupby}}',
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3CopyObject', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3CopyObject', common.selector, by=['type', '$additional_groupby']),
         'S3CopyObject {{$additional_groupby}}',
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3CreateMultipartUpload', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3CreateMultipartUpload', common.selector, by=['type', '$additional_groupby']),
         'S3CreateMultipartUpload {{$additional_groupby}}',
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3UploadPart', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3UploadPart', common.selector, by=['type', '$additional_groupby']),
         'S3UploadPart {{$additional_groupby}}',
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3CompleteMultipartUpload', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3CompleteMultipartUpload', common.selector, by=['type', '$additional_groupby']),
         'S3CompleteMultipartUpload {{$additional_groupby}}',
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3PutDMFile', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3PutDMFile', common.selector, by=['type', '$additional_groupby']),
         'S3PutDMFile {{$additional_groupby}}',
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3IORead', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3IORead', common.selector, by=['type', '$additional_groupby']),
         'S3IORead {{$additional_groupby}}',
         hide=true,
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3IOSeek', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3IOSeek', common.selector, by=['type', '$additional_groupby']),
         'S3IOSeek {{$additional_groupby}}',
         hide=true,
       ),
@@ -4113,30 +4066,30 @@ local rowS3 = (
     'S3 Retry OPS',
     [
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3GetObjectRetry', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3GetObjectRetry', common.selector, by=['type', '$additional_groupby']),
         'S3GetObjectRetry {{$additional_groupby}}',
         intervalFactor=1,
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3PutObjectRetry', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3PutObjectRetry', common.selector, by=['type', '$additional_groupby']),
         'S3PutObjectRetry {{$additional_groupby}}',
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3PutDMFileRetry', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3PutDMFileRetry', common.selector, by=['type', '$additional_groupby']),
         'S3PutDMFileRetry {{$additional_groupby}}',
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3IOReadError', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3IOReadError', common.selector, by=['type', '$additional_groupby']),
         'S3IOReadError {{$additional_groupby}}',
         intervalFactor=1,
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3IOSeekError', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3IOSeekError', common.selector, by=['type', '$additional_groupby']),
         'S3IOSeekError {{$additional_groupby}}',
         intervalFactor=1,
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3IOSeekBackward', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3IOSeekBackward', common.selector, by=['type', '$additional_groupby']),
         'S3IOSeekBackward {{$additional_groupby}}',
         intervalFactor=1,
       ),
@@ -4160,43 +4113,43 @@ local rowS3 = (
     'S3 HTTP OPS',
     [
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3ReadRequestsCount', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3ReadRequestsCount', common.selector, by=['type', '$additional_groupby']),
         'read-count {{$additional_groupby}}',
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3WriteRequestsCount', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3WriteRequestsCount', common.selector, by=['type', '$additional_groupby']),
         'write-count {{$additional_groupby}}',
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3ReadRequestsErrors', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3ReadRequestsErrors', common.selector, by=['type', '$additional_groupby']),
         'read-error {{$additional_groupby}}',
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3WriteRequestsErrors', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3WriteRequestsErrors', common.selector, by=['type', '$additional_groupby']),
         'write-error {{$additional_groupby}}',
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3ReadRequestsThrottling', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3ReadRequestsThrottling', common.selector, by=['type', '$additional_groupby']),
         'read-throttling {{$additional_groupby}}',
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3WriteRequestsThrottling', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3WriteRequestsThrottling', common.selector, by=['type', '$additional_groupby']),
         'write-throttling {{$additional_groupby}}',
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3ReadRequestsRedirects', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3ReadRequestsRedirects', common.selector, by=['type', '$additional_groupby']),
         'read-redirects {{$additional_groupby}}',
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3WriteRequestsRedirects', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3WriteRequestsRedirects', common.selector, by=['type', '$additional_groupby']),
         'write-redirects {{$additional_groupby}}',
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3ReadRequestsNotFound', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3ReadRequestsNotFound', common.selector, by=['type', '$additional_groupby']),
         'read-notfound {{$additional_groupby}}',
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3WriteRequestsNotFound', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3WriteRequestsNotFound', common.selector, by=['type', '$additional_groupby']),
         'write-notfound {{$additional_groupby}}',
       ),
     ],
@@ -4238,27 +4191,27 @@ local rowS3 = (
     'S3RandomAccessFile OPS',
     [
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3IOReadError', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3IOReadError', common.selector, by=['type', '$additional_groupby']),
         'S3IOReadError {{$additional_groupby}}',
         intervalFactor=1,
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3IOSeekError', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3IOSeekError', common.selector, by=['type', '$additional_groupby']),
         'S3IOSeekError {{$additional_groupby}}',
         intervalFactor=1,
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3IOSeekBackward', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3IOSeekBackward', common.selector, by=['type', '$additional_groupby']),
         'S3IOSeekBackward {{$additional_groupby}}',
         intervalFactor=1,
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3IORead', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3IORead', common.selector, by=['type', '$additional_groupby']),
         'S3IORead {{$additional_groupby}}',
         intervalFactor=1,
       ),
       common.target(
-        common.expr.sumRate('tiflash_system_profile_event_S3IOSeek', common.selector, by=['type', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_system_profile_event_S3IOSeek', common.selector, by=['type', '$additional_groupby']),
         'S3IOSeek {{$additional_groupby}}',
         intervalFactor=1,
       ),
@@ -4297,7 +4250,6 @@ local rowPipelineModel = (
     legendSort=null,
     legendSortDesc=null,
     yLeft='none',
-    yRight='short',
   );
 
   local panelTaskCount = common.graph(
@@ -4317,7 +4269,6 @@ local rowPipelineModel = (
     legendSort=null,
     legendSortDesc=null,
     yLeft='none',
-    yRight='short',
   );
 
   local panelTaskStatusChangeOps = common.opsPanel(
@@ -4325,7 +4276,6 @@ local rowPipelineModel = (
     'tiflash_pipeline_task_change_to_status',
     by=['type'],
     yLeft='none',
-    yRight='short',
   );
 
   local panelTaskDuration = common.durationPanel(
@@ -4366,33 +4316,32 @@ local rowPipelineModel = (
     'Task Max Execute Time Per Round',
     [
       prometheus.target(
-        'histogram_quantile(0.95, sum(rate(tiflash_pipeline_task_execute_max_time_seconds_per_round_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
+        'histogram_quantile(0.95, sum(rate(tiflash_pipeline_task_execute_max_time_seconds_per_round_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type))',
         legendFormat='95-{{type}}',
       ),
       prometheus.target(
-        'histogram_quantile(0.95, sum(rate(tiflash_pipeline_task_execute_max_time_seconds_per_round_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
+        'histogram_quantile(0.95, sum(rate(tiflash_pipeline_task_execute_max_time_seconds_per_round_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type))',
         legendFormat='99-{{type}}',
       ),
       prometheus.target(
-        'histogram_quantile(0.99, sum(rate(tiflash_pipeline_task_execute_max_time_seconds_per_round_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
+        'histogram_quantile(0.99, sum(rate(tiflash_pipeline_task_execute_max_time_seconds_per_round_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type))',
         legendFormat='999-{{type}}',
       ),
       prometheus.target(
-        'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_pipeline_task_execute_max_time_seconds_per_round_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))) by (le, type) / 1000000000)',
+        'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_pipeline_task_execute_max_time_seconds_per_round_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, type) / 1000000000)',
         legendFormat='100-{{type}}',
       ),
       prometheus.target(
-        'sum(rate(tiflash_pipeline_task_execute_max_time_seconds_per_round_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="cpu"}[1m])) / sum(rate(tiflash_pipeline_task_execute_max_time_seconds_per_round_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="cpu"}[1m]))',
+        'sum(rate(tiflash_pipeline_task_execute_max_time_seconds_per_round_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="cpu"}[$__rate_interval])) / sum(rate(tiflash_pipeline_task_execute_max_time_seconds_per_round_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="cpu"}[$__rate_interval]))',
         legendFormat='avg-cpu',
       ),
       prometheus.target(
-        'sum(rate(tiflash_pipeline_task_execute_max_time_seconds_per_round_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="io"}[1m])) / sum(rate(tiflash_pipeline_task_execute_max_time_seconds_per_round_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="io"}[1m]))',
+        'sum(rate(tiflash_pipeline_task_execute_max_time_seconds_per_round_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="io"}[$__rate_interval])) / sum(rate(tiflash_pipeline_task_execute_max_time_seconds_per_round_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="io"}[$__rate_interval]))',
         legendFormat='avg-io',
       ),
     ],
     legendSort='current',
     yLeft='s',
-    yRight='short',
   );
 
   local panelThreadsCpuOfCpuTaskThreadPool = common.cpuWithLimitPanel(
@@ -4431,7 +4380,6 @@ local rowPipelineModel = (
     legendSort=null,
     legendSortDesc=null,
     yLeft='none',
-    yRight='short',
   );
 
   common.buildRow(
@@ -4463,7 +4411,7 @@ local rowTiflashResourceControl = (
         hide=true,
       ),
       common.target(
-        common.expr.sumRate('tiflash_resource_group_counter', 'k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="total_consumption", instance=~"$instance", instance=~"$tiflash_role"', by=['instance', 'resource_group'], range='1m'),
+        common.expr.sumRate('tiflash_resource_group_counter', 'k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="total_consumption", instance=~"$instance", instance=~"$tiflash_role"', by=['instance', 'resource_group']),
         'total_consumption-{{instance}}-{{resource_group}}',
         hide=true,
       ),
@@ -4478,22 +4426,22 @@ local rowTiflashResourceControl = (
         hide=true,
       ),
       common.target(
-        common.expr.sumRate('tiflash_resource_group_counter', 'k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="request_gac_count", instance=~"$instance", instance=~"$tiflash_role"', by=['instance', 'resource_group'], range='1m'),
+        common.expr.sumRate('tiflash_resource_group_counter', 'k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="request_gac_count", instance=~"$instance", instance=~"$tiflash_role"', by=['instance', 'resource_group']),
         'request_gac_count-{{instance}}-{{resource_group}}',
         hide=true,
       ),
       common.target(
-        common.expr.sumRate('tiflash_resource_group_counter', 'k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="gac_req_ru_consumption_delta", instance=~"$instance", instance=~"$tiflash_role"', by=['instance', 'resource_group'], range='1m'),
+        common.expr.sumRate('tiflash_resource_group_counter', 'k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="gac_req_ru_consumption_delta", instance=~"$instance", instance=~"$tiflash_role"', by=['instance', 'resource_group']),
         'gac_req_ru_consumption_delta-{{instance}}-{{resource_group}}',
         hide=true,
       ),
       common.target(
-        common.expr.sumRate('tiflash_resource_group_counter', 'k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="compute_ru_consumption", instance=~"$instance", instance=~"$tiflash_role"', by=['instance', 'resource_group'], range='1m'),
+        common.expr.sumRate('tiflash_resource_group_counter', 'k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="compute_ru_consumption", instance=~"$instance", instance=~"$tiflash_role"', by=['instance', 'resource_group']),
         'compute_ru_consumption-{{instance}}-{{resource_group}}',
         hide=true,
       ),
       common.target(
-        common.expr.sumRate('tiflash_resource_group_counter', 'k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="storage_ru_consumption", instance=~"$instance", instance=~"$tiflash_role"', by=['instance', 'resource_group'], range='1m'),
+        common.expr.sumRate('tiflash_resource_group_counter', 'k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="storage_ru_consumption", instance=~"$instance", instance=~"$tiflash_role"', by=['instance', 'resource_group']),
         'storage_ru_consumption-{{instance}}-{{resource_group}}',
         hide=true,
       ),
@@ -4507,14 +4455,13 @@ local rowTiflashResourceControl = (
     legendSortDesc=null,
     yLeft='short',
     yLeftMin=null,
-    yRight='short',
   );
 
   local panelRequestUnit = common.graph(
     'Request Unit',
     [
       common.target(
-        common.expr.sumRate('tiflash_storage_sync_replica_ru', 'instance=~"$tiflash_role"', by=['keyspace_id', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_storage_sync_replica_ru', 'instance=~"$tiflash_role"', by=['keyspace_id', '$additional_groupby']),
         'replica-sync-rate-{{keyspace_id}}',
       ),
       prometheus.target(
@@ -4522,7 +4469,7 @@ local rowTiflashResourceControl = (
         legendFormat='replica-sync-sum-24h-{{keyspace_id}} {{$additional_groupby}}',
       ),
       common.target(
-        common.expr.sumRate('tiflash_compute_request_unit', 'instance=~"$tiflash_role"', by=['cluster_id', '$additional_groupby'], range='1m'),
+        common.expr.sumRate('tiflash_compute_request_unit', 'instance=~"$tiflash_role"', by=['cluster_id', '$additional_groupby']),
         'query-rate-{{cluster_id}} {{$additional_groupby}}',
       ),
       prometheus.target(
@@ -4530,7 +4477,7 @@ local rowTiflashResourceControl = (
         legendFormat='query-sum-24h-{{cluster_id}} {{$additional_groupby}}',
       ),
       prometheus.target(
-        'sum(rate(tiflash_storage_ru_read_bytes{instance=~"$tiflash_role"}[1m])) by (keyspace, resource_group, type, $additional_groupby) / (64 * 1024)',
+        'sum(rate(tiflash_storage_ru_read_bytes{instance=~"$tiflash_role"}[$__rate_interval])) by (keyspace, resource_group, type, $additional_groupby) / (64 * 1024)',
         legendFormat='storage-{{keyspace}}_{{resource_group}}_{{type}} {{$additional_groupby}}',
       ),
     ],
@@ -4543,8 +4490,8 @@ local rowTiflashResourceControl = (
       { alias: '/sum/', yaxis: 2 },
     ],
     yLeft='cps',
-    yRight='short',
     yRightMin='0',
+    yRight='short',
     yRightShow=true,
   );
 
@@ -4582,7 +4529,6 @@ local rowStatusServer = (
     legendSort=null,
     legendSortDesc=null,
     yLeft='ops',
-    yRight='short',
   );
 
   common.buildRow(
