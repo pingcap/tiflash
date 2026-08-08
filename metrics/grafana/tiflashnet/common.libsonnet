@@ -125,7 +125,7 @@ local mkGraph(
   yRightMin=null,
   yRightMax=null,
   yRightDecimals=null,
-  yRightShow=true,
+  yRightShow=false,
   seriesOverrides=[],
 ) =
   local base = graphPanel.new(
@@ -234,7 +234,7 @@ local mkGraph(
     yRightMin=null,
     yRightMax=null,
     yRightDecimals=null,
-    yRightShow=true,
+    yRightShow=false,
     seriesOverrides=[],
   )::
     mkGraph(
@@ -343,6 +343,7 @@ local mkGraph(
 
   // Full graph panel for duration histograms.
   // metric may end with `_bucket`. Optional: unit, quantiles, showAvg, extraTargets, seriesOverrides.
+  // Right axis is shown only when seriesOverrides put series on yaxis 2.
   durationPanel(
     title,
     metric,
@@ -390,6 +391,7 @@ local mkGraph(
       yLeft=unit,
       yRight=yRight,
       yLeftMin='0',
+      yRightShow=std.length(seriesOverrides) > 0,
       seriesOverrides=seriesOverrides,
     ),
 
@@ -427,6 +429,8 @@ local mkGraph(
       nullPointMode='null as zero',
       yLeft=yLeft,
       yRight=yRight,
+      // Single-series OPS panels do not use the right axis.
+      yRightShow=false,
     ),
 
   // L3b: histogram heatmap (tsbuckets + spectral).
@@ -498,7 +502,6 @@ local mkGraph(
       nullPointMode='null',
       yLeft='percentunit',
       yRight='short',
-      yRightShow=false,
       seriesOverrides=if hideLimit then [] else [limitOverride],
     ),
 
@@ -561,6 +564,7 @@ local mkGraph(
       nullPointMode='null as zero',
       yLeft=yLeft,
       yRight='percentunit',
+      yRightShow=true,
       seriesOverrides=overrides,
     ),
 }

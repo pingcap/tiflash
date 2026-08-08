@@ -84,6 +84,7 @@ Prefer `common.expr.*` instead of hand-written selector strings:
 
 ```jsonnet
 common.expr.sumRate('tiflash_stale_read_count', common.selector, by=['instance'])
+common.expr.sumIrate('tiflash_proxy_threads_io_bytes_total', common.proxySelector, by=['instance'])
 common.expr.histogramQuantile('0.99', 'tiflash_storage_s3_request_seconds', common.selector, by=['type'])
 common.expr.histogramAvg('tiflash_storage_s3_request_seconds', common.selector, by=['type'])
 ```
@@ -95,8 +96,9 @@ Extra matchers go in `labels=`, e.g. `labels='type="decode"'`. Default range is 
 
 Prefer `common.graph` / `common.target` / `common.override` instead of repeating
 `graphPanel.new` + legend/`resetYaxes`/`addYaxis` boilerplate. `common.graph` sets
-table legend + dual Y axes; pass only what differs (`fill`, `yLeft`/`yRight`,
-`legendHideZero`, `decimals`, `stack`, …):
+table legend + dual Y axes; right axis defaults to **hidden** (`yRightShow=false`).
+Pass `yRightShow=true` and a real `yRight` unit only when series use `yaxis=2`
+(or use helpers like `opsHitRatioPanel` / `durationPanel` with `seriesOverrides`):
 
 ```jsonnet
 common.graph(
@@ -105,7 +107,6 @@ common.graph(
     common.target(common.expr.sumRate('metric', common.selector, by=['instance']), '{{instance}}'),
   ],
   yLeft='ops',
-  yRight='none',
   fill=0,
 )
 ```

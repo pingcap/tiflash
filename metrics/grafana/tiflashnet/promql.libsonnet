@@ -38,6 +38,10 @@ local metricSel(metric, selector) =
   sumRate(metric, selector, by=[], labels='', range='$__rate_interval')::
     'sum(rate(' + metricSel(metric, joinSelector(selector, labels)) + '[' + range + ']))' + byClause(by),
 
+  // sum(irate(metric{sel}[range])) by (...)
+  sumIrate(metric, selector, by=[], labels='', range='$__rate_interval')::
+    'sum(irate(' + metricSel(metric, joinSelector(selector, labels)) + '[' + range + ']))' + byClause(by),
+
   // sum(delta(metric{sel}[range])) by (...)
   sumDelta(metric, selector, by=[], labels='', range='$__rate_interval')::
     'sum(delta(' + metricSel(metric, joinSelector(selector, labels)) + '[' + range + ']))' + byClause(by),

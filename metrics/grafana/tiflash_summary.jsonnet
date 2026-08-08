@@ -40,14 +40,13 @@ local rowServer = (
     description='The storage size per TiFlash instance.\n(Not including some disk usage of TiFlash-Proxy by now)',
     fill=5,
     linewidth=0,
-    decimals=1,
+    decimals=3,
     stack=true,
     legendMax=false,
     legendHideZero=true,
     legendHideEmpty=true,
     legendSort='current',
     yLeft='bytes',
-    yRight='short',
   );
 
   local panelAvailableSize = common.graph(
@@ -61,12 +60,11 @@ local rowServer = (
     description='The available capacity size per TiFlash instance',
     fill=5,
     linewidth=0,
-    decimals=1,
+    decimals=3,
     stack=true,
     legendMax=false,
     legendSort='current',
     yLeft='bytes',
-    yRight='short',
   );
 
   local panelCapacitySize = common.graph(
@@ -80,12 +78,11 @@ local rowServer = (
     description='The capacity size per TiFlash instance',
     fill=5,
     linewidth=0,
-    decimals=1,
+    decimals=3,
     stack=true,
     legendMax=false,
     legendSort='current',
     yLeft='bytes',
-    yRight='short',
   );
 
   local panelUptime = common.graph(
@@ -100,12 +97,8 @@ local rowServer = (
     fill=0,
     legendMax=false,
     legendSort='current',
-    seriesOverrides=[
-      { alias: 'total', fill: 0, lines: false },
-    ],
     yLeft='dtdurations',
     yLeftMin=null,
-    yRight='short',
   );
 
   local panelRegion = common.graph(
@@ -123,14 +116,13 @@ local rowServer = (
     ],
     description='The number of Regions on each TiFlash instance',
     fill=0,
-    decimals=1,
+    decimals=0,
     nullPointMode='null',
     legendHideZero=true,
     legendSort='current',
     yLeft='short',
     yLeftMin=null,
     yRight='short',
-    yRightShow=false,
   );
 
   local panelCpuUsage = common.graph(
@@ -155,15 +147,19 @@ local rowServer = (
     yLeft='percentunit',
     yLeftDecimals=1,
     yRight='short',
-    yRightShow=false,
   );
 
   local panelMemory = common.graph(
     'Memory',
     [
-      prometheus.target(
-        'tiflash_proxy_process_resident_memory_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", job=~".*tiflash", instance=~"$proxy_instance", instance=~"$tiflash_role"}',
-        legendFormat='{{instance}}',
+      common.target(
+        common.expr.sum(
+          'tiflash_proxy_process_resident_memory_bytes',
+          common.proxySelector,
+          labels='job=~".*tiflash"',
+          by=['instance'],
+        ),
+        '{{instance}}',
         intervalFactor=1,
       ),
       common.target(
@@ -239,15 +235,19 @@ local rowServer = (
     ],
     yLeft='bytes',
     yRight='short',
-    yRightShow=false,
   );
 
   local panelIoThroughput = common.graph(
     'IO Throughput',
     [
-      prometheus.target(
-        'sum by (instance) (irate(tiflash_proxy_threads_io_bytes_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", job=~".*tiflash", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m]))',
-        legendFormat='{{instance}}',
+      common.target(
+        common.expr.sumIrate(
+          'tiflash_proxy_threads_io_bytes_total',
+          common.proxySelector,
+          labels='job=~".*tiflash"',
+          by=['instance'],
+        ),
+        '{{instance}}',
         intervalFactor=1,
       ),
     ],
@@ -256,7 +256,6 @@ local rowServer = (
     yLeft='bytes',
     yLeftDecimals=0,
     yRight='short',
-    yRightShow=false,
   );
 
   local panelRemoteStoreSummaryDisaggArch = common.graph(
@@ -590,6 +589,7 @@ local rowCoprocessor = (
   )
   .addYaxis(
     format='short',
+    show=false,
   );
 
   local panelExchangeBytesSeconds = common.graph(
@@ -812,6 +812,7 @@ local rowTaskScheduler = (
   )
   .addYaxis(
     format='short',
+    show=false,
   );
 
   local panelEstimatedThreadUsageAndLimit = graphPanel.new(
@@ -864,6 +865,7 @@ local rowTaskScheduler = (
   )
   .addYaxis(
     format='short',
+    show=false,
   );
 
   local panelActiveAndWaitingQueriesCount = graphPanel.new(
@@ -901,6 +903,7 @@ local rowTaskScheduler = (
   )
   .addYaxis(
     format='short',
+    show=false,
   );
 
   local panelActiveAndWaitingTasksCount = graphPanel.new(
@@ -938,6 +941,7 @@ local rowTaskScheduler = (
   )
   .addYaxis(
     format='short',
+    show=false,
   );
 
   local panelHardLimitExceededCount = common.graph(
@@ -1024,6 +1028,7 @@ local rowDdl = (
   )
   .addYaxis(
     format='none',
+    show=false,
   );
 
   local panelSchemaApplyOpm = graphPanel.new(
@@ -1047,6 +1052,7 @@ local rowDdl = (
   )
   .addYaxis(
     format='none',
+    show=false,
   );
 
   local panelSchemaApplyDuration = common.durationPanel(
@@ -1105,7 +1111,6 @@ local rowImbalanceReadWrite = (
     yLeft='percentunit',
     yLeftDecimals=1,
     yRight='short',
-    yRightShow=false,
   );
 
   local panelSegmentReader = common.cpuWithLimitPanel(
@@ -1174,6 +1179,7 @@ local rowImbalanceReadWrite = (
     yLeft='ops',
     yRight='opm',
     yRightMin='0',
+    yRightShow=true,
   );
 
   local panelWriteThroughputByInstance = common.graph(
@@ -1199,7 +1205,7 @@ local rowImbalanceReadWrite = (
     ],
     yLeft='binBps',
     yRight='bytes',
-    yRightShow=false,
+    yRightShow=true,
   );
 
   common.buildRow(
@@ -1232,7 +1238,6 @@ local rowMemoryTrace = (
     yLeft='short',
     yLeftMin=null,
     yRight='s',
-    yRightShow=false,
   );
 
   local panelNumberOfPhysicalTables = common.graph(
@@ -1257,7 +1262,6 @@ local rowMemoryTrace = (
     yLeft='short',
     yLeftMin=null,
     yRight='s',
-    yRightShow=false,
   );
 
   local panelNumberOfSegments = common.graph(
@@ -1281,7 +1285,6 @@ local rowMemoryTrace = (
     yLeft='short',
     yLeftMin=null,
     yRight='s',
-    yRightShow=false,
   );
 
   local panelBytesOfMemtables = common.graph(
@@ -1305,7 +1308,6 @@ local rowMemoryTrace = (
     yLeft='bytes',
     yLeftMin=null,
     yRight='s',
-    yRightShow=false,
   );
 
   local panelMarkCacheAndMinmaxIndexCacheMemoryUsage = common.graph(
@@ -1333,7 +1335,6 @@ local rowMemoryTrace = (
     ],
     yLeft='bytes',
     yRight='short',
-    yRightShow=false,
   );
 
   local panelEffectivenessOfMarkCache = graphPanel.new(
@@ -1420,6 +1421,7 @@ local rowMemoryTrace = (
     yLeft='short',
     yRight='s',
     yRightMin='0',
+    yRightShow=true,
   );
 
   local panelMemoryByThread = graphPanel.new(
@@ -1461,6 +1463,7 @@ local rowMemoryTrace = (
   )
   .addYaxis(
     format='short',
+    show=false,
   );
 
   local panelMemoryByThreadProxy = graphPanel.new(
@@ -1504,6 +1507,7 @@ local rowMemoryTrace = (
   )
   .addYaxis(
     format='short',
+    show=false,
   );
 
   local panelMemoryByClass = graphPanel.new(
@@ -1532,6 +1536,7 @@ local rowMemoryTrace = (
   )
   .addYaxis(
     format='short',
+    show=false,
   );
 
   local panelKvstoreMemory = graphPanel.new(
@@ -1553,6 +1558,7 @@ local rowMemoryTrace = (
   )
   .addYaxis(
     format='short',
+    show=false,
   );
 
   common.buildRow(
@@ -1608,7 +1614,6 @@ local rowColumnarStorage = (
     ],
     yLeft='bytes',
     yRight='short',
-    yRightShow=false,
   );
 
   local panelIaSegmentsMemoryWait = common.durationPanel(
@@ -1733,6 +1738,7 @@ local rowColumnarStorage = (
     ],
     yLeft='bytes',
     yRight='short',
+    yRightShow=true,
   );
 
   common.buildRow(
@@ -1831,6 +1837,7 @@ local rowStorage = (
     yLeft='short',
     yLeftMax='20',
     yRight='binBps',
+    yRightShow=true,
   );
 
   local panelSubtasksWriteThroughputBytes = common.graph(
@@ -1852,7 +1859,7 @@ local rowStorage = (
     ],
     yLeft='binBps',
     yRight='bytes',
-    yRightShow=false,
+    yRightShow=true,
   );
 
   local panelSubtasksWriteThroughputRows = common.graph(
@@ -1874,7 +1881,7 @@ local rowStorage = (
     ],
     yLeft='none',
     yRight='bytes',
-    yRightShow=false,
+    yRightShow=true,
   );
 
   local panelSmallInternalTasksOps = common.opsPanel(
@@ -1972,7 +1979,6 @@ local rowStorage = (
     sideWidth=250,
     yLeft='none',
     yRight='short',
-    yRightShow=false,
   );
 
   local panelFileOpenOps = common.graph(
@@ -1997,7 +2003,6 @@ local rowStorage = (
     sideWidth=250,
     yLeft='ops',
     yRight='short',
-    yRightShow=false,
   );
 
   local panelFsyncStatus = common.graph(
@@ -2021,6 +2026,7 @@ local rowStorage = (
     ],
     yLeft='ops',
     yRight='s',
+    yRightShow=true,
   );
 
   local panelDiskWriteOps = common.graph(
@@ -2182,6 +2188,7 @@ local rowStorage = (
   )
   .addYaxis(
     format='short',
+    show=false,
   );
 
   common.buildRow(
@@ -2291,6 +2298,7 @@ local rowStorageReadPoolDataSharing = (
     yLeft='short',
     yRight='s',
     yRightMin='0',
+    yRightShow=true,
   );
 
   local panelReadThreadInternalDuration = common.durationPanel(
@@ -2371,6 +2379,7 @@ local rowStorageReadPoolDataSharing = (
     yLeft='ops',
     yRight='percentunit',
     yRightMin='0',
+    yRightShow=true,
   );
 
   local panelSegmentMergedtaskDuration = common.durationPanel(
@@ -2405,7 +2414,6 @@ local rowStorageReadPoolDataSharing = (
     yLeft='cps',
     yRight='opm',
     yRightMin='0',
-    yRightShow=false,
   );
 
   common.buildRow(
@@ -2457,6 +2465,7 @@ local rowPagestorage = (
     yRight='percentunit',
     yRightMin='0',
     yRightMax='1.1',
+    yRightShow=true,
   );
 
   local panelPagestorageFileNum = common.graph(
@@ -2520,6 +2529,7 @@ local rowPagestorage = (
   )
   .addYaxis(
     format='short',
+    show=false,
   );
 
   local panelPageGcDuration = common.durationPanel(
@@ -2565,7 +2575,6 @@ local rowPagestorage = (
     sideWidth=250,
     yLeft='none',
     yRight='short',
-    yRightShow=false,
   );
 
   local panelPagestorageStoredBytesByType = common.graph(
@@ -2637,6 +2646,7 @@ local rowPagestorage = (
     yLeft='ops',
     yRight='opm',
     yRightMin='0',
+    yRightShow=true,
   );
 
   local panelPsApplyEditsOpsByInstance = common.graph(
@@ -2658,6 +2668,7 @@ local rowPagestorage = (
     yLeft='ops',
     yRight='opm',
     yRightMin='0',
+    yRightShow=true,
   );
 
   common.buildRow(
@@ -2752,6 +2763,7 @@ local rowRateLimiter = (
     yLeftMin=null,
     yLeftDecimals=0,
     yRight='s',
+    yRightShow=true,
   );
 
   local panelIOLimiterPendingOps = common.graph(
@@ -2771,6 +2783,7 @@ local rowRateLimiter = (
     yLeft='ops',
     yLeftDecimals=0,
     yRight='s',
+    yRightShow=true,
   );
 
   local panelIOLimiterPendingDuration = common.durationPanel(
@@ -2800,8 +2813,10 @@ local rowStorageWriteStall = (
     by=['type', 'instance'],
     legend='%s-{{type}}-{{instance}}',
     description='The stall duration of write and delete range',
-  )
-  .addSeriesOverride({ alias: '99-delta_merge', yaxis: 2 });
+    seriesOverrides=[
+      common.override('99-delta_merge', yaxis=2),
+    ],
+  );
 
   local panelWriteDeltaManagementThroughput = common.graph(
     'Write & Delta Management Throughput',
@@ -2824,7 +2839,6 @@ local rowStorageWriteStall = (
     sideWidth=250,
     yLeft='binBps',
     yRight='bytes',
-    yRightShow=false,
   );
 
   local panelWriteDeltaManagementTotal = common.graph(
@@ -2848,7 +2862,6 @@ local rowStorageWriteStall = (
     sideWidth=250,
     yLeft='bytes',
     yRight='bytes',
-    yRightShow=false,
   );
 
   local panelWriteThroughputByInstance = common.graph(
@@ -2875,7 +2888,7 @@ local rowStorageWriteStall = (
     ],
     yLeft='binBps',
     yRight='bytes',
-    yRightShow=false,
+    yRightShow=true,
   );
 
   local panelWriteCommandOpsByInstance = common.graph(
@@ -2903,6 +2916,7 @@ local rowStorageWriteStall = (
     yLeft='ops',
     yRight='opm',
     yRightMin='0',
+    yRightShow=true,
   );
 
   common.buildRow(
@@ -3199,6 +3213,7 @@ local rowRaft = (
   )
   .addYaxis(
     format='none',
+    show=false,
   );
 
   common.buildRow(
@@ -3293,6 +3308,7 @@ local rowRaftSnapshotIngestsst = (
   )
   .addYaxis(
     format='short',
+    show=false,
   );
 
   local panelSnapshotSizeHeatmap = common.heatmap(
@@ -3410,6 +3426,7 @@ local rowRoughSetFilterRateHistogram = (
     ],
     yLeft='percentunit',
     yRight='short',
+    yRightShow=true,
   );
 
   local panelRoughSetFilterRateHistogram = common.heatmap(
@@ -3539,6 +3556,7 @@ local rowDisaggregatedWrite = (
     yRight='percentunit',
     yRightMin='0',
     yRightMax='1.1',
+    yRightShow=true,
   );
 
   local panelRemoteObjectLockRequestQps = common.opsPanel(
@@ -3578,10 +3596,12 @@ local rowDisaggregatedWrite = (
     'tiflash_storage_s3_gc_seconds_bucket',
     by=['type'],
     legend='%s-{{type}} {{$additional_groupby}}',
-  )
-  .addSeriesOverride({ alias: '/total/', yaxis: 2 })
-  .addSeriesOverride({ alias: '/one_store/', yaxis: 2 })
-  .addSeriesOverride({ alias: '/clean_locks/', yaxis: 2 });
+    seriesOverrides=[
+      common.override('/total/', yaxis=2),
+      common.override('/one_store/', yaxis=2),
+      common.override('/clean_locks/', yaxis=2),
+    ],
+  );
 
   local panelRemoteGcStatus = common.graph(
     'Remote GC Status',
@@ -3644,6 +3664,7 @@ local rowDisaggregatedWrite = (
     yLeft='ops',
     yRight='percentunit',
     yRightMin='0',
+    yRightShow=true,
   );
 
   local panelFapState = common.graph(
@@ -3665,6 +3686,7 @@ local rowDisaggregatedWrite = (
     yLeft='ops',
     yRight='percentunit',
     yRightMin='0',
+    yRightShow=true,
   );
 
   local panelFapTimeByStage = common.durationPanel(
@@ -3672,8 +3694,10 @@ local rowDisaggregatedWrite = (
     'tiflash_fap_task_duration_seconds_bucket',
     by=['type'],
     legend='{{type}}-%s {{$additional_groupby}}',
-  )
-  .addSeriesOverride({ alias: '/hit_ratio/', yaxis: 2 });
+    seriesOverrides=[
+      common.override('/hit_ratio/', yaxis=2),
+    ],
+  );
 
   local panelFapNoMatchReason = common.graph(
     'FAP no match reason',
@@ -3694,6 +3718,7 @@ local rowDisaggregatedWrite = (
     yLeft='ops',
     yRight='percentunit',
     yRightMin='0',
+    yRightShow=true,
   );
 
   common.buildRow(
@@ -3757,7 +3782,6 @@ local rowDisaggregatedCompute = (
     yLeft='binBps',
     yRight='percentunit',
     yRightMin='0',
-    yRightShow=false,
   );
 
   local panelRemoteCacheBgDownloadDuration = common.durationPanel(
@@ -3790,6 +3814,7 @@ local rowDisaggregatedCompute = (
     yLeft='ops',
     yLeftDecimals=0,
     yRight='s',
+    yRightShow=true,
   );
 
   local panelRemoteCacheWaitOnDownloadingFlow = common.graph(
@@ -3806,7 +3831,6 @@ local rowDisaggregatedCompute = (
     yLeft='binBps',
     yRight='percentunit',
     yRightMin='0',
-    yRightShow=false,
   );
 
   local panelRemoteCacheGauge = common.graph(
@@ -3841,6 +3865,7 @@ local rowDisaggregatedCompute = (
     yLeft='ops',
     yLeftDecimals=0,
     yRight='s',
+    yRightShow=true,
   );
 
   local panelRemoteCacheUsage = common.graph(
@@ -3871,7 +3896,6 @@ local rowDisaggregatedCompute = (
     yLeft='bytes',
     yRight='percentunit',
     yRightMin='0',
-    yRightShow=false,
   );
 
   local panelMemoryUsageOfStorageTasks = common.graph(
@@ -3903,7 +3927,6 @@ local rowDisaggregatedCompute = (
     yLeft='bytes',
     yRight='percentunit',
     yRightMin='0',
-    yRightShow=false,
   );
 
   local panelMvccIndexCache = common.opsHitRatioPanel(
@@ -3952,7 +3975,6 @@ local rowDisaggregatedCompute = (
     yLeftDecimals=1,
     yRight='opm',
     yRightMin='0',
-    yRightShow=false,
   );
 
   local panelPlaceindexUpdateRowsDeletes = common.graph(
@@ -4523,6 +4545,7 @@ local rowTiflashResourceControl = (
     yLeft='cps',
     yRight='short',
     yRightMin='0',
+    yRightShow=true,
   );
 
   common.buildRow(
@@ -4592,7 +4615,6 @@ local rowVectorSearch = (
     yLeftDecimals=0,
     yRight='ops',
     yRightMin='0',
-    yRightShow=false,
   );
 
   local panelVectorIndexEstimatedMemoryUsage = common.graph(
@@ -4617,7 +4639,6 @@ local rowVectorSearch = (
     yLeftDecimals=0,
     yRight='ops',
     yRightMin='0',
-    yRightShow=false,
   );
 
   local panelP999VectorSearchDurationPerRequest = common.graph(
@@ -4640,6 +4661,7 @@ local rowVectorSearch = (
     yRight='s',
     yRightMin='0',
     yRightDecimals=1,
+    yRightShow=true,
   );
 
   local panelP999VectorIndexBuildDurationPerDmfileColumn = common.graph(
@@ -4659,7 +4681,6 @@ local rowVectorSearch = (
     yRight='s',
     yRightMin='0',
     yRightDecimals=1,
-    yRightShow=false,
   );
 
   common.buildRow(
