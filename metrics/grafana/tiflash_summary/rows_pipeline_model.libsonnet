@@ -205,118 +205,22 @@ local task_Max_Execute_Time_Per_RoundP = graphPanel.new(
   format='short',
 );
 
-local threads_CPU_of_CPU_Task_Thread_PoolP = graphPanel.new(
-  title='Threads CPU of CPU Task Thread Pool',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-  legend_sideWidth=250,
-)
-.addTarget(
-  prometheus.target(
-    'sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"cpu_pool", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m]))',
-    legendFormat='{{name}} {{instance}}',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"cpu_pool", instance=~"$proxy_instance", instance=~"$tiflash_role"})',
-    legendFormat='Limit',
-  )
-)
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
-.resetYaxes()
-.addYaxis(
-  format='percentunit',
-  min='0',
-  decimals=1,
-)
-.addYaxis(
-  format='short',
-  show=false,
+local threads_CPU_of_CPU_Task_Thread_PoolP = common.cpuWithLimitPanel(
+  'Threads CPU of CPU Task Thread Pool',
+  'cpu_pool',
+  legend='{{name}} {{instance}}',
 );
 
-local threads_CPU_of_IO_Task_Thread_PoolP = graphPanel.new(
-  title='Threads CPU of IO Task Thread Pool',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-  legend_sideWidth=250,
-)
-.addTarget(
-  prometheus.target(
-    'sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"io_pool", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m]))',
-    legendFormat='{{name}} {{instance}}',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"io_pool", instance=~"$proxy_instance", instance=~"$tiflash_role"})',
-    legendFormat='Limit',
-  )
-)
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
-.resetYaxes()
-.addYaxis(
-  format='percentunit',
-  min='0',
-  decimals=1,
-)
-.addYaxis(
-  format='short',
-  show=false,
+local threads_CPU_of_IO_Task_Thread_PoolP = common.cpuWithLimitPanel(
+  'Threads CPU of IO Task Thread Pool',
+  'io_pool',
+  legend='{{name}} {{instance}}',
 );
 
-local threads_CPU_of_Wait_ReactorP = graphPanel.new(
-  title='Threads CPU of Wait Reactor',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-  legend_sideWidth=250,
-)
-.addTarget(
-  prometheus.target(
-    'sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"WaitReactor", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m]))',
-    legendFormat='{{name}} {{instance}}',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"WaitReactor", instance=~"$proxy_instance", instance=~"$tiflash_role"})',
-    legendFormat='Limit',
-  )
-)
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
-.resetYaxes()
-.addYaxis(
-  format='percentunit',
-  min='0',
-  decimals=1,
-)
-.addYaxis(
-  format='short',
-  show=false,
+local threads_CPU_of_Wait_ReactorP = common.cpuWithLimitPanel(
+  'Threads CPU of Wait Reactor',
+  'WaitReactor',
+  legend='{{name}} {{instance}}',
 );
 
 local wait_notify_task_detailsP = graphPanel.new(

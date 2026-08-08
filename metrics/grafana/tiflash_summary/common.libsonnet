@@ -110,6 +110,7 @@ local mkGraph(
   yLeft='short',
   yRight='short',
   yLeftMin='0',
+  yRightShow=true,
   seriesOverrides=[],
 ) =
   local base =
@@ -152,7 +153,7 @@ local mkGraph(
   local withAxes = withTargets
     .resetYaxes()
     .addYaxis(format=yLeft, min=yLeftMin)
-    .addYaxis(format=yRight);
+    .addYaxis(format=yRight, show=yRightShow);
   std.foldl(
     function(p, o) p.addSeriesOverride(o),
     seriesOverrides,
@@ -214,6 +215,7 @@ local mkGraph(
     yLeft='short',
     yRight='short',
     yLeftMin='0',
+    yRightShow=true,
     seriesOverrides=[],
   )::
     mkGraph(
@@ -231,6 +233,7 @@ local mkGraph(
       yLeft=yLeft,
       yRight=yRight,
       yLeftMin=yLeftMin,
+      yRightShow=yRightShow,
       seriesOverrides=seriesOverrides,
     ),
 
@@ -403,5 +406,41 @@ local mkGraph(
         format='heatmap',
         legendFormat='{{le}}',
       )
+    ),
+
+  // L3c: thread CPU usage + Limit red line (count of matching series).
+  // nameRegex is matched against the `name` label of tiflash_proxy_thread_cpu_seconds_total.
+  cpuWithLimitPanel(
+    title,
+    nameRegex,
+    description=null,
+    legend='{{instance}}',
+    metric='tiflash_proxy_thread_cpu_seconds_total',
+    range='$__rate_interval',
+  )::
+    local sel = 'k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"' + nameRegex + '", instance=~"$tiflash_role"';
+    self.graph(
+      title,
+      [
+        self.target(promql.sumRate(metric, sel, by=['instance'], range=range), legend),
+        self.target(promql.count(metric, sel, by=['instance']), 'Limit'),
+      ],
+      description=description,
+      fill=0,
+      nullPointMode='null',
+      sideWidth=250,
+      yLeft='percentunit',
+      yRight='short',
+      yRightShow=false,
+      seriesOverrides=[
+        self.override(
+          'Limit',
+          color='#F2495C',
+          hideTooltip=true,
+          legend=false,
+          linewidth=2,
+          nullPointMode='connected',
+        ),
+      ],
     ),
 }

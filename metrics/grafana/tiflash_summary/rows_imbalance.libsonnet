@@ -49,42 +49,10 @@ local cPU_Usage_irateP = graphPanel.new(
   show=false,
 );
 
-local segment_ReaderP = graphPanel.new(
-  title='Segment Reader',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-  legend_sideWidth=250,
-)
-.addTarget(
-  prometheus.target(
-    'sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"SegmentReader.*", instance=~"$tiflash_role"}[1m]))',
-    legendFormat='{{name}} {{instance}}',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"SegmentReader.*", instance=~"$tiflash_role"})',
-    legendFormat='Limit',
-  )
-)
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
-.resetYaxes()
-.addYaxis(
-  format='percentunit',
-  min='0',
-  decimals=1,
-)
-.addYaxis(
-  format='short',
-  show=false,
+local segment_ReaderP = common.cpuWithLimitPanel(
+  'Segment Reader',
+  'SegmentReader.*',
+  legend='{{name}} {{instance}}',
 );
 
 local request_QPS_by_instanceP = common.opsPanel(

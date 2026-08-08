@@ -110,6 +110,13 @@ common.heatmap(
 )
 ```
 
+For Threads CPU panels with a Limit red line, prefer `common.cpuWithLimitPanel`:
+
+```jsonnet
+common.cpuWithLimitPanel('SST Apply', 'apply_low_.*', description='Involved when importing data.')
+common.cpuWithLimitPanel('Region Task', 'region_task.*', legend='{{name}} {{instance}}')
+```
+
 ## Duration histogram helpers
 
 For `*_seconds_bucket` latency panels (default show p9999/p99; hide max/p999/p80/avg), prefer:

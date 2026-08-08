@@ -41,585 +41,96 @@ local sST_Import_ServiceP = graphPanel.new(
   show=false,
 );
 
-local sST_ApplyP = graphPanel.new(
-  title='SST Apply',
-  datasource=common.datasource,
+local sST_ApplyP = common.cpuWithLimitPanel(
+  'SST Apply',
+  'apply_low_.*',
   description='Involved when importing data.',
-  fill=0,
-  nullPointMode='null',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-  legend_sideWidth=250,
-)
-.addTarget(
-  prometheus.target(
-    'sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"apply_low_.*", instance=~"$tiflash_role"}[1m]))',
-    legendFormat='{{instance}}',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"apply_low_.*", instance=~"$tiflash_role"})',
-    legendFormat='Limit',
-  )
-)
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
-.resetYaxes()
-.addYaxis(
-  format='percentunit',
-  min='0',
-  decimals=1,
-)
-.addYaxis(
-  format='short',
-  show=false,
 );
 
-local region_TaskP = graphPanel.new(
-  title='Region Task',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-  legend_sideWidth=250,
-)
-.addTarget(
-  prometheus.target(
-    'sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"region_task.*", instance=~"$tiflash_role"}[1m]))',
-    legendFormat='{{name}} {{instance}}',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"region_task.*", instance=~"$tiflash_role"})',
-    legendFormat='Limit',
-  )
-)
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
-.resetYaxes()
-.addYaxis(
-  format='percentunit',
-  min='0',
-  decimals=1,
-)
-.addYaxis(
-  format='short',
-  show=false,
+local region_TaskP = common.cpuWithLimitPanel(
+  'Region Task',
+  'region_task.*',
+  legend='{{name}} {{instance}}',
 );
 
-local region_WorkerP = graphPanel.new(
-  title='Region Worker',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-  legend_sideWidth=250,
-)
-.addTarget(
-  prometheus.target(
-    'sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"region_worker.*", instance=~"$tiflash_role"}[1m]))',
-    legendFormat='{{name}} {{instance}}',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"region_worker.*", instance=~"$tiflash_role"})',
-    legendFormat='Limit',
-  )
-)
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
-.resetYaxes()
-.addYaxis(
-  format='percentunit',
-  min='0',
-  decimals=1,
-)
-.addYaxis(
-  format='short',
-  show=false,
+local region_WorkerP = common.cpuWithLimitPanel(
+  'Region Worker',
+  'region_worker.*',
+  legend='{{name}} {{instance}}',
 );
 
-local raft_StoreP = graphPanel.new(
-  title='Raft Store',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-  legend_sideWidth=250,
-)
-.addTarget(
-  prometheus.target(
-    'sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"raftstore_.*", instance=~"$tiflash_role"}[1m]))',
-    legendFormat='{{name}} {{instance}}',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"raftstore_.*", instance=~"$tiflash_role"})',
-    legendFormat='Limit',
-  )
-)
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
-.resetYaxes()
-.addYaxis(
-  format='percentunit',
-  min='0',
-  decimals=1,
-)
-.addYaxis(
-  format='short',
-  show=false,
+local raft_StoreP = common.cpuWithLimitPanel(
+  'Raft Store',
+  'raftstore_.*',
+  legend='{{name}} {{instance}}',
 );
 
-local apply_WorkerP = graphPanel.new(
-  title='Apply Worker',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-  legend_sideWidth=250,
-)
-.addTarget(
-  prometheus.target(
-    'sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"apply_.*", name!~"apply_low_.*", instance=~"$tiflash_role"}[1m]))',
-    legendFormat='{{name}} {{instance}}',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"apply_.*", name!~"apply_low_.*", instance=~"$tiflash_role"})',
-    legendFormat='Limit',
-  )
-)
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
-.resetYaxes()
-.addYaxis(
-  format='percentunit',
-  min='0',
-  decimals=1,
-)
-.addYaxis(
-  format='short',
-  show=false,
+local apply_WorkerP = common.cpuWithLimitPanel(
+  'Apply Worker',
+  'apply_.*',
+  legend='{{name}} {{instance}}',
 );
 
-local storage_Background_Small_TasksP = graphPanel.new(
-  title='Storage Background (Small Tasks)',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-  legend_sideWidth=250,
-)
-.addTarget(
-  prometheus.target(
-    'sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"bg_\\\\d+", instance=~"$tiflash_role"}[1m]))',
-    legendFormat='{{name}} {{instance}}',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"bg_\\\\d+", instance=~"$tiflash_role"})',
-    legendFormat='Limit',
-  )
-)
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
-.resetYaxes()
-.addYaxis(
-  format='percentunit',
-  min='0',
-  decimals=1,
-)
-.addYaxis(
-  format='short',
-  show=false,
+local storage_Background_Small_TasksP = common.cpuWithLimitPanel(
+  'Storage Background (Small Tasks)',
+  'bg_\\d+',
+  legend='{{name}} {{instance}}',
 );
 
-local storage_Background_Large_TasksP = graphPanel.new(
-  title='Storage Background (Large Tasks)',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-  legend_sideWidth=250,
-)
-.addTarget(
-  prometheus.target(
-    'sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"bg_block_\\\\d+", instance=~"$tiflash_role"}[1m]))',
-    legendFormat='{{name}} {{instance}}',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"bg_block_\\\\d+", instance=~"$tiflash_role"})',
-    legendFormat='Limit',
-  )
-)
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
-.resetYaxes()
-.addYaxis(
-  format='percentunit',
-  min='0',
-  decimals=1,
-)
-.addYaxis(
-  format='short',
-  show=false,
+local storage_Background_Large_TasksP = common.cpuWithLimitPanel(
+  'Storage Background (Large Tasks)',
+  'bg_block_\\d+',
+  legend='{{name}} {{instance}}',
 );
 
-local manual_CompactionP = graphPanel.new(
-  title='Manual Compaction',
-  datasource=common.datasource,
+local manual_CompactionP = common.cpuWithLimitPanel(
+  'Manual Compaction',
+  'm_compact_pool',
   description='Involved when manually compacting the data.',
-  fill=0,
-  nullPointMode='null',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-  legend_sideWidth=250,
-)
-.addTarget(
-  prometheus.target(
-    'sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"m_compact_pool", instance=~"$tiflash_role"}[1m]))',
-    legendFormat='{{name}} {{instance}}',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"m_compact_pool", instance=~"$tiflash_role"})',
-    legendFormat='Limit',
-  )
-)
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
-.resetYaxes()
-.addYaxis(
-  format='percentunit',
-  min='0',
-  decimals=1,
-)
-.addYaxis(
-  format='short',
-  show=false,
+  legend='{{name}} {{instance}}',
 );
 
-local gRPC_Async_ServerP = graphPanel.new(
-  title='GRPC Async Server',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-  legend_sideWidth=250,
-)
-.addTarget(
-  prometheus.target(
-    'sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"async_poller.*", instance=~"$tiflash_role"}[1m]))',
-    legendFormat='{{name}} {{instance}}',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"async_poller.*", instance=~"$tiflash_role"}) < sum(tiflash_system_current_metric_LogicalCPUCores{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance) or sum(tiflash_system_current_metric_LogicalCPUCores{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-    legendFormat='Limit',
-  )
-)
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
-.resetYaxes()
-.addYaxis(
-  format='percentunit',
-  min='0',
-  decimals=1,
-)
-.addYaxis(
-  format='short',
-  show=false,
+local gRPC_Async_ServerP = common.cpuWithLimitPanel(
+  'GRPC Async Server',
+  'async_poller.*',
+  legend='{{name}} {{instance}}',
 );
 
-local gRPC_Async_ClientP = graphPanel.new(
-  title='GRPC Async Client',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-  legend_sideWidth=250,
-)
-.addTarget(
-  prometheus.target(
-    'sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"GRPCComp.*", instance=~"$tiflash_role"}[1m]))',
-    legendFormat='{{name}} {{instance}}',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"GRPCComp.*", instance=~"$tiflash_role"}) < sum(tiflash_system_current_metric_LogicalCPUCores{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance) or sum(tiflash_system_current_metric_LogicalCPUCores{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-    legendFormat='Limit',
-  )
-)
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
-.resetYaxes()
-.addYaxis(
-  format='percentunit',
-  min='0',
-  decimals=1,
-)
-.addYaxis(
-  format='short',
-  show=false,
+local gRPC_Async_ClientP = common.cpuWithLimitPanel(
+  'GRPC Async Client',
+  'GRPCComp.*',
+  legend='{{name}} {{instance}}',
 );
 
-local fAP_builderP = graphPanel.new(
-  title='FAP builder',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-  legend_sideWidth=250,
-)
-.addTarget(
-  prometheus.target(
-    'sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"fap_builder.*", instance=~"$tiflash_role"}[1m]))',
-    legendFormat='{{name}} {{instance}}',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"GRPCComp.*", instance=~"$tiflash_role"}) < sum(tiflash_system_current_metric_LogicalCPUCores{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance) or sum(tiflash_system_current_metric_LogicalCPUCores{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
-    legendFormat='Limit',
-  )
-)
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
-.resetYaxes()
-.addYaxis(
-  format='percentunit',
-  min='0',
-  decimals=1,
-)
-.addYaxis(
-  format='short',
-  show=false,
+local fAP_builderP = common.cpuWithLimitPanel(
+  'FAP builder',
+  'fap_builder.*',
+  legend='{{name}} {{instance}}',
 );
 
-local snapshot_SenderP = graphPanel.new(
-  title='Snapshot Sender',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-  legend_sideWidth=250,
-)
-.addTarget(
-  prometheus.target(
-    'sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"snap_sender.*", instance=~"$tiflash_role"}[1m]))',
-    legendFormat='{{name}} {{instance}}',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"snap_sender.*", instance=~"$tiflash_role"})',
-    legendFormat='Limit',
-  )
-)
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
-.resetYaxes()
-.addYaxis(
-  format='percentunit',
-  min='0',
-  decimals=1,
-)
-.addYaxis(
-  format='short',
-  show=false,
+local snapshot_SenderP = common.cpuWithLimitPanel(
+  'Snapshot Sender',
+  'snap_sender.*',
+  legend='{{name}} {{instance}}',
 );
 
-local segment_SchedulerP = graphPanel.new(
-  title='Segment Scheduler',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-  legend_sideWidth=250,
-)
-.addTarget(
-  prometheus.target(
-    'sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"segment_sched.*", instance=~"$tiflash_role"}[1m]))',
-    legendFormat='{{name}} {{instance}}',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"segment_sched.*", instance=~"$tiflash_role"})',
-    legendFormat='Limit',
-  )
-)
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
-.resetYaxes()
-.addYaxis(
-  format='percentunit',
-  min='0',
-  decimals=1,
-)
-.addYaxis(
-  format='short',
-  show=false,
+local segment_SchedulerP = common.cpuWithLimitPanel(
+  'Segment Scheduler',
+  'segment_sched.*',
+  legend='{{name}} {{instance}}',
 );
 
-local local_Index_PoolP = graphPanel.new(
-  title='Local Index Pool',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-  legend_sideWidth=250,
-)
-.addTarget(
-  prometheus.target(
-    'sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"LocalIndexPool*", instance=~"$tiflash_role"}[1m]))',
-    legendFormat='pool-{{instance}}',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"LocalIndexPool*", instance=~"$tiflash_role"})',
-    legendFormat='Limit',
-    hide=true,
-  )
-)
-.addTarget(
-  prometheus.target(
-    'sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"LocalIndexSched*", instance=~"$tiflash_role"}[1m]))',
-    legendFormat='sched-{{instance}}',
-  )
-)
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
-.resetYaxes()
-.addYaxis(
-  format='percentunit',
-  min='0',
-  decimals=1,
-)
-.addYaxis(
-  format='short',
-  show=false,
+local local_Index_PoolP = common.cpuWithLimitPanel(
+  'Local Index Pool',
+  'LocalIndexPool*',
+  legend='pool-{{instance}}',
 );
 
-local segment_ReaderP = graphPanel.new(
-  title='Segment Reader',
-  datasource=common.datasource,
-  fill=0,
-  nullPointMode='null',
-  legend_alignAsTable=true,
-  legend_rightSide=true,
-  legend_values=true,
-  legend_current=true,
-  legend_max=true,
-  legend_sort='max',
-  legend_sortDesc=true,
-  legend_sideWidth=250,
-)
-.addTarget(
-  prometheus.target(
-    'sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"SegmentReader.*", instance=~"$tiflash_role", instance=~"$proxy_instance"}[1m]))',
-    legendFormat='{{name}} {{instance}}',
-  )
-)
-.addTarget(
-  prometheus.target(
-    'count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"SegmentReader.*", instance=~"$tiflash_role", instance=~"$proxy_instance"})',
-    legendFormat='Limit',
-  )
-)
-.addSeriesOverride({ alias: 'Limit', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2, nullPointMode: 'connected' })
-.resetYaxes()
-.addYaxis(
-  format='percentunit',
-  min='0',
-  decimals=1,
-)
-.addYaxis(
-  format='short',
-  show=false,
+local segment_ReaderP = common.cpuWithLimitPanel(
+  'Segment Reader',
+  'SegmentReader.*',
+  legend='{{name}} {{instance}}',
 );
-
 
 {
   row: common.buildRow(

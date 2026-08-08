@@ -1126,14 +1126,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"apply_low_.*\", instance=~\"$tiflash_role\"}[1m]))",
+              "expr": "sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"apply_low_.*\", instance=~\"$tiflash_role\"}[$__rate_interval])) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{instance}}",
               "refId": "A"
             },
             {
-              "expr": "count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"apply_low_.*\", instance=~\"$tiflash_role\"})",
+              "expr": "count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"apply_low_.*\", instance=~\"$tiflash_role\"}) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "Limit",
@@ -1159,7 +1159,6 @@
           },
           "yaxes": [
             {
-              "decimals": 1,
               "format": "percentunit",
               "label": null,
               "logBase": 1,
@@ -1230,14 +1229,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"region_task.*\", instance=~\"$tiflash_role\"}[1m]))",
+              "expr": "sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"region_task.*\", instance=~\"$tiflash_role\"}[$__rate_interval])) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{name}} {{instance}}",
               "refId": "A"
             },
             {
-              "expr": "count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"region_task.*\", instance=~\"$tiflash_role\"})",
+              "expr": "count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"region_task.*\", instance=~\"$tiflash_role\"}) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "Limit",
@@ -1263,7 +1262,6 @@
           },
           "yaxes": [
             {
-              "decimals": 1,
               "format": "percentunit",
               "label": null,
               "logBase": 1,
@@ -1334,14 +1332,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"region_worker.*\", instance=~\"$tiflash_role\"}[1m]))",
+              "expr": "sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"region_worker.*\", instance=~\"$tiflash_role\"}[$__rate_interval])) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{name}} {{instance}}",
               "refId": "A"
             },
             {
-              "expr": "count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"region_worker.*\", instance=~\"$tiflash_role\"})",
+              "expr": "count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"region_worker.*\", instance=~\"$tiflash_role\"}) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "Limit",
@@ -1367,7 +1365,6 @@
           },
           "yaxes": [
             {
-              "decimals": 1,
               "format": "percentunit",
               "label": null,
               "logBase": 1,
@@ -1438,14 +1435,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"raftstore_.*\", instance=~\"$tiflash_role\"}[1m]))",
+              "expr": "sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"raftstore_.*\", instance=~\"$tiflash_role\"}[$__rate_interval])) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{name}} {{instance}}",
               "refId": "A"
             },
             {
-              "expr": "count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"raftstore_.*\", instance=~\"$tiflash_role\"})",
+              "expr": "count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"raftstore_.*\", instance=~\"$tiflash_role\"}) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "Limit",
@@ -1471,7 +1468,6 @@
           },
           "yaxes": [
             {
-              "decimals": 1,
               "format": "percentunit",
               "label": null,
               "logBase": 1,
@@ -1542,14 +1538,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"apply_.*\", name!~\"apply_low_.*\", instance=~\"$tiflash_role\"}[1m]))",
+              "expr": "sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"apply_.*\", instance=~\"$tiflash_role\"}[$__rate_interval])) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{name}} {{instance}}",
               "refId": "A"
             },
             {
-              "expr": "count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"apply_.*\", name!~\"apply_low_.*\", instance=~\"$tiflash_role\"})",
+              "expr": "count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"apply_.*\", instance=~\"$tiflash_role\"}) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "Limit",
@@ -1575,7 +1571,6 @@
           },
           "yaxes": [
             {
-              "decimals": 1,
               "format": "percentunit",
               "label": null,
               "logBase": 1,
@@ -1646,14 +1641,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"bg_\\\\d+\", instance=~\"$tiflash_role\"}[1m]))",
+              "expr": "sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"bg_\\d+\", instance=~\"$tiflash_role\"}[$__rate_interval])) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{name}} {{instance}}",
               "refId": "A"
             },
             {
-              "expr": "count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"bg_\\\\d+\", instance=~\"$tiflash_role\"})",
+              "expr": "count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"bg_\\d+\", instance=~\"$tiflash_role\"}) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "Limit",
@@ -1679,7 +1674,6 @@
           },
           "yaxes": [
             {
-              "decimals": 1,
               "format": "percentunit",
               "label": null,
               "logBase": 1,
@@ -1750,14 +1744,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"bg_block_\\\\d+\", instance=~\"$tiflash_role\"}[1m]))",
+              "expr": "sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"bg_block_\\d+\", instance=~\"$tiflash_role\"}[$__rate_interval])) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{name}} {{instance}}",
               "refId": "A"
             },
             {
-              "expr": "count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"bg_block_\\\\d+\", instance=~\"$tiflash_role\"})",
+              "expr": "count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"bg_block_\\d+\", instance=~\"$tiflash_role\"}) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "Limit",
@@ -1783,7 +1777,6 @@
           },
           "yaxes": [
             {
-              "decimals": 1,
               "format": "percentunit",
               "label": null,
               "logBase": 1,
@@ -1855,14 +1848,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"m_compact_pool\", instance=~\"$tiflash_role\"}[1m]))",
+              "expr": "sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"m_compact_pool\", instance=~\"$tiflash_role\"}[$__rate_interval])) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{name}} {{instance}}",
               "refId": "A"
             },
             {
-              "expr": "count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"m_compact_pool\", instance=~\"$tiflash_role\"})",
+              "expr": "count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"m_compact_pool\", instance=~\"$tiflash_role\"}) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "Limit",
@@ -1888,7 +1881,6 @@
           },
           "yaxes": [
             {
-              "decimals": 1,
               "format": "percentunit",
               "label": null,
               "logBase": 1,
@@ -1959,14 +1951,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"async_poller.*\", instance=~\"$tiflash_role\"}[1m]))",
+              "expr": "sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"async_poller.*\", instance=~\"$tiflash_role\"}[$__rate_interval])) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{name}} {{instance}}",
               "refId": "A"
             },
             {
-              "expr": "count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"async_poller.*\", instance=~\"$tiflash_role\"}) < sum(tiflash_system_current_metric_LogicalCPUCores{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}) by (instance) or sum(tiflash_system_current_metric_LogicalCPUCores{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}) by (instance)",
+              "expr": "count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"async_poller.*\", instance=~\"$tiflash_role\"}) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "Limit",
@@ -1992,7 +1984,6 @@
           },
           "yaxes": [
             {
-              "decimals": 1,
               "format": "percentunit",
               "label": null,
               "logBase": 1,
@@ -2063,14 +2054,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"GRPCComp.*\", instance=~\"$tiflash_role\"}[1m]))",
+              "expr": "sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"GRPCComp.*\", instance=~\"$tiflash_role\"}[$__rate_interval])) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{name}} {{instance}}",
               "refId": "A"
             },
             {
-              "expr": "count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"GRPCComp.*\", instance=~\"$tiflash_role\"}) < sum(tiflash_system_current_metric_LogicalCPUCores{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}) by (instance) or sum(tiflash_system_current_metric_LogicalCPUCores{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}) by (instance)",
+              "expr": "count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"GRPCComp.*\", instance=~\"$tiflash_role\"}) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "Limit",
@@ -2096,7 +2087,6 @@
           },
           "yaxes": [
             {
-              "decimals": 1,
               "format": "percentunit",
               "label": null,
               "logBase": 1,
@@ -2167,14 +2157,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"fap_builder.*\", instance=~\"$tiflash_role\"}[1m]))",
+              "expr": "sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"fap_builder.*\", instance=~\"$tiflash_role\"}[$__rate_interval])) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{name}} {{instance}}",
               "refId": "A"
             },
             {
-              "expr": "count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"GRPCComp.*\", instance=~\"$tiflash_role\"}) < sum(tiflash_system_current_metric_LogicalCPUCores{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}) by (instance) or sum(tiflash_system_current_metric_LogicalCPUCores{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}) by (instance)",
+              "expr": "count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"fap_builder.*\", instance=~\"$tiflash_role\"}) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "Limit",
@@ -2200,7 +2190,6 @@
           },
           "yaxes": [
             {
-              "decimals": 1,
               "format": "percentunit",
               "label": null,
               "logBase": 1,
@@ -2271,14 +2260,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"snap_sender.*\", instance=~\"$tiflash_role\"}[1m]))",
+              "expr": "sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"snap_sender.*\", instance=~\"$tiflash_role\"}[$__rate_interval])) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{name}} {{instance}}",
               "refId": "A"
             },
             {
-              "expr": "count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"snap_sender.*\", instance=~\"$tiflash_role\"})",
+              "expr": "count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"snap_sender.*\", instance=~\"$tiflash_role\"}) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "Limit",
@@ -2304,7 +2293,6 @@
           },
           "yaxes": [
             {
-              "decimals": 1,
               "format": "percentunit",
               "label": null,
               "logBase": 1,
@@ -2375,14 +2363,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"segment_sched.*\", instance=~\"$tiflash_role\"}[1m]))",
+              "expr": "sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"segment_sched.*\", instance=~\"$tiflash_role\"}[$__rate_interval])) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{name}} {{instance}}",
               "refId": "A"
             },
             {
-              "expr": "count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"segment_sched.*\", instance=~\"$tiflash_role\"})",
+              "expr": "count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"segment_sched.*\", instance=~\"$tiflash_role\"}) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "Limit",
@@ -2408,7 +2396,6 @@
           },
           "yaxes": [
             {
-              "decimals": 1,
               "format": "percentunit",
               "label": null,
               "logBase": 1,
@@ -2479,26 +2466,18 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"LocalIndexPool*\", instance=~\"$tiflash_role\"}[1m]))",
+              "expr": "sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"LocalIndexPool*\", instance=~\"$tiflash_role\"}[$__rate_interval])) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "pool-{{instance}}",
               "refId": "A"
             },
             {
-              "expr": "count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"LocalIndexPool*\", instance=~\"$tiflash_role\"})",
+              "expr": "count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"LocalIndexPool*\", instance=~\"$tiflash_role\"}) by (instance)",
               "format": "time_series",
-              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "Limit",
               "refId": "B"
-            },
-            {
-              "expr": "sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"LocalIndexSched*\", instance=~\"$tiflash_role\"}[1m]))",
-              "format": "time_series",
-              "intervalFactor": 2,
-              "legendFormat": "sched-{{instance}}",
-              "refId": "C"
             }
           ],
           "thresholds": [],
@@ -2520,7 +2499,6 @@
           },
           "yaxes": [
             {
-              "decimals": 1,
               "format": "percentunit",
               "label": null,
               "logBase": 1,
@@ -2591,14 +2569,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"SegmentReader.*\", instance=~\"$tiflash_role\", instance=~\"$proxy_instance\"}[1m]))",
+              "expr": "sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"SegmentReader.*\", instance=~\"$tiflash_role\"}[$__rate_interval])) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{name}} {{instance}}",
               "refId": "A"
             },
             {
-              "expr": "count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"SegmentReader.*\", instance=~\"$tiflash_role\", instance=~\"$proxy_instance\"})",
+              "expr": "count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"SegmentReader.*\", instance=~\"$tiflash_role\"}) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "Limit",
@@ -2624,7 +2602,6 @@
           },
           "yaxes": [
             {
-              "decimals": 1,
               "format": "percentunit",
               "label": null,
               "logBase": 1,
@@ -5827,14 +5804,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"SegmentReader.*\", instance=~\"$tiflash_role\"}[1m]))",
+              "expr": "sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"SegmentReader.*\", instance=~\"$tiflash_role\"}[$__rate_interval])) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{name}} {{instance}}",
               "refId": "A"
             },
             {
-              "expr": "count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"SegmentReader.*\", instance=~\"$tiflash_role\"})",
+              "expr": "count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"SegmentReader.*\", instance=~\"$tiflash_role\"}) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "Limit",
@@ -5860,7 +5837,6 @@
           },
           "yaxes": [
             {
-              "decimals": 1,
               "format": "percentunit",
               "label": null,
               "logBase": 1,
@@ -21828,14 +21804,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"cpu_pool\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[1m]))",
+              "expr": "sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"cpu_pool\", instance=~\"$tiflash_role\"}[$__rate_interval])) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{name}} {{instance}}",
               "refId": "A"
             },
             {
-              "expr": "count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"cpu_pool\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"})",
+              "expr": "count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"cpu_pool\", instance=~\"$tiflash_role\"}) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "Limit",
@@ -21861,7 +21837,6 @@
           },
           "yaxes": [
             {
-              "decimals": 1,
               "format": "percentunit",
               "label": null,
               "logBase": 1,
@@ -21932,14 +21907,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"io_pool\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[1m]))",
+              "expr": "sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"io_pool\", instance=~\"$tiflash_role\"}[$__rate_interval])) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{name}} {{instance}}",
               "refId": "A"
             },
             {
-              "expr": "count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"io_pool\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"})",
+              "expr": "count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"io_pool\", instance=~\"$tiflash_role\"}) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "Limit",
@@ -21965,7 +21940,6 @@
           },
           "yaxes": [
             {
-              "decimals": 1,
               "format": "percentunit",
               "label": null,
               "logBase": 1,
@@ -22036,14 +22010,14 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "sum by (instance) (rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"WaitReactor\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[1m]))",
+              "expr": "sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"WaitReactor\", instance=~\"$tiflash_role\"}[$__rate_interval])) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "{{name}} {{instance}}",
               "refId": "A"
             },
             {
-              "expr": "count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"WaitReactor\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"})",
+              "expr": "count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"WaitReactor\", instance=~\"$tiflash_role\"}) by (instance)",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "Limit",
@@ -22069,7 +22043,6 @@
           },
           "yaxes": [
             {
-              "decimals": 1,
               "format": "percentunit",
               "label": null,
               "logBase": 1,
