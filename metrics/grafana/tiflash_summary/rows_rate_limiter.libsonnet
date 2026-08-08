@@ -79,6 +79,7 @@ local i_O_Limiter_Current_Pending_GaugeP = graphPanel.new(
     'avg(tiflash_system_current_metric_RateLimiterPendingWriteRequest{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
     legendFormat='other-current-{{instance}}',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -156,6 +157,7 @@ local i_O_Limiter_Pending_DurationP = graphPanel.new(
   prometheus.target(
     'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_io_limiter_pending_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))) by (le, type) / 1000000000)',
     legendFormat='{{type}}-pending-max',
+    hide=true,
   )
 )
 .addTarget(
@@ -174,17 +176,17 @@ local i_O_Limiter_Pending_DurationP = graphPanel.new(
 
 {
   row: rowObj
-  .addPanel(i_O_Limiter_ThroughputP, gridPos=common.pos(12, 8))
-  .addPanel(i_O_Limiter_ThresholdP, gridPos=common.pos(12, 8))
-  .addPanel(i_O_Limiter_Current_Pending_GaugeP, gridPos=common.pos(8, 8))
-  .addPanel(i_O_Limiter_Pending_OPSP, gridPos=common.pos(8, 8))
-  .addPanel(i_O_Limiter_Pending_DurationP, gridPos=common.pos(8, 8))
+  .addPanel(i_O_Limiter_ThroughputP, gridPos=common.pos(12, 8, x=0, y=12))
+  .addPanel(i_O_Limiter_ThresholdP, gridPos=common.pos(12, 8, x=12, y=12))
+  .addPanel(i_O_Limiter_Current_Pending_GaugeP, gridPos=common.pos(8, 8, x=0, y=20))
+  .addPanel(i_O_Limiter_Pending_OPSP, gridPos=common.pos(8, 8, x=8, y=20))
+  .addPanel(i_O_Limiter_Pending_DurationP, gridPos=common.pos(8, 8, x=16, y=20))
   ,
   panels: [
-    { panel: i_O_Limiter_ThroughputP, w: 12, h: 8 },
-    { panel: i_O_Limiter_ThresholdP, w: 12, h: 8 },
-    { panel: i_O_Limiter_Current_Pending_GaugeP, w: 8, h: 8 },
-    { panel: i_O_Limiter_Pending_OPSP, w: 8, h: 8 },
-    { panel: i_O_Limiter_Pending_DurationP, w: 8, h: 8 }
+    { panel: i_O_Limiter_ThroughputP, w: 12, h: 8, x: 0, y: 12 },
+    { panel: i_O_Limiter_ThresholdP, w: 12, h: 8, x: 12, y: 12 },
+    { panel: i_O_Limiter_Current_Pending_GaugeP, w: 8, h: 8, x: 0, y: 20 },
+    { panel: i_O_Limiter_Pending_OPSP, w: 8, h: 8, x: 8, y: 20 },
+    { panel: i_O_Limiter_Pending_DurationP, w: 8, h: 8, x: 16, y: 20 }
   ],
 }

@@ -204,19 +204,19 @@ local write_Throughput_By_InstanceP = graphPanel.new(
 
 {
   row: rowObj
-  .addPanel(cPU_Usage_irateP, gridPos=common.pos(12, 8))
-  .addPanel(segment_ReaderP, gridPos=common.pos(12, 8))
-  .addPanel(request_QPS_by_instanceP, gridPos=common.pos(12, 8))
-  .addPanel(read_Throughput_by_instanceP, gridPos=common.pos(12, 8))
-  .addPanel(write_Command_OPS_By_InstanceP, gridPos=common.pos(12, 8))
-  .addPanel(write_Throughput_By_InstanceP, gridPos=common.pos(12, 8))
+  .addPanel(cPU_Usage_irateP, gridPos=common.pos(12, 8, x=0, y=39))
+  .addPanel(segment_ReaderP, gridPos=common.pos(12, 8, x=12, y=39))
+  .addPanel(request_QPS_by_instanceP, gridPos=common.pos(12, 8, x=0, y=47))
+  .addPanel(read_Throughput_by_instanceP, gridPos=common.pos(12, 8, x=12, y=47))
+  .addPanel(write_Command_OPS_By_InstanceP, gridPos=common.pos(12, 8, x=0, y=55))
+  .addPanel(write_Throughput_By_InstanceP, gridPos=common.pos(12, 8, x=12, y=55))
   ,
   panels: [
-    { panel: cPU_Usage_irateP, w: 12, h: 8 },
-    { panel: segment_ReaderP, w: 12, h: 8 },
-    { panel: request_QPS_by_instanceP, w: 12, h: 8 },
-    { panel: read_Throughput_by_instanceP, w: 12, h: 8 },
-    { panel: write_Command_OPS_By_InstanceP, w: 12, h: 8 },
-    { panel: write_Throughput_By_InstanceP, w: 12, h: 8 }
+    { panel: cPU_Usage_irateP, w: 12, h: 8, x: 0, y: 39 },
+    { panel: segment_ReaderP, w: 12, h: 8, x: 12, y: 39 },
+    { panel: request_QPS_by_instanceP, w: 12, h: 8, x: 0, y: 47 },
+    { panel: read_Throughput_by_instanceP, w: 12, h: 8, x: 12, y: 47 },
+    { panel: write_Command_OPS_By_InstanceP, w: 12, h: 8, x: 0, y: 55 },
+    { panel: write_Throughput_By_InstanceP, w: 12, h: 8, x: 12, y: 55 }
   ],
 }

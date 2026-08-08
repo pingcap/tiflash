@@ -127,12 +127,14 @@ local s3_OPSP = graphPanel.new(
   prometheus.target(
     'sum(rate(tiflash_system_profile_event_S3IORead{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
     legendFormat='S3IORead {{$additional_groupby}}',
+    hide=true,
   )
 )
 .addTarget(
   prometheus.target(
     'sum(rate(tiflash_system_profile_event_S3IOSeek{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (type, $additional_groupby)',
     legendFormat='S3IOSeek {{$additional_groupby}}',
+    hide=true,
   )
 );
 
@@ -216,6 +218,7 @@ local s3_Request_DurationP = graphPanel.new(
     'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_s3_request_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))) by (le, type, $additional_groupby) / 1000000000)',
     legendFormat='{{type}}-max {{$additional_groupby}}',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -332,6 +335,7 @@ local s3_HTTP_Request_DurationP = graphPanel.new(
     'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_s3_http_request_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))) by (le, type, $additional_groupby) / 1000000000)',
     legendFormat='{{type}}-max {{$additional_groupby}}',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -432,23 +436,23 @@ local s3RandomAccessFile_OPSP = graphPanel.new(
 
 {
   row: rowObj
-  .addPanel(s3_BytesP, gridPos=common.pos(12, 8))
-  .addPanel(s3_OPSP, gridPos=common.pos(12, 8))
-  .addPanel(s3_Retry_OPSP, gridPos=common.pos(12, 8))
-  .addPanel(s3_Request_DurationP, gridPos=common.pos(12, 8))
-  .addPanel(s3_HTTP_OPSP, gridPos=common.pos(12, 8))
-  .addPanel(s3_HTTP_Request_DurationP, gridPos=common.pos(12, 8))
-  .addPanel(s3_on_going_instancesP, gridPos=common.pos(12, 8))
-  .addPanel(s3RandomAccessFile_OPSP, gridPos=common.pos(12, 8))
+  .addPanel(s3_BytesP, gridPos=common.pos(12, 8, x=0, y=36))
+  .addPanel(s3_OPSP, gridPos=common.pos(12, 8, x=12, y=36))
+  .addPanel(s3_Retry_OPSP, gridPos=common.pos(12, 8, x=0, y=44))
+  .addPanel(s3_Request_DurationP, gridPos=common.pos(12, 8, x=12, y=44))
+  .addPanel(s3_HTTP_OPSP, gridPos=common.pos(12, 8, x=0, y=52))
+  .addPanel(s3_HTTP_Request_DurationP, gridPos=common.pos(12, 8, x=12, y=52))
+  .addPanel(s3_on_going_instancesP, gridPos=common.pos(12, 8, x=0, y=60))
+  .addPanel(s3RandomAccessFile_OPSP, gridPos=common.pos(12, 8, x=12, y=60))
   ,
   panels: [
-    { panel: s3_BytesP, w: 12, h: 8 },
-    { panel: s3_OPSP, w: 12, h: 8 },
-    { panel: s3_Retry_OPSP, w: 12, h: 8 },
-    { panel: s3_Request_DurationP, w: 12, h: 8 },
-    { panel: s3_HTTP_OPSP, w: 12, h: 8 },
-    { panel: s3_HTTP_Request_DurationP, w: 12, h: 8 },
-    { panel: s3_on_going_instancesP, w: 12, h: 8 },
-    { panel: s3RandomAccessFile_OPSP, w: 12, h: 8 }
+    { panel: s3_BytesP, w: 12, h: 8, x: 0, y: 36 },
+    { panel: s3_OPSP, w: 12, h: 8, x: 12, y: 36 },
+    { panel: s3_Retry_OPSP, w: 12, h: 8, x: 0, y: 44 },
+    { panel: s3_Request_DurationP, w: 12, h: 8, x: 12, y: 44 },
+    { panel: s3_HTTP_OPSP, w: 12, h: 8, x: 0, y: 52 },
+    { panel: s3_HTTP_Request_DurationP, w: 12, h: 8, x: 12, y: 52 },
+    { panel: s3_on_going_instancesP, w: 12, h: 8, x: 0, y: 60 },
+    { panel: s3RandomAccessFile_OPSP, w: 12, h: 8, x: 12, y: 60 }
   ],
 }

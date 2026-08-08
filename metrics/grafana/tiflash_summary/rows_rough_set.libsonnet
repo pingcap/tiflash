@@ -33,6 +33,7 @@ local rough_Set_Filter_RateP = graphPanel.new(
     'avg((rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[5m]) - rate(tiflash_system_profile_event_DMFileFilterAftRoughSet{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[5m])) / (rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[5m]))) by (instance)',
     legendFormat='5min-{{instance}}',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -40,6 +41,7 @@ local rough_Set_Filter_RateP = graphPanel.new(
     'sum(rate(tiflash_system_profile_event_DMFileFilterNoFilter{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance)',
     legendFormat='No Filter-{{instance}}',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -47,6 +49,7 @@ local rough_Set_Filter_RateP = graphPanel.new(
     'sum(rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance)',
     legendFormat='PK Filter-{{instance}}',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -54,6 +57,7 @@ local rough_Set_Filter_RateP = graphPanel.new(
     'sum(rate(tiflash_system_profile_event_DMFileFilterAftRoughSet{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance)',
     legendFormat='RS Filter-{{instance}}',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addSeriesOverride({ alias: '/^RS Filter/', yaxis: 2 })
@@ -80,11 +84,11 @@ local rough_Set_Filter_Rate_HistogramP = heatmapPanel.new(
 
 {
   row: rowObj
-  .addPanel(rough_Set_Filter_RateP, gridPos=common.pos(12, 8))
-  .addPanel(rough_Set_Filter_Rate_HistogramP, gridPos=common.pos(12, 8))
+  .addPanel(rough_Set_Filter_RateP, gridPos=common.pos(12, 8, x=0, y=64))
+  .addPanel(rough_Set_Filter_Rate_HistogramP, gridPos=common.pos(12, 8, x=12, y=64))
   ,
   panels: [
-    { panel: rough_Set_Filter_RateP, w: 12, h: 8 },
-    { panel: rough_Set_Filter_Rate_HistogramP, w: 12, h: 8 }
+    { panel: rough_Set_Filter_RateP, w: 12, h: 8, x: 0, y: 64 },
+    { panel: rough_Set_Filter_Rate_HistogramP, w: 12, h: 8, x: 12, y: 64 }
   ],
 }

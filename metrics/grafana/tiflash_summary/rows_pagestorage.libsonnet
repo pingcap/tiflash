@@ -117,6 +117,7 @@ local page_write_DurationP = graphPanel.new(
     'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_page_write_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))) by (le, type) / 1000000000)',
     legendFormat='{{type}}-max',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -130,18 +131,21 @@ local page_write_DurationP = graphPanel.new(
   prometheus.target(
     'histogram_quantile(0.99, sum(rate(tiflash_storage_page_write_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
     legendFormat='{{type}}-99',
+    hide=true,
   )
 )
 .addTarget(
   prometheus.target(
     'histogram_quantile(0.95, sum(rate(tiflash_storage_page_write_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
     legendFormat='{{type}}-95',
+    hide=true,
   )
 )
 .addTarget(
   prometheus.target(
     'histogram_quantile(0.80, sum(rate(tiflash_storage_page_write_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
     legendFormat='{{type}}-80',
+    hide=true,
   )
 );
 
@@ -194,6 +198,7 @@ local page_GC_DurationP = graphPanel.new(
     'histogram_quantile(0.99, sum(rate(tiflash_storage_page_gc_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
     legendFormat='{{type}}-99',
     intervalFactor=1,
+    hide=true,
   )
 );
 
@@ -299,6 +304,7 @@ local number_of_TablesP = graphPanel.new(
   prometheus.target(
     'sum(tiflash_system_current_metric_StoragePoolV2Only{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
     legendFormat='V2-{{instance}}',
+    hide=true,
   )
 )
 .addTarget(
@@ -311,6 +317,7 @@ local number_of_TablesP = graphPanel.new(
   prometheus.target(
     'sum(tiflash_system_current_metric_StoragePoolMixMode{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
     legendFormat='Mix-{{instance}}',
+    hide=true,
   )
 )
 .addTarget(
@@ -371,31 +378,31 @@ local pS_Apply_edits_OPS_By_InstanceP = graphPanel.new(
 
 {
   row: rowObj
-  .addPanel(pageStorage_Disk_UsageP, gridPos=common.pos(12, 8))
-  .addPanel(pageStorage_File_NumP, gridPos=common.pos(12, 8))
-  .addPanel(pageStorage_WriteBatch_SizeP, gridPos=common.pos(12, 8))
-  .addPanel(page_write_DurationP, gridPos=common.pos(12, 8))
-  .addPanel(page_GC_Tasks_OPMP, gridPos=common.pos(12, 8))
-  .addPanel(page_GC_DurationP, gridPos=common.pos(12, 8))
-  .addPanel(numer_of_PagesP, gridPos=common.pos(12, 8))
-  .addPanel(pageStorage_Pending_Writers_NumP, gridPos=common.pos(12, 8))
-  .addPanel(pageStorage_stored_bytes_by_typeP, gridPos=common.pos(12, 8))
-  .addPanel(number_of_TablesP, gridPos=common.pos(12, 8))
-  .addPanel(pS_Command_OPS_By_InstanceP, gridPos=common.pos(24, 9))
-  .addPanel(pS_Apply_edits_OPS_By_InstanceP, gridPos=common.pos(24, 9))
+  .addPanel(pageStorage_Disk_UsageP, gridPos=common.pos(12, 8, x=0, y=43))
+  .addPanel(pageStorage_File_NumP, gridPos=common.pos(12, 8, x=12, y=43))
+  .addPanel(pageStorage_WriteBatch_SizeP, gridPos=common.pos(12, 8, x=0, y=51))
+  .addPanel(page_write_DurationP, gridPos=common.pos(12, 8, x=12, y=51))
+  .addPanel(page_GC_Tasks_OPMP, gridPos=common.pos(12, 8, x=0, y=59))
+  .addPanel(page_GC_DurationP, gridPos=common.pos(12, 8, x=12, y=59))
+  .addPanel(numer_of_PagesP, gridPos=common.pos(12, 8, x=0, y=67))
+  .addPanel(pageStorage_Pending_Writers_NumP, gridPos=common.pos(12, 8, x=12, y=67))
+  .addPanel(pageStorage_stored_bytes_by_typeP, gridPos=common.pos(12, 8, x=0, y=75))
+  .addPanel(number_of_TablesP, gridPos=common.pos(12, 8, x=12, y=75))
+  .addPanel(pS_Command_OPS_By_InstanceP, gridPos=common.pos(24, 9, x=0, y=83))
+  .addPanel(pS_Apply_edits_OPS_By_InstanceP, gridPos=common.pos(24, 9, x=0, y=92))
   ,
   panels: [
-    { panel: pageStorage_Disk_UsageP, w: 12, h: 8 },
-    { panel: pageStorage_File_NumP, w: 12, h: 8 },
-    { panel: pageStorage_WriteBatch_SizeP, w: 12, h: 8 },
-    { panel: page_write_DurationP, w: 12, h: 8 },
-    { panel: page_GC_Tasks_OPMP, w: 12, h: 8 },
-    { panel: page_GC_DurationP, w: 12, h: 8 },
-    { panel: numer_of_PagesP, w: 12, h: 8 },
-    { panel: pageStorage_Pending_Writers_NumP, w: 12, h: 8 },
-    { panel: pageStorage_stored_bytes_by_typeP, w: 12, h: 8 },
-    { panel: number_of_TablesP, w: 12, h: 8 },
-    { panel: pS_Command_OPS_By_InstanceP, w: 24, h: 9 },
-    { panel: pS_Apply_edits_OPS_By_InstanceP, w: 24, h: 9 }
+    { panel: pageStorage_Disk_UsageP, w: 12, h: 8, x: 0, y: 43 },
+    { panel: pageStorage_File_NumP, w: 12, h: 8, x: 12, y: 43 },
+    { panel: pageStorage_WriteBatch_SizeP, w: 12, h: 8, x: 0, y: 51 },
+    { panel: page_write_DurationP, w: 12, h: 8, x: 12, y: 51 },
+    { panel: page_GC_Tasks_OPMP, w: 12, h: 8, x: 0, y: 59 },
+    { panel: page_GC_DurationP, w: 12, h: 8, x: 12, y: 59 },
+    { panel: numer_of_PagesP, w: 12, h: 8, x: 0, y: 67 },
+    { panel: pageStorage_Pending_Writers_NumP, w: 12, h: 8, x: 12, y: 67 },
+    { panel: pageStorage_stored_bytes_by_typeP, w: 12, h: 8, x: 0, y: 75 },
+    { panel: number_of_TablesP, w: 12, h: 8, x: 12, y: 75 },
+    { panel: pS_Command_OPS_By_InstanceP, w: 24, h: 9, x: 0, y: 83 },
+    { panel: pS_Apply_edits_OPS_By_InstanceP, w: 24, h: 9, x: 0, y: 92 }
   ],
 }

@@ -78,6 +78,7 @@ local iA_Segments_Memory_WaitP = graphPanel.new(
     'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_proxy_kv_engine_ia_manager_segments_memory_wait_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m]))) by (le, $additional_groupby) / 1000000000)',
     legendFormat='max {{$additional_groupby}}',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -145,6 +146,7 @@ local iA_Segments_Remote_Read_DurationP = graphPanel.new(
     'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_proxy_kv_engine_ia_remote_read_segment_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m]))) by (le, $additional_groupby) / 1000000000)',
     legendFormat='max {{$additional_groupby}}',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -212,6 +214,7 @@ local columnar_Prefetch_DurationP = graphPanel.new(
     'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_proxy_kv_engine_columnar_prefetch_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m]))) by (le, $additional_groupby) / 1000000000)',
     legendFormat='max {{$additional_groupby}}',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -249,6 +252,7 @@ local columnar_Prefetch_Cache_Hit_DurationP = graphPanel.new(
     'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_proxy_kv_engine_columnar_prefetch_cache_hit_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m]))) by (le, $additional_groupby) / 1000000000)',
     legendFormat='max {{$additional_groupby}}',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -310,6 +314,7 @@ local columnar_Fetch_Snapshot_DurationP = graphPanel.new(
     'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_proxy_kv_engine_columnar_fetch_snapshot_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[1m]))) by (le, $additional_groupby) / 1000000000)',
     legendFormat='max {{$additional_groupby}}',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -394,29 +399,29 @@ local columnar_Meta_Cache_GaugeP = graphPanel.new(
 
 {
   row: rowObj
-  .addPanel(iA_usageP, gridPos=common.pos(12, 8))
-  .addPanel(iA_Segments_Memory_WaitP, gridPos=common.pos(12, 8))
-  .addPanel(iA_Segment_Remote_Read_CacheP, gridPos=common.pos(12, 8))
-  .addPanel(iA_Segments_Remote_Read_DurationP, gridPos=common.pos(12, 8))
-  .addPanel(columnarFile_CacheP, gridPos=common.pos(8, 8))
-  .addPanel(columnar_Prefetch_DurationP, gridPos=common.pos(8, 8))
-  .addPanel(columnar_Prefetch_Cache_Hit_DurationP, gridPos=common.pos(8, 8))
-  .addPanel(columnar_Fetch_Snapshot_RetryP, gridPos=common.pos(12, 8))
-  .addPanel(columnar_Fetch_Snapshot_DurationP, gridPos=common.pos(12, 8))
-  .addPanel(columnar_Meta_CacheP, gridPos=common.pos(12, 8))
-  .addPanel(columnar_Meta_Cache_GaugeP, gridPos=common.pos(12, 8))
+  .addPanel(iA_usageP, gridPos=common.pos(12, 8, x=0, y=9))
+  .addPanel(iA_Segments_Memory_WaitP, gridPos=common.pos(12, 8, x=12, y=9))
+  .addPanel(iA_Segment_Remote_Read_CacheP, gridPos=common.pos(12, 8, x=0, y=17))
+  .addPanel(iA_Segments_Remote_Read_DurationP, gridPos=common.pos(12, 8, x=12, y=17))
+  .addPanel(columnarFile_CacheP, gridPos=common.pos(8, 8, x=0, y=25))
+  .addPanel(columnar_Prefetch_DurationP, gridPos=common.pos(8, 8, x=8, y=25))
+  .addPanel(columnar_Prefetch_Cache_Hit_DurationP, gridPos=common.pos(8, 8, x=16, y=25))
+  .addPanel(columnar_Fetch_Snapshot_RetryP, gridPos=common.pos(12, 8, x=0, y=33))
+  .addPanel(columnar_Fetch_Snapshot_DurationP, gridPos=common.pos(12, 8, x=12, y=33))
+  .addPanel(columnar_Meta_CacheP, gridPos=common.pos(12, 8, x=0, y=41))
+  .addPanel(columnar_Meta_Cache_GaugeP, gridPos=common.pos(12, 8, x=12, y=41))
   ,
   panels: [
-    { panel: iA_usageP, w: 12, h: 8 },
-    { panel: iA_Segments_Memory_WaitP, w: 12, h: 8 },
-    { panel: iA_Segment_Remote_Read_CacheP, w: 12, h: 8 },
-    { panel: iA_Segments_Remote_Read_DurationP, w: 12, h: 8 },
-    { panel: columnarFile_CacheP, w: 8, h: 8 },
-    { panel: columnar_Prefetch_DurationP, w: 8, h: 8 },
-    { panel: columnar_Prefetch_Cache_Hit_DurationP, w: 8, h: 8 },
-    { panel: columnar_Fetch_Snapshot_RetryP, w: 12, h: 8 },
-    { panel: columnar_Fetch_Snapshot_DurationP, w: 12, h: 8 },
-    { panel: columnar_Meta_CacheP, w: 12, h: 8 },
-    { panel: columnar_Meta_Cache_GaugeP, w: 12, h: 8 }
+    { panel: iA_usageP, w: 12, h: 8, x: 0, y: 9 },
+    { panel: iA_Segments_Memory_WaitP, w: 12, h: 8, x: 12, y: 9 },
+    { panel: iA_Segment_Remote_Read_CacheP, w: 12, h: 8, x: 0, y: 17 },
+    { panel: iA_Segments_Remote_Read_DurationP, w: 12, h: 8, x: 12, y: 17 },
+    { panel: columnarFile_CacheP, w: 8, h: 8, x: 0, y: 25 },
+    { panel: columnar_Prefetch_DurationP, w: 8, h: 8, x: 8, y: 25 },
+    { panel: columnar_Prefetch_Cache_Hit_DurationP, w: 8, h: 8, x: 16, y: 25 },
+    { panel: columnar_Fetch_Snapshot_RetryP, w: 12, h: 8, x: 0, y: 33 },
+    { panel: columnar_Fetch_Snapshot_DurationP, w: 12, h: 8, x: 12, y: 33 },
+    { panel: columnar_Meta_CacheP, w: 12, h: 8, x: 0, y: 41 },
+    { panel: columnar_Meta_Cache_GaugeP, w: 12, h: 8, x: 12, y: 41 }
   ],
 }

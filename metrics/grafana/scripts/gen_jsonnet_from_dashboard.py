@@ -99,6 +99,14 @@ def emit_target(t: dict) -> str:
         args.append(f"intervalFactor={t['intervalFactor']}")
     if t.get("interval"):
         args.append(f"interval={jstr(t['interval'])}")
+    # Preserve explicit hide=true (common for optional / high-cardinality series).
+    if t.get("hide") is True:
+        args.append("hide=true")
+    elif t.get("hide") is False:
+        # Omit false; grafonnet default is unset/visible.
+        pass
+    if t.get("instant") is True:
+        args.append("instant=true")
     return "prometheus.target(\n    " + ",\n    ".join(args) + ",\n  )"
 
 
@@ -244,7 +252,9 @@ def emit_row_file(row: dict) -> str:
         gp = p.get("gridPos") or {}
         w = gp.get("w", 12)
         h = gp.get("h", 7)
-        panel_vars.append((var, w, h))
+        x = gp.get("x", 0)
+        y = gp.get("y", 0)
+        panel_vars.append((var, w, h, x, y))
 
     row_var = "rowObj"
     lines = [
@@ -263,13 +273,17 @@ def emit_row_file(row: dict) -> str:
     lines.append("")
     lines.append("{")
     lines.append(f"  row: {row_var}")
-    for var, w, h in panel_vars:
-        lines.append(f"  .addPanel({var}, gridPos=common.pos({w}, {h}))")
+    for var, w, h, x, y in panel_vars:
+        lines.append(
+            f"  .addPanel({var}, gridPos=common.pos({w}, {h}, x={x}, y={y}))"
+        )
     lines.append("  ,")
     lines.append("  panels: [")
-    for i, (var, w, h) in enumerate(panel_vars):
+    for i, (var, w, h, x, y) in enumerate(panel_vars):
         comma = "," if i + 1 < len(panel_vars) else ""
-        lines.append(f"    {{ panel: {var}, w: {w}, h: {h} }}{comma}")
+        lines.append(
+            f"    {{ panel: {var}, w: {w}, h: {h}, x: {x}, y: {y} }}{comma}"
+        )
     lines.append("  ],")
     lines.append("}")
     lines.append("")

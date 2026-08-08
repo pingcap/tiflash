@@ -26,6 +26,7 @@ local status_API_Request_DurationP = graphPanel.new(
     'histogram_quantile(0.999, sum(rate( tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket {k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval] )) by (le, path, $additional_groupby))',
     legendFormat='999-{{path}} {{$additional_groupby}}',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -40,6 +41,7 @@ local status_API_Request_DurationP = graphPanel.new(
     '(sum(rate( tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket {k8s_cluster="$k8s_cluster",tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"} [$__rate_interval] )) by (path, $additional_groupby) / sum(rate( tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket {k8s_cluster="$k8s_cluster",tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"} [$__rate_interval] )) by (path, $additional_groupby) )',
     legendFormat='avg-{{path}} {{$additional_groupby}}',
     intervalFactor=1,
+    hide=true,
   )
 );
 
@@ -69,11 +71,11 @@ local status_API_Request_op_sP = graphPanel.new(
 
 {
   row: rowObj
-  .addPanel(status_API_Request_DurationP, gridPos=common.pos(12, 7))
-  .addPanel(status_API_Request_op_sP, gridPos=common.pos(12, 7))
+  .addPanel(status_API_Request_DurationP, gridPos=common.pos(12, 7, x=0, y=204))
+  .addPanel(status_API_Request_op_sP, gridPos=common.pos(12, 7, x=12, y=204))
   ,
   panels: [
-    { panel: status_API_Request_DurationP, w: 12, h: 7 },
-    { panel: status_API_Request_op_sP, w: 12, h: 7 }
+    { panel: status_API_Request_DurationP, w: 12, h: 7, x: 0, y: 204 },
+    { panel: status_API_Request_op_sP, w: 12, h: 7, x: 12, y: 204 }
   ],
 }

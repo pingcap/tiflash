@@ -59,6 +59,7 @@ local read_SnapshotsP = graphPanel.new(
     'tiflash_system_current_metric_PSMVCCSnapshotsList{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
     legendFormat='snapshot_list-{{instance}}',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -67,6 +68,7 @@ local read_SnapshotsP = graphPanel.new(
     format='heatmap',
     legendFormat='num_snapshot-{{instance}}',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -74,6 +76,7 @@ local read_SnapshotsP = graphPanel.new(
     'tiflash_system_current_metric_DT_SnapshotOfRead{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
     legendFormat='read-{{instance}}',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -81,6 +84,7 @@ local read_SnapshotsP = graphPanel.new(
     'tiflash_system_current_metric_DT_SnapshotOfReadRaw{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
     legendFormat='read_raw-{{instance}}',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -88,6 +92,7 @@ local read_SnapshotsP = graphPanel.new(
     'tiflash_system_current_metric_DT_SnapshotOfDeltaMerge{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
     legendFormat='delta_merge-{{instance}}',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -95,6 +100,7 @@ local read_SnapshotsP = graphPanel.new(
     'tiflash_system_current_metric_DT_SnapshotOfDeltaCompact{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
     legendFormat='delta_compact-{{instance}}',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -102,6 +108,7 @@ local read_SnapshotsP = graphPanel.new(
     'tiflash_system_current_metric_DT_SnapshotOfSegmentMerge{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
     legendFormat='seg_merge-{{instance}}',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -109,6 +116,7 @@ local read_SnapshotsP = graphPanel.new(
     'tiflash_system_current_metric_DT_SnapshotOfSegmentSplit{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
     legendFormat='seg_split-{{instance}}',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -116,6 +124,7 @@ local read_SnapshotsP = graphPanel.new(
     'tiflash_system_current_metric_DT_SnapshotOfPlaceIndex{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
     legendFormat='place_index-{{instance}}',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -159,6 +168,7 @@ local read_Thread_Internal_DurationP = graphPanel.new(
     'histogram_quantile(0.95, sum(rate(tiflash_read_thread_internal_us_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
     legendFormat='95-{{type}}',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -166,6 +176,7 @@ local read_Thread_Internal_DurationP = graphPanel.new(
     'histogram_quantile(0.80, sum(rate(tiflash_read_thread_internal_us_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
     legendFormat='80-{{type}}',
     intervalFactor=1,
+    hide=true,
   )
 );
 
@@ -217,6 +228,7 @@ local data_SharingP = graphPanel.new(
   prometheus.target(
     'sum(rate(tiflash_storage_column_cache_packs{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"extra_column_hit"}[1m]))/sum(rate(tiflash_storage_column_cache_packs{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"extra_column_hit|extra_column_miss"}[1m]))',
     legendFormat='extra_column_cache_hit_ratio',
+    hide=true,
   )
 )
 .addSeriesOverride({ alias: '/cache_hit_ratio/', yaxis: 2 });
@@ -277,6 +289,7 @@ local segment_MergedTask_DurationP = graphPanel.new(
     'histogram_quantile(0.80, sum(rate(tiflash_storage_read_thread_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type,$additional_groupby))',
     legendFormat='80-{{type}} {{$additional_groupby}}',
     intervalFactor=1,
+    hide=true,
   )
 );
 
@@ -305,6 +318,7 @@ local versionChainP = graphPanel.new(
     'histogram_quantile(0.99, sum(rate(tiflash_storage_version_chain_ms_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
     legendFormat='99-{{type}}',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -312,6 +326,7 @@ local versionChainP = graphPanel.new(
     'histogram_quantile(0.95, sum(rate(tiflash_storage_version_chain_ms_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
     legendFormat='95-{{type}}',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -319,6 +334,7 @@ local versionChainP = graphPanel.new(
     'histogram_quantile(0.80, sum(rate(tiflash_storage_version_chain_ms_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
     legendFormat='80-{{type}}',
     intervalFactor=1,
+    hide=true,
   )
 );
 
@@ -347,25 +363,25 @@ local deltaIndexErrorP = graphPanel.new(
 
 {
   row: rowObj
-  .addPanel(read_Tasks_OPSP, gridPos=common.pos(12, 8))
-  .addPanel(read_SnapshotsP, gridPos=common.pos(12, 8))
-  .addPanel(read_Thread_Internal_DurationP, gridPos=common.pos(12, 8))
-  .addPanel(read_Thread_SchedulingP, gridPos=common.pos(12, 8))
-  .addPanel(data_SharingP, gridPos=common.pos(8, 8))
-  .addPanel(segment_MergedTaskP, gridPos=common.pos(8, 8))
-  .addPanel(segment_MergedTask_DurationP, gridPos=common.pos(8, 8))
-  .addPanel(versionChainP, gridPos=common.pos(12, 8))
-  .addPanel(deltaIndexErrorP, gridPos=common.pos(12, 8))
+  .addPanel(read_Tasks_OPSP, gridPos=common.pos(12, 8, x=0, y=42))
+  .addPanel(read_SnapshotsP, gridPos=common.pos(12, 8, x=12, y=42))
+  .addPanel(read_Thread_Internal_DurationP, gridPos=common.pos(12, 8, x=0, y=50))
+  .addPanel(read_Thread_SchedulingP, gridPos=common.pos(12, 8, x=12, y=50))
+  .addPanel(data_SharingP, gridPos=common.pos(8, 8, x=0, y=58))
+  .addPanel(segment_MergedTaskP, gridPos=common.pos(8, 8, x=8, y=58))
+  .addPanel(segment_MergedTask_DurationP, gridPos=common.pos(8, 8, x=16, y=58))
+  .addPanel(versionChainP, gridPos=common.pos(12, 8, x=0, y=66))
+  .addPanel(deltaIndexErrorP, gridPos=common.pos(12, 8, x=12, y=66))
   ,
   panels: [
-    { panel: read_Tasks_OPSP, w: 12, h: 8 },
-    { panel: read_SnapshotsP, w: 12, h: 8 },
-    { panel: read_Thread_Internal_DurationP, w: 12, h: 8 },
-    { panel: read_Thread_SchedulingP, w: 12, h: 8 },
-    { panel: data_SharingP, w: 8, h: 8 },
-    { panel: segment_MergedTaskP, w: 8, h: 8 },
-    { panel: segment_MergedTask_DurationP, w: 8, h: 8 },
-    { panel: versionChainP, w: 12, h: 8 },
-    { panel: deltaIndexErrorP, w: 12, h: 8 }
+    { panel: read_Tasks_OPSP, w: 12, h: 8, x: 0, y: 42 },
+    { panel: read_SnapshotsP, w: 12, h: 8, x: 12, y: 42 },
+    { panel: read_Thread_Internal_DurationP, w: 12, h: 8, x: 0, y: 50 },
+    { panel: read_Thread_SchedulingP, w: 12, h: 8, x: 12, y: 50 },
+    { panel: data_SharingP, w: 8, h: 8, x: 0, y: 58 },
+    { panel: segment_MergedTaskP, w: 8, h: 8, x: 8, y: 58 },
+    { panel: segment_MergedTask_DurationP, w: 8, h: 8, x: 16, y: 58 },
+    { panel: versionChainP, w: 12, h: 8, x: 0, y: 66 },
+    { panel: deltaIndexErrorP, w: 12, h: 8, x: 12, y: 66 }
   ],
 }

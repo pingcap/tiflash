@@ -465,6 +465,7 @@ local local_Index_PoolP = graphPanel.new(
   prometheus.target(
     'count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"LocalIndexPool*", instance=~"$tiflash_role"})',
     legendFormat='Limit',
+    hide=true,
   )
 )
 .addTarget(
@@ -509,39 +510,39 @@ local segment_ReaderP = graphPanel.new(
 
 {
   row: rowObj
-  .addPanel(sST_Import_ServiceP, gridPos=common.pos(12, 7))
-  .addPanel(sST_ApplyP, gridPos=common.pos(12, 7))
-  .addPanel(region_TaskP, gridPos=common.pos(12, 7))
-  .addPanel(region_WorkerP, gridPos=common.pos(12, 7))
-  .addPanel(raft_StoreP, gridPos=common.pos(12, 7))
-  .addPanel(apply_WorkerP, gridPos=common.pos(12, 7))
-  .addPanel(storage_Background_Small_TasksP, gridPos=common.pos(12, 7))
-  .addPanel(storage_Background_Large_TasksP, gridPos=common.pos(12, 7))
-  .addPanel(manual_CompactionP, gridPos=common.pos(12, 7))
-  .addPanel(gRPC_Async_ServerP, gridPos=common.pos(12, 7))
-  .addPanel(gRPC_Async_ClientP, gridPos=common.pos(12, 7))
-  .addPanel(fAP_builderP, gridPos=common.pos(12, 7))
-  .addPanel(snapshot_SenderP, gridPos=common.pos(12, 7))
-  .addPanel(segment_SchedulerP, gridPos=common.pos(12, 7))
-  .addPanel(local_Index_PoolP, gridPos=common.pos(12, 7))
-  .addPanel(segment_ReaderP, gridPos=common.pos(12, 7))
+  .addPanel(sST_Import_ServiceP, gridPos=common.pos(12, 7, x=0, y=34))
+  .addPanel(sST_ApplyP, gridPos=common.pos(12, 7, x=12, y=34))
+  .addPanel(region_TaskP, gridPos=common.pos(12, 7, x=0, y=41))
+  .addPanel(region_WorkerP, gridPos=common.pos(12, 7, x=12, y=41))
+  .addPanel(raft_StoreP, gridPos=common.pos(12, 7, x=0, y=48))
+  .addPanel(apply_WorkerP, gridPos=common.pos(12, 7, x=12, y=48))
+  .addPanel(storage_Background_Small_TasksP, gridPos=common.pos(12, 7, x=0, y=55))
+  .addPanel(storage_Background_Large_TasksP, gridPos=common.pos(12, 7, x=12, y=55))
+  .addPanel(manual_CompactionP, gridPos=common.pos(12, 7, x=0, y=62))
+  .addPanel(gRPC_Async_ServerP, gridPos=common.pos(12, 7, x=12, y=62))
+  .addPanel(gRPC_Async_ClientP, gridPos=common.pos(12, 7, x=0, y=69))
+  .addPanel(fAP_builderP, gridPos=common.pos(12, 7, x=12, y=69))
+  .addPanel(snapshot_SenderP, gridPos=common.pos(12, 7, x=0, y=76))
+  .addPanel(segment_SchedulerP, gridPos=common.pos(12, 7, x=12, y=76))
+  .addPanel(local_Index_PoolP, gridPos=common.pos(12, 7, x=0, y=83))
+  .addPanel(segment_ReaderP, gridPos=common.pos(12, 7, x=12, y=83))
   ,
   panels: [
-    { panel: sST_Import_ServiceP, w: 12, h: 7 },
-    { panel: sST_ApplyP, w: 12, h: 7 },
-    { panel: region_TaskP, w: 12, h: 7 },
-    { panel: region_WorkerP, w: 12, h: 7 },
-    { panel: raft_StoreP, w: 12, h: 7 },
-    { panel: apply_WorkerP, w: 12, h: 7 },
-    { panel: storage_Background_Small_TasksP, w: 12, h: 7 },
-    { panel: storage_Background_Large_TasksP, w: 12, h: 7 },
-    { panel: manual_CompactionP, w: 12, h: 7 },
-    { panel: gRPC_Async_ServerP, w: 12, h: 7 },
-    { panel: gRPC_Async_ClientP, w: 12, h: 7 },
-    { panel: fAP_builderP, w: 12, h: 7 },
-    { panel: snapshot_SenderP, w: 12, h: 7 },
-    { panel: segment_SchedulerP, w: 12, h: 7 },
-    { panel: local_Index_PoolP, w: 12, h: 7 },
-    { panel: segment_ReaderP, w: 12, h: 7 }
+    { panel: sST_Import_ServiceP, w: 12, h: 7, x: 0, y: 34 },
+    { panel: sST_ApplyP, w: 12, h: 7, x: 12, y: 34 },
+    { panel: region_TaskP, w: 12, h: 7, x: 0, y: 41 },
+    { panel: region_WorkerP, w: 12, h: 7, x: 12, y: 41 },
+    { panel: raft_StoreP, w: 12, h: 7, x: 0, y: 48 },
+    { panel: apply_WorkerP, w: 12, h: 7, x: 12, y: 48 },
+    { panel: storage_Background_Small_TasksP, w: 12, h: 7, x: 0, y: 55 },
+    { panel: storage_Background_Large_TasksP, w: 12, h: 7, x: 12, y: 55 },
+    { panel: manual_CompactionP, w: 12, h: 7, x: 0, y: 62 },
+    { panel: gRPC_Async_ServerP, w: 12, h: 7, x: 12, y: 62 },
+    { panel: gRPC_Async_ClientP, w: 12, h: 7, x: 0, y: 69 },
+    { panel: fAP_builderP, w: 12, h: 7, x: 12, y: 69 },
+    { panel: snapshot_SenderP, w: 12, h: 7, x: 0, y: 76 },
+    { panel: segment_SchedulerP, w: 12, h: 7, x: 12, y: 76 },
+    { panel: local_Index_PoolP, w: 12, h: 7, x: 0, y: 83 },
+    { panel: segment_ReaderP, w: 12, h: 7, x: 12, y: 83 }
   ],
 }

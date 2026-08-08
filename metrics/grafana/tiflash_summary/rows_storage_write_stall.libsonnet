@@ -31,6 +31,7 @@ local write_Stall_DurationP = graphPanel.new(
     'histogram_quantile(0.99, sum(rate(tiflash_storage_write_stall_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type, instance))',
     legendFormat='99-{{type}}-{{instance}}',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -180,17 +181,17 @@ local write_Command_OPS_By_InstanceP = graphPanel.new(
 
 {
   row: rowObj
-  .addPanel(write_Stall_DurationP, gridPos=common.pos(24, 8))
-  .addPanel(write_Delta_Management_ThroughputP, gridPos=common.pos(12, 8))
-  .addPanel(write_Delta_Management_TotalP, gridPos=common.pos(12, 8))
-  .addPanel(write_Throughput_By_InstanceP, gridPos=common.pos(24, 9))
-  .addPanel(write_Command_OPS_By_InstanceP, gridPos=common.pos(24, 9))
+  .addPanel(write_Stall_DurationP, gridPos=common.pos(24, 8, x=0, y=61))
+  .addPanel(write_Delta_Management_ThroughputP, gridPos=common.pos(12, 8, x=0, y=69))
+  .addPanel(write_Delta_Management_TotalP, gridPos=common.pos(12, 8, x=12, y=69))
+  .addPanel(write_Throughput_By_InstanceP, gridPos=common.pos(24, 9, x=0, y=77))
+  .addPanel(write_Command_OPS_By_InstanceP, gridPos=common.pos(24, 9, x=0, y=86))
   ,
   panels: [
-    { panel: write_Stall_DurationP, w: 24, h: 8 },
-    { panel: write_Delta_Management_ThroughputP, w: 12, h: 8 },
-    { panel: write_Delta_Management_TotalP, w: 12, h: 8 },
-    { panel: write_Throughput_By_InstanceP, w: 24, h: 9 },
-    { panel: write_Command_OPS_By_InstanceP, w: 24, h: 9 }
+    { panel: write_Stall_DurationP, w: 24, h: 8, x: 0, y: 61 },
+    { panel: write_Delta_Management_ThroughputP, w: 12, h: 8, x: 0, y: 69 },
+    { panel: write_Delta_Management_TotalP, w: 12, h: 8, x: 12, y: 69 },
+    { panel: write_Throughput_By_InstanceP, w: 24, h: 9, x: 0, y: 77 },
+    { panel: write_Command_OPS_By_InstanceP, w: 24, h: 9, x: 0, y: 86 }
   ],
 }

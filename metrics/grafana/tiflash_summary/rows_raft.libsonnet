@@ -109,6 +109,7 @@ local raft_Wait_Index_DurationP = graphPanel.new(
     'histogram_quantile(0.95, sum(rate(tiflash_raft_wait_index_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, $additional_groupby))',
     legendFormat='95 {{$additional_groupby}}',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -116,6 +117,7 @@ local raft_Wait_Index_DurationP = graphPanel.new(
     'histogram_quantile(0.80, sum(rate(tiflash_raft_wait_index_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, $additional_groupby))',
     legendFormat='80 {{$additional_groupby}}',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -161,6 +163,7 @@ local raft_Batch_Read_Index_DurationP = graphPanel.new(
     'histogram_quantile(0.95, sum(rate(tiflash_raft_read_index_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le))',
     legendFormat='95',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -168,6 +171,7 @@ local raft_Batch_Read_Index_DurationP = graphPanel.new(
     'histogram_quantile(0.80, sum(rate(tiflash_raft_read_index_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le))',
     legendFormat='80',
     intervalFactor=1,
+    hide=true,
   )
 );
 
@@ -400,6 +404,7 @@ local region_Size_by_event_HeatmapP = heatmapPanel.new(
     'sum(delta(tiflash_raft_region_flush_bytes_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"flushed"}[1m])) by (le, type)',
     format='heatmap',
     legendFormat='{{le}}',
+    hide=true,
   )
 );
 
@@ -483,6 +488,7 @@ local raft_Eager_GC_DurationP = graphPanel.new(
   prometheus.target(
     'histogram_quantile(0.95, sum(rate(tiflash_raft_eager_gc_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type))',
     legendFormat='95%-{{type}}',
+    hide=true,
   )
 )
 .addTarget(
@@ -495,6 +501,7 @@ local raft_Eager_GC_DurationP = graphPanel.new(
   prometheus.target(
     'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_raft_eager_gc_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))) by (le, type) / 1000000000)',
     legendFormat=' 100%-{{type}}',
+    hide=true,
   )
 );
 
@@ -599,6 +606,7 @@ local upstream_LatencyP = graphPanel.new(
   prometheus.target(
     'histogram_quantile(0.95, sum(rate(tiflash_raft_upstream_latency_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le))',
     legendFormat='95%',
+    hide=true,
   )
 )
 .addTarget(
@@ -628,57 +636,57 @@ local log_Replication_RejectedP = graphPanel.new(
 
 {
   row: rowObj
-  .addPanel(stale_Read_OPSP, gridPos=common.pos(12, 7))
-  .addPanel(raft_Read_Index_OPSP, gridPos=common.pos(12, 7))
-  .addPanel(learner_Read_FailuresP, gridPos=common.pos(12, 7))
-  .addPanel(read_Index_EventsP, gridPos=common.pos(12, 7))
-  .addPanel(raft_Wait_Index_DurationP, gridPos=common.pos(12, 7))
-  .addPanel(raft_Batch_Read_Index_DurationP, gridPos=common.pos(12, 7))
-  .addPanel(apply_Raft_write_logs_DurationP, gridPos=common.pos(24, 7))
-  .addPanel(region_write_Duration_decodeP, gridPos=common.pos(12, 7))
-  .addPanel(region_write_Duration_write_blocksP, gridPos=common.pos(12, 7))
-  .addPanel(apply_Raft_write_logs_Duration_HeatmapP, gridPos=common.pos(12, 7))
-  .addPanel(apply_Raft_admin_logs_Duration_HeatmapP, gridPos=common.pos(12, 7))
-  .addPanel(raft_Events_QPSP, gridPos=common.pos(12, 7))
-  .addPanel(raft_Frequent_Events_QPSP, gridPos=common.pos(12, 7))
-  .addPanel(raft_Log_Gap_HeatmapP, gridPos=common.pos(12, 7))
-  .addPanel(raft_Entry_Batch_Size_HeatmapP, gridPos=common.pos(12, 7))
-  .addPanel(region_Size_by_event_HeatmapP, gridPos=common.pos(12, 7))
-  .addPanel(big_Write_To_Region_Size_HeatmapP, gridPos=common.pos(12, 7))
-  .addPanel(write_Committed_Size_HeatmapP, gridPos=common.pos(24, 7))
-  .addPanel(raft_Eager_GC_OPSP, gridPos=common.pos(12, 7))
-  .addPanel(raft_Eager_GC_DurationP, gridPos=common.pos(12, 7))
-  .addPanel(keys_flowP, gridPos=common.pos(24, 7))
-  .addPanel(raft_throughputP, gridPos=common.pos(24, 7))
-  .addPanel(upstream_Latency_HeatmapP, gridPos=common.pos(12, 7))
-  .addPanel(upstream_LatencyP, gridPos=common.pos(12, 7))
-  .addPanel(log_Replication_RejectedP, gridPos=common.pos(12, 7))
+  .addPanel(stale_Read_OPSP, gridPos=common.pos(12, 7, x=0, y=62))
+  .addPanel(raft_Read_Index_OPSP, gridPos=common.pos(12, 7, x=12, y=62))
+  .addPanel(learner_Read_FailuresP, gridPos=common.pos(12, 7, x=0, y=69))
+  .addPanel(read_Index_EventsP, gridPos=common.pos(12, 7, x=12, y=69))
+  .addPanel(raft_Wait_Index_DurationP, gridPos=common.pos(12, 7, x=0, y=76))
+  .addPanel(raft_Batch_Read_Index_DurationP, gridPos=common.pos(12, 7, x=12, y=76))
+  .addPanel(apply_Raft_write_logs_DurationP, gridPos=common.pos(24, 7, x=0, y=83))
+  .addPanel(region_write_Duration_decodeP, gridPos=common.pos(12, 7, x=0, y=90))
+  .addPanel(region_write_Duration_write_blocksP, gridPos=common.pos(12, 7, x=12, y=90))
+  .addPanel(apply_Raft_write_logs_Duration_HeatmapP, gridPos=common.pos(12, 7, x=0, y=97))
+  .addPanel(apply_Raft_admin_logs_Duration_HeatmapP, gridPos=common.pos(12, 7, x=12, y=97))
+  .addPanel(raft_Events_QPSP, gridPos=common.pos(12, 7, x=0, y=104))
+  .addPanel(raft_Frequent_Events_QPSP, gridPos=common.pos(12, 7, x=12, y=104))
+  .addPanel(raft_Log_Gap_HeatmapP, gridPos=common.pos(12, 7, x=0, y=111))
+  .addPanel(raft_Entry_Batch_Size_HeatmapP, gridPos=common.pos(12, 7, x=12, y=111))
+  .addPanel(region_Size_by_event_HeatmapP, gridPos=common.pos(12, 7, x=0, y=118))
+  .addPanel(big_Write_To_Region_Size_HeatmapP, gridPos=common.pos(12, 7, x=12, y=118))
+  .addPanel(write_Committed_Size_HeatmapP, gridPos=common.pos(24, 7, x=0, y=125))
+  .addPanel(raft_Eager_GC_OPSP, gridPos=common.pos(12, 7, x=0, y=132))
+  .addPanel(raft_Eager_GC_DurationP, gridPos=common.pos(12, 7, x=12, y=132))
+  .addPanel(keys_flowP, gridPos=common.pos(24, 7, x=0, y=139))
+  .addPanel(raft_throughputP, gridPos=common.pos(24, 7, x=0, y=146))
+  .addPanel(upstream_Latency_HeatmapP, gridPos=common.pos(12, 7, x=0, y=153))
+  .addPanel(upstream_LatencyP, gridPos=common.pos(12, 7, x=12, y=153))
+  .addPanel(log_Replication_RejectedP, gridPos=common.pos(12, 7, x=0, y=160))
   ,
   panels: [
-    { panel: stale_Read_OPSP, w: 12, h: 7 },
-    { panel: raft_Read_Index_OPSP, w: 12, h: 7 },
-    { panel: learner_Read_FailuresP, w: 12, h: 7 },
-    { panel: read_Index_EventsP, w: 12, h: 7 },
-    { panel: raft_Wait_Index_DurationP, w: 12, h: 7 },
-    { panel: raft_Batch_Read_Index_DurationP, w: 12, h: 7 },
-    { panel: apply_Raft_write_logs_DurationP, w: 24, h: 7 },
-    { panel: region_write_Duration_decodeP, w: 12, h: 7 },
-    { panel: region_write_Duration_write_blocksP, w: 12, h: 7 },
-    { panel: apply_Raft_write_logs_Duration_HeatmapP, w: 12, h: 7 },
-    { panel: apply_Raft_admin_logs_Duration_HeatmapP, w: 12, h: 7 },
-    { panel: raft_Events_QPSP, w: 12, h: 7 },
-    { panel: raft_Frequent_Events_QPSP, w: 12, h: 7 },
-    { panel: raft_Log_Gap_HeatmapP, w: 12, h: 7 },
-    { panel: raft_Entry_Batch_Size_HeatmapP, w: 12, h: 7 },
-    { panel: region_Size_by_event_HeatmapP, w: 12, h: 7 },
-    { panel: big_Write_To_Region_Size_HeatmapP, w: 12, h: 7 },
-    { panel: write_Committed_Size_HeatmapP, w: 24, h: 7 },
-    { panel: raft_Eager_GC_OPSP, w: 12, h: 7 },
-    { panel: raft_Eager_GC_DurationP, w: 12, h: 7 },
-    { panel: keys_flowP, w: 24, h: 7 },
-    { panel: raft_throughputP, w: 24, h: 7 },
-    { panel: upstream_Latency_HeatmapP, w: 12, h: 7 },
-    { panel: upstream_LatencyP, w: 12, h: 7 },
-    { panel: log_Replication_RejectedP, w: 12, h: 7 }
+    { panel: stale_Read_OPSP, w: 12, h: 7, x: 0, y: 62 },
+    { panel: raft_Read_Index_OPSP, w: 12, h: 7, x: 12, y: 62 },
+    { panel: learner_Read_FailuresP, w: 12, h: 7, x: 0, y: 69 },
+    { panel: read_Index_EventsP, w: 12, h: 7, x: 12, y: 69 },
+    { panel: raft_Wait_Index_DurationP, w: 12, h: 7, x: 0, y: 76 },
+    { panel: raft_Batch_Read_Index_DurationP, w: 12, h: 7, x: 12, y: 76 },
+    { panel: apply_Raft_write_logs_DurationP, w: 24, h: 7, x: 0, y: 83 },
+    { panel: region_write_Duration_decodeP, w: 12, h: 7, x: 0, y: 90 },
+    { panel: region_write_Duration_write_blocksP, w: 12, h: 7, x: 12, y: 90 },
+    { panel: apply_Raft_write_logs_Duration_HeatmapP, w: 12, h: 7, x: 0, y: 97 },
+    { panel: apply_Raft_admin_logs_Duration_HeatmapP, w: 12, h: 7, x: 12, y: 97 },
+    { panel: raft_Events_QPSP, w: 12, h: 7, x: 0, y: 104 },
+    { panel: raft_Frequent_Events_QPSP, w: 12, h: 7, x: 12, y: 104 },
+    { panel: raft_Log_Gap_HeatmapP, w: 12, h: 7, x: 0, y: 111 },
+    { panel: raft_Entry_Batch_Size_HeatmapP, w: 12, h: 7, x: 12, y: 111 },
+    { panel: region_Size_by_event_HeatmapP, w: 12, h: 7, x: 0, y: 118 },
+    { panel: big_Write_To_Region_Size_HeatmapP, w: 12, h: 7, x: 12, y: 118 },
+    { panel: write_Committed_Size_HeatmapP, w: 24, h: 7, x: 0, y: 125 },
+    { panel: raft_Eager_GC_OPSP, w: 12, h: 7, x: 0, y: 132 },
+    { panel: raft_Eager_GC_DurationP, w: 12, h: 7, x: 12, y: 132 },
+    { panel: keys_flowP, w: 24, h: 7, x: 0, y: 139 },
+    { panel: raft_throughputP, w: 24, h: 7, x: 0, y: 146 },
+    { panel: upstream_Latency_HeatmapP, w: 12, h: 7, x: 0, y: 153 },
+    { panel: upstream_LatencyP, w: 12, h: 7, x: 12, y: 153 },
+    { panel: log_Replication_RejectedP, w: 12, h: 7, x: 0, y: 160 }
   ],
 }

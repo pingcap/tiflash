@@ -323,25 +323,25 @@ local wait_notify_task_detailsP = graphPanel.new(
 
 {
   row: rowObj
-  .addPanel(task_Thread_Pool_SizeP, gridPos=common.pos(12, 8))
-  .addPanel(task_CountP, gridPos=common.pos(12, 8))
-  .addPanel(task_Status_Change_OPSP, gridPos=common.pos(12, 8))
-  .addPanel(task_DurationP, gridPos=common.pos(12, 8))
-  .addPanel(task_Max_Execute_Time_Per_RoundP, gridPos=common.pos(12, 8))
-  .addPanel(threads_CPU_of_CPU_Task_Thread_PoolP, gridPos=common.pos(12, 8))
-  .addPanel(threads_CPU_of_IO_Task_Thread_PoolP, gridPos=common.pos(12, 8))
-  .addPanel(threads_CPU_of_Wait_ReactorP, gridPos=common.pos(12, 8))
-  .addPanel(wait_notify_task_detailsP, gridPos=common.pos(12, 8))
+  .addPanel(task_Thread_Pool_SizeP, gridPos=common.pos(12, 8, x=0, y=162))
+  .addPanel(task_CountP, gridPos=common.pos(12, 8, x=12, y=162))
+  .addPanel(task_Status_Change_OPSP, gridPos=common.pos(12, 8, x=0, y=170))
+  .addPanel(task_DurationP, gridPos=common.pos(12, 8, x=12, y=170))
+  .addPanel(task_Max_Execute_Time_Per_RoundP, gridPos=common.pos(12, 8, x=0, y=178))
+  .addPanel(threads_CPU_of_CPU_Task_Thread_PoolP, gridPos=common.pos(12, 8, x=12, y=178))
+  .addPanel(threads_CPU_of_IO_Task_Thread_PoolP, gridPos=common.pos(12, 8, x=0, y=186))
+  .addPanel(threads_CPU_of_Wait_ReactorP, gridPos=common.pos(12, 8, x=12, y=186))
+  .addPanel(wait_notify_task_detailsP, gridPos=common.pos(12, 8, x=0, y=194))
   ,
   panels: [
-    { panel: task_Thread_Pool_SizeP, w: 12, h: 8 },
-    { panel: task_CountP, w: 12, h: 8 },
-    { panel: task_Status_Change_OPSP, w: 12, h: 8 },
-    { panel: task_DurationP, w: 12, h: 8 },
-    { panel: task_Max_Execute_Time_Per_RoundP, w: 12, h: 8 },
-    { panel: threads_CPU_of_CPU_Task_Thread_PoolP, w: 12, h: 8 },
-    { panel: threads_CPU_of_IO_Task_Thread_PoolP, w: 12, h: 8 },
-    { panel: threads_CPU_of_Wait_ReactorP, w: 12, h: 8 },
-    { panel: wait_notify_task_detailsP, w: 12, h: 8 }
+    { panel: task_Thread_Pool_SizeP, w: 12, h: 8, x: 0, y: 162 },
+    { panel: task_CountP, w: 12, h: 8, x: 12, y: 162 },
+    { panel: task_Status_Change_OPSP, w: 12, h: 8, x: 0, y: 170 },
+    { panel: task_DurationP, w: 12, h: 8, x: 12, y: 170 },
+    { panel: task_Max_Execute_Time_Per_RoundP, w: 12, h: 8, x: 0, y: 178 },
+    { panel: threads_CPU_of_CPU_Task_Thread_PoolP, w: 12, h: 8, x: 12, y: 178 },
+    { panel: threads_CPU_of_IO_Task_Thread_PoolP, w: 12, h: 8, x: 0, y: 186 },
+    { panel: threads_CPU_of_Wait_ReactorP, w: 12, h: 8, x: 12, y: 186 },
+    { panel: wait_notify_task_detailsP, w: 12, h: 8, x: 0, y: 194 }
   ],
 }

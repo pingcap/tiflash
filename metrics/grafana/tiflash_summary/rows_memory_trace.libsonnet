@@ -56,6 +56,7 @@ local number_of_Physical_TablesP = graphPanel.new(
     'tiflash_system_current_metric_NumIStorage{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
     legendFormat='tables-all-{{instance}}',
     intervalFactor=1,
+    hide=true,
   )
 );
 
@@ -276,12 +277,14 @@ local memory_by_threadP = graphPanel.new(
   prometheus.target(
     'tiflash_storages_thread_memory_usage{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"alloc_.*"}',
     legendFormat='{{instance}}-{{type}}-tot',
+    hide=true,
   )
 )
 .addTarget(
   prometheus.target(
     '-tiflash_storages_thread_memory_usage{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"dealloc_.*"}',
     legendFormat='{{instance}}-{{type}}-tot',
+    hide=true,
   )
 );
 
@@ -312,12 +315,14 @@ local memory_by_thread_proxyP = graphPanel.new(
   prometheus.target(
     'tiflash_raft_proxy_thread_memory_usage{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"alloc_.*"}',
     legendFormat='{{instance}}-{{type}}-tot',
+    hide=true,
   )
 )
 .addTarget(
   prometheus.target(
     '-tiflash_raft_proxy_thread_memory_usage{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"dealloc_.*"}',
     legendFormat='{{instance}}-{{type}}-tot',
+    hide=true,
   )
 );
 
@@ -340,6 +345,7 @@ local memory_by_classP = graphPanel.new(
   prometheus.target(
     'rate(tiflash_memory_usage_by_class{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__interval])',
     legendFormat='{{instance}}-{{type}}-rate',
+    hide=true,
   )
 );
 
@@ -362,31 +368,31 @@ local kVStore_memoryP = graphPanel.new(
 
 {
   row: rowObj
-  .addPanel(number_of_KeyspacesP, gridPos=common.pos(12, 8))
-  .addPanel(number_of_Physical_TablesP, gridPos=common.pos(12, 8))
-  .addPanel(number_of_SegmentsP, gridPos=common.pos(12, 8))
-  .addPanel(bytes_of_MemTablesP, gridPos=common.pos(12, 8))
-  .addPanel(mark_Cache_and_Minmax_Index_Cache_Memory_UsageP, gridPos=common.pos(12, 8))
-  .addPanel(effectiveness_of_Mark_CacheP, gridPos=common.pos(12, 8))
-  .addPanel(schema_of_Column_FileP, gridPos=common.pos(12, 8))
-  .addPanel(read_SnapshotsP, gridPos=common.pos(12, 8))
-  .addPanel(memory_by_threadP, gridPos=common.pos(12, 8))
-  .addPanel(memory_by_thread_proxyP, gridPos=common.pos(12, 8))
-  .addPanel(memory_by_classP, gridPos=common.pos(12, 8))
-  .addPanel(kVStore_memoryP, gridPos=common.pos(12, 8))
+  .addPanel(number_of_KeyspacesP, gridPos=common.pos(12, 8, x=0, y=40))
+  .addPanel(number_of_Physical_TablesP, gridPos=common.pos(12, 8, x=12, y=40))
+  .addPanel(number_of_SegmentsP, gridPos=common.pos(12, 8, x=0, y=48))
+  .addPanel(bytes_of_MemTablesP, gridPos=common.pos(12, 8, x=12, y=48))
+  .addPanel(mark_Cache_and_Minmax_Index_Cache_Memory_UsageP, gridPos=common.pos(12, 8, x=0, y=56))
+  .addPanel(effectiveness_of_Mark_CacheP, gridPos=common.pos(12, 8, x=12, y=56))
+  .addPanel(schema_of_Column_FileP, gridPos=common.pos(12, 8, x=0, y=64))
+  .addPanel(read_SnapshotsP, gridPos=common.pos(12, 8, x=12, y=64))
+  .addPanel(memory_by_threadP, gridPos=common.pos(12, 8, x=0, y=72))
+  .addPanel(memory_by_thread_proxyP, gridPos=common.pos(12, 8, x=12, y=72))
+  .addPanel(memory_by_classP, gridPos=common.pos(12, 8, x=0, y=80))
+  .addPanel(kVStore_memoryP, gridPos=common.pos(12, 8, x=12, y=80))
   ,
   panels: [
-    { panel: number_of_KeyspacesP, w: 12, h: 8 },
-    { panel: number_of_Physical_TablesP, w: 12, h: 8 },
-    { panel: number_of_SegmentsP, w: 12, h: 8 },
-    { panel: bytes_of_MemTablesP, w: 12, h: 8 },
-    { panel: mark_Cache_and_Minmax_Index_Cache_Memory_UsageP, w: 12, h: 8 },
-    { panel: effectiveness_of_Mark_CacheP, w: 12, h: 8 },
-    { panel: schema_of_Column_FileP, w: 12, h: 8 },
-    { panel: read_SnapshotsP, w: 12, h: 8 },
-    { panel: memory_by_threadP, w: 12, h: 8 },
-    { panel: memory_by_thread_proxyP, w: 12, h: 8 },
-    { panel: memory_by_classP, w: 12, h: 8 },
-    { panel: kVStore_memoryP, w: 12, h: 8 }
+    { panel: number_of_KeyspacesP, w: 12, h: 8, x: 0, y: 40 },
+    { panel: number_of_Physical_TablesP, w: 12, h: 8, x: 12, y: 40 },
+    { panel: number_of_SegmentsP, w: 12, h: 8, x: 0, y: 48 },
+    { panel: bytes_of_MemTablesP, w: 12, h: 8, x: 12, y: 48 },
+    { panel: mark_Cache_and_Minmax_Index_Cache_Memory_UsageP, w: 12, h: 8, x: 0, y: 56 },
+    { panel: effectiveness_of_Mark_CacheP, w: 12, h: 8, x: 12, y: 56 },
+    { panel: schema_of_Column_FileP, w: 12, h: 8, x: 0, y: 64 },
+    { panel: read_SnapshotsP, w: 12, h: 8, x: 12, y: 64 },
+    { panel: memory_by_threadP, w: 12, h: 8, x: 0, y: 72 },
+    { panel: memory_by_thread_proxyP, w: 12, h: 8, x: 12, y: 72 },
+    { panel: memory_by_classP, w: 12, h: 8, x: 0, y: 80 },
+    { panel: kVStore_memoryP, w: 12, h: 8, x: 12, y: 80 }
   ],
 }

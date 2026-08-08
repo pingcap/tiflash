@@ -33,48 +33,56 @@ local tiFlash_Resource_GroupP = graphPanel.new(
   prometheus.target(
     'max(tiflash_resource_group{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="avg_speed", instance=~"$instance", instance=~"$tiflash_role"}) by (instance,resource_group)',
     legendFormat='avg_speed-{{instance}}-{{resource_group}}',
+    hide=true,
   )
 )
 .addTarget(
   prometheus.target(
     'sum(rate(tiflash_resource_group_counter{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="total_consumption", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance,resource_group)',
     legendFormat='total_consumption-{{instance}}-{{resource_group}}',
+    hide=true,
   )
 )
 .addTarget(
   prometheus.target(
     'max(tiflash_resource_group{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="bucket_fill_rate", instance=~"$instance", instance=~"$tiflash_role"}) by (instance,resource_group)',
     legendFormat='bucket_fill_rate-{{instance}}-{{resource_group}}',
+    hide=true,
   )
 )
 .addTarget(
   prometheus.target(
     'max(tiflash_resource_group{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="bucket_capacity", instance=~"$instance", instance=~"$tiflash_role"}) by (instance,resource_group)',
     legendFormat='bucket_capacity-{{instance}}-{{resource_group}}',
+    hide=true,
   )
 )
 .addTarget(
   prometheus.target(
     'sum(rate(tiflash_resource_group_counter{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="request_gac_count", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance,resource_group)',
     legendFormat='request_gac_count-{{instance}}-{{resource_group}}',
+    hide=true,
   )
 )
 .addTarget(
   prometheus.target(
     'sum(rate(tiflash_resource_group_counter{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="gac_req_ru_consumption_delta", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance,resource_group)',
     legendFormat='gac_req_ru_consumption_delta-{{instance}}-{{resource_group}}',
+    hide=true,
   )
 )
 .addTarget(
   prometheus.target(
     'sum(rate(tiflash_resource_group_counter{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="compute_ru_consumption", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance,resource_group)',
     legendFormat='compute_ru_consumption-{{instance}}-{{resource_group}}',
+    hide=true,
   )
 )
 .addTarget(
   prometheus.target(
     'sum(rate(tiflash_resource_group_counter{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="storage_ru_consumption", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance,resource_group)',
     legendFormat='storage_ru_consumption-{{instance}}-{{resource_group}}',
+    hide=true,
   )
 );
 
@@ -130,11 +138,11 @@ local request_UnitP = graphPanel.new(
 
 {
   row: rowObj
-  .addPanel(tiFlash_Resource_GroupP, gridPos=common.pos(12, 8))
-  .addPanel(request_UnitP, gridPos=common.pos(12, 8))
+  .addPanel(tiFlash_Resource_GroupP, gridPos=common.pos(12, 8, x=0, y=203))
+  .addPanel(request_UnitP, gridPos=common.pos(12, 8, x=12, y=203))
   ,
   panels: [
-    { panel: tiFlash_Resource_GroupP, w: 12, h: 8 },
-    { panel: request_UnitP, w: 12, h: 8 }
+    { panel: tiFlash_Resource_GroupP, w: 12, h: 8, x: 0, y: 203 },
+    { panel: request_UnitP, w: 12, h: 8, x: 12, y: 203 }
   ],
 }

@@ -45,7 +45,7 @@
             "h": 8,
             "w": 8,
             "x": 0,
-            "y": 0
+            "y": 1
           },
           "id": 3,
           "legend": {
@@ -144,8 +144,8 @@
           "gridPos": {
             "h": 8,
             "w": 8,
-            "x": 0,
-            "y": 0
+            "x": 8,
+            "y": 1
           },
           "id": 4,
           "legend": {
@@ -235,8 +235,8 @@
           "gridPos": {
             "h": 8,
             "w": 8,
-            "x": 0,
-            "y": 0
+            "x": 16,
+            "y": 1
           },
           "id": 5,
           "legend": {
@@ -326,7 +326,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 9
           },
           "id": 6,
           "legend": {
@@ -420,8 +420,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 9
           },
           "id": 7,
           "legend": {
@@ -463,6 +463,7 @@
             {
               "expr": "sum(tiflash_proxy_tikv_raftstore_hibernated_peer_state{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}) by (instance, state)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "{{instance}}-{{state}}",
               "refId": "B"
@@ -519,7 +520,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 17
           },
           "id": 8,
           "legend": {
@@ -621,8 +622,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 17
           },
           "id": 9,
           "legend": {
@@ -678,6 +679,7 @@
             {
               "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_retained{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"})",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "retained",
               "refId": "C"
@@ -685,6 +687,7 @@
             {
               "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_mapped{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"})",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "mapped",
               "refId": "D"
@@ -692,6 +695,7 @@
             {
               "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_resident{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"})",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "resident",
               "refId": "E"
@@ -699,6 +703,7 @@
             {
               "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_allocated{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"})",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "allocated",
               "refId": "F"
@@ -706,6 +711,7 @@
             {
               "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_active{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"})",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "active",
               "refId": "G"
@@ -713,6 +719,7 @@
             {
               "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_metadata_thp{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"})",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "metadata_thp",
               "refId": "H"
@@ -720,6 +727,7 @@
             {
               "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_metadata{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"})",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "metadata",
               "refId": "I"
@@ -727,6 +735,7 @@
             {
               "expr": "sum(tiflash_system_asynchronous_metric_mimalloc_current_rss{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=~\".*tiflash\", instance=~\"$instance\", instance=~\"$tiflash_role\"})",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "mimalloc_rss",
               "refId": "J"
@@ -734,6 +743,7 @@
             {
               "expr": "sum(tiflash_system_asynchronous_metric_mimalloc_current_commit{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=~\".*tiflash\", instance=~\"$instance\", instance=~\"$tiflash_role\"})",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "mimalloc_commit",
               "refId": "K"
@@ -741,6 +751,7 @@
             {
               "expr": "sum(tiflash_system_asynchronous_metric_mmap_alive{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=~\".*tiflash\", instance=~\"$instance\", instance=~\"$tiflash_role\"})",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "mmap",
               "refId": "L"
@@ -794,7 +805,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 25
           },
           "id": 10,
           "legend": {
@@ -881,8 +892,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 25
           },
           "id": 11,
           "legend": {
@@ -993,7 +1004,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 34
           },
           "id": 13,
           "legend": {
@@ -1080,8 +1091,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 34
           },
           "id": 14,
           "legend": {
@@ -1184,7 +1195,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 41
           },
           "id": 15,
           "legend": {
@@ -1286,8 +1297,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 41
           },
           "id": 16,
           "legend": {
@@ -1390,7 +1401,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 48
           },
           "id": 17,
           "legend": {
@@ -1492,8 +1503,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 48
           },
           "id": 18,
           "legend": {
@@ -1596,7 +1607,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 55
           },
           "id": 19,
           "legend": {
@@ -1698,8 +1709,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 55
           },
           "id": 20,
           "legend": {
@@ -1803,7 +1814,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 62
           },
           "id": 21,
           "legend": {
@@ -1905,8 +1916,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 62
           },
           "id": 22,
           "legend": {
@@ -2009,7 +2020,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 69
           },
           "id": 23,
           "legend": {
@@ -2111,8 +2122,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 69
           },
           "id": 24,
           "legend": {
@@ -2215,7 +2226,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 76
           },
           "id": 25,
           "legend": {
@@ -2317,8 +2328,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 76
           },
           "id": 26,
           "legend": {
@@ -2421,7 +2432,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 83
           },
           "id": 27,
           "legend": {
@@ -2471,6 +2482,7 @@
             {
               "expr": "count by (instance) (tiflash_proxy_thread_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", name=~\"LocalIndexPool*\", instance=~\"$tiflash_role\"})",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "Limit",
               "refId": "B"
@@ -2530,8 +2542,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 83
           },
           "id": 28,
           "legend": {
@@ -2655,7 +2667,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 35
           },
           "id": 30,
           "legend": {
@@ -2751,8 +2763,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 35
           },
           "id": 31,
           "legend": {
@@ -2842,7 +2854,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 42
           },
           "id": 32,
           "legend": {
@@ -2931,8 +2943,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 42
           },
           "id": 33,
           "legend": {
@@ -3041,7 +3053,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 36
           },
           "id": 35,
           "legend": {
@@ -3127,8 +3139,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 36
           },
           "id": 36,
           "legend": {
@@ -3215,7 +3227,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 43
           },
           "id": 37,
           "legend": {
@@ -3254,6 +3266,7 @@
             {
               "expr": "histogram_quantile(0.99, sum(rate(tiflash_coprocessor_request_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (le, type))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "99-{{type}}",
               "refId": "B"
@@ -3261,6 +3274,7 @@
             {
               "expr": "histogram_quantile(0.95, sum(rate(tiflash_coprocessor_request_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (le, type))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "95-{{type}}",
               "refId": "C"
@@ -3268,6 +3282,7 @@
             {
               "expr": "histogram_quantile(0.80, sum(rate(tiflash_coprocessor_request_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (le, type))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "80-{{type}}",
               "refId": "D"
@@ -3320,8 +3335,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 43
           },
           "id": 38,
           "legend": {
@@ -3406,7 +3421,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 50
           },
           "id": 39,
           "legend": {
@@ -3511,8 +3526,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 50
           },
           "id": 40,
           "legend": {
@@ -3599,7 +3614,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 57
           },
           "id": 41,
           "legend": {
@@ -3704,8 +3719,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 57
           },
           "id": 42,
           "legend": {
@@ -3792,7 +3807,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 64
           },
           "id": 43,
           "legend": {
@@ -3876,8 +3891,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 64
           },
           "id": 44,
           "legend": {
@@ -3962,7 +3977,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 71
           },
           "id": 45,
           "legend": {
@@ -4046,8 +4061,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 71
           },
           "id": 46,
           "legend": {
@@ -4133,7 +4148,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 78
           },
           "id": 47,
           "legend": {
@@ -4217,8 +4232,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 78
           },
           "id": 48,
           "legend": {
@@ -4303,7 +4318,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 85
           },
           "id": 49,
           "legend": {
@@ -4387,8 +4402,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 85
           },
           "id": 50,
           "legend": {
@@ -4475,7 +4490,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 92
           },
           "id": 51,
           "legend": {
@@ -4560,8 +4575,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 92
           },
           "id": 52,
           "legend": {
@@ -4669,7 +4684,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 37
           },
           "id": 54,
           "legend": {
@@ -4754,8 +4769,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 37
           },
           "id": 55,
           "legend": {
@@ -4869,7 +4884,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 45
           },
           "id": 56,
           "legend": {
@@ -4964,8 +4979,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 45
           },
           "id": 57,
           "legend": {
@@ -5061,7 +5076,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 53
           },
           "id": 58,
           "legend": {
@@ -5146,8 +5161,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 53
           },
           "id": 59,
           "legend": {
@@ -5179,6 +5194,7 @@
             {
               "expr": "histogram_quantile(0.80, max(rate(tiflash_task_scheduler_waiting_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (instance,le,resource_group))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "{{instance}}-{{resource_group}}-80",
               "refId": "A"
@@ -5186,6 +5202,7 @@
             {
               "expr": "histogram_quantile(0.90, max(rate(tiflash_task_scheduler_waiting_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (instance,le,resource_group))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "{{instance}}-{{resource_group}}-90",
               "refId": "B"
@@ -5267,7 +5284,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 38
           },
           "id": 61,
           "legend": {
@@ -5313,6 +5330,7 @@
             {
               "expr": "sum(increase(tiflash_schema_internal_ddl_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type,instance)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "{{type}}-{{instance}}",
               "refId": "C"
@@ -5320,6 +5338,7 @@
             {
               "expr": "sum(increase(tiflash_schema_internal_ddl_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (instance)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "total-{{instance}}",
               "refId": "D"
@@ -5373,8 +5392,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 38
           },
           "id": 62,
           "legend": {
@@ -5459,7 +5478,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 45
           },
           "id": 63,
           "legend": {
@@ -5510,6 +5529,7 @@
             {
               "expr": "histogram_quantile(0.95, sum(rate(tiflash_schema_apply_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (le, type))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "95-{{type}}",
               "refId": "C"
@@ -5517,6 +5537,7 @@
             {
               "expr": "histogram_quantile(0.80, sum(rate(tiflash_schema_apply_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\", keyspace!=\"\"}[1m])) by (le, type, keyspace))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "80-{{type}}",
               "refId": "D"
@@ -5598,7 +5619,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 39
           },
           "id": 65,
           "legend": {
@@ -5699,8 +5720,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 39
           },
           "id": 66,
           "legend": {
@@ -5803,7 +5824,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 47
           },
           "id": 67,
           "legend": {
@@ -5891,8 +5912,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 47
           },
           "id": 68,
           "legend": {
@@ -5997,7 +6018,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 55
           },
           "id": 69,
           "legend": {
@@ -6095,8 +6116,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 55
           },
           "id": 70,
           "legend": {
@@ -6217,7 +6238,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 40
           },
           "id": 72,
           "legend": {
@@ -6301,8 +6322,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 40
           },
           "id": 73,
           "legend": {
@@ -6341,6 +6362,7 @@
             {
               "expr": "tiflash_system_current_metric_NumIStorage{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "tables-all-{{instance}}",
               "refId": "B"
@@ -6394,7 +6416,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 48
           },
           "id": 74,
           "legend": {
@@ -6485,8 +6507,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 48
           },
           "id": 75,
           "legend": {
@@ -6579,7 +6601,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 56
           },
           "id": 76,
           "legend": {
@@ -6688,8 +6710,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 56
           },
           "id": 77,
           "legend": {
@@ -6782,7 +6804,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 64
           },
           "id": 78,
           "legend": {
@@ -6889,8 +6911,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 64
           },
           "id": 79,
           "legend": {
@@ -6988,7 +7010,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 72
           },
           "id": 80,
           "legend": {
@@ -7034,6 +7056,7 @@
             {
               "expr": "tiflash_storages_thread_memory_usage{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\", type=~\"alloc_.*\"}",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "{{instance}}-{{type}}-tot",
               "refId": "C"
@@ -7041,6 +7064,7 @@
             {
               "expr": "-tiflash_storages_thread_memory_usage{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\", type=~\"dealloc_.*\"}",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "{{instance}}-{{type}}-tot",
               "refId": "D"
@@ -7093,8 +7117,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 72
           },
           "id": 81,
           "legend": {
@@ -7142,6 +7166,7 @@
             {
               "expr": "tiflash_raft_proxy_thread_memory_usage{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\", type=~\"alloc_.*\"}",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "{{instance}}-{{type}}-tot",
               "refId": "C"
@@ -7149,6 +7174,7 @@
             {
               "expr": "-tiflash_raft_proxy_thread_memory_usage{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\", type=~\"dealloc_.*\"}",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "{{instance}}-{{type}}-tot",
               "refId": "D"
@@ -7202,7 +7228,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 80
           },
           "id": 82,
           "legend": {
@@ -7241,6 +7267,7 @@
             {
               "expr": "rate(tiflash_memory_usage_by_class{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[$__interval])",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "{{instance}}-{{type}}-rate",
               "refId": "B"
@@ -7293,8 +7320,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 80
           },
           "id": 83,
           "legend": {
@@ -7399,7 +7426,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 9
           },
           "id": 85,
           "legend": {
@@ -7519,8 +7546,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 9
           },
           "id": 86,
           "legend": {
@@ -7554,6 +7581,7 @@
             {
               "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_proxy_kv_engine_ia_manager_segments_memory_wait_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[1m]))) by (le, $additional_groupby) / 1000000000)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "max {{$additional_groupby}}",
               "refId": "A"
@@ -7621,7 +7649,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 17
           },
           "id": 87,
           "legend": {
@@ -7714,8 +7742,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 17
           },
           "id": 88,
           "legend": {
@@ -7749,6 +7777,7 @@
             {
               "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_proxy_kv_engine_ia_remote_read_segment_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[1m]))) by (le, $additional_groupby) / 1000000000)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "max {{$additional_groupby}}",
               "refId": "A"
@@ -7816,7 +7845,7 @@
             "h": 8,
             "w": 8,
             "x": 0,
-            "y": 0
+            "y": 25
           },
           "id": 89,
           "legend": {
@@ -7909,8 +7938,8 @@
           "gridPos": {
             "h": 8,
             "w": 8,
-            "x": 0,
-            "y": 0
+            "x": 8,
+            "y": 25
           },
           "id": 90,
           "legend": {
@@ -7944,6 +7973,7 @@
             {
               "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_proxy_kv_engine_columnar_prefetch_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[1m]))) by (le, $additional_groupby) / 1000000000)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "max {{$additional_groupby}}",
               "refId": "A"
@@ -8010,8 +8040,8 @@
           "gridPos": {
             "h": 8,
             "w": 8,
-            "x": 0,
-            "y": 0
+            "x": 16,
+            "y": 25
           },
           "id": 91,
           "legend": {
@@ -8045,6 +8075,7 @@
             {
               "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_proxy_kv_engine_columnar_prefetch_cache_hit_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[1m]))) by (le, $additional_groupby) / 1000000000)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "max {{$additional_groupby}}",
               "refId": "A"
@@ -8112,7 +8143,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 33
           },
           "id": 92,
           "legend": {
@@ -8198,8 +8229,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 33
           },
           "id": 93,
           "legend": {
@@ -8233,6 +8264,7 @@
             {
               "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_proxy_kv_engine_columnar_fetch_snapshot_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[1m]))) by (le, $additional_groupby) / 1000000000)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "max {{$additional_groupby}}",
               "refId": "A"
@@ -8300,7 +8332,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 41
           },
           "id": 94,
           "legend": {
@@ -8400,8 +8432,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 41
           },
           "id": 95,
           "legend": {
@@ -8519,7 +8551,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 41
           },
           "id": 97,
           "legend": {
@@ -8615,8 +8647,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 41
           },
           "id": 98,
           "legend": {
@@ -8667,6 +8699,7 @@
             {
               "expr": "sum by (instance) ( rate(tiflash_system_profile_event_PSMWriteBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[10m]) + rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWriteBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[10m]) ) / sum by (instance) ( rate(tiflash_storage_throughput_bytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\", type=~\"write|ingest\"}[10m]) )",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "amp-10min-{{instance}}",
               "refId": "C"
@@ -8674,6 +8707,7 @@
             {
               "expr": "sum by (instance) ( rate(tiflash_system_profile_event_PSMWriteBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[30m]) + rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWriteBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[30m]) ) / sum by (instance) ( rate(tiflash_storage_throughput_bytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\", type=~\"write|ingest\"}[30m]) )",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "amp-30min-{{instance}}",
               "refId": "D"
@@ -8681,6 +8715,7 @@
             {
               "expr": "sum by (instance) ( rate(tiflash_system_profile_event_PSMWriteBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[5m]) + rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWriteBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[5m]) )",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "fs-5min-{{instance}}",
               "refId": "E"
@@ -8688,6 +8723,7 @@
             {
               "expr": "sum by (instance) ( rate(tiflash_storage_throughput_bytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\", type=~\"write|ingest\"}[5m]) )",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "write-5min-{{instance}}",
               "refId": "F"
@@ -8743,7 +8779,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 49
           },
           "id": 99,
           "legend": {
@@ -8838,8 +8874,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 49
           },
           "id": 100,
           "legend": {
@@ -8934,7 +8970,7 @@
             "h": 5,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 57
           },
           "id": 101,
           "legend": {
@@ -9019,8 +9055,8 @@
           "gridPos": {
             "h": 5,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 57
           },
           "id": 102,
           "legend": {
@@ -9052,6 +9088,7 @@
             {
               "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\", type!~\"(delta_merge|seg_merge|seg_split).*\"}[$__rate_interval]))) by (le,type, $additional_groupby) / 1000000000)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "max-{{type}} {{$additional_groupby}}",
               "refId": "A"
@@ -9120,7 +9157,7 @@
             "h": 5,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 62
           },
           "id": 103,
           "legend": {
@@ -9205,8 +9242,8 @@
           "gridPos": {
             "h": 5,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 62
           },
           "id": 104,
           "legend": {
@@ -9238,6 +9275,7 @@
             {
               "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\", type=~\"(delta_merge|seg_merge|seg_split).*\"}[$__rate_interval]))) by (le,type, $additional_groupby) / 1000000000)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "max-{{type}} {{$additional_groupby}}",
               "refId": "A"
@@ -9306,7 +9344,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 0
+            "y": 67
           },
           "id": 105,
           "legend": {
@@ -9406,7 +9444,7 @@
             "h": 7,
             "w": 8,
             "x": 0,
-            "y": 0
+            "y": 74
           },
           "id": 106,
           "legend": {
@@ -9440,6 +9478,7 @@
             {
               "expr": "tiflash_proxy_process_open_fds{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=~\".*tiflash\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "{{instance}}",
               "refId": "A"
@@ -9514,8 +9553,8 @@
           "gridPos": {
             "h": 7,
             "w": 8,
-            "x": 0,
-            "y": 0
+            "x": 8,
+            "y": 74
           },
           "id": 107,
           "legend": {
@@ -9611,8 +9650,8 @@
           "gridPos": {
             "h": 7,
             "w": 8,
-            "x": 0,
-            "y": 0
+            "x": 16,
+            "y": 74
           },
           "id": 108,
           "legend": {
@@ -9712,7 +9751,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 81
           },
           "id": 109,
           "legend": {
@@ -9752,6 +9791,7 @@
             {
               "expr": "sum(rate(tiflash_system_profile_event_PSMWritePages{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m]))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "PageFile",
               "refId": "B"
@@ -9812,8 +9852,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 81
           },
           "id": 110,
           "legend": {
@@ -9853,6 +9893,7 @@
             {
               "expr": "sum(rate(tiflash_system_profile_event_PSMReadPages{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m]))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "PageFile",
               "refId": "B"
@@ -9915,7 +9956,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 88
           },
           "id": 111,
           "legend": {
@@ -10020,8 +10061,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 88
           },
           "id": 112,
           "legend": {
@@ -10126,7 +10167,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 96
           },
           "id": 113,
           "legend": {
@@ -10218,8 +10259,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 96
           },
           "id": 114,
           "legend": {
@@ -10325,7 +10366,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 42
           },
           "id": 116,
           "legend": {
@@ -10409,8 +10450,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 42
           },
           "id": 117,
           "legend": {
@@ -10455,6 +10496,7 @@
             {
               "expr": "tiflash_system_current_metric_PSMVCCSnapshotsList{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "snapshot_list-{{instance}}",
               "refId": "B"
@@ -10462,6 +10504,7 @@
             {
               "expr": "tiflash_system_current_metric_PSMVCCNumSnapshots{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}",
               "format": "heatmap",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "num_snapshot-{{instance}}",
               "refId": "C"
@@ -10469,6 +10512,7 @@
             {
               "expr": "tiflash_system_current_metric_DT_SnapshotOfRead{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "read-{{instance}}",
               "refId": "D"
@@ -10476,6 +10520,7 @@
             {
               "expr": "tiflash_system_current_metric_DT_SnapshotOfReadRaw{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "read_raw-{{instance}}",
               "refId": "E"
@@ -10483,6 +10528,7 @@
             {
               "expr": "tiflash_system_current_metric_DT_SnapshotOfDeltaMerge{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "delta_merge-{{instance}}",
               "refId": "F"
@@ -10490,6 +10536,7 @@
             {
               "expr": "tiflash_system_current_metric_DT_SnapshotOfDeltaCompact{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "delta_compact-{{instance}}",
               "refId": "G"
@@ -10497,6 +10544,7 @@
             {
               "expr": "tiflash_system_current_metric_DT_SnapshotOfSegmentMerge{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "seg_merge-{{instance}}",
               "refId": "H"
@@ -10504,6 +10552,7 @@
             {
               "expr": "tiflash_system_current_metric_DT_SnapshotOfSegmentSplit{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "seg_split-{{instance}}",
               "refId": "I"
@@ -10511,6 +10560,7 @@
             {
               "expr": "tiflash_system_current_metric_DT_SnapshotOfPlaceIndex{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "place_index-{{instance}}",
               "refId": "J"
@@ -10571,7 +10621,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 50
           },
           "id": 118,
           "legend": {
@@ -10617,6 +10667,7 @@
             {
               "expr": "histogram_quantile(0.95, sum(rate(tiflash_read_thread_internal_us_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (le, type))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "95-{{type}}",
               "refId": "C"
@@ -10624,6 +10675,7 @@
             {
               "expr": "histogram_quantile(0.80, sum(rate(tiflash_read_thread_internal_us_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (le, type))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "80-{{type}}",
               "refId": "D"
@@ -10677,8 +10729,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 50
           },
           "id": 119,
           "legend": {
@@ -10769,7 +10821,7 @@
             "h": 8,
             "w": 8,
             "x": 0,
-            "y": 0
+            "y": 58
           },
           "id": 120,
           "legend": {
@@ -10820,6 +10872,7 @@
             {
               "expr": "sum(rate(tiflash_storage_column_cache_packs{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\", type=~\"extra_column_hit\"}[1m]))/sum(rate(tiflash_storage_column_cache_packs{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\", type=~\"extra_column_hit|extra_column_miss\"}[1m]))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "extra_column_cache_hit_ratio",
               "refId": "C"
@@ -10872,8 +10925,8 @@
           "gridPos": {
             "h": 8,
             "w": 8,
-            "x": 0,
-            "y": 0
+            "x": 8,
+            "y": 58
           },
           "id": 121,
           "legend": {
@@ -10963,8 +11016,8 @@
           "gridPos": {
             "h": 8,
             "w": 8,
-            "x": 0,
-            "y": 0
+            "x": 16,
+            "y": 58
           },
           "id": 122,
           "legend": {
@@ -11011,6 +11064,7 @@
             {
               "expr": "histogram_quantile(0.80, sum(rate(tiflash_storage_read_thread_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (le, type,$additional_groupby))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "80-{{type}} {{$additional_groupby}}",
               "refId": "C"
@@ -11064,7 +11118,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 66
           },
           "id": 123,
           "legend": {
@@ -11103,6 +11157,7 @@
             {
               "expr": "histogram_quantile(0.99, sum(rate(tiflash_storage_version_chain_ms_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (le, type))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "99-{{type}}",
               "refId": "B"
@@ -11110,6 +11165,7 @@
             {
               "expr": "histogram_quantile(0.95, sum(rate(tiflash_storage_version_chain_ms_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (le, type))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "95-{{type}}",
               "refId": "C"
@@ -11117,6 +11173,7 @@
             {
               "expr": "histogram_quantile(0.80, sum(rate(tiflash_storage_version_chain_ms_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (le, type))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "80-{{type}}",
               "refId": "D"
@@ -11170,8 +11227,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 66
           },
           "id": 124,
           "legend": {
@@ -11278,7 +11335,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 43
           },
           "id": 126,
           "legend": {
@@ -11396,8 +11453,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 43
           },
           "id": 127,
           "legend": {
@@ -11497,7 +11554,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 51
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -11545,8 +11602,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 51
           },
           "id": 129,
           "legend": {
@@ -11580,6 +11637,7 @@
             {
               "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_page_write_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m]))) by (le, type) / 1000000000)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "{{type}}-max",
               "refId": "A"
@@ -11594,6 +11652,7 @@
             {
               "expr": "histogram_quantile(0.99, sum(rate(tiflash_storage_page_write_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (le, type))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "{{type}}-99",
               "refId": "C"
@@ -11601,6 +11660,7 @@
             {
               "expr": "histogram_quantile(0.95, sum(rate(tiflash_storage_page_write_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (le, type))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "{{type}}-95",
               "refId": "D"
@@ -11608,6 +11668,7 @@
             {
               "expr": "histogram_quantile(0.80, sum(rate(tiflash_storage_page_write_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (le, type))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "{{type}}-80",
               "refId": "E"
@@ -11661,7 +11722,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 59
           },
           "id": 130,
           "legend": {
@@ -11748,8 +11809,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 59
           },
           "id": 131,
           "legend": {
@@ -11791,6 +11852,7 @@
             {
               "expr": "histogram_quantile(0.99, sum(rate(tiflash_storage_page_gc_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (le, type))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "{{type}}-99",
               "refId": "B"
@@ -11846,7 +11908,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 67
           },
           "id": 132,
           "legend": {
@@ -11942,8 +12004,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 67
           },
           "id": 133,
           "legend": {
@@ -12031,7 +12093,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 75
           },
           "id": 134,
           "legend": {
@@ -12122,8 +12184,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 75
           },
           "id": 135,
           "legend": {
@@ -12158,6 +12220,7 @@
             {
               "expr": "sum(tiflash_system_current_metric_StoragePoolV2Only{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}) by (instance)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "V2-{{instance}}",
               "refId": "A"
@@ -12172,6 +12235,7 @@
             {
               "expr": "sum(tiflash_system_current_metric_StoragePoolMixMode{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}) by (instance)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "Mix-{{instance}}",
               "refId": "C"
@@ -12234,7 +12298,7 @@
             "h": 9,
             "w": 24,
             "x": 0,
-            "y": 0
+            "y": 83
           },
           "id": 136,
           "legend": {
@@ -12324,7 +12388,7 @@
             "h": 9,
             "w": 24,
             "x": 0,
-            "y": 0
+            "y": 92
           },
           "id": 137,
           "legend": {
@@ -12435,7 +12499,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 12
           },
           "id": 139,
           "legend": {
@@ -12523,8 +12587,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 12
           },
           "id": 140,
           "legend": {
@@ -12611,7 +12675,7 @@
             "h": 8,
             "w": 8,
             "x": 0,
-            "y": 0
+            "y": 20
           },
           "id": 141,
           "legend": {
@@ -12651,6 +12715,7 @@
             {
               "expr": "avg(tiflash_system_current_metric_RateLimiterPendingWriteRequest{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}) by (instance)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "other-current-{{instance}}",
               "refId": "A"
@@ -12732,8 +12797,8 @@
           "gridPos": {
             "h": 8,
             "w": 8,
-            "x": 0,
-            "y": 0
+            "x": 8,
+            "y": 20
           },
           "id": 142,
           "legend": {
@@ -12826,8 +12891,8 @@
           "gridPos": {
             "h": 8,
             "w": 8,
-            "x": 0,
-            "y": 0
+            "x": 16,
+            "y": 20
           },
           "id": 143,
           "legend": {
@@ -12862,6 +12927,7 @@
             {
               "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_io_limiter_pending_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m]))) by (le, type) / 1000000000)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "{{type}}-pending-max",
               "refId": "A"
@@ -12950,7 +13016,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 0
+            "y": 61
           },
           "id": 145,
           "legend": {
@@ -12989,6 +13055,7 @@
             {
               "expr": "histogram_quantile(0.99, sum(rate(tiflash_storage_write_stall_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (le, type, instance))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "99-{{type}}-{{instance}}",
               "refId": "A"
@@ -13051,7 +13118,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 69
           },
           "id": 146,
           "legend": {
@@ -13148,8 +13215,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 69
           },
           "id": 147,
           "legend": {
@@ -13247,7 +13314,7 @@
             "h": 9,
             "w": 24,
             "x": 0,
-            "y": 0
+            "y": 77
           },
           "id": 148,
           "legend": {
@@ -13350,7 +13417,7 @@
             "h": 9,
             "w": 24,
             "x": 0,
-            "y": 0
+            "y": 86
           },
           "id": 149,
           "legend": {
@@ -13468,7 +13535,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 62
           },
           "id": 151,
           "legend": {
@@ -13552,8 +13619,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 62
           },
           "id": 152,
           "legend": {
@@ -13638,7 +13705,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 69
           },
           "id": 153,
           "legend": {
@@ -13722,8 +13789,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 69
           },
           "id": 154,
           "legend": {
@@ -13808,7 +13875,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 76
           },
           "id": 155,
           "legend": {
@@ -13859,6 +13926,7 @@
             {
               "expr": "histogram_quantile(0.95, sum(rate(tiflash_raft_wait_index_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (le, $additional_groupby))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "95 {{$additional_groupby}}",
               "refId": "C"
@@ -13866,6 +13934,7 @@
             {
               "expr": "histogram_quantile(0.80, sum(rate(tiflash_raft_wait_index_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (le, $additional_groupby))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "80 {{$additional_groupby}}",
               "refId": "D"
@@ -13926,8 +13995,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 76
           },
           "id": 156,
           "legend": {
@@ -13973,6 +14042,7 @@
             {
               "expr": "histogram_quantile(0.95, sum(rate(tiflash_raft_read_index_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (le))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "95",
               "refId": "C"
@@ -13980,6 +14050,7 @@
             {
               "expr": "histogram_quantile(0.80, sum(rate(tiflash_raft_read_index_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (le))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "80",
               "refId": "D"
@@ -14034,7 +14105,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 0
+            "y": 83
           },
           "id": 157,
           "legend": {
@@ -14163,7 +14234,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 90
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -14218,8 +14289,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 90
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -14275,7 +14346,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 97
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -14330,8 +14401,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 97
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -14380,7 +14451,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 104
           },
           "id": 162,
           "legend": {
@@ -14464,8 +14535,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 104
           },
           "id": 163,
           "legend": {
@@ -14556,7 +14627,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 111
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -14617,8 +14688,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 111
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -14673,7 +14744,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 118
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -14693,6 +14764,7 @@
             {
               "expr": "sum(delta(tiflash_raft_region_flush_bytes_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\", type=~\"flushed\"}[1m])) by (le, type)",
               "format": "heatmap",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "{{le}}",
               "refId": "B"
@@ -14734,8 +14806,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 118
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -14790,7 +14862,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 0
+            "y": 125
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -14839,7 +14911,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 132
           },
           "id": 169,
           "legend": {
@@ -14924,8 +14996,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 132
           },
           "id": 170,
           "legend": {
@@ -14966,6 +15038,7 @@
             {
               "expr": "histogram_quantile(0.95, sum(rate(tiflash_raft_eager_gc_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (le, type))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "95%-{{type}}",
               "refId": "B"
@@ -14980,6 +15053,7 @@
             {
               "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_raft_eager_gc_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m]))) by (le, type) / 1000000000)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": " 100%-{{type}}",
               "refId": "D"
@@ -15035,7 +15109,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 0
+            "y": 139
           },
           "id": 171,
           "legend": {
@@ -15125,7 +15199,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 0
+            "y": 146
           },
           "id": 172,
           "legend": {
@@ -15221,7 +15295,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 153
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -15270,8 +15344,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 153
           },
           "id": 174,
           "legend": {
@@ -15319,6 +15393,7 @@
             {
               "expr": "histogram_quantile(0.95, sum(rate(tiflash_raft_upstream_latency_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (le))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "95%",
               "refId": "C"
@@ -15379,7 +15454,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 160
           },
           "id": 175,
           "legend": {
@@ -15484,7 +15559,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 0
+            "y": 63
           },
           "id": 177,
           "legend": {
@@ -15572,7 +15647,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 0
+            "y": 70
           },
           "id": 178,
           "legend": {
@@ -15685,7 +15760,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 77
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -15733,8 +15808,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 77
           },
           "id": 180,
           "legend": {
@@ -15825,7 +15900,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 84
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -15880,8 +15955,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 84
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -15936,7 +16011,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 91
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -15991,8 +16066,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 91
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -16047,7 +16122,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 98
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -16102,8 +16177,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 98
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -16159,7 +16234,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 105
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -16228,7 +16303,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 64
           },
           "id": 189,
           "legend": {
@@ -16280,6 +16355,7 @@
             {
               "expr": "avg((rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[5m]) - rate(tiflash_system_profile_event_DMFileFilterAftRoughSet{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[5m])) / (rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[5m]))) by (instance)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "5min-{{instance}}",
               "refId": "B"
@@ -16287,6 +16363,7 @@
             {
               "expr": "sum(rate(tiflash_system_profile_event_DMFileFilterNoFilter{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (instance)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "No Filter-{{instance}}",
               "refId": "C"
@@ -16294,6 +16371,7 @@
             {
               "expr": "sum(rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (instance)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "PK Filter-{{instance}}",
               "refId": "D"
@@ -16301,6 +16379,7 @@
             {
               "expr": "sum(rate(tiflash_system_profile_event_DMFileFilterAftRoughSet{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (instance)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "RS Filter-{{instance}}",
               "refId": "E"
@@ -16359,8 +16438,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 64
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -16430,7 +16509,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 33
           },
           "id": 192,
           "legend": {
@@ -16464,6 +16543,7 @@
             {
               "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_checkpoint_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m]))) by (le, type, $additional_groupby) / 1000000000)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "{{type}} {{$additional_groupby}}",
               "refId": "A"
@@ -16478,6 +16558,7 @@
             {
               "expr": "histogram_quantile(0.99, sum(rate(tiflash_storage_checkpoint_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (le, type, $additional_groupby))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "{{type}}-99 {{$additional_groupby}}",
               "refId": "C"
@@ -16532,8 +16613,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 33
           },
           "id": 193,
           "legend": {
@@ -16632,7 +16713,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 41
           },
           "id": 194,
           "legend": {
@@ -16723,8 +16804,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 41
           },
           "id": 195,
           "legend": {
@@ -16816,7 +16897,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 49
           },
           "id": 196,
           "legend": {
@@ -16904,8 +16985,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 49
           },
           "id": 197,
           "legend": {
@@ -16960,6 +17041,7 @@
             {
               "expr": "sum((tiflash_storage_remote_stats{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\", type=\"valid_size\"}) / (tiflash_storage_remote_stats{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\", type=\"total_size\"})) by (instance)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "valid_rate-{{instance}}",
               "refId": "C"
@@ -17015,7 +17097,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 57
           },
           "id": 198,
           "legend": {
@@ -17100,8 +17182,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 57
           },
           "id": 199,
           "legend": {
@@ -17189,7 +17271,7 @@
             "h": 8,
             "w": 8,
             "x": 0,
-            "y": 0
+            "y": 65
           },
           "id": 200,
           "legend": {
@@ -17278,8 +17360,8 @@
           "gridPos": {
             "h": 8,
             "w": 9,
-            "x": 0,
-            "y": 0
+            "x": 8,
+            "y": 65
           },
           "id": 201,
           "legend": {
@@ -17326,6 +17408,7 @@
             {
               "expr": "histogram_quantile(0.999, sum(rate(tiflash_storage_s3_gc_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (le, type, $additional_groupby))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "99%-{{type}} {{$additional_groupby}}",
               "refId": "A"
@@ -17386,8 +17469,8 @@
           "gridPos": {
             "h": 8,
             "w": 7,
-            "x": 0,
-            "y": 0
+            "x": 17,
+            "y": 65
           },
           "id": 202,
           "legend": {
@@ -17478,7 +17561,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 73
           },
           "id": 203,
           "legend": {
@@ -17567,8 +17650,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 73
           },
           "id": 204,
           "legend": {
@@ -17654,7 +17737,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 81
           },
           "id": 205,
           "legend": {
@@ -17743,8 +17826,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 81
           },
           "id": 206,
           "legend": {
@@ -17834,7 +17917,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 89
           },
           "id": 207,
           "legend": {
@@ -17923,8 +18006,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 89
           },
           "id": 208,
           "legend": {
@@ -18034,7 +18117,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 0
+            "y": 34
           },
           "id": 210,
           "legend": {
@@ -18122,7 +18205,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 42
           },
           "id": 211,
           "legend": {
@@ -18233,8 +18316,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 42
           },
           "id": 212,
           "legend": {
@@ -18322,7 +18405,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 50
           },
           "id": 213,
           "legend": {
@@ -18356,6 +18439,7 @@
             {
               "expr": "histogram_quantile(0.999, sum(rate(tiflash_storage_remote_cache_bg_download_stage_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (le, stage, file_type, $additional_groupby))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "999%-{{stage}}-{{file_type}} {{$additional_groupby}}",
               "refId": "A"
@@ -18422,8 +18506,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 50
           },
           "id": 214,
           "legend": {
@@ -18457,6 +18541,7 @@
             {
               "expr": "histogram_quantile(0.999, sum(rate(tiflash_storage_remote_cache_wait_on_downloading_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (le, result, file_type, $additional_groupby))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "999%-{{result}}-{{file_type}} {{$additional_groupby}}",
               "refId": "A"
@@ -18517,7 +18602,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 58
           },
           "id": 215,
           "legend": {
@@ -18609,8 +18694,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 58
           },
           "id": 216,
           "legend": {
@@ -18698,7 +18783,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 66
           },
           "id": 217,
           "legend": {
@@ -18785,8 +18870,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 66
           },
           "id": 218,
           "legend": {
@@ -18880,7 +18965,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 74
           },
           "id": 219,
           "legend": {
@@ -18989,8 +19074,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 74
           },
           "id": 220,
           "legend": {
@@ -19098,7 +19183,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 82
           },
           "id": 221,
           "legend": {
@@ -19196,8 +19281,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 82
           },
           "id": 222,
           "legend": {
@@ -19229,6 +19314,7 @@
             {
               "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\", type=\"place_index_update\"}[$__rate_interval]))) by (le,type, $additional_groupby) / 1000000000)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "max-{{type}} {{$additional_groupby}}",
               "refId": "A"
@@ -19297,7 +19383,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 89
           },
           "id": 223,
           "legend": {
@@ -19388,8 +19474,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 89
           },
           "id": 224,
           "legend": {
@@ -19423,6 +19509,7 @@
             {
               "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_place_index_stats_count_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m]))) by (le, $additional_groupby) / 1000000000)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "max {{$additional_groupby}}",
               "refId": "A"
@@ -19430,6 +19517,7 @@
             {
               "expr": "histogram_quantile(0.99, sum(rate(tiflash_storage_place_index_stats_count_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (le, type, $additional_groupby))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "99-{{type}} {{$additional_groupby}}",
               "refId": "B"
@@ -19511,7 +19599,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 36
           },
           "id": 226,
           "legend": {
@@ -19612,8 +19700,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 36
           },
           "id": 227,
           "legend": {
@@ -19717,6 +19805,7 @@
             {
               "expr": "sum(rate(tiflash_system_profile_event_S3IORead{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "S3IORead {{$additional_groupby}}",
               "refId": "K"
@@ -19724,6 +19813,7 @@
             {
               "expr": "sum(rate(tiflash_system_profile_event_S3IOSeek{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (type, $additional_groupby)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "S3IOSeek {{$additional_groupby}}",
               "refId": "L"
@@ -19778,7 +19868,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 44
           },
           "id": 228,
           "legend": {
@@ -19900,8 +19990,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 44
           },
           "id": 229,
           "legend": {
@@ -19935,6 +20025,7 @@
             {
               "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_s3_request_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m]))) by (le, type, $additional_groupby) / 1000000000)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "{{type}}-max {{$additional_groupby}}",
               "refId": "A"
@@ -20003,7 +20094,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 52
           },
           "id": 230,
           "legend": {
@@ -20153,8 +20244,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 52
           },
           "id": 231,
           "legend": {
@@ -20188,6 +20279,7 @@
             {
               "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_s3_http_request_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m]))) by (le, type, $additional_groupby) / 1000000000)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "{{type}}-max {{$additional_groupby}}",
               "refId": "A"
@@ -20256,7 +20348,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 60
           },
           "id": 232,
           "legend": {
@@ -20349,8 +20441,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 60
           },
           "id": 233,
           "legend": {
@@ -20485,7 +20577,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 162
           },
           "id": 235,
           "legend": {
@@ -20569,8 +20661,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 162
           },
           "id": 236,
           "legend": {
@@ -20662,7 +20754,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 170
           },
           "id": 237,
           "legend": {
@@ -20746,8 +20838,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 170
           },
           "id": 238,
           "legend": {
@@ -20883,7 +20975,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 178
           },
           "id": 239,
           "legend": {
@@ -21004,8 +21096,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 178
           },
           "id": 240,
           "legend": {
@@ -21108,7 +21200,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 186
           },
           "id": 241,
           "legend": {
@@ -21210,8 +21302,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 186
           },
           "id": 242,
           "legend": {
@@ -21315,7 +21407,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 194
           },
           "id": 243,
           "legend": {
@@ -21428,7 +21520,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 203
           },
           "id": 245,
           "legend": {
@@ -21467,6 +21559,7 @@
             {
               "expr": "max(tiflash_resource_group{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"avg_speed\", instance=~\"$instance\", instance=~\"$tiflash_role\"}) by (instance,resource_group)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "avg_speed-{{instance}}-{{resource_group}}",
               "refId": "B"
@@ -21474,6 +21567,7 @@
             {
               "expr": "sum(rate(tiflash_resource_group_counter{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"total_consumption\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (instance,resource_group)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "total_consumption-{{instance}}-{{resource_group}}",
               "refId": "C"
@@ -21481,6 +21575,7 @@
             {
               "expr": "max(tiflash_resource_group{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"bucket_fill_rate\", instance=~\"$instance\", instance=~\"$tiflash_role\"}) by (instance,resource_group)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "bucket_fill_rate-{{instance}}-{{resource_group}}",
               "refId": "D"
@@ -21488,6 +21583,7 @@
             {
               "expr": "max(tiflash_resource_group{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"bucket_capacity\", instance=~\"$instance\", instance=~\"$tiflash_role\"}) by (instance,resource_group)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "bucket_capacity-{{instance}}-{{resource_group}}",
               "refId": "E"
@@ -21495,6 +21591,7 @@
             {
               "expr": "sum(rate(tiflash_resource_group_counter{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"request_gac_count\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (instance,resource_group)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "request_gac_count-{{instance}}-{{resource_group}}",
               "refId": "F"
@@ -21502,6 +21599,7 @@
             {
               "expr": "sum(rate(tiflash_resource_group_counter{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"gac_req_ru_consumption_delta\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (instance,resource_group)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "gac_req_ru_consumption_delta-{{instance}}-{{resource_group}}",
               "refId": "G"
@@ -21509,6 +21607,7 @@
             {
               "expr": "sum(rate(tiflash_resource_group_counter{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"compute_ru_consumption\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (instance,resource_group)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "compute_ru_consumption-{{instance}}-{{resource_group}}",
               "refId": "H"
@@ -21516,6 +21615,7 @@
             {
               "expr": "sum(rate(tiflash_resource_group_counter{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", type=\"storage_ru_consumption\", instance=~\"$instance\", instance=~\"$tiflash_role\"}[1m])) by (instance,resource_group)",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 2,
               "legendFormat": "storage_ru_consumption-{{instance}}-{{resource_group}}",
               "refId": "I"
@@ -21570,8 +21670,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 203
           },
           "id": 246,
           "legend": {
@@ -21713,7 +21813,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 204
           },
           "id": 248,
           "legend": {
@@ -21745,6 +21845,7 @@
             {
               "expr": "histogram_quantile(0.999, sum(rate( tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket {k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[$__rate_interval] )) by (le, path, $additional_groupby))",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "999-{{path}} {{$additional_groupby}}",
               "refId": "A"
@@ -21759,6 +21860,7 @@
             {
               "expr": "(sum(rate( tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"} [$__rate_interval] )) by (path, $additional_groupby) / sum(rate( tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"} [$__rate_interval] )) by (path, $additional_groupby) )",
               "format": "time_series",
+              "hide": true,
               "intervalFactor": 1,
               "legendFormat": "avg-{{path}} {{$additional_groupby}}",
               "refId": "C"
@@ -21811,8 +21913,8 @@
           "gridPos": {
             "h": 7,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 204
           },
           "id": 249,
           "legend": {
@@ -21920,7 +22022,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 205
           },
           "id": 251,
           "legend": {
@@ -22011,8 +22113,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 205
           },
           "id": 252,
           "legend": {
@@ -22111,7 +22213,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 213
           },
           "id": 253,
           "legend": {
@@ -22205,8 +22307,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 0
+            "x": 12,
+            "y": 213
           },
           "id": 254,
           "legend": {

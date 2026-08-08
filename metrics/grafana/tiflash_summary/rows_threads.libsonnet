@@ -121,15 +121,15 @@ local thread_Nonvoluntary_Context_SwitchesP = graphPanel.new(
 
 {
   row: rowObj
-  .addPanel(threads_stateP, gridPos=common.pos(12, 7))
-  .addPanel(threads_IOP, gridPos=common.pos(12, 7))
-  .addPanel(thread_Voluntary_Context_SwitchesP, gridPos=common.pos(12, 7))
-  .addPanel(thread_Nonvoluntary_Context_SwitchesP, gridPos=common.pos(12, 7))
+  .addPanel(threads_stateP, gridPos=common.pos(12, 7, x=0, y=35))
+  .addPanel(threads_IOP, gridPos=common.pos(12, 7, x=12, y=35))
+  .addPanel(thread_Voluntary_Context_SwitchesP, gridPos=common.pos(12, 7, x=0, y=42))
+  .addPanel(thread_Nonvoluntary_Context_SwitchesP, gridPos=common.pos(12, 7, x=12, y=42))
   ,
   panels: [
-    { panel: threads_stateP, w: 12, h: 7 },
-    { panel: threads_IOP, w: 12, h: 7 },
-    { panel: thread_Voluntary_Context_SwitchesP, w: 12, h: 7 },
-    { panel: thread_Nonvoluntary_Context_SwitchesP, w: 12, h: 7 }
+    { panel: threads_stateP, w: 12, h: 7, x: 0, y: 35 },
+    { panel: threads_IOP, w: 12, h: 7, x: 12, y: 35 },
+    { panel: thread_Voluntary_Context_SwitchesP, w: 12, h: 7, x: 0, y: 42 },
+    { panel: thread_Nonvoluntary_Context_SwitchesP, w: 12, h: 7, x: 12, y: 42 }
   ],
 }

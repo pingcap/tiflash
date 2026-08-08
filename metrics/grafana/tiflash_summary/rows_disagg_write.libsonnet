@@ -30,6 +30,7 @@ local checkpoint_Upload_DurationP = graphPanel.new(
     'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_checkpoint_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))) by (le, type, $additional_groupby) / 1000000000)',
     legendFormat='{{type}} {{$additional_groupby}}',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -42,6 +43,7 @@ local checkpoint_Upload_DurationP = graphPanel.new(
   prometheus.target(
     'histogram_quantile(0.99, sum(rate(tiflash_storage_checkpoint_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type, $additional_groupby))',
     legendFormat='{{type}}-99 {{$additional_groupby}}',
+    hide=true,
   )
 );
 
@@ -183,6 +185,7 @@ local remote_Store_UsageP = graphPanel.new(
   prometheus.target(
     'sum((tiflash_storage_remote_stats{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="valid_size"}) / (tiflash_storage_remote_stats{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="total_size"})) by (instance)',
     legendFormat='valid_rate-{{instance}}',
+    hide=true,
   )
 )
 .addSeriesOverride({ alias: '/^valid_rate/', yaxis: 2 })
@@ -278,6 +281,7 @@ local remote_GC_Duration_BreakdownP = graphPanel.new(
   prometheus.target(
     'histogram_quantile(0.999, sum(rate(tiflash_storage_s3_gc_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type, $additional_groupby))',
     legendFormat='99%-{{type}} {{$additional_groupby}}',
+    hide=true,
   )
 )
 .addTarget(
@@ -452,41 +456,41 @@ local fAP_no_match_reasonP = graphPanel.new(
 
 {
   row: rowObj
-  .addPanel(checkpoint_Upload_DurationP, gridPos=common.pos(12, 8))
-  .addPanel(checkpoint_Upload_flowP, gridPos=common.pos(12, 8))
-  .addPanel(checkpoint_Upload_keys_speed_by_type_allP, gridPos=common.pos(12, 8))
-  .addPanel(checkpoint_Upload_flow_by_type_incremental_compactionP, gridPos=common.pos(12, 8))
-  .addPanel(remote_File_NumP, gridPos=common.pos(12, 8))
-  .addPanel(remote_Store_UsageP, gridPos=common.pos(12, 8))
-  .addPanel(remote_Object_Lock_Request_QPSP, gridPos=common.pos(12, 8))
-  .addPanel(remote_Object_Lock_DurationP, gridPos=common.pos(12, 8))
-  .addPanel(remote_Store_SummaryP, gridPos=common.pos(8, 8))
-  .addPanel(remote_GC_Duration_BreakdownP, gridPos=common.pos(9, 8))
-  .addPanel(remote_GC_StatusP, gridPos=common.pos(7, 8))
-  .addPanel(local_Lock_Manager_statusP, gridPos=common.pos(12, 8))
-  .addPanel(local_Lock_Manager_QPSP, gridPos=common.pos(12, 8))
-  .addPanel(fAP_resultP, gridPos=common.pos(12, 8))
-  .addPanel(fAP_stateP, gridPos=common.pos(12, 8))
-  .addPanel(fAP_time_by_stageP, gridPos=common.pos(12, 8))
-  .addPanel(fAP_no_match_reasonP, gridPos=common.pos(12, 8))
+  .addPanel(checkpoint_Upload_DurationP, gridPos=common.pos(12, 8, x=0, y=33))
+  .addPanel(checkpoint_Upload_flowP, gridPos=common.pos(12, 8, x=12, y=33))
+  .addPanel(checkpoint_Upload_keys_speed_by_type_allP, gridPos=common.pos(12, 8, x=0, y=41))
+  .addPanel(checkpoint_Upload_flow_by_type_incremental_compactionP, gridPos=common.pos(12, 8, x=12, y=41))
+  .addPanel(remote_File_NumP, gridPos=common.pos(12, 8, x=0, y=49))
+  .addPanel(remote_Store_UsageP, gridPos=common.pos(12, 8, x=12, y=49))
+  .addPanel(remote_Object_Lock_Request_QPSP, gridPos=common.pos(12, 8, x=0, y=57))
+  .addPanel(remote_Object_Lock_DurationP, gridPos=common.pos(12, 8, x=12, y=57))
+  .addPanel(remote_Store_SummaryP, gridPos=common.pos(8, 8, x=0, y=65))
+  .addPanel(remote_GC_Duration_BreakdownP, gridPos=common.pos(9, 8, x=8, y=65))
+  .addPanel(remote_GC_StatusP, gridPos=common.pos(7, 8, x=17, y=65))
+  .addPanel(local_Lock_Manager_statusP, gridPos=common.pos(12, 8, x=0, y=73))
+  .addPanel(local_Lock_Manager_QPSP, gridPos=common.pos(12, 8, x=12, y=73))
+  .addPanel(fAP_resultP, gridPos=common.pos(12, 8, x=0, y=81))
+  .addPanel(fAP_stateP, gridPos=common.pos(12, 8, x=12, y=81))
+  .addPanel(fAP_time_by_stageP, gridPos=common.pos(12, 8, x=0, y=89))
+  .addPanel(fAP_no_match_reasonP, gridPos=common.pos(12, 8, x=12, y=89))
   ,
   panels: [
-    { panel: checkpoint_Upload_DurationP, w: 12, h: 8 },
-    { panel: checkpoint_Upload_flowP, w: 12, h: 8 },
-    { panel: checkpoint_Upload_keys_speed_by_type_allP, w: 12, h: 8 },
-    { panel: checkpoint_Upload_flow_by_type_incremental_compactionP, w: 12, h: 8 },
-    { panel: remote_File_NumP, w: 12, h: 8 },
-    { panel: remote_Store_UsageP, w: 12, h: 8 },
-    { panel: remote_Object_Lock_Request_QPSP, w: 12, h: 8 },
-    { panel: remote_Object_Lock_DurationP, w: 12, h: 8 },
-    { panel: remote_Store_SummaryP, w: 8, h: 8 },
-    { panel: remote_GC_Duration_BreakdownP, w: 9, h: 8 },
-    { panel: remote_GC_StatusP, w: 7, h: 8 },
-    { panel: local_Lock_Manager_statusP, w: 12, h: 8 },
-    { panel: local_Lock_Manager_QPSP, w: 12, h: 8 },
-    { panel: fAP_resultP, w: 12, h: 8 },
-    { panel: fAP_stateP, w: 12, h: 8 },
-    { panel: fAP_time_by_stageP, w: 12, h: 8 },
-    { panel: fAP_no_match_reasonP, w: 12, h: 8 }
+    { panel: checkpoint_Upload_DurationP, w: 12, h: 8, x: 0, y: 33 },
+    { panel: checkpoint_Upload_flowP, w: 12, h: 8, x: 12, y: 33 },
+    { panel: checkpoint_Upload_keys_speed_by_type_allP, w: 12, h: 8, x: 0, y: 41 },
+    { panel: checkpoint_Upload_flow_by_type_incremental_compactionP, w: 12, h: 8, x: 12, y: 41 },
+    { panel: remote_File_NumP, w: 12, h: 8, x: 0, y: 49 },
+    { panel: remote_Store_UsageP, w: 12, h: 8, x: 12, y: 49 },
+    { panel: remote_Object_Lock_Request_QPSP, w: 12, h: 8, x: 0, y: 57 },
+    { panel: remote_Object_Lock_DurationP, w: 12, h: 8, x: 12, y: 57 },
+    { panel: remote_Store_SummaryP, w: 8, h: 8, x: 0, y: 65 },
+    { panel: remote_GC_Duration_BreakdownP, w: 9, h: 8, x: 8, y: 65 },
+    { panel: remote_GC_StatusP, w: 7, h: 8, x: 17, y: 65 },
+    { panel: local_Lock_Manager_statusP, w: 12, h: 8, x: 0, y: 73 },
+    { panel: local_Lock_Manager_QPSP, w: 12, h: 8, x: 12, y: 73 },
+    { panel: fAP_resultP, w: 12, h: 8, x: 0, y: 81 },
+    { panel: fAP_stateP, w: 12, h: 8, x: 12, y: 81 },
+    { panel: fAP_time_by_stageP, w: 12, h: 8, x: 0, y: 89 },
+    { panel: fAP_no_match_reasonP, w: 12, h: 8, x: 12, y: 89 }
   ],
 }

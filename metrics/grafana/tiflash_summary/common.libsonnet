@@ -9,10 +9,11 @@
 
   rowPos:: { x: 0, y: 0, w: 24, h: 1 },
 
-  // gridPos helper; y is filled by Grafana/grafonnet when adding panels under a row.
-  pos(w, h):: { x: 0, y: 0, w: w, h: h },
-  left(h=7):: { x: 0, y: 0, w: 12, h: h },
-  right(h=7):: { x: 12, y: 0, w: 12, h: h },
-  full(h=7):: { x: 0, y: 0, w: 24, h: h },
-  third(h=8):: { x: 0, y: 0, w: 8, h: h },
+  // gridPos helper. x/y matter for horizontal packing inside a row
+  // (e.g. three w=8 panels at x=0/8/16, or pairs at x=0/12).
+  pos(w, h, x=0, y=0):: { x: x, y: y, w: w, h: h },
+  left(h=7, y=0):: self.pos(12, h, x=0, y=y),
+  right(h=7, y=0):: self.pos(12, h, x=12, y=y),
+  full(h=7, y=0):: self.pos(24, h, x=0, y=y),
+  third(h=8, x=0, y=0):: self.pos(8, h, x=x, y=y),
 }

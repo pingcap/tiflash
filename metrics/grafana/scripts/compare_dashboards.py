@@ -68,10 +68,16 @@ def panel_key(row_title: str, panel: dict) -> str:
     return f"{row_title} :: {panel.get('title')}"
 
 
-def extract_targets(panel: dict) -> list[tuple[str, str]]:
+def extract_targets(panel: dict) -> list[tuple[str, str, bool]]:
     out = []
     for t in panel.get("targets") or []:
-        out.append((norm_expr(t.get("expr")), t.get("legendFormat") or ""))
+        out.append(
+            (
+                norm_expr(t.get("expr")),
+                t.get("legendFormat") or "",
+                bool(t.get("hide")),
+            )
+        )
     return out
 
 
@@ -153,6 +159,18 @@ def compare(old: dict, new: dict, only_rows: set[str] | None = None) -> list[str
             issues.append(f"missing panel: {title} :: {pt}")
         for pt in sorted(set(np) - set(op)):
             issues.append(f"extra panel: {title} :: {pt}")
+
+        def rel_y_map(panels: dict) -> dict[str, int]:
+            ys = [(p.get("gridPos") or {}).get("y") or 0 for p in panels.values()]
+            base = min(ys) if ys else 0
+            return {
+                name: ((p.get("gridPos") or {}).get("y") or 0) - base
+                for name, p in panels.items()
+            }
+
+        old_rel_y = rel_y_map(op)
+        new_rel_y = rel_y_map(np)
+
         for pt in sorted(set(op) & set(np)):
             a, b = op[pt], np[pt]
             ot, nt = extract_targets(a), extract_targets(b)
@@ -172,6 +190,19 @@ def compare(old: dict, new: dict, only_rows: set[str] | None = None) -> list[str
                     issues.append(
                         f"{k} differ: {title} :: {pt}: {am[k]!r} -> {bm.get(k)!r}"
                     )
+            ag = a.get("gridPos") or {}
+            bg = b.get("gridPos") or {}
+            for gk in ("x", "w", "h"):
+                if ag.get(gk) != bg.get(gk):
+                    issues.append(
+                        f"gridPos.{gk} differ: {title} :: {pt}: "
+                        f"{ag.get(gk)!r} -> {bg.get(gk)!r}"
+                    )
+            if old_rel_y.get(pt) != new_rel_y.get(pt):
+                issues.append(
+                    f"gridPos.y(relative) differ: {title} :: {pt}: "
+                    f"{old_rel_y.get(pt)!r} -> {new_rel_y.get(pt)!r}"
+                )
     return issues
 
 

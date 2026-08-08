@@ -118,6 +118,7 @@ local remote_Cache_BG_Download_DurationP = graphPanel.new(
   prometheus.target(
     'histogram_quantile(0.999, sum(rate(tiflash_storage_remote_cache_bg_download_stage_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, stage, file_type, $additional_groupby))',
     legendFormat='999%-{{stage}}-{{file_type}} {{$additional_groupby}}',
+    hide=true,
   )
 )
 .addTarget(
@@ -153,6 +154,7 @@ local remote_Cache_Wait_on_Downloading_DurationP = graphPanel.new(
   prometheus.target(
     'histogram_quantile(0.999, sum(rate(tiflash_storage_remote_cache_wait_on_downloading_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, result, file_type, $additional_groupby))',
     legendFormat='999%-{{result}}-{{file_type}} {{$additional_groupby}}',
+    hide=true,
   )
 )
 .addTarget(
@@ -395,6 +397,7 @@ local placeIndex_Tasks_DurationP = graphPanel.new(
   prometheus.target(
     'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="place_index_update"}[$__rate_interval]))) by (le,type, $additional_groupby) / 1000000000)',
     legendFormat='max-{{type}} {{$additional_groupby}}',
+    hide=true,
   )
 )
 .addTarget(
@@ -459,6 +462,7 @@ local placeIndex_update_rows_deletesP = graphPanel.new(
     'histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_place_index_stats_count_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m]))) by (le, $additional_groupby) / 1000000000)',
     legendFormat='max {{$additional_groupby}}',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -466,6 +470,7 @@ local placeIndex_update_rows_deletesP = graphPanel.new(
     'histogram_quantile(0.99, sum(rate(tiflash_storage_place_index_stats_count_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (le, type, $additional_groupby))',
     legendFormat='99-{{type}} {{$additional_groupby}}',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -479,37 +484,37 @@ local placeIndex_update_rows_deletesP = graphPanel.new(
 
 {
   row: rowObj
-  .addPanel(read_Duration_BreakdownP, gridPos=common.pos(24, 8))
-  .addPanel(remote_Cache_OperationsP, gridPos=common.pos(12, 8))
-  .addPanel(remote_Cache_FlowP, gridPos=common.pos(12, 8))
-  .addPanel(remote_Cache_BG_Download_DurationP, gridPos=common.pos(12, 8))
-  .addPanel(remote_Cache_Wait_on_Downloading_DurationP, gridPos=common.pos(12, 8))
-  .addPanel(remote_Cache_Wait_on_Downloading_OPSP, gridPos=common.pos(12, 8))
-  .addPanel(remote_Cache_Wait_on_Downloading_FlowP, gridPos=common.pos(12, 8))
-  .addPanel(remote_Cache_GaugeP, gridPos=common.pos(12, 8))
-  .addPanel(remote_Cache_Reject_Download_Type_OPSP, gridPos=common.pos(12, 8))
-  .addPanel(remote_Cache_UsageP, gridPos=common.pos(12, 8))
-  .addPanel(memory_Usage_of_Storage_TasksP, gridPos=common.pos(12, 8))
-  .addPanel(mVCCIndexCacheP, gridPos=common.pos(12, 7))
-  .addPanel(placeIndex_Tasks_DurationP, gridPos=common.pos(12, 7))
-  .addPanel(placeIndexTask_Reuse_OPSP, gridPos=common.pos(12, 7))
-  .addPanel(placeIndex_update_rows_deletesP, gridPos=common.pos(12, 7))
+  .addPanel(read_Duration_BreakdownP, gridPos=common.pos(24, 8, x=0, y=34))
+  .addPanel(remote_Cache_OperationsP, gridPos=common.pos(12, 8, x=0, y=42))
+  .addPanel(remote_Cache_FlowP, gridPos=common.pos(12, 8, x=12, y=42))
+  .addPanel(remote_Cache_BG_Download_DurationP, gridPos=common.pos(12, 8, x=0, y=50))
+  .addPanel(remote_Cache_Wait_on_Downloading_DurationP, gridPos=common.pos(12, 8, x=12, y=50))
+  .addPanel(remote_Cache_Wait_on_Downloading_OPSP, gridPos=common.pos(12, 8, x=0, y=58))
+  .addPanel(remote_Cache_Wait_on_Downloading_FlowP, gridPos=common.pos(12, 8, x=12, y=58))
+  .addPanel(remote_Cache_GaugeP, gridPos=common.pos(12, 8, x=0, y=66))
+  .addPanel(remote_Cache_Reject_Download_Type_OPSP, gridPos=common.pos(12, 8, x=12, y=66))
+  .addPanel(remote_Cache_UsageP, gridPos=common.pos(12, 8, x=0, y=74))
+  .addPanel(memory_Usage_of_Storage_TasksP, gridPos=common.pos(12, 8, x=12, y=74))
+  .addPanel(mVCCIndexCacheP, gridPos=common.pos(12, 7, x=0, y=82))
+  .addPanel(placeIndex_Tasks_DurationP, gridPos=common.pos(12, 7, x=12, y=82))
+  .addPanel(placeIndexTask_Reuse_OPSP, gridPos=common.pos(12, 7, x=0, y=89))
+  .addPanel(placeIndex_update_rows_deletesP, gridPos=common.pos(12, 7, x=12, y=89))
   ,
   panels: [
-    { panel: read_Duration_BreakdownP, w: 24, h: 8 },
-    { panel: remote_Cache_OperationsP, w: 12, h: 8 },
-    { panel: remote_Cache_FlowP, w: 12, h: 8 },
-    { panel: remote_Cache_BG_Download_DurationP, w: 12, h: 8 },
-    { panel: remote_Cache_Wait_on_Downloading_DurationP, w: 12, h: 8 },
-    { panel: remote_Cache_Wait_on_Downloading_OPSP, w: 12, h: 8 },
-    { panel: remote_Cache_Wait_on_Downloading_FlowP, w: 12, h: 8 },
-    { panel: remote_Cache_GaugeP, w: 12, h: 8 },
-    { panel: remote_Cache_Reject_Download_Type_OPSP, w: 12, h: 8 },
-    { panel: remote_Cache_UsageP, w: 12, h: 8 },
-    { panel: memory_Usage_of_Storage_TasksP, w: 12, h: 8 },
-    { panel: mVCCIndexCacheP, w: 12, h: 7 },
-    { panel: placeIndex_Tasks_DurationP, w: 12, h: 7 },
-    { panel: placeIndexTask_Reuse_OPSP, w: 12, h: 7 },
-    { panel: placeIndex_update_rows_deletesP, w: 12, h: 7 }
+    { panel: read_Duration_BreakdownP, w: 24, h: 8, x: 0, y: 34 },
+    { panel: remote_Cache_OperationsP, w: 12, h: 8, x: 0, y: 42 },
+    { panel: remote_Cache_FlowP, w: 12, h: 8, x: 12, y: 42 },
+    { panel: remote_Cache_BG_Download_DurationP, w: 12, h: 8, x: 0, y: 50 },
+    { panel: remote_Cache_Wait_on_Downloading_DurationP, w: 12, h: 8, x: 12, y: 50 },
+    { panel: remote_Cache_Wait_on_Downloading_OPSP, w: 12, h: 8, x: 0, y: 58 },
+    { panel: remote_Cache_Wait_on_Downloading_FlowP, w: 12, h: 8, x: 12, y: 58 },
+    { panel: remote_Cache_GaugeP, w: 12, h: 8, x: 0, y: 66 },
+    { panel: remote_Cache_Reject_Download_Type_OPSP, w: 12, h: 8, x: 12, y: 66 },
+    { panel: remote_Cache_UsageP, w: 12, h: 8, x: 0, y: 74 },
+    { panel: memory_Usage_of_Storage_TasksP, w: 12, h: 8, x: 12, y: 74 },
+    { panel: mVCCIndexCacheP, w: 12, h: 7, x: 0, y: 82 },
+    { panel: placeIndex_Tasks_DurationP, w: 12, h: 7, x: 12, y: 82 },
+    { panel: placeIndexTask_Reuse_OPSP, w: 12, h: 7, x: 0, y: 89 },
+    { panel: placeIndex_update_rows_deletesP, w: 12, h: 7, x: 12, y: 89 }
   ],
 }

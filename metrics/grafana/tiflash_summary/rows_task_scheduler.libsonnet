@@ -178,12 +178,14 @@ local task_Waiting_DurationP = graphPanel.new(
   prometheus.target(
     'histogram_quantile(0.80, max(rate(tiflash_task_scheduler_waiting_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance,le,resource_group))',
     legendFormat='{{instance}}-{{resource_group}}-80',
+    hide=true,
   )
 )
 .addTarget(
   prometheus.target(
     'histogram_quantile(0.90, max(rate(tiflash_task_scheduler_waiting_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[1m])) by (instance,le,resource_group))',
     legendFormat='{{instance}}-{{resource_group}}-90',
+    hide=true,
   )
 )
 .addTarget(
@@ -196,19 +198,19 @@ local task_Waiting_DurationP = graphPanel.new(
 
 {
   row: rowObj
-  .addPanel(min_TSOP, gridPos=common.pos(12, 8))
-  .addPanel(estimated_Thread_Usage_and_LimitP, gridPos=common.pos(12, 8))
-  .addPanel(active_and_Waiting_Queries_CountP, gridPos=common.pos(12, 8))
-  .addPanel(active_and_Waiting_Tasks_CountP, gridPos=common.pos(12, 8))
-  .addPanel(hard_Limit_Exceeded_CountP, gridPos=common.pos(12, 8))
-  .addPanel(task_Waiting_DurationP, gridPos=common.pos(12, 8))
+  .addPanel(min_TSOP, gridPos=common.pos(12, 8, x=0, y=37))
+  .addPanel(estimated_Thread_Usage_and_LimitP, gridPos=common.pos(12, 8, x=12, y=37))
+  .addPanel(active_and_Waiting_Queries_CountP, gridPos=common.pos(12, 8, x=0, y=45))
+  .addPanel(active_and_Waiting_Tasks_CountP, gridPos=common.pos(12, 8, x=12, y=45))
+  .addPanel(hard_Limit_Exceeded_CountP, gridPos=common.pos(12, 8, x=0, y=53))
+  .addPanel(task_Waiting_DurationP, gridPos=common.pos(12, 8, x=12, y=53))
   ,
   panels: [
-    { panel: min_TSOP, w: 12, h: 8 },
-    { panel: estimated_Thread_Usage_and_LimitP, w: 12, h: 8 },
-    { panel: active_and_Waiting_Queries_CountP, w: 12, h: 8 },
-    { panel: active_and_Waiting_Tasks_CountP, w: 12, h: 8 },
-    { panel: hard_Limit_Exceeded_CountP, w: 12, h: 8 },
-    { panel: task_Waiting_DurationP, w: 12, h: 8 }
+    { panel: min_TSOP, w: 12, h: 8, x: 0, y: 37 },
+    { panel: estimated_Thread_Usage_and_LimitP, w: 12, h: 8, x: 12, y: 37 },
+    { panel: active_and_Waiting_Queries_CountP, w: 12, h: 8, x: 0, y: 45 },
+    { panel: active_and_Waiting_Tasks_CountP, w: 12, h: 8, x: 12, y: 45 },
+    { panel: hard_Limit_Exceeded_CountP, w: 12, h: 8, x: 0, y: 53 },
+    { panel: task_Waiting_DurationP, w: 12, h: 8, x: 12, y: 53 }
   ],
 }

@@ -145,6 +145,7 @@ local regionP = graphPanel.new(
   prometheus.target(
     'sum(tiflash_proxy_tikv_raftstore_hibernated_peer_state{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}) by (instance, state)',
     legendFormat='{{instance}}-{{state}}',
+    hide=true,
   )
 );
 
@@ -215,6 +216,7 @@ local memoryP = graphPanel.new(
     'sum(tiflash_system_asynchronous_metric_jemalloc_retained{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"})',
     legendFormat='retained',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -222,6 +224,7 @@ local memoryP = graphPanel.new(
     'sum(tiflash_system_asynchronous_metric_jemalloc_mapped{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"})',
     legendFormat='mapped',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -229,6 +232,7 @@ local memoryP = graphPanel.new(
     'sum(tiflash_system_asynchronous_metric_jemalloc_resident{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"})',
     legendFormat='resident',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -236,6 +240,7 @@ local memoryP = graphPanel.new(
     'sum(tiflash_system_asynchronous_metric_jemalloc_allocated{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"})',
     legendFormat='allocated',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -243,6 +248,7 @@ local memoryP = graphPanel.new(
     'sum(tiflash_system_asynchronous_metric_jemalloc_active{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"})',
     legendFormat='active',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -250,6 +256,7 @@ local memoryP = graphPanel.new(
     'sum(tiflash_system_asynchronous_metric_jemalloc_metadata_thp{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"})',
     legendFormat='metadata_thp',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -257,6 +264,7 @@ local memoryP = graphPanel.new(
     'sum(tiflash_system_asynchronous_metric_jemalloc_metadata{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"})',
     legendFormat='metadata',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -264,6 +272,7 @@ local memoryP = graphPanel.new(
     'sum(tiflash_system_asynchronous_metric_mimalloc_current_rss{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", job=~".*tiflash", instance=~"$instance", instance=~"$tiflash_role"})',
     legendFormat='mimalloc_rss',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -271,6 +280,7 @@ local memoryP = graphPanel.new(
     'sum(tiflash_system_asynchronous_metric_mimalloc_current_commit{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", job=~".*tiflash", instance=~"$instance", instance=~"$tiflash_role"})',
     legendFormat='mimalloc_commit',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addTarget(
@@ -278,6 +288,7 @@ local memoryP = graphPanel.new(
     'sum(tiflash_system_asynchronous_metric_mmap_alive{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", job=~".*tiflash", instance=~"$instance", instance=~"$tiflash_role"})',
     legendFormat='mmap',
     intervalFactor=1,
+    hide=true,
   )
 )
 .addSeriesOverride({ alias: '/limit/', color: '#F2495C', hideTooltip: true, legend: false, linewidth: 2 });
@@ -333,25 +344,25 @@ local remote_Store_Summary_Disagg_archP = graphPanel.new(
 
 {
   row: rowObj
-  .addPanel(store_sizeP, gridPos=common.pos(8, 8))
-  .addPanel(available_sizeP, gridPos=common.pos(8, 8))
-  .addPanel(capacity_sizeP, gridPos=common.pos(8, 8))
-  .addPanel(uptimeP, gridPos=common.pos(12, 8))
-  .addPanel(regionP, gridPos=common.pos(12, 8))
-  .addPanel(cPU_UsageP, gridPos=common.pos(12, 8))
-  .addPanel(memoryP, gridPos=common.pos(12, 8))
-  .addPanel(iO_ThroughputP, gridPos=common.pos(12, 8))
-  .addPanel(remote_Store_Summary_Disagg_archP, gridPos=common.pos(12, 8))
+  .addPanel(store_sizeP, gridPos=common.pos(8, 8, x=0, y=1))
+  .addPanel(available_sizeP, gridPos=common.pos(8, 8, x=8, y=1))
+  .addPanel(capacity_sizeP, gridPos=common.pos(8, 8, x=16, y=1))
+  .addPanel(uptimeP, gridPos=common.pos(12, 8, x=0, y=9))
+  .addPanel(regionP, gridPos=common.pos(12, 8, x=12, y=9))
+  .addPanel(cPU_UsageP, gridPos=common.pos(12, 8, x=0, y=17))
+  .addPanel(memoryP, gridPos=common.pos(12, 8, x=12, y=17))
+  .addPanel(iO_ThroughputP, gridPos=common.pos(12, 8, x=0, y=25))
+  .addPanel(remote_Store_Summary_Disagg_archP, gridPos=common.pos(12, 8, x=12, y=25))
   ,
   panels: [
-    { panel: store_sizeP, w: 8, h: 8 },
-    { panel: available_sizeP, w: 8, h: 8 },
-    { panel: capacity_sizeP, w: 8, h: 8 },
-    { panel: uptimeP, w: 12, h: 8 },
-    { panel: regionP, w: 12, h: 8 },
-    { panel: cPU_UsageP, w: 12, h: 8 },
-    { panel: memoryP, w: 12, h: 8 },
-    { panel: iO_ThroughputP, w: 12, h: 8 },
-    { panel: remote_Store_Summary_Disagg_archP, w: 12, h: 8 }
+    { panel: store_sizeP, w: 8, h: 8, x: 0, y: 1 },
+    { panel: available_sizeP, w: 8, h: 8, x: 8, y: 1 },
+    { panel: capacity_sizeP, w: 8, h: 8, x: 16, y: 1 },
+    { panel: uptimeP, w: 12, h: 8, x: 0, y: 9 },
+    { panel: regionP, w: 12, h: 8, x: 12, y: 9 },
+    { panel: cPU_UsageP, w: 12, h: 8, x: 0, y: 17 },
+    { panel: memoryP, w: 12, h: 8, x: 12, y: 17 },
+    { panel: iO_ThroughputP, w: 12, h: 8, x: 0, y: 25 },
+    { panel: remote_Store_Summary_Disagg_archP, w: 12, h: 8, x: 12, y: 25 }
   ],
 }
