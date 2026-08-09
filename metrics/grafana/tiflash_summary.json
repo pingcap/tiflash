@@ -4275,7 +4275,7 @@
           "targets": [
             {
               "datasource": "${DS_TEST-CLUSTER}",
-              "expr": "sum(rate(tiflash_proxy_threads_io_bytes_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[30s])) by (name, io, $additional_groupby) > 1024",
+              "expr": "sum(rate(tiflash_proxy_threads_io_bytes_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[$__rate_interval])) by (name, io, $additional_groupby) > 1024",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -4283,7 +4283,7 @@
               "intervalFactor": 1,
               "legendFormat": "{{name}}-{{io}} {{$additional_groupby}}",
               "metric": "",
-              "query": "sum(rate(tiflash_proxy_threads_io_bytes_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[30s])) by (name, io, $additional_groupby) > 1024",
+              "query": "sum(rate(tiflash_proxy_threads_io_bytes_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[$__rate_interval])) by (name, io, $additional_groupby) > 1024",
               "refId": "",
               "step": 10,
               "target": ""
@@ -4409,7 +4409,7 @@
           "targets": [
             {
               "datasource": "${DS_TEST-CLUSTER}",
-              "expr": "sum(rate(tiflash_proxy_thread_voluntary_context_switches{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[30s])) by (instance, name) > 200",
+              "expr": "sum(rate(tiflash_proxy_thread_voluntary_context_switches{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[$__rate_interval])) by (instance, name) > 200",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -4417,7 +4417,7 @@
               "intervalFactor": 1,
               "legendFormat": "{{instance}} - {{name}}",
               "metric": "",
-              "query": "sum(rate(tiflash_proxy_thread_voluntary_context_switches{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[30s])) by (instance, name) > 200",
+              "query": "sum(rate(tiflash_proxy_thread_voluntary_context_switches{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[$__rate_interval])) by (instance, name) > 200",
               "refId": "",
               "step": 10,
               "target": ""
@@ -4543,7 +4543,7 @@
           "targets": [
             {
               "datasource": "${DS_TEST-CLUSTER}",
-              "expr": "sum(rate(tiflash_proxy_thread_nonvoluntary_context_switches{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[30s])) by (instance, name) > 50",
+              "expr": "sum(rate(tiflash_proxy_thread_nonvoluntary_context_switches{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[$__rate_interval])) by (instance, name) > 50",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -4551,7 +4551,7 @@
               "intervalFactor": 1,
               "legendFormat": "{{instance}} - {{name}}",
               "metric": "",
-              "query": "sum(rate(tiflash_proxy_thread_nonvoluntary_context_switches{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[30s])) by (instance, name) > 50",
+              "query": "sum(rate(tiflash_proxy_thread_nonvoluntary_context_switches{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$proxy_instance\", instance=~\"$tiflash_role\"}[$__rate_interval])) by (instance, name) > 50",
               "refId": "",
               "step": 10,
               "target": ""

@@ -880,7 +880,7 @@ def Threads() -> RowPanel:
                 title="Threads IO",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_proxy_threads_io_bytes_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[30s])) by (name, io, $additional_groupby) > 1024',
+                        expr='sum(rate(tiflash_proxy_threads_io_bytes_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by (name, io, $additional_groupby) > 1024',
                         legend_format="{{name}}-{{io}} {{$additional_groupby}}",
                         interval_factor=1,
                     ),
@@ -901,7 +901,7 @@ def Threads() -> RowPanel:
                 title="Thread Voluntary Context Switches",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_proxy_thread_voluntary_context_switches{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[30s])) by (instance, name) > 200',
+                        expr='sum(rate(tiflash_proxy_thread_voluntary_context_switches{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance, name) > 200',
                         legend_format="{{instance}} - {{name}}",
                         interval_factor=1,
                     ),
@@ -918,7 +918,7 @@ def Threads() -> RowPanel:
                 title="Thread Nonvoluntary Context Switches",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_proxy_thread_nonvoluntary_context_switches{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[30s])) by (instance, name) > 50',
+                        expr='sum(rate(tiflash_proxy_thread_nonvoluntary_context_switches{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance, name) > 50',
                         legend_format="{{instance}} - {{name}}",
                         interval_factor=1,
                     ),
