@@ -538,7 +538,7 @@ def Server() -> RowPanel:
     return layout.row_panel
 
 
-def Threads_CPU() -> RowPanel:
+def ThreadsCPU() -> RowPanel:
     layout = Layout(title="Threads CPU")
     layout.row(
         [
@@ -2217,7 +2217,7 @@ def Coprocessor() -> RowPanel:
     return layout.row_panel
 
 
-def Task_Scheduler() -> RowPanel:
+def TaskScheduler() -> RowPanel:
     layout = Layout(title="Task Scheduler")
     layout.row(
         [
@@ -2661,7 +2661,7 @@ def DDL() -> RowPanel:
     return layout.row_panel
 
 
-def Imbalance_read_write() -> RowPanel:
+def ImbalanceReadWrite() -> RowPanel:
     layout = Layout(title="Imbalance read/write")
     layout.row(
         [
@@ -2953,7 +2953,7 @@ def Imbalance_read_write() -> RowPanel:
     return layout.row_panel
 
 
-def Memory_trace() -> RowPanel:
+def MemoryTrace() -> RowPanel:
     layout = Layout(title="Memory trace")
     layout.row(
         [
@@ -3318,7 +3318,7 @@ def Memory_trace() -> RowPanel:
     return layout.row_panel
 
 
-def Columnar_Storage() -> RowPanel:
+def ColumnarStorage() -> RowPanel:
     layout = Layout(title="Columnar Storage")
     layout.row(
         [
@@ -4764,7 +4764,7 @@ def Storage() -> RowPanel:
     return layout.row_panel
 
 
-def Storage_Read_Pool_Data_Sharing() -> RowPanel:
+def StorageReadPoolDataSharing() -> RowPanel:
     layout = Layout(title="Storage Read Pool & Data Sharing")
     layout.row(
         [
@@ -5794,7 +5794,7 @@ def PageStorage() -> RowPanel:
     return layout.row_panel
 
 
-def Rate_Limiter() -> RowPanel:
+def RateLimiter() -> RowPanel:
     layout = Layout(title="Rate Limiter")
     layout.row(
         [
@@ -5994,7 +5994,7 @@ def Rate_Limiter() -> RowPanel:
     return layout.row_panel
 
 
-def Storage_Write_Stall() -> RowPanel:
+def StorageWriteStall() -> RowPanel:
     layout = Layout(title="Storage Write Stall")
     layout.row(
         [
@@ -7192,7 +7192,7 @@ def Raft() -> RowPanel:
     return layout.row_panel
 
 
-def Raft_Snapshot_IngestSST() -> RowPanel:
+def RaftSnapshotIngestSST() -> RowPanel:
     layout = Layout(title="Raft Snapshot / IngestSST")
     layout.row(
         [
@@ -7484,7 +7484,7 @@ def Raft_Snapshot_IngestSST() -> RowPanel:
     return layout.row_panel
 
 
-def Rough_Set_Filter_Rate_Histogram() -> RowPanel:
+def RoughSetFilterRateHistogram() -> RowPanel:
     layout = Layout(title="Rough Set Filter Rate Histogram")
     layout.row(
         [
@@ -7574,7 +7574,7 @@ def Rough_Set_Filter_Rate_Histogram() -> RowPanel:
     return layout.row_panel
 
 
-def Disaggregated_Write() -> RowPanel:
+def DisaggregatedWrite() -> RowPanel:
     layout = Layout(title="Disaggregated-Write")
     layout.row(
         [
@@ -8368,7 +8368,7 @@ def Disaggregated_Write() -> RowPanel:
     return layout.row_panel
 
 
-def Disaggregated_Compute() -> RowPanel:
+def DisaggregatedCompute() -> RowPanel:
     layout = Layout(title="Disaggregated-Compute")
     layout.row(
         [
@@ -9589,7 +9589,7 @@ def S3() -> RowPanel:
     return layout.row_panel
 
 
-def Pipeline_Model() -> RowPanel:
+def PipelineModel() -> RowPanel:
     layout = Layout(title="Pipeline Model")
     layout.row(
         [
@@ -10055,7 +10055,7 @@ def Pipeline_Model() -> RowPanel:
     return layout.row_panel
 
 
-def TiFlash_Resource_Control() -> RowPanel:
+def TiFlashResourceControl() -> RowPanel:
     layout = Layout(title="TiFlash Resource Control")
     layout.row(
         [
@@ -10176,7 +10176,7 @@ def TiFlash_Resource_Control() -> RowPanel:
     return layout.row_panel
 
 
-def Status_Server() -> RowPanel:
+def StatusServer() -> RowPanel:
     layout = Layout(title="Status Server")
     layout.row(
         [
@@ -10283,7 +10283,7 @@ def Status_Server() -> RowPanel:
     return layout.row_panel
 
 
-def Vector_Search() -> RowPanel:
+def VectorSearch() -> RowPanel:
     layout = Layout(title="Vector Search")
     layout.row(
         [
@@ -10463,30 +10463,32 @@ dashboard = Dashboard(
     templating=Templates(),
     panels=[
         Server(),
-        Threads_CPU(),
+        ThreadsCPU(),
         Threads(),
         Coprocessor(),
-        Task_Scheduler(),
+        TaskScheduler(),
         DDL(),
-        Imbalance_read_write(),
-        Memory_trace(),
-        Columnar_Storage(),
+        ImbalanceReadWrite(),
+        MemoryTrace(),
+        ColumnarStorage(),
         Storage(),
-        Storage_Read_Pool_Data_Sharing(),
+        StorageReadPoolDataSharing(),
         PageStorage(),
-        Rate_Limiter(),
-        Storage_Write_Stall(),
+        RateLimiter(),
+        StorageWriteStall(),
         Raft(),
-        Raft_Snapshot_IngestSST(),
-        Rough_Set_Filter_Rate_Histogram(),
-        Disaggregated_Write(),
-        Disaggregated_Compute(),
+        RaftSnapshotIngestSST(),
+        RoughSetFilterRateHistogram(),
+        DisaggregatedWrite(),
+        DisaggregatedCompute(),
         S3(),
-        Pipeline_Model(),
-        TiFlash_Resource_Control(),
-        Status_Server(),
-        Vector_Search(),
+        PipelineModel(),
+        TiFlashResourceControl(),
+        StatusServer(),
+        VectorSearch(),
     ],
+    # Set 14 or larger to support shared crosshair or shared tooltip.
+    # See https://github.com/grafana/grafana/blob/v10.2.2/public/app/features/dashboard/state/DashboardMigrator.ts#L443-L445
     schemaVersion=14,
     graphTooltip=GRAPH_TOOLTIP_MODE_SHARED_CROSSHAIR,
 ).auto_panel_ids()

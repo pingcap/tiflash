@@ -24,11 +24,13 @@ def py_str(s: str | None) -> str:
 
 
 def py_ident(title: str) -> str:
-    s = re.sub(r"[^0-9A-Za-z]+", "_", title).strip("_")
-    if not s:
-        s = "Row"
+    """Convert row title to PascalCase function name (e.g. Disaggregated-Write -> DisaggregatedWrite)."""
+    parts = re.findall(r"[A-Za-z0-9]+", title)
+    if not parts:
+        return "Row"
+    s = "".join(p[:1].upper() + p[1:] for p in parts)
     if s[0].isdigit():
-        s = "R_" + s
+        s = "R" + s
     return s
 
 
