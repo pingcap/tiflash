@@ -78,21 +78,42 @@ def Templates() -> Templating:
                 label="Proxy Instance",
                 refresh=1,
             ),
+            # Custom vars: pass explicit options so text/value/current match clinic JSON.
+            # grafanalib's comma-split ignores "All : .*" label:value syntax.
             Template(
                 name="additional_groupby",
                 type="custom",
                 query="none,instance",
-                dataSource=DATASOURCE,
+                dataSource=None,
                 hide=SHOW,
                 label="additional_groupby",
+                default="none",
+                options=[
+                    {"selected": True, "text": "none", "value": "none"},
+                    {"selected": False, "text": "instance", "value": "instance"},
+                ],
             ),
             Template(
                 name="tiflash_role",
                 type="custom",
-                query=".*,.*write-tiflash.*,.*compute-tiflash.*",
-                dataSource=DATASOURCE,
+                query="All : .*, Write : .*write-tiflash.*, Compute : .*compute-tiflash.*",
+                dataSource=None,
                 hide=SHOW,
                 label="Role",
+                default=".*",
+                options=[
+                    {"selected": True, "text": "All", "value": ".*"},
+                    {
+                        "selected": False,
+                        "text": "Write",
+                        "value": ".*write-tiflash.*",
+                    },
+                    {
+                        "selected": False,
+                        "text": "Compute",
+                        "value": ".*compute-tiflash.*",
+                    },
+                ],
             ),
         ]
     )

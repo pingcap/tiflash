@@ -285,20 +285,24 @@ def emit_templates(templating: dict) -> str:
         # grafanalib: hide 0=show, 1=label, 2=variable — CSE uses HIDE_VARIABLE/SHOW
         hide_const = "SHOW" if hide == 0 else ("HIDE_VARIABLE" if hide == 2 else hide)
         if ttype == "custom":
-            # Template with custom query
+            # Custom vars need explicit options: grafanalib comma-split does not
+            # understand Grafana "All : .*" text:value syntax.
             query = t.get("query") or ""
-            current = (t.get("current") or {}).get("value")
+            current = t.get("current") or {}
+            default = current.get("value")
+            options = t.get("options") or []
             lines.append("        Template(")
             lines.append(f"            name={py_str(name)},")
-            lines.append(f"            type='custom',")
+            lines.append("            type='custom',")
             lines.append(f"            query={py_str(query)},")
-            lines.append(f"            dataSource=DATASOURCE,")
+            lines.append("            dataSource=None,")
             lines.append(f"            hide={hide_const},")
             if t.get("label"):
                 lines.append(f"            label={py_str(t.get('label'))},")
-            if current is not None:
-                # grafanalib Template may not take current; keep via extraJson later if needed
-                pass
+            if default is not None:
+                lines.append(f"            default={py_str(default)},")
+            if options:
+                lines.append(f"            options={py_str(options)},")
             lines.append("        ),")
         else:
             lines.append(

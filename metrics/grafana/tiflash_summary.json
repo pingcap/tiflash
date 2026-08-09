@@ -37367,8 +37367,12 @@
         "auto": false,
         "auto_count": 30,
         "auto_min": "10s",
-        "current": {},
-        "datasource": "${DS_TEST-CLUSTER}",
+        "current": {
+          "selected": true,
+          "text": "none",
+          "value": "none"
+        },
+        "datasource": null,
         "hide": 0,
         "includeAll": false,
         "label": "additional_groupby",
@@ -37376,7 +37380,7 @@
         "name": "additional_groupby",
         "options": [
           {
-            "selected": false,
+            "selected": true,
             "text": "none",
             "value": "none"
           },
@@ -37400,8 +37404,12 @@
         "auto": false,
         "auto_count": 30,
         "auto_min": "10s",
-        "current": {},
-        "datasource": "${DS_TEST-CLUSTER}",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": ".*"
+        },
+        "datasource": null,
         "hide": 0,
         "includeAll": false,
         "label": "Role",
@@ -37409,22 +37417,22 @@
         "name": "tiflash_role",
         "options": [
           {
-            "selected": false,
-            "text": ".*",
+            "selected": true,
+            "text": "All",
             "value": ".*"
           },
           {
             "selected": false,
-            "text": ".*write-tiflash.*",
+            "text": "Write",
             "value": ".*write-tiflash.*"
           },
           {
             "selected": false,
-            "text": ".*compute-tiflash.*",
+            "text": "Compute",
             "value": ".*compute-tiflash.*"
           }
         ],
-        "query": ".*,.*write-tiflash.*,.*compute-tiflash.*",
+        "query": "All : .*, Write : .*write-tiflash.*, Compute : .*compute-tiflash.*",
         "refresh": 1,
         "regex": null,
         "sort": 1,
