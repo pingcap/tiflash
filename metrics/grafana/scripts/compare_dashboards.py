@@ -190,7 +190,13 @@ def compare(old: dict, new: dict, only_rows: set[str] | None = None) -> list[str
                 am, bm = graph_meta(a), graph_meta(b)
             else:
                 am, bm = heatmap_meta(a), heatmap_meta(b)
+            # Hidden right Y-axis fields are not user-visible; ignore cosmetic drift.
+            ignore = set()
+            if am.get("type") == "graph" and not am.get("showY2") and not bm.get("showY2"):
+                ignore.update({"formatY2", "labelY2", "logBaseY2", "minY2", "showY2"})
             for k in am:
+                if k in ignore:
+                    continue
                 if am[k] != bm.get(k):
                     # description whitespace / missing description is soft
                     if k == "description" and not am[k]:

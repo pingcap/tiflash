@@ -51,23 +51,37 @@ def emit_target(t: dict, indent: str) -> str:
     return f"{indent}target({', '.join(args)})"
 
 
-
-
 def yaxes_from_panel(p: dict) -> str:
     yaxes = p.get("yaxes") or []
     left = yaxes[0] if yaxes else {}
     right = yaxes[1] if len(yaxes) > 1 else {}
     left_fmt = left.get("format") or "short"
     right_fmt = right.get("format") or "short"
-    left_min = left.get("min")
-    left_max = left.get("max")
-    left_log = left.get("logBase") or 1
-    right_show = right.get("show", True)
+    right_show = bool(right.get("show", False))
     args = [f"left_format={py_str(left_fmt)}"]
-    # Always pass right format; visibility controlled separately.
+    # Always pass right format; visibility via right_show (default False).
     args.append(f"right_format={py_str(right_fmt)}")
+
+    def add_axis_kwargs(prefix: str, ax: dict) -> None:
+        if ax.get("min") not in (None, ""):
+            args.append(f"{prefix}min={py_str(ax['min'])}")
+        if ax.get("max") not in (None, ""):
+            args.append(f"{prefix}max={py_str(ax['max'])}")
+        if ax.get("label") not in (None, ""):
+            args.append(f"{prefix}label={py_str(ax['label'])}")
+        if ax.get("decimals") is not None:
+            args.append(f"{prefix}decimals={ax['decimals']}")
+        log_base = ax.get("logBase") or 1
+        if log_base != 1:
+            args.append(f"{prefix}log_base={log_base}")
+        if prefix == "left_" and ax.get("show") is False:
+            args.append("left_show=False")
+
+    add_axis_kwargs("left_", left)
+    if right_show:
+        add_axis_kwargs("right_", right)
+        args.append("right_show=True")
     call = f"yaxes({', '.join(args)})"
-    # Apply min/max/log via mutating after — keep simple: encode in extra_json below.
     return call, right_show, left, right
 
 
@@ -132,36 +146,7 @@ def emit_graph(p: dict, indent: str) -> str:
     tooltip = p.get("tooltip") or {}
     tooltip_sort = tooltip.get("sort", 0) or 0
     overrides = p.get("seriesOverrides") or []
-    extra = {}
-    # Preserve y-axis min/max/log/label when present.
-    if any(
-        left.get(k) not in (None, "", 1, False)
-        for k in ("min", "max", "label", "logBase", "decimals")
-    ) or any(
-        right.get(k) not in (None, "", 1, False)
-        for k in ("min", "max", "label", "logBase", "decimals")
-    ):
-        extra["yaxes"] = [
-            {
-                "format": left.get("format") or "short",
-                "label": left.get("label"),
-                "logBase": left.get("logBase") or 1,
-                "max": left.get("max"),
-                "min": left.get("min"),
-                "show": left.get("show", True),
-                "decimals": left.get("decimals"),
-            },
-            {
-                "format": right.get("format") or "short",
-                "label": right.get("label"),
-                "logBase": right.get("logBase") or 1,
-                "max": right.get("max"),
-                "min": right.get("min"),
-                "show": right.get("show", True),
-                "decimals": right.get("decimals"),
-            },
-        ]
-        right_show = bool(right.get("show", True))
+    right_show = bool(right.get("show", False))
 
     args = [
         f"title={py_str(p.get('title'))}",
@@ -189,10 +174,6 @@ def emit_graph(p: dict, indent: str) -> str:
         args.append(f"tooltip_sort={tooltip_sort}")
     if overrides:
         args.append(f"series_overrides={py_str(overrides)}")
-    # Always set y_right_show explicitly from JSON when we didn't embed yaxes.
-    args.append(f"y_right_show={right_show}")
-    if extra:
-        args.append(f"extra_json={py_str(extra)}")
     # Prefer no fill_gradient unless JSON had fillGradient
     fg = p.get("fillGradient", 0) or 0
     if fg:
@@ -214,7 +195,11 @@ def emit_heatmap(p: dict, indent: str) -> str:
         expr = t.get("expr") or ""
         legend = t.get("legendFormat") or "{{le}}"
         interval = t.get("intervalFactor")
-        iv = f", interval_factor={interval}" if interval is not None else ", interval_factor=1"
+        iv = (
+            f", interval_factor={interval}"
+            if interval is not None
+            else ", interval_factor=1"
+        )
         hide = ", hide=True" if t.get("hide") else ""
         t_lines.append(
             f"{indent}    target(expr={py_str(expr)}, legend_format={py_str(legend)}{iv}{hide})"
@@ -291,7 +276,6 @@ def emit_row(row: dict) -> str:
     return "\n".join(parts)
 
 
-
 def emit_templates(templating: dict) -> str:
     items = (templating or {}).get("list") or []
     lines = ["def Templates() -> Templating:", "    return Templating(list=["]
@@ -346,8 +330,7 @@ def main() -> None:
     rows = [p for p in dash.get("panels") or [] if p.get("type") == "row"]
     row_fns = [py_ident(r.get("title") or f"Row{i}") for i, r in enumerate(rows)]
 
-    header = textwrap.dedent(
-        '''\
+    header = textwrap.dedent("""\
         # Generated from tiflash_summary.json — prefer editing with common.py helpers.
         import os
         import sys
@@ -375,16 +358,14 @@ def main() -> None:
             Templating,
         )
 
-        '''
-    )
+        """)
 
     body_parts = [emit_templates(dash.get("templating") or {})]
     for row in rows:
         body_parts.append(emit_row(row))
 
     panels_list = ",\n        ".join(f"{fn}()" for fn in row_fns)
-    footer = textwrap.dedent(
-        f'''\
+    footer = textwrap.dedent(f"""\
         dashboard = Dashboard(
             title={py_str(dash.get("title"))},
             uid={py_str(dash.get("uid"))},
@@ -400,12 +381,10 @@ def main() -> None:
             graphTooltip=GRAPH_TOOLTIP_MODE_SHARED_CROSSHAIR,
             time={py_str((dash.get("time") or {}).get("from") or "now-1h")},
         ).auto_panel_ids()
-        '''
-    )
+        """)
     # Fix time= — Dashboard expects Time object; use shared time from grafanalib if needed.
     # grafanalib Dashboard(time=) often accepts dict-like; keep simple without time kw if unsure.
-    footer = textwrap.dedent(
-        f'''\
+    footer = textwrap.dedent(f"""\
         dashboard = Dashboard(
             title={py_str(dash.get("title"))},
             uid={py_str(dash.get("uid"))},
@@ -420,8 +399,7 @@ def main() -> None:
             schemaVersion=14,
             graphTooltip=GRAPH_TOOLTIP_MODE_SHARED_CROSSHAIR,
         ).auto_panel_ids()
-        '''
-    )
+        """)
 
     OUT.write_text(header + "\n".join(body_parts) + "\n" + footer)
     print(f"Wrote {OUT} ({OUT.stat().st_size} bytes), rows={len(rows)}")

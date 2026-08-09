@@ -966,17 +966,66 @@ def timeseries_panel(
     )
 
 
-def yaxis(format: str, log_base=1) -> YAxis:
+def yaxis(
+    format: str,
+    log_base: int = 1,
+    min=None,
+    max=None,
+    label: Optional[str] = None,
+    decimals: Optional[int] = None,
+    show: bool = True,
+) -> YAxis:
     # CSE forbids SI byte units in favor of IEC; TiFlash Summary historically uses
     # Grafana "bytes"/"Bps" and we preserve those for clinic compatibility.
-    return YAxis(format=format, logBase=log_base)
+    return YAxis(
+        format=format,
+        logBase=log_base,
+        min=min,
+        max=max,
+        label=label,
+        decimals=decimals,
+        show=show,
+    )
 
 
-def yaxes(left_format: str, right_format: Optional[str] = None, log_base=1) -> YAxes:
-    ya = YAxes(left=yaxis(left_format, log_base=log_base))
-    if right_format is not None:
-        ya.right = yaxis(right_format, log_base=log_base)
-    return ya
+def yaxes(
+    left_format: str,
+    right_format: Optional[str] = None,
+    log_base: int = 1,
+    left_min=None,
+    left_max=None,
+    left_label: Optional[str] = None,
+    left_decimals: Optional[int] = None,
+    left_log_base: Optional[int] = None,
+    left_show: bool = True,
+    right_min=None,
+    right_max=None,
+    right_label: Optional[str] = None,
+    right_decimals: Optional[int] = None,
+    right_log_base: Optional[int] = None,
+    right_show: bool = False,
+) -> YAxes:
+    """Build Y axes. Right axis is hidden by default; pass right_show=True for dual-axis panels."""
+    left = yaxis(
+        left_format,
+        log_base=log_base if left_log_base is None else left_log_base,
+        min=left_min,
+        max=left_max,
+        label=left_label,
+        decimals=left_decimals,
+        show=left_show,
+    )
+    # Always set right so grafanalib's default (show=True) never leaks into single-axis panels.
+    right = yaxis(
+        right_format if right_format is not None else UNITS.SHORT,
+        log_base=log_base if right_log_base is None else right_log_base,
+        min=right_min,
+        max=right_max,
+        label=right_label,
+        decimals=right_decimals,
+        show=right_show,
+    )
+    return YAxes(left=left, right=right)
 
 
 def graph_legend(
@@ -1028,14 +1077,12 @@ def graph_panel(
     data_source=DATASOURCE,
     null_point_mode=NULL_AS_ZERO,
     tooltip_sort: int = 0,
-    y_right_show: bool = False,
     decimals: Optional[int] = None,
     points: bool = False,
     pointradius: int = 5,
-    extra_json: Optional[dict] = None,
 ) -> Panel:
-    # extraJson add patches grafanalib result.
-    extraJson = dict(extra_json or {})
+    # Internal extraJson patches grafanalib gaps (fillGradient / tooltip.sort / decimals).
+    extraJson: dict = {}
     if fill_gradient != 0:
         # fillGradient is only valid when fill is 1.
         if fill == 0:
@@ -1044,26 +1091,8 @@ def graph_panel(
         # set it manually.
         # TODO: remove it when grafanalib fix this.
         extraJson["fillGradient"] = 1
-    if not y_right_show and "yaxes" not in extraJson:
-        extraJson["yaxes"] = [
-            {
-                "format": yaxes.left.format,
-                "label": yaxes.left.label,
-                "logBase": yaxes.left.logBase,
-                "max": yaxes.left.max,
-                "min": yaxes.left.min,
-                "show": True,
-            },
-            {
-                "format": yaxes.right.format,
-                "label": yaxes.right.label,
-                "logBase": yaxes.right.logBase,
-                "max": yaxes.right.max,
-                "min": yaxes.right.min,
-                "show": False,
-            },
-        ]
-    if tooltip_sort and "tooltip" not in extraJson:
+
+    if tooltip_sort:
         extraJson["tooltip"] = {
             "shared": True,
             "sort": tooltip_sort,
@@ -1098,7 +1127,7 @@ def graph_panel(
         maxDataPoints=None,
         points=points,
         pointRadius=pointradius,
-        extraJson=extraJson,
+        extraJson=extraJson or None,
     )
 
 
@@ -1534,11 +1563,14 @@ def duration_panel(
         targets=targets,
         fill=1,
         fill_gradient=0,
-        yaxes=yaxes(left_format=unit, right_format=y_right),
+        yaxes=yaxes(
+            left_format=unit,
+            right_format=y_right,
+            right_show=bool(series_overrides),
+        ),
         legend=graph_legend(max=True, current=True, sort_desc=True),
         series_overrides=series_overrides,
         tooltip_sort=2,
-        y_right_show=bool(series_overrides),
         null_point_mode=NULL_AS_ZERO,
     )
 
@@ -1573,7 +1605,6 @@ def ops_panel(
         fill_gradient=0,
         yaxes=yaxes(left_format=y_left),
         tooltip_sort=2,
-        y_right_show=False,
         null_point_mode=NULL_AS_ZERO,
     )
 
@@ -1644,7 +1675,6 @@ def cpu_with_limit_panel(
         yaxes=yaxes(left_format=UNITS.PERCENT_UNIT, right_format=UNITS.SHORT),
         series_overrides=overrides,
         null_point_mode="null",
-        y_right_show=False,
     )
 
 
@@ -1704,9 +1734,12 @@ def ops_hit_ratio_panel(
         targets=[ops_t] + ratio_targets,
         fill=fill,
         fill_gradient=0,
-        yaxes=yaxes(left_format=y_left, right_format=UNITS.PERCENT_UNIT),
+        yaxes=yaxes(
+            left_format=y_left,
+            right_format=UNITS.PERCENT_UNIT,
+            right_show=True,
+        ),
         series_overrides=overrides,
-        y_right_show=True,
         null_point_mode=NULL_AS_ZERO,
     )
 

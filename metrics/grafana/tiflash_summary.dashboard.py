@@ -135,36 +135,13 @@ def Server() -> RowPanel:
                         legend_format="{{instance}}-remote",
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="short"),
+                yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
                 description="The storage size per TiFlash instance.\n(Not including some disk usage of TiFlash-Proxy by now)",
                 legend=graph_legend(max=False),
                 fill=5,
                 line_width=0,
                 stack=True,
                 decimals=3,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "bytes",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -175,36 +152,13 @@ def Server() -> RowPanel:
                         legend_format="{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="short"),
+                yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
                 description="The available capacity size per TiFlash instance",
                 legend=graph_legend(max=False),
                 fill=5,
                 line_width=0,
                 stack=True,
                 decimals=3,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "bytes",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -215,39 +169,16 @@ def Server() -> RowPanel:
                         legend_format="{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="short"),
+                yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
                 description="The capacity size per TiFlash instance",
                 legend=graph_legend(max=False),
                 fill=5,
                 line_width=0,
                 stack=True,
                 decimals=3,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "bytes",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -262,7 +193,6 @@ def Server() -> RowPanel:
                 yaxes=yaxes(left_format="dtdurations", right_format="short"),
                 description="TiFlash uptime since last restart",
                 legend=graph_legend(max=False),
-                y_right_show=False,
                 fill_gradient=0,
             ),
             graph_panel(
@@ -282,10 +212,9 @@ def Server() -> RowPanel:
                 description="The number of Regions on each TiFlash instance",
                 null_point_mode="null",
                 decimals=0,
-                y_right_show=False,
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -302,7 +231,12 @@ def Server() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="percentunit", right_format="short"),
+                yaxes=yaxes(
+                    left_format="percentunit",
+                    right_format="short",
+                    left_min="0",
+                    left_decimals=1,
+                ),
                 description="TiFlash CPU usage calculated with process CPU running seconds.",
                 null_point_mode="null",
                 series_overrides=[
@@ -314,29 +248,6 @@ def Server() -> RowPanel:
                         "linewidth": 2,
                     }
                 ],
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": 1,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -412,7 +323,7 @@ def Server() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="short"),
+                yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
                 description="The memory usage per TiFlash instance",
                 null_point_mode="null",
                 series_overrides=[
@@ -424,32 +335,9 @@ def Server() -> RowPanel:
                         "linewidth": 2,
                     }
                 ],
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "bytes",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -462,31 +350,13 @@ def Server() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="short"),
+                yaxes=yaxes(
+                    left_format="bytes",
+                    right_format="short",
+                    left_min="0",
+                    left_decimals=0,
+                ),
                 null_point_mode="null",
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "bytes",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": 0,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -497,35 +367,12 @@ def Server() -> RowPanel:
                         legend_format="store-{{store_id}}-{{type}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="short"),
+                yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
                 legend=graph_legend(max=False),
                 decimals=1,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "bytes",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     return layout.row_panel
 
@@ -542,32 +389,11 @@ def ThreadsCPU() -> RowPanel:
                         legend_format="{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="percentunit", right_format="short"),
+                yaxes=yaxes(
+                    left_format="percentunit", right_format="short", left_min="0"
+                ),
                 description="Involved when importing data.",
                 null_point_mode="null",
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -582,7 +408,9 @@ def ThreadsCPU() -> RowPanel:
                         legend_format="Limit",
                     ),
                 ],
-                yaxes=yaxes(left_format="percentunit", right_format="short"),
+                yaxes=yaxes(
+                    left_format="percentunit", right_format="short", left_min="0"
+                ),
                 description="Involved when importing data.",
                 null_point_mode="null",
                 series_overrides=[
@@ -595,32 +423,9 @@ def ThreadsCPU() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -636,7 +441,9 @@ def ThreadsCPU() -> RowPanel:
                         legend_format="Limit",
                     ),
                 ],
-                yaxes=yaxes(left_format="percentunit", right_format="short"),
+                yaxes=yaxes(
+                    left_format="percentunit", right_format="short", left_min="0"
+                ),
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -648,29 +455,6 @@ def ThreadsCPU() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -685,7 +469,9 @@ def ThreadsCPU() -> RowPanel:
                         legend_format="Limit",
                     ),
                 ],
-                yaxes=yaxes(left_format="percentunit", right_format="short"),
+                yaxes=yaxes(
+                    left_format="percentunit", right_format="short", left_min="0"
+                ),
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -697,32 +483,9 @@ def ThreadsCPU() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -738,7 +501,9 @@ def ThreadsCPU() -> RowPanel:
                         legend_format="Limit",
                     ),
                 ],
-                yaxes=yaxes(left_format="percentunit", right_format="short"),
+                yaxes=yaxes(
+                    left_format="percentunit", right_format="short", left_min="0"
+                ),
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -750,29 +515,6 @@ def ThreadsCPU() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -787,7 +529,9 @@ def ThreadsCPU() -> RowPanel:
                         legend_format="Limit",
                     ),
                 ],
-                yaxes=yaxes(left_format="percentunit", right_format="short"),
+                yaxes=yaxes(
+                    left_format="percentunit", right_format="short", left_min="0"
+                ),
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -799,32 +543,9 @@ def ThreadsCPU() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -840,7 +561,9 @@ def ThreadsCPU() -> RowPanel:
                         legend_format="Limit",
                     ),
                 ],
-                yaxes=yaxes(left_format="percentunit", right_format="short"),
+                yaxes=yaxes(
+                    left_format="percentunit", right_format="short", left_min="0"
+                ),
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -852,29 +575,6 @@ def ThreadsCPU() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -889,7 +589,9 @@ def ThreadsCPU() -> RowPanel:
                         legend_format="Limit",
                     ),
                 ],
-                yaxes=yaxes(left_format="percentunit", right_format="short"),
+                yaxes=yaxes(
+                    left_format="percentunit", right_format="short", left_min="0"
+                ),
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -901,32 +603,9 @@ def ThreadsCPU() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -942,7 +621,9 @@ def ThreadsCPU() -> RowPanel:
                         legend_format="Limit",
                     ),
                 ],
-                yaxes=yaxes(left_format="percentunit", right_format="short"),
+                yaxes=yaxes(
+                    left_format="percentunit", right_format="short", left_min="0"
+                ),
                 description="Involved when manually compacting the data.",
                 null_point_mode="null",
                 series_overrides=[
@@ -955,29 +636,6 @@ def ThreadsCPU() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -992,7 +650,9 @@ def ThreadsCPU() -> RowPanel:
                         legend_format="Limit",
                     ),
                 ],
-                yaxes=yaxes(left_format="percentunit", right_format="short"),
+                yaxes=yaxes(
+                    left_format="percentunit", right_format="short", left_min="0"
+                ),
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -1004,32 +664,9 @@ def ThreadsCPU() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -1045,7 +682,9 @@ def ThreadsCPU() -> RowPanel:
                         legend_format="Limit",
                     ),
                 ],
-                yaxes=yaxes(left_format="percentunit", right_format="short"),
+                yaxes=yaxes(
+                    left_format="percentunit", right_format="short", left_min="0"
+                ),
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -1057,29 +696,6 @@ def ThreadsCPU() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -1094,7 +710,9 @@ def ThreadsCPU() -> RowPanel:
                         legend_format="Limit",
                     ),
                 ],
-                yaxes=yaxes(left_format="percentunit", right_format="short"),
+                yaxes=yaxes(
+                    left_format="percentunit", right_format="short", left_min="0"
+                ),
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -1106,32 +724,9 @@ def ThreadsCPU() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -1147,7 +742,9 @@ def ThreadsCPU() -> RowPanel:
                         legend_format="Limit",
                     ),
                 ],
-                yaxes=yaxes(left_format="percentunit", right_format="short"),
+                yaxes=yaxes(
+                    left_format="percentunit", right_format="short", left_min="0"
+                ),
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -1159,29 +756,6 @@ def ThreadsCPU() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -1196,7 +770,9 @@ def ThreadsCPU() -> RowPanel:
                         legend_format="Limit",
                     ),
                 ],
-                yaxes=yaxes(left_format="percentunit", right_format="short"),
+                yaxes=yaxes(
+                    left_format="percentunit", right_format="short", left_min="0"
+                ),
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -1208,32 +784,9 @@ def ThreadsCPU() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -1249,7 +802,9 @@ def ThreadsCPU() -> RowPanel:
                         legend_format="Limit",
                     ),
                 ],
-                yaxes=yaxes(left_format="percentunit", right_format="short"),
+                yaxes=yaxes(
+                    left_format="percentunit", right_format="short", left_min="0"
+                ),
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -1261,29 +816,6 @@ def ThreadsCPU() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -1298,7 +830,9 @@ def ThreadsCPU() -> RowPanel:
                         legend_format="Limit",
                     ),
                 ],
-                yaxes=yaxes(left_format="percentunit", right_format="short"),
+                yaxes=yaxes(
+                    left_format="percentunit", right_format="short", left_min="0"
+                ),
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -1310,32 +844,9 @@ def ThreadsCPU() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     return layout.row_panel
 
@@ -1363,7 +874,6 @@ def Threads() -> RowPanel:
                 decimals=1,
                 points=True,
                 pointradius=2,
-                y_right_show=False,
                 fill_gradient=0,
             ),
             graph_panel(
@@ -1381,10 +891,9 @@ def Threads() -> RowPanel:
                 decimals=1,
                 points=True,
                 pointradius=2,
-                y_right_show=False,
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -1403,7 +912,6 @@ def Threads() -> RowPanel:
                 decimals=1,
                 points=True,
                 pointradius=2,
-                y_right_show=False,
                 fill_gradient=0,
             ),
             graph_panel(
@@ -1421,10 +929,9 @@ def Threads() -> RowPanel:
                 decimals=1,
                 points=True,
                 pointradius=2,
-                y_right_show=False,
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     return layout.row_panel
 
@@ -1441,31 +948,8 @@ def Coprocessor() -> RowPanel:
                         legend_format="{{type}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="none"),
+                yaxes=yaxes(left_format="none", right_format="none", left_min="0"),
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -1476,34 +960,11 @@ def Coprocessor() -> RowPanel:
                         legend_format="{{type}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="none"),
+                yaxes=yaxes(left_format="none", right_format="none", left_min="0"),
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -1539,32 +1000,9 @@ def Coprocessor() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -1575,34 +1013,11 @@ def Coprocessor() -> RowPanel:
                         legend_format="{{reason}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="none"),
+                yaxes=yaxes(left_format="none", right_format="none", left_min="0"),
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -1638,32 +1053,9 @@ def Coprocessor() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -1675,33 +1067,10 @@ def Coprocessor() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="short"),
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "bytes",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
+                yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -1729,34 +1098,11 @@ def Coprocessor() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="short"),
+                yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
                 legend=graph_legend(
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
                 fill=1,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "bytes",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -1768,33 +1114,10 @@ def Coprocessor() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="short"),
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "bytes",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
+                yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -1807,30 +1130,7 @@ def Coprocessor() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="short"),
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
+                yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
                 fill_gradient=0,
             ),
             graph_panel(
@@ -1842,33 +1142,10 @@ def Coprocessor() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="none"),
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
+                yaxes=yaxes(left_format="none", right_format="none", left_min="0"),
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -1881,30 +1158,7 @@ def Coprocessor() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="short"),
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
+                yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
                 fill_gradient=0,
             ),
             graph_panel(
@@ -1916,33 +1170,10 @@ def Coprocessor() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="short"),
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
+                yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -1955,31 +1186,8 @@ def Coprocessor() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="short"),
+                yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
                 description="The MPP query count in TiFlash",
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -1991,33 +1199,10 @@ def Coprocessor() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="short"),
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
+                yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -2030,30 +1215,7 @@ def Coprocessor() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
+                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill_gradient=0,
             ),
             graph_panel(
@@ -2065,33 +1227,10 @@ def Coprocessor() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="short"),
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "bytes",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
+                yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -2104,30 +1243,7 @@ def Coprocessor() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="short"),
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "bytes",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
+                yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
                 fill_gradient=0,
             ),
             graph_panel(
@@ -2139,34 +1255,11 @@ def Coprocessor() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="short"),
+                yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
                 description="The establish calldata details",
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     return layout.row_panel
 
@@ -2183,36 +1276,18 @@ def TaskScheduler() -> RowPanel:
                         legend_format="{{instance}}-{{resource_group}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="short"),
+                yaxes=yaxes(
+                    left_format="none",
+                    right_format="short",
+                    left_label="TSO",
+                    left_show=False,
+                ),
                 description="the min_tso of each instance",
                 legend=graph_legend(max=False),
                 fill=1,
                 null_point_mode="null",
                 points=True,
                 pointradius=1,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "none",
-                            "label": "TSO",
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -2239,35 +1314,17 @@ def TaskScheduler() -> RowPanel:
                         legend_format="{{instance}}-{{type}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="short"),
+                yaxes=yaxes(
+                    left_format="none",
+                    right_format="short",
+                    left_label="Threads",
+                    left_log_base=10,
+                ),
                 description="estimated thread usage in min-tso scheduler, and the sort/hard limit of estimated thread in scheduler.",
                 legend=graph_legend(max=False),
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "none",
-                            "label": "Threads",
-                            "logBase": 10,
-                            "max": None,
-                            "min": None,
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -2283,31 +1340,10 @@ def TaskScheduler() -> RowPanel:
                         legend_format="{{instance}}-{{type}}-{{resource_group}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="short"),
+                yaxes=yaxes(
+                    left_format="none", right_format="short", left_label="Queries"
+                ),
                 description="the count of active/ waiting queries",
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "none",
-                            "label": "Queries",
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -2322,34 +1358,13 @@ def TaskScheduler() -> RowPanel:
                         legend_format="{{instance}}-{{type}}-{{resource_group}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="short"),
+                yaxes=yaxes(
+                    left_format="none", right_format="short", left_label="Tasks"
+                ),
                 description="the count of active/ waiting tasks",
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "none",
-                            "label": "Tasks",
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -2363,7 +1378,6 @@ def TaskScheduler() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="none", right_format="short"),
                 description="the usage of estimated threads exceeded the hard limit where errors occur.",
-                y_right_show=False,
                 fill_gradient=0,
             ),
             graph_panel(
@@ -2398,36 +1412,13 @@ def TaskScheduler() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 description="the time of waiting for schedule",
                 fill=1,
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     return layout.row_panel
 
@@ -2462,34 +1453,11 @@ def DDL() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="opm", right_format="none"),
+                yaxes=yaxes(left_format="opm", right_format="none", left_min="0"),
                 description="Executed DDL jobs per minute",
                 legend=graph_legend(
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "opm",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -2501,37 +1469,14 @@ def DDL() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="opm", right_format="none"),
+                yaxes=yaxes(left_format="opm", right_format="none", left_min="0"),
                 description="Executed DDL apply jobs per minute",
                 legend=graph_legend(
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "opm",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.half_row(
         [
@@ -2571,36 +1516,15 @@ def DDL() -> RowPanel:
                         legend_format="applying-{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(
+                    left_format="s", right_format="short", left_min="0", right_show=True
+                ),
                 fill=1,
                 tooltip_sort=2,
                 series_overrides=[{"alias": "/^applying/", "yaxis": 2}],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     return layout.row_panel
 
@@ -2622,7 +1546,12 @@ def ImbalanceReadWrite() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="percentunit", right_format="short"),
+                yaxes=yaxes(
+                    left_format="percentunit",
+                    right_format="short",
+                    left_min="0",
+                    left_decimals=1,
+                ),
                 description="TiFlash CPU usage calculated with process CPU running seconds.",
                 legend=graph_legend(side_width=250),
                 null_point_mode="null",
@@ -2635,29 +1564,6 @@ def ImbalanceReadWrite() -> RowPanel:
                         "linewidth": 2,
                     }
                 ],
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": 1,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -2672,7 +1578,9 @@ def ImbalanceReadWrite() -> RowPanel:
                         legend_format="Limit",
                     ),
                 ],
-                yaxes=yaxes(left_format="percentunit", right_format="short"),
+                yaxes=yaxes(
+                    left_format="percentunit", right_format="short", left_min="0"
+                ),
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -2684,32 +1592,9 @@ def ImbalanceReadWrite() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -2721,31 +1606,8 @@ def ImbalanceReadWrite() -> RowPanel:
                         legend_format="{{type}}-{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="none"),
+                yaxes=yaxes(left_format="none", right_format="none", left_min="0"),
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -2766,37 +1628,14 @@ def ImbalanceReadWrite() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="binBps", right_format="short"),
+                yaxes=yaxes(left_format="binBps", right_format="short", left_min="0"),
                 description="The flow of different kinds of read operations",
                 fill=1,
                 null_point_mode="null",
                 decimals=1,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "binBps",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -2814,32 +1653,15 @@ def ImbalanceReadWrite() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="opm"),
+                yaxes=yaxes(
+                    left_format="ops",
+                    right_format="opm",
+                    left_min="0",
+                    right_min="0",
+                    right_show=True,
+                ),
                 description="The total count of different kinds of commands received",
                 series_overrides=[{"alias": "/delete_range|ingest/", "yaxis": 2}],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "opm",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -2855,38 +1677,20 @@ def ImbalanceReadWrite() -> RowPanel:
                         legend_format="ingest-{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="binBps", right_format="bytes"),
+                yaxes=yaxes(
+                    left_format="binBps",
+                    right_format="bytes",
+                    left_min="0",
+                    right_show=True,
+                ),
                 description="The throughput of write by instance",
                 legend=graph_legend(side_width=250),
                 null_point_mode="null",
                 decimals=1,
                 series_overrides=[{"alias": "/total/", "yaxis": 2}],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "binBps",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "bytes",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     return layout.row_panel
 
@@ -2907,7 +1711,6 @@ def MemoryTrace() -> RowPanel:
                 yaxes=yaxes(left_format="short", right_format="s"),
                 fill=1,
                 null_point_mode="null",
-                y_right_show=False,
                 fill_gradient=0,
             ),
             graph_panel(
@@ -2928,10 +1731,9 @@ def MemoryTrace() -> RowPanel:
                 yaxes=yaxes(left_format="short", right_format="s"),
                 fill=1,
                 null_point_mode="null",
-                y_right_show=False,
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -2952,7 +1754,6 @@ def MemoryTrace() -> RowPanel:
                 yaxes=yaxes(left_format="short", right_format="s"),
                 fill=1,
                 null_point_mode="null",
-                y_right_show=False,
                 fill_gradient=0,
             ),
             graph_panel(
@@ -2972,10 +1773,9 @@ def MemoryTrace() -> RowPanel:
                 yaxes=yaxes(left_format="bytes", right_format="s"),
                 fill=1,
                 null_point_mode="null",
-                y_right_show=False,
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -2995,7 +1795,7 @@ def MemoryTrace() -> RowPanel:
                         legend_format="rn_mvcc_index_cache_{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="short"),
+                yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
                 description="The memory usage of mark cache and minmax index cache",
                 legend=graph_legend(side_width=250),
                 null_point_mode="null",
@@ -3008,29 +1808,6 @@ def MemoryTrace() -> RowPanel:
                         "linewidth": 2,
                     }
                 ],
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "bytes",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -3052,10 +1829,9 @@ def MemoryTrace() -> RowPanel:
                 ),
                 fill=1,
                 null_point_mode="null",
-                y_right_show=False,
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -3084,7 +1860,6 @@ def MemoryTrace() -> RowPanel:
                 legend=graph_legend(max=False),
                 fill=1,
                 null_point_mode="null",
-                y_right_show=False,
                 fill_gradient=0,
             ),
             graph_panel(
@@ -3101,36 +1876,19 @@ def MemoryTrace() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="short", right_format="s"),
+                yaxes=yaxes(
+                    left_format="short",
+                    right_format="s",
+                    left_min="0",
+                    right_min="0",
+                    right_show=True,
+                ),
                 fill=1,
                 null_point_mode="null",
                 series_overrides=[{"alias": "/max_snapshot_lifetime/", "yaxis": 2}],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -3162,7 +1920,6 @@ def MemoryTrace() -> RowPanel:
                 ),
                 fill=1,
                 null_point_mode="null",
-                y_right_show=False,
                 fill_gradient=0,
             ),
             graph_panel(
@@ -3193,10 +1950,9 @@ def MemoryTrace() -> RowPanel:
                 ),
                 fill=1,
                 null_point_mode="null",
-                y_right_show=False,
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -3219,7 +1975,6 @@ def MemoryTrace() -> RowPanel:
                 ),
                 fill=1,
                 null_point_mode="null",
-                y_right_show=False,
                 fill_gradient=0,
             ),
             graph_panel(
@@ -3236,10 +1991,9 @@ def MemoryTrace() -> RowPanel:
                 ),
                 fill=1,
                 null_point_mode="null",
-                y_right_show=False,
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     return layout.row_panel
 
@@ -3275,7 +2029,7 @@ def ColumnarStorage() -> RowPanel:
                         legend_format="segments-disk-size-{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="short"),
+                yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -3286,29 +2040,6 @@ def ColumnarStorage() -> RowPanel:
                         "linewidth": 2,
                     }
                 ],
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "bytes",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -3343,35 +2074,12 @@ def ColumnarStorage() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -3388,30 +2096,7 @@ def ColumnarStorage() -> RowPanel:
                         legend_format="cache-miss {{$additional_groupby}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="opm"),
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "opm",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
+                yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
                 fill_gradient=0,
             ),
             graph_panel(
@@ -3446,35 +2131,12 @@ def ColumnarStorage() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -3491,30 +2153,7 @@ def ColumnarStorage() -> RowPanel:
                         legend_format="file-cache-miss {{$additional_groupby}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="opm"),
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "opm",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
+                yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
                 fill_gradient=0,
             ),
             graph_panel(
@@ -3549,32 +2188,9 @@ def ColumnarStorage() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -3609,35 +2225,12 @@ def ColumnarStorage() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -3649,31 +2242,8 @@ def ColumnarStorage() -> RowPanel:
                         legend_format="retry {{$additional_groupby}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="opm"),
+                yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "opm",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -3708,35 +2278,12 @@ def ColumnarStorage() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -3757,30 +2304,7 @@ def ColumnarStorage() -> RowPanel:
                         legend_format="parse {{$additional_groupby}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="opm"),
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "opm",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
+                yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
                 fill_gradient=0,
             ),
             graph_panel(
@@ -3796,35 +2320,17 @@ def ColumnarStorage() -> RowPanel:
                         legend_format="weighted_size-{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="short"),
+                yaxes=yaxes(
+                    left_format="bytes",
+                    right_format="short",
+                    left_min="0",
+                    right_show=True,
+                ),
                 null_point_mode="null",
                 series_overrides=[{"alias": "/entries/", "yaxis": 2}],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "bytes",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     return layout.row_panel
 
@@ -3846,35 +2352,18 @@ def Storage() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="opm"),
+                yaxes=yaxes(
+                    left_format="ops",
+                    right_format="opm",
+                    left_min="0",
+                    right_min="0",
+                    right_show=True,
+                ),
                 description="The total count of different kinds of commands received",
                 legend=graph_legend(
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
                 series_overrides=[{"alias": "/delete_range|ingest/", "yaxis": 2}],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "opm",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -3915,36 +2404,19 @@ def Storage() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="short", right_format="binBps"),
+                yaxes=yaxes(
+                    left_format="short",
+                    right_format="binBps",
+                    left_min="0",
+                    left_max="20",
+                    right_show=True,
+                ),
                 legend=graph_legend(max=False),
                 null_point_mode="null",
                 series_overrides=[{"alias": "/fs|write/", "yaxis": 2}],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": "20",
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "binBps",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -3957,35 +2429,17 @@ def Storage() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="binBps", right_format="bytes"),
+                yaxes=yaxes(
+                    left_format="binBps",
+                    right_format="bytes",
+                    left_min="0",
+                    right_show=True,
+                ),
                 description="The throughput of (maybe foreground) tasks of storage in bytes",
                 legend=graph_legend(side_width=250),
                 null_point_mode="null",
                 decimals=1,
                 series_overrides=[{"alias": "/total/", "yaxis": 2}],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "binBps",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "bytes",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -3997,38 +2451,20 @@ def Storage() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="bytes"),
+                yaxes=yaxes(
+                    left_format="none",
+                    right_format="bytes",
+                    left_min="0",
+                    right_show=True,
+                ),
                 description="The throughput of (maybe foreground) tasks of storage in rows",
                 legend=graph_legend(side_width=250),
                 null_point_mode="null",
                 decimals=1,
                 series_overrides=[{"alias": "/total/", "yaxis": 2}],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "bytes",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -4040,32 +2476,9 @@ def Storage() -> RowPanel:
                         legend_format="{{type}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="opm"),
+                yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
                 description="Total number of storage's internal sub tasks",
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "opm",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -4100,33 +2513,10 @@ def Storage() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 description="Duration of storage's internal sub tasks",
                 fill=1,
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
         ],
@@ -4142,32 +2532,9 @@ def Storage() -> RowPanel:
                         legend_format="{{type}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="opm"),
+                yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
                 description="Total number of storage's internal sub tasks",
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "opm",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -4202,33 +2569,10 @@ def Storage() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 description="Duration of storage's internal sub tasks",
                 fill=1,
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
         ],
@@ -4255,34 +2599,16 @@ def Storage() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="short", right_format="none"),
+                yaxes=yaxes(
+                    left_format="short",
+                    right_format="none",
+                    left_min="0",
+                    left_decimals=0,
+                ),
                 description="The current processing number of  segments' background management",
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": 0,
-                        },
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -4311,33 +2637,10 @@ def Storage() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="short"),
+                yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
                 description="The number of currently opened file descriptors.\n(Only counting storage engine of TiFlash by now. Not including TiFlash-Proxy)",
                 legend=graph_legend(side_width=250),
                 null_point_mode="null",
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -4354,33 +2657,10 @@ def Storage() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="short"),
+                yaxes=yaxes(left_format="ops", right_format="short", left_min="0"),
                 description="The number of open file descriptors action.\n(Only counting storage engine of TiFlash by now. Not including TiFlash-Proxy)",
                 legend=graph_legend(side_width=250),
                 null_point_mode="null",
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -4396,36 +2676,15 @@ def Storage() -> RowPanel:
                         legend_format="max-fsync-{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="s"),
+                yaxes=yaxes(
+                    left_format="ops", right_format="s", left_min="0", right_show=True
+                ),
                 description="OPS and duration of fsync operations.\n(Only counting storage engine of TiFlash by now. Not including TiFlash-Proxy)",
                 legend=graph_legend(side_width=250),
                 series_overrides=[{"alias": "/max-fsync/", "yaxis": 2}],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -4447,31 +2706,8 @@ def Storage() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="none"),
+                yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
                 description="The number of different kinds of read operations",
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -4492,34 +2728,11 @@ def Storage() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="none"),
+                yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
                 description="The number of different kinds of read operations",
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -4541,34 +2754,11 @@ def Storage() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="binBps", right_format="short"),
+                yaxes=yaxes(left_format="binBps", right_format="short", left_min="0"),
                 description="The flow of different kinds of write operations",
                 fill=1,
                 null_point_mode="null",
                 decimals=1,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "binBps",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -4589,37 +2779,14 @@ def Storage() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="binBps", right_format="short"),
+                yaxes=yaxes(left_format="binBps", right_format="short", left_min="0"),
                 description="The flow of different kinds of read operations",
                 fill=1,
                 null_point_mode="null",
                 decimals=1,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "binBps",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -4640,7 +2807,6 @@ def Storage() -> RowPanel:
                 legend=graph_legend(avg=True, max=False),
                 fill=1,
                 null_point_mode="null",
-                y_right_show=False,
                 fill_gradient=0,
             ),
             graph_panel(
@@ -4656,10 +2822,9 @@ def Storage() -> RowPanel:
                 legend=graph_legend(max=False, total=True),
                 fill=1,
                 null_point_mode="null",
-                y_right_show=False,
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     return layout.row_panel
 
@@ -4676,32 +2841,9 @@ def StorageReadPoolDataSharing() -> RowPanel:
                         legend_format="{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="none"),
+                yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
                 description="Total number of storage engine read tasks",
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -4772,36 +2914,19 @@ def StorageReadPoolDataSharing() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="short", right_format="s"),
+                yaxes=yaxes(
+                    left_format="short",
+                    right_format="s",
+                    left_min="0",
+                    right_min="0",
+                    right_show=True,
+                ),
                 fill=1,
                 null_point_mode="null",
                 series_overrides=[{"alias": "/max_snapshot_lifetime/", "yaxis": 2}],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -4837,32 +2962,9 @@ def StorageReadPoolDataSharing() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="µs", right_format="short"),
+                yaxes=yaxes(left_format="µs", right_format="short", left_min="0"),
                 fill=1,
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "µs",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -4873,36 +2975,19 @@ def StorageReadPoolDataSharing() -> RowPanel:
                         legend_format="{{type}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="binBps"),
+                yaxes=yaxes(
+                    left_format="ops",
+                    right_format="binBps",
+                    left_min="0",
+                    right_min="0",
+                    right_show=True,
+                ),
                 description="The information of read thread scheduling.",
                 legend=graph_legend(current=False, max=False),
                 series_overrides=[{"alias": "/push_block/", "yaxis": 2}],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "binBps",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -4923,35 +3008,17 @@ def StorageReadPoolDataSharing() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="percentunit"),
+                yaxes=yaxes(
+                    left_format="ops",
+                    right_format="percentunit",
+                    left_min="0",
+                    right_show=True,
+                ),
                 description="The information of data sharing cache hit ratio. Data sharing cache is purpose-built for OLAP workload that can reduce repeated data reads of concurrent table scanning.",
                 series_overrides=[
                     {"alias": "/cache_hit_ratio/", "yaxis": 2},
                     {"alias": "/cache_hit_ratio/", "yaxis": 2},
                 ],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -4962,31 +3029,14 @@ def StorageReadPoolDataSharing() -> RowPanel:
                         legend_format="{{type}} {{$additional_groupby}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="percentunit"),
+                yaxes=yaxes(
+                    left_format="ops",
+                    right_format="percentunit",
+                    left_min="0",
+                    right_min="0",
+                    right_show=True,
+                ),
                 series_overrides=[{"alias": "/cache_hit_ratio/", "yaxis": 2}],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -5021,35 +3071,12 @@ def StorageReadPoolDataSharing() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -5085,32 +3112,9 @@ def StorageReadPoolDataSharing() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="ms", right_format="short"),
+                yaxes=yaxes(left_format="ms", right_format="short", left_min="0"),
                 fill=1,
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ms",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -5122,35 +3126,12 @@ def StorageReadPoolDataSharing() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="cps", right_format="opm"),
+                yaxes=yaxes(left_format="cps", right_format="opm", left_min="0"),
                 description="Errors of DeltaIndex",
                 legend=graph_legend(current=False),
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "cps",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "opm",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     return layout.row_panel
 
@@ -5179,7 +3160,14 @@ def PageStorage() -> RowPanel:
                         legend_format="log_size-{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="percentunit"),
+                yaxes=yaxes(
+                    left_format="bytes",
+                    right_format="percentunit",
+                    left_min="0",
+                    right_min="0",
+                    right_max="1.1",
+                    right_show=True,
+                ),
                 description="The disk usage of PageStorage instances in each TiFlash node",
                 legend=graph_legend(max=False),
                 decimals=1,
@@ -5187,29 +3175,6 @@ def PageStorage() -> RowPanel:
                     {"alias": "/^valid_rate/", "yaxis": 2},
                     {"alias": "/size/", "linewidth": 3},
                 ],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "bytes",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": "1.1",
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -5224,36 +3189,15 @@ def PageStorage() -> RowPanel:
                         legend_format="log_file-{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="short", right_format="percentunit"),
+                yaxes=yaxes(
+                    left_format="short", right_format="percentunit", left_min="0"
+                ),
                 description="The number of files of PageStorage instances in each TiFlash node",
                 legend=graph_legend(max=False),
                 decimals=1,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": "1.1",
-                            "min": "0",
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -5303,35 +3247,12 @@ def PageStorage() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -5344,34 +3265,11 @@ def PageStorage() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="opm", right_format="short"),
+                yaxes=yaxes(left_format="opm", right_format="short", left_min="0"),
                 legend=graph_legend(
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
                 fill=1,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "opm",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -5406,35 +3304,12 @@ def PageStorage() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -5450,33 +3325,10 @@ def PageStorage() -> RowPanel:
                         legend_format="num_entries-{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="short", right_format="short"),
+                yaxes=yaxes(left_format="short", right_format="short", left_min="0"),
                 description="The number of pages of all TiFlash instance",
                 legend=graph_legend(max=False),
                 decimals=1,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -5488,36 +3340,13 @@ def PageStorage() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="short"),
+                yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
                 description="The num of pending writers in PageStorage",
                 legend=graph_legend(side_width=250),
                 null_point_mode="null",
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -5529,33 +3358,10 @@ def PageStorage() -> RowPanel:
                         legend_format="{{type}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="short"),
+                yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
                 fill=1,
                 null_point_mode="null",
                 decimals=1,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "bytes",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -5584,10 +3390,9 @@ def PageStorage() -> RowPanel:
                 description="The number of tables running under different mode in DeltaTree",
                 legend=graph_legend(max=False),
                 decimals=1,
-                y_right_show=False,
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -5600,34 +3405,17 @@ def PageStorage() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="opm"),
+                yaxes=yaxes(
+                    left_format="ops",
+                    right_format="opm",
+                    left_min="0",
+                    right_min="0",
+                    right_show=True,
+                ),
                 series_overrides=[{"yaxis": 2}],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "opm",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -5640,34 +3428,17 @@ def PageStorage() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="opm"),
+                yaxes=yaxes(
+                    left_format="ops",
+                    right_format="opm",
+                    left_min="0",
+                    right_min="0",
+                    right_show=True,
+                ),
                 series_overrides=[{"yaxis": 2}],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "opm",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     return layout.row_panel
 
@@ -5684,32 +3455,14 @@ def RateLimiter() -> RowPanel:
                         legend_format="{{type}}-{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="binBps", right_format="short"),
+                yaxes=yaxes(
+                    left_format="binBps",
+                    right_format="short",
+                    left_min="0",
+                    left_decimals=0,
+                ),
                 description="The storage I/O limiter metrics.",
                 fill=1,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "binBps",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": 0,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -5724,10 +3477,9 @@ def RateLimiter() -> RowPanel:
                 description="Current limit bytes per second of Storage I/O limiter",
                 legend=graph_legend(max=False),
                 fill=1,
-                y_right_show=False,
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -5757,12 +3509,11 @@ def RateLimiter() -> RowPanel:
                         legend_format="fgread-current-{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="short", right_format="s"),
+                yaxes=yaxes(left_format="short", right_format="s", right_show=True),
                 description="I/O Limiter current pending gauge.",
                 fill=1,
                 null_point_mode="null",
                 series_overrides=[{"alias": "/pending/", "yaxis": 2}],
-                y_right_show=True,
                 fill_gradient=0,
             ),
             graph_panel(
@@ -5773,33 +3524,16 @@ def RateLimiter() -> RowPanel:
                         legend_format="{{type}}-{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="s"),
+                yaxes=yaxes(
+                    left_format="ops",
+                    right_format="s",
+                    left_min="0",
+                    left_decimals=0,
+                    right_show=True,
+                ),
                 description="The storage I/O limiter metrics.",
                 fill=1,
                 series_overrides=[{"alias": "", "yaxis": 2}],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": 0,
-                        },
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -5834,36 +3568,13 @@ def RateLimiter() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 description="I/O Limiter pending duration.",
                 fill=1,
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     return layout.row_panel
 
@@ -5904,37 +3615,16 @@ def StorageWriteStall() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(
+                    left_format="s", right_format="short", left_min="0", right_show=True
+                ),
                 description="The stall duration of write and delete range",
                 fill=1,
                 tooltip_sort=2,
                 series_overrides=[{"alias": "99-delta_merge", "yaxis": 2}],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -5952,34 +3642,11 @@ def StorageWriteStall() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="binBps", right_format="bytes"),
+                yaxes=yaxes(left_format="binBps", right_format="bytes", left_min="0"),
                 description="The throughput of write and delta's background management",
                 legend=graph_legend(side_width=250),
                 null_point_mode="null",
                 decimals=1,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "binBps",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "bytes",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -5996,37 +3663,14 @@ def StorageWriteStall() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="bytes"),
+                yaxes=yaxes(left_format="bytes", right_format="bytes", left_min="0"),
                 description="The throughput of write and delta's background management",
                 legend=graph_legend(side_width=250),
                 null_point_mode="null",
                 decimals=1,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "bytes",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "bytes",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -6043,38 +3687,20 @@ def StorageWriteStall() -> RowPanel:
                         legend_format="ingest-{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="binBps", right_format="bytes"),
+                yaxes=yaxes(
+                    left_format="binBps",
+                    right_format="bytes",
+                    left_min="0",
+                    right_show=True,
+                ),
                 description="The throughput of write by instance",
                 legend=graph_legend(side_width=250),
                 null_point_mode="null",
                 decimals=1,
                 series_overrides=[{"alias": "/total/", "yaxis": 2}],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "binBps",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "bytes",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -6092,35 +3718,18 @@ def StorageWriteStall() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="opm"),
+                yaxes=yaxes(
+                    left_format="ops",
+                    right_format="opm",
+                    left_min="0",
+                    right_min="0",
+                    right_show=True,
+                ),
                 description="The total count of different kinds of commands received",
                 series_overrides=[{"alias": "/delete_range|ingest/", "yaxis": 2}],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "opm",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     return layout.row_panel
 
@@ -6137,31 +3746,8 @@ def Raft() -> RowPanel:
                         legend_format="{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="none"),
+                yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -6172,34 +3758,11 @@ def Raft() -> RowPanel:
                         legend_format="{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="none"),
+                yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -6211,31 +3774,8 @@ def Raft() -> RowPanel:
                         legend_format="{{type}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="none"),
+                yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -6246,34 +3786,11 @@ def Raft() -> RowPanel:
                         legend_format="{{type}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="none"),
+                yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -6313,33 +3830,12 @@ def Raft() -> RowPanel:
                         legend_format="{{instance}}-timeout",
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="opm"),
+                yaxes=yaxes(
+                    left_format="s", right_format="opm", left_min="0", right_show=True
+                ),
                 fill=1,
                 tooltip_sort=2,
                 series_overrides=[{"alias": "/timeout/", "yaxis": 2}],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "opm",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -6374,36 +3870,13 @@ def Raft() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 description="The number of currently applying snapshots.",
                 fill=1,
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -6455,36 +3928,13 @@ def Raft() -> RowPanel:
                         legend_format="avg-decode",
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 description="Duration of applying Raft write logs",
                 fill=1,
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -6518,7 +3968,7 @@ def Raft() -> RowPanel:
                     ),
                 ],
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -6552,7 +4002,7 @@ def Raft() -> RowPanel:
                     ),
                 ],
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -6564,31 +4014,8 @@ def Raft() -> RowPanel:
                         legend_format="{{type}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="none"),
+                yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -6599,34 +4026,11 @@ def Raft() -> RowPanel:
                         legend_format="{{type}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="none"),
+                yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -6663,7 +4067,7 @@ def Raft() -> RowPanel:
                     ),
                 ],
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -6701,7 +4105,7 @@ def Raft() -> RowPanel:
                     ),
                 ],
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -6719,7 +4123,7 @@ def Raft() -> RowPanel:
                     ),
                 ],
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -6731,31 +4135,8 @@ def Raft() -> RowPanel:
                         legend_format="{{type}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="none"),
+                yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -6790,36 +4171,13 @@ def Raft() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 description="Duration of Raft logs eager GC tasks",
                 fill=1,
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -6831,37 +4189,14 @@ def Raft() -> RowPanel:
                         legend_format="{{type}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="short", right_format="short"),
+                yaxes=yaxes(left_format="short", right_format="short", left_min="0"),
                 description="The keys flow of different kinds of Raft operations",
                 fill=1,
                 null_point_mode="null",
                 decimals=1,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -6873,36 +4208,13 @@ def Raft() -> RowPanel:
                         legend_format="{{type}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="short", right_format="short"),
+                yaxes=yaxes(left_format="short", right_format="short", left_min="0"),
                 fill=1,
                 null_point_mode="null",
                 decimals=1,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -6952,36 +4264,13 @@ def Raft() -> RowPanel:
                         legend_format="avg {{$additional_groupby}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 description="Latency that TiKV sends raft log to TiFlash.",
                 fill=1,
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.half_row(
         [
@@ -6994,36 +4283,13 @@ def Raft() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="none"),
+                yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
                 legend=graph_legend(
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     return layout.row_panel
 
@@ -7064,35 +4330,12 @@ def RaftSnapshotIngestSST() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -7120,35 +4363,12 @@ def RaftSnapshotIngestSST() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="short"),
+                yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
                 description="The number of currently applying snapshots.",
                 fill=1,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -7180,10 +4400,9 @@ def RaftSnapshotIngestSST() -> RowPanel:
                 ),
                 fill=1,
                 null_point_mode="null",
-                y_right_show=False,
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -7216,7 +4435,7 @@ def RaftSnapshotIngestSST() -> RowPanel:
                     ),
                 ],
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -7249,7 +4468,7 @@ def RaftSnapshotIngestSST() -> RowPanel:
                     ),
                 ],
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -7282,7 +4501,7 @@ def RaftSnapshotIngestSST() -> RowPanel:
                     ),
                 ],
             ),
-        ],
+        ]
     )
     layout.half_row(
         [
@@ -7301,7 +4520,7 @@ def RaftSnapshotIngestSST() -> RowPanel:
                     ),
                 ],
             ),
-        ],
+        ]
     )
     return layout.row_panel
 
@@ -7343,36 +4562,18 @@ def RoughSetFilterRateHistogram() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="percentunit", right_format="short"),
+                yaxes=yaxes(
+                    left_format="percentunit",
+                    right_format="short",
+                    left_min="0",
+                    right_show=True,
+                ),
                 legend=graph_legend(max=False),
                 series_overrides=[
                     {"alias": "/^RS Filter/", "yaxis": 2},
                     {"alias": "/^PK/", "yaxis": 2},
                     {"alias": "/^No Filter/", "yaxis": 2},
                 ],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             make_heatmap(
@@ -7389,7 +4590,7 @@ def RoughSetFilterRateHistogram() -> RowPanel:
                     ),
                 ],
             ),
-        ],
+        ]
     )
     return layout.row_panel
 
@@ -7430,33 +4631,10 @@ def DisaggregatedWrite() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 description="PageStorage Checkpoint Duration",
                 fill=1,
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -7472,37 +4650,14 @@ def DisaggregatedWrite() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="binBps", right_format="short"),
+                yaxes=yaxes(left_format="binBps", right_format="short", left_min="0"),
                 description="The flow of checkpoint operations",
                 fill=1,
                 null_point_mode="null",
                 decimals=1,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "binBps",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -7514,33 +4669,10 @@ def DisaggregatedWrite() -> RowPanel:
                         legend_format="{{type}} {{$additional_groupby}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="none"),
+                yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
                 description="The keys of checkpoint operations. All keys are uploaded in the checkpoint. Grouped by key types.",
                 fill=1,
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -7551,37 +4683,14 @@ def DisaggregatedWrite() -> RowPanel:
                         legend_format="{{type}} {{$additional_groupby}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="binBps", right_format="short"),
+                yaxes=yaxes(left_format="binBps", right_format="short", left_min="0"),
                 description="The flow of checkpoint operations. Group by key types",
                 fill=1,
                 null_point_mode="null",
                 decimals=1,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "binBps",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -7593,33 +4702,12 @@ def DisaggregatedWrite() -> RowPanel:
                         legend_format="checkpoint_data-{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="short", right_format="percentunit"),
+                yaxes=yaxes(
+                    left_format="short", right_format="percentunit", left_min="0"
+                ),
                 description="The number of files of owned by each TiFlash node",
                 legend=graph_legend(max=False),
                 decimals=1,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": "1.1",
-                            "min": "0",
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -7639,7 +4727,14 @@ def DisaggregatedWrite() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="percentunit"),
+                yaxes=yaxes(
+                    left_format="bytes",
+                    right_format="percentunit",
+                    left_min="0",
+                    right_min="0",
+                    right_max="1.1",
+                    right_show=True,
+                ),
                 description="The remote store usage owned by each TiFlash node",
                 legend=graph_legend(max=False),
                 decimals=1,
@@ -7647,32 +4742,9 @@ def DisaggregatedWrite() -> RowPanel:
                     {"alias": "/^valid_rate/", "yaxis": 2},
                     {"alias": "/size/", "linewidth": 3},
                 ],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "bytes",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": "1.1",
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -7684,31 +4756,8 @@ def DisaggregatedWrite() -> RowPanel:
                         legend_format="{{type}} {{$additional_groupby}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="none"),
+                yaxes=yaxes(left_format="none", right_format="none", left_min="0"),
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -7743,35 +4792,12 @@ def DisaggregatedWrite() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -7783,32 +4809,9 @@ def DisaggregatedWrite() -> RowPanel:
                         legend_format="store-{{store_id}}-{{type}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="short"),
+                yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
                 legend=graph_legend(max=False),
                 decimals=1,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "bytes",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -7843,7 +4846,9 @@ def DisaggregatedWrite() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(
+                    left_format="s", right_format="short", left_min="0", right_show=True
+                ),
                 fill=1,
                 tooltip_sort=2,
                 series_overrides=[
@@ -7851,29 +4856,6 @@ def DisaggregatedWrite() -> RowPanel:
                     {"alias": "/one_store/", "yaxis": 2},
                     {"alias": "/clean_locks/", "yaxis": 2},
                 ],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -7884,35 +4866,12 @@ def DisaggregatedWrite() -> RowPanel:
                         legend_format="{{instance}}-{{type}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="short", right_format="short"),
+                yaxes=yaxes(left_format="short", right_format="short", left_min="0"),
                 legend=graph_legend(max=False),
                 decimals=1,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -7924,32 +4883,9 @@ def DisaggregatedWrite() -> RowPanel:
                         legend_format="{{instance}}-{{type}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="short", right_format="short"),
+                yaxes=yaxes(left_format="short", right_format="short", left_min="0"),
                 legend=graph_legend(max=False),
                 decimals=1,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -7960,34 +4896,11 @@ def DisaggregatedWrite() -> RowPanel:
                         legend_format="{{type}} {{$additional_groupby}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="none"),
+                yaxes=yaxes(left_format="none", right_format="none", left_min="0"),
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -8000,32 +4913,15 @@ def DisaggregatedWrite() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="percentunit"),
+                yaxes=yaxes(
+                    left_format="ops",
+                    right_format="percentunit",
+                    left_min="0",
+                    right_min="0",
+                    right_show=True,
+                ),
                 legend=graph_legend(max=False),
                 series_overrides=[{"alias": "/hit_ratio/", "yaxis": 2}],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -8037,35 +4933,18 @@ def DisaggregatedWrite() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="percentunit"),
+                yaxes=yaxes(
+                    left_format="ops",
+                    right_format="percentunit",
+                    left_min="0",
+                    right_min="0",
+                    right_show=True,
+                ),
                 legend=graph_legend(max=False),
                 series_overrides=[{"alias": "/hit_ratio/", "yaxis": 2}],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -8101,33 +4980,12 @@ def DisaggregatedWrite() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(
+                    left_format="s", right_format="short", left_min="0", right_show=True
+                ),
                 fill=1,
                 tooltip_sort=2,
                 series_overrides=[{"alias": "/hit_ratio/", "yaxis": 2}],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -8139,35 +4997,18 @@ def DisaggregatedWrite() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="percentunit"),
+                yaxes=yaxes(
+                    left_format="ops",
+                    right_format="percentunit",
+                    left_min="0",
+                    right_min="0",
+                    right_show=True,
+                ),
                 legend=graph_legend(max=False),
                 series_overrides=[{"alias": "/hit_ratio/", "yaxis": 2}],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     return layout.row_panel
 
@@ -8208,35 +5049,12 @@ def DisaggregatedCompute() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -8256,35 +5074,17 @@ def DisaggregatedCompute() -> RowPanel:
                         legend_format="page_cache_hit_ratio",
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="percentunit"),
+                yaxes=yaxes(
+                    left_format="ops",
+                    right_format="percentunit",
+                    left_min="0",
+                    right_show=True,
+                ),
                 description="Remote Cache Operations",
                 series_overrides=[
                     {"alias": "dtfile_cache_hit_ratio", "yaxis": 2},
                     {"alias": "page_cache_hit_ratio", "yaxis": 2},
                 ],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -8296,34 +5096,13 @@ def DisaggregatedCompute() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="binBps", right_format="percentunit"),
+                yaxes=yaxes(
+                    left_format="binBps", right_format="percentunit", left_min="0"
+                ),
                 description="Remote Cache Flow",
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "binBps",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -8359,32 +5138,9 @@ def DisaggregatedCompute() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -8419,35 +5175,12 @@ def DisaggregatedCompute() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -8459,32 +5192,15 @@ def DisaggregatedCompute() -> RowPanel:
                         legend_format="{{result}}-{{file_type}} {{$additional_groupby}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="s"),
+                yaxes=yaxes(
+                    left_format="ops",
+                    right_format="s",
+                    left_min="0",
+                    left_decimals=0,
+                    right_show=True,
+                ),
                 fill=1,
                 series_overrides=[{"alias": "", "yaxis": 2}],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": 0,
-                        },
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -8496,33 +5212,12 @@ def DisaggregatedCompute() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="binBps", right_format="percentunit"),
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "binBps",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
+                yaxes=yaxes(
+                    left_format="binBps", right_format="percentunit", left_min="0"
+                ),
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -8536,7 +5231,6 @@ def DisaggregatedCompute() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="short", right_format="short"),
                 fill=1,
-                y_right_show=False,
                 fill_gradient=0,
             ),
             graph_panel(
@@ -8547,35 +5241,18 @@ def DisaggregatedCompute() -> RowPanel:
                         legend_format="{{reason}}-{{file_type}} {{$additional_groupby}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="s"),
+                yaxes=yaxes(
+                    left_format="ops",
+                    right_format="s",
+                    left_min="0",
+                    left_decimals=0,
+                    right_show=True,
+                ),
                 fill=1,
                 series_overrides=[{"alias": "", "yaxis": 2}],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": 0,
-                        },
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -8599,32 +5276,11 @@ def DisaggregatedCompute() -> RowPanel:
                         legend_format="PageUsed-{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="percentunit"),
+                yaxes=yaxes(
+                    left_format="bytes", right_format="percentunit", left_min="0"
+                ),
                 description="Remote Cache Usage",
                 legend=graph_legend(max=False),
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "bytes",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -8647,35 +5303,14 @@ def DisaggregatedCompute() -> RowPanel:
                         legend_format="SharedColumnData-{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="percentunit"),
+                yaxes=yaxes(
+                    left_format="bytes", right_format="percentunit", left_min="0"
+                ),
                 description="Memory Usage of Storage Tasks",
                 legend=graph_legend(current=False),
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "bytes",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -8691,32 +5326,14 @@ def DisaggregatedCompute() -> RowPanel:
                         legend_format="hit_ratio-{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="percentunit"),
+                yaxes=yaxes(
+                    left_format="ops",
+                    right_format="percentunit",
+                    left_min="0",
+                    right_show=True,
+                ),
                 description="DeltaIndex cache of ReadNodes",
                 series_overrides=[{"alias": "/hit_ratio/", "yaxis": 2}],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -8751,36 +5368,13 @@ def DisaggregatedCompute() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 description="Duration of storage's internal sub tasks",
                 fill=1,
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -8796,31 +5390,10 @@ def DisaggregatedCompute() -> RowPanel:
                         legend_format="{{type}} {{$additional_groupby}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="opm"),
+                yaxes=yaxes(
+                    left_format="ops", right_format="opm", left_min="0", left_decimals=1
+                ),
                 description="Total number of storage's internal sub tasks",
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": 1,
-                        },
-                        {
-                            "format": "opm",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -8844,34 +5417,11 @@ def DisaggregatedCompute() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="short", right_format="opm"),
+                yaxes=yaxes(left_format="short", right_format="opm", left_min="0"),
                 fill=1,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "opm",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": False,
-                            "decimals": 2,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     return layout.row_panel
 
@@ -8897,31 +5447,8 @@ def S3() -> RowPanel:
                         legend_format="S3WriteDMFileBytes {{$additional_groupby}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="binBps", right_format="opm"),
+                yaxes=yaxes(left_format="binBps", right_format="opm", left_min="0"),
                 description="S3 read/write throughput",
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "binBps",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "opm",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -8979,34 +5506,11 @@ def S3() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="opm"),
+                yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
                 description="S3 OPS",
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "opm",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -9042,31 +5546,8 @@ def S3() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="opm"),
+                yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
                 description="S3 Retry OPS",
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "opm",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -9101,36 +5582,13 @@ def S3() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 description="S3 Request Duration",
                 fill=1,
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -9178,31 +5636,8 @@ def S3() -> RowPanel:
                         legend_format="write-notfound {{$additional_groupby}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="opm"),
+                yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
                 description="S3 HTTP OPS",
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "opm",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -9237,36 +5672,13 @@ def S3() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 description="S3 HTTP Request Duration",
                 fill=1,
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -9282,31 +5694,8 @@ def S3() -> RowPanel:
                         legend_format="S3RandomAccessFile {{$additional_groupby}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="opm"),
+                yaxes=yaxes(left_format="none", right_format="opm", left_min="0"),
                 description="S3 HTTP OPS",
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "opm",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -9338,33 +5727,10 @@ def S3() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="opm"),
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "opm",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
+                yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     return layout.row_panel
 
@@ -9382,30 +5748,7 @@ def PipelineModel() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="short"),
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
+                yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
                 fill_gradient=0,
             ),
             graph_panel(
@@ -9421,33 +5764,10 @@ def PipelineModel() -> RowPanel:
                         legend_format="sum({{type}})",
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="short"),
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
+                yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -9459,31 +5779,8 @@ def PipelineModel() -> RowPanel:
                         legend_format="{{type}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="none"),
+                yaxes=yaxes(left_format="none", right_format="none", left_min="0"),
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -9538,35 +5835,12 @@ def PipelineModel() -> RowPanel:
                         legend_format="avg-await",
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -9598,31 +5872,8 @@ def PipelineModel() -> RowPanel:
                         legend_format="avg-io",
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -9637,7 +5888,9 @@ def PipelineModel() -> RowPanel:
                         legend_format="Limit",
                     ),
                 ],
-                yaxes=yaxes(left_format="percentunit", right_format="short"),
+                yaxes=yaxes(
+                    left_format="percentunit", right_format="short", left_min="0"
+                ),
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -9649,32 +5902,9 @@ def PipelineModel() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -9690,7 +5920,9 @@ def PipelineModel() -> RowPanel:
                         legend_format="Limit",
                     ),
                 ],
-                yaxes=yaxes(left_format="percentunit", right_format="short"),
+                yaxes=yaxes(
+                    left_format="percentunit", right_format="short", left_min="0"
+                ),
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -9702,29 +5934,6 @@ def PipelineModel() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -9739,7 +5948,9 @@ def PipelineModel() -> RowPanel:
                         legend_format="Limit",
                     ),
                 ],
-                yaxes=yaxes(left_format="percentunit", right_format="short"),
+                yaxes=yaxes(
+                    left_format="percentunit", right_format="short", left_min="0"
+                ),
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -9751,32 +5962,9 @@ def PipelineModel() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "percentunit",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.half_row(
         [
@@ -9793,34 +5981,11 @@ def PipelineModel() -> RowPanel:
                         legend_format="sum({{type}})",
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="short"),
+                yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
                 description="wait notify task details",
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "none",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     return layout.row_panel
 
@@ -9882,7 +6047,6 @@ def TiFlashResourceControl() -> RowPanel:
                 legend=graph_legend(avg=True, max=False),
                 fill=1,
                 null_point_mode="null",
-                y_right_show=False,
                 fill_gradient=0,
             ),
             graph_panel(
@@ -9909,37 +6073,20 @@ def TiFlashResourceControl() -> RowPanel:
                         legend_format="storage-{{keyspace}}_{{resource_group}}_{{type}} {{$additional_groupby}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="cps", right_format="short"),
+                yaxes=yaxes(
+                    left_format="cps",
+                    right_format="short",
+                    left_min="0",
+                    right_min="0",
+                    right_show=True,
+                ),
                 description="Request Unit for tidb-serverless charging",
                 legend=graph_legend(max=False),
                 decimals=1,
                 series_overrides=[{"alias": "/sum/", "yaxis": 2}],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "cps",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     return layout.row_panel
 
@@ -9980,32 +6127,9 @@ def StatusServer() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short"),
+                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
                 tooltip_sort=2,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -10016,35 +6140,12 @@ def StatusServer() -> RowPanel:
                         legend_format="{{path}} {{$additional_groupby}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="short"),
+                yaxes=yaxes(left_format="ops", right_format="short", left_min="0"),
                 fill=1,
                 null_point_mode="null",
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": None,
-                        },
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": None,
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     return layout.row_panel
 
@@ -10062,32 +6163,14 @@ def VectorSearch() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="short", right_format="ops"),
+                yaxes=yaxes(
+                    left_format="short",
+                    right_format="ops",
+                    left_min="0",
+                    left_decimals=0,
+                ),
                 legend=graph_legend(current=False),
                 decimals=0,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "short",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": 0,
-                        },
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -10103,35 +6186,17 @@ def VectorSearch() -> RowPanel:
                         legend_format="{{instance}}-RssFile",
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="ops"),
+                yaxes=yaxes(
+                    left_format="bytes",
+                    right_format="ops",
+                    left_min="0",
+                    left_decimals=0,
+                ),
                 legend=graph_legend(current=False),
                 decimals=0,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "bytes",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": 0,
-                        },
-                        {
-                            "format": "ops",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": False,
-                            "decimals": None,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     layout.row(
         [
@@ -10144,33 +6209,18 @@ def VectorSearch() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="s"),
+                yaxes=yaxes(
+                    left_format="s",
+                    right_format="s",
+                    left_min="0",
+                    left_decimals=1,
+                    right_min="0",
+                    right_decimals=1,
+                    right_show=True,
+                ),
                 legend=graph_legend(current=False),
                 decimals=1,
                 series_overrides=[{"alias": "/download/", "yaxis": 2}],
-                y_right_show=True,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": 1,
-                        },
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": 1,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
             graph_panel(
@@ -10182,35 +6232,14 @@ def VectorSearch() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="s"),
+                yaxes=yaxes(
+                    left_format="s", right_format="s", left_min="0", left_decimals=1
+                ),
                 legend=graph_legend(current=False),
                 decimals=1,
-                y_right_show=False,
-                extra_json={
-                    "yaxes": [
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": True,
-                            "decimals": 1,
-                        },
-                        {
-                            "format": "s",
-                            "label": None,
-                            "logBase": 1,
-                            "max": None,
-                            "min": "0",
-                            "show": False,
-                            "decimals": 1,
-                        },
-                    ]
-                },
                 fill_gradient=0,
             ),
-        ],
+        ]
     )
     return layout.row_panel
 
