@@ -248,8 +248,6 @@ def Server() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[8, 8, 8],
     )
     layout.row(
         [
@@ -288,8 +286,6 @@ def Server() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -454,8 +450,6 @@ def Server() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -532,8 +526,6 @@ def Server() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     return layout.row_panel
 
@@ -629,8 +621,6 @@ def ThreadsCPU() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -733,8 +723,6 @@ def ThreadsCPU() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -837,8 +825,6 @@ def ThreadsCPU() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -941,8 +927,6 @@ def ThreadsCPU() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -1046,8 +1030,6 @@ def ThreadsCPU() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -1150,8 +1132,6 @@ def ThreadsCPU() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -1254,8 +1234,6 @@ def ThreadsCPU() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -1358,8 +1336,6 @@ def ThreadsCPU() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     return layout.row_panel
 
@@ -1409,8 +1385,6 @@ def Threads() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -1451,8 +1425,6 @@ def Threads() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     return layout.row_panel
 
@@ -1532,8 +1504,6 @@ def Coprocessor() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -1633,8 +1603,6 @@ def Coprocessor() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -1734,8 +1702,6 @@ def Coprocessor() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -1829,8 +1795,6 @@ def Coprocessor() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -1905,8 +1869,6 @@ def Coprocessor() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -1981,8 +1943,6 @@ def Coprocessor() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -2058,8 +2018,6 @@ def Coprocessor() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -2134,8 +2092,6 @@ def Coprocessor() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -2211,8 +2167,6 @@ def Coprocessor() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     return layout.row_panel
 
@@ -2314,8 +2268,6 @@ def TaskScheduler() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -2398,8 +2350,6 @@ def TaskScheduler() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -2478,8 +2428,6 @@ def TaskScheduler() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     return layout.row_panel
 
@@ -2584,10 +2532,8 @@ def DDL() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
-    layout.row(
+    layout.half_row(
         [
             graph_panel(
                 title="Schema Apply Duration",
@@ -2655,8 +2601,6 @@ def DDL() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12],
     )
     return layout.row_panel
 
@@ -2766,8 +2710,6 @@ def ImbalanceReadWrite() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -2855,8 +2797,6 @@ def ImbalanceReadWrite() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -2947,8 +2887,6 @@ def ImbalanceReadWrite() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     return layout.row_panel
 
@@ -2994,8 +2932,6 @@ def MemoryTrace() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -3040,8 +2976,6 @@ def MemoryTrace() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -3122,8 +3056,6 @@ def MemoryTrace() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -3199,8 +3131,6 @@ def MemoryTrace() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -3267,8 +3197,6 @@ def MemoryTrace() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -3312,8 +3240,6 @@ def MemoryTrace() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     return layout.row_panel
 
@@ -3446,8 +3372,6 @@ def ColumnarStorage() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -3551,8 +3475,6 @@ def ColumnarStorage() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -3716,8 +3638,6 @@ def ColumnarStorage() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[8, 8, 8],
     )
     layout.row(
         [
@@ -3817,8 +3737,6 @@ def ColumnarStorage() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -3907,8 +3825,6 @@ def ColumnarStorage() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     return layout.row_panel
 
@@ -4029,8 +3945,6 @@ def Storage() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -4115,8 +4029,6 @@ def Storage() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -4219,7 +4131,6 @@ def Storage() -> RowPanel:
             ),
         ],
         height=5,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -4322,7 +4233,6 @@ def Storage() -> RowPanel:
             ),
         ],
         height=5,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -4373,8 +4283,6 @@ def Storage() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[24],
     )
     layout.row(
         [
@@ -4518,8 +4426,6 @@ def Storage() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[8, 8, 8],
     )
     layout.row(
         [
@@ -4614,8 +4520,6 @@ def Storage() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -4716,8 +4620,6 @@ def Storage() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -4758,8 +4660,6 @@ def Storage() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     return layout.row_panel
 
@@ -4902,8 +4802,6 @@ def StorageReadPoolDataSharing() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -5005,8 +4903,6 @@ def StorageReadPoolDataSharing() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -5154,8 +5050,6 @@ def StorageReadPoolDataSharing() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[8, 8, 8],
     )
     layout.row(
         [
@@ -5257,8 +5151,6 @@ def StorageReadPoolDataSharing() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     return layout.row_panel
 
@@ -5362,8 +5254,6 @@ def PageStorage() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -5442,8 +5332,6 @@ def PageStorage() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -5547,8 +5435,6 @@ def PageStorage() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -5632,8 +5518,6 @@ def PageStorage() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -5704,8 +5588,6 @@ def PageStorage() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -5746,8 +5628,6 @@ def PageStorage() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[24],
     )
     layout.row(
         [
@@ -5788,8 +5668,6 @@ def PageStorage() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[24],
     )
     return layout.row_panel
 
@@ -5850,8 +5728,6 @@ def RateLimiter() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -5988,8 +5864,6 @@ def RateLimiter() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[8, 8, 8],
     )
     return layout.row_panel
 
@@ -6061,8 +5935,6 @@ def StorageWriteStall() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[24],
     )
     layout.row(
         [
@@ -6155,8 +6027,6 @@ def StorageWriteStall() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -6205,8 +6075,6 @@ def StorageWriteStall() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[24],
     )
     layout.row(
         [
@@ -6253,8 +6121,6 @@ def StorageWriteStall() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[24],
     )
     return layout.row_panel
 
@@ -6334,8 +6200,6 @@ def Raft() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -6410,8 +6274,6 @@ def Raft() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -6542,8 +6404,6 @@ def Raft() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -6625,8 +6485,6 @@ def Raft() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[24],
     )
     layout.row(
         [
@@ -6661,8 +6519,6 @@ def Raft() -> RowPanel:
                 ],
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -6697,8 +6553,6 @@ def Raft() -> RowPanel:
                 ],
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -6773,8 +6627,6 @@ def Raft() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -6812,8 +6664,6 @@ def Raft() -> RowPanel:
                 ],
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -6852,8 +6702,6 @@ def Raft() -> RowPanel:
                 ],
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -6872,8 +6720,6 @@ def Raft() -> RowPanel:
                 ],
             ),
         ],
-        height=8,
-        widths=[24],
     )
     layout.row(
         [
@@ -6974,8 +6820,6 @@ def Raft() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -7018,8 +6862,6 @@ def Raft() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[24],
     )
     layout.row(
         [
@@ -7061,8 +6903,6 @@ def Raft() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[24],
     )
     layout.row(
         [
@@ -7142,10 +6982,8 @@ def Raft() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
-    layout.row(
+    layout.half_row(
         [
             graph_panel(
                 title="Log Replication Rejected",
@@ -7186,8 +7024,6 @@ def Raft() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12],
     )
     return layout.row_panel
 
@@ -7257,8 +7093,6 @@ def RaftSnapshotIngestSST() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[24],
     )
     layout.row(
         [
@@ -7315,8 +7149,6 @@ def RaftSnapshotIngestSST() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[24],
     )
     layout.row(
         [
@@ -7352,8 +7184,6 @@ def RaftSnapshotIngestSST() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -7387,8 +7217,6 @@ def RaftSnapshotIngestSST() -> RowPanel:
                 ],
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -7422,8 +7250,6 @@ def RaftSnapshotIngestSST() -> RowPanel:
                 ],
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -7457,10 +7283,8 @@ def RaftSnapshotIngestSST() -> RowPanel:
                 ],
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
-    layout.row(
+    layout.half_row(
         [
             make_heatmap(
                 title="Ingest SST Duration",
@@ -7478,8 +7302,6 @@ def RaftSnapshotIngestSST() -> RowPanel:
                 ],
             ),
         ],
-        height=8,
-        widths=[12],
     )
     return layout.row_panel
 
@@ -7568,8 +7390,6 @@ def RoughSetFilterRateHistogram() -> RowPanel:
                 ],
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     return layout.row_panel
 
@@ -7683,8 +7503,6 @@ def DisaggregatedWrite() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -7764,8 +7582,6 @@ def DisaggregatedWrite() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -7857,8 +7673,6 @@ def DisaggregatedWrite() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -7958,8 +7772,6 @@ def DisaggregatedWrite() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -8101,8 +7913,6 @@ def DisaggregatedWrite() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[8, 8, 8],
     )
     layout.row(
         [
@@ -8178,8 +7988,6 @@ def DisaggregatedWrite() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -8258,8 +8066,6 @@ def DisaggregatedWrite() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -8362,8 +8168,6 @@ def DisaggregatedWrite() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     return layout.row_panel
 
@@ -8433,8 +8237,6 @@ def DisaggregatedCompute() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[24],
     )
     layout.row(
         [
@@ -8522,8 +8324,6 @@ def DisaggregatedCompute() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -8648,8 +8448,6 @@ def DisaggregatedCompute() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -8725,8 +8523,6 @@ def DisaggregatedCompute() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -8780,8 +8576,6 @@ def DisaggregatedCompute() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -8882,8 +8676,6 @@ def DisaggregatedCompute() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -8989,8 +8781,6 @@ def DisaggregatedCompute() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -9082,8 +8872,6 @@ def DisaggregatedCompute() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     return layout.row_panel
 
@@ -9219,8 +9007,6 @@ def S3() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -9345,8 +9131,6 @@ def S3() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -9483,8 +9267,6 @@ def S3() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -9583,8 +9365,6 @@ def S3() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     return layout.row_panel
 
@@ -9668,8 +9448,6 @@ def PipelineModel() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -9789,8 +9567,6 @@ def PipelineModel() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -9899,8 +9675,6 @@ def PipelineModel() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -10003,10 +9777,8 @@ def PipelineModel() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
-    layout.row(
+    layout.half_row(
         [
             graph_panel(
                 title="Wait notify task details",
@@ -10049,8 +9821,6 @@ def PipelineModel() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12],
     )
     return layout.row_panel
 
@@ -10170,8 +9940,6 @@ def TiFlashResourceControl() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     return layout.row_panel
 
@@ -10277,8 +10045,6 @@ def StatusServer() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     return layout.row_panel
 
@@ -10366,8 +10132,6 @@ def VectorSearch() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     layout.row(
         [
@@ -10447,8 +10211,6 @@ def VectorSearch() -> RowPanel:
                 fill_gradient=0,
             ),
         ],
-        height=8,
-        widths=[12, 12],
     )
     return layout.row_panel
 

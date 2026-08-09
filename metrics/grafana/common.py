@@ -920,15 +920,17 @@ class Layout:
             base = width // count
             ws = [base] * count
             ws[-1] += width - base * count
-        x = self.current_row_x_pos % self.ROW_WIDTH
+        x = 0  # each band starts at the left edge
         for panel, w in zip(panels, ws):
             panel.gridPos = GridPos(h=h, w=w, x=x, y=self.current_row_y_pos)
             x += w
         self.row_panel.panels.extend(panels)
         self.current_row_y_pos += h
-        self.current_row_x_pos = x
+        # Do not carry x into the next band; authors call row()/half_row() per band.
+        self.current_row_x_pos = 0
 
     def half_row(self, panels: list[Panel], height: Optional[int] = None):
+        """Place panels in the left half (width 12), leaving the right half empty when alone."""
         self.row(panels, self.ROW_WIDTH // 2, height=height)
 
 

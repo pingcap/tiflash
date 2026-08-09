@@ -267,10 +267,25 @@ def emit_row(row: dict) -> str:
         widths = [(p.get("gridPos") or {}).get("w", 24) for p in band]
         heights = [(p.get("gridPos") or {}).get("h", 8) for p in band]
         h = max(heights) if heights else 8
-        parts.append("    layout.row([")
+        equal = len(set(widths)) == 1
+        full = sum(widths) == 24
+        half_single = widths == [12]
+        if h == 8 and half_single:
+            method = "half_row"
+            suffix = ")"
+        elif h == 8 and full and equal:
+            method = "row"
+            suffix = ")"
+        elif full and equal:
+            method = "row"
+            suffix = f", height={h})"
+        else:
+            method = "row"
+            suffix = f", height={h}, widths={widths})"
+        parts.append(f"    layout.{method}([")
         for p in band:
             parts.append(emit_panel(p, "        ") + ",")
-        parts.append(f"    ], height={h}, widths={widths})")
+        parts.append(f"    ]{suffix}")
     parts.append("    return layout.row_panel")
     parts.append("")
     return "\n".join(parts)
