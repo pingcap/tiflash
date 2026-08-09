@@ -1322,7 +1322,6 @@ def graph_panel_histogram_quantiles(
     return graph_panel(
         title=title,
         description=description,
-        yaxes=yaxes,
         targets=[
             target(
                 expr=expr_histogram_quantile(
@@ -1370,6 +1369,7 @@ def graph_panel_histogram_quantiles(
                 additional_groupby=additional_groupby,
             ),
         ],
+        yaxes=yaxes,
         series_overrides=[
             series_override(
                 # use regex because the real alias is "count ${additional_groupby}"
@@ -1561,14 +1561,14 @@ def duration_panel(
         title=title,
         description=description,
         targets=targets,
-        fill=1,
-        fill_gradient=0,
         yaxes=yaxes(
             left_format=unit,
             right_format=y_right,
             right_show=bool(series_overrides),
         ),
         legend=graph_legend(max=True, current=True, sort_desc=True),
+        fill=1,
+        fill_gradient=0,
         series_overrides=series_overrides,
         tooltip_sort=2,
         null_point_mode=NULL_AS_ZERO,
@@ -1601,9 +1601,9 @@ def ops_panel(
         title=title,
         description=description,
         targets=[t],
+        yaxes=yaxes(left_format=y_left),
         fill=fill,
         fill_gradient=0,
-        yaxes=yaxes(left_format=y_left),
         tooltip_sort=2,
         null_point_mode=NULL_AS_ZERO,
     )
@@ -1670,9 +1670,9 @@ def cpu_with_limit_panel(
         title=title,
         description=description,
         targets=targets,
+        yaxes=yaxes(left_format=UNITS.PERCENT_UNIT, right_format=UNITS.SHORT),
         fill=0,
         fill_gradient=0,
-        yaxes=yaxes(left_format=UNITS.PERCENT_UNIT, right_format=UNITS.SHORT),
         series_overrides=overrides,
         null_point_mode="null",
     )
@@ -1732,13 +1732,13 @@ def ops_hit_ratio_panel(
         title=title,
         description=description,
         targets=[ops_t] + ratio_targets,
-        fill=fill,
-        fill_gradient=0,
         yaxes=yaxes(
             left_format=y_left,
             right_format=UNITS.PERCENT_UNIT,
             right_show=True,
         ),
+        fill=fill,
+        fill_gradient=0,
         series_overrides=overrides,
         null_point_mode=NULL_AS_ZERO,
     )

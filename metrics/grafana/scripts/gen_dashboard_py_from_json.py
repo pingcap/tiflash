@@ -150,15 +150,23 @@ def emit_graph(p: dict, indent: str) -> str:
 
     args = [
         f"title={py_str(p.get('title'))}",
-        f"targets=[\n{target_lines},\n{indent}    ]" if targets else "targets=[]",
-        f"yaxes={yaxes_call}",
     ]
     if desc:
         args.append(f"description={py_str(desc)}")
+    args.append(
+        f"targets=[\n{target_lines},\n{indent}    ]" if targets else "targets=[]"
+    )
+    args.append(f"yaxes={yaxes_call}")
     if legend_call:
         args.append(f"legend={legend_call}")
+    # Keep fill / fill_gradient as adjacent lines.
     if fill != 0:
         args.append(f"fill={fill}")
+    fg = p.get("fillGradient", 0) or 0
+    if fg:
+        args.append(f"fill_gradient={fg}")
+    else:
+        args.append("fill_gradient=0")
     if linewidth != 1:
         args.append(f"line_width={linewidth}")
     if stack:
@@ -174,12 +182,6 @@ def emit_graph(p: dict, indent: str) -> str:
         args.append(f"tooltip_sort={tooltip_sort}")
     if overrides:
         args.append(f"series_overrides={py_str(overrides)}")
-    # Prefer no fill_gradient unless JSON had fillGradient
-    fg = p.get("fillGradient", 0) or 0
-    if fg:
-        args.append(f"fill_gradient={fg}")
-    else:
-        args.append("fill_gradient=0")
 
     joined = f",\n{indent}    ".join(args)
     return f"{indent}graph_panel(\n{indent}    {joined},\n{indent})"

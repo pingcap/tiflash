@@ -125,6 +125,7 @@ def Server() -> RowPanel:
         [
             graph_panel(
                 title="Store size",
+                description="The storage size per TiFlash instance.\n(Not including some disk usage of TiFlash-Proxy by now)",
                 targets=[
                     target(
                         expr='sum(tiflash_system_current_metric_StoreSizeUsed{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~""}) by (instance)',
@@ -136,16 +137,16 @@ def Server() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
-                description="The storage size per TiFlash instance.\n(Not including some disk usage of TiFlash-Proxy by now)",
                 legend=graph_legend(max=False),
                 fill=5,
+                fill_gradient=0,
                 line_width=0,
                 stack=True,
                 decimals=3,
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Available size",
+                description="The available capacity size per TiFlash instance",
                 targets=[
                     target(
                         expr='sum(tiflash_system_current_metric_StoreSizeAvailable{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
@@ -153,16 +154,16 @@ def Server() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
-                description="The available capacity size per TiFlash instance",
                 legend=graph_legend(max=False),
                 fill=5,
+                fill_gradient=0,
                 line_width=0,
                 stack=True,
                 decimals=3,
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Capacity size",
+                description="The capacity size per TiFlash instance",
                 targets=[
                     target(
                         expr='sum(tiflash_system_current_metric_StoreSizeCapacity{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
@@ -170,13 +171,12 @@ def Server() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
-                description="The capacity size per TiFlash instance",
                 legend=graph_legend(max=False),
                 fill=5,
+                fill_gradient=0,
                 line_width=0,
                 stack=True,
                 decimals=3,
-                fill_gradient=0,
             ),
         ]
     )
@@ -184,6 +184,7 @@ def Server() -> RowPanel:
         [
             graph_panel(
                 title="Uptime",
+                description="TiFlash uptime since last restart",
                 targets=[
                     target(
                         expr='tiflash_system_asynchronous_metric_Uptime{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
@@ -191,12 +192,12 @@ def Server() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="dtdurations", right_format="short"),
-                description="TiFlash uptime since last restart",
                 legend=graph_legend(max=False),
                 fill_gradient=0,
             ),
             graph_panel(
                 title="Region",
+                description="The number of Regions on each TiFlash instance",
                 targets=[
                     target(
                         expr='sum(tiflash_proxy_tikv_raftstore_region_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="region", instance=~"$proxy_instance", instance=~"$tiflash_role"}) by (instance)',
@@ -209,10 +210,9 @@ def Server() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="short", right_format="short"),
-                description="The number of Regions on each TiFlash instance",
+                fill_gradient=0,
                 null_point_mode="null",
                 decimals=0,
-                fill_gradient=0,
             ),
         ]
     )
@@ -220,6 +220,7 @@ def Server() -> RowPanel:
         [
             graph_panel(
                 title="CPU Usage",
+                description="TiFlash CPU usage calculated with process CPU running seconds.",
                 targets=[
                     target(
                         expr='rate(tiflash_proxy_process_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", job=~".*tiflash", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])',
@@ -237,7 +238,7 @@ def Server() -> RowPanel:
                     left_min="0",
                     left_decimals=1,
                 ),
-                description="TiFlash CPU usage calculated with process CPU running seconds.",
+                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -248,10 +249,10 @@ def Server() -> RowPanel:
                         "linewidth": 2,
                     }
                 ],
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Memory",
+                description="The memory usage per TiFlash instance",
                 targets=[
                     target(
                         expr='sum(tiflash_proxy_process_resident_memory_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role", job=~".*tiflash"}) by (instance)',
@@ -324,7 +325,7 @@ def Server() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
-                description="The memory usage per TiFlash instance",
+                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -335,7 +336,6 @@ def Server() -> RowPanel:
                         "linewidth": 2,
                     }
                 ],
-                fill_gradient=0,
             ),
         ]
     )
@@ -356,8 +356,8 @@ def Server() -> RowPanel:
                     left_min="0",
                     left_decimals=0,
                 ),
-                null_point_mode="null",
                 fill_gradient=0,
+                null_point_mode="null",
             ),
             graph_panel(
                 title="Remote Store Summary (Disagg arch)",
@@ -369,8 +369,8 @@ def Server() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
                 legend=graph_legend(max=False),
-                decimals=1,
                 fill_gradient=0,
+                decimals=1,
             ),
         ]
     )
@@ -383,6 +383,7 @@ def ThreadsCPU() -> RowPanel:
         [
             graph_panel(
                 title="SST Import Service",
+                description="Involved when importing data.",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"sst_importer.*", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
@@ -392,12 +393,12 @@ def ThreadsCPU() -> RowPanel:
                 yaxes=yaxes(
                     left_format="percentunit", right_format="short", left_min="0"
                 ),
-                description="Involved when importing data.",
-                null_point_mode="null",
                 fill_gradient=0,
+                null_point_mode="null",
             ),
             graph_panel(
                 title="SST Apply",
+                description="Involved when importing data.",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"apply_low_.*", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
@@ -411,7 +412,7 @@ def ThreadsCPU() -> RowPanel:
                 yaxes=yaxes(
                     left_format="percentunit", right_format="short", left_min="0"
                 ),
-                description="Involved when importing data.",
+                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -423,7 +424,6 @@ def ThreadsCPU() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                fill_gradient=0,
             ),
         ]
     )
@@ -444,6 +444,7 @@ def ThreadsCPU() -> RowPanel:
                 yaxes=yaxes(
                     left_format="percentunit", right_format="short", left_min="0"
                 ),
+                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -455,7 +456,6 @@ def ThreadsCPU() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Region Worker",
@@ -472,6 +472,7 @@ def ThreadsCPU() -> RowPanel:
                 yaxes=yaxes(
                     left_format="percentunit", right_format="short", left_min="0"
                 ),
+                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -483,7 +484,6 @@ def ThreadsCPU() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                fill_gradient=0,
             ),
         ]
     )
@@ -504,6 +504,7 @@ def ThreadsCPU() -> RowPanel:
                 yaxes=yaxes(
                     left_format="percentunit", right_format="short", left_min="0"
                 ),
+                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -515,7 +516,6 @@ def ThreadsCPU() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Apply Worker",
@@ -532,6 +532,7 @@ def ThreadsCPU() -> RowPanel:
                 yaxes=yaxes(
                     left_format="percentunit", right_format="short", left_min="0"
                 ),
+                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -543,7 +544,6 @@ def ThreadsCPU() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                fill_gradient=0,
             ),
         ]
     )
@@ -564,6 +564,7 @@ def ThreadsCPU() -> RowPanel:
                 yaxes=yaxes(
                     left_format="percentunit", right_format="short", left_min="0"
                 ),
+                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -575,7 +576,6 @@ def ThreadsCPU() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Storage Background (Large Tasks)",
@@ -592,6 +592,7 @@ def ThreadsCPU() -> RowPanel:
                 yaxes=yaxes(
                     left_format="percentunit", right_format="short", left_min="0"
                 ),
+                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -603,7 +604,6 @@ def ThreadsCPU() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                fill_gradient=0,
             ),
         ]
     )
@@ -611,6 +611,7 @@ def ThreadsCPU() -> RowPanel:
         [
             graph_panel(
                 title="Manual Compaction",
+                description="Involved when manually compacting the data.",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"m_compact_pool", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
@@ -624,7 +625,7 @@ def ThreadsCPU() -> RowPanel:
                 yaxes=yaxes(
                     left_format="percentunit", right_format="short", left_min="0"
                 ),
-                description="Involved when manually compacting the data.",
+                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -636,7 +637,6 @@ def ThreadsCPU() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                fill_gradient=0,
             ),
             graph_panel(
                 title="GRPC Async Server",
@@ -653,6 +653,7 @@ def ThreadsCPU() -> RowPanel:
                 yaxes=yaxes(
                     left_format="percentunit", right_format="short", left_min="0"
                 ),
+                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -664,7 +665,6 @@ def ThreadsCPU() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                fill_gradient=0,
             ),
         ]
     )
@@ -685,6 +685,7 @@ def ThreadsCPU() -> RowPanel:
                 yaxes=yaxes(
                     left_format="percentunit", right_format="short", left_min="0"
                 ),
+                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -696,7 +697,6 @@ def ThreadsCPU() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                fill_gradient=0,
             ),
             graph_panel(
                 title="FAP builder",
@@ -713,6 +713,7 @@ def ThreadsCPU() -> RowPanel:
                 yaxes=yaxes(
                     left_format="percentunit", right_format="short", left_min="0"
                 ),
+                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -724,7 +725,6 @@ def ThreadsCPU() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                fill_gradient=0,
             ),
         ]
     )
@@ -745,6 +745,7 @@ def ThreadsCPU() -> RowPanel:
                 yaxes=yaxes(
                     left_format="percentunit", right_format="short", left_min="0"
                 ),
+                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -756,7 +757,6 @@ def ThreadsCPU() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Segment Scheduler",
@@ -773,6 +773,7 @@ def ThreadsCPU() -> RowPanel:
                 yaxes=yaxes(
                     left_format="percentunit", right_format="short", left_min="0"
                 ),
+                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -784,7 +785,6 @@ def ThreadsCPU() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                fill_gradient=0,
             ),
         ]
     )
@@ -805,6 +805,7 @@ def ThreadsCPU() -> RowPanel:
                 yaxes=yaxes(
                     left_format="percentunit", right_format="short", left_min="0"
                 ),
+                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -816,7 +817,6 @@ def ThreadsCPU() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Segment Reader",
@@ -833,6 +833,7 @@ def ThreadsCPU() -> RowPanel:
                 yaxes=yaxes(
                     left_format="percentunit", right_format="short", left_min="0"
                 ),
+                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -844,7 +845,6 @@ def ThreadsCPU() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                fill_gradient=0,
             ),
         ]
     )
@@ -870,11 +870,11 @@ def Threads() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="none", right_format="short"),
                 fill=1,
-                null_point_mode="null",
-                decimals=1,
+                fill_gradient=0,
                 points=True,
                 pointradius=2,
-                fill_gradient=0,
+                null_point_mode="null",
+                decimals=1,
             ),
             graph_panel(
                 title="Threads IO",
@@ -887,11 +887,11 @@ def Threads() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="Bps", right_format="short"),
                 fill=1,
-                null_point_mode="null",
-                decimals=1,
+                fill_gradient=0,
                 points=True,
                 pointradius=2,
-                fill_gradient=0,
+                null_point_mode="null",
+                decimals=1,
             ),
         ]
     )
@@ -908,11 +908,11 @@ def Threads() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="none", right_format="short"),
                 fill=1,
-                null_point_mode="null",
-                decimals=1,
+                fill_gradient=0,
                 points=True,
                 pointradius=2,
-                fill_gradient=0,
+                null_point_mode="null",
+                decimals=1,
             ),
             graph_panel(
                 title="Thread Nonvoluntary Context Switches",
@@ -925,11 +925,11 @@ def Threads() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="none", right_format="short"),
                 fill=1,
-                null_point_mode="null",
-                decimals=1,
+                fill_gradient=0,
                 points=True,
                 pointradius=2,
-                fill_gradient=0,
+                null_point_mode="null",
+                decimals=1,
             ),
         ]
     )
@@ -949,8 +949,8 @@ def Coprocessor() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="none", left_min="0"),
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
             graph_panel(
                 title="Executor QPS",
@@ -961,8 +961,8 @@ def Coprocessor() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="none", left_min="0"),
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
         ]
     )
@@ -1002,8 +1002,8 @@ def Coprocessor() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
             graph_panel(
                 title="Error QPS",
@@ -1014,8 +1014,8 @@ def Coprocessor() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="none", left_min="0"),
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
         ]
     )
@@ -1055,8 +1055,8 @@ def Coprocessor() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
             graph_panel(
                 title="Response Bytes/Seconds",
@@ -1179,6 +1179,7 @@ def Coprocessor() -> RowPanel:
         [
             graph_panel(
                 title="MPP Query count",
+                description="The MPP query count in TiFlash",
                 targets=[
                     target(
                         expr='max(tiflash_mpp_task_manager{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance, type)',
@@ -1187,7 +1188,6 @@ def Coprocessor() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
-                description="The MPP query count in TiFlash",
                 fill_gradient=0,
             ),
             graph_panel(
@@ -1248,6 +1248,7 @@ def Coprocessor() -> RowPanel:
             ),
             graph_panel(
                 title="Establish calldata details",
+                description="The establish calldata details",
                 targets=[
                     target(
                         expr='max(tiflash_establish_calldata_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type != "new_request_calldata"}) by (instance, type)',
@@ -1256,7 +1257,6 @@ def Coprocessor() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
-                description="The establish calldata details",
                 fill_gradient=0,
             ),
         ]
@@ -1270,6 +1270,7 @@ def TaskScheduler() -> RowPanel:
         [
             graph_panel(
                 title="Min TSO",
+                description="the min_tso of each instance",
                 targets=[
                     target(
                         expr='max(tiflash_task_scheduler{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="min_tso"}) by (instance, resource_group)',
@@ -1282,16 +1283,16 @@ def TaskScheduler() -> RowPanel:
                     left_label="TSO",
                     left_show=False,
                 ),
-                description="the min_tso of each instance",
                 legend=graph_legend(max=False),
                 fill=1,
-                null_point_mode="null",
+                fill_gradient=0,
                 points=True,
                 pointradius=1,
-                fill_gradient=0,
+                null_point_mode="null",
             ),
             graph_panel(
                 title="Estimated Thread Usage and Limit",
+                description="estimated thread usage in min-tso scheduler, and the sort/hard limit of estimated thread in scheduler.",
                 targets=[
                     target(
                         expr='max(tiflash_task_scheduler{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="thread_soft_limit"}) by (instance, type, resource_group)',
@@ -1320,7 +1321,6 @@ def TaskScheduler() -> RowPanel:
                     left_label="Threads",
                     left_log_base=10,
                 ),
-                description="estimated thread usage in min-tso scheduler, and the sort/hard limit of estimated thread in scheduler.",
                 legend=graph_legend(max=False),
                 fill_gradient=0,
             ),
@@ -1330,6 +1330,7 @@ def TaskScheduler() -> RowPanel:
         [
             graph_panel(
                 title="Active and Waiting Queries Count",
+                description="the count of active/ waiting queries",
                 targets=[
                     target(
                         expr='max(tiflash_task_scheduler{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="waiting_queries_count"}) by (instance, type, resource_group)',
@@ -1343,11 +1344,11 @@ def TaskScheduler() -> RowPanel:
                 yaxes=yaxes(
                     left_format="none", right_format="short", left_label="Queries"
                 ),
-                description="the count of active/ waiting queries",
                 fill_gradient=0,
             ),
             graph_panel(
                 title="Active and Waiting Tasks Count",
+                description="the count of active/ waiting tasks",
                 targets=[
                     target(
                         expr='max(tiflash_task_scheduler{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="waiting_tasks_count"}) by (instance, type, resource_group)',
@@ -1361,7 +1362,6 @@ def TaskScheduler() -> RowPanel:
                 yaxes=yaxes(
                     left_format="none", right_format="short", left_label="Tasks"
                 ),
-                description="the count of active/ waiting tasks",
                 fill_gradient=0,
             ),
         ]
@@ -1370,6 +1370,7 @@ def TaskScheduler() -> RowPanel:
         [
             graph_panel(
                 title="Hard Limit Exceeded Count",
+                description="the usage of estimated threads exceeded the hard limit where errors occur.",
                 targets=[
                     target(
                         expr='max(tiflash_task_scheduler{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="hard_limit_exceeded_count"}) by (instance, type, resource_group)',
@@ -1377,11 +1378,11 @@ def TaskScheduler() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="short"),
-                description="the usage of estimated threads exceeded the hard limit where errors occur.",
                 fill_gradient=0,
             ),
             graph_panel(
                 title="Task Waiting Duration",
+                description="the time of waiting for schedule",
                 targets=[
                     target(
                         expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_task_scheduler_waiting_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, instance, resource_group, $additional_groupby) / 1000000000)',
@@ -1413,10 +1414,9 @@ def TaskScheduler() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                description="the time of waiting for schedule",
                 fill=1,
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
         ]
     )
@@ -1429,6 +1429,7 @@ def DDL() -> RowPanel:
         [
             graph_panel(
                 title="Schema Internal DDL OPM",
+                description="Executed DDL jobs per minute",
                 targets=[
                     target(
                         expr='avg(increase(tiflash_schema_internal_ddl_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
@@ -1454,7 +1455,6 @@ def DDL() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="opm", right_format="none", left_min="0"),
-                description="Executed DDL jobs per minute",
                 legend=graph_legend(
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
@@ -1462,6 +1462,7 @@ def DDL() -> RowPanel:
             ),
             graph_panel(
                 title="Schema Apply OPM",
+                description="Executed DDL apply jobs per minute",
                 targets=[
                     target(
                         expr='avg(increase(tiflash_schema_trigger_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
@@ -1470,7 +1471,6 @@ def DDL() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="opm", right_format="none", left_min="0"),
-                description="Executed DDL apply jobs per minute",
                 legend=graph_legend(
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
@@ -1520,9 +1520,9 @@ def DDL() -> RowPanel:
                     left_format="s", right_format="short", left_min="0", right_show=True
                 ),
                 fill=1,
+                fill_gradient=0,
                 tooltip_sort=2,
                 series_overrides=[{"alias": "/^applying/", "yaxis": 2}],
-                fill_gradient=0,
             ),
         ]
     )
@@ -1535,6 +1535,7 @@ def ImbalanceReadWrite() -> RowPanel:
         [
             graph_panel(
                 title="CPU Usage (irate)",
+                description="TiFlash CPU usage calculated with process CPU running seconds.",
                 targets=[
                     target(
                         expr='irate(tiflash_proxy_process_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", job=~".*tiflash", instance=~"$tiflash_role"}[$__rate_interval])',
@@ -1552,8 +1553,8 @@ def ImbalanceReadWrite() -> RowPanel:
                     left_min="0",
                     left_decimals=1,
                 ),
-                description="TiFlash CPU usage calculated with process CPU running seconds.",
                 legend=graph_legend(side_width=250),
+                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -1564,7 +1565,6 @@ def ImbalanceReadWrite() -> RowPanel:
                         "linewidth": 2,
                     }
                 ],
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Segment Reader",
@@ -1581,6 +1581,7 @@ def ImbalanceReadWrite() -> RowPanel:
                 yaxes=yaxes(
                     left_format="percentunit", right_format="short", left_min="0"
                 ),
+                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -1592,7 +1593,6 @@ def ImbalanceReadWrite() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                fill_gradient=0,
             ),
         ]
     )
@@ -1607,11 +1607,12 @@ def ImbalanceReadWrite() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="none", left_min="0"),
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
             graph_panel(
                 title="Read Throughput by instance",
+                description="The flow of different kinds of read operations",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_system_profile_event_ReadBufferFromFileDescriptorReadBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
@@ -1629,11 +1630,10 @@ def ImbalanceReadWrite() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="binBps", right_format="short", left_min="0"),
-                description="The flow of different kinds of read operations",
                 fill=1,
+                fill_gradient=0,
                 null_point_mode="null",
                 decimals=1,
-                fill_gradient=0,
             ),
         ]
     )
@@ -1641,6 +1641,7 @@ def ImbalanceReadWrite() -> RowPanel:
         [
             graph_panel(
                 title="Write Command OPS By Instance",
+                description="The total count of different kinds of commands received",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_system_profile_event_DMWriteBlock{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance, type)',
@@ -1660,12 +1661,12 @@ def ImbalanceReadWrite() -> RowPanel:
                     right_min="0",
                     right_show=True,
                 ),
-                description="The total count of different kinds of commands received",
-                series_overrides=[{"alias": "/delete_range|ingest/", "yaxis": 2}],
                 fill_gradient=0,
+                series_overrides=[{"alias": "/delete_range|ingest/", "yaxis": 2}],
             ),
             graph_panel(
                 title="Write Throughput By Instance",
+                description="The throughput of write by instance",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_storage_throughput_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"write"}[$__rate_interval])) by (instance)',
@@ -1683,12 +1684,11 @@ def ImbalanceReadWrite() -> RowPanel:
                     left_min="0",
                     right_show=True,
                 ),
-                description="The throughput of write by instance",
                 legend=graph_legend(side_width=250),
+                fill_gradient=0,
                 null_point_mode="null",
                 decimals=1,
                 series_overrides=[{"alias": "/total/", "yaxis": 2}],
-                fill_gradient=0,
             ),
         ]
     )
@@ -1710,8 +1710,8 @@ def MemoryTrace() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="short", right_format="s"),
                 fill=1,
-                null_point_mode="null",
                 fill_gradient=0,
+                null_point_mode="null",
             ),
             graph_panel(
                 title="Number of Physical Tables",
@@ -1730,8 +1730,8 @@ def MemoryTrace() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="short", right_format="s"),
                 fill=1,
-                null_point_mode="null",
                 fill_gradient=0,
+                null_point_mode="null",
             ),
         ]
     )
@@ -1753,8 +1753,8 @@ def MemoryTrace() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="short", right_format="s"),
                 fill=1,
-                null_point_mode="null",
                 fill_gradient=0,
+                null_point_mode="null",
             ),
             graph_panel(
                 title="Bytes of MemTables",
@@ -1772,8 +1772,8 @@ def MemoryTrace() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="bytes", right_format="s"),
                 fill=1,
-                null_point_mode="null",
                 fill_gradient=0,
+                null_point_mode="null",
             ),
         ]
     )
@@ -1781,6 +1781,7 @@ def MemoryTrace() -> RowPanel:
         [
             graph_panel(
                 title="Mark Cache and Minmax Index Cache Memory Usage",
+                description="The memory usage of mark cache and minmax index cache",
                 targets=[
                     target(
                         expr='tiflash_system_asynchronous_metric_MarkCacheBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
@@ -1796,8 +1797,8 @@ def MemoryTrace() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
-                description="The memory usage of mark cache and minmax index cache",
                 legend=graph_legend(side_width=250),
+                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -1808,10 +1809,10 @@ def MemoryTrace() -> RowPanel:
                         "linewidth": 2,
                     }
                 ],
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Effectiveness of Mark Cache",
+                description="cache misses or cache hits of mark_cache.\nBased on this infactor, we can check whether mark_cache is large enough",
                 targets=[
                     target(
                         expr='max(tiflash_system_profile_event_MarkCacheMisses{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
@@ -1823,13 +1824,12 @@ def MemoryTrace() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="percentunit", right_format="percent"),
-                description="cache misses or cache hits of mark_cache.\nBased on this infactor, we can check whether mark_cache is large enough",
                 legend=graph_legend(
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
                 fill=1,
-                null_point_mode="null",
                 fill_gradient=0,
+                null_point_mode="null",
             ),
         ]
     )
@@ -1837,6 +1837,7 @@ def MemoryTrace() -> RowPanel:
         [
             graph_panel(
                 title="Schema of Column File",
+                description="Information about schema of column file, to learn the memory usage of schema",
                 targets=[
                     target(
                         expr='max(tiflash_shared_block_schemas{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"current_size"}) by (instance)',
@@ -1856,11 +1857,10 @@ def MemoryTrace() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="short", right_format="short"),
-                description="Information about schema of column file, to learn the memory usage of schema",
                 legend=graph_legend(max=False),
                 fill=1,
-                null_point_mode="null",
                 fill_gradient=0,
+                null_point_mode="null",
             ),
             graph_panel(
                 title="Read Snapshots",
@@ -1884,9 +1884,9 @@ def MemoryTrace() -> RowPanel:
                     right_show=True,
                 ),
                 fill=1,
+                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[{"alias": "/max_snapshot_lifetime/", "yaxis": 2}],
-                fill_gradient=0,
             ),
         ]
     )
@@ -1919,8 +1919,8 @@ def MemoryTrace() -> RowPanel:
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
                 fill=1,
-                null_point_mode="null",
                 fill_gradient=0,
+                null_point_mode="null",
             ),
             graph_panel(
                 title="Memory by thread (proxy)",
@@ -1949,8 +1949,8 @@ def MemoryTrace() -> RowPanel:
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
                 fill=1,
-                null_point_mode="null",
                 fill_gradient=0,
+                null_point_mode="null",
             ),
         ]
     )
@@ -1974,8 +1974,8 @@ def MemoryTrace() -> RowPanel:
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
                 fill=1,
-                null_point_mode="null",
                 fill_gradient=0,
+                null_point_mode="null",
             ),
             graph_panel(
                 title="KVStore memory",
@@ -1990,8 +1990,8 @@ def MemoryTrace() -> RowPanel:
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
                 fill=1,
-                null_point_mode="null",
                 fill_gradient=0,
+                null_point_mode="null",
             ),
         ]
     )
@@ -2030,6 +2030,7 @@ def ColumnarStorage() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
+                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -2040,7 +2041,6 @@ def ColumnarStorage() -> RowPanel:
                         "linewidth": 2,
                     }
                 ],
-                fill_gradient=0,
             ),
             graph_panel(
                 title="IA Segments Memory Wait",
@@ -2076,8 +2076,8 @@ def ColumnarStorage() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
         ]
     )
@@ -2133,8 +2133,8 @@ def ColumnarStorage() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
         ]
     )
@@ -2190,8 +2190,8 @@ def ColumnarStorage() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
             graph_panel(
                 title="Columnar Prefetch Cache Hit Duration",
@@ -2227,8 +2227,8 @@ def ColumnarStorage() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
         ]
     )
@@ -2243,8 +2243,8 @@ def ColumnarStorage() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
             graph_panel(
                 title="Columnar Fetch Snapshot Duration",
@@ -2280,8 +2280,8 @@ def ColumnarStorage() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
         ]
     )
@@ -2326,9 +2326,9 @@ def ColumnarStorage() -> RowPanel:
                     left_min="0",
                     right_show=True,
                 ),
+                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[{"alias": "/entries/", "yaxis": 2}],
-                fill_gradient=0,
             ),
         ]
     )
@@ -2341,6 +2341,7 @@ def Storage() -> RowPanel:
         [
             graph_panel(
                 title="Write Command OPS",
+                description="The total count of different kinds of commands received",
                 targets=[
                     target(
                         expr='sum(increase(tiflash_storage_command_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
@@ -2359,12 +2360,11 @@ def Storage() -> RowPanel:
                     right_min="0",
                     right_show=True,
                 ),
-                description="The total count of different kinds of commands received",
                 legend=graph_legend(
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
-                series_overrides=[{"alias": "/delete_range|ingest/", "yaxis": 2}],
                 fill_gradient=0,
+                series_overrides=[{"alias": "/delete_range|ingest/", "yaxis": 2}],
             ),
             graph_panel(
                 title="Write Amplification",
@@ -2412,9 +2412,9 @@ def Storage() -> RowPanel:
                     right_show=True,
                 ),
                 legend=graph_legend(max=False),
+                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[{"alias": "/fs|write/", "yaxis": 2}],
-                fill_gradient=0,
             ),
         ]
     )
@@ -2422,6 +2422,7 @@ def Storage() -> RowPanel:
         [
             graph_panel(
                 title="SubTasks Write Throughput (bytes)",
+                description="The throughput of (maybe foreground) tasks of storage in bytes",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_storage_subtask_throughput_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
@@ -2435,15 +2436,15 @@ def Storage() -> RowPanel:
                     left_min="0",
                     right_show=True,
                 ),
-                description="The throughput of (maybe foreground) tasks of storage in bytes",
                 legend=graph_legend(side_width=250),
+                fill_gradient=0,
                 null_point_mode="null",
                 decimals=1,
                 series_overrides=[{"alias": "/total/", "yaxis": 2}],
-                fill_gradient=0,
             ),
             graph_panel(
                 title="SubTasks Write Throughput (rows)",
+                description="The throughput of (maybe foreground) tasks of storage in rows",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_storage_subtask_throughput_rows{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
@@ -2457,12 +2458,11 @@ def Storage() -> RowPanel:
                     left_min="0",
                     right_show=True,
                 ),
-                description="The throughput of (maybe foreground) tasks of storage in rows",
                 legend=graph_legend(side_width=250),
+                fill_gradient=0,
                 null_point_mode="null",
                 decimals=1,
                 series_overrides=[{"alias": "/total/", "yaxis": 2}],
-                fill_gradient=0,
             ),
         ]
     )
@@ -2470,6 +2470,7 @@ def Storage() -> RowPanel:
         [
             graph_panel(
                 title="Small Internal Tasks OPS",
+                description="Total number of storage's internal sub tasks",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_storage_subtask_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type!~"(delta_merge|seg_merge|seg_split).*"}[$__rate_interval])) by (type)',
@@ -2477,12 +2478,12 @@ def Storage() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
-                description="Total number of storage's internal sub tasks",
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
             graph_panel(
                 title="Small Internal Tasks Duration",
+                description="Duration of storage's internal sub tasks",
                 targets=[
                     target(
                         expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type!~"(delta_merge|seg_merge|seg_split).*"}[$__rate_interval]))) by (le, type, $additional_groupby) / 1000000000)',
@@ -2514,10 +2515,9 @@ def Storage() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                description="Duration of storage's internal sub tasks",
                 fill=1,
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
         ],
         height=5,
@@ -2526,6 +2526,7 @@ def Storage() -> RowPanel:
         [
             graph_panel(
                 title="Large Internal Tasks OPS",
+                description="Total number of storage's internal sub tasks",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_storage_subtask_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"(delta_merge|seg_merge|seg_split).*"}[$__rate_interval])) by (type)',
@@ -2533,12 +2534,12 @@ def Storage() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
-                description="Total number of storage's internal sub tasks",
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
             graph_panel(
                 title="Large Internal Tasks Duration",
+                description="Duration of storage's internal sub tasks",
                 targets=[
                     target(
                         expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"(delta_merge|seg_merge|seg_split).*"}[$__rate_interval]))) by (le, type, $additional_groupby) / 1000000000)',
@@ -2570,10 +2571,9 @@ def Storage() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                description="Duration of storage's internal sub tasks",
                 fill=1,
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
         ],
         height=5,
@@ -2582,6 +2582,7 @@ def Storage() -> RowPanel:
         [
             graph_panel(
                 title="Current Data Management Tasks",
+                description="The current processing number of  segments' background management",
                 targets=[
                     target(
                         expr='avg(tiflash_system_current_metric_DT_DeltaMerge{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
@@ -2605,7 +2606,6 @@ def Storage() -> RowPanel:
                     left_min="0",
                     left_decimals=0,
                 ),
-                description="The current processing number of  segments' background management",
                 fill_gradient=0,
             ),
         ]
@@ -2614,6 +2614,7 @@ def Storage() -> RowPanel:
         [
             graph_panel(
                 title="Opened File Count",
+                description="The number of currently opened file descriptors.\n(Only counting storage engine of TiFlash by now. Not including TiFlash-Proxy)",
                 targets=[
                     target(
                         expr='tiflash_proxy_process_open_fds{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", job=~".*tiflash", instance=~"$proxy_instance", instance=~"$tiflash_role"}',
@@ -2638,13 +2639,13 @@ def Storage() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
-                description="The number of currently opened file descriptors.\n(Only counting storage engine of TiFlash by now. Not including TiFlash-Proxy)",
                 legend=graph_legend(side_width=250),
-                null_point_mode="null",
                 fill_gradient=0,
+                null_point_mode="null",
             ),
             graph_panel(
                 title="File Open OPS",
+                description="The number of open file descriptors action.\n(Only counting storage engine of TiFlash by now. Not including TiFlash-Proxy)",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_system_profile_event_FileOpen{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
@@ -2658,13 +2659,13 @@ def Storage() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="short", left_min="0"),
-                description="The number of open file descriptors action.\n(Only counting storage engine of TiFlash by now. Not including TiFlash-Proxy)",
                 legend=graph_legend(side_width=250),
-                null_point_mode="null",
                 fill_gradient=0,
+                null_point_mode="null",
             ),
             graph_panel(
                 title="FSync Status",
+                description="OPS and duration of fsync operations.\n(Only counting storage engine of TiFlash by now. Not including TiFlash-Proxy)",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_system_profile_event_FileFSync{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
@@ -2679,10 +2680,9 @@ def Storage() -> RowPanel:
                 yaxes=yaxes(
                     left_format="ops", right_format="s", left_min="0", right_show=True
                 ),
-                description="OPS and duration of fsync operations.\n(Only counting storage engine of TiFlash by now. Not including TiFlash-Proxy)",
                 legend=graph_legend(side_width=250),
-                series_overrides=[{"alias": "/max-fsync/", "yaxis": 2}],
                 fill_gradient=0,
+                series_overrides=[{"alias": "/max-fsync/", "yaxis": 2}],
             ),
         ]
     )
@@ -2690,6 +2690,7 @@ def Storage() -> RowPanel:
         [
             graph_panel(
                 title="Disk Write OPS",
+                description="The number of different kinds of read operations",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_system_profile_event_PSMWriteIOCalls{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
@@ -2707,11 +2708,11 @@ def Storage() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
-                description="The number of different kinds of read operations",
                 fill_gradient=0,
             ),
             graph_panel(
                 title="Disk Read OPS",
+                description="The number of different kinds of read operations",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_system_profile_event_PSMReadIOCalls{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))',
@@ -2729,7 +2730,6 @@ def Storage() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
-                description="The number of different kinds of read operations",
                 fill_gradient=0,
             ),
         ]
@@ -2738,6 +2738,7 @@ def Storage() -> RowPanel:
         [
             graph_panel(
                 title="Write flow",
+                description="The flow of different kinds of write operations",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWriteBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))',
@@ -2755,14 +2756,14 @@ def Storage() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="binBps", right_format="short", left_min="0"),
-                description="The flow of different kinds of write operations",
                 fill=1,
+                fill_gradient=0,
                 null_point_mode="null",
                 decimals=1,
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Read flow",
+                description="The flow of different kinds of read operations",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_system_profile_event_ReadBufferFromFileDescriptorReadBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))',
@@ -2780,11 +2781,10 @@ def Storage() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="binBps", right_format="short", left_min="0"),
-                description="The flow of different kinds of read operations",
                 fill=1,
+                fill_gradient=0,
                 null_point_mode="null",
                 decimals=1,
-                fill_gradient=0,
             ),
         ]
     )
@@ -2792,6 +2792,7 @@ def Storage() -> RowPanel:
         [
             graph_panel(
                 title="Compression Ratio",
+                description="The compression ratio of different compression algorithm",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_storage_pack_compression_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"lz4_uncompressed_bytes"}[$__rate_interval]))/sum(rate(tiflash_storage_pack_compression_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"lz4_compressed_bytes"}[$__rate_interval]))',
@@ -2803,14 +2804,14 @@ def Storage() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="short", right_format="short"),
-                description="The compression ratio of different compression algorithm",
                 legend=graph_legend(avg=True, max=False),
                 fill=1,
-                null_point_mode="null",
                 fill_gradient=0,
+                null_point_mode="null",
             ),
             graph_panel(
                 title="Compression Algorithm Count",
+                description="The count of the compression algorithm used by each data part",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_storage_pack_compression_algorithm_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
@@ -2818,11 +2819,10 @@ def Storage() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="short", right_format="short"),
-                description="The count of the compression algorithm used by each data part",
                 legend=graph_legend(max=False, total=True),
                 fill=1,
-                null_point_mode="null",
                 fill_gradient=0,
+                null_point_mode="null",
             ),
         ]
     )
@@ -2835,6 +2835,7 @@ def StorageReadPoolDataSharing() -> RowPanel:
         [
             graph_panel(
                 title="Read Tasks OPS",
+                description="Total number of storage engine read tasks",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_storage_read_tasks_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
@@ -2842,9 +2843,8 @@ def StorageReadPoolDataSharing() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
-                description="Total number of storage engine read tasks",
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
             graph_panel(
                 title="Read Snapshots",
@@ -2922,9 +2922,9 @@ def StorageReadPoolDataSharing() -> RowPanel:
                     right_show=True,
                 ),
                 fill=1,
+                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[{"alias": "/max_snapshot_lifetime/", "yaxis": 2}],
-                fill_gradient=0,
             ),
         ]
     )
@@ -2964,11 +2964,12 @@ def StorageReadPoolDataSharing() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="µs", right_format="short", left_min="0"),
                 fill=1,
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
             graph_panel(
                 title="Read Thread Scheduling",
+                description="The information of read thread scheduling.",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_storage_read_thread_counter{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"ru_exhausted|sche_active_segment_limit|sche_from_cache|sche_new_task|sche_no_pool|sche_no_ru|sche_no_segment|sche_no_slot|push_block_bytes"}[$__rate_interval])) by (type)',
@@ -2982,10 +2983,9 @@ def StorageReadPoolDataSharing() -> RowPanel:
                     right_min="0",
                     right_show=True,
                 ),
-                description="The information of read thread scheduling.",
                 legend=graph_legend(current=False, max=False),
-                series_overrides=[{"alias": "/push_block/", "yaxis": 2}],
                 fill_gradient=0,
+                series_overrides=[{"alias": "/push_block/", "yaxis": 2}],
             ),
         ]
     )
@@ -2993,6 +2993,7 @@ def StorageReadPoolDataSharing() -> RowPanel:
         [
             graph_panel(
                 title="Data Sharing",
+                description="The information of data sharing cache hit ratio. Data sharing cache is purpose-built for OLAP workload that can reduce repeated data reads of concurrent table scanning.",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_storage_read_thread_counter{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"add_cache_total_bytes_limit"}[$__rate_interval])) by (type)',
@@ -3014,12 +3015,11 @@ def StorageReadPoolDataSharing() -> RowPanel:
                     left_min="0",
                     right_show=True,
                 ),
-                description="The information of data sharing cache hit ratio. Data sharing cache is purpose-built for OLAP workload that can reduce repeated data reads of concurrent table scanning.",
+                fill_gradient=0,
                 series_overrides=[
                     {"alias": "/cache_hit_ratio/", "yaxis": 2},
                     {"alias": "/cache_hit_ratio/", "yaxis": 2},
                 ],
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Segment MergedTask",
@@ -3036,8 +3036,8 @@ def StorageReadPoolDataSharing() -> RowPanel:
                     right_min="0",
                     right_show=True,
                 ),
-                series_overrides=[{"alias": "/cache_hit_ratio/", "yaxis": 2}],
                 fill_gradient=0,
+                series_overrides=[{"alias": "/cache_hit_ratio/", "yaxis": 2}],
             ),
             graph_panel(
                 title="Segment MergedTask Duration",
@@ -3073,8 +3073,8 @@ def StorageReadPoolDataSharing() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
         ]
     )
@@ -3114,11 +3114,12 @@ def StorageReadPoolDataSharing() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="ms", right_format="short", left_min="0"),
                 fill=1,
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
             graph_panel(
                 title="DeltaIndexError",
+                description="Errors of DeltaIndex",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_system_profile_event_DTDeltaIndexError{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
@@ -3127,7 +3128,6 @@ def StorageReadPoolDataSharing() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="cps", right_format="opm", left_min="0"),
-                description="Errors of DeltaIndex",
                 legend=graph_legend(current=False),
                 fill_gradient=0,
             ),
@@ -3142,6 +3142,7 @@ def PageStorage() -> RowPanel:
         [
             graph_panel(
                 title="PageStorage Disk Usage",
+                description="The disk usage of PageStorage instances in each TiFlash node",
                 targets=[
                     target(
                         expr='tiflash_system_asynchronous_metric_BlobDiskBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
@@ -3168,17 +3169,17 @@ def PageStorage() -> RowPanel:
                     right_max="1.1",
                     right_show=True,
                 ),
-                description="The disk usage of PageStorage instances in each TiFlash node",
                 legend=graph_legend(max=False),
+                fill_gradient=0,
                 decimals=1,
                 series_overrides=[
                     {"alias": "/^valid_rate/", "yaxis": 2},
                     {"alias": "/size/", "linewidth": 3},
                 ],
-                fill_gradient=0,
             ),
             graph_panel(
                 title="PageStorage File Num",
+                description="The number of files of PageStorage instances in each TiFlash node",
                 targets=[
                     target(
                         expr='sum(tiflash_system_asynchronous_metric_BlobFileNums{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
@@ -3192,10 +3193,9 @@ def PageStorage() -> RowPanel:
                 yaxes=yaxes(
                     left_format="short", right_format="percentunit", left_min="0"
                 ),
-                description="The number of files of PageStorage instances in each TiFlash node",
                 legend=graph_legend(max=False),
-                decimals=1,
                 fill_gradient=0,
+                decimals=1,
             ),
         ]
     )
@@ -3249,8 +3249,8 @@ def PageStorage() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
         ]
     )
@@ -3306,8 +3306,8 @@ def PageStorage() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
         ]
     )
@@ -3315,6 +3315,7 @@ def PageStorage() -> RowPanel:
         [
             graph_panel(
                 title="Numer of Pages",
+                description="The number of pages of all TiFlash instance",
                 targets=[
                     target(
                         expr='tiflash_system_asynchronous_metric_PagesInMem{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
@@ -3326,13 +3327,13 @@ def PageStorage() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="short", right_format="short", left_min="0"),
-                description="The number of pages of all TiFlash instance",
                 legend=graph_legend(max=False),
-                decimals=1,
                 fill_gradient=0,
+                decimals=1,
             ),
             graph_panel(
                 title="PageStorage Pending Writers Num",
+                description="The num of pending writers in PageStorage",
                 targets=[
                     target(
                         expr='sum(tiflash_system_current_metric_PSPendingWriterNum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
@@ -3341,10 +3342,9 @@ def PageStorage() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
-                description="The num of pending writers in PageStorage",
                 legend=graph_legend(side_width=250),
-                null_point_mode="null",
                 fill_gradient=0,
+                null_point_mode="null",
             ),
         ]
     )
@@ -3360,12 +3360,13 @@ def PageStorage() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
                 fill=1,
+                fill_gradient=0,
                 null_point_mode="null",
                 decimals=1,
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Number of Tables",
+                description="The number of tables running under different mode in DeltaTree",
                 targets=[
                     target(
                         expr='sum(tiflash_system_current_metric_StoragePoolV2Only{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
@@ -3387,10 +3388,9 @@ def PageStorage() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="short", right_format="short"),
-                description="The number of tables running under different mode in DeltaTree",
                 legend=graph_legend(max=False),
-                decimals=1,
                 fill_gradient=0,
+                decimals=1,
             ),
         ]
     )
@@ -3412,8 +3412,8 @@ def PageStorage() -> RowPanel:
                     right_min="0",
                     right_show=True,
                 ),
-                series_overrides=[{"yaxis": 2}],
                 fill_gradient=0,
+                series_overrides=[{"yaxis": 2}],
             ),
         ]
     )
@@ -3435,8 +3435,8 @@ def PageStorage() -> RowPanel:
                     right_min="0",
                     right_show=True,
                 ),
-                series_overrides=[{"yaxis": 2}],
                 fill_gradient=0,
+                series_overrides=[{"yaxis": 2}],
             ),
         ]
     )
@@ -3449,6 +3449,7 @@ def RateLimiter() -> RowPanel:
         [
             graph_panel(
                 title="I/O Limiter Throughput",
+                description="The storage I/O limiter metrics.",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_storage_io_limiter{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, instance)',
@@ -3461,12 +3462,12 @@ def RateLimiter() -> RowPanel:
                     left_min="0",
                     left_decimals=0,
                 ),
-                description="The storage I/O limiter metrics.",
                 fill=1,
                 fill_gradient=0,
             ),
             graph_panel(
                 title="I/O Limiter Threshold",
+                description="Current limit bytes per second of Storage I/O limiter",
                 targets=[
                     target(
                         expr='sum(tiflash_storage_io_limiter_curr{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (type, instance)',
@@ -3474,7 +3475,6 @@ def RateLimiter() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="bytes", right_format="short"),
-                description="Current limit bytes per second of Storage I/O limiter",
                 legend=graph_legend(max=False),
                 fill=1,
                 fill_gradient=0,
@@ -3485,6 +3485,7 @@ def RateLimiter() -> RowPanel:
         [
             graph_panel(
                 title="I/O Limiter Current Pending Gauge",
+                description="I/O Limiter current pending gauge.",
                 targets=[
                     target(
                         expr='avg(tiflash_system_current_metric_RateLimiterPendingWriteRequest{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
@@ -3510,14 +3511,14 @@ def RateLimiter() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="short", right_format="s", right_show=True),
-                description="I/O Limiter current pending gauge.",
                 fill=1,
+                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[{"alias": "/pending/", "yaxis": 2}],
-                fill_gradient=0,
             ),
             graph_panel(
                 title="I/O Limiter Pending OPS",
+                description="The storage I/O limiter metrics.",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_storage_io_limiter_pending_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, instance)',
@@ -3531,13 +3532,13 @@ def RateLimiter() -> RowPanel:
                     left_decimals=0,
                     right_show=True,
                 ),
-                description="The storage I/O limiter metrics.",
                 fill=1,
-                series_overrides=[{"alias": "", "yaxis": 2}],
                 fill_gradient=0,
+                series_overrides=[{"alias": "", "yaxis": 2}],
             ),
             graph_panel(
                 title="I/O Limiter Pending Duration",
+                description="I/O Limiter pending duration.",
                 targets=[
                     target(
                         expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_io_limiter_pending_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, type, $additional_groupby) / 1000000000)',
@@ -3569,10 +3570,9 @@ def RateLimiter() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                description="I/O Limiter pending duration.",
                 fill=1,
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
         ]
     )
@@ -3585,6 +3585,7 @@ def StorageWriteStall() -> RowPanel:
         [
             graph_panel(
                 title="Write Stall Duration",
+                description="The stall duration of write and delete range",
                 targets=[
                     target(
                         expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_write_stall_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, type, instance, $additional_groupby) / 1000000000)',
@@ -3618,11 +3619,10 @@ def StorageWriteStall() -> RowPanel:
                 yaxes=yaxes(
                     left_format="s", right_format="short", left_min="0", right_show=True
                 ),
-                description="The stall duration of write and delete range",
                 fill=1,
+                fill_gradient=0,
                 tooltip_sort=2,
                 series_overrides=[{"alias": "99-delta_merge", "yaxis": 2}],
-                fill_gradient=0,
             ),
         ]
     )
@@ -3630,6 +3630,7 @@ def StorageWriteStall() -> RowPanel:
         [
             graph_panel(
                 title="Write & Delta Management Throughput",
+                description="The throughput of write and delta's background management",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_storage_throughput_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"write|ingest"}[$__rate_interval]))',
@@ -3643,14 +3644,14 @@ def StorageWriteStall() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="binBps", right_format="bytes", left_min="0"),
-                description="The throughput of write and delta's background management",
                 legend=graph_legend(side_width=250),
+                fill_gradient=0,
                 null_point_mode="null",
                 decimals=1,
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Write & Delta Management Total",
+                description="The throughput of write and delta's background management",
                 targets=[
                     target(
                         expr='sum(tiflash_storage_throughput_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"write|ingest"})',
@@ -3664,11 +3665,10 @@ def StorageWriteStall() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="bytes", right_format="bytes", left_min="0"),
-                description="The throughput of write and delta's background management",
                 legend=graph_legend(side_width=250),
+                fill_gradient=0,
                 null_point_mode="null",
                 decimals=1,
-                fill_gradient=0,
             ),
         ]
     )
@@ -3676,6 +3676,7 @@ def StorageWriteStall() -> RowPanel:
         [
             graph_panel(
                 title="Write Throughput By Instance",
+                description="The throughput of write by instance",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_storage_throughput_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"write"}[$__rate_interval])) by (instance)',
@@ -3693,12 +3694,11 @@ def StorageWriteStall() -> RowPanel:
                     left_min="0",
                     right_show=True,
                 ),
-                description="The throughput of write by instance",
                 legend=graph_legend(side_width=250),
+                fill_gradient=0,
                 null_point_mode="null",
                 decimals=1,
                 series_overrides=[{"alias": "/total/", "yaxis": 2}],
-                fill_gradient=0,
             ),
         ]
     )
@@ -3706,6 +3706,7 @@ def StorageWriteStall() -> RowPanel:
         [
             graph_panel(
                 title="Write Command OPS By Instance",
+                description="The total count of different kinds of commands received",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_system_profile_event_DMWriteBlock{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance, type)',
@@ -3725,9 +3726,8 @@ def StorageWriteStall() -> RowPanel:
                     right_min="0",
                     right_show=True,
                 ),
-                description="The total count of different kinds of commands received",
-                series_overrides=[{"alias": "/delete_range|ingest/", "yaxis": 2}],
                 fill_gradient=0,
+                series_overrides=[{"alias": "/delete_range|ingest/", "yaxis": 2}],
             ),
         ]
     )
@@ -3747,8 +3747,8 @@ def Raft() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
             graph_panel(
                 title="Raft Read Index OPS",
@@ -3759,8 +3759,8 @@ def Raft() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
         ]
     )
@@ -3775,8 +3775,8 @@ def Raft() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
             graph_panel(
                 title="Read Index Events",
@@ -3787,8 +3787,8 @@ def Raft() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
         ]
     )
@@ -3834,12 +3834,13 @@ def Raft() -> RowPanel:
                     left_format="s", right_format="opm", left_min="0", right_show=True
                 ),
                 fill=1,
+                fill_gradient=0,
                 tooltip_sort=2,
                 series_overrides=[{"alias": "/timeout/", "yaxis": 2}],
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Raft Batch Read Index Duration",
+                description="The number of currently applying snapshots.",
                 targets=[
                     target(
                         expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_raft_read_index_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, $additional_groupby) / 1000000000)',
@@ -3871,10 +3872,9 @@ def Raft() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                description="The number of currently applying snapshots.",
                 fill=1,
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
         ]
     )
@@ -3882,6 +3882,7 @@ def Raft() -> RowPanel:
         [
             graph_panel(
                 title="Apply Raft write logs Duration",
+                description="Duration of applying Raft write logs",
                 targets=[
                     target(
                         expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_raft_apply_write_command_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, type, $additional_groupby) / 1000000000)',
@@ -3929,10 +3930,9 @@ def Raft() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                description="Duration of applying Raft write logs",
                 fill=1,
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
         ]
     )
@@ -4015,8 +4015,8 @@ def Raft() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
             graph_panel(
                 title="Raft Frequent Events QPS",
@@ -4027,8 +4027,8 @@ def Raft() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
         ]
     )
@@ -4136,11 +4136,12 @@ def Raft() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
             graph_panel(
                 title="Raft Eager GC Duration",
+                description="Duration of Raft logs eager GC tasks",
                 targets=[
                     target(
                         expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_raft_eager_gc_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, type, $additional_groupby) / 1000000000)',
@@ -4172,10 +4173,9 @@ def Raft() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                description="Duration of Raft logs eager GC tasks",
                 fill=1,
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
         ]
     )
@@ -4183,6 +4183,7 @@ def Raft() -> RowPanel:
         [
             graph_panel(
                 title="Keys flow",
+                description="The keys flow of different kinds of Raft operations",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_raft_process_keys{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
@@ -4190,11 +4191,10 @@ def Raft() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="short", right_format="short", left_min="0"),
-                description="The keys flow of different kinds of Raft operations",
                 fill=1,
+                fill_gradient=0,
                 null_point_mode="null",
                 decimals=1,
-                fill_gradient=0,
             ),
         ]
     )
@@ -4210,9 +4210,9 @@ def Raft() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="short", right_format="short", left_min="0"),
                 fill=1,
+                fill_gradient=0,
                 null_point_mode="null",
                 decimals=1,
-                fill_gradient=0,
             ),
         ]
     )
@@ -4235,6 +4235,7 @@ def Raft() -> RowPanel:
             ),
             graph_panel(
                 title="Upstream Latency",
+                description="Latency that TiKV sends raft log to TiFlash.",
                 targets=[
                     target(
                         expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_raft_upstream_latency_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, $additional_groupby) / 1000000000)',
@@ -4265,10 +4266,9 @@ def Raft() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                description="Latency that TiKV sends raft log to TiFlash.",
                 fill=1,
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
         ]
     )
@@ -4332,8 +4332,8 @@ def RaftSnapshotIngestSST() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
         ]
     )
@@ -4341,6 +4341,7 @@ def RaftSnapshotIngestSST() -> RowPanel:
         [
             graph_panel(
                 title="Applying snapshots Count",
+                description="The number of currently applying snapshots.",
                 targets=[
                     target(
                         expr='sum(tiflash_system_current_metric_RaftNumSnapshotsPendingApply{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
@@ -4364,7 +4365,6 @@ def RaftSnapshotIngestSST() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
-                description="The number of currently applying snapshots.",
                 fill=1,
                 fill_gradient=0,
             ),
@@ -4399,8 +4399,8 @@ def RaftSnapshotIngestSST() -> RowPanel:
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
                 fill=1,
-                null_point_mode="null",
                 fill_gradient=0,
+                null_point_mode="null",
             ),
         ]
     )
@@ -4569,12 +4569,12 @@ def RoughSetFilterRateHistogram() -> RowPanel:
                     right_show=True,
                 ),
                 legend=graph_legend(max=False),
+                fill_gradient=0,
                 series_overrides=[
                     {"alias": "/^RS Filter/", "yaxis": 2},
                     {"alias": "/^PK/", "yaxis": 2},
                     {"alias": "/^No Filter/", "yaxis": 2},
                 ],
-                fill_gradient=0,
             ),
             make_heatmap(
                 title="Rough Set Filter Rate Histogram",
@@ -4601,6 +4601,7 @@ def DisaggregatedWrite() -> RowPanel:
         [
             graph_panel(
                 title="Checkpoint Upload Duration",
+                description="PageStorage Checkpoint Duration",
                 targets=[
                     target(
                         expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_checkpoint_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, type, $additional_groupby) / 1000000000)',
@@ -4632,13 +4633,13 @@ def DisaggregatedWrite() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                description="PageStorage Checkpoint Duration",
                 fill=1,
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
             graph_panel(
                 title="Checkpoint Upload flow",
+                description="The flow of checkpoint operations",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_storage_checkpoint_flow{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="incremental"}[$__rate_interval])) by ($additional_groupby)',
@@ -4651,11 +4652,10 @@ def DisaggregatedWrite() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="binBps", right_format="short", left_min="0"),
-                description="The flow of checkpoint operations",
                 fill=1,
+                fill_gradient=0,
                 null_point_mode="null",
                 decimals=1,
-                fill_gradient=0,
             ),
         ]
     )
@@ -4663,6 +4663,7 @@ def DisaggregatedWrite() -> RowPanel:
         [
             graph_panel(
                 title="Checkpoint Upload keys speed by type (all)",
+                description="The keys of checkpoint operations. All keys are uploaded in the checkpoint. Grouped by key types.",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_storage_checkpoint_keys_by_types{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
@@ -4670,13 +4671,13 @@ def DisaggregatedWrite() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
-                description="The keys of checkpoint operations. All keys are uploaded in the checkpoint. Grouped by key types.",
                 fill=1,
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
             graph_panel(
                 title="Checkpoint Upload flow by type (incremental+compaction)",
+                description="The flow of checkpoint operations. Group by key types",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_storage_checkpoint_flow_by_types{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
@@ -4684,11 +4685,10 @@ def DisaggregatedWrite() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="binBps", right_format="short", left_min="0"),
-                description="The flow of checkpoint operations. Group by key types",
                 fill=1,
+                fill_gradient=0,
                 null_point_mode="null",
                 decimals=1,
-                fill_gradient=0,
             ),
         ]
     )
@@ -4696,6 +4696,7 @@ def DisaggregatedWrite() -> RowPanel:
         [
             graph_panel(
                 title="Remote File Num",
+                description="The number of files of owned by each TiFlash node",
                 targets=[
                     target(
                         expr='sum(tiflash_storage_remote_stats{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="num_files"}) by (instance)',
@@ -4705,13 +4706,13 @@ def DisaggregatedWrite() -> RowPanel:
                 yaxes=yaxes(
                     left_format="short", right_format="percentunit", left_min="0"
                 ),
-                description="The number of files of owned by each TiFlash node",
                 legend=graph_legend(max=False),
-                decimals=1,
                 fill_gradient=0,
+                decimals=1,
             ),
             graph_panel(
                 title="Remote Store Usage",
+                description="The remote store usage owned by each TiFlash node",
                 targets=[
                     target(
                         expr='sum(tiflash_storage_remote_stats{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="total_size"}) by (instance)',
@@ -4735,14 +4736,13 @@ def DisaggregatedWrite() -> RowPanel:
                     right_max="1.1",
                     right_show=True,
                 ),
-                description="The remote store usage owned by each TiFlash node",
                 legend=graph_legend(max=False),
+                fill_gradient=0,
                 decimals=1,
                 series_overrides=[
                     {"alias": "/^valid_rate/", "yaxis": 2},
                     {"alias": "/size/", "linewidth": 3},
                 ],
-                fill_gradient=0,
             ),
         ]
     )
@@ -4757,8 +4757,8 @@ def DisaggregatedWrite() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="none", left_min="0"),
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
             graph_panel(
                 title="Remote Object Lock Duration",
@@ -4794,8 +4794,8 @@ def DisaggregatedWrite() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
         ]
     )
@@ -4811,8 +4811,8 @@ def DisaggregatedWrite() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
                 legend=graph_legend(max=False),
-                decimals=1,
                 fill_gradient=0,
+                decimals=1,
             ),
             graph_panel(
                 title="Remote GC Duration Breakdown",
@@ -4850,13 +4850,13 @@ def DisaggregatedWrite() -> RowPanel:
                     left_format="s", right_format="short", left_min="0", right_show=True
                 ),
                 fill=1,
+                fill_gradient=0,
                 tooltip_sort=2,
                 series_overrides=[
                     {"alias": "/total/", "yaxis": 2},
                     {"alias": "/one_store/", "yaxis": 2},
                     {"alias": "/clean_locks/", "yaxis": 2},
                 ],
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Remote GC Status",
@@ -4868,8 +4868,8 @@ def DisaggregatedWrite() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="short", right_format="short", left_min="0"),
                 legend=graph_legend(max=False),
-                decimals=1,
                 fill_gradient=0,
+                decimals=1,
             ),
         ]
     )
@@ -4885,8 +4885,8 @@ def DisaggregatedWrite() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="short", right_format="short", left_min="0"),
                 legend=graph_legend(max=False),
-                decimals=1,
                 fill_gradient=0,
+                decimals=1,
             ),
             graph_panel(
                 title="Local Lock Manager QPS",
@@ -4897,8 +4897,8 @@ def DisaggregatedWrite() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="none", left_min="0"),
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
         ]
     )
@@ -4921,8 +4921,8 @@ def DisaggregatedWrite() -> RowPanel:
                     right_show=True,
                 ),
                 legend=graph_legend(max=False),
-                series_overrides=[{"alias": "/hit_ratio/", "yaxis": 2}],
                 fill_gradient=0,
+                series_overrides=[{"alias": "/hit_ratio/", "yaxis": 2}],
             ),
             graph_panel(
                 title="FAP state",
@@ -4941,8 +4941,8 @@ def DisaggregatedWrite() -> RowPanel:
                     right_show=True,
                 ),
                 legend=graph_legend(max=False),
-                series_overrides=[{"alias": "/hit_ratio/", "yaxis": 2}],
                 fill_gradient=0,
+                series_overrides=[{"alias": "/hit_ratio/", "yaxis": 2}],
             ),
         ]
     )
@@ -4984,9 +4984,9 @@ def DisaggregatedWrite() -> RowPanel:
                     left_format="s", right_format="short", left_min="0", right_show=True
                 ),
                 fill=1,
+                fill_gradient=0,
                 tooltip_sort=2,
                 series_overrides=[{"alias": "/hit_ratio/", "yaxis": 2}],
-                fill_gradient=0,
             ),
             graph_panel(
                 title="FAP no match reason",
@@ -5005,8 +5005,8 @@ def DisaggregatedWrite() -> RowPanel:
                     right_show=True,
                 ),
                 legend=graph_legend(max=False),
-                series_overrides=[{"alias": "/hit_ratio/", "yaxis": 2}],
                 fill_gradient=0,
+                series_overrides=[{"alias": "/hit_ratio/", "yaxis": 2}],
             ),
         ]
     )
@@ -5051,8 +5051,8 @@ def DisaggregatedCompute() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
         ]
     )
@@ -5060,6 +5060,7 @@ def DisaggregatedCompute() -> RowPanel:
         [
             graph_panel(
                 title="Remote Cache Operations",
+                description="Remote Cache Operations",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_storage_remote_cache{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
@@ -5080,15 +5081,15 @@ def DisaggregatedCompute() -> RowPanel:
                     left_min="0",
                     right_show=True,
                 ),
-                description="Remote Cache Operations",
+                fill_gradient=0,
                 series_overrides=[
                     {"alias": "dtfile_cache_hit_ratio", "yaxis": 2},
                     {"alias": "page_cache_hit_ratio", "yaxis": 2},
                 ],
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Remote Cache Flow",
+                description="Remote Cache Flow",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_storage_remote_cache_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
@@ -5099,7 +5100,6 @@ def DisaggregatedCompute() -> RowPanel:
                 yaxes=yaxes(
                     left_format="binBps", right_format="percentunit", left_min="0"
                 ),
-                description="Remote Cache Flow",
                 fill_gradient=0,
             ),
         ]
@@ -5140,8 +5140,8 @@ def DisaggregatedCompute() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
             graph_panel(
                 title="Remote Cache Wait on Downloading Duration",
@@ -5177,8 +5177,8 @@ def DisaggregatedCompute() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
         ]
     )
@@ -5200,8 +5200,8 @@ def DisaggregatedCompute() -> RowPanel:
                     right_show=True,
                 ),
                 fill=1,
-                series_overrides=[{"alias": "", "yaxis": 2}],
                 fill_gradient=0,
+                series_overrides=[{"alias": "", "yaxis": 2}],
             ),
             graph_panel(
                 title="Remote Cache Wait on Downloading Flow",
@@ -5249,8 +5249,8 @@ def DisaggregatedCompute() -> RowPanel:
                     right_show=True,
                 ),
                 fill=1,
-                series_overrides=[{"alias": "", "yaxis": 2}],
                 fill_gradient=0,
+                series_overrides=[{"alias": "", "yaxis": 2}],
             ),
         ]
     )
@@ -5258,6 +5258,7 @@ def DisaggregatedCompute() -> RowPanel:
         [
             graph_panel(
                 title="Remote Cache Usage",
+                description="Remote Cache Usage",
                 targets=[
                     target(
                         expr='sum(tiflash_system_current_metric_DTFileCacheCapacity{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
@@ -5279,12 +5280,12 @@ def DisaggregatedCompute() -> RowPanel:
                 yaxes=yaxes(
                     left_format="bytes", right_format="percentunit", left_min="0"
                 ),
-                description="Remote Cache Usage",
                 legend=graph_legend(max=False),
                 fill_gradient=0,
             ),
             graph_panel(
                 title="Memory Usage of Storage Tasks",
+                description="Memory Usage of Storage Tasks",
                 targets=[
                     target(
                         expr='sum(tiflash_system_current_metric_MemoryTrackingQueryStorageTask{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
@@ -5306,7 +5307,6 @@ def DisaggregatedCompute() -> RowPanel:
                 yaxes=yaxes(
                     left_format="bytes", right_format="percentunit", left_min="0"
                 ),
-                description="Memory Usage of Storage Tasks",
                 legend=graph_legend(current=False),
                 fill_gradient=0,
             ),
@@ -5316,6 +5316,7 @@ def DisaggregatedCompute() -> RowPanel:
         [
             graph_panel(
                 title="MVCCIndexCache",
+                description="DeltaIndex cache of ReadNodes",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_storage_mvcc_index_cache{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, instance)',
@@ -5332,12 +5333,12 @@ def DisaggregatedCompute() -> RowPanel:
                     left_min="0",
                     right_show=True,
                 ),
-                description="DeltaIndex cache of ReadNodes",
-                series_overrides=[{"alias": "/hit_ratio/", "yaxis": 2}],
                 fill_gradient=0,
+                series_overrides=[{"alias": "/hit_ratio/", "yaxis": 2}],
             ),
             graph_panel(
                 title="PlaceIndex Tasks Duration",
+                description="Duration of storage's internal sub tasks",
                 targets=[
                     target(
                         expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="place_index_update"}[$__rate_interval]))) by (le, type, $additional_groupby) / 1000000000)',
@@ -5369,10 +5370,9 @@ def DisaggregatedCompute() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                description="Duration of storage's internal sub tasks",
                 fill=1,
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
         ]
     )
@@ -5380,6 +5380,7 @@ def DisaggregatedCompute() -> RowPanel:
         [
             graph_panel(
                 title="PlaceIndexTask/Reuse OPS",
+                description="Total number of storage's internal sub tasks",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_storage_place_index_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
@@ -5393,7 +5394,6 @@ def DisaggregatedCompute() -> RowPanel:
                 yaxes=yaxes(
                     left_format="ops", right_format="opm", left_min="0", left_decimals=1
                 ),
-                description="Total number of storage's internal sub tasks",
                 fill_gradient=0,
             ),
             graph_panel(
@@ -5432,6 +5432,7 @@ def S3() -> RowPanel:
         [
             graph_panel(
                 title="S3 Bytes",
+                description="S3 read/write throughput",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_system_profile_event_S3WriteBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
@@ -5448,11 +5449,11 @@ def S3() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="binBps", right_format="opm", left_min="0"),
-                description="S3 read/write throughput",
                 fill_gradient=0,
             ),
             graph_panel(
                 title="S3 OPS",
+                description="S3 OPS",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_system_profile_event_S3PutObject{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
@@ -5507,7 +5508,6 @@ def S3() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
-                description="S3 OPS",
                 fill_gradient=0,
             ),
         ]
@@ -5516,6 +5516,7 @@ def S3() -> RowPanel:
         [
             graph_panel(
                 title="S3 Retry OPS",
+                description="S3 Retry OPS",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_system_profile_event_S3GetObjectRetry{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
@@ -5547,11 +5548,11 @@ def S3() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
-                description="S3 Retry OPS",
                 fill_gradient=0,
             ),
             graph_panel(
                 title="S3 Request Duration",
+                description="S3 Request Duration",
                 targets=[
                     target(
                         expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_s3_request_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, type, $additional_groupby) / 1000000000)',
@@ -5583,10 +5584,9 @@ def S3() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                description="S3 Request Duration",
                 fill=1,
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
         ]
     )
@@ -5594,6 +5594,7 @@ def S3() -> RowPanel:
         [
             graph_panel(
                 title="S3 HTTP OPS",
+                description="S3 HTTP OPS",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_system_profile_event_S3ReadRequestsCount{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
@@ -5637,11 +5638,11 @@ def S3() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
-                description="S3 HTTP OPS",
                 fill_gradient=0,
             ),
             graph_panel(
                 title="S3 HTTP Request Duration",
+                description="S3 HTTP Request Duration",
                 targets=[
                     target(
                         expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_s3_http_request_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, type, $additional_groupby) / 1000000000)',
@@ -5673,10 +5674,9 @@ def S3() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                description="S3 HTTP Request Duration",
                 fill=1,
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
         ]
     )
@@ -5684,6 +5684,7 @@ def S3() -> RowPanel:
         [
             graph_panel(
                 title="S3 on-going instances",
+                description="S3 HTTP OPS",
                 targets=[
                     target(
                         expr='sum(tiflash_system_current_metric_S3Requests{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (type, $additional_groupby)',
@@ -5695,7 +5696,6 @@ def S3() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="opm", left_min="0"),
-                description="S3 HTTP OPS",
                 fill_gradient=0,
             ),
             graph_panel(
@@ -5780,8 +5780,8 @@ def PipelineModel() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="none", left_min="0"),
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
             graph_panel(
                 title="Task Duration",
@@ -5837,8 +5837,8 @@ def PipelineModel() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
         ]
     )
@@ -5891,6 +5891,7 @@ def PipelineModel() -> RowPanel:
                 yaxes=yaxes(
                     left_format="percentunit", right_format="short", left_min="0"
                 ),
+                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -5902,7 +5903,6 @@ def PipelineModel() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                fill_gradient=0,
             ),
         ]
     )
@@ -5923,6 +5923,7 @@ def PipelineModel() -> RowPanel:
                 yaxes=yaxes(
                     left_format="percentunit", right_format="short", left_min="0"
                 ),
+                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -5934,7 +5935,6 @@ def PipelineModel() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Threads CPU of Wait Reactor",
@@ -5951,6 +5951,7 @@ def PipelineModel() -> RowPanel:
                 yaxes=yaxes(
                     left_format="percentunit", right_format="short", left_min="0"
                 ),
+                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -5962,7 +5963,6 @@ def PipelineModel() -> RowPanel:
                         "nullPointMode": "connected",
                     }
                 ],
-                fill_gradient=0,
             ),
         ]
     )
@@ -5970,6 +5970,7 @@ def PipelineModel() -> RowPanel:
         [
             graph_panel(
                 title="Wait notify task details",
+                description="wait notify task details",
                 targets=[
                     target(
                         expr='max(tiflash_pipeline_wait_on_notify_tasks{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance, type)',
@@ -5982,7 +5983,6 @@ def PipelineModel() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
-                description="wait notify task details",
                 fill_gradient=0,
             ),
         ]
@@ -5996,6 +5996,7 @@ def TiFlashResourceControl() -> RowPanel:
         [
             graph_panel(
                 title="TiFlash Resource Group",
+                description="Metas of resource group",
                 targets=[
                     target(
                         expr='max(tiflash_resource_group{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="remaining_tokens", instance=~"$instance", instance=~"$tiflash_role"}) by (instance,resource_group)',
@@ -6043,14 +6044,14 @@ def TiFlashResourceControl() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="short", right_format="short"),
-                description="Metas of resource group",
                 legend=graph_legend(avg=True, max=False),
                 fill=1,
-                null_point_mode="null",
                 fill_gradient=0,
+                null_point_mode="null",
             ),
             graph_panel(
                 title="Request Unit",
+                description="Request Unit for tidb-serverless charging",
                 targets=[
                     target(
                         expr='sum(rate(tiflash_storage_sync_replica_ru{instance=~"$tiflash_role"}[$__rate_interval])) by (keyspace_id, $additional_groupby)',
@@ -6080,11 +6081,10 @@ def TiFlashResourceControl() -> RowPanel:
                     right_min="0",
                     right_show=True,
                 ),
-                description="Request Unit for tidb-serverless charging",
                 legend=graph_legend(max=False),
+                fill_gradient=0,
                 decimals=1,
                 series_overrides=[{"alias": "/sum/", "yaxis": 2}],
-                fill_gradient=0,
             ),
         ]
     )
@@ -6129,8 +6129,8 @@ def StatusServer() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                tooltip_sort=2,
                 fill_gradient=0,
+                tooltip_sort=2,
             ),
             graph_panel(
                 title="Status API Request (op/s)",
@@ -6142,8 +6142,8 @@ def StatusServer() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="ops", right_format="short", left_min="0"),
                 fill=1,
-                null_point_mode="null",
                 fill_gradient=0,
+                null_point_mode="null",
             ),
         ]
     )
@@ -6170,8 +6170,8 @@ def VectorSearch() -> RowPanel:
                     left_decimals=0,
                 ),
                 legend=graph_legend(current=False),
-                decimals=0,
                 fill_gradient=0,
+                decimals=0,
             ),
             graph_panel(
                 title="Vector Index Estimated Memory Usage",
@@ -6193,8 +6193,8 @@ def VectorSearch() -> RowPanel:
                     left_decimals=0,
                 ),
                 legend=graph_legend(current=False),
-                decimals=0,
                 fill_gradient=0,
+                decimals=0,
             ),
         ]
     )
@@ -6219,9 +6219,9 @@ def VectorSearch() -> RowPanel:
                     right_show=True,
                 ),
                 legend=graph_legend(current=False),
+                fill_gradient=0,
                 decimals=1,
                 series_overrides=[{"alias": "/download/", "yaxis": 2}],
-                fill_gradient=0,
             ),
             graph_panel(
                 title="99.9% Vector Index Build Duration (Per DMFile Column)",
@@ -6236,8 +6236,8 @@ def VectorSearch() -> RowPanel:
                     left_format="s", right_format="s", left_min="0", left_decimals=1
                 ),
                 legend=graph_legend(current=False),
-                decimals=1,
                 fill_gradient=0,
+                decimals=1,
             ),
         ]
     )
