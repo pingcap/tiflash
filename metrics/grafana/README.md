@@ -1,174 +1,60 @@
 # TiFlash Grafana dashboards
 
-## About
+TiFlash Summary is generated as Grafana JSON from Python code using
+[grafanalib](https://github.com/weaveworks/grafanalib), following the same
+pattern as TiKV / Cloud Storage Engine (`common.py` + `*.dashboard.py`).
 
-Use [go-jsonnet](https://github.com/google/go-jsonnet) and
-[grafonnet-lib](https://github.com/grafana/grafonnet-lib) (TiDB-compatible
-[nolouch fork](https://github.com/nolouch/grafonnet-lib)) to generate
-`tiflash_summary.json`.
+Please avoid manually modifying the generated `.json` files.
 
-Why jsonnet?
+## Generate Dashboard JSON
 
-1. The exported Grafana JSON is too large to maintain by hand (~27k lines).
-2. Jsonnet + grafonnet-lib keep panel queries / layout reviewable as source.
-
-## Layout
-
-```text
-metrics/grafana/
-  tiflash_summary.jsonnet          # dashboard source (templates + all rows in order)
-  tiflashnet/
-    common.libsonnet               # shared helpers (layout / graph / domain panels)
-    promql.libsonnet               # PromQL expression builders (L1)
-  generate_json.sh                 # regenerate tiflash_summary.json
-  scripts/compare_dashboards.py    # semantic diff vs previous JSON
-  scripts/gen_jsonnet_from_dashboard.py  # legacy one-shot bootstrap from JSON
+```bash
+cd metrics/grafana
+./generate_dashboard.sh
 ```
 
-Each dashboard row is defined inline in `tiflash_summary.jsonnet` (in display order)
-inside a scoped `local rowXxx = ( ... );` block, then attached with `.addPanel(rowXxx, ...)`.
+This runs `uv sync`, formats Python sources with isort/black, regenerates
+`tiflash_summary.json`, and updates `tiflash_summary.json.sha256`.
 
-## Authoring helpers (prefer these)
+### Manual (uv)
 
-| Helper | Use for |
-|--------|---------|
-| `common.band` / `common.buildRow` | Row layout (no hand-written x/y/w) |
-| `common.expr.*` | PromQL (`sumRate`, `histogramQuantile`, …) |
-| `common.graph` / `common.target` / `common.override` | Shared graph style |
-| `common.opsPanel` | Single-metric OPS/QPS |
-| `common.heatmap` | Histogram heatmaps |
-| `common.cpuWithLimitPanel` | Threads CPU + Limit line |
-| `common.opsHitRatioPanel` | OPS + hit-ratio dual axis |
-| `common.durationPanel` | Latency histograms (`*_bucket`) |
-
-New panels should use these helpers; hand-written `graphPanel.new` only for one-off cases.
-
-## Usage
-
-1. Edit `tiflash_summary.jsonnet` (and helpers under `tiflashnet/` if needed).
-2. Run `./generate_json.sh` to regenerate `tiflash_summary.json`.
-3. Optionally compare against the previous generated file (or git HEAD):  
-   `python3 scripts/compare_dashboards.py scripts/tiflash_summary.original.json tiflash_summary.json`
-4. Commit **both** the jsonnet sources and the generated JSON.
-
-Do **not** hand-edit `tiflash_summary.json` — it is a generated artifact.
-
-`scripts/gen_jsonnet_from_dashboard.py` is a legacy bootstrap helper from dashboard JSON
-exports. Day-to-day edits should be made in `tiflash_summary.jsonnet` / `tiflashnet/*.libsonnet`.
-
-## Layout helpers
-
-Prefer `common.band` / `common.buildRow` instead of hand-written `x/y/w`:
-
-```jsonnet
-{
-  row: common.buildRow(
-    rowObj,
-    [
-      common.band([panelStoreSize, panelAvailableSize, panelCapacitySize]),  // 3 equal columns
-      common.band([panelUptime, panelRegion]),                              // 2 equal columns
-      common.band([panelFullWidth]),                                        // 1 full-width panel
-      common.band([{ panel: a, w: 8 }, { panel: b, w: 16 }], h=7), // custom widths/height
-    ],
-  ),
-}
+```bash
+cd metrics/grafana
+uv sync
+.venv/bin/isort --profile black *.py
+.venv/bin/black *.py
+.venv/bin/generate-dashboard -o tiflash_summary.json tiflash_summary.dashboard.py
 ```
 
-N panels in a band are equally divided across width 24 unless you pass explicit `w`.
+## Files
 
-Panel locals use `panel` prefix + `UpperCamelCase` body (e.g. `panelStaleReadOps`, `panelCpuUsage`, `panelRequestQps`).
+| File | Description |
+|------|-------------|
+| `common.py` | Shared helpers: PromQL builders, `graph_panel`, L3 panels (`ops_panel`, `duration_panel`, `cpu_with_limit_panel`, …) |
+| `tiflash_summary.dashboard.py` | TiFlash Summary dashboard source |
+| `tiflash_summary.json` | Generated JSON — do not edit manually |
+| `tiflash_summary.json.sha256` | SHA256 of the generated JSON |
+| `generate_dashboard.sh` | Generate entrypoint |
+| `pyproject.toml` / `uv.lock` | Python deps (`grafanalib==0.7.1`) |
+| `scripts/compare_dashboards.py` | Semantic diff helper |
+| `jsonnet_legacy/` | Archived jsonnet/grafonnet sources (not used for generation; cleanup later) |
 
-## PromQL helpers (L1)
+## Authoring notes
 
-Prefer `common.expr.*` instead of hand-written selector strings:
+- Prefer helpers in `common.py` for new panels (`ops_panel`, `duration_panel`,
+  `tiflash_heatmap_panel`, `cpu_with_limit_panel`, `ops_hit_ratio_panel`,
+  `graph_panel` + `expr_*`).
+- Default PromQL labels always include `k8s_cluster` / `tidb_cluster`.
+  Choose instance selectors with `instance_selectors="cpp"` (default:
+  `$instance` + `$tiflash_role`) or `"proxy"` (`$proxy_instance` +
+  `$tiflash_role`), or `use_instance_selectors(...)`.
+- `tiflash_proxy_summary.json` / `tiflash_proxy_details.json` are still
+  hand-maintained JSON.
 
-```jsonnet
-common.expr.sumRate('tiflash_stale_read_count', common.selector, by=['instance'])
-common.expr.sumIrate('tiflash_proxy_threads_io_bytes_total', common.proxySelector, by=['instance'])
-common.expr.histogramQuantile('0.99', 'tiflash_storage_s3_request_seconds', common.selector, by=['type'])
-common.expr.histogramAvg('tiflash_storage_s3_request_seconds', common.selector, by=['type'])
+## Validate
+
+```bash
+python3 scripts/compare_dashboards.py \
+  scripts/tiflash_summary.pre_grafanalib.json \
+  tiflash_summary.json
 ```
-
-`histogramQuantile` / `histogramAvg` take the metric **base name** (no `_bucket` / `_sum` / `_count`).
-Extra matchers go in `labels=`, e.g. `labels='type="decode"'`. Default range is `$__rate_interval`.
-
-## Graph style helpers (L2)
-
-Prefer `common.graph` / `common.target` / `common.override` instead of repeating
-`graphPanel.new` + legend/`resetYaxes`/`addYaxis` boilerplate. `common.graph` sets
-table legend + dual Y axes; right axis defaults to **hidden** (`yRightShow=false`).
-Pass `yRightShow=true` and a real `yRight` unit only when series use `yaxis=2`
-(or use helpers like `opsHitRatioPanel` / `durationPanel` with `seriesOverrides`):
-
-```jsonnet
-common.graph(
-  'Example',
-  [
-    common.target(common.expr.sumRate('metric', common.selector, by=['instance']), '{{instance}}'),
-  ],
-  yLeft='ops',
-  fill=0,
-)
-```
-
-For single-metric OPS/QPS panels, prefer `common.opsPanel`:
-
-```jsonnet
-common.opsPanel('Stale Read OPS', 'tiflash_stale_read_count', by=['instance'])
-common.opsPanel(
-  'Small Internal Tasks OPS',
-  'tiflash_storage_subtask_count',
-  by=['type'],
-  labels='type!~"(delta_merge|seg_merge|seg_split).*"',
-  yRight='opm',
-)
-```
-
-For histogram heatmaps, prefer `common.heatmap`:
-
-```jsonnet
-common.heatmap(
-  'Region write Duration (decode)',
-  'tiflash_raft_write_data_to_storage_duration_seconds_bucket',
-  labels='type="decode"',
-)
-```
-
-For Threads CPU panels with a Limit red line, prefer `common.cpuWithLimitPanel`:
-
-```jsonnet
-common.cpuWithLimitPanel('SST Apply', 'apply_low_.*', description='Involved when importing data.')
-common.cpuWithLimitPanel('Region Task', 'region_task.*', legend='{{name}} {{instance}}')
-```
-
-For OPS + hit-ratio dual-axis panels, prefer `common.opsHitRatioPanel`:
-
-```jsonnet
-common.opsHitRatioPanel(
-  'Remote Cache Operations',
-  'tiflash_storage_remote_cache',
-  [
-    { hitLabels: 'type=~"dtfile_hit"', totalLabels: 'type=~"dtfile_hit|dtfile_miss"', legend: 'dtfile_cache_hit_ratio' },
-  ],
-  by=['type', '$additional_groupby'],
-  legend='{{type}} {{$additional_groupby}}',
-)
-```
-
-## Duration histogram helpers
-
-For `*_seconds_bucket` latency panels (default show p9999/p99; hide max/p999/p80/avg), prefer:
-
-```jsonnet
-local panelS3RequestDuration = common.durationPanel(
-  'S3 Request Duration',
-  'tiflash_storage_s3_request_seconds_bucket',
-  by=['type'],
-  legend='{{type}}-%s {{$additional_groupby}}',
-  description='S3 Request Duration',
-);
-```
-
-`%s` in `legend` is replaced by `max` / `9999` / `999` / `99` / `80` / `avg`. Use `selector=common.proxySelector` for proxy metrics.
-
-Optional kwargs: `unit=` (default `s`), `yRight=`, `quantiles=`, `showAvg=`, `extraTargets=`, `seriesOverrides=` for Class C panels that need extra series.
