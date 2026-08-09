@@ -15,14 +15,30 @@ from grafanalib.core import (
 )
 
 from common import (
+    ADDITIONAL_GROUPBY,
     DATASOURCE,
     DATASOURCE_INPUT,
     Layout,
+    cpu_with_limit_panel,
+    duration_panel,
+    expr_aggr,
+    expr_avg,
+    expr_histogram_avg,
+    expr_histogram_quantile,
+    expr_max,
+    expr_operator,
+    expr_simple,
+    expr_sum,
+    expr_sum_delta,
+    expr_sum_increase,
+    expr_sum_irate,
+    expr_sum_rate,
     graph_legend,
     graph_panel,
     make_heatmap,
     target,
     template,
+    use_instance_selectors,
     yaxes,
 )
 
@@ -128,11 +144,18 @@ def Server() -> RowPanel:
                 description="The storage size per TiFlash instance.\n(Not including some disk usage of TiFlash-Proxy by now)",
                 targets=[
                     target(
-                        expr='sum(tiflash_system_current_metric_StoreSizeUsed{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~""}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_system_current_metric_StoreSizeUsed",
+                            label_selectors=['type=~""'],
+                            by_labels=["instance"],
+                        ),
                         legend_format="{{instance}}-local",
                     ),
                     target(
-                        expr='sum(tiflash_system_current_metric_StoreSizeUsedRemote{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_system_current_metric_StoreSizeUsedRemote",
+                            by_labels=["instance"],
+                        ),
                         legend_format="{{instance}}-remote",
                     ),
                 ],
@@ -149,7 +172,10 @@ def Server() -> RowPanel:
                 description="The available capacity size per TiFlash instance",
                 targets=[
                     target(
-                        expr='sum(tiflash_system_current_metric_StoreSizeAvailable{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_system_current_metric_StoreSizeAvailable",
+                            by_labels=["instance"],
+                        ),
                         legend_format="{{instance}}",
                     ),
                 ],
@@ -166,7 +192,10 @@ def Server() -> RowPanel:
                 description="The capacity size per TiFlash instance",
                 targets=[
                     target(
-                        expr='sum(tiflash_system_current_metric_StoreSizeCapacity{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_system_current_metric_StoreSizeCapacity",
+                            by_labels=["instance"],
+                        ),
                         legend_format="{{instance}}",
                     ),
                 ],
@@ -187,7 +216,7 @@ def Server() -> RowPanel:
                 description="TiFlash uptime since last restart",
                 targets=[
                     target(
-                        expr='tiflash_system_asynchronous_metric_Uptime{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple("tiflash_system_asynchronous_metric_Uptime"),
                         legend_format="{{instance}}",
                     ),
                 ],
@@ -200,11 +229,28 @@ def Server() -> RowPanel:
                 description="The number of Regions on each TiFlash instance",
                 targets=[
                     target(
-                        expr='sum(tiflash_proxy_tikv_raftstore_region_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="region", instance=~"$proxy_instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_proxy_tikv_raftstore_region_count",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'type="region"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="{{instance}}",
                     ),
                     target(
-                        expr='sum(tiflash_proxy_tikv_raftstore_hibernated_peer_state{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}) by (instance, state)',
+                        expr=expr_sum(
+                            "tiflash_proxy_tikv_raftstore_hibernated_peer_state",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=["instance", "state"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="{{instance}}-{{state}}",
                         hide=True,
                     ),
@@ -227,7 +273,10 @@ def Server() -> RowPanel:
                         legend_format="{{instance}}",
                     ),
                     target(
-                        expr='sum(tiflash_system_current_metric_LogicalCPUCores{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_system_current_metric_LogicalCPUCores",
+                            by_labels=["instance"],
+                        ),
                         legend_format="limit-{{instance}}",
                         interval_factor=1,
                     ),
@@ -255,70 +304,115 @@ def Server() -> RowPanel:
                 description="The memory usage per TiFlash instance",
                 targets=[
                     target(
-                        expr='sum(tiflash_proxy_process_resident_memory_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role", job=~".*tiflash"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_proxy_process_resident_memory_bytes",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'job=~".*tiflash"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="{{instance}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(tiflash_system_current_metric_MemoryCapacity{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_system_current_metric_MemoryCapacity",
+                            by_labels=["instance"],
+                        ),
                         legend_format="limit-{{instance}}",
                     ),
                     target(
-                        expr='sum(tiflash_system_asynchronous_metric_jemalloc_retained{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"})',
+                        expr=expr_sum(
+                            "tiflash_system_asynchronous_metric_jemalloc_retained",
+                            by_labels=[],
+                        ),
                         legend_format="retained",
                         hide=True,
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(tiflash_system_asynchronous_metric_jemalloc_mapped{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"})',
+                        expr=expr_sum(
+                            "tiflash_system_asynchronous_metric_jemalloc_mapped",
+                            by_labels=[],
+                        ),
                         legend_format="mapped",
                         hide=True,
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(tiflash_system_asynchronous_metric_jemalloc_resident{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"})',
+                        expr=expr_sum(
+                            "tiflash_system_asynchronous_metric_jemalloc_resident",
+                            by_labels=[],
+                        ),
                         legend_format="resident",
                         hide=True,
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(tiflash_system_asynchronous_metric_jemalloc_allocated{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"})',
+                        expr=expr_sum(
+                            "tiflash_system_asynchronous_metric_jemalloc_allocated",
+                            by_labels=[],
+                        ),
                         legend_format="allocated",
                         hide=True,
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(tiflash_system_asynchronous_metric_jemalloc_active{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"})',
+                        expr=expr_sum(
+                            "tiflash_system_asynchronous_metric_jemalloc_active",
+                            by_labels=[],
+                        ),
                         legend_format="active",
                         hide=True,
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(tiflash_system_asynchronous_metric_jemalloc_metadata_thp{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"})',
+                        expr=expr_sum(
+                            "tiflash_system_asynchronous_metric_jemalloc_metadata_thp",
+                            by_labels=[],
+                        ),
                         legend_format="metadata_thp",
                         hide=True,
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(tiflash_system_asynchronous_metric_jemalloc_metadata{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"})',
+                        expr=expr_sum(
+                            "tiflash_system_asynchronous_metric_jemalloc_metadata",
+                            by_labels=[],
+                        ),
                         legend_format="metadata",
                         hide=True,
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(tiflash_system_asynchronous_metric_mimalloc_current_rss{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", job=~".*tiflash", instance=~"$instance", instance=~"$tiflash_role"})',
+                        expr=expr_sum(
+                            "tiflash_system_asynchronous_metric_mimalloc_current_rss",
+                            label_selectors=['job=~".*tiflash"'],
+                            by_labels=[],
+                        ),
                         legend_format="mimalloc_rss",
                         hide=True,
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(tiflash_system_asynchronous_metric_mimalloc_current_commit{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", job=~".*tiflash", instance=~"$instance", instance=~"$tiflash_role"})',
+                        expr=expr_sum(
+                            "tiflash_system_asynchronous_metric_mimalloc_current_commit",
+                            label_selectors=['job=~".*tiflash"'],
+                            by_labels=[],
+                        ),
                         legend_format="mimalloc_commit",
                         hide=True,
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(tiflash_system_asynchronous_metric_mmap_alive{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", job=~".*tiflash", instance=~"$instance", instance=~"$tiflash_role"})',
+                        expr=expr_sum(
+                            "tiflash_system_asynchronous_metric_mmap_alive",
+                            label_selectors=['job=~".*tiflash"'],
+                            by_labels=[],
+                        ),
                         legend_format="mmap",
                         hide=True,
                         interval_factor=1,
@@ -345,7 +439,16 @@ def Server() -> RowPanel:
                 title="IO Throughput",
                 targets=[
                     target(
-                        expr='sum(irate(tiflash_proxy_threads_io_bytes_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role", job=~".*tiflash"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_irate(
+                            "tiflash_proxy_threads_io_bytes_total",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'job=~".*tiflash"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="{{instance}}",
                         interval_factor=1,
                     ),
@@ -363,7 +466,10 @@ def Server() -> RowPanel:
                 title="Remote Store Summary (Disagg arch)",
                 targets=[
                     target(
-                        expr='sum(tiflash_storage_s3_store_summary_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance, store_id, type)',
+                        expr=expr_sum(
+                            "tiflash_storage_s3_store_summary_bytes",
+                            by_labels=["instance", "store_id", "type"],
+                        ),
                         legend_format="store-{{store_id}}-{{type}}",
                     ),
                 ],
@@ -386,7 +492,16 @@ def ThreadsCPU() -> RowPanel:
                 description="Involved when importing data.",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"sst_importer.*", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_proxy_thread_cpu_seconds_total",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'name=~"sst_importer.*"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="{{instance}}",
                     ),
                 ],
@@ -401,11 +516,30 @@ def ThreadsCPU() -> RowPanel:
                 description="Involved when importing data.",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"apply_low_.*", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_proxy_thread_cpu_seconds_total",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'name=~"apply_low_.*"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="{{instance}}",
                     ),
                     target(
-                        expr='count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"apply_low_.*", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_aggr(
+                            "tiflash_proxy_thread_cpu_seconds_total",
+                            "count",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'name=~"apply_low_.*"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="Limit",
                     ),
                 ],
@@ -433,11 +567,30 @@ def ThreadsCPU() -> RowPanel:
                 title="Region Task",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"region_task.*", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_proxy_thread_cpu_seconds_total",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'name=~"region_task.*"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="{{name}} {{instance}}",
                     ),
                     target(
-                        expr='count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"region_task.*", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_aggr(
+                            "tiflash_proxy_thread_cpu_seconds_total",
+                            "count",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'name=~"region_task.*"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="Limit",
                     ),
                 ],
@@ -461,11 +614,30 @@ def ThreadsCPU() -> RowPanel:
                 title="Region Worker",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"region_worker.*", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_proxy_thread_cpu_seconds_total",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'name=~"region_worker.*"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="{{name}} {{instance}}",
                     ),
                     target(
-                        expr='count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"region_worker.*", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_aggr(
+                            "tiflash_proxy_thread_cpu_seconds_total",
+                            "count",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'name=~"region_worker.*"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="Limit",
                     ),
                 ],
@@ -493,11 +665,30 @@ def ThreadsCPU() -> RowPanel:
                 title="Raft Store",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"raftstore_.*", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_proxy_thread_cpu_seconds_total",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'name=~"raftstore_.*"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="{{name}} {{instance}}",
                     ),
                     target(
-                        expr='count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"raftstore_.*", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_aggr(
+                            "tiflash_proxy_thread_cpu_seconds_total",
+                            "count",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'name=~"raftstore_.*"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="Limit",
                     ),
                 ],
@@ -521,11 +712,30 @@ def ThreadsCPU() -> RowPanel:
                 title="Apply Worker",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"apply_.*", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_proxy_thread_cpu_seconds_total",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'name=~"apply_.*"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="{{name}} {{instance}}",
                     ),
                     target(
-                        expr='count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"apply_.*", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_aggr(
+                            "tiflash_proxy_thread_cpu_seconds_total",
+                            "count",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'name=~"apply_.*"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="Limit",
                     ),
                 ],
@@ -553,11 +763,30 @@ def ThreadsCPU() -> RowPanel:
                 title="Storage Background (Small Tasks)",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"bg_\\\\d+", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_proxy_thread_cpu_seconds_total",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'name=~"bg_\\\\\\\\d+"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="{{name}} {{instance}}",
                     ),
                     target(
-                        expr='count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"bg_\\\\d+", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_aggr(
+                            "tiflash_proxy_thread_cpu_seconds_total",
+                            "count",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'name=~"bg_\\\\\\\\d+"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="Limit",
                     ),
                 ],
@@ -581,11 +810,30 @@ def ThreadsCPU() -> RowPanel:
                 title="Storage Background (Large Tasks)",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"bg_block_\\\\d+", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_proxy_thread_cpu_seconds_total",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'name=~"bg_block_\\\\\\\\d+"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="{{name}} {{instance}}",
                     ),
                     target(
-                        expr='count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"bg_block_\\\\d+", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_aggr(
+                            "tiflash_proxy_thread_cpu_seconds_total",
+                            "count",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'name=~"bg_block_\\\\\\\\d+"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="Limit",
                     ),
                 ],
@@ -614,11 +862,30 @@ def ThreadsCPU() -> RowPanel:
                 description="Involved when manually compacting the data.",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"m_compact_pool", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_proxy_thread_cpu_seconds_total",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'name=~"m_compact_pool"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="{{name}} {{instance}}",
                     ),
                     target(
-                        expr='count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"m_compact_pool", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_aggr(
+                            "tiflash_proxy_thread_cpu_seconds_total",
+                            "count",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'name=~"m_compact_pool"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="Limit",
                     ),
                 ],
@@ -642,11 +909,30 @@ def ThreadsCPU() -> RowPanel:
                 title="GRPC Async Server",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"async_poller.*", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_proxy_thread_cpu_seconds_total",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'name=~"async_poller.*"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="{{name}} {{instance}}",
                     ),
                     target(
-                        expr='count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"async_poller.*", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_aggr(
+                            "tiflash_proxy_thread_cpu_seconds_total",
+                            "count",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'name=~"async_poller.*"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="Limit",
                     ),
                 ],
@@ -674,11 +960,30 @@ def ThreadsCPU() -> RowPanel:
                 title="GRPC Async Client",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"GRPCComp.*", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_proxy_thread_cpu_seconds_total",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'name=~"GRPCComp.*"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="{{name}} {{instance}}",
                     ),
                     target(
-                        expr='count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"GRPCComp.*", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_aggr(
+                            "tiflash_proxy_thread_cpu_seconds_total",
+                            "count",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'name=~"GRPCComp.*"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="Limit",
                     ),
                 ],
@@ -702,11 +1007,30 @@ def ThreadsCPU() -> RowPanel:
                 title="FAP builder",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"fap_builder.*", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_proxy_thread_cpu_seconds_total",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'name=~"fap_builder.*"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="{{name}} {{instance}}",
                     ),
                     target(
-                        expr='count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"fap_builder.*", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_aggr(
+                            "tiflash_proxy_thread_cpu_seconds_total",
+                            "count",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'name=~"fap_builder.*"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="Limit",
                     ),
                 ],
@@ -734,11 +1058,30 @@ def ThreadsCPU() -> RowPanel:
                 title="Snapshot Sender",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"snap_sender.*", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_proxy_thread_cpu_seconds_total",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'name=~"snap_sender.*"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="{{name}} {{instance}}",
                     ),
                     target(
-                        expr='count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"snap_sender.*", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_aggr(
+                            "tiflash_proxy_thread_cpu_seconds_total",
+                            "count",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'name=~"snap_sender.*"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="Limit",
                     ),
                 ],
@@ -762,11 +1105,30 @@ def ThreadsCPU() -> RowPanel:
                 title="Segment Scheduler",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"segment_sched.*", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_proxy_thread_cpu_seconds_total",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'name=~"segment_sched.*"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="{{name}} {{instance}}",
                     ),
                     target(
-                        expr='count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"segment_sched.*", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_aggr(
+                            "tiflash_proxy_thread_cpu_seconds_total",
+                            "count",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'name=~"segment_sched.*"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="Limit",
                     ),
                 ],
@@ -794,11 +1156,30 @@ def ThreadsCPU() -> RowPanel:
                 title="Local Index Pool",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"LocalIndexPool*", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_proxy_thread_cpu_seconds_total",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'name=~"LocalIndexPool*"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="pool-{{instance}}",
                     ),
                     target(
-                        expr='count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"LocalIndexPool*", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_aggr(
+                            "tiflash_proxy_thread_cpu_seconds_total",
+                            "count",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'name=~"LocalIndexPool*"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="Limit",
                     ),
                 ],
@@ -822,11 +1203,30 @@ def ThreadsCPU() -> RowPanel:
                 title="Segment Reader",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"SegmentReader.*", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_proxy_thread_cpu_seconds_total",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'name=~"SegmentReader.*"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="{{name}} {{instance}}",
                     ),
                     target(
-                        expr='count(tiflash_proxy_thread_cpu_seconds_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", name=~"SegmentReader.*", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_aggr(
+                            "tiflash_proxy_thread_cpu_seconds_total",
+                            "count",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'name=~"SegmentReader.*"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="Limit",
                     ),
                 ],
@@ -859,12 +1259,28 @@ def Threads() -> RowPanel:
                 title="Threads state",
                 targets=[
                     target(
-                        expr='sum(tiflash_proxy_threads_state{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}) by (instance, state)',
+                        expr=expr_sum(
+                            "tiflash_proxy_threads_state",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=["instance", "state"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="{{instance}}-{{state}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(tiflash_proxy_threads_state{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_proxy_threads_state",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=["instance"],
+                            skip_default_instance=True,
+                        ),
                         legend_format="{{instance}}-total",
                     ),
                 ],
@@ -880,7 +1296,15 @@ def Threads() -> RowPanel:
                 title="Threads IO",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_proxy_threads_io_bytes_total{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by (name, io, $additional_groupby) > 1024',
+                        expr=expr_sum_rate(
+                            "tiflash_proxy_threads_io_bytes_total",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=["name", "io", ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ).extra(extra_expr="> 1024"),
                         legend_format="{{name}}-{{io}} {{$additional_groupby}}",
                         interval_factor=1,
                     ),
@@ -901,7 +1325,15 @@ def Threads() -> RowPanel:
                 title="Thread Voluntary Context Switches",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_proxy_thread_voluntary_context_switches{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance, name) > 200',
+                        expr=expr_sum_rate(
+                            "tiflash_proxy_thread_voluntary_context_switches",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=["instance", "name"],
+                            skip_default_instance=True,
+                        ).extra(extra_expr="> 200"),
                         legend_format="{{instance}} - {{name}}",
                         interval_factor=1,
                     ),
@@ -918,7 +1350,15 @@ def Threads() -> RowPanel:
                 title="Thread Nonvoluntary Context Switches",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_proxy_thread_nonvoluntary_context_switches{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance, name) > 50',
+                        expr=expr_sum_rate(
+                            "tiflash_proxy_thread_nonvoluntary_context_switches",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=["instance", "name"],
+                            skip_default_instance=True,
+                        ).extra(extra_expr="> 50"),
                         legend_format="{{instance}} - {{name}}",
                         interval_factor=1,
                     ),
@@ -944,7 +1384,9 @@ def Coprocessor() -> RowPanel:
                 title="Request QPS",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_coprocessor_request_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
+                        expr=expr_sum_rate(
+                            "tiflash_coprocessor_request_count", by_labels=["type"]
+                        ),
                         legend_format="{{type}}",
                     ),
                 ],
@@ -956,7 +1398,9 @@ def Coprocessor() -> RowPanel:
                 title="Executor QPS",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_coprocessor_executor_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
+                        expr=expr_sum_rate(
+                            "tiflash_coprocessor_executor_count", by_labels=["type"]
+                        ),
                         legend_format="{{type}}",
                     ),
                 ],
@@ -977,25 +1421,44 @@ def Coprocessor() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_coprocessor_request_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_coprocessor_request_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="9999-{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_coprocessor_request_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_coprocessor_request_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="999-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_coprocessor_request_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_coprocessor_request_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="99-{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_coprocessor_request_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_coprocessor_request_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="80-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_coprocessor_request_duration_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby) / sum(rate(tiflash_coprocessor_request_duration_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_coprocessor_request_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="avg-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
@@ -1009,7 +1472,9 @@ def Coprocessor() -> RowPanel:
                 title="Error QPS",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_coprocessor_request_error{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (reason)',
+                        expr=expr_sum_rate(
+                            "tiflash_coprocessor_request_error", by_labels=["reason"]
+                        ),
                         legend_format="{{reason}}",
                     ),
                 ],
@@ -1030,25 +1495,44 @@ def Coprocessor() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_coprocessor_request_handle_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_coprocessor_request_handle_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="9999-{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_coprocessor_request_handle_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_coprocessor_request_handle_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="999-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_coprocessor_request_handle_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_coprocessor_request_handle_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="99-{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_coprocessor_request_handle_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_coprocessor_request_handle_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="80-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_coprocessor_request_handle_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby) / sum(rate(tiflash_coprocessor_request_handle_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_coprocessor_request_handle_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="avg-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
@@ -1062,7 +1546,9 @@ def Coprocessor() -> RowPanel:
                 title="Response Bytes/Seconds",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_coprocessor_response_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
+                        expr=expr_sum_rate(
+                            "tiflash_coprocessor_response_bytes", by_labels=["type"]
+                        ),
                         legend_format="{{type}}",
                         interval_factor=1,
                     ),
@@ -1078,22 +1564,38 @@ def Coprocessor() -> RowPanel:
                 title="Cop task memory usage",
                 targets=[
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_coprocessor_request_memory_usage_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_coprocessor_request_memory_usage",
+                            by_labels=["type"],
+                        ),
                         legend_format="999-{{type}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_coprocessor_request_memory_usage_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_coprocessor_request_memory_usage",
+                            by_labels=["type"],
+                        ),
                         legend_format="99-{{type}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='histogram_quantile(0.95, sum(rate(tiflash_coprocessor_request_memory_usage_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type))',
+                        expr=expr_histogram_quantile(
+                            "0.95",
+                            "tiflash_coprocessor_request_memory_usage",
+                            by_labels=["type"],
+                        ),
                         legend_format="95-{{type}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_coprocessor_request_memory_usage_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_coprocessor_request_memory_usage",
+                            by_labels=["type"],
+                        ),
                         legend_format="80-{{type}}",
                         interval_factor=1,
                     ),
@@ -1109,7 +1611,9 @@ def Coprocessor() -> RowPanel:
                 title="Exchange Bytes/Seconds",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_exchange_data_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
+                        expr=expr_sum_rate(
+                            "tiflash_exchange_data_bytes", by_labels=["type"]
+                        ),
                         legend_format="{{type}}",
                         interval_factor=1,
                     ),
@@ -1125,7 +1629,11 @@ def Coprocessor() -> RowPanel:
                 title="Threads of Rpc",
                 targets=[
                     target(
-                        expr='max(tiflash_thread_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"rpc.*", type!~".*max"}) by (instance, type)',
+                        expr=expr_max(
+                            "tiflash_thread_count",
+                            label_selectors=['type=~"rpc.*"', 'type!~".*max"'],
+                            by_labels=["instance", "type"],
+                        ),
                         legend_format="{{instance}}-{{type}}",
                         interval_factor=1,
                     ),
@@ -1137,7 +1645,10 @@ def Coprocessor() -> RowPanel:
                 title="Handling Request Number",
                 targets=[
                     target(
-                        expr='sum(tiflash_coprocessor_handling_request_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (type)',
+                        expr=expr_sum(
+                            "tiflash_coprocessor_handling_request_count",
+                            by_labels=["type"],
+                        ),
                         legend_format="{{type}}",
                         interval_factor=1,
                     ),
@@ -1153,7 +1664,11 @@ def Coprocessor() -> RowPanel:
                 title="Threads",
                 targets=[
                     target(
-                        expr='max(tiflash_thread_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type!~".*max", type!~"rpc.*"}) by (instance, type)',
+                        expr=expr_max(
+                            "tiflash_thread_count",
+                            label_selectors=['type!~".*max"', 'type!~"rpc.*"'],
+                            by_labels=["instance", "type"],
+                        ),
                         legend_format="{{instance}}-{{type}}",
                         interval_factor=1,
                     ),
@@ -1165,7 +1680,11 @@ def Coprocessor() -> RowPanel:
                 title="Max Threads of Rpc",
                 targets=[
                     target(
-                        expr='max(tiflash_thread_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"rpc.*", type=~".*max"}) by (instance, type)',
+                        expr=expr_max(
+                            "tiflash_thread_count",
+                            label_selectors=['type=~"rpc.*"', 'type=~".*max"'],
+                            by_labels=["instance", "type"],
+                        ),
                         legend_format="{{instance}}-{{type}}",
                         interval_factor=1,
                     ),
@@ -1182,7 +1701,9 @@ def Coprocessor() -> RowPanel:
                 description="The MPP query count in TiFlash",
                 targets=[
                     target(
-                        expr='max(tiflash_mpp_task_manager{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance, type)',
+                        expr=expr_max(
+                            "tiflash_mpp_task_manager", by_labels=["instance", "type"]
+                        ),
                         legend_format="{{instance}}-{{type}}",
                         interval_factor=1,
                     ),
@@ -1194,7 +1715,11 @@ def Coprocessor() -> RowPanel:
                 title="Max Threads",
                 targets=[
                     target(
-                        expr='max(tiflash_thread_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~".*max", type!~"rpc.*"}) by (instance, type)',
+                        expr=expr_max(
+                            "tiflash_thread_count",
+                            label_selectors=['type=~".*max"', 'type!~"rpc.*"'],
+                            by_labels=["instance", "type"],
+                        ),
                         legend_format="{{instance}}-{{type}}",
                         interval_factor=1,
                     ),
@@ -1210,7 +1735,7 @@ def Coprocessor() -> RowPanel:
                 title="Time of the Longest Live MPP Task",
                 targets=[
                     target(
-                        expr='tiflash_mpp_task_monitor{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple("tiflash_mpp_task_monitor"),
                         legend_format="{{instance}}",
                         interval_factor=1,
                     ),
@@ -1222,7 +1747,7 @@ def Coprocessor() -> RowPanel:
                 title="Data size in send and receive queue",
                 targets=[
                     target(
-                        expr='tiflash_exchange_queueing_data_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple("tiflash_exchange_queueing_data_bytes"),
                         legend_format="{{type}}",
                         interval_factor=1,
                     ),
@@ -1238,7 +1763,9 @@ def Coprocessor() -> RowPanel:
                 title="Network Transmission",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_network_transmission_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
+                        expr=expr_sum_rate(
+                            "tiflash_network_transmission_bytes", by_labels=["type"]
+                        ),
                         legend_format="{{type}}",
                         interval_factor=1,
                     ),
@@ -1251,7 +1778,11 @@ def Coprocessor() -> RowPanel:
                 description="The establish calldata details",
                 targets=[
                     target(
-                        expr='max(tiflash_establish_calldata_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type != "new_request_calldata"}) by (instance, type)',
+                        expr=expr_max(
+                            "tiflash_establish_calldata_count",
+                            label_selectors=['type != "new_request_calldata"'],
+                            by_labels=["instance", "type"],
+                        ),
                         legend_format="{{instance}}-{{type}}",
                         interval_factor=1,
                     ),
@@ -1273,7 +1804,11 @@ def TaskScheduler() -> RowPanel:
                 description="the min_tso of each instance",
                 targets=[
                     target(
-                        expr='max(tiflash_task_scheduler{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="min_tso"}) by (instance, resource_group)',
+                        expr=expr_max(
+                            "tiflash_task_scheduler",
+                            label_selectors=['type="min_tso"'],
+                            by_labels=["instance", "resource_group"],
+                        ),
                         legend_format="{{instance}}-{{resource_group}}",
                     ),
                 ],
@@ -1295,23 +1830,43 @@ def TaskScheduler() -> RowPanel:
                 description="estimated thread usage in min-tso scheduler, and the sort/hard limit of estimated thread in scheduler.",
                 targets=[
                     target(
-                        expr='max(tiflash_task_scheduler{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="thread_soft_limit"}) by (instance, type, resource_group)',
+                        expr=expr_max(
+                            "tiflash_task_scheduler",
+                            label_selectors=['type="thread_soft_limit"'],
+                            by_labels=["instance", "type", "resource_group"],
+                        ),
                         legend_format="{{instance}}-{{type}}-{{resource_group}}",
                     ),
                     target(
-                        expr='max(tiflash_task_scheduler{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="estimated_thread_usage"}) by (instance, type, resource_group)',
+                        expr=expr_max(
+                            "tiflash_task_scheduler",
+                            label_selectors=['type="estimated_thread_usage"'],
+                            by_labels=["instance", "type", "resource_group"],
+                        ),
                         legend_format="{{instance}}-{{type}}-{{resource_group}}",
                     ),
                     target(
-                        expr='max(tiflash_task_scheduler{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="thread_hard_limit"}) by (instance, type, resource_group)',
+                        expr=expr_max(
+                            "tiflash_task_scheduler",
+                            label_selectors=['type="thread_hard_limit"'],
+                            by_labels=["instance", "type", "resource_group"],
+                        ),
                         legend_format="{{instance}}-{{type}}-{{resource_group}}",
                     ),
                     target(
-                        expr='max(tiflash_task_scheduler{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="global_estimated_thread_usage"}) by (instance, type, resource_group)',
+                        expr=expr_max(
+                            "tiflash_task_scheduler",
+                            label_selectors=['type="global_estimated_thread_usage"'],
+                            by_labels=["instance", "type", "resource_group"],
+                        ),
                         legend_format="{{instance}}-{{type}}-{{resource_group}}",
                     ),
                     target(
-                        expr='max(tiflash_task_scheduler{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="group_entry_count"}) by (instance, type)',
+                        expr=expr_max(
+                            "tiflash_task_scheduler",
+                            label_selectors=['type="group_entry_count"'],
+                            by_labels=["instance", "type"],
+                        ),
                         legend_format="{{instance}}-{{type}}",
                     ),
                 ],
@@ -1333,11 +1888,19 @@ def TaskScheduler() -> RowPanel:
                 description="the count of active/ waiting queries",
                 targets=[
                     target(
-                        expr='max(tiflash_task_scheduler{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="waiting_queries_count"}) by (instance, type, resource_group)',
+                        expr=expr_max(
+                            "tiflash_task_scheduler",
+                            label_selectors=['type="waiting_queries_count"'],
+                            by_labels=["instance", "type", "resource_group"],
+                        ),
                         legend_format="{{instance}}-{{type}}-{{resource_group}}",
                     ),
                     target(
-                        expr='max(tiflash_task_scheduler{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="active_queries_count"}) by (instance, type, resource_group)',
+                        expr=expr_max(
+                            "tiflash_task_scheduler",
+                            label_selectors=['type="active_queries_count"'],
+                            by_labels=["instance", "type", "resource_group"],
+                        ),
                         legend_format="{{instance}}-{{type}}-{{resource_group}}",
                     ),
                 ],
@@ -1351,11 +1914,19 @@ def TaskScheduler() -> RowPanel:
                 description="the count of active/ waiting tasks",
                 targets=[
                     target(
-                        expr='max(tiflash_task_scheduler{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="waiting_tasks_count"}) by (instance, type, resource_group)',
+                        expr=expr_max(
+                            "tiflash_task_scheduler",
+                            label_selectors=['type="waiting_tasks_count"'],
+                            by_labels=["instance", "type", "resource_group"],
+                        ),
                         legend_format="{{instance}}-{{type}}-{{resource_group}}",
                     ),
                     target(
-                        expr='max(tiflash_task_scheduler{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="active_tasks_count"}) by (instance, type, resource_group)',
+                        expr=expr_max(
+                            "tiflash_task_scheduler",
+                            label_selectors=['type="active_tasks_count"'],
+                            by_labels=["instance", "type", "resource_group"],
+                        ),
                         legend_format="{{instance}}-{{type}}-{{resource_group}}",
                     ),
                 ],
@@ -1373,7 +1944,11 @@ def TaskScheduler() -> RowPanel:
                 description="the usage of estimated threads exceeded the hard limit where errors occur.",
                 targets=[
                     target(
-                        expr='max(tiflash_task_scheduler{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="hard_limit_exceeded_count"}) by (instance, type, resource_group)',
+                        expr=expr_max(
+                            "tiflash_task_scheduler",
+                            label_selectors=['type="hard_limit_exceeded_count"'],
+                            by_labels=["instance", "type", "resource_group"],
+                        ),
                         legend_format="{{instance}}-{{resource_group}}",
                     ),
                 ],
@@ -1390,25 +1965,64 @@ def TaskScheduler() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_task_scheduler_waiting_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, instance, resource_group, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_task_scheduler_waiting_duration_seconds",
+                            by_labels=[
+                                "instance",
+                                "resource_group",
+                                ADDITIONAL_GROUPBY,
+                            ],
+                        ),
                         legend_format="{{instance}}-{{resource_group}}-9999",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_task_scheduler_waiting_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, instance, resource_group, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_task_scheduler_waiting_duration_seconds",
+                            by_labels=[
+                                "instance",
+                                "resource_group",
+                                ADDITIONAL_GROUPBY,
+                            ],
+                        ),
                         legend_format="{{instance}}-{{resource_group}}-999",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_task_scheduler_waiting_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, instance, resource_group, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_task_scheduler_waiting_duration_seconds",
+                            by_labels=[
+                                "instance",
+                                "resource_group",
+                                ADDITIONAL_GROUPBY,
+                            ],
+                        ),
                         legend_format="{{instance}}-{{resource_group}}-99",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_task_scheduler_waiting_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, instance, resource_group, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_task_scheduler_waiting_duration_seconds",
+                            by_labels=[
+                                "instance",
+                                "resource_group",
+                                ADDITIONAL_GROUPBY,
+                            ],
+                        ),
                         legend_format="{{instance}}-{{resource_group}}-80",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_task_scheduler_waiting_duration_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance, resource_group, $additional_groupby) / sum(rate(tiflash_task_scheduler_waiting_duration_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance, resource_group, $additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_task_scheduler_waiting_duration_seconds",
+                            by_labels=[
+                                "instance",
+                                "resource_group",
+                                ADDITIONAL_GROUPBY,
+                            ],
+                        ),
                         legend_format="{{instance}}-{{resource_group}}-avg",
                         hide=True,
                     ),
@@ -1442,13 +2056,18 @@ def DDL() -> RowPanel:
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(increase(tiflash_schema_internal_ddl_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type,instance)',
+                        expr=expr_sum_increase(
+                            "tiflash_schema_internal_ddl_count",
+                            by_labels=["type", "instance"],
+                        ),
                         legend_format="{{type}}-{{instance}}",
                         hide=True,
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(increase(tiflash_schema_internal_ddl_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_increase(
+                            "tiflash_schema_internal_ddl_count", by_labels=["instance"]
+                        ),
                         legend_format="total-{{instance}}",
                         hide=True,
                         interval_factor=1,
@@ -1489,30 +2108,53 @@ def DDL() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_schema_apply_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_schema_apply_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="9999-{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_schema_apply_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_schema_apply_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="999-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_schema_apply_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_schema_apply_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="99-{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_schema_apply_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_schema_apply_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="80-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_schema_apply_duration_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby) / sum(rate(tiflash_schema_apply_duration_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_schema_apply_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="avg-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='sum(tiflash_sync_schema_applying{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"$type"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_sync_schema_applying",
+                            label_selectors=['type=~"$type"'],
+                            by_labels=["instance"],
+                        ),
                         legend_format="applying-{{instance}}",
                     ),
                 ],
@@ -1542,7 +2184,10 @@ def ImbalanceReadWrite() -> RowPanel:
                         legend_format="{{instance}}",
                     ),
                     target(
-                        expr='sum(tiflash_system_current_metric_LogicalCPUCores{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_system_current_metric_LogicalCPUCores",
+                            by_labels=["instance"],
+                        ),
                         legend_format="limit-{{instance}}",
                         interval_factor=1,
                     ),
@@ -1602,7 +2247,10 @@ def ImbalanceReadWrite() -> RowPanel:
                 title="Request QPS by instance",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_coprocessor_request_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_coprocessor_request_count",
+                            by_labels=["type", "instance"],
+                        ),
                         legend_format="{{type}}-{{instance}}",
                     ),
                 ],
@@ -1615,16 +2263,25 @@ def ImbalanceReadWrite() -> RowPanel:
                 description="The flow of different kinds of read operations",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_ReadBufferFromFileDescriptorReadBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_ReadBufferFromFileDescriptorReadBytes",
+                            by_labels=["instance"],
+                        ),
                         legend_format="File Descriptor-{{instance}}",
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_PSMReadBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_PSMReadBytes",
+                            by_labels=["instance"],
+                        ),
                         legend_format="Page-{{instance}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_PSMBackgroundReadBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_PSMBackgroundReadBytes",
+                            by_labels=["instance"],
+                        ),
                         legend_format="PageBackGround-{{instance}}",
                         interval_factor=1,
                     ),
@@ -1644,12 +2301,18 @@ def ImbalanceReadWrite() -> RowPanel:
                 description="The total count of different kinds of commands received",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_DMWriteBlock{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance, type)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_DMWriteBlock",
+                            by_labels=["instance", "type"],
+                        ),
                         legend_format="write block-{{instance}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(increase(tiflash_storage_command_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance, type)',
+                        expr=expr_sum_increase(
+                            "tiflash_storage_command_count",
+                            by_labels=["instance", "type"],
+                        ),
                         legend_format="{{type}}-{{instance}}",
                         interval_factor=1,
                     ),
@@ -1669,12 +2332,20 @@ def ImbalanceReadWrite() -> RowPanel:
                 description="The throughput of write by instance",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_storage_throughput_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"write"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_storage_throughput_bytes",
+                            label_selectors=['type=~"write"'],
+                            by_labels=["instance"],
+                        ),
                         legend_format="write-{{instance}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(rate(tiflash_storage_throughput_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"ingest"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_storage_throughput_bytes",
+                            label_selectors=['type=~"ingest"'],
+                            by_labels=["instance"],
+                        ),
                         legend_format="ingest-{{instance}}",
                     ),
                 ],
@@ -1703,7 +2374,7 @@ def MemoryTrace() -> RowPanel:
                 title="Number of Keyspaces",
                 targets=[
                     target(
-                        expr='tiflash_system_current_metric_NumKeyspace{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple("tiflash_system_current_metric_NumKeyspace"),
                         legend_format="keyspace-{{instance}}",
                         interval_factor=1,
                     ),
@@ -1717,12 +2388,14 @@ def MemoryTrace() -> RowPanel:
                 title="Number of Physical Tables",
                 targets=[
                     target(
-                        expr='tiflash_system_current_metric_DT_NumStorageDeltaMerge{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple(
+                            "tiflash_system_current_metric_DT_NumStorageDeltaMerge"
+                        ),
                         legend_format="tables-{{instance}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='tiflash_system_current_metric_NumIStorage{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple("tiflash_system_current_metric_NumIStorage"),
                         legend_format="tables-all-{{instance}}",
                         hide=True,
                         interval_factor=1,
@@ -1741,12 +2414,14 @@ def MemoryTrace() -> RowPanel:
                 title="Number of Segments",
                 targets=[
                     target(
-                        expr='tiflash_system_current_metric_DT_NumSegment{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple("tiflash_system_current_metric_DT_NumSegment"),
                         legend_format="segments-{{instance}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='tiflash_system_current_metric_DT_NumMemTable{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple(
+                            "tiflash_system_current_metric_DT_NumMemTable"
+                        ),
                         legend_format="mem_table-{{instance}}",
                         interval_factor=1,
                     ),
@@ -1760,12 +2435,16 @@ def MemoryTrace() -> RowPanel:
                 title="Bytes of MemTables",
                 targets=[
                     target(
-                        expr='tiflash_system_current_metric_DT_BytesMemTable{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple(
+                            "tiflash_system_current_metric_DT_BytesMemTable"
+                        ),
                         legend_format="bytes-{{instance}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='tiflash_system_current_metric_DT_BytesMemTableAllocated{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple(
+                            "tiflash_system_current_metric_DT_BytesMemTableAllocated"
+                        ),
                         legend_format="bytes-allocated-{{instance}}",
                         interval_factor=1,
                     ),
@@ -1784,15 +2463,21 @@ def MemoryTrace() -> RowPanel:
                 description="The memory usage of mark cache and minmax index cache",
                 targets=[
                     target(
-                        expr='tiflash_system_asynchronous_metric_MarkCacheBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple(
+                            "tiflash_system_asynchronous_metric_MarkCacheBytes"
+                        ),
                         legend_format="mark_cache_{{instance}}",
                     ),
                     target(
-                        expr='tiflash_system_asynchronous_metric_MinMaxIndexFiles{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple(
+                            "tiflash_system_asynchronous_metric_MinMaxIndexFiles"
+                        ),
                         legend_format="minmax_index_cache_{{instance}}",
                     ),
                     target(
-                        expr='tiflash_system_asynchronous_metric_RNMVCCIndexCacheBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple(
+                            "tiflash_system_asynchronous_metric_RNMVCCIndexCacheBytes"
+                        ),
                         legend_format="rn_mvcc_index_cache_{{instance}}",
                     ),
                 ],
@@ -1815,11 +2500,17 @@ def MemoryTrace() -> RowPanel:
                 description="cache misses or cache hits of mark_cache.\nBased on this infactor, we can check whether mark_cache is large enough",
                 targets=[
                     target(
-                        expr='max(tiflash_system_profile_event_MarkCacheMisses{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_max(
+                            "tiflash_system_profile_event_MarkCacheMisses",
+                            by_labels=["instance"],
+                        ),
                         legend_format="mark cache misses",
                     ),
                     target(
-                        expr='max(tiflash_system_profile_event_MarkCacheHits{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_max(
+                            "tiflash_system_profile_event_MarkCacheHits",
+                            by_labels=["instance"],
+                        ),
                         legend_format="mark cache hits",
                     ),
                 ],
@@ -1840,19 +2531,35 @@ def MemoryTrace() -> RowPanel:
                 description="Information about schema of column file, to learn the memory usage of schema",
                 targets=[
                     target(
-                        expr='max(tiflash_shared_block_schemas{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"current_size"}) by (instance)',
+                        expr=expr_max(
+                            "tiflash_shared_block_schemas",
+                            label_selectors=['type=~"current_size"'],
+                            by_labels=["instance"],
+                        ),
                         legend_format="current_size-{{instance}}",
                     ),
                     target(
-                        expr='sum(rate(tiflash_shared_block_schemas{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"hit_count"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_shared_block_schemas",
+                            label_selectors=['type=~"hit_count"'],
+                            by_labels=["instance"],
+                        ),
                         legend_format="hit_count_ops-{{instance}}",
                     ),
                     target(
-                        expr='max(tiflash_shared_block_schemas{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"still_used_when_evict"}) by (instance)',
+                        expr=expr_max(
+                            "tiflash_shared_block_schemas",
+                            label_selectors=['type=~"still_used_when_evict"'],
+                            by_labels=["instance"],
+                        ),
                         legend_format="still_used_when_evict-{{instance}}",
                     ),
                     target(
-                        expr='sum(rate(tiflash_shared_block_schemas{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"miss_count"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_shared_block_schemas",
+                            label_selectors=['type=~"miss_count"'],
+                            by_labels=["instance"],
+                        ),
                         legend_format="miss_count_ops-{{instance}}",
                     ),
                 ],
@@ -1866,12 +2573,16 @@ def MemoryTrace() -> RowPanel:
                 title="Read Snapshots",
                 targets=[
                     target(
-                        expr='tiflash_system_current_metric_DT_SegmentReadTasks{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple(
+                            "tiflash_system_current_metric_DT_SegmentReadTasks"
+                        ),
                         legend_format="read_tasks-{{instance}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='tiflash_system_asynchronous_metric_MaxDTDeltaOldestSnapshotLifetime{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple(
+                            "tiflash_system_asynchronous_metric_MaxDTDeltaOldestSnapshotLifetime"
+                        ),
                         legend_format="max_snapshot_lifetime-{{instance}}",
                         interval_factor=1,
                     ),
@@ -1904,7 +2615,10 @@ def MemoryTrace() -> RowPanel:
                         legend_format="{{instance}}-{{type}}",
                     ),
                     target(
-                        expr='tiflash_storages_thread_memory_usage{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"alloc_.*"}',
+                        expr=expr_simple(
+                            "tiflash_storages_thread_memory_usage",
+                            label_selectors=['type=~"alloc_.*"'],
+                        ),
                         legend_format="{{instance}}-{{type}}-tot",
                         hide=True,
                     ),
@@ -1934,7 +2648,10 @@ def MemoryTrace() -> RowPanel:
                         legend_format="{{instance}}-{{type}}",
                     ),
                     target(
-                        expr='tiflash_raft_proxy_thread_memory_usage{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"alloc_.*"}',
+                        expr=expr_simple(
+                            "tiflash_raft_proxy_thread_memory_usage",
+                            label_selectors=['type=~"alloc_.*"'],
+                        ),
                         legend_format="{{instance}}-{{type}}-tot",
                         hide=True,
                     ),
@@ -1960,7 +2677,7 @@ def MemoryTrace() -> RowPanel:
                 title="Memory by class",
                 targets=[
                     target(
-                        expr='tiflash_memory_usage_by_class{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple("tiflash_memory_usage_by_class"),
                         legend_format="{{instance}}-{{type}}",
                     ),
                     target(
@@ -1981,7 +2698,10 @@ def MemoryTrace() -> RowPanel:
                 title="KVStore memory",
                 targets=[
                     target(
-                        expr='sum(tiflash_system_current_metric_MemoryTrackingKVStore{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_system_current_metric_MemoryTrackingKVStore",
+                            by_labels=["instance"],
+                        ),
                         legend_format="{{instance}}",
                     ),
                 ],
@@ -2006,26 +2726,61 @@ def ColumnarStorage() -> RowPanel:
                 title="IA usage",
                 targets=[
                     target(
-                        expr='tiflash_proxy_kv_engine_ia_main_queue_capacity{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple(
+                            "tiflash_proxy_kv_engine_ia_main_queue_capacity",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            skip_default_instance=True,
+                        ),
                         legend_format="capacity-main-{{instance}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='tiflash_proxy_kv_engine_ia_small_queue_capacity{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple(
+                            "tiflash_proxy_kv_engine_ia_small_queue_capacity",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            skip_default_instance=True,
+                        ),
                         legend_format="capacity-small-{{instance}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='tiflash_proxy_kv_engine_ia_manager_segments_memory_capacity{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple(
+                            "tiflash_proxy_kv_engine_ia_manager_segments_memory_capacity",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            skip_default_instance=True,
+                        ),
                         legend_format="capacity-segments-{{instance}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='tiflash_proxy_kv_engine_ia_manager_segments_memory_size{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple(
+                            "tiflash_proxy_kv_engine_ia_manager_segments_memory_size",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            skip_default_instance=True,
+                        ),
                         legend_format="segments-mem-size-{{instance}}",
                     ),
                     target(
-                        expr='tiflash_proxy_kv_engine_ia_manager_segments_disk_size{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple(
+                            "tiflash_proxy_kv_engine_ia_manager_segments_disk_size",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            skip_default_instance=True,
+                        ),
                         legend_format="segments-disk-size-{{instance}}",
                     ),
                 ],
@@ -2051,25 +2806,69 @@ def ColumnarStorage() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_proxy_kv_engine_ia_manager_segments_memory_wait_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_proxy_kv_engine_ia_manager_segments_memory_wait_duration_seconds",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="9999 {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_proxy_kv_engine_ia_manager_segments_memory_wait_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_proxy_kv_engine_ia_manager_segments_memory_wait_duration_seconds",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="999 {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_proxy_kv_engine_ia_manager_segments_memory_wait_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_proxy_kv_engine_ia_manager_segments_memory_wait_duration_seconds",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="99 {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_proxy_kv_engine_ia_manager_segments_memory_wait_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_proxy_kv_engine_ia_manager_segments_memory_wait_duration_seconds",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="80 {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_proxy_kv_engine_ia_manager_segments_memory_wait_duration_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by ($additional_groupby) / sum(rate(tiflash_proxy_kv_engine_ia_manager_segments_memory_wait_duration_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by ($additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_proxy_kv_engine_ia_manager_segments_memory_wait_duration_seconds",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="avg {{$additional_groupby}}",
                         hide=True,
                     ),
@@ -2087,12 +2886,28 @@ def ColumnarStorage() -> RowPanel:
                 title="IA Segment Remote Read Cache",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_proxy_kv_engine_ia_remote_read_segment_cache_hit{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by ($additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_proxy_kv_engine_ia_remote_read_segment_cache_hit",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="cache-hit {{$additional_groupby}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(rate(tiflash_proxy_kv_engine_ia_remote_read_segment_cache_miss{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by ($additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_proxy_kv_engine_ia_remote_read_segment_cache_miss",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="cache-miss {{$additional_groupby}}",
                     ),
                 ],
@@ -2108,25 +2923,69 @@ def ColumnarStorage() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_proxy_kv_engine_ia_remote_read_segment_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_proxy_kv_engine_ia_remote_read_segment_duration_seconds",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="9999 {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_proxy_kv_engine_ia_remote_read_segment_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_proxy_kv_engine_ia_remote_read_segment_duration_seconds",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="999 {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_proxy_kv_engine_ia_remote_read_segment_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_proxy_kv_engine_ia_remote_read_segment_duration_seconds",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="99 {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_proxy_kv_engine_ia_remote_read_segment_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_proxy_kv_engine_ia_remote_read_segment_duration_seconds",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="80 {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_proxy_kv_engine_ia_remote_read_segment_duration_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by ($additional_groupby) / sum(rate(tiflash_proxy_kv_engine_ia_remote_read_segment_duration_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by ($additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_proxy_kv_engine_ia_remote_read_segment_duration_seconds",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="avg {{$additional_groupby}}",
                         hide=True,
                     ),
@@ -2144,12 +3003,28 @@ def ColumnarStorage() -> RowPanel:
                 title="ColumnarFile Cache",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_proxy_kv_engine_columnar_file_cache_hit{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by ($additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_proxy_kv_engine_columnar_file_cache_hit",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="file-cache-hit {{$additional_groupby}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(rate(tiflash_proxy_kv_engine_columnar_file_cache_miss{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by ($additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_proxy_kv_engine_columnar_file_cache_miss",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="file-cache-miss {{$additional_groupby}}",
                     ),
                 ],
@@ -2165,25 +3040,69 @@ def ColumnarStorage() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_proxy_kv_engine_columnar_prefetch_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_proxy_kv_engine_columnar_prefetch_duration_seconds",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="9999 {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_proxy_kv_engine_columnar_prefetch_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_proxy_kv_engine_columnar_prefetch_duration_seconds",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="999 {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_proxy_kv_engine_columnar_prefetch_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_proxy_kv_engine_columnar_prefetch_duration_seconds",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="99 {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_proxy_kv_engine_columnar_prefetch_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_proxy_kv_engine_columnar_prefetch_duration_seconds",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="80 {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_proxy_kv_engine_columnar_prefetch_duration_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by ($additional_groupby) / sum(rate(tiflash_proxy_kv_engine_columnar_prefetch_duration_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by ($additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_proxy_kv_engine_columnar_prefetch_duration_seconds",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="avg {{$additional_groupby}}",
                         hide=True,
                     ),
@@ -2202,25 +3121,69 @@ def ColumnarStorage() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_proxy_kv_engine_columnar_prefetch_cache_hit_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_proxy_kv_engine_columnar_prefetch_cache_hit",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="9999 {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_proxy_kv_engine_columnar_prefetch_cache_hit_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_proxy_kv_engine_columnar_prefetch_cache_hit",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="999 {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_proxy_kv_engine_columnar_prefetch_cache_hit_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_proxy_kv_engine_columnar_prefetch_cache_hit",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="99 {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_proxy_kv_engine_columnar_prefetch_cache_hit_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_proxy_kv_engine_columnar_prefetch_cache_hit",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="80 {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_proxy_kv_engine_columnar_prefetch_cache_hit_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by ($additional_groupby) / sum(rate(tiflash_proxy_kv_engine_columnar_prefetch_cache_hit_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by ($additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_proxy_kv_engine_columnar_prefetch_cache_hit",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="avg {{$additional_groupby}}",
                         hide=True,
                     ),
@@ -2238,7 +3201,15 @@ def ColumnarStorage() -> RowPanel:
                 title="Columnar Fetch Snapshot Retry",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_proxy_kv_engine_columnar_fetch_snapshot_retry_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by ($additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_proxy_kv_engine_columnar_fetch_snapshot_retry_count",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="retry {{$additional_groupby}}",
                     ),
                 ],
@@ -2255,25 +3226,69 @@ def ColumnarStorage() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_proxy_kv_engine_columnar_fetch_snapshot_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_proxy_kv_engine_columnar_fetch_snapshot_duration_seconds",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="9999 {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_proxy_kv_engine_columnar_fetch_snapshot_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_proxy_kv_engine_columnar_fetch_snapshot_duration_seconds",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="999 {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_proxy_kv_engine_columnar_fetch_snapshot_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_proxy_kv_engine_columnar_fetch_snapshot_duration_seconds",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="99 {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_proxy_kv_engine_columnar_fetch_snapshot_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_proxy_kv_engine_columnar_fetch_snapshot_duration_seconds",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="80 {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_proxy_kv_engine_columnar_fetch_snapshot_duration_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by ($additional_groupby) / sum(rate(tiflash_proxy_kv_engine_columnar_fetch_snapshot_duration_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by ($additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_proxy_kv_engine_columnar_fetch_snapshot_duration_seconds",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="avg {{$additional_groupby}}",
                         hide=True,
                     ),
@@ -2291,16 +3306,40 @@ def ColumnarStorage() -> RowPanel:
                 title="Columnar Meta Cache",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_proxy_kv_engine_columnar_meta_cache_hit{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by ($additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_proxy_kv_engine_columnar_meta_cache_hit",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="hit {{$additional_groupby}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(rate(tiflash_proxy_kv_engine_columnar_meta_cache_miss{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by ($additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_proxy_kv_engine_columnar_meta_cache_miss",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="miss {{$additional_groupby}}",
                     ),
                     target(
-                        expr='sum(rate(tiflash_proxy_kv_engine_columnar_meta_cache_parse{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by ($additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_proxy_kv_engine_columnar_meta_cache_parse",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="parse {{$additional_groupby}}",
                     ),
                 ],
@@ -2311,12 +3350,26 @@ def ColumnarStorage() -> RowPanel:
                 title="Columnar Meta Cache Gauge",
                 targets=[
                     target(
-                        expr='tiflash_proxy_kv_engine_columnar_meta_cache_entries{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple(
+                            "tiflash_proxy_kv_engine_columnar_meta_cache_entries",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            skip_default_instance=True,
+                        ),
                         legend_format="entries-{{instance}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='tiflash_proxy_kv_engine_columnar_meta_cache_weighted_size{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple(
+                            "tiflash_proxy_kv_engine_columnar_meta_cache_weighted_size",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            skip_default_instance=True,
+                        ),
                         legend_format="weighted_size-{{instance}}",
                     ),
                 ],
@@ -2344,11 +3397,16 @@ def Storage() -> RowPanel:
                 description="The total count of different kinds of commands received",
                 targets=[
                     target(
-                        expr='sum(increase(tiflash_storage_command_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
+                        expr=expr_sum_increase(
+                            "tiflash_storage_command_count", by_labels=["type"]
+                        ),
                         legend_format="{{type}}",
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_DMWriteBlock{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_DMWriteBlock",
+                            by_labels=["type"],
+                        ),
                         legend_format="write block",
                         interval_factor=1,
                     ),
@@ -2425,7 +3483,10 @@ def Storage() -> RowPanel:
                 description="The throughput of (maybe foreground) tasks of storage in bytes",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_storage_subtask_throughput_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
+                        expr=expr_sum_rate(
+                            "tiflash_storage_subtask_throughput_bytes",
+                            by_labels=["type"],
+                        ),
                         legend_format="{{type}}",
                         interval_factor=1,
                     ),
@@ -2447,7 +3508,10 @@ def Storage() -> RowPanel:
                 description="The throughput of (maybe foreground) tasks of storage in rows",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_storage_subtask_throughput_rows{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
+                        expr=expr_sum_rate(
+                            "tiflash_storage_subtask_throughput_rows",
+                            by_labels=["type"],
+                        ),
                         legend_format="{{type}}",
                         interval_factor=1,
                     ),
@@ -2473,7 +3537,13 @@ def Storage() -> RowPanel:
                 description="Total number of storage's internal sub tasks",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_storage_subtask_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type!~"(delta_merge|seg_merge|seg_split).*"}[$__rate_interval])) by (type)',
+                        expr=expr_sum_rate(
+                            "tiflash_storage_subtask_count",
+                            label_selectors=[
+                                'type!~"(delta_merge|seg_merge|seg_split).*"'
+                            ],
+                            by_labels=["type"],
+                        ),
                         legend_format="{{type}}",
                     ),
                 ],
@@ -2491,25 +3561,59 @@ def Storage() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type!~"(delta_merge|seg_merge|seg_split).*"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_storage_subtask_duration_seconds",
+                            label_selectors=[
+                                'type!~"(delta_merge|seg_merge|seg_split).*"'
+                            ],
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="9999-{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type!~"(delta_merge|seg_merge|seg_split).*"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_storage_subtask_duration_seconds",
+                            label_selectors=[
+                                'type!~"(delta_merge|seg_merge|seg_split).*"'
+                            ],
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="999-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type!~"(delta_merge|seg_merge|seg_split).*"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_storage_subtask_duration_seconds",
+                            label_selectors=[
+                                'type!~"(delta_merge|seg_merge|seg_split).*"'
+                            ],
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="99-{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type!~"(delta_merge|seg_merge|seg_split).*"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_storage_subtask_duration_seconds",
+                            label_selectors=[
+                                'type!~"(delta_merge|seg_merge|seg_split).*"'
+                            ],
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="80-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_storage_subtask_duration_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type!~"(delta_merge|seg_merge|seg_split).*"}[$__rate_interval])) by (type, $additional_groupby) / sum(rate(tiflash_storage_subtask_duration_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type!~"(delta_merge|seg_merge|seg_split).*"}[$__rate_interval])) by (type, $additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_storage_subtask_duration_seconds",
+                            label_selectors=[
+                                'type!~"(delta_merge|seg_merge|seg_split).*"'
+                            ],
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="avg-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
@@ -2529,7 +3633,13 @@ def Storage() -> RowPanel:
                 description="Total number of storage's internal sub tasks",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_storage_subtask_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"(delta_merge|seg_merge|seg_split).*"}[$__rate_interval])) by (type)',
+                        expr=expr_sum_rate(
+                            "tiflash_storage_subtask_count",
+                            label_selectors=[
+                                'type=~"(delta_merge|seg_merge|seg_split).*"'
+                            ],
+                            by_labels=["type"],
+                        ),
                         legend_format="{{type}}",
                     ),
                 ],
@@ -2547,25 +3657,59 @@ def Storage() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"(delta_merge|seg_merge|seg_split).*"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_storage_subtask_duration_seconds",
+                            label_selectors=[
+                                'type=~"(delta_merge|seg_merge|seg_split).*"'
+                            ],
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="9999-{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"(delta_merge|seg_merge|seg_split).*"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_storage_subtask_duration_seconds",
+                            label_selectors=[
+                                'type=~"(delta_merge|seg_merge|seg_split).*"'
+                            ],
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="999-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"(delta_merge|seg_merge|seg_split).*"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_storage_subtask_duration_seconds",
+                            label_selectors=[
+                                'type=~"(delta_merge|seg_merge|seg_split).*"'
+                            ],
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="99-{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"(delta_merge|seg_merge|seg_split).*"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_storage_subtask_duration_seconds",
+                            label_selectors=[
+                                'type=~"(delta_merge|seg_merge|seg_split).*"'
+                            ],
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="80-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_storage_subtask_duration_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"(delta_merge|seg_merge|seg_split).*"}[$__rate_interval])) by (type, $additional_groupby) / sum(rate(tiflash_storage_subtask_duration_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"(delta_merge|seg_merge|seg_split).*"}[$__rate_interval])) by (type, $additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_storage_subtask_duration_seconds",
+                            label_selectors=[
+                                'type=~"(delta_merge|seg_merge|seg_split).*"'
+                            ],
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="avg-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
@@ -2585,17 +3729,26 @@ def Storage() -> RowPanel:
                 description="The current processing number of  segments' background management",
                 targets=[
                     target(
-                        expr='avg(tiflash_system_current_metric_DT_DeltaMerge{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_avg(
+                            "tiflash_system_current_metric_DT_DeltaMerge",
+                            by_labels=["instance"],
+                        ),
                         legend_format="delta_merge-{{instance}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='avg(tiflash_system_current_metric_DT_SegmentSplit{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_avg(
+                            "tiflash_system_current_metric_DT_SegmentSplit",
+                            by_labels=["instance"],
+                        ),
                         legend_format="seg_split-{{instance}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='avg(tiflash_system_current_metric_DT_SegmentMerge{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_avg(
+                            "tiflash_system_current_metric_DT_SegmentMerge",
+                            by_labels=["instance"],
+                        ),
                         legend_format="seg_merge-{{instance}}",
                         interval_factor=1,
                     ),
@@ -2617,23 +3770,40 @@ def Storage() -> RowPanel:
                 description="The number of currently opened file descriptors.\n(Only counting storage engine of TiFlash by now. Not including TiFlash-Proxy)",
                 targets=[
                     target(
-                        expr='tiflash_proxy_process_open_fds{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", job=~".*tiflash", instance=~"$proxy_instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple(
+                            "tiflash_proxy_process_open_fds",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                                'job=~".*tiflash"',
+                            ],
+                            skip_default_instance=True,
+                        ),
                         legend_format="{{instance}}",
                         hide=True,
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(tiflash_system_current_metric_OpenFileForWrite{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_system_current_metric_OpenFileForWrite",
+                            by_labels=["instance"],
+                        ),
                         legend_format="W-{{instance}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(tiflash_system_current_metric_OpenFileForRead{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_system_current_metric_OpenFileForRead",
+                            by_labels=["instance"],
+                        ),
                         legend_format="R-{{instance}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(tiflash_system_current_metric_OpenFileForReadWrite{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_system_current_metric_OpenFileForReadWrite",
+                            by_labels=["instance"],
+                        ),
                         legend_format="RW-{{instance}}",
                         interval_factor=1,
                     ),
@@ -2648,12 +3818,18 @@ def Storage() -> RowPanel:
                 description="The number of open file descriptors action.\n(Only counting storage engine of TiFlash by now. Not including TiFlash-Proxy)",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_FileOpen{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_FileOpen",
+                            by_labels=["instance"],
+                        ),
                         legend_format="Open-{{instance}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_FileOpenFailed{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_FileOpenFailed",
+                            by_labels=["instance"],
+                        ),
                         legend_format="OpenFail-{{instance}}",
                         interval_factor=1,
                     ),
@@ -2668,7 +3844,10 @@ def Storage() -> RowPanel:
                 description="OPS and duration of fsync operations.\n(Only counting storage engine of TiFlash by now. Not including TiFlash-Proxy)",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_FileFSync{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_FileFSync",
+                            by_labels=["instance"],
+                        ),
                         legend_format="ops-fsync-{{instance}}",
                         interval_factor=1,
                     ),
@@ -2693,16 +3872,24 @@ def Storage() -> RowPanel:
                 description="The number of different kinds of read operations",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_PSMWriteIOCalls{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_PSMWriteIOCalls",
+                            by_labels=["type"],
+                        ),
                         legend_format="Page",
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_PSMWritePages{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_PSMWritePages", by_labels=[]
+                        ),
                         legend_format="PageFile",
                         hide=True,
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWrite{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_WriteBufferFromFileDescriptorWrite",
+                            by_labels=[],
+                        ),
                         legend_format="File Descriptor",
                         interval_factor=1,
                     ),
@@ -2715,16 +3902,23 @@ def Storage() -> RowPanel:
                 description="The number of different kinds of read operations",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_PSMReadIOCalls{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_PSMReadIOCalls", by_labels=[]
+                        ),
                         legend_format="Page",
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_PSMReadPages{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_PSMReadPages", by_labels=[]
+                        ),
                         legend_format="PageFile",
                         hide=True,
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_ReadBufferFromFileDescriptorRead{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_ReadBufferFromFileDescriptorRead",
+                            by_labels=[],
+                        ),
                         legend_format="File Descriptor",
                         interval_factor=1,
                     ),
@@ -2741,16 +3935,24 @@ def Storage() -> RowPanel:
                 description="The flow of different kinds of write operations",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_WriteBufferFromFileDescriptorWriteBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_WriteBufferFromFileDescriptorWriteBytes",
+                            by_labels=[],
+                        ),
                         legend_format="File Descriptor",
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_PSMWriteBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_PSMWriteBytes", by_labels=[]
+                        ),
                         legend_format="Page",
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_PSMBackgroundWriteBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_PSMBackgroundWriteBytes",
+                            by_labels=[],
+                        ),
                         legend_format="PageBackGround",
                         interval_factor=1,
                     ),
@@ -2766,16 +3968,24 @@ def Storage() -> RowPanel:
                 description="The flow of different kinds of read operations",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_ReadBufferFromFileDescriptorReadBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_ReadBufferFromFileDescriptorReadBytes",
+                            by_labels=[],
+                        ),
                         legend_format="File Descriptor",
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_PSMReadBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_PSMReadBytes", by_labels=[]
+                        ),
                         legend_format="Page",
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_PSMBackgroundReadBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_PSMBackgroundReadBytes",
+                            by_labels=[],
+                        ),
                         legend_format="PageBackGround",
                         interval_factor=1,
                     ),
@@ -2814,7 +4024,10 @@ def Storage() -> RowPanel:
                 description="The count of the compression algorithm used by each data part",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_storage_pack_compression_algorithm_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
+                        expr=expr_sum_rate(
+                            "tiflash_storage_pack_compression_algorithm_count",
+                            by_labels=["type"],
+                        ),
                         legend_format="{{type}}",
                     ),
                 ],
@@ -2838,7 +4051,9 @@ def StorageReadPoolDataSharing() -> RowPanel:
                 description="Total number of storage engine read tasks",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_storage_read_tasks_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_storage_read_tasks_count", by_labels=["instance"]
+                        ),
                         legend_format="{{instance}}",
                     ),
                 ],
@@ -2850,66 +4065,88 @@ def StorageReadPoolDataSharing() -> RowPanel:
                 title="Read Snapshots",
                 targets=[
                     target(
-                        expr='tiflash_system_current_metric_DT_SegmentReadTasks{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple(
+                            "tiflash_system_current_metric_DT_SegmentReadTasks"
+                        ),
                         legend_format="read_tasks-{{instance}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='tiflash_system_current_metric_PSMVCCSnapshotsList{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple(
+                            "tiflash_system_current_metric_PSMVCCSnapshotsList"
+                        ),
                         legend_format="snapshot_list-{{instance}}",
                         hide=True,
                         interval_factor=1,
                     ),
                     target(
-                        expr='tiflash_system_current_metric_PSMVCCNumSnapshots{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple(
+                            "tiflash_system_current_metric_PSMVCCNumSnapshots"
+                        ),
                         legend_format="num_snapshot-{{instance}}",
                         hide=True,
                         interval_factor=1,
                     ),
                     target(
-                        expr='tiflash_system_current_metric_DT_SnapshotOfRead{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple(
+                            "tiflash_system_current_metric_DT_SnapshotOfRead"
+                        ),
                         legend_format="read-{{instance}}",
                         hide=True,
                         interval_factor=1,
                     ),
                     target(
-                        expr='tiflash_system_current_metric_DT_SnapshotOfReadRaw{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple(
+                            "tiflash_system_current_metric_DT_SnapshotOfReadRaw"
+                        ),
                         legend_format="read_raw-{{instance}}",
                         hide=True,
                         interval_factor=1,
                     ),
                     target(
-                        expr='tiflash_system_current_metric_DT_SnapshotOfDeltaMerge{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple(
+                            "tiflash_system_current_metric_DT_SnapshotOfDeltaMerge"
+                        ),
                         legend_format="delta_merge-{{instance}}",
                         hide=True,
                         interval_factor=1,
                     ),
                     target(
-                        expr='tiflash_system_current_metric_DT_SnapshotOfDeltaCompact{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple(
+                            "tiflash_system_current_metric_DT_SnapshotOfDeltaCompact"
+                        ),
                         legend_format="delta_compact-{{instance}}",
                         hide=True,
                         interval_factor=1,
                     ),
                     target(
-                        expr='tiflash_system_current_metric_DT_SnapshotOfSegmentMerge{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple(
+                            "tiflash_system_current_metric_DT_SnapshotOfSegmentMerge"
+                        ),
                         legend_format="seg_merge-{{instance}}",
                         hide=True,
                         interval_factor=1,
                     ),
                     target(
-                        expr='tiflash_system_current_metric_DT_SnapshotOfSegmentSplit{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple(
+                            "tiflash_system_current_metric_DT_SnapshotOfSegmentSplit"
+                        ),
                         legend_format="seg_split-{{instance}}",
                         hide=True,
                         interval_factor=1,
                     ),
                     target(
-                        expr='tiflash_system_current_metric_DT_SnapshotOfPlaceIndex{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple(
+                            "tiflash_system_current_metric_DT_SnapshotOfPlaceIndex"
+                        ),
                         legend_format="place_index-{{instance}}",
                         hide=True,
                         interval_factor=1,
                     ),
                     target(
-                        expr='tiflash_system_asynchronous_metric_MaxDTDeltaOldestSnapshotLifetime{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple(
+                            "tiflash_system_asynchronous_metric_MaxDTDeltaOldestSnapshotLifetime"
+                        ),
                         legend_format="max_snapshot_lifetime-{{instance}}",
                         interval_factor=1,
                     ),
@@ -2939,25 +4176,44 @@ def StorageReadPoolDataSharing() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_read_thread_internal_us_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_read_thread_internal_us",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="9999-{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_read_thread_internal_us_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_read_thread_internal_us",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="999-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_read_thread_internal_us_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_read_thread_internal_us",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="99-{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_read_thread_internal_us_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_read_thread_internal_us",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="80-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_read_thread_internal_us_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby) / sum(rate(tiflash_read_thread_internal_us_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_read_thread_internal_us",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="avg-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
@@ -2972,7 +4228,13 @@ def StorageReadPoolDataSharing() -> RowPanel:
                 description="The information of read thread scheduling.",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_storage_read_thread_counter{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"ru_exhausted|sche_active_segment_limit|sche_from_cache|sche_new_task|sche_no_pool|sche_no_ru|sche_no_segment|sche_no_slot|push_block_bytes"}[$__rate_interval])) by (type)',
+                        expr=expr_sum_rate(
+                            "tiflash_storage_read_thread_counter",
+                            label_selectors=[
+                                'type=~"ru_exhausted|sche_active_segment_limit|sche_from_cache|sche_new_task|sche_no_pool|sche_no_ru|sche_no_segment|sche_no_slot|push_block_bytes"'
+                            ],
+                            by_labels=["type"],
+                        ),
                         legend_format="{{type}}",
                     ),
                 ],
@@ -2996,7 +4258,11 @@ def StorageReadPoolDataSharing() -> RowPanel:
                 description="The information of data sharing cache hit ratio. Data sharing cache is purpose-built for OLAP workload that can reduce repeated data reads of concurrent table scanning.",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_storage_read_thread_counter{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"add_cache_total_bytes_limit"}[$__rate_interval])) by (type)',
+                        expr=expr_sum_rate(
+                            "tiflash_storage_read_thread_counter",
+                            label_selectors=['type=~"add_cache_total_bytes_limit"'],
+                            by_labels=["type"],
+                        ),
                         legend_format="{{type}}",
                     ),
                     target(
@@ -3025,7 +4291,10 @@ def StorageReadPoolDataSharing() -> RowPanel:
                 title="Segment MergedTask",
                 targets=[
                     target(
-                        expr='sum(tiflash_storage_read_thread_gauge{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (type, $additional_groupby)',
+                        expr=expr_sum(
+                            "tiflash_storage_read_thread_gauge",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}} {{$additional_groupby}}",
                     ),
                 ],
@@ -3048,25 +4317,44 @@ def StorageReadPoolDataSharing() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_storage_read_thread_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_storage_read_thread_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="9999-{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_storage_read_thread_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_storage_read_thread_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="999-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_storage_read_thread_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_storage_read_thread_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="99-{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_storage_read_thread_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_storage_read_thread_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="80-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_storage_read_thread_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby) / sum(rate(tiflash_storage_read_thread_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_storage_read_thread_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="avg-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
@@ -3089,25 +4377,44 @@ def StorageReadPoolDataSharing() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_storage_version_chain_ms_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_storage_version_chain_ms",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="9999-{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_storage_version_chain_ms_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_storage_version_chain_ms",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="999-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_storage_version_chain_ms_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_storage_version_chain_ms",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="99-{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_storage_version_chain_ms_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_storage_version_chain_ms",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="80-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_storage_version_chain_ms_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby) / sum(rate(tiflash_storage_version_chain_ms_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_storage_version_chain_ms",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="avg-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
@@ -3122,7 +4429,10 @@ def StorageReadPoolDataSharing() -> RowPanel:
                 description="Errors of DeltaIndex",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_DTDeltaIndexError{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_DTDeltaIndexError",
+                            by_labels=["instance"],
+                        ),
                         legend_format="DeltaIndexError-{{instance}}",
                         interval_factor=1,
                     ),
@@ -3145,11 +4455,16 @@ def PageStorage() -> RowPanel:
                 description="The disk usage of PageStorage instances in each TiFlash node",
                 targets=[
                     target(
-                        expr='tiflash_system_asynchronous_metric_BlobDiskBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple(
+                            "tiflash_system_asynchronous_metric_BlobDiskBytes"
+                        ),
                         legend_format="blob_disk_size-{{instance}}",
                     ),
                     target(
-                        expr='sum(tiflash_system_asynchronous_metric_BlobValidBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_system_asynchronous_metric_BlobValidBytes",
+                            by_labels=["instance"],
+                        ),
                         legend_format="blob_valid_size-{{instance}}",
                     ),
                     target(
@@ -3157,7 +4472,9 @@ def PageStorage() -> RowPanel:
                         legend_format="blob_valid_rate-{{instance}}",
                     ),
                     target(
-                        expr='tiflash_system_asynchronous_metric_LogDiskBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple(
+                            "tiflash_system_asynchronous_metric_LogDiskBytes"
+                        ),
                         legend_format="log_size-{{instance}}",
                     ),
                 ],
@@ -3182,11 +4499,17 @@ def PageStorage() -> RowPanel:
                 description="The number of files of PageStorage instances in each TiFlash node",
                 targets=[
                     target(
-                        expr='sum(tiflash_system_asynchronous_metric_BlobFileNums{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_system_asynchronous_metric_BlobFileNums",
+                            by_labels=["instance"],
+                        ),
                         legend_format="blob_file-{{instance}}",
                     ),
                     target(
-                        expr='sum(tiflash_system_asynchronous_metric_LogNums{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_system_asynchronous_metric_LogNums",
+                            by_labels=["instance"],
+                        ),
                         legend_format="log_file-{{instance}}",
                     ),
                 ],
@@ -3209,7 +4532,11 @@ def PageStorage() -> RowPanel:
                 max_data_points=512,
                 targets=[
                     target(
-                        expr='sum(delta(tiflash_storage_page_write_batch_size_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="v3"}[$__rate_interval])) by (le)',
+                        expr=expr_sum_delta(
+                            "tiflash_storage_page_write_batch_size_bucket",
+                            label_selectors=['type="v3"'],
+                            by_labels=["le"],
+                        ),
                         legend_format="{{le}}",
                         interval_factor=2,
                     ),
@@ -3224,25 +4551,44 @@ def PageStorage() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_storage_page_write_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_storage_page_write_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-9999 {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_storage_page_write_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_storage_page_write_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-999 {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_storage_page_write_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_storage_page_write_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-99 {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_storage_page_write_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_storage_page_write_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-80 {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_storage_page_write_duration_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby) / sum(rate(tiflash_storage_page_write_duration_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_storage_page_write_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-avg {{$additional_groupby}}",
                         hide=True,
                     ),
@@ -3260,7 +4606,9 @@ def PageStorage() -> RowPanel:
                 title="Page GC Tasks OPM",
                 targets=[
                     target(
-                        expr='sum(increase(tiflash_storage_page_gc_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
+                        expr=expr_sum_increase(
+                            "tiflash_storage_page_gc_count", by_labels=["type"]
+                        ),
                         legend_format="{{type}}",
                         interval_factor=1,
                     ),
@@ -3281,25 +4629,44 @@ def PageStorage() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_storage_page_gc_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_storage_page_gc_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-9999 {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_storage_page_gc_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_storage_page_gc_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-999 {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_storage_page_gc_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_storage_page_gc_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-99 {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_storage_page_gc_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_storage_page_gc_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-80 {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_storage_page_gc_duration_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby) / sum(rate(tiflash_storage_page_gc_duration_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_storage_page_gc_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-avg {{$additional_groupby}}",
                         hide=True,
                     ),
@@ -3318,11 +4685,15 @@ def PageStorage() -> RowPanel:
                 description="The number of pages of all TiFlash instance",
                 targets=[
                     target(
-                        expr='tiflash_system_asynchronous_metric_PagesInMem{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple(
+                            "tiflash_system_asynchronous_metric_PagesInMem"
+                        ),
                         legend_format="num_pages-{{instance}}",
                     ),
                     target(
-                        expr='tiflash_system_asynchronous_metric_VersionedEntries{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}',
+                        expr=expr_simple(
+                            "tiflash_system_asynchronous_metric_VersionedEntries"
+                        ),
                         legend_format="num_entries-{{instance}}",
                     ),
                 ],
@@ -3336,7 +4707,10 @@ def PageStorage() -> RowPanel:
                 description="The num of pending writers in PageStorage",
                 targets=[
                     target(
-                        expr='sum(tiflash_system_current_metric_PSPendingWriterNum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_system_current_metric_PSPendingWriterNum",
+                            by_labels=["instance"],
+                        ),
                         legend_format="size-{{instance}}",
                         interval_factor=1,
                     ),
@@ -3354,7 +4728,9 @@ def PageStorage() -> RowPanel:
                 title="PageStorage stored bytes by type",
                 targets=[
                     target(
-                        expr='sum(tiflash_storage_page_data_by_types{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (type)',
+                        expr=expr_sum(
+                            "tiflash_storage_page_data_by_types", by_labels=["type"]
+                        ),
                         legend_format="{{type}}",
                     ),
                 ],
@@ -3369,21 +4745,33 @@ def PageStorage() -> RowPanel:
                 description="The number of tables running under different mode in DeltaTree",
                 targets=[
                     target(
-                        expr='sum(tiflash_system_current_metric_StoragePoolV2Only{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_system_current_metric_StoragePoolV2Only",
+                            by_labels=["instance"],
+                        ),
                         legend_format="V2-{{instance}}",
                         hide=True,
                     ),
                     target(
-                        expr='sum(tiflash_system_current_metric_StoragePoolV3Only{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_system_current_metric_StoragePoolV3Only",
+                            by_labels=["instance"],
+                        ),
                         legend_format="V3-{{instance}}",
                     ),
                     target(
-                        expr='sum(tiflash_system_current_metric_StoragePoolMixMode{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_system_current_metric_StoragePoolMixMode",
+                            by_labels=["instance"],
+                        ),
                         legend_format="Mix-{{instance}}",
                         hide=True,
                     ),
                     target(
-                        expr='sum(tiflash_system_current_metric_StoragePoolUniPS{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_system_current_metric_StoragePoolUniPS",
+                            by_labels=["instance"],
+                        ),
                         legend_format="UniPS-{{instance}}",
                     ),
                 ],
@@ -3400,7 +4788,10 @@ def PageStorage() -> RowPanel:
                 title="PS Command OPS By Instance",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_storage_page_command_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance, type)',
+                        expr=expr_sum_rate(
+                            "tiflash_storage_page_command_count",
+                            by_labels=["instance", "type"],
+                        ),
                         legend_format="{{type}}-{{instance}}",
                         interval_factor=1,
                     ),
@@ -3423,7 +4814,10 @@ def PageStorage() -> RowPanel:
                 title="PS Apply edits OPS By Instance",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_storage_page_apply_edit_type{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance, type)',
+                        expr=expr_sum_rate(
+                            "tiflash_storage_page_apply_edit_type",
+                            by_labels=["instance", "type"],
+                        ),
                         legend_format="{{type}}-{{instance}}",
                         interval_factor=1,
                     ),
@@ -3452,7 +4846,9 @@ def RateLimiter() -> RowPanel:
                 description="The storage I/O limiter metrics.",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_storage_io_limiter{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_storage_io_limiter", by_labels=["type", "instance"]
+                        ),
                         legend_format="{{type}}-{{instance}}",
                     ),
                 ],
@@ -3470,7 +4866,10 @@ def RateLimiter() -> RowPanel:
                 description="Current limit bytes per second of Storage I/O limiter",
                 targets=[
                     target(
-                        expr='sum(tiflash_storage_io_limiter_curr{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (type, instance)',
+                        expr=expr_sum(
+                            "tiflash_storage_io_limiter_curr",
+                            by_labels=["type", "instance"],
+                        ),
                         legend_format="{{type}}-{{instance}}",
                     ),
                 ],
@@ -3488,25 +4887,40 @@ def RateLimiter() -> RowPanel:
                 description="I/O Limiter current pending gauge.",
                 targets=[
                     target(
-                        expr='avg(tiflash_system_current_metric_RateLimiterPendingWriteRequest{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_avg(
+                            "tiflash_system_current_metric_RateLimiterPendingWriteRequest",
+                            by_labels=["instance"],
+                        ),
                         legend_format="other-current-{{instance}}",
                         hide=True,
                         interval_factor=1,
                     ),
                     target(
-                        expr='avg(tiflash_system_current_metric_IOLimiterPendingBgWriteReq{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_avg(
+                            "tiflash_system_current_metric_IOLimiterPendingBgWriteReq",
+                            by_labels=["instance"],
+                        ),
                         legend_format="bgwrite-current-{{instance}}",
                     ),
                     target(
-                        expr='avg(tiflash_system_current_metric_IOLimiterPendingFgWriteReq{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_avg(
+                            "tiflash_system_current_metric_IOLimiterPendingFgWriteReq",
+                            by_labels=["instance"],
+                        ),
                         legend_format="fgwrite-current-{{instance}}",
                     ),
                     target(
-                        expr='avg(tiflash_system_current_metric_IOLimiterPendingBgReadReq{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_avg(
+                            "tiflash_system_current_metric_IOLimiterPendingBgReadReq",
+                            by_labels=["instance"],
+                        ),
                         legend_format="bgread-current-{{instance}}",
                     ),
                     target(
-                        expr='avg(tiflash_system_current_metric_IOLimiterPendingFgReadReq{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_avg(
+                            "tiflash_system_current_metric_IOLimiterPendingFgReadReq",
+                            by_labels=["instance"],
+                        ),
                         legend_format="fgread-current-{{instance}}",
                     ),
                 ],
@@ -3521,7 +4935,10 @@ def RateLimiter() -> RowPanel:
                 description="The storage I/O limiter metrics.",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_storage_io_limiter_pending_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_storage_io_limiter_pending_count",
+                            by_labels=["type", "instance"],
+                        ),
                         legend_format="{{type}}-{{instance}}",
                     ),
                 ],
@@ -3546,25 +4963,44 @@ def RateLimiter() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_storage_io_limiter_pending_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_storage_io_limiter_pending_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-pending-9999",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_storage_io_limiter_pending_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_storage_io_limiter_pending_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-pending-999",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_storage_io_limiter_pending_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_storage_io_limiter_pending_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-pending-99",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_storage_io_limiter_pending_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_storage_io_limiter_pending_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-pending-80",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_storage_io_limiter_pending_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby) / sum(rate(tiflash_storage_io_limiter_pending_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_storage_io_limiter_pending_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-pending-avg",
                         hide=True,
                     ),
@@ -3593,25 +5029,44 @@ def StorageWriteStall() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_storage_write_stall_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, instance, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_storage_write_stall_duration_seconds",
+                            by_labels=["type", "instance", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="9999-{{type}}-{{instance}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_storage_write_stall_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, instance, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_storage_write_stall_duration_seconds",
+                            by_labels=["type", "instance", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="999-{{type}}-{{instance}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_storage_write_stall_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, instance, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_storage_write_stall_duration_seconds",
+                            by_labels=["type", "instance", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="99-{{type}}-{{instance}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_storage_write_stall_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, instance, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_storage_write_stall_duration_seconds",
+                            by_labels=["type", "instance", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="80-{{type}}-{{instance}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_storage_write_stall_duration_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, instance, $additional_groupby) / sum(rate(tiflash_storage_write_stall_duration_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, instance, $additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_storage_write_stall_duration_seconds",
+                            by_labels=["type", "instance", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="avg-{{type}}-{{instance}}",
                         hide=True,
                     ),
@@ -3633,12 +5088,20 @@ def StorageWriteStall() -> RowPanel:
                 description="The throughput of write and delta's background management",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_storage_throughput_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"write|ingest"}[$__rate_interval]))',
+                        expr=expr_sum_rate(
+                            "tiflash_storage_throughput_bytes",
+                            label_selectors=['type=~"write|ingest"'],
+                            by_labels=[],
+                        ),
                         legend_format="write+ingest",
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(rate(tiflash_storage_throughput_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type!~"write|ingest"}[$__rate_interval]))',
+                        expr=expr_sum_rate(
+                            "tiflash_storage_throughput_bytes",
+                            label_selectors=['type!~"write|ingest"'],
+                            by_labels=[],
+                        ),
                         legend_format="ManageDelta",
                         interval_factor=1,
                     ),
@@ -3654,12 +5117,20 @@ def StorageWriteStall() -> RowPanel:
                 description="The throughput of write and delta's background management",
                 targets=[
                     target(
-                        expr='sum(tiflash_storage_throughput_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"write|ingest"})',
+                        expr=expr_sum(
+                            "tiflash_storage_throughput_bytes",
+                            label_selectors=['type=~"write|ingest"'],
+                            by_labels=[],
+                        ),
                         legend_format="write+ingest",
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(tiflash_storage_throughput_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type!~"write|ingest"})',
+                        expr=expr_sum(
+                            "tiflash_storage_throughput_bytes",
+                            label_selectors=['type!~"write|ingest"'],
+                            by_labels=[],
+                        ),
                         legend_format="ManageDelta",
                         interval_factor=1,
                     ),
@@ -3679,12 +5150,20 @@ def StorageWriteStall() -> RowPanel:
                 description="The throughput of write by instance",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_storage_throughput_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"write"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_storage_throughput_bytes",
+                            label_selectors=['type=~"write"'],
+                            by_labels=["instance"],
+                        ),
                         legend_format="write-{{instance}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(rate(tiflash_storage_throughput_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"ingest"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_storage_throughput_bytes",
+                            label_selectors=['type=~"ingest"'],
+                            by_labels=["instance"],
+                        ),
                         legend_format="ingest-{{instance}}",
                     ),
                 ],
@@ -3709,12 +5188,18 @@ def StorageWriteStall() -> RowPanel:
                 description="The total count of different kinds of commands received",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_DMWriteBlock{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance, type)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_DMWriteBlock",
+                            by_labels=["instance", "type"],
+                        ),
                         legend_format="write block-{{instance}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(increase(tiflash_storage_command_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance, type)',
+                        expr=expr_sum_increase(
+                            "tiflash_storage_command_count",
+                            by_labels=["instance", "type"],
+                        ),
                         legend_format="{{type}}-{{instance}}",
                         interval_factor=1,
                     ),
@@ -3742,7 +5227,9 @@ def Raft() -> RowPanel:
                 title="Stale Read OPS",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_stale_read_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_stale_read_count", by_labels=["instance"]
+                        ),
                         legend_format="{{instance}}",
                     ),
                 ],
@@ -3754,7 +5241,9 @@ def Raft() -> RowPanel:
                 title="Raft Read Index OPS",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_raft_read_index_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_raft_read_index_count", by_labels=["instance"]
+                        ),
                         legend_format="{{instance}}",
                     ),
                 ],
@@ -3770,7 +5259,10 @@ def Raft() -> RowPanel:
                 title="Learner Read Failures",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_raft_learner_read_failures_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
+                        expr=expr_sum_rate(
+                            "tiflash_raft_learner_read_failures_count",
+                            by_labels=["type"],
+                        ),
                         legend_format="{{type}}",
                     ),
                 ],
@@ -3782,7 +5274,9 @@ def Raft() -> RowPanel:
                 title="Read Index Events",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_raft_read_index_events_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
+                        expr=expr_sum_rate(
+                            "tiflash_raft_read_index_events_count", by_labels=["type"]
+                        ),
                         legend_format="{{type}}",
                     ),
                 ],
@@ -3803,30 +5297,52 @@ def Raft() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_raft_wait_index_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_raft_wait_index_duration_seconds",
+                            by_labels=[ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="9999 {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_raft_wait_index_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_raft_wait_index_duration_seconds",
+                            by_labels=[ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="999 {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_raft_wait_index_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_raft_wait_index_duration_seconds",
+                            by_labels=[ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="99 {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_raft_wait_index_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_raft_wait_index_duration_seconds",
+                            by_labels=[ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="80 {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_raft_wait_index_duration_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by ($additional_groupby) / sum(rate(tiflash_raft_wait_index_duration_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by ($additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_raft_wait_index_duration_seconds",
+                            by_labels=[ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="avg {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='sum(increase(tiflash_system_profile_event_RaftWaitIndexTimeout{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_increase(
+                            "tiflash_system_profile_event_RaftWaitIndexTimeout",
+                            by_labels=["instance"],
+                        ),
                         legend_format="{{instance}}-timeout",
                     ),
                 ],
@@ -3848,25 +5364,44 @@ def Raft() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_raft_read_index_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_raft_read_index_duration_seconds",
+                            by_labels=[ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="9999 {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_raft_read_index_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_raft_read_index_duration_seconds",
+                            by_labels=[ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="999 {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_raft_read_index_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_raft_read_index_duration_seconds",
+                            by_labels=[ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="99 {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_raft_read_index_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_raft_read_index_duration_seconds",
+                            by_labels=[ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="80 {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_raft_read_index_duration_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by ($additional_groupby) / sum(rate(tiflash_raft_read_index_duration_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by ($additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_raft_read_index_duration_seconds",
+                            by_labels=[ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="avg {{$additional_groupby}}",
                         hide=True,
                     ),
@@ -3890,25 +5425,44 @@ def Raft() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_raft_apply_write_command_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_raft_apply_write_command_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="9999-{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_raft_apply_write_command_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_raft_apply_write_command_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="999-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_raft_apply_write_command_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_raft_apply_write_command_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="99-{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_raft_apply_write_command_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_raft_apply_write_command_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="80-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_raft_apply_write_command_duration_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby) / sum(rate(tiflash_raft_apply_write_command_duration_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_raft_apply_write_command_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="avg-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
@@ -3947,7 +5501,11 @@ def Raft() -> RowPanel:
                 max_data_points=512,
                 targets=[
                     target(
-                        expr='sum(delta(tiflash_raft_write_data_to_storage_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="decode"}[$__rate_interval])) by (le)',
+                        expr=expr_sum_delta(
+                            "tiflash_raft_write_data_to_storage_duration_seconds_bucket",
+                            label_selectors=['type="decode"'],
+                            by_labels=["le"],
+                        ),
                         legend_format="{{le}}",
                         interval_factor=2,
                     ),
@@ -3962,7 +5520,11 @@ def Raft() -> RowPanel:
                 max_data_points=512,
                 targets=[
                     target(
-                        expr='sum(delta(tiflash_raft_write_data_to_storage_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="write"}[$__rate_interval])) by (le)',
+                        expr=expr_sum_delta(
+                            "tiflash_raft_write_data_to_storage_duration_seconds_bucket",
+                            label_selectors=['type="write"'],
+                            by_labels=["le"],
+                        ),
                         legend_format="{{le}}",
                         interval_factor=2,
                     ),
@@ -3981,7 +5543,11 @@ def Raft() -> RowPanel:
                 max_data_points=512,
                 targets=[
                     target(
-                        expr='sum(delta(tiflash_raft_apply_write_command_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="write"}[$__rate_interval])) by (le)',
+                        expr=expr_sum_delta(
+                            "tiflash_raft_apply_write_command_duration_seconds_bucket",
+                            label_selectors=['type="write"'],
+                            by_labels=["le"],
+                        ),
                         legend_format="{{le}}",
                         interval_factor=2,
                     ),
@@ -3996,7 +5562,11 @@ def Raft() -> RowPanel:
                 max_data_points=512,
                 targets=[
                     target(
-                        expr='sum(delta(tiflash_raft_apply_write_command_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="admin"}[$__rate_interval])) by (le)',
+                        expr=expr_sum_delta(
+                            "tiflash_raft_apply_write_command_duration_seconds_bucket",
+                            label_selectors=['type="admin"'],
+                            by_labels=["le"],
+                        ),
                         legend_format="{{le}}",
                         interval_factor=2,
                     ),
@@ -4010,7 +5580,9 @@ def Raft() -> RowPanel:
                 title="Raft Events QPS",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_raft_raft_events_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
+                        expr=expr_sum_rate(
+                            "tiflash_raft_raft_events_count", by_labels=["type"]
+                        ),
                         legend_format="{{type}}",
                     ),
                 ],
@@ -4022,7 +5594,10 @@ def Raft() -> RowPanel:
                 title="Raft Frequent Events QPS",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_raft_raft_frequent_events_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
+                        expr=expr_sum_rate(
+                            "tiflash_raft_raft_frequent_events_count",
+                            by_labels=["type"],
+                        ),
                         legend_format="{{type}}",
                     ),
                 ],
@@ -4042,12 +5617,20 @@ def Raft() -> RowPanel:
                 max_data_points=512,
                 targets=[
                     target(
-                        expr='sum(delta(tiflash_raft_raft_log_gap_count_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"applied_index"}[$__rate_interval])) by (le, type)',
+                        expr=expr_sum_delta(
+                            "tiflash_raft_raft_log_gap_count_bucket",
+                            label_selectors=['type=~"applied_index"'],
+                            by_labels=["le", "type"],
+                        ),
                         legend_format="{{le}}",
                         interval_factor=2,
                     ),
                     target(
-                        expr='sum(delta(tiflash_raft_raft_log_gap_count_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"compact_index"}[$__rate_interval])) by (le, type)',
+                        expr=expr_sum_delta(
+                            "tiflash_raft_raft_log_gap_count_bucket",
+                            label_selectors=['type=~"compact_index"'],
+                            by_labels=["le", "type"],
+                        ),
                         legend_format="{{le}}",
                         interval_factor=2,
                     ),
@@ -4061,7 +5644,11 @@ def Raft() -> RowPanel:
                 max_data_points=512,
                 targets=[
                     target(
-                        expr='sum(delta(tiflash_raft_entry_size_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"normal"}[$__rate_interval])) by (le, type)',
+                        expr=expr_sum_delta(
+                            "tiflash_raft_entry_size_bucket",
+                            label_selectors=['type=~"normal"'],
+                            by_labels=["le", "type"],
+                        ),
                         legend_format="{{le}}",
                         interval_factor=2,
                     ),
@@ -4079,12 +5666,20 @@ def Raft() -> RowPanel:
                 max_data_points=512,
                 targets=[
                     target(
-                        expr='sum(delta(tiflash_raft_region_flush_bytes_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"unflushed"}[$__rate_interval])) by (le, type)',
+                        expr=expr_sum_delta(
+                            "tiflash_raft_region_flush_bytes_bucket",
+                            label_selectors=['type=~"unflushed"'],
+                            by_labels=["le", "type"],
+                        ),
                         legend_format="{{le}}",
                         interval_factor=2,
                     ),
                     target(
-                        expr='sum(delta(tiflash_raft_region_flush_bytes_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"flushed"}[$__rate_interval])) by (le, type)',
+                        expr=expr_sum_delta(
+                            "tiflash_raft_region_flush_bytes_bucket",
+                            label_selectors=['type=~"flushed"'],
+                            by_labels=["le", "type"],
+                        ),
                         legend_format="{{le}}",
                         interval_factor=2,
                         hide=True,
@@ -4099,7 +5694,11 @@ def Raft() -> RowPanel:
                 max_data_points=512,
                 targets=[
                     target(
-                        expr='sum(delta(tiflash_raft_write_flow_bytes_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"big_write_to_region"}[$__rate_interval])) by (le, type)',
+                        expr=expr_sum_delta(
+                            "tiflash_raft_write_flow_bytes_bucket",
+                            label_selectors=['type=~"big_write_to_region"'],
+                            by_labels=["le", "type"],
+                        ),
                         legend_format="{{le}}",
                         interval_factor=2,
                     ),
@@ -4117,7 +5716,11 @@ def Raft() -> RowPanel:
                 max_data_points=512,
                 targets=[
                     target(
-                        expr='sum(delta(tiflash_raft_write_flow_bytes_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"write_committed"}[$__rate_interval])) by (le, type)',
+                        expr=expr_sum_delta(
+                            "tiflash_raft_write_flow_bytes_bucket",
+                            label_selectors=['type=~"write_committed"'],
+                            by_labels=["le", "type"],
+                        ),
                         legend_format="{{le}}",
                         interval_factor=2,
                     ),
@@ -4131,7 +5734,9 @@ def Raft() -> RowPanel:
                 title="Raft Eager GC OPS",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_raft_eager_gc_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
+                        expr=expr_sum_rate(
+                            "tiflash_raft_eager_gc_count", by_labels=["type"]
+                        ),
                         legend_format="{{type}}",
                     ),
                 ],
@@ -4149,25 +5754,44 @@ def Raft() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_raft_eager_gc_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_raft_eager_gc_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="9999-{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_raft_eager_gc_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_raft_eager_gc_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="999-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_raft_eager_gc_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_raft_eager_gc_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="99-{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_raft_eager_gc_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_raft_eager_gc_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="80-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_raft_eager_gc_duration_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby) / sum(rate(tiflash_raft_eager_gc_duration_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_raft_eager_gc_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="avg-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
@@ -4186,7 +5810,9 @@ def Raft() -> RowPanel:
                 description="The keys flow of different kinds of Raft operations",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_raft_process_keys{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
+                        expr=expr_sum_rate(
+                            "tiflash_raft_process_keys", by_labels=["type"]
+                        ),
                         legend_format="{{type}}",
                     ),
                 ],
@@ -4204,7 +5830,9 @@ def Raft() -> RowPanel:
                 title="Raft throughput",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_raft_throughput_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
+                        expr=expr_sum_rate(
+                            "tiflash_raft_throughput_bytes", by_labels=["type"]
+                        ),
                         legend_format="{{type}}",
                     ),
                 ],
@@ -4227,7 +5855,9 @@ def Raft() -> RowPanel:
                 max_data_points=512,
                 targets=[
                     target(
-                        expr='sum(delta(tiflash_raft_upstream_latency_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le)',
+                        expr=expr_sum_delta(
+                            "tiflash_raft_upstream_latency_bucket", by_labels=["le"]
+                        ),
                         legend_format="{{le}}",
                         interval_factor=2,
                     ),
@@ -4243,25 +5873,44 @@ def Raft() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_raft_upstream_latency_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_raft_upstream_latency",
+                            by_labels=[ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="9999 {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_raft_upstream_latency_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_raft_upstream_latency",
+                            by_labels=[ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="999 {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_raft_upstream_latency_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_raft_upstream_latency",
+                            by_labels=[ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="99 {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_raft_upstream_latency_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_raft_upstream_latency",
+                            by_labels=[ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="80 {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_raft_upstream_latency_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by ($additional_groupby) / sum(rate(tiflash_raft_upstream_latency_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by ($additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_raft_upstream_latency",
+                            by_labels=[ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="avg {{$additional_groupby}}",
                     ),
                 ],
@@ -4307,25 +5956,44 @@ def RaftSnapshotIngestSST() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_raft_command_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_raft_command_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="9999-{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_raft_command_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_raft_command_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="999-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_raft_command_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_raft_command_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="99-{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_raft_command_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_raft_command_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="80-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_raft_command_duration_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby) / sum(rate(tiflash_raft_command_duration_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_raft_command_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="avg-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
@@ -4344,22 +6012,34 @@ def RaftSnapshotIngestSST() -> RowPanel:
                 description="The number of currently applying snapshots.",
                 targets=[
                     target(
-                        expr='sum(tiflash_system_current_metric_RaftNumSnapshotsPendingApply{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_system_current_metric_RaftNumSnapshotsPendingApply",
+                            by_labels=["instance"],
+                        ),
                         legend_format="Pending-{{instance}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(tiflash_system_current_metric_RaftNumPrehandlingSubTasks{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_system_current_metric_RaftNumPrehandlingSubTasks",
+                            by_labels=["instance"],
+                        ),
                         legend_format="PrehandleSubtasks-{{instance}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(tiflash_system_current_metric_RaftNumParallelPrehandlingTasks{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_system_current_metric_RaftNumParallelPrehandlingTasks",
+                            by_labels=["instance"],
+                        ),
                         legend_format="ParallelTasks-{{instance}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(tiflash_system_current_metric_RaftNumWaitedParallelPrehandlingTasks{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_system_current_metric_RaftNumWaitedParallelPrehandlingTasks",
+                            by_labels=["instance"],
+                        ),
                         legend_format="Pending-ParallelTasks-{{instance}}",
                         interval_factor=1,
                     ),
@@ -4380,7 +6060,11 @@ def RaftSnapshotIngestSST() -> RowPanel:
                 max_data_points=512,
                 targets=[
                     target(
-                        expr='sum(delta(tiflash_raft_write_flow_bytes_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"snapshot_uncommitted"}[$__rate_interval])) by (le, type)',
+                        expr=expr_sum_delta(
+                            "tiflash_raft_write_flow_bytes_bucket",
+                            label_selectors=['type=~"snapshot_uncommitted"'],
+                            by_labels=["le", "type"],
+                        ),
                         legend_format="{{le}}",
                         interval_factor=2,
                     ),
@@ -4390,7 +6074,10 @@ def RaftSnapshotIngestSST() -> RowPanel:
                 title="Ongoing raft snapshot",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_raft_ongoing_snapshot_total_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
+                        expr=expr_sum_rate(
+                            "tiflash_raft_ongoing_snapshot_total_bytes",
+                            by_labels=["type"],
+                        ),
                         legend_format="{{le}}",
                     ),
                 ],
@@ -4414,7 +6101,11 @@ def RaftSnapshotIngestSST() -> RowPanel:
                 max_data_points=512,
                 targets=[
                     target(
-                        expr='sum(delta(tiflash_raft_snapshot_total_bytes_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="approx_raft_snapshot"}[$__rate_interval])) by (le)',
+                        expr=expr_sum_delta(
+                            "tiflash_raft_snapshot_total_bytes_bucket",
+                            label_selectors=['type="approx_raft_snapshot"'],
+                            by_labels=["le"],
+                        ),
                         legend_format="{{le}}",
                         interval_factor=2,
                     ),
@@ -4429,7 +6120,11 @@ def RaftSnapshotIngestSST() -> RowPanel:
                 max_data_points=512,
                 targets=[
                     target(
-                        expr='sum(delta(tiflash_raft_command_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="snapshot_predecode"}[$__rate_interval])) by (le)',
+                        expr=expr_sum_delta(
+                            "tiflash_raft_command_duration_seconds_bucket",
+                            label_selectors=['type="snapshot_predecode"'],
+                            by_labels=["le"],
+                        ),
                         legend_format="{{le}}",
                         interval_factor=2,
                     ),
@@ -4447,7 +6142,11 @@ def RaftSnapshotIngestSST() -> RowPanel:
                 max_data_points=512,
                 targets=[
                     target(
-                        expr='sum(delta(tiflash_raft_command_throughput_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="prehandle_snapshot"}[$__rate_interval])) by (le)',
+                        expr=expr_sum_delta(
+                            "tiflash_raft_command_throughput_seconds_bucket",
+                            label_selectors=['type="prehandle_snapshot"'],
+                            by_labels=["le"],
+                        ),
                         legend_format="{{le}}",
                         interval_factor=2,
                     ),
@@ -4462,7 +6161,11 @@ def RaftSnapshotIngestSST() -> RowPanel:
                 max_data_points=512,
                 targets=[
                     target(
-                        expr='sum(delta(tiflash_raft_command_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="snapshot_flush"}[$__rate_interval])) by (le)',
+                        expr=expr_sum_delta(
+                            "tiflash_raft_command_duration_seconds_bucket",
+                            label_selectors=['type="snapshot_flush"'],
+                            by_labels=["le"],
+                        ),
                         legend_format="{{le}}",
                         interval_factor=2,
                     ),
@@ -4480,7 +6183,11 @@ def RaftSnapshotIngestSST() -> RowPanel:
                 max_data_points=512,
                 targets=[
                     target(
-                        expr='sum(delta(tiflash_raft_write_flow_bytes_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"ingest_uncommitted"}[$__rate_interval])) by (le, type)',
+                        expr=expr_sum_delta(
+                            "tiflash_raft_write_flow_bytes_bucket",
+                            label_selectors=['type=~"ingest_uncommitted"'],
+                            by_labels=["le", "type"],
+                        ),
                         legend_format="{{le}}",
                         interval_factor=2,
                     ),
@@ -4495,7 +6202,11 @@ def RaftSnapshotIngestSST() -> RowPanel:
                 max_data_points=512,
                 targets=[
                     target(
-                        expr='sum(delta(tiflash_raft_command_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="snapshot_predecode_sst2dt"}[$__rate_interval])) by (le)',
+                        expr=expr_sum_delta(
+                            "tiflash_raft_command_duration_seconds_bucket",
+                            label_selectors=['type="snapshot_predecode_sst2dt"'],
+                            by_labels=["le"],
+                        ),
                         legend_format="{{le}}",
                         interval_factor=2,
                     ),
@@ -4514,7 +6225,11 @@ def RaftSnapshotIngestSST() -> RowPanel:
                 max_data_points=512,
                 targets=[
                     target(
-                        expr='sum(delta(tiflash_raft_command_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="ingest_sst"}[$__rate_interval])) by (le)',
+                        expr=expr_sum_delta(
+                            "tiflash_raft_command_duration_seconds_bucket",
+                            label_selectors=['type="ingest_sst"'],
+                            by_labels=["le"],
+                        ),
                         legend_format="{{le}}",
                         interval_factor=2,
                     ),
@@ -4538,25 +6253,34 @@ def RoughSetFilterRateHistogram() -> RowPanel:
                         interval_factor=1,
                     ),
                     target(
-                        expr='avg((rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[5m]) - rate(tiflash_system_profile_event_DMFileFilterAftRoughSet{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[5m])) / (rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[5m]))) by (instance)',
+                        expr='avg((rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]) - rate(tiflash_system_profile_event_DMFileFilterAftRoughSet{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) / (rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (instance)',
                         legend_format="5min-{{instance}}",
                         hide=True,
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_DMFileFilterNoFilter{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_DMFileFilterNoFilter",
+                            by_labels=["instance"],
+                        ),
                         legend_format="No Filter-{{instance}}",
                         hide=True,
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_DMFileFilterAftPKAndPackSet{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_DMFileFilterAftPKAndPackSet",
+                            by_labels=["instance"],
+                        ),
                         legend_format="PK Filter-{{instance}}",
                         hide=True,
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_DMFileFilterAftRoughSet{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_DMFileFilterAftRoughSet",
+                            by_labels=["instance"],
+                        ),
                         legend_format="RS Filter-{{instance}}",
                         hide=True,
                         interval_factor=1,
@@ -4584,7 +6308,10 @@ def RoughSetFilterRateHistogram() -> RowPanel:
                 max_data_points=512,
                 targets=[
                     target(
-                        expr='sum(delta(tiflash_storage_rough_set_filter_rate_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le)',
+                        expr=expr_sum_delta(
+                            "tiflash_storage_rough_set_filter_rate_bucket",
+                            by_labels=["le"],
+                        ),
                         legend_format="{{le}}",
                         interval_factor=2,
                     ),
@@ -4609,25 +6336,44 @@ def DisaggregatedWrite() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_storage_checkpoint_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_storage_checkpoint_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-9999 {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_storage_checkpoint_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_storage_checkpoint_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-999 {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_storage_checkpoint_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_storage_checkpoint_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-99 {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_storage_checkpoint_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_storage_checkpoint_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-80 {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_storage_checkpoint_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby) / sum(rate(tiflash_storage_checkpoint_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_storage_checkpoint_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-avg {{$additional_groupby}}",
                         hide=True,
                     ),
@@ -4642,11 +6388,19 @@ def DisaggregatedWrite() -> RowPanel:
                 description="The flow of checkpoint operations",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_storage_checkpoint_flow{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="incremental"}[$__rate_interval])) by ($additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_storage_checkpoint_flow",
+                            label_selectors=['type="incremental"'],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="incremental {{$additional_groupby}}",
                     ),
                     target(
-                        expr='sum(rate(tiflash_storage_checkpoint_flow{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="compaction"}[$__rate_interval])) by ($additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_storage_checkpoint_flow",
+                            label_selectors=['type="compaction"'],
+                            by_labels=[ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="compaction {{$additional_groupby}}",
                         interval_factor=1,
                     ),
@@ -4666,7 +6420,10 @@ def DisaggregatedWrite() -> RowPanel:
                 description="The keys of checkpoint operations. All keys are uploaded in the checkpoint. Grouped by key types.",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_storage_checkpoint_keys_by_types{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_storage_checkpoint_keys_by_types",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}} {{$additional_groupby}}",
                     ),
                 ],
@@ -4680,7 +6437,10 @@ def DisaggregatedWrite() -> RowPanel:
                 description="The flow of checkpoint operations. Group by key types",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_storage_checkpoint_flow_by_types{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_storage_checkpoint_flow_by_types",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}} {{$additional_groupby}}",
                     ),
                 ],
@@ -4699,7 +6459,11 @@ def DisaggregatedWrite() -> RowPanel:
                 description="The number of files of owned by each TiFlash node",
                 targets=[
                     target(
-                        expr='sum(tiflash_storage_remote_stats{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="num_files"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_storage_remote_stats",
+                            label_selectors=['type="num_files"'],
+                            by_labels=["instance"],
+                        ),
                         legend_format="checkpoint_data-{{instance}}",
                     ),
                 ],
@@ -4715,11 +6479,19 @@ def DisaggregatedWrite() -> RowPanel:
                 description="The remote store usage owned by each TiFlash node",
                 targets=[
                     target(
-                        expr='sum(tiflash_storage_remote_stats{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="total_size"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_storage_remote_stats",
+                            label_selectors=['type="total_size"'],
+                            by_labels=["instance"],
+                        ),
                         legend_format="remote_size-{{instance}}",
                     ),
                     target(
-                        expr='sum(tiflash_storage_remote_stats{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="valid_size"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_storage_remote_stats",
+                            label_selectors=['type="valid_size"'],
+                            by_labels=["instance"],
+                        ),
                         legend_format="valid_size-{{instance}}",
                     ),
                     target(
@@ -4752,7 +6524,10 @@ def DisaggregatedWrite() -> RowPanel:
                 title="Remote Object Lock Request QPS",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_disaggregated_object_lock_request_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_disaggregated_object_lock_request_count",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}} {{$additional_groupby}}",
                     ),
                 ],
@@ -4769,25 +6544,44 @@ def DisaggregatedWrite() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_disaggregated_object_lock_request_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_disaggregated_object_lock_request_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="9999-{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_disaggregated_object_lock_request_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_disaggregated_object_lock_request_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="999-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_disaggregated_object_lock_request_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_disaggregated_object_lock_request_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="99-{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_disaggregated_object_lock_request_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_disaggregated_object_lock_request_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="80-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_disaggregated_object_lock_request_duration_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby) / sum(rate(tiflash_disaggregated_object_lock_request_duration_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_disaggregated_object_lock_request_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="avg-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
@@ -4805,7 +6599,10 @@ def DisaggregatedWrite() -> RowPanel:
                 title="Remote Store Summary",
                 targets=[
                     target(
-                        expr='sum(tiflash_storage_s3_store_summary_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance, store_id, type)',
+                        expr=expr_sum(
+                            "tiflash_storage_s3_store_summary_bytes",
+                            by_labels=["instance", "store_id", "type"],
+                        ),
                         legend_format="store-{{store_id}}-{{type}}",
                     ),
                 ],
@@ -4823,25 +6620,44 @@ def DisaggregatedWrite() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_storage_s3_gc_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_storage_s3_gc_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="9999-{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_storage_s3_gc_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_storage_s3_gc_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="999-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_storage_s3_gc_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_storage_s3_gc_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="99-{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_storage_s3_gc_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_storage_s3_gc_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="80-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_storage_s3_gc_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby) / sum(rate(tiflash_storage_s3_gc_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_storage_s3_gc_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="avg-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
@@ -4862,7 +6678,10 @@ def DisaggregatedWrite() -> RowPanel:
                 title="Remote GC Status",
                 targets=[
                     target(
-                        expr='sum(tiflash_storage_s3_gc_status{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance, type)',
+                        expr=expr_sum(
+                            "tiflash_storage_s3_gc_status",
+                            by_labels=["instance", "type"],
+                        ),
                         legend_format="{{instance}}-{{type}}",
                     ),
                 ],
@@ -4879,7 +6698,10 @@ def DisaggregatedWrite() -> RowPanel:
                 title="Local Lock Manager status",
                 targets=[
                     target(
-                        expr='sum(tiflash_storage_s3_lock_mgr_status{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance, type)',
+                        expr=expr_sum(
+                            "tiflash_storage_s3_lock_mgr_status",
+                            by_labels=["instance", "type"],
+                        ),
                         legend_format="{{instance}}-{{type}}",
                     ),
                 ],
@@ -4892,7 +6714,10 @@ def DisaggregatedWrite() -> RowPanel:
                 title="Local Lock Manager QPS",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_storage_s3_lock_mgr_counter{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_storage_s3_lock_mgr_counter",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}} {{$additional_groupby}}",
                     ),
                 ],
@@ -4908,7 +6733,10 @@ def DisaggregatedWrite() -> RowPanel:
                 title="FAP result",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_fap_task_result{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_fap_task_result",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}} {{$additional_groupby}}",
                         interval_factor=1,
                     ),
@@ -4928,7 +6756,10 @@ def DisaggregatedWrite() -> RowPanel:
                 title="FAP state",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_fap_task_state{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_fap_task_state",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}} {{$additional_groupby}}",
                         interval_factor=1,
                     ),
@@ -4957,25 +6788,44 @@ def DisaggregatedWrite() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_fap_task_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_fap_task_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-9999 {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_fap_task_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_fap_task_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-999 {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_fap_task_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_fap_task_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-99 {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_fap_task_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_fap_task_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-80 {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_fap_task_duration_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby) / sum(rate(tiflash_fap_task_duration_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_fap_task_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-avg {{$additional_groupby}}",
                         hide=True,
                     ),
@@ -4992,7 +6842,10 @@ def DisaggregatedWrite() -> RowPanel:
                 title="FAP no match reason",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_fap_nomatch_reason{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_fap_nomatch_reason",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}} {{$additional_groupby}}",
                         interval_factor=1,
                     ),
@@ -5026,25 +6879,44 @@ def DisaggregatedCompute() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_disaggregated_breakdown_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_disaggregated_breakdown_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="9999-{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_disaggregated_breakdown_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_disaggregated_breakdown_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="999-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_disaggregated_breakdown_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_disaggregated_breakdown_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="99-{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_disaggregated_breakdown_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_disaggregated_breakdown_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="80-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_disaggregated_breakdown_duration_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby) / sum(rate(tiflash_disaggregated_breakdown_duration_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_disaggregated_breakdown_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="avg-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
@@ -5063,7 +6935,10 @@ def DisaggregatedCompute() -> RowPanel:
                 description="Remote Cache Operations",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_storage_remote_cache{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_storage_remote_cache",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}} {{$additional_groupby}}",
                     ),
                     target(
@@ -5092,7 +6967,10 @@ def DisaggregatedCompute() -> RowPanel:
                 description="Remote Cache Flow",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_storage_remote_cache_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_storage_remote_cache_bytes",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}} {{$additional_groupby}}",
                         interval_factor=1,
                     ),
@@ -5115,25 +6993,44 @@ def DisaggregatedCompute() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_storage_remote_cache_bg_download_stage_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, stage, file_type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_storage_remote_cache_bg_download_stage_seconds",
+                            by_labels=["stage", "file_type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="9999-{{stage}}-{{file_type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_storage_remote_cache_bg_download_stage_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, stage, file_type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_storage_remote_cache_bg_download_stage_seconds",
+                            by_labels=["stage", "file_type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="999-{{stage}}-{{file_type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_storage_remote_cache_bg_download_stage_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, stage, file_type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_storage_remote_cache_bg_download_stage_seconds",
+                            by_labels=["stage", "file_type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="99-{{stage}}-{{file_type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_storage_remote_cache_bg_download_stage_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, stage, file_type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_storage_remote_cache_bg_download_stage_seconds",
+                            by_labels=["stage", "file_type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="80-{{stage}}-{{file_type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_storage_remote_cache_bg_download_stage_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (stage, file_type, $additional_groupby) / sum(rate(tiflash_storage_remote_cache_bg_download_stage_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (stage, file_type, $additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_storage_remote_cache_bg_download_stage_seconds",
+                            by_labels=["stage", "file_type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="avg-{{stage}}-{{file_type}} {{$additional_groupby}}",
                         hide=True,
                     ),
@@ -5152,25 +7049,44 @@ def DisaggregatedCompute() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_storage_remote_cache_wait_on_downloading_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, result, file_type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_storage_remote_cache_wait_on_downloading_seconds",
+                            by_labels=["result", "file_type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="9999-{{result}}-{{file_type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_storage_remote_cache_wait_on_downloading_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, result, file_type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_storage_remote_cache_wait_on_downloading_seconds",
+                            by_labels=["result", "file_type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="999-{{result}}-{{file_type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_storage_remote_cache_wait_on_downloading_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, result, file_type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_storage_remote_cache_wait_on_downloading_seconds",
+                            by_labels=["result", "file_type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="99-{{result}}-{{file_type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_storage_remote_cache_wait_on_downloading_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, result, file_type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_storage_remote_cache_wait_on_downloading_seconds",
+                            by_labels=["result", "file_type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="80-{{result}}-{{file_type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_storage_remote_cache_wait_on_downloading_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (result, file_type, $additional_groupby) / sum(rate(tiflash_storage_remote_cache_wait_on_downloading_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (result, file_type, $additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_storage_remote_cache_wait_on_downloading_seconds",
+                            by_labels=["result", "file_type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="avg-{{result}}-{{file_type}} {{$additional_groupby}}",
                         hide=True,
                     ),
@@ -5188,7 +7104,10 @@ def DisaggregatedCompute() -> RowPanel:
                 title="Remote Cache Wait on Downloading OPS",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_storage_remote_cache_wait_on_downloading_result{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (result, file_type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_storage_remote_cache_wait_on_downloading_result",
+                            by_labels=["result", "file_type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{result}}-{{file_type}} {{$additional_groupby}}",
                     ),
                 ],
@@ -5207,7 +7126,10 @@ def DisaggregatedCompute() -> RowPanel:
                 title="Remote Cache Wait on Downloading Flow",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_storage_remote_cache_wait_on_downloading_bytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (result, file_type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_storage_remote_cache_wait_on_downloading_bytes",
+                            by_labels=["result", "file_type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{result}}-{{file_type}} {{$additional_groupby}}",
                         interval_factor=1,
                     ),
@@ -5225,7 +7147,10 @@ def DisaggregatedCompute() -> RowPanel:
                 title="Remote Cache Gauge",
                 targets=[
                     target(
-                        expr='sum(tiflash_storage_remote_cache_status{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (type, instance)',
+                        expr=expr_sum(
+                            "tiflash_storage_remote_cache_status",
+                            by_labels=["type", "instance"],
+                        ),
                         legend_format="{{type}}-{{instance}}",
                     ),
                 ],
@@ -5237,7 +7162,10 @@ def DisaggregatedCompute() -> RowPanel:
                 title="Remote Cache Reject Download Type OPS",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_storage_remote_cache_reject{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (reason, file_type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_storage_remote_cache_reject",
+                            by_labels=["reason", "file_type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{reason}}-{{file_type}} {{$additional_groupby}}",
                     ),
                 ],
@@ -5261,19 +7189,31 @@ def DisaggregatedCompute() -> RowPanel:
                 description="Remote Cache Usage",
                 targets=[
                     target(
-                        expr='sum(tiflash_system_current_metric_DTFileCacheCapacity{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_system_current_metric_DTFileCacheCapacity",
+                            by_labels=["instance"],
+                        ),
                         legend_format="DTFileCapacity-{{instance}}",
                     ),
                     target(
-                        expr='sum(tiflash_system_current_metric_DTFileCacheUsed{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_system_current_metric_DTFileCacheUsed",
+                            by_labels=["instance"],
+                        ),
                         legend_format="DTFileUsed-{{instance}}",
                     ),
                     target(
-                        expr='sum(tiflash_system_current_metric_PageCacheCapacity{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_system_current_metric_PageCacheCapacity",
+                            by_labels=["instance"],
+                        ),
                         legend_format="PageCapacity-{{instance}}",
                     ),
                     target(
-                        expr='sum(tiflash_system_current_metric_PageCacheUsed{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_system_current_metric_PageCacheUsed",
+                            by_labels=["instance"],
+                        ),
                         legend_format="PageUsed-{{instance}}",
                     ),
                 ],
@@ -5288,19 +7228,31 @@ def DisaggregatedCompute() -> RowPanel:
                 description="Memory Usage of Storage Tasks",
                 targets=[
                     target(
-                        expr='sum(tiflash_system_current_metric_MemoryTrackingQueryStorageTask{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_system_current_metric_MemoryTrackingQueryStorageTask",
+                            by_labels=["instance"],
+                        ),
                         legend_format="MemoryTrackingQueryStorageTask-{{instance}}",
                     ),
                     target(
-                        expr='sum(tiflash_system_current_metric_MemoryTrackingFetchPages{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_system_current_metric_MemoryTrackingFetchPages",
+                            by_labels=["instance"],
+                        ),
                         legend_format="MemoryTrackingFetchPages-{{instance}}",
                     ),
                     target(
-                        expr='sum(tiflash_system_current_metric_DT_DeltaIndexCacheSize{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_system_current_metric_DT_DeltaIndexCacheSize",
+                            by_labels=["instance"],
+                        ),
                         legend_format="DeltaIndexCacheSize-{{instance}}",
                     ),
                     target(
-                        expr='sum(tiflash_system_current_metric_MemoryTrackingSharedColumnData{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance)',
+                        expr=expr_sum(
+                            "tiflash_system_current_metric_MemoryTrackingSharedColumnData",
+                            by_labels=["instance"],
+                        ),
                         legend_format="SharedColumnData-{{instance}}",
                     ),
                 ],
@@ -5319,7 +7271,10 @@ def DisaggregatedCompute() -> RowPanel:
                 description="DeltaIndex cache of ReadNodes",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_storage_mvcc_index_cache{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, instance)',
+                        expr=expr_sum_rate(
+                            "tiflash_storage_mvcc_index_cache",
+                            by_labels=["type", "instance"],
+                        ),
                         legend_format="{{type}}-{{instance}}",
                     ),
                     target(
@@ -5346,25 +7301,49 @@ def DisaggregatedCompute() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="place_index_update"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_storage_subtask_duration_seconds",
+                            label_selectors=['type="place_index_update"'],
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="9999-{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="place_index_update"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_storage_subtask_duration_seconds",
+                            label_selectors=['type="place_index_update"'],
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="999-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="place_index_update"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_storage_subtask_duration_seconds",
+                            label_selectors=['type="place_index_update"'],
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="99-{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="place_index_update"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_storage_subtask_duration_seconds",
+                            label_selectors=['type="place_index_update"'],
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="80-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_storage_subtask_duration_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="place_index_update"}[$__rate_interval])) by (type, $additional_groupby) / sum(rate(tiflash_storage_subtask_duration_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="place_index_update"}[$__rate_interval])) by (type, $additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_storage_subtask_duration_seconds",
+                            label_selectors=['type="place_index_update"'],
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="avg-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
@@ -5383,11 +7362,18 @@ def DisaggregatedCompute() -> RowPanel:
                 description="Total number of storage's internal sub tasks",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_storage_place_index_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_storage_place_index_count",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='sum(rate(tiflash_storage_subtask_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"place_index_update"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_storage_subtask_count",
+                            label_selectors=['type=~"place_index_update"'],
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}} {{$additional_groupby}}",
                     ),
                 ],
@@ -5406,7 +7392,11 @@ def DisaggregatedCompute() -> RowPanel:
                         interval_factor=1,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_storage_place_index_stats_count_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_storage_place_index_stats_count",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="99-{{type}} {{$additional_groupby}}",
                         hide=True,
                         interval_factor=1,
@@ -5435,16 +7425,25 @@ def S3() -> RowPanel:
                 description="S3 read/write throughput",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3WriteBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3WriteBytes",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="S3WriteBytes {{$additional_groupby}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3ReadBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3ReadBytes",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="S3ReadBytes {{$additional_groupby}}",
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3WriteDMFileBytes{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3WriteDMFileBytes",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="S3WriteDMFileBytes {{$additional_groupby}}",
                     ),
                 ],
@@ -5456,53 +7455,89 @@ def S3() -> RowPanel:
                 description="S3 OPS",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3PutObject{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3PutObject",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="S3PutObject {{$additional_groupby}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3GetObject{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3GetObject",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="S3GetObject {{$additional_groupby}}",
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3HeadObject{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3HeadObject",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="S3HeadObject {{$additional_groupby}}",
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3ListObjects{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3ListObjects",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="S3ListObjects {{$additional_groupby}}",
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3DeleteObject{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3DeleteObject",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="S3DeleteObject {{$additional_groupby}}",
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3CopyObject{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3CopyObject",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="S3CopyObject {{$additional_groupby}}",
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3CreateMultipartUpload{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3CreateMultipartUpload",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="S3CreateMultipartUpload {{$additional_groupby}}",
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3UploadPart{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3UploadPart",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="S3UploadPart {{$additional_groupby}}",
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3CompleteMultipartUpload{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3CompleteMultipartUpload",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="S3CompleteMultipartUpload {{$additional_groupby}}",
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3PutDMFile{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3PutDMFile",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="S3PutDMFile {{$additional_groupby}}",
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3IORead{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3IORead",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="S3IORead {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3IOSeek{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3IOSeek",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="S3IOSeek {{$additional_groupby}}",
                         hide=True,
                     ),
@@ -5519,30 +7554,48 @@ def S3() -> RowPanel:
                 description="S3 Retry OPS",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3GetObjectRetry{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3GetObjectRetry",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="S3GetObjectRetry {{$additional_groupby}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3PutObjectRetry{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3PutObjectRetry",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="S3PutObjectRetry {{$additional_groupby}}",
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3PutDMFileRetry{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3PutDMFileRetry",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="S3PutDMFileRetry {{$additional_groupby}}",
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3IOReadError{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3IOReadError",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="S3IOReadError {{$additional_groupby}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3IOSeekError{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3IOSeekError",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="S3IOSeekError {{$additional_groupby}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3IOSeekBackward{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3IOSeekBackward",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="S3IOSeekBackward {{$additional_groupby}}",
                         interval_factor=1,
                     ),
@@ -5560,25 +7613,44 @@ def S3() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_storage_s3_request_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_storage_s3_request_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-9999 {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_storage_s3_request_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_storage_s3_request_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-999 {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_storage_s3_request_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_storage_s3_request_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-99 {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_storage_s3_request_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_storage_s3_request_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-80 {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_storage_s3_request_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby) / sum(rate(tiflash_storage_s3_request_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_storage_s3_request_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-avg {{$additional_groupby}}",
                         hide=True,
                     ),
@@ -5597,43 +7669,73 @@ def S3() -> RowPanel:
                 description="S3 HTTP OPS",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3ReadRequestsCount{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3ReadRequestsCount",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="read-count {{$additional_groupby}}",
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3WriteRequestsCount{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3WriteRequestsCount",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="write-count {{$additional_groupby}}",
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3ReadRequestsErrors{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3ReadRequestsErrors",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="read-error {{$additional_groupby}}",
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3WriteRequestsErrors{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3WriteRequestsErrors",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="write-error {{$additional_groupby}}",
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3ReadRequestsThrottling{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3ReadRequestsThrottling",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="read-throttling {{$additional_groupby}}",
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3WriteRequestsThrottling{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3WriteRequestsThrottling",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="write-throttling {{$additional_groupby}}",
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3ReadRequestsRedirects{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3ReadRequestsRedirects",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="read-redirects {{$additional_groupby}}",
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3WriteRequestsRedirects{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3WriteRequestsRedirects",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="write-redirects {{$additional_groupby}}",
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3ReadRequestsNotFound{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3ReadRequestsNotFound",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="read-notfound {{$additional_groupby}}",
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3WriteRequestsNotFound{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3WriteRequestsNotFound",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="write-notfound {{$additional_groupby}}",
                     ),
                 ],
@@ -5650,25 +7752,44 @@ def S3() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_storage_s3_http_request_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_storage_s3_http_request_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-9999 {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_storage_s3_http_request_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_storage_s3_http_request_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-999 {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_storage_s3_http_request_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_storage_s3_http_request_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-99 {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_storage_s3_http_request_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_storage_s3_http_request_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-80 {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_storage_s3_http_request_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby) / sum(rate(tiflash_storage_s3_http_request_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_storage_s3_http_request_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="{{type}}-avg {{$additional_groupby}}",
                         hide=True,
                     ),
@@ -5687,11 +7808,17 @@ def S3() -> RowPanel:
                 description="S3 HTTP OPS",
                 targets=[
                     target(
-                        expr='sum(tiflash_system_current_metric_S3Requests{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (type, $additional_groupby)',
+                        expr=expr_sum(
+                            "tiflash_system_current_metric_S3Requests",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="S3Requests {{$additional_groupby}}",
                     ),
                     target(
-                        expr='sum(tiflash_system_current_metric_S3RandomAccessFile{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (type, $additional_groupby)',
+                        expr=expr_sum(
+                            "tiflash_system_current_metric_S3RandomAccessFile",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="S3RandomAccessFile {{$additional_groupby}}",
                     ),
                 ],
@@ -5702,27 +7829,42 @@ def S3() -> RowPanel:
                 title="S3RandomAccessFile OPS",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3IOReadError{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3IOReadError",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="S3IOReadError {{$additional_groupby}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3IOSeekError{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3IOSeekError",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="S3IOSeekError {{$additional_groupby}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3IOSeekBackward{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3IOSeekBackward",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="S3IOSeekBackward {{$additional_groupby}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3IORead{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3IORead",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="S3IORead {{$additional_groupby}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(rate(tiflash_system_profile_event_S3IOSeek{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby)',
+                        expr=expr_sum_rate(
+                            "tiflash_system_profile_event_S3IOSeek",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="S3IOSeek {{$additional_groupby}}",
                         interval_factor=1,
                     ),
@@ -5743,7 +7885,11 @@ def PipelineModel() -> RowPanel:
                 title="Task Thread Pool Size",
                 targets=[
                     target(
-                        expr='max(tiflash_pipeline_scheduler{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~".*_task_thread_pool_size"}) by (instance, type)',
+                        expr=expr_max(
+                            "tiflash_pipeline_scheduler",
+                            label_selectors=['type=~".*_task_thread_pool_size"'],
+                            by_labels=["instance", "type"],
+                        ),
                         legend_format="{{instance}}-{{type}}",
                         interval_factor=1,
                     ),
@@ -5755,12 +7901,20 @@ def PipelineModel() -> RowPanel:
                 title="Task Count",
                 targets=[
                     target(
-                        expr='max(tiflash_pipeline_scheduler{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~".*_tasks_count"}) by (instance, type)',
+                        expr=expr_max(
+                            "tiflash_pipeline_scheduler",
+                            label_selectors=['type=~".*_tasks_count"'],
+                            by_labels=["instance", "type"],
+                        ),
                         legend_format="{{instance}}-{{type}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(tiflash_pipeline_scheduler{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~".*_tasks_count"}) by (type)',
+                        expr=expr_sum(
+                            "tiflash_pipeline_scheduler",
+                            label_selectors=['type=~".*_tasks_count"'],
+                            by_labels=["type"],
+                        ),
                         legend_format="sum({{type}})",
                     ),
                 ],
@@ -5775,7 +7929,9 @@ def PipelineModel() -> RowPanel:
                 title="Task Status Change OPS",
                 targets=[
                     target(
-                        expr='sum(rate(tiflash_pipeline_task_change_to_status{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type)',
+                        expr=expr_sum_rate(
+                            "tiflash_pipeline_task_change_to_status", by_labels=["type"]
+                        ),
                         legend_format="{{type}}",
                     ),
                 ],
@@ -5792,25 +7948,44 @@ def PipelineModel() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_pipeline_task_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_pipeline_task_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="9999-{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_pipeline_task_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_pipeline_task_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="999-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_pipeline_task_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_pipeline_task_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="99-{{type}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_pipeline_task_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_pipeline_task_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="80-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_pipeline_task_duration_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby) / sum(rate(tiflash_pipeline_task_duration_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (type, $additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_pipeline_task_duration_seconds",
+                            by_labels=["type", ADDITIONAL_GROUPBY],
+                        ),
                         legend_format="avg-{{type}} {{$additional_groupby}}",
                         hide=True,
                     ),
@@ -5848,15 +8023,27 @@ def PipelineModel() -> RowPanel:
                 title="Task Max Execute Time Per Round",
                 targets=[
                     target(
-                        expr='histogram_quantile(0.95, sum(rate(tiflash_pipeline_task_execute_max_time_seconds_per_round_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type))',
+                        expr=expr_histogram_quantile(
+                            "0.95",
+                            "tiflash_pipeline_task_execute_max_time_seconds_per_round",
+                            by_labels=["type"],
+                        ),
                         legend_format="95-{{type}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.95, sum(rate(tiflash_pipeline_task_execute_max_time_seconds_per_round_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type))',
+                        expr=expr_histogram_quantile(
+                            "0.95",
+                            "tiflash_pipeline_task_execute_max_time_seconds_per_round",
+                            by_labels=["type"],
+                        ),
                         legend_format="99-{{type}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_pipeline_task_execute_max_time_seconds_per_round_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, type))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_pipeline_task_execute_max_time_seconds_per_round",
+                            by_labels=["type"],
+                        ),
                         legend_format="999-{{type}}",
                     ),
                     target(
@@ -5973,12 +8160,17 @@ def PipelineModel() -> RowPanel:
                 description="wait notify task details",
                 targets=[
                     target(
-                        expr='max(tiflash_pipeline_wait_on_notify_tasks{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (instance, type)',
+                        expr=expr_max(
+                            "tiflash_pipeline_wait_on_notify_tasks",
+                            by_labels=["instance", "type"],
+                        ),
                         legend_format="{{instance}}-{{type}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='sum(tiflash_pipeline_wait_on_notify_tasks{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}) by (type)',
+                        expr=expr_sum(
+                            "tiflash_pipeline_wait_on_notify_tasks", by_labels=["type"]
+                        ),
                         legend_format="sum({{type}})",
                     ),
                 ],
@@ -5999,46 +8191,82 @@ def TiFlashResourceControl() -> RowPanel:
                 description="Metas of resource group",
                 targets=[
                     target(
-                        expr='max(tiflash_resource_group{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="remaining_tokens", instance=~"$instance", instance=~"$tiflash_role"}) by (instance,resource_group)',
+                        expr=expr_max(
+                            "tiflash_resource_group",
+                            label_selectors=['type="remaining_tokens"'],
+                            by_labels=["instance", "resource_group"],
+                        ),
                         legend_format="remaining_tokens-{{instance}}-{{resource_group}}",
                     ),
                     target(
-                        expr='max(tiflash_resource_group{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="avg_speed", instance=~"$instance", instance=~"$tiflash_role"}) by (instance,resource_group)',
+                        expr=expr_max(
+                            "tiflash_resource_group",
+                            label_selectors=['type="avg_speed"'],
+                            by_labels=["instance", "resource_group"],
+                        ),
                         legend_format="avg_speed-{{instance}}-{{resource_group}}",
                         hide=True,
                     ),
                     target(
-                        expr='sum(rate(tiflash_resource_group_counter{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="total_consumption", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance, resource_group)',
+                        expr=expr_sum_rate(
+                            "tiflash_resource_group_counter",
+                            label_selectors=['type="total_consumption"'],
+                            by_labels=["instance", "resource_group"],
+                        ),
                         legend_format="total_consumption-{{instance}}-{{resource_group}}",
                         hide=True,
                     ),
                     target(
-                        expr='max(tiflash_resource_group{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="bucket_fill_rate", instance=~"$instance", instance=~"$tiflash_role"}) by (instance,resource_group)',
+                        expr=expr_max(
+                            "tiflash_resource_group",
+                            label_selectors=['type="bucket_fill_rate"'],
+                            by_labels=["instance", "resource_group"],
+                        ),
                         legend_format="bucket_fill_rate-{{instance}}-{{resource_group}}",
                         hide=True,
                     ),
                     target(
-                        expr='max(tiflash_resource_group{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="bucket_capacity", instance=~"$instance", instance=~"$tiflash_role"}) by (instance,resource_group)',
+                        expr=expr_max(
+                            "tiflash_resource_group",
+                            label_selectors=['type="bucket_capacity"'],
+                            by_labels=["instance", "resource_group"],
+                        ),
                         legend_format="bucket_capacity-{{instance}}-{{resource_group}}",
                         hide=True,
                     ),
                     target(
-                        expr='sum(rate(tiflash_resource_group_counter{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="request_gac_count", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance, resource_group)',
+                        expr=expr_sum_rate(
+                            "tiflash_resource_group_counter",
+                            label_selectors=['type="request_gac_count"'],
+                            by_labels=["instance", "resource_group"],
+                        ),
                         legend_format="request_gac_count-{{instance}}-{{resource_group}}",
                         hide=True,
                     ),
                     target(
-                        expr='sum(rate(tiflash_resource_group_counter{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="gac_req_ru_consumption_delta", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance, resource_group)',
+                        expr=expr_sum_rate(
+                            "tiflash_resource_group_counter",
+                            label_selectors=['type="gac_req_ru_consumption_delta"'],
+                            by_labels=["instance", "resource_group"],
+                        ),
                         legend_format="gac_req_ru_consumption_delta-{{instance}}-{{resource_group}}",
                         hide=True,
                     ),
                     target(
-                        expr='sum(rate(tiflash_resource_group_counter{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="compute_ru_consumption", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance, resource_group)',
+                        expr=expr_sum_rate(
+                            "tiflash_resource_group_counter",
+                            label_selectors=['type="compute_ru_consumption"'],
+                            by_labels=["instance", "resource_group"],
+                        ),
                         legend_format="compute_ru_consumption-{{instance}}-{{resource_group}}",
                         hide=True,
                     ),
                     target(
-                        expr='sum(rate(tiflash_resource_group_counter{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", type="storage_ru_consumption", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval])) by (instance, resource_group)',
+                        expr=expr_sum_rate(
+                            "tiflash_resource_group_counter",
+                            label_selectors=['type="storage_ru_consumption"'],
+                            by_labels=["instance", "resource_group"],
+                        ),
                         legend_format="storage_ru_consumption-{{instance}}-{{resource_group}}",
                         hide=True,
                     ),
@@ -6104,25 +8332,69 @@ def StatusServer() -> RowPanel:
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.9999, sum(rate(tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, path, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.9999",
+                            "tiflash_proxy_tikv_status_server_proxy_request_duration_seconds",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=["path", ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="9999-{{path}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.999, sum(rate(tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, path, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.999",
+                            "tiflash_proxy_tikv_status_server_proxy_request_duration_seconds",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=["path", ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="999-{{path}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='histogram_quantile(0.99, sum(rate(tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, path, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.99",
+                            "tiflash_proxy_tikv_status_server_proxy_request_duration_seconds",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=["path", ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="99-{{path}} {{$additional_groupby}}",
                     ),
                     target(
-                        expr='histogram_quantile(0.80, sum(rate(tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by (le, path, $additional_groupby))',
+                        expr=expr_histogram_quantile(
+                            "0.80",
+                            "tiflash_proxy_tikv_status_server_proxy_request_duration_seconds",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=["path", ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="80-{{path}} {{$additional_groupby}}",
                         hide=True,
                     ),
                     target(
-                        expr='(sum(rate(tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_sum{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by (path, $additional_groupby) / sum(rate(tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_count{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval])) by (path, $additional_groupby))',
+                        expr=expr_histogram_avg(
+                            "tiflash_proxy_tikv_status_server_proxy_request_duration_seconds",
+                            label_selectors=[
+                                'instance=~"$proxy_instance"',
+                                'instance=~"$tiflash_role"',
+                            ],
+                            by_labels=["path", ADDITIONAL_GROUPBY],
+                            skip_default_instance=True,
+                        ),
                         legend_format="avg-{{path}} {{$additional_groupby}}",
                         hide=True,
                     ),
@@ -6177,12 +8449,15 @@ def VectorSearch() -> RowPanel:
                 title="Vector Index Estimated Memory Usage",
                 targets=[
                     target(
-                        expr='tiflash_vector_index_memory_usage{ k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role" }',
+                        expr=expr_simple("tiflash_vector_index_memory_usage"),
                         legend_format="{{instance}}-{{type}}",
                         interval_factor=1,
                     ),
                     target(
-                        expr='tiflash_process_rss_by_type_bytes{ k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="file" }',
+                        expr=expr_simple(
+                            "tiflash_process_rss_by_type_bytes",
+                            label_selectors=['type="file"'],
+                        ),
                         legend_format="{{instance}}-RssFile",
                     ),
                 ],

@@ -686,7 +686,7 @@ def expr_operator(
 
 
 def expr_histogram_quantile(
-    quantile: float,
+    quantile: Union[float, str],
     metrics: str,
     label_selectors: list[str] = [],
     by_labels: list[str] = [],
@@ -718,7 +718,8 @@ def expr_histogram_quantile(
         use_shared_pool=use_shared_pool,
     )
     # histogram_quantile({quantile}, {sum_rate_of_buckets})
-    quantile_str = f"{quantile}"
+    # Keep string quantiles as-is so "0.80" / "1.00" match legacy PromQL.
+    quantile_str = quantile if isinstance(quantile, str) else f"{quantile}"
     if is_optional_quantile:
         quantile_str = OPTIONAL_QUANTILE_INPUT
     expr = expr_aggr(
@@ -1636,36 +1637,43 @@ def cpu_with_limit_panel(
     legend: str = "{{instance}}",
     metric: str = "tiflash_proxy_thread_cpu_seconds_total",
     hide_limit: bool = False,
+    instance_selectors: str = "proxy",
 ) -> Panel:
-    """Thread CPU + optional Limit count line (role-scoped proxy metrics)."""
-    sel_str = (
-        'k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", '
-        f'name=~"{name_regex}", instance=~"$tiflash_role"'
-    )
-    targets = [
-        target(
-            expr=f"sum(rate({metric}{{{sel_str}}}[$__rate_interval])) by (instance)",
-            legend_format=legend,
-        )
-    ]
-    overrides: list = []
-    if not hide_limit:
-        targets.append(
+    """Thread CPU + optional Limit count line (proxy instance + role selectors)."""
+    with use_instance_selectors(instance_selectors):
+        targets = [
             target(
-                expr=f"count({metric}{{{sel_str}}}) by (instance)",
-                legend_format="Limit",
+                expr=expr_sum_rate(
+                    metric,
+                    label_selectors=[f'name=~"{name_regex}"'],
+                    by_labels=["instance"],
+                ),
+                legend_format=legend,
             )
-        )
-        overrides.append(
-            tiflash_override(
-                "Limit",
-                color="#F2495C",
-                hide_tooltip=True,
-                legend=False,
-                linewidth=2,
-                null_point_mode="connected",
+        ]
+        overrides: list = []
+        if not hide_limit:
+            targets.append(
+                target(
+                    expr=expr_aggr(
+                        metric,
+                        "count",
+                        label_selectors=[f'name=~"{name_regex}"'],
+                        by_labels=["instance"],
+                    ),
+                    legend_format="Limit",
+                )
             )
-        )
+            overrides.append(
+                tiflash_override(
+                    "Limit",
+                    color="#F2495C",
+                    hide_tooltip=True,
+                    legend=False,
+                    linewidth=2,
+                    null_point_mode="connected",
+                )
+            )
     return graph_panel(
         title=title,
         description=description,

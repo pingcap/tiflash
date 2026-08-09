@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from typing import Any
 
@@ -58,10 +59,121 @@ def rows(dash: dict) -> list[dict]:
     return out
 
 
+_AGGR_OPS = ("sum", "min", "max", "avg", "count", "group", "stddev", "stdvar")
+
+
+def _matching_paren(s: str, open_idx: int) -> int:
+    """Return index of ')' matching s[open_idx]=='(', or -1."""
+    depth = 0
+    for i in range(open_idx, len(s)):
+        if s[i] == "(":
+            depth += 1
+        elif s[i] == ")":
+            depth -= 1
+            if depth == 0:
+                return i
+    return -1
+
+
+def _sort_by_labels(labels: str) -> str:
+    parts = [p for p in (x.strip() for x in labels.split(",")) if p]
+    return ",".join(sorted(parts))
+
+
+def _peel_double_parens(s: str) -> str:
+    """Replace ((inner)) with (inner) at any nesting level (one pass)."""
+    out: list[str] = []
+    i = 0
+    while i < len(s):
+        if s[i] == "(":
+            j = _matching_paren(s, i)
+            if j > i + 1 and s[i + 1] == "(" and _matching_paren(s, i + 1) == j - 1:
+                out.append("(")
+                out.append(s[i + 2 : j - 1])
+                out.append(")")
+                i = j + 1
+                continue
+            out.append(s[i : j + 1] if j >= 0 else s[i])
+            i = j + 1 if j >= 0 else i + 1
+            continue
+        out.append(s[i])
+        i += 1
+    return "".join(out)
+
+
 def norm_expr(s: str | None) -> str:
+    """Normalize PromQL for semantic compare (whitespace / by-label order / parens)."""
     if not s:
         return ""
-    return " ".join(s.split())
+    # PromQL is whitespace-insensitive for our purposes.
+    s = re.sub(r"\s+", "", s)
+
+    # op by (labels) (expr)  ->  op(expr) by (labels)
+    changed = True
+    while changed:
+        changed = False
+        for op in _AGGR_OPS:
+            token = f"{op}by("
+            start = 0
+            while True:
+                idx = s.find(token, start)
+                if idx < 0:
+                    break
+                labels_open = idx + len(op) + 2  # '(' after by
+                labels_close = _matching_paren(s, labels_open)
+                if labels_close < 0 or labels_close + 1 >= len(s) or s[labels_close + 1] != "(":
+                    start = idx + 1
+                    continue
+                expr_open = labels_close + 1
+                expr_close = _matching_paren(s, expr_open)
+                if expr_close < 0:
+                    start = idx + 1
+                    continue
+                labels = _sort_by_labels(s[labels_open + 1 : labels_close])
+                expr = s[expr_open + 1 : expr_close]
+                s = s[:idx] + f"{op}({expr})by({labels})" + s[expr_close + 1 :]
+                changed = True
+                break
+            if changed:
+                break
+
+    # Sort labels inside by (...)
+    def _sort_by_clause(m: re.Match[str]) -> str:
+        return f"by({_sort_by_labels(m.group(1))})"
+
+    s = re.sub(r"by\(([^)]*)\)", _sort_by_clause, s)
+
+    # Sort label matchers inside metric{...} (order is semantically irrelevant).
+    def _sort_braces(m: re.Match[str]) -> str:
+        return "{" + _sort_by_labels(m.group(1)) + "}"
+
+    s = re.sub(r"\{([^{}]*)\}", _sort_braces, s)
+
+    # Peel redundant parens wrapping a trailing function argument: f(a,(x)) -> f(a,x)
+    changed = True
+    while changed:
+        changed = False
+        i = 0
+        while i < len(s) - 1:
+            if s[i : i + 2] == ",(":
+                j = _matching_paren(s, i + 1)
+                if j > 0 and j + 1 < len(s) and s[j + 1] == ")":
+                    s = s[: i + 1] + s[i + 2 : j] + s[j + 1 :]
+                    changed = True
+                    break
+            i += 1
+
+    # Peel redundant ((...)) introduced by Expr.__str__
+    prev = None
+    while prev != s:
+        prev = s
+        s = _peel_double_parens(s)
+
+    # Peel a single outer wrap when the entire expression is parenthesized.
+    while s.startswith("(") and _matching_paren(s, 0) == len(s) - 1:
+        s = s[1:-1]
+
+    return s
 
 
 def panel_key(row_title: str, panel: dict) -> str:
