@@ -160,7 +160,7 @@ def Server() -> RowPanel:
                         legend_format="{{instance}}-remote",
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="bytes", left_min="0"),
                 legend=graph_legend(max=False),
                 fill=5,
                 line_width=0,
@@ -179,7 +179,7 @@ def Server() -> RowPanel:
                         legend_format="{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="bytes", left_min="0"),
                 legend=graph_legend(max=False),
                 fill=5,
                 line_width=0,
@@ -198,7 +198,7 @@ def Server() -> RowPanel:
                         legend_format="{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="bytes", left_min="0"),
                 legend=graph_legend(max=False),
                 fill=5,
                 line_width=0,
@@ -218,7 +218,7 @@ def Server() -> RowPanel:
                         legend_format="{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="dtdurations", right_format="short"),
+                yaxes=yaxes(left_format="dtdurations"),
                 legend=graph_legend(max=False),
             ),
             graph_panel(
@@ -246,7 +246,7 @@ def Server() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="short", right_format="short"),
+                yaxes=yaxes(left_format="short"),
                 null_point_mode="null",
                 decimals=0,
             ),
@@ -271,12 +271,7 @@ def Server() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(
-                    left_format="percentunit",
-                    right_format="short",
-                    left_min="0",
-                    left_decimals=1,
-                ),
+                yaxes=yaxes(left_format="percentunit", left_min="0", left_decimals=1),
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -405,7 +400,7 @@ def Server() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="bytes", left_min="0"),
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -437,12 +432,7 @@ def Server() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(
-                    left_format="bytes",
-                    right_format="short",
-                    left_min="0",
-                    left_decimals=0,
-                ),
+                yaxes=yaxes(left_format="bytes", left_min="0", left_decimals=0),
                 null_point_mode="null",
             ),
             graph_panel(
@@ -456,7 +446,7 @@ def Server() -> RowPanel:
                         legend_format="store-{{store_id}}-{{type}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="bytes", left_min="0"),
                 legend=graph_legend(max=False),
                 decimals=1,
             ),
@@ -609,7 +599,7 @@ def Threads() -> RowPanel:
                         legend_format="{{instance}}-total",
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="short"),
+                yaxes=yaxes(left_format="none"),
                 fill=1,
             ),
             graph_panel(
@@ -625,7 +615,7 @@ def Threads() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="binBps", right_format="short"),
+                yaxes=yaxes(left_format="binBps"),
                 fill=1,
             ),
         ]
@@ -645,7 +635,7 @@ def Threads() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="short"),
+                yaxes=yaxes(left_format="none"),
                 fill=1,
             ),
             graph_panel(
@@ -661,7 +651,7 @@ def Threads() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="short"),
+                yaxes=yaxes(left_format="none"),
                 fill=1,
             ),
         ]
@@ -761,7 +751,7 @@ def Coprocessor() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="bytes", left_min="0"),
                 legend=graph_legend(
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
@@ -790,7 +780,7 @@ def Coprocessor() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="none", left_min="0"),
             ),
             graph_panel(
                 title="Handling Request Number",
@@ -804,7 +794,7 @@ def Coprocessor() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="none", left_min="0"),
+                yaxes=yaxes(left_format="none", left_min="0"),
             ),
         ]
     )
@@ -823,7 +813,7 @@ def Coprocessor() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="none", left_min="0"),
             ),
             graph_panel(
                 title="Max Threads of Rpc",
@@ -838,7 +828,7 @@ def Coprocessor() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="none", left_min="0"),
             ),
         ]
     )
@@ -856,7 +846,7 @@ def Coprocessor() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="none", left_min="0"),
             ),
             graph_panel(
                 title="Max Threads",
@@ -871,7 +861,7 @@ def Coprocessor() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="none", left_min="0"),
             ),
         ]
     )
@@ -886,7 +876,7 @@ def Coprocessor() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="s", left_min="0"),
             ),
             graph_panel(
                 title="Data size in send and receive queue",
@@ -897,7 +887,7 @@ def Coprocessor() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="bytes", left_min="0"),
             ),
         ]
     )
@@ -923,7 +913,7 @@ def Coprocessor() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="none", left_min="0"),
             ),
         ]
     )
@@ -947,12 +937,7 @@ def TaskScheduler() -> RowPanel:
                         legend_format="{{instance}}-{{resource_group}}",
                     ),
                 ],
-                yaxes=yaxes(
-                    left_format="none",
-                    right_format="short",
-                    left_label="TSO",
-                    left_show=False,
-                ),
+                yaxes=yaxes(left_format="none", left_label="TSO", left_show=False),
                 legend=graph_legend(max=False),
                 fill=1,
                 points=True,
@@ -1004,12 +989,7 @@ def TaskScheduler() -> RowPanel:
                         legend_format="{{instance}}-{{type}}",
                     ),
                 ],
-                yaxes=yaxes(
-                    left_format="none",
-                    right_format="short",
-                    left_label="Threads",
-                    left_log_base=10,
-                ),
+                yaxes=yaxes(left_format="none", left_label="Threads", left_log_base=10),
                 legend=graph_legend(max=False),
             ),
         ]
@@ -1037,9 +1017,7 @@ def TaskScheduler() -> RowPanel:
                         legend_format="{{instance}}-{{type}}-{{resource_group}}",
                     ),
                 ],
-                yaxes=yaxes(
-                    left_format="none", right_format="short", left_label="Queries"
-                ),
+                yaxes=yaxes(left_format="none", left_label="Queries"),
             ),
             graph_panel(
                 title="Active and Waiting Tasks Count",
@@ -1062,9 +1040,7 @@ def TaskScheduler() -> RowPanel:
                         legend_format="{{instance}}-{{type}}-{{resource_group}}",
                     ),
                 ],
-                yaxes=yaxes(
-                    left_format="none", right_format="short", left_label="Tasks"
-                ),
+                yaxes=yaxes(left_format="none", left_label="Tasks"),
             ),
         ]
     )
@@ -1083,7 +1059,7 @@ def TaskScheduler() -> RowPanel:
                         legend_format="{{instance}}-{{resource_group}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="short"),
+                yaxes=yaxes(left_format="none"),
             ),
             duration_panel(
                 "Task Waiting Duration",
@@ -1133,7 +1109,7 @@ def DDL() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="opm", right_format="none", left_min="0"),
+                yaxes=yaxes(left_format="opm", left_min="0"),
                 legend=graph_legend(
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
@@ -1148,7 +1124,7 @@ def DDL() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="opm", right_format="none", left_min="0"),
+                yaxes=yaxes(left_format="opm", left_min="0"),
                 legend=graph_legend(
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
@@ -1249,12 +1225,7 @@ def ImbalanceReadWrite() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(
-                    left_format="percentunit",
-                    right_format="short",
-                    left_min="0",
-                    left_decimals=1,
-                ),
+                yaxes=yaxes(left_format="percentunit", left_min="0", left_decimals=1),
                 legend=graph_legend(side_width=250),
                 null_point_mode="null",
                 series_overrides=[
@@ -1279,9 +1250,7 @@ def ImbalanceReadWrite() -> RowPanel:
                         legend_format="Limit",
                     ),
                 ],
-                yaxes=yaxes(
-                    left_format="percentunit", right_format="short", left_min="0"
-                ),
+                yaxes=yaxes(left_format="percentunit", left_min="0"),
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -1332,7 +1301,7 @@ def ImbalanceReadWrite() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="binBps", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="binBps", left_min="0"),
                 fill=1,
                 null_point_mode="null",
                 decimals=1,
@@ -1422,7 +1391,7 @@ def MemoryTrace() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="short", right_format="s"),
+                yaxes=yaxes(left_format="short"),
                 fill=1,
                 null_point_mode="null",
             ),
@@ -1443,7 +1412,7 @@ def MemoryTrace() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="short", right_format="s"),
+                yaxes=yaxes(left_format="short"),
                 fill=1,
                 null_point_mode="null",
             ),
@@ -1467,7 +1436,7 @@ def MemoryTrace() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="short", right_format="s"),
+                yaxes=yaxes(left_format="short"),
                 fill=1,
                 null_point_mode="null",
             ),
@@ -1489,7 +1458,7 @@ def MemoryTrace() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="s"),
+                yaxes=yaxes(left_format="bytes"),
                 fill=1,
                 null_point_mode="null",
             ),
@@ -1520,7 +1489,7 @@ def MemoryTrace() -> RowPanel:
                         legend_format="rn_mvcc_index_cache_{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="bytes", left_min="0"),
                 legend=graph_legend(side_width=250),
                 null_point_mode="null",
                 series_overrides=[
@@ -1552,7 +1521,7 @@ def MemoryTrace() -> RowPanel:
                         legend_format="mark cache hits",
                     ),
                 ],
-                yaxes=yaxes(left_format="percentunit", right_format="percent"),
+                yaxes=yaxes(left_format="percentunit"),
                 legend=graph_legend(
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
@@ -1600,7 +1569,7 @@ def MemoryTrace() -> RowPanel:
                         legend_format="miss_count_ops-{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="short", right_format="short"),
+                yaxes=yaxes(left_format="short"),
                 legend=graph_legend(max=False),
                 fill=1,
                 null_point_mode="null",
@@ -1663,7 +1632,7 @@ def MemoryTrace() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="short"),
+                yaxes=yaxes(left_format="bytes"),
                 legend=graph_legend(
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
@@ -1695,7 +1664,7 @@ def MemoryTrace() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="short"),
+                yaxes=yaxes(left_format="bytes"),
                 legend=graph_legend(
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
@@ -1719,7 +1688,7 @@ def MemoryTrace() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="short"),
+                yaxes=yaxes(left_format="bytes"),
                 legend=graph_legend(
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
@@ -1737,7 +1706,7 @@ def MemoryTrace() -> RowPanel:
                         legend_format="{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="short"),
+                yaxes=yaxes(left_format="bytes"),
                 legend=graph_legend(
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
@@ -1762,7 +1731,6 @@ def ColumnarStorage() -> RowPanel:
                             instance_selector=PROXY_LABEL_SELECTORS,
                         ),
                         legend_format="capacity-main-{{instance}}",
-                        interval_factor=1,
                     ),
                     target(
                         expr=expr_simple(
@@ -1770,7 +1738,6 @@ def ColumnarStorage() -> RowPanel:
                             instance_selector=PROXY_LABEL_SELECTORS,
                         ),
                         legend_format="capacity-small-{{instance}}",
-                        interval_factor=1,
                     ),
                     target(
                         expr=expr_simple(
@@ -1778,7 +1745,6 @@ def ColumnarStorage() -> RowPanel:
                             instance_selector=PROXY_LABEL_SELECTORS,
                         ),
                         legend_format="capacity-segments-{{instance}}",
-                        interval_factor=1,
                     ),
                     target(
                         expr=expr_simple(
@@ -1795,8 +1761,7 @@ def ColumnarStorage() -> RowPanel:
                         legend_format="segments-disk-size-{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
-                null_point_mode="null",
+                yaxes=yaxes(left_format="bytes", left_min="0"),
                 series_overrides=[
                     {
                         "alias": "/limit/",
@@ -1837,7 +1802,7 @@ def ColumnarStorage() -> RowPanel:
                         legend_format="cache-miss {{$additional_groupby}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
+                yaxes=yaxes(left_format="ops", left_min="0"),
             ),
             duration_panel(
                 "IA Segments Remote Read Duration",
@@ -1869,7 +1834,7 @@ def ColumnarStorage() -> RowPanel:
                         legend_format="file-cache-miss {{$additional_groupby}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
+                yaxes=yaxes(left_format="ops", left_min="0"),
             ),
             duration_panel(
                 "Columnar Prefetch Duration",
@@ -1930,7 +1895,7 @@ def ColumnarStorage() -> RowPanel:
                         legend_format="parse {{$additional_groupby}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
+                yaxes=yaxes(left_format="ops", left_min="0"),
             ),
             graph_panel(
                 title="Columnar Meta Cache Gauge",
@@ -2174,12 +2139,7 @@ def Storage() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(
-                    left_format="short",
-                    right_format="none",
-                    left_min="0",
-                    left_decimals=0,
-                ),
+                yaxes=yaxes(left_format="short", left_min="0", left_decimals=0),
             ),
         ]
     )
@@ -2226,7 +2186,7 @@ def Storage() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="none", left_min="0"),
                 legend=graph_legend(side_width=250),
                 null_point_mode="null",
             ),
@@ -2251,7 +2211,7 @@ def Storage() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="ops", left_min="0"),
                 legend=graph_legend(side_width=250),
                 null_point_mode="null",
             ),
@@ -2309,7 +2269,7 @@ def Storage() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
+                yaxes=yaxes(left_format="ops", left_min="0"),
             ),
             graph_panel(
                 title="Disk Read OPS",
@@ -2337,7 +2297,7 @@ def Storage() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
+                yaxes=yaxes(left_format="ops", left_min="0"),
             ),
         ]
     )
@@ -2370,7 +2330,7 @@ def Storage() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="binBps", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="binBps", left_min="0"),
                 fill=1,
                 null_point_mode="null",
                 decimals=1,
@@ -2402,7 +2362,7 @@ def Storage() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="binBps", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="binBps", left_min="0"),
                 fill=1,
                 null_point_mode="null",
                 decimals=1,
@@ -2424,7 +2384,7 @@ def Storage() -> RowPanel:
                         legend_format="lightweight",
                     ),
                 ],
-                yaxes=yaxes(left_format="short", right_format="short"),
+                yaxes=yaxes(left_format="short"),
                 legend=graph_legend(avg=True, max=False),
                 fill=1,
                 null_point_mode="null",
@@ -2747,9 +2707,7 @@ def PageStorage() -> RowPanel:
                         legend_format="log_file-{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(
-                    left_format="short", right_format="percentunit", left_min="0"
-                ),
+                yaxes=yaxes(left_format="short", left_min="0"),
                 legend=graph_legend(max=False),
                 decimals=1,
             ),
@@ -2796,7 +2754,7 @@ def PageStorage() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="opm", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="opm", left_min="0"),
                 legend=graph_legend(
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
@@ -2829,7 +2787,7 @@ def PageStorage() -> RowPanel:
                         legend_format="num_entries-{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="short", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="short", left_min="0"),
                 legend=graph_legend(max=False),
                 decimals=1,
             ),
@@ -2846,7 +2804,7 @@ def PageStorage() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="none", left_min="0"),
                 legend=graph_legend(side_width=250),
                 null_point_mode="null",
             ),
@@ -2864,7 +2822,7 @@ def PageStorage() -> RowPanel:
                         legend_format="{{type}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="bytes", left_min="0"),
                 fill=1,
                 null_point_mode="null",
                 decimals=1,
@@ -2904,7 +2862,7 @@ def PageStorage() -> RowPanel:
                         legend_format="UniPS-{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="short", right_format="short"),
+                yaxes=yaxes(left_format="short"),
                 legend=graph_legend(max=False),
                 decimals=1,
             ),
@@ -2988,7 +2946,7 @@ def RateLimiter() -> RowPanel:
                         legend_format="{{type}}-{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="short"),
+                yaxes=yaxes(left_format="bytes"),
                 legend=graph_legend(max=False),
                 fill=1,
             ),
@@ -3116,7 +3074,7 @@ def StorageWriteStall() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="binBps", right_format="bytes", left_min="0"),
+                yaxes=yaxes(left_format="binBps", left_min="0"),
                 legend=graph_legend(side_width=250),
                 null_point_mode="null",
                 decimals=1,
@@ -3144,7 +3102,7 @@ def StorageWriteStall() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="bytes", left_min="0"),
+                yaxes=yaxes(left_format="bytes", left_min="0"),
                 legend=graph_legend(side_width=250),
                 null_point_mode="null",
                 decimals=1,
@@ -3399,7 +3357,7 @@ def Raft() -> RowPanel:
                         legend_format="avg-decode",
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="s", left_min="0"),
                 fill=1,
                 tooltip_sort=2,
             ),
@@ -3705,7 +3663,7 @@ def Raft() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
+                yaxes=yaxes(left_format="ops", left_min="0"),
                 legend=graph_legend(
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
@@ -3766,7 +3724,7 @@ def RaftSnapshotIngestSST() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="none", left_min="0"),
                 fill=1,
             ),
         ]
@@ -4069,7 +4027,7 @@ def DisaggregatedWrite() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="binBps", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="binBps", left_min="0"),
                 fill=1,
                 null_point_mode="null",
                 decimals=1,
@@ -4114,9 +4072,7 @@ def DisaggregatedWrite() -> RowPanel:
                         legend_format="checkpoint_data-{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(
-                    left_format="short", right_format="percentunit", left_min="0"
-                ),
+                yaxes=yaxes(left_format="short", left_min="0"),
                 legend=graph_legend(max=False),
                 decimals=1,
             ),
@@ -4193,7 +4149,7 @@ def DisaggregatedWrite() -> RowPanel:
                         legend_format="store-{{store_id}}-{{type}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="bytes", left_min="0"),
                 legend=graph_legend(max=False),
                 decimals=1,
             ),
@@ -4219,7 +4175,7 @@ def DisaggregatedWrite() -> RowPanel:
                         legend_format="{{instance}}-{{type}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="short", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="short", left_min="0"),
                 legend=graph_legend(max=False),
                 decimals=1,
             ),
@@ -4238,7 +4194,7 @@ def DisaggregatedWrite() -> RowPanel:
                         legend_format="{{instance}}-{{type}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="short", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="short", left_min="0"),
                 legend=graph_legend(max=False),
                 decimals=1,
             ),
@@ -4451,7 +4407,7 @@ def DisaggregatedCompute() -> RowPanel:
                         legend_format="{{type}}-{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="short", right_format="short"),
+                yaxes=yaxes(left_format="short"),
                 fill=1,
             ),
             graph_panel(
@@ -4512,9 +4468,7 @@ def DisaggregatedCompute() -> RowPanel:
                         legend_format="PageUsed-{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(
-                    left_format="bytes", right_format="percentunit", left_min="0"
-                ),
+                yaxes=yaxes(left_format="bytes", left_min="0"),
                 legend=graph_legend(max=False),
             ),
             graph_panel(
@@ -4550,9 +4504,7 @@ def DisaggregatedCompute() -> RowPanel:
                         legend_format="SharedColumnData-{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(
-                    left_format="bytes", right_format="percentunit", left_min="0"
-                ),
+                yaxes=yaxes(left_format="bytes", left_min="0"),
                 legend=graph_legend(current=False),
             ),
         ]
@@ -4615,9 +4567,7 @@ def DisaggregatedCompute() -> RowPanel:
                         legend_format="{{type}} {{$additional_groupby}}",
                     ),
                 ],
-                yaxes=yaxes(
-                    left_format="ops", right_format="opm", left_min="0", left_decimals=1
-                ),
+                yaxes=yaxes(left_format="ops", left_min="0", left_decimals=1),
             ),
             graph_panel(
                 title="PlaceIndex update rows/deletes",
@@ -4644,7 +4594,7 @@ def DisaggregatedCompute() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="short", right_format="opm", left_min="0"),
+                yaxes=yaxes(left_format="short", left_min="0"),
                 fill=1,
             ),
         ]
@@ -4683,7 +4633,7 @@ def S3() -> RowPanel:
                         legend_format="S3WriteDMFileBytes {{$additional_groupby}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="binBps", right_format="opm", left_min="0"),
+                yaxes=yaxes(left_format="binBps", left_min="0"),
             ),
             graph_panel(
                 title="S3 OPS",
@@ -4777,7 +4727,7 @@ def S3() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
+                yaxes=yaxes(left_format="ops", left_min="0"),
             ),
         ]
     )
@@ -4834,7 +4784,7 @@ def S3() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
+                yaxes=yaxes(left_format="ops", left_min="0"),
             ),
             duration_panel(
                 "S3 Request Duration",
@@ -4922,7 +4872,7 @@ def S3() -> RowPanel:
                         legend_format="write-notfound {{$additional_groupby}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
+                yaxes=yaxes(left_format="ops", left_min="0"),
             ),
             duration_panel(
                 "S3 HTTP Request Duration",
@@ -4954,7 +4904,7 @@ def S3() -> RowPanel:
                         legend_format="S3RandomAccessFile {{$additional_groupby}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="opm", left_min="0"),
+                yaxes=yaxes(left_format="none", left_min="0"),
             ),
             graph_panel(
                 title="S3RandomAccessFile OPS",
@@ -5000,7 +4950,7 @@ def S3() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
+                yaxes=yaxes(left_format="ops", left_min="0"),
             ),
         ]
     )
@@ -5024,7 +4974,7 @@ def PipelineModel() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="none", left_min="0"),
             ),
             graph_panel(
                 title="Task Count",
@@ -5047,7 +4997,7 @@ def PipelineModel() -> RowPanel:
                         legend_format="sum({{type}})",
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="none", left_min="0"),
             ),
         ]
     )
@@ -5130,7 +5080,7 @@ def PipelineModel() -> RowPanel:
                         legend_format="avg-await",
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="s", left_min="0"),
                 fill=1,
                 tooltip_sort=2,
             ),
@@ -5178,7 +5128,7 @@ def PipelineModel() -> RowPanel:
                         legend_format="avg-io",
                     ),
                 ],
-                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="s", left_min="0"),
                 fill=1,
             ),
             graph_panel(
@@ -5193,9 +5143,7 @@ def PipelineModel() -> RowPanel:
                         legend_format="Limit",
                     ),
                 ],
-                yaxes=yaxes(
-                    left_format="percentunit", right_format="short", left_min="0"
-                ),
+                yaxes=yaxes(left_format="percentunit", left_min="0"),
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -5224,9 +5172,7 @@ def PipelineModel() -> RowPanel:
                         legend_format="Limit",
                     ),
                 ],
-                yaxes=yaxes(
-                    left_format="percentunit", right_format="short", left_min="0"
-                ),
+                yaxes=yaxes(left_format="percentunit", left_min="0"),
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -5251,9 +5197,7 @@ def PipelineModel() -> RowPanel:
                         legend_format="Limit",
                     ),
                 ],
-                yaxes=yaxes(
-                    left_format="percentunit", right_format="short", left_min="0"
-                ),
+                yaxes=yaxes(left_format="percentunit", left_min="0"),
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -5289,7 +5233,7 @@ def PipelineModel() -> RowPanel:
                         legend_format="sum({{type}})",
                     ),
                 ],
-                yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="none", left_min="0"),
             ),
         ]
     )
@@ -5385,7 +5329,7 @@ def TiFlashResourceControl() -> RowPanel:
                         hide=True,
                     ),
                 ],
-                yaxes=yaxes(left_format="short", right_format="short"),
+                yaxes=yaxes(left_format="short"),
                 legend=graph_legend(avg=True, max=False),
                 fill=1,
                 null_point_mode="null",
@@ -5450,7 +5394,7 @@ def StatusServer() -> RowPanel:
                         legend_format="{{path}} {{$additional_groupby}}",
                     ),
                 ],
-                yaxes=yaxes(left_format="ops", right_format="short", left_min="0"),
+                yaxes=yaxes(left_format="ops", left_min="0"),
                 fill=1,
                 null_point_mode="null",
             ),
@@ -5472,12 +5416,7 @@ def VectorSearch() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(
-                    left_format="short",
-                    right_format="ops",
-                    left_min="0",
-                    left_decimals=0,
-                ),
+                yaxes=yaxes(left_format="short", left_min="0", left_decimals=0),
                 legend=graph_legend(current=False),
                 decimals=0,
             ),
@@ -5497,12 +5436,7 @@ def VectorSearch() -> RowPanel:
                         legend_format="{{instance}}-RssFile",
                     ),
                 ],
-                yaxes=yaxes(
-                    left_format="bytes",
-                    right_format="ops",
-                    left_min="0",
-                    left_decimals=0,
-                ),
+                yaxes=yaxes(left_format="bytes", left_min="0", left_decimals=0),
                 legend=graph_legend(current=False),
                 decimals=0,
             ),
@@ -5541,9 +5475,7 @@ def VectorSearch() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(
-                    left_format="s", right_format="s", left_min="0", left_decimals=1
-                ),
+                yaxes=yaxes(left_format="s", left_min="0", left_decimals=1),
                 legend=graph_legend(current=False),
                 decimals=1,
             ),

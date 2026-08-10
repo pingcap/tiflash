@@ -6175,7 +6175,7 @@
             },
             {
               "decimals": null,
-              "format": "none",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -8464,7 +8464,7 @@
             },
             {
               "decimals": null,
-              "format": "none",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -8597,7 +8597,7 @@
             },
             {
               "decimals": null,
-              "format": "none",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -9959,7 +9959,7 @@
             },
             {
               "decimals": null,
-              "format": "s",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -10107,7 +10107,7 @@
             },
             {
               "decimals": null,
-              "format": "s",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -10255,7 +10255,7 @@
             },
             {
               "decimals": null,
-              "format": "s",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -10403,7 +10403,7 @@
             },
             {
               "decimals": null,
-              "format": "s",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -10722,7 +10722,7 @@
             },
             {
               "decimals": null,
-              "format": "percent",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -11802,7 +11802,7 @@
           "maxDataPoints": null,
           "maxPerRow": null,
           "minSpan": null,
-          "nullPointMode": "null",
+          "nullPointMode": "null as zero",
           "options": {
             "alertThreshold": true,
             "dataLinks": []
@@ -11833,7 +11833,7 @@
               "hide": false,
               "instant": false,
               "interval": "",
-              "intervalFactor": 1,
+              "intervalFactor": 2,
               "legendFormat": "capacity-main-{{instance}}",
               "metric": "",
               "query": "((\n    tiflash_proxy_kv_engine_ia_main_queue_capacity\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$proxy_instance\",instance=~\"$tiflash_role\"}\n    \n))  ",
@@ -11848,7 +11848,7 @@
               "hide": false,
               "instant": false,
               "interval": "",
-              "intervalFactor": 1,
+              "intervalFactor": 2,
               "legendFormat": "capacity-small-{{instance}}",
               "metric": "",
               "query": "((\n    tiflash_proxy_kv_engine_ia_small_queue_capacity\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$proxy_instance\",instance=~\"$tiflash_role\"}\n    \n))  ",
@@ -11863,7 +11863,7 @@
               "hide": false,
               "instant": false,
               "interval": "",
-              "intervalFactor": 1,
+              "intervalFactor": 2,
               "legendFormat": "capacity-segments-{{instance}}",
               "metric": "",
               "query": "((\n    tiflash_proxy_kv_engine_ia_manager_segments_memory_capacity\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$proxy_instance\",instance=~\"$tiflash_role\"}\n    \n))  ",
@@ -12289,7 +12289,7 @@
             },
             {
               "decimals": null,
-              "format": "opm",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -12645,7 +12645,7 @@
             },
             {
               "decimals": null,
-              "format": "opm",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -13565,7 +13565,7 @@
             },
             {
               "decimals": null,
-              "format": "opm",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -15249,7 +15249,7 @@
             },
             {
               "decimals": null,
-              "format": "none",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -15891,7 +15891,7 @@
             },
             {
               "decimals": null,
-              "format": "none",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -16054,7 +16054,7 @@
             },
             {
               "decimals": null,
-              "format": "none",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -18710,7 +18710,7 @@
             },
             {
               "decimals": null,
-              "format": "percentunit",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -21489,7 +21489,7 @@
             },
             {
               "decimals": null,
-              "format": "bytes",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -21638,7 +21638,7 @@
             },
             {
               "decimals": null,
-              "format": "bytes",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -25519,7 +25519,7 @@
             },
             {
               "decimals": null,
-              "format": "none",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -28073,7 +28073,7 @@
             },
             {
               "decimals": null,
-              "format": "percentunit",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -31661,7 +31661,7 @@
             },
             {
               "decimals": null,
-              "format": "percentunit",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -31839,7 +31839,7 @@
             },
             {
               "decimals": null,
-              "format": "percentunit",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -32348,7 +32348,7 @@
             },
             {
               "decimals": null,
-              "format": "opm",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -32511,7 +32511,7 @@
             },
             {
               "decimals": null,
-              "format": "opm",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -32716,7 +32716,7 @@
             },
             {
               "decimals": null,
-              "format": "opm",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -33014,7 +33014,7 @@
             },
             {
               "decimals": null,
-              "format": "opm",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -33222,7 +33222,7 @@
             },
             {
               "decimals": null,
-              "format": "opm",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -33698,7 +33698,7 @@
             },
             {
               "decimals": null,
-              "format": "opm",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -34054,7 +34054,7 @@
             },
             {
               "decimals": null,
-              "format": "opm",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -34247,7 +34247,7 @@
             },
             {
               "decimals": null,
-              "format": "opm",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -36866,7 +36866,7 @@
             },
             {
               "decimals": null,
-              "format": "ops",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -37015,7 +37015,7 @@
             },
             {
               "decimals": null,
-              "format": "ops",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -37288,7 +37288,7 @@
             },
             {
               "decimals": null,
-              "format": "s",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
