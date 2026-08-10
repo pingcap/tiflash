@@ -1194,6 +1194,8 @@ def heatmap_panel(
     assert metric.endswith(
         "_bucket"
     ), f"'{metric}' should be a histogram metric with '_bucket' suffix"
+    # Build a fresh YAxis per call. A shared default object would be mutated across
+    # panels (e.g. via decimals), so later heatmaps would inherit earlier settings.
     if y_axis is None:
         y_axis = yaxis(UNITS.NO_FORMAT, decimals=1)
     expr_fn = expr_sum_increase if func == "increase" else expr_sum_delta
