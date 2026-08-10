@@ -2298,7 +2298,7 @@ try
     auto minmax_index = std::make_shared<MinMaxIndex>(*col_type);
     for (const auto & c : cases)
     {
-        RUNTIME_CHECK(c.column_data.size(), c.del_mark.size());
+RUNTIME_CHECK(c.column_data.size() == c.del_mark.size());
         auto col_data = createColumn<Nullable<Decimal64>>(std::make_tuple(20, 5), c.column_data).column;
         auto del_mark_col = createColumn<UInt8>(c.del_mark).column;
         minmax_index->addPack(*col_data, static_cast<const ColumnVector<UInt8> *>(del_mark_col.get()));
