@@ -120,7 +120,7 @@ The dispatch should cover nullable and non-nullable paths:
 The write-side index predicate should include decimal explicitly:
 
 ```cpp
-bool do_index = cd.id == EXTRA_HANDLE_COLUMN_ID || type->isInteger() || type->isDateOrDateTime()
+bool do_index = cd.id == MutSup::extra_handle_id || type->isInteger() || type->isDateOrDateTime()
     || type->isDecimal();
 ```
 
