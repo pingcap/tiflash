@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Logger.h>
+#include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
@@ -20,6 +21,10 @@
 #include <Interpreters/convertFieldToType.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/File/DMFileMetaV2.h>
+#include <Storages/DeltaMerge/File/DMFileUtil.h>
+#include <Storages/DeltaMerge/File/DMFileWriter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
@@ -29,10 +34,12 @@
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
+#include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <ext/scope_guard.h>
 #include <memory>
+#include <string_view>
 
 
 namespace DB::DM::tests
@@ -55,6 +62,58 @@ protected:
 protected:
     // a ptr to context, we can reload context with different settings if need.
     ContextPtr context;
+};
+
+class MinMaxIndexWriteTest : public DB::base::TiFlashStorageTestBasic
+{
+protected:
+    void SetUp() override
+    {
+        TiFlashStorageTestBasic::SetUp();
+        parent_path = getTemporaryPath();
+        file_provider = db_context->getFileProvider();
+    }
+
+    static constexpr ColId decimal_col_id = 100;
+
+    static ColumnDefinesPtr makeColumns()
+    {
+        auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ false);
+        cols->emplace_back(ColumnDefine{decimal_col_id, "decimal_col", std::make_shared<DataTypeDecimal64>(20, 5)});
+        return cols;
+    }
+
+    static Block makeBlock()
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, 4, /*reversed*/ false);
+        auto type = std::make_shared<DataTypeDecimal64>(20, 5);
+        auto col = DB::tests::createColumn<Decimal64>(
+                       std::make_tuple(20, 5),
+                       std::vector<String>{"1.23000", "2.34000", "3.45000", "4.56000"})
+                       .column;
+        block.insert(ColumnWithTypeAndName(std::move(col), type, "decimal_col", decimal_col_id));
+        return block;
+    }
+
+    DMFilePtr writeDMFile()
+    {
+        auto dm_file = DMFile::create(
+            /*file_id*/ 1,
+            parent_path,
+            std::make_optional<DMChecksumConfig>(),
+            128 * 1024,
+            16 * 1024 * 1024,
+            NullspaceID,
+            DMFileFormat::V3);
+        auto cols = makeColumns();
+        DMFileWriter writer(dm_file, *cols, file_provider, db_context->getWriteLimiter(), DMFileWriter::Options{});
+        writer.write(makeBlock(), DMFileWriter::BlockProperty{0, 0, 0, 0});
+        writer.finalize();
+        return dm_file;
+    }
+
+    String parent_path;
+    FileProviderPtr file_provider;
 };
 
 namespace
@@ -248,6 +307,15 @@ Decimal64 getDecimal64(String s)
     return expected_default_value;
 }
 
+template <typename DecimalType>
+DecimalField<DecimalType> getDecimalField(std::string_view s, PrecType precision, ScaleType scale)
+{
+    DecimalType value;
+    ReadBufferFromString buf(s);
+    readDecimalText(value, buf, precision, scale);
+    return DecimalField<DecimalType>(value, scale);
+}
+
 constexpr Int64 Int64_Match_DATA = 100;
 constexpr Int64 Int64_Greater_DATA = 10000;
 constexpr Int64 Int64_Smaller_DATA = -1;
@@ -265,7 +333,8 @@ const String MyDateTime_Greater_DATE = "2022-09-27";
 const String MyDateTime_Smaller_DATE = "1997-09-27";
 
 const String Decimal_Match_DATA = "100.25566";
-const String Decimal_UnMatch_DATA = "100.25500";
+const String Decimal_Greater_DATA = "101.00000";
+const String Decimal_Smaller_DATA = "99.00000";
 
 std::pair<String, CSVTuples> generateTypeValue(MinMaxTestDatatype data_type, bool has_null)
 {
@@ -440,7 +509,7 @@ RSOperatorPtr generateEqualOperator(MinMaxTestDatatype data_type, bool is_match)
         {
             return createEqual(
                 attr("Decimal(20,5)"),
-                Field(DecimalField<Decimal64>(getDecimal64(Decimal_UnMatch_DATA), 5)));
+                Field(DecimalField<Decimal64>(getDecimal64(Decimal_Smaller_DATA), 5)));
         }
     }
     case Test_Nullable_Decimal64:
@@ -455,7 +524,7 @@ RSOperatorPtr generateEqualOperator(MinMaxTestDatatype data_type, bool is_match)
         {
             return createEqual(
                 attr("Nullable(Decimal(20,5))"),
-                Field(DecimalField<Decimal64>(getDecimal64(Decimal_UnMatch_DATA), 5)));
+                Field(DecimalField<Decimal64>(getDecimal64(Decimal_Smaller_DATA), 5)));
         }
     }
     default:
@@ -567,7 +636,7 @@ RSOperatorPtr generateInOperator(MinMaxTestDatatype data_type, bool is_match)
         {
             return createIn(
                 attr("Decimal(20,5)"),
-                {Field(DecimalField<Decimal64>(getDecimal64(Decimal_UnMatch_DATA), 5))});
+                {Field(DecimalField<Decimal64>(getDecimal64(Decimal_Smaller_DATA), 5))});
         }
     }
     case Test_Nullable_Decimal64:
@@ -582,7 +651,7 @@ RSOperatorPtr generateInOperator(MinMaxTestDatatype data_type, bool is_match)
         {
             return createIn(
                 attr("Nullable(Decimal(20,5))"),
-                {Field(DecimalField<Decimal64>(getDecimal64(Decimal_UnMatch_DATA), 5))});
+                {Field(DecimalField<Decimal64>(getDecimal64(Decimal_Smaller_DATA), 5))});
         }
     }
     default:
@@ -688,13 +757,13 @@ RSOperatorPtr generateGreaterOperator(MinMaxTestDatatype data_type, bool is_matc
         {
             return createGreater(
                 attr("Decimal(20,5)"),
-                Field(DecimalField<Decimal64>(getDecimal64(Decimal_Match_DATA), 5)));
+                Field(DecimalField<Decimal64>(getDecimal64(Decimal_Smaller_DATA), 5)));
         }
         else
         {
             return createGreater(
                 attr("Decimal(20,5)"),
-                Field(DecimalField<Decimal64>(getDecimal64(Decimal_UnMatch_DATA), 5)));
+                Field(DecimalField<Decimal64>(getDecimal64(Decimal_Match_DATA), 5)));
         }
     }
     case Test_Nullable_Decimal64:
@@ -703,13 +772,13 @@ RSOperatorPtr generateGreaterOperator(MinMaxTestDatatype data_type, bool is_matc
         {
             return createGreater(
                 attr("Nullable(Decimal(20,5))"),
-                Field(DecimalField<Decimal64>(getDecimal64(Decimal_Match_DATA), 5)));
+                Field(DecimalField<Decimal64>(getDecimal64(Decimal_Smaller_DATA), 5)));
         }
         else
         {
             return createGreater(
                 attr("Nullable(Decimal(20,5))"),
-                Field(DecimalField<Decimal64>(getDecimal64(Decimal_UnMatch_DATA), 5)));
+                Field(DecimalField<Decimal64>(getDecimal64(Decimal_Match_DATA), 5)));
         }
     }
     default:
@@ -821,7 +890,7 @@ RSOperatorPtr generateGreaterEqualOperator(MinMaxTestDatatype data_type, bool is
         {
             return createGreaterEqual(
                 attr("Decimal(20,5)"),
-                Field(DecimalField<Decimal64>(getDecimal64(Decimal_UnMatch_DATA), 5)));
+                Field(DecimalField<Decimal64>(getDecimal64(Decimal_Greater_DATA), 5)));
         }
     }
     case Test_Nullable_Decimal64:
@@ -836,7 +905,7 @@ RSOperatorPtr generateGreaterEqualOperator(MinMaxTestDatatype data_type, bool is
         {
             return createGreaterEqual(
                 attr("Nullable(Decimal(20,5))"),
-                Field(DecimalField<Decimal64>(getDecimal64(Decimal_UnMatch_DATA), 5)));
+                Field(DecimalField<Decimal64>(getDecimal64(Decimal_Greater_DATA), 5)));
         }
     }
     default:
@@ -942,13 +1011,13 @@ RSOperatorPtr generateLessOperator(MinMaxTestDatatype data_type, bool is_match)
         {
             return createLess(
                 attr("Decimal(20,5)"),
-                Field(DecimalField<Decimal64>(getDecimal64(Decimal_Match_DATA), 5)));
+                Field(DecimalField<Decimal64>(getDecimal64(Decimal_Greater_DATA), 5)));
         }
         else
         {
             return createLess(
                 attr("Decimal(20,5)"),
-                Field(DecimalField<Decimal64>(getDecimal64(Decimal_UnMatch_DATA), 5)));
+                Field(DecimalField<Decimal64>(getDecimal64(Decimal_Match_DATA), 5)));
         }
     }
     case Test_Nullable_Decimal64:
@@ -957,13 +1026,13 @@ RSOperatorPtr generateLessOperator(MinMaxTestDatatype data_type, bool is_match)
         {
             return createLess(
                 attr("Nullable(Decimal(20,5))"),
-                Field(DecimalField<Decimal64>(getDecimal64(Decimal_Match_DATA), 5)));
+                Field(DecimalField<Decimal64>(getDecimal64(Decimal_Greater_DATA), 5)));
         }
         else
         {
             return createLess(
                 attr("Nullable(Decimal(20,5))"),
-                Field(DecimalField<Decimal64>(getDecimal64(Decimal_UnMatch_DATA), 5)));
+                Field(DecimalField<Decimal64>(getDecimal64(Decimal_Match_DATA), 5)));
         }
     }
     default:
@@ -1075,7 +1144,7 @@ RSOperatorPtr generateLessEqualOperator(MinMaxTestDatatype data_type, bool is_ma
         {
             return createLessEqual(
                 attr("Decimal(20,5)"),
-                Field(DecimalField<Decimal64>(getDecimal64(Decimal_UnMatch_DATA), 5)));
+                Field(DecimalField<Decimal64>(getDecimal64(Decimal_Smaller_DATA), 5)));
         }
     }
     case Test_Nullable_Decimal64:
@@ -1090,7 +1159,7 @@ RSOperatorPtr generateLessEqualOperator(MinMaxTestDatatype data_type, bool is_ma
         {
             return createLessEqual(
                 attr("Nullable(Decimal(20,5))"),
-                Field(DecimalField<Decimal64>(getDecimal64(Decimal_UnMatch_DATA), 5)));
+                Field(DecimalField<Decimal64>(getDecimal64(Decimal_Smaller_DATA), 5)));
         }
     }
     default:
@@ -1287,7 +1356,7 @@ RSOperatorPtr generateNullEqualOperator(MinMaxTestDatatype data_type, bool is_ma
         {
             return createNullEqual(
                 attr("Decimal(20,5)"),
-                Field(DecimalField<Decimal64>(getDecimal64(Decimal_UnMatch_DATA), 5)));
+                Field(DecimalField<Decimal64>(getDecimal64(Decimal_Smaller_DATA), 5)));
         }
     }
     case Test_Nullable_Decimal64:
@@ -1306,7 +1375,7 @@ RSOperatorPtr generateNullEqualOperator(MinMaxTestDatatype data_type, bool is_ma
         {
             return createNullEqual(
                 attr("Nullable(Decimal(20,5))"),
-                Field(DecimalField<Decimal64>(getDecimal64(Decimal_UnMatch_DATA), 5)));
+                Field(DecimalField<Decimal64>(getDecimal64(Decimal_Smaller_DATA), 5)));
         }
     }
     default:
@@ -1359,7 +1428,7 @@ try
 
     for (size_t operater_type = Test_Equal; operater_type < Test_MaxOperator; operater_type++)
     {
-        for (size_t datatype = Test_Int64; datatype < Test_Decimal64; datatype++)
+        for (size_t datatype = Test_Int64; datatype < Test_Max; datatype++)
         {
             {
                 // not null
@@ -1407,66 +1476,6 @@ try
                             true)));
                 ASSERT_EQ(
                     false,
-                    checkMatch(
-                        case_name,
-                        *context,
-                        type_value_pair.first,
-                        type_value_pair.second,
-                        generateRSOperator(
-                            static_cast<MinMaxTestDatatype>(datatype),
-                            static_cast<MinMaxTestOperator>(operater_type),
-                            false)));
-            }
-        }
-        // datatypes which not support minmax index
-        for (size_t datatype = Test_Decimal64; datatype < Test_Max; datatype++)
-        {
-            {
-                // not null
-                auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), false);
-                ASSERT_EQ(
-                    true,
-                    checkMatch(
-                        case_name,
-                        *context,
-                        type_value_pair.first,
-                        type_value_pair.second,
-                        generateRSOperator(
-                            static_cast<MinMaxTestDatatype>(datatype),
-                            static_cast<MinMaxTestOperator>(operater_type),
-                            true)));
-                ASSERT_EQ(
-                    true,
-                    checkMatch(
-                        case_name,
-                        *context,
-                        type_value_pair.first,
-                        type_value_pair.second,
-                        generateRSOperator(
-                            static_cast<MinMaxTestDatatype>(datatype),
-                            static_cast<MinMaxTestOperator>(operater_type),
-                            false)));
-            }
-            {
-                // has null
-                if (!isNullableDateType(static_cast<MinMaxTestDatatype>(datatype)))
-                {
-                    continue;
-                }
-                auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), true);
-                ASSERT_EQ(
-                    true,
-                    checkMatch(
-                        case_name,
-                        *context,
-                        type_value_pair.first,
-                        type_value_pair.second,
-                        generateRSOperator(
-                            static_cast<MinMaxTestDatatype>(datatype),
-                            static_cast<MinMaxTestOperator>(operater_type),
-                            true)));
-                ASSERT_EQ(
-                    true,
                     checkMatch(
                         case_name,
                         *context,
@@ -1489,7 +1498,7 @@ try
 
     for (size_t operater_type = Test_Equal; operater_type < Test_MaxOperator; operater_type++)
     {
-        for (size_t datatype = Test_Int64; datatype < Test_Decimal64; datatype++)
+        for (size_t datatype = Test_Int64; datatype < Test_Max; datatype++)
         {
             {
                 // not null
@@ -1526,67 +1535,6 @@ try
                 auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), true);
                 ASSERT_EQ(
                     false,
-                    checkMatch(
-                        case_name,
-                        *context,
-                        type_value_pair.first,
-                        type_value_pair.second,
-                        createNot(generateRSOperator(
-                            static_cast<MinMaxTestDatatype>(datatype),
-                            static_cast<MinMaxTestOperator>(operater_type),
-                            true))));
-                ASSERT_EQ(
-                    true,
-                    checkMatch(
-                        case_name,
-                        *context,
-                        type_value_pair.first,
-                        type_value_pair.second,
-                        createNot(generateRSOperator(
-                            static_cast<MinMaxTestDatatype>(datatype),
-                            static_cast<MinMaxTestOperator>(operater_type),
-                            false))));
-            }
-        }
-
-        // datatypes which not support minmax index
-        for (size_t datatype = Test_Decimal64; datatype < Test_Max; datatype++)
-        {
-            {
-                // not null
-                auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), false);
-                ASSERT_EQ(
-                    true,
-                    checkMatch(
-                        case_name,
-                        *context,
-                        type_value_pair.first,
-                        type_value_pair.second,
-                        createNot(generateRSOperator(
-                            static_cast<MinMaxTestDatatype>(datatype),
-                            static_cast<MinMaxTestOperator>(operater_type),
-                            true))));
-                ASSERT_EQ(
-                    true,
-                    checkMatch(
-                        case_name,
-                        *context,
-                        type_value_pair.first,
-                        type_value_pair.second,
-                        createNot(generateRSOperator(
-                            static_cast<MinMaxTestDatatype>(datatype),
-                            static_cast<MinMaxTestOperator>(operater_type),
-                            false))));
-            }
-            {
-                // has null
-                if (!isNullableDateType(static_cast<MinMaxTestDatatype>(datatype)))
-                {
-                    continue;
-                }
-                auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), true);
-                ASSERT_EQ(
-                    true,
                     checkMatch(
                         case_name,
                         *context,
@@ -1622,7 +1570,7 @@ try
     {
         for (size_t operater_right_type = Test_Equal; operater_right_type < Test_MaxOperator; operater_right_type++)
         {
-            for (size_t datatype = Test_Int64; datatype < Test_Decimal64; datatype++)
+            for (size_t datatype = Test_Int64; datatype < Test_Max; datatype++)
             {
                 {
                     // not null
@@ -1687,81 +1635,6 @@ try
                         false);
                     ASSERT_EQ(
                         false,
-                        checkMatch(
-                            case_name,
-                            *context,
-                            type_value_pair.first,
-                            type_value_pair.second,
-                            createAnd({left_rs_operator, right_rs_operator_not_match})));
-                }
-            }
-            // datatypes which not support minmax index
-            for (size_t datatype = Test_Decimal64; datatype < Test_Max; datatype++)
-            {
-                {
-                    // not null
-                    auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), false);
-                    auto left_rs_operator = generateRSOperator(
-                        static_cast<MinMaxTestDatatype>(datatype),
-                        static_cast<MinMaxTestOperator>(operater_left_type),
-                        true);
-                    auto right_rs_operator = generateRSOperator(
-                        static_cast<MinMaxTestDatatype>(datatype),
-                        static_cast<MinMaxTestOperator>(operater_right_type),
-                        true);
-                    ASSERT_EQ(
-                        true,
-                        checkMatch(
-                            case_name,
-                            *context,
-                            type_value_pair.first,
-                            type_value_pair.second,
-                            createAnd({left_rs_operator, right_rs_operator})));
-
-                    auto right_rs_operator_not_match = generateRSOperator(
-                        static_cast<MinMaxTestDatatype>(datatype),
-                        static_cast<MinMaxTestOperator>(operater_right_type),
-                        false);
-                    ASSERT_EQ(
-                        true,
-                        checkMatch(
-                            case_name,
-                            *context,
-                            type_value_pair.first,
-                            type_value_pair.second,
-                            createAnd({left_rs_operator, right_rs_operator_not_match})));
-                }
-                {
-                    // has null
-                    if (!isNullableDateType(static_cast<MinMaxTestDatatype>(datatype)))
-                    {
-                        continue;
-                    }
-                    auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), true);
-                    auto left_rs_operator = generateRSOperator(
-                        static_cast<MinMaxTestDatatype>(datatype),
-                        static_cast<MinMaxTestOperator>(operater_left_type),
-                        true);
-                    auto right_rs_operator = generateRSOperator(
-                        static_cast<MinMaxTestDatatype>(datatype),
-                        static_cast<MinMaxTestOperator>(operater_right_type),
-                        true);
-
-                    ASSERT_EQ(
-                        true,
-                        checkMatch(
-                            case_name,
-                            *context,
-                            type_value_pair.first,
-                            type_value_pair.second,
-                            createAnd({left_rs_operator, right_rs_operator})));
-
-                    auto right_rs_operator_not_match = generateRSOperator(
-                        static_cast<MinMaxTestDatatype>(datatype),
-                        static_cast<MinMaxTestOperator>(operater_right_type),
-                        false);
-                    ASSERT_EQ(
-                        true,
                         checkMatch(
                             case_name,
                             *context,
@@ -1784,7 +1657,7 @@ try
     {
         for (size_t operater_right_type = Test_Equal; operater_right_type < Test_MaxOperator; operater_right_type++)
         {
-            for (size_t datatype = Test_Int64; datatype < Test_Decimal64; datatype++)
+            for (size_t datatype = Test_Int64; datatype < Test_Max; datatype++)
             {
                 {
                     // not null
@@ -1855,55 +1728,6 @@ try
                             type_value_pair.first,
                             type_value_pair.second,
                             createOr({left_rs_operator_not_match, right_rs_operator})));
-                }
-            }
-            // datatypes which not support minmax index
-            for (size_t datatype = Test_Decimal64; datatype < Test_Max; datatype++)
-            {
-                {
-                    // not null
-                    auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), false);
-                    auto left_rs_operator = generateRSOperator(
-                        static_cast<MinMaxTestDatatype>(datatype),
-                        static_cast<MinMaxTestOperator>(operater_left_type),
-                        false);
-                    auto right_rs_operator = generateRSOperator(
-                        static_cast<MinMaxTestDatatype>(datatype),
-                        static_cast<MinMaxTestOperator>(operater_right_type),
-                        false);
-                    ASSERT_EQ(
-                        true,
-                        checkMatch(
-                            case_name,
-                            *context,
-                            type_value_pair.first,
-                            type_value_pair.second,
-                            createOr({left_rs_operator, right_rs_operator})));
-                }
-                {
-                    // has null
-                    if (!isNullableDateType(static_cast<MinMaxTestDatatype>(datatype)))
-                    {
-                        continue;
-                    }
-                    auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), true);
-                    auto left_rs_operator = generateRSOperator(
-                        static_cast<MinMaxTestDatatype>(datatype),
-                        static_cast<MinMaxTestOperator>(operater_left_type),
-                        false);
-                    auto right_rs_operator = generateRSOperator(
-                        static_cast<MinMaxTestDatatype>(datatype),
-                        static_cast<MinMaxTestOperator>(operater_right_type),
-                        false);
-
-                    ASSERT_EQ(
-                        true,
-                        checkMatch(
-                            case_name,
-                            *context,
-                            type_value_pair.first,
-                            type_value_pair.second,
-                            createOr({left_rs_operator, right_rs_operator})));
                 }
             }
         }
@@ -1918,7 +1742,7 @@ try
 
     auto operater_type = Test_IsNull;
 
-    for (size_t datatype = Test_Int64; datatype < Test_Decimal64; datatype++)
+    for (size_t datatype = Test_Int64; datatype < Test_Max; datatype++)
     {
         {
             // not null
@@ -1936,67 +1760,6 @@ try
                         true)));
             ASSERT_EQ(
                 false,
-                checkMatch(
-                    case_name,
-                    *context,
-                    type_value_pair.first,
-                    type_value_pair.second,
-                    generateRSOperator(
-                        static_cast<MinMaxTestDatatype>(datatype),
-                        static_cast<MinMaxTestOperator>(operater_type),
-                        false)));
-        }
-        {
-            // has null
-            if (!isNullableDateType(static_cast<MinMaxTestDatatype>(datatype)))
-            {
-                continue;
-            }
-            auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), true);
-            ASSERT_EQ(
-                true,
-                checkMatch(
-                    case_name,
-                    *context,
-                    type_value_pair.first,
-                    type_value_pair.second,
-                    generateRSOperator(
-                        static_cast<MinMaxTestDatatype>(datatype),
-                        static_cast<MinMaxTestOperator>(operater_type),
-                        true)));
-            ASSERT_EQ(
-                true,
-                checkMatch(
-                    case_name,
-                    *context,
-                    type_value_pair.first,
-                    type_value_pair.second,
-                    generateRSOperator(
-                        static_cast<MinMaxTestDatatype>(datatype),
-                        static_cast<MinMaxTestOperator>(operater_type),
-                        false)));
-        }
-    }
-
-    // datatypes which not support minmax index
-    for (size_t datatype = Test_Decimal64; datatype < Test_Max; datatype++)
-    {
-        {
-            // not null
-            auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), false);
-            ASSERT_EQ(
-                true,
-                checkMatch(
-                    case_name,
-                    *context,
-                    type_value_pair.first,
-                    type_value_pair.second,
-                    generateRSOperator(
-                        static_cast<MinMaxTestDatatype>(datatype),
-                        static_cast<MinMaxTestOperator>(operater_type),
-                        true)));
-            ASSERT_EQ(
-                true,
                 checkMatch(
                     case_name,
                     *context,
@@ -2046,7 +1809,7 @@ try
 {
     const auto * case_name = ::testing::UnitTest::GetInstance()->current_test_info()->name();
 
-    for (size_t datatype = Test_Int64; datatype < Test_Decimal64; datatype++)
+    for (size_t datatype = Test_Int64; datatype < Test_Max; datatype++)
     {
         {
             // not null data, compare with value (match)
@@ -2126,92 +1889,8 @@ try
         }
     }
 
-    // datatypes which not support minmax index
-    for (size_t datatype = Test_Decimal64; datatype < Test_Max; datatype++)
-    {
-        {
-            // not null data, compare with value (match)
-            auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), false);
-            ASSERT_EQ(
-                true,
-                checkMatch(
-                    case_name,
-                    *context,
-                    type_value_pair.first,
-                    type_value_pair.second,
-                    generateNullEqualOperator(static_cast<MinMaxTestDatatype>(datatype), true, false)));
-        }
-        {
-            // not null data, compare with value (not match) - should still return true
-            // because no minmax index is available
-            auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), false);
-            ASSERT_EQ(
-                true,
-                checkMatch(
-                    case_name,
-                    *context,
-                    type_value_pair.first,
-                    type_value_pair.second,
-                    generateNullEqualOperator(static_cast<MinMaxTestDatatype>(datatype), false, false)));
-        }
-        {
-            // not null data, compare with null - should still return true
-            // because no minmax index is available
-            auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), false);
-            ASSERT_EQ(
-                true,
-                checkMatch(
-                    case_name,
-                    *context,
-                    type_value_pair.first,
-                    type_value_pair.second,
-                    generateNullEqualOperator(static_cast<MinMaxTestDatatype>(datatype), true, true)));
-        }
-        {
-            // has null data, compare with value (match) - should still return true
-            // because no minmax index is available
-            if (!isNullableDateType(static_cast<MinMaxTestDatatype>(datatype)))
-            {
-                continue;
-            }
-            auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), true);
-            ASSERT_EQ(
-                true,
-                checkMatch(
-                    case_name,
-                    *context,
-                    type_value_pair.first,
-                    type_value_pair.second,
-                    generateNullEqualOperator(static_cast<MinMaxTestDatatype>(datatype), true, false)));
-        }
-        {
-            // has null data, compare with value (not match) - should still return true
-            // because no minmax index is available
-            auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), true);
-            ASSERT_EQ(
-                true,
-                checkMatch(
-                    case_name,
-                    *context,
-                    type_value_pair.first,
-                    type_value_pair.second,
-                    generateNullEqualOperator(static_cast<MinMaxTestDatatype>(datatype), false, false)));
-        }
-        {
-            // has null data, compare with null (match) - should still return true
-            // because no minmax index is available
-            auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), true);
-            ASSERT_EQ(
-                true,
-                checkMatch(
-                    case_name,
-                    *context,
-                    type_value_pair.first,
-                    type_value_pair.second,
-                    generateNullEqualOperator(static_cast<MinMaxTestDatatype>(datatype), true, true)));
-        }
-    }
 }
+
 CATCH
 
 TEST_F(MinMaxIndexTest, checkPKMatch)
@@ -2474,7 +2153,7 @@ try
     auto minmax_index = std::make_shared<MinMaxIndex>(*col_type);
     for (const auto & c : cases)
     {
-        RUNTIME_CHECK(c.column_data.size(), c.del_mark.size());
+        RUNTIME_CHECK(c.column_data.size() == c.del_mark.size());
         auto col_data = createColumn<Nullable<String>>(c.column_data).column;
         auto del_mark_col = createColumn<UInt8>(c.del_mark).column;
         minmax_index->addPack(*col_data, static_cast<const ColumnVector<UInt8> *>(del_mark_col.get()));
@@ -2516,22 +2195,14 @@ try
     auto type = std::make_shared<DataTypeInt64>();
     auto data_type = makeNullable(type);
 
-    PaddedPODArray<UInt8> has_null_marks(1, 1);
-    PaddedPODArray<UInt8> has_value_marks(1, 1);
-    MutableColumnPtr minmaxes = data_type->createColumn();
-
     auto column = data_type->createColumn();
 
     column->insert(Field(static_cast<Int64>(1))); // insert value 1
     column->insert(Field(static_cast<Int64>(2))); // insert value 2
     column->insertDefault(); // insert null value
 
-    auto * col = column.get();
-    minmaxes->insertFrom(*col, 0); // insert min index
-    minmaxes->insertFrom(*col, 1); // insert max index
-
-    auto minmax
-        = std::make_shared<MinMaxIndex>(std::move(has_null_marks), std::move(has_value_marks), std::move(minmaxes));
+    auto minmax = std::make_shared<MinMaxIndex>(*data_type);
+    minmax->addPack(*column, nullptr);
 
     auto index = RSIndex(data_type, minmax);
     param.indexes.emplace(DEFAULT_COL_ID, index);
@@ -2566,6 +2237,31 @@ try
         auto filter = createNot(createIn(attr("Nullable(Int64)"), {Field(static_cast<Int64>(3))}));
         ASSERT_EQ(filter->roughCheck(0, 1, param)[0], RSResult::AllNull);
     }
+}
+CATCH
+
+TEST_F(MinMaxIndexWriteTest, WriteDecimalMinMaxIndex)
+try
+{
+    auto dm_file = writeDMFile();
+
+    EXPECT_GT(dm_file->getColumnStat(decimal_col_id).index_bytes, 0u);
+
+    const auto * meta = typeid_cast<const DMFileMetaV2 *>(dm_file->meta.get());
+    ASSERT_NE(meta, nullptr);
+    const auto fname = colIndexFileName(DB::toString(decimal_col_id));
+    auto itr = meta->merged_sub_file_infos.find(fname);
+    ASSERT_NE(itr, meta->merged_sub_file_infos.end());
+    EXPECT_GT(itr->second.size, 0u);
+
+    auto restored = DMFile::restore(
+        file_provider,
+        dm_file->fileId(),
+        dm_file->pageId(),
+        parent_path,
+        DMFileMeta::ReadMode::all(),
+        /*meta_version*/ 0);
+    EXPECT_GT(restored->getColumnStat(decimal_col_id).index_bytes, 0u);
 }
 CATCH
 
@@ -2818,7 +2514,7 @@ MinMaxIndexPtr createMinMaxIndex(const IDataType & col_type, const T & cases)
     auto minmax_index = std::make_shared<MinMaxIndex>(col_type);
     for (const auto & c : cases)
     {
-        RUNTIME_CHECK(c.column_data.size(), c.del_mark.size());
+        RUNTIME_CHECK(c.column_data.size() == c.del_mark.size());
         auto col_data = createColumn<Nullable<Int64>>(c.column_data).column;
         auto del_mark_col = createColumn<UInt8>(c.del_mark).column;
         minmax_index->addPack(*col_data, static_cast<const ColumnVector<UInt8> *>(del_mark_col.get()));
@@ -2826,6 +2522,130 @@ MinMaxIndexPtr createMinMaxIndex(const IDataType & col_type, const T & cases)
     return minmax_index;
 }
 } // namespace
+
+TEST_F(MinMaxIndexTest, CheckDecimal)
+try
+{
+    struct DecimalTestData
+    {
+        std::vector<std::optional<String>> column_data;
+        std::vector<UInt64> del_mark;
+    };
+
+    const auto cases = std::array{
+        DecimalTestData{
+            .column_data = {String("1.23000"), String("2.34000"), std::nullopt},
+            .del_mark = {0, 0, 0},
+        },
+        DecimalTestData{
+            .column_data = {String("5.00000"), String("5.00000")},
+            .del_mark = {0, 0},
+        },
+        DecimalTestData{
+            .column_data = {std::nullopt, std::nullopt},
+            .del_mark = {0, 0},
+        },
+    };
+
+    auto col_type = makeNullable(std::make_shared<DataTypeDecimal64>(20, 5));
+    auto minmax_index = std::make_shared<MinMaxIndex>(*col_type);
+    for (const auto & c : cases)
+    {
+        RUNTIME_CHECK(c.column_data.size() == c.del_mark.size());
+        auto col_data = createColumn<Nullable<Decimal64>>(std::make_tuple(20, 5), c.column_data).column;
+        auto del_mark_col = createColumn<UInt8>(c.del_mark).column;
+        minmax_index->addPack(*col_data, static_cast<const ColumnVector<UInt8> *>(del_mark_col.get()));
+    }
+
+    auto check_results
+        = [&](const RSResults & actual, const std::array<RSResult, 3> & expected, std::string_view test_case) {
+              for (size_t i = 0; i < expected.size(); ++i)
+              {
+                  ASSERT_EQ(actual[i], expected[i])
+                      << fmt::format("{} pack={} actual={} expected={}", test_case, i, actual[i], expected[i]);
+              }
+          };
+
+    check_results(
+        minmax_index->checkCmp<RoughCheck::CheckEqual>(
+            0,
+            cases.size(),
+            Field(getDecimalField<Decimal32>("1.23", 9, 2)),
+            col_type),
+        {RSResult::SomeNull, RSResult::None, RSResult::SomeNull},
+        "decimal32 equal decimal64");
+
+    check_results(
+        minmax_index->checkIn(
+            0,
+            cases.size(),
+            {Field(getDecimalField<Decimal32>("1.23", 9, 2)), Field(getDecimalField<Decimal64>("7.77", 20, 2))},
+            col_type),
+        {RSResult::SomeNull, RSResult::None, RSResult::SomeNull},
+        "decimal in");
+
+    check_results(
+        minmax_index->checkCmp<RoughCheck::CheckGreater>(
+            0,
+            cases.size(),
+            Field(getDecimalField<Decimal64>("2.34", 20, 2)),
+            col_type),
+        {RSResult::NoneNull, RSResult::All, RSResult::SomeNull},
+        "decimal greater");
+
+    check_results(
+        minmax_index->checkCmp<RoughCheck::CheckGreaterEqual>(
+            0,
+            cases.size(),
+            Field(getDecimalField<Decimal64>("5.00", 20, 2)),
+            col_type),
+        {RSResult::NoneNull, RSResult::All, RSResult::SomeNull},
+        "decimal greater equal");
+
+    check_results(
+        minmax_index->checkNullEqual(0, cases.size(), Field(getDecimalField<Decimal32>("5.00", 9, 2)), col_type),
+        {RSResult::None, RSResult::All, RSResult::None},
+        "decimal null equal");
+
+    const auto decimal64_type = std::make_shared<DataTypeDecimal64>(20, 5);
+    ASSERT_EQ(
+        RoughCheck::Cmp<EqualsOp>::compare(
+            Field(getDecimalField<Decimal32>("1.23", 9, 2)),
+            decimal64_type,
+            getDecimalField<Decimal64>("1.23000", 20, 5).getValue()),
+        ValueCompareResult::True);
+
+    const auto decimal128_type = std::make_shared<DataTypeDecimal128>(38, 6);
+    ASSERT_EQ(
+        RoughCheck::Cmp<LessOp>::compare(
+            Field(getDecimalField<Decimal64>("1.23", 20, 2)),
+            decimal128_type,
+            getDecimalField<Decimal128>("1.230001", 38, 6).getValue()),
+        ValueCompareResult::True);
+
+    const auto decimal256_type = std::make_shared<DataTypeDecimal256>(65, 8);
+    ASSERT_EQ(
+        RoughCheck::Cmp<GreaterOrEqualsOp>::compare(
+            Field(getDecimalField<Decimal128>("1.23000000", 38, 8)),
+            decimal256_type,
+            getDecimalField<Decimal256>("1.23000000", 65, 8).getValue()),
+        ValueCompareResult::True);
+
+    ASSERT_EQ(
+        RoughCheck::Cmp<EqualsOp>::compare(
+            Field(static_cast<Int64>(5)),
+            decimal64_type,
+            getDecimalField<Decimal64>("5.00000", 20, 5).getValue()),
+        ValueCompareResult::CanNotCompare);
+
+    ASSERT_EQ(
+        RoughCheck::Cmp<EqualsOp>::compare(
+            Field(getDecimalField<Decimal64>("5.00000", 20, 5)),
+            std::make_shared<DataTypeInt64>(),
+            static_cast<Int64>(5)),
+        ValueCompareResult::CanNotCompare);
+}
+CATCH
 
 TEST_F(MinMaxIndexTest, CheckIsNull)
 try
