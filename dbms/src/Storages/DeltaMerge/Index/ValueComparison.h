@@ -149,7 +149,7 @@ private:
                     fmt::format("Illegal compare {} with {}", left_field.getTypeName(), compareTypeToString(right)));
             return true;
         }
-        else if constexpr (LeftGroupType == Decimal || RightGroupType == Decimal)
+        else if constexpr (LeftGroupType == Decimal && RightGroupType == Decimal)
         {
             // clang-format off
             if (compareDecimalLeftType<Field::Types::Which::Decimal32, Decimal32>(left_field, right_type, right, res)
@@ -158,6 +158,12 @@ private:
                 || compareDecimalLeftType<Field::Types::Which::Decimal256, Decimal256>(left_field, right_type, right, res))
                 return true;
             // clang-format on
+            return false;
+        }
+        else if constexpr (LeftGroupType == Decimal || RightGroupType == Decimal)
+        {
+            // Mixed decimal comparison is intentionally unsupported here. Decimal values need scale information from
+            // both sides; returning false makes rough check fall back conservatively.
             return false;
         }
         else if constexpr (LeftGroupType == String && RightGroupType == String)

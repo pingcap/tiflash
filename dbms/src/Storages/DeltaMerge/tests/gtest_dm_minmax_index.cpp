@@ -2385,6 +2385,13 @@ try
             decimal64_type,
             getDecimalField<Decimal64>("5.00000", 20, 5).getValue()),
         ValueCompareResult::CanNotCompare);
+
+    ASSERT_EQ(
+        RoughCheck::Cmp<EqualsOp>::compare(
+            Field(getDecimalField<Decimal64>("5.00000", 20, 5)),
+            std::make_shared<DataTypeInt64>(),
+            static_cast<Int64>(5)),
+        ValueCompareResult::CanNotCompare);
 }
 CATCH
 
