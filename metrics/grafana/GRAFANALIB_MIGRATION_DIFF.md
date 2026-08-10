@@ -2,7 +2,7 @@
 
 本文档由 `scripts/gen_migration_diff_md.py` 自动生成，对比：
 
-- **修改前**：`jsonnet_legacy/scripts/tiflash_summary.original.json`
+- **修改前**：`jsonnet_legacy/scripts/tiflash_summary.original.json`（已在后续清理中删除；本文档保留当时对比结果）
 - **修改后**：`tiflash_summary.json`
 
 ## 1. 总览
