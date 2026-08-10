@@ -1560,11 +1560,11 @@ def duration_panel(
         yaxes=yaxes(
             left_format=unit,
             right_format=y_right,
+            left_min="0",
             right_show=bool(series_overrides),
         ),
         legend=graph_legend(max=True, current=True, sort_desc=True),
         fill=1,
-        fill_gradient=0,
         series_overrides=series_overrides,
         tooltip_sort=2,
         null_point_mode=NULL_AS_ZERO,

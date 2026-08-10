@@ -718,60 +718,11 @@ def Coprocessor() -> RowPanel:
     )
     layout.row(
         [
-            graph_panel(
-                title="Request Duration",
-                targets=[
-                    target(
-                        expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_coprocessor_request_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, type, $additional_groupby) / 1000000000)',
-                        legend_format="max-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.9999",
-                            "tiflash_coprocessor_request_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="9999-{{type}} {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.999",
-                            "tiflash_coprocessor_request_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="999-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.99",
-                            "tiflash_coprocessor_request_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="99-{{type}} {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.80",
-                            "tiflash_coprocessor_request_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="80-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_avg(
-                            "tiflash_coprocessor_request_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="avg-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                ],
-                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                fill=1,
-                tooltip_sort=2,
+            duration_panel(
+                "Request Duration",
+                "tiflash_coprocessor_request_duration_seconds",
+                by_labels=["type"],
+                legend="%s-{{type}} {{$additional_groupby}}",
             ),
             graph_panel(
                 title="Error QPS",
@@ -790,60 +741,11 @@ def Coprocessor() -> RowPanel:
     )
     layout.row(
         [
-            graph_panel(
-                title="Request Handle Duration",
-                targets=[
-                    target(
-                        expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_coprocessor_request_handle_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, type, $additional_groupby) / 1000000000)',
-                        legend_format="max-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.9999",
-                            "tiflash_coprocessor_request_handle_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="9999-{{type}} {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.999",
-                            "tiflash_coprocessor_request_handle_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="999-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.99",
-                            "tiflash_coprocessor_request_handle_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="99-{{type}} {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.80",
-                            "tiflash_coprocessor_request_handle_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="80-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_avg(
-                            "tiflash_coprocessor_request_handle_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="avg-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                ],
-                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                fill=1,
-                tooltip_sort=2,
+            duration_panel(
+                "Request Handle Duration",
+                "tiflash_coprocessor_request_handle_seconds",
+                by_labels=["type"],
+                legend="%s-{{type}} {{$additional_groupby}}",
             ),
             graph_panel(
                 title="Response Bytes/Seconds",
@@ -1240,81 +1142,12 @@ def TaskScheduler() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="none", right_format="short"),
             ),
-            graph_panel(
-                title="Task Waiting Duration",
+            duration_panel(
+                "Task Waiting Duration",
+                "tiflash_task_scheduler_waiting_duration_seconds",
                 description="the time of waiting for schedule",
-                targets=[
-                    target(
-                        expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_task_scheduler_waiting_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, instance, resource_group, $additional_groupby) / 1000000000)',
-                        legend_format="{{instance}}-{{resource_group}}-max",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.9999",
-                            "tiflash_task_scheduler_waiting_duration_seconds",
-                            by_labels=[
-                                "instance",
-                                "resource_group",
-                                ADDITIONAL_GROUPBY,
-                            ],
-                        ),
-                        legend_format="{{instance}}-{{resource_group}}-9999",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.999",
-                            "tiflash_task_scheduler_waiting_duration_seconds",
-                            by_labels=[
-                                "instance",
-                                "resource_group",
-                                ADDITIONAL_GROUPBY,
-                            ],
-                        ),
-                        legend_format="{{instance}}-{{resource_group}}-999",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.99",
-                            "tiflash_task_scheduler_waiting_duration_seconds",
-                            by_labels=[
-                                "instance",
-                                "resource_group",
-                                ADDITIONAL_GROUPBY,
-                            ],
-                        ),
-                        legend_format="{{instance}}-{{resource_group}}-99",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.80",
-                            "tiflash_task_scheduler_waiting_duration_seconds",
-                            by_labels=[
-                                "instance",
-                                "resource_group",
-                                ADDITIONAL_GROUPBY,
-                            ],
-                        ),
-                        legend_format="{{instance}}-{{resource_group}}-80",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_avg(
-                            "tiflash_task_scheduler_waiting_duration_seconds",
-                            by_labels=[
-                                "instance",
-                                "resource_group",
-                                ADDITIONAL_GROUPBY,
-                            ],
-                        ),
-                        legend_format="{{instance}}-{{resource_group}}-avg",
-                        hide=True,
-                    ),
-                ],
-                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                fill=1,
-                tooltip_sort=2,
+                by_labels=["instance", "resource_group"],
+                legend="{{instance}}-{{resource_group}}-%s",
             ),
         ]
     )
@@ -2039,65 +1872,10 @@ def ColumnarStorage() -> RowPanel:
                     }
                 ],
             ),
-            graph_panel(
-                title="IA Segments Memory Wait",
-                targets=[
-                    target(
-                        expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_proxy_kv_engine_ia_manager_segments_memory_wait_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, $additional_groupby) / 1000000000)',
-                        legend_format="max {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.9999",
-                            "tiflash_proxy_kv_engine_ia_manager_segments_memory_wait_duration_seconds",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="9999 {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.999",
-                            "tiflash_proxy_kv_engine_ia_manager_segments_memory_wait_duration_seconds",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="999 {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.99",
-                            "tiflash_proxy_kv_engine_ia_manager_segments_memory_wait_duration_seconds",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="99 {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.80",
-                            "tiflash_proxy_kv_engine_ia_manager_segments_memory_wait_duration_seconds",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="80 {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_avg(
-                            "tiflash_proxy_kv_engine_ia_manager_segments_memory_wait_duration_seconds",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="avg {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                ],
-                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                fill=1,
-                tooltip_sort=2,
+            duration_panel(
+                "IA Segments Memory Wait",
+                "tiflash_proxy_kv_engine_ia_manager_segments_memory_wait_duration_seconds",
+                instance_selector=PROXY_LABEL_SELECTORS,
             ),
         ]
     )
@@ -2126,65 +1904,10 @@ def ColumnarStorage() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
             ),
-            graph_panel(
-                title="IA Segments Remote Read Duration",
-                targets=[
-                    target(
-                        expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_proxy_kv_engine_ia_remote_read_segment_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, $additional_groupby) / 1000000000)',
-                        legend_format="max {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.9999",
-                            "tiflash_proxy_kv_engine_ia_remote_read_segment_duration_seconds",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="9999 {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.999",
-                            "tiflash_proxy_kv_engine_ia_remote_read_segment_duration_seconds",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="999 {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.99",
-                            "tiflash_proxy_kv_engine_ia_remote_read_segment_duration_seconds",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="99 {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.80",
-                            "tiflash_proxy_kv_engine_ia_remote_read_segment_duration_seconds",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="80 {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_avg(
-                            "tiflash_proxy_kv_engine_ia_remote_read_segment_duration_seconds",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="avg {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                ],
-                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                fill=1,
-                tooltip_sort=2,
+            duration_panel(
+                "IA Segments Remote Read Duration",
+                "tiflash_proxy_kv_engine_ia_remote_read_segment_duration_seconds",
+                instance_selector=PROXY_LABEL_SELECTORS,
             ),
         ]
     )
@@ -2213,125 +1936,15 @@ def ColumnarStorage() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
             ),
-            graph_panel(
-                title="Columnar Prefetch Duration",
-                targets=[
-                    target(
-                        expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_proxy_kv_engine_columnar_prefetch_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, $additional_groupby) / 1000000000)',
-                        legend_format="max {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.9999",
-                            "tiflash_proxy_kv_engine_columnar_prefetch_duration_seconds",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="9999 {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.999",
-                            "tiflash_proxy_kv_engine_columnar_prefetch_duration_seconds",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="999 {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.99",
-                            "tiflash_proxy_kv_engine_columnar_prefetch_duration_seconds",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="99 {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.80",
-                            "tiflash_proxy_kv_engine_columnar_prefetch_duration_seconds",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="80 {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_avg(
-                            "tiflash_proxy_kv_engine_columnar_prefetch_duration_seconds",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="avg {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                ],
-                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                fill=1,
-                tooltip_sort=2,
+            duration_panel(
+                "Columnar Prefetch Duration",
+                "tiflash_proxy_kv_engine_columnar_prefetch_duration_seconds",
+                instance_selector=PROXY_LABEL_SELECTORS,
             ),
-            graph_panel(
-                title="Columnar Prefetch Cache Hit Duration",
-                targets=[
-                    target(
-                        expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_proxy_kv_engine_columnar_prefetch_cache_hit_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, $additional_groupby) / 1000000000)',
-                        legend_format="max {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.9999",
-                            "tiflash_proxy_kv_engine_columnar_prefetch_cache_hit",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="9999 {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.999",
-                            "tiflash_proxy_kv_engine_columnar_prefetch_cache_hit",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="999 {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.99",
-                            "tiflash_proxy_kv_engine_columnar_prefetch_cache_hit",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="99 {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.80",
-                            "tiflash_proxy_kv_engine_columnar_prefetch_cache_hit",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="80 {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_avg(
-                            "tiflash_proxy_kv_engine_columnar_prefetch_cache_hit",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="avg {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                ],
-                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                fill=1,
-                tooltip_sort=2,
+            duration_panel(
+                "Columnar Prefetch Cache Hit Duration",
+                "tiflash_proxy_kv_engine_columnar_prefetch_cache_hit",
+                instance_selector=PROXY_LABEL_SELECTORS,
             ),
         ]
     )
@@ -2352,65 +1965,10 @@ def ColumnarStorage() -> RowPanel:
                 yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
                 tooltip_sort=2,
             ),
-            graph_panel(
-                title="Columnar Fetch Snapshot Duration",
-                targets=[
-                    target(
-                        expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_proxy_kv_engine_columnar_fetch_snapshot_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, $additional_groupby) / 1000000000)',
-                        legend_format="max {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.9999",
-                            "tiflash_proxy_kv_engine_columnar_fetch_snapshot_duration_seconds",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="9999 {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.999",
-                            "tiflash_proxy_kv_engine_columnar_fetch_snapshot_duration_seconds",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="999 {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.99",
-                            "tiflash_proxy_kv_engine_columnar_fetch_snapshot_duration_seconds",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="99 {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.80",
-                            "tiflash_proxy_kv_engine_columnar_fetch_snapshot_duration_seconds",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="80 {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_avg(
-                            "tiflash_proxy_kv_engine_columnar_fetch_snapshot_duration_seconds",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="avg {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                ],
-                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                fill=1,
-                tooltip_sort=2,
+            duration_panel(
+                "Columnar Fetch Snapshot Duration",
+                "tiflash_proxy_kv_engine_columnar_fetch_snapshot_duration_seconds",
+                instance_selector=PROXY_LABEL_SELECTORS,
             ),
         ]
     )
@@ -2638,76 +2196,13 @@ def Storage() -> RowPanel:
                 yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
                 tooltip_sort=2,
             ),
-            graph_panel(
-                title="Small Internal Tasks Duration",
+            duration_panel(
+                "Small Internal Tasks Duration",
+                "tiflash_storage_subtask_duration_seconds",
                 description="Duration of storage's internal sub tasks",
-                targets=[
-                    target(
-                        expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type!~"(delta_merge|seg_merge|seg_split).*"}[$__rate_interval]))) by (le, type, $additional_groupby) / 1000000000)',
-                        legend_format="max-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.9999",
-                            "tiflash_storage_subtask_duration_seconds",
-                            label_selectors=[
-                                'type!~"(delta_merge|seg_merge|seg_split).*"'
-                            ],
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="9999-{{type}} {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.999",
-                            "tiflash_storage_subtask_duration_seconds",
-                            label_selectors=[
-                                'type!~"(delta_merge|seg_merge|seg_split).*"'
-                            ],
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="999-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.99",
-                            "tiflash_storage_subtask_duration_seconds",
-                            label_selectors=[
-                                'type!~"(delta_merge|seg_merge|seg_split).*"'
-                            ],
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="99-{{type}} {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.80",
-                            "tiflash_storage_subtask_duration_seconds",
-                            label_selectors=[
-                                'type!~"(delta_merge|seg_merge|seg_split).*"'
-                            ],
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="80-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_avg(
-                            "tiflash_storage_subtask_duration_seconds",
-                            label_selectors=[
-                                'type!~"(delta_merge|seg_merge|seg_split).*"'
-                            ],
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="avg-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                ],
-                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                fill=1,
-                tooltip_sort=2,
+                by_labels=["type"],
+                legend="%s-{{type}} {{$additional_groupby}}",
+                extra_label_selectors=['type!~"(delta_merge|seg_merge|seg_split).*"'],
             ),
         ],
         height=5,
@@ -2732,76 +2227,13 @@ def Storage() -> RowPanel:
                 yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
                 tooltip_sort=2,
             ),
-            graph_panel(
-                title="Large Internal Tasks Duration",
+            duration_panel(
+                "Large Internal Tasks Duration",
+                "tiflash_storage_subtask_duration_seconds",
                 description="Duration of storage's internal sub tasks",
-                targets=[
-                    target(
-                        expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type=~"(delta_merge|seg_merge|seg_split).*"}[$__rate_interval]))) by (le, type, $additional_groupby) / 1000000000)',
-                        legend_format="max-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.9999",
-                            "tiflash_storage_subtask_duration_seconds",
-                            label_selectors=[
-                                'type=~"(delta_merge|seg_merge|seg_split).*"'
-                            ],
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="9999-{{type}} {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.999",
-                            "tiflash_storage_subtask_duration_seconds",
-                            label_selectors=[
-                                'type=~"(delta_merge|seg_merge|seg_split).*"'
-                            ],
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="999-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.99",
-                            "tiflash_storage_subtask_duration_seconds",
-                            label_selectors=[
-                                'type=~"(delta_merge|seg_merge|seg_split).*"'
-                            ],
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="99-{{type}} {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.80",
-                            "tiflash_storage_subtask_duration_seconds",
-                            label_selectors=[
-                                'type=~"(delta_merge|seg_merge|seg_split).*"'
-                            ],
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="80-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_avg(
-                            "tiflash_storage_subtask_duration_seconds",
-                            label_selectors=[
-                                'type=~"(delta_merge|seg_merge|seg_split).*"'
-                            ],
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="avg-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                ],
-                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                fill=1,
-                tooltip_sort=2,
+                by_labels=["type"],
+                legend="%s-{{type}} {{$additional_groupby}}",
+                extra_label_selectors=['type=~"(delta_merge|seg_merge|seg_split).*"'],
             ),
         ],
         height=5,
@@ -3237,60 +2669,12 @@ def StorageReadPoolDataSharing() -> RowPanel:
     )
     layout.row(
         [
-            graph_panel(
-                title="Read Thread Internal Duration",
-                targets=[
-                    target(
-                        expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_read_thread_internal_us_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, type, $additional_groupby) / 1000000000)',
-                        legend_format="max-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.9999",
-                            "tiflash_read_thread_internal_us",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="9999-{{type}} {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.999",
-                            "tiflash_read_thread_internal_us",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="999-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.99",
-                            "tiflash_read_thread_internal_us",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="99-{{type}} {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.80",
-                            "tiflash_read_thread_internal_us",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="80-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_avg(
-                            "tiflash_read_thread_internal_us",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="avg-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                ],
-                yaxes=yaxes(left_format="µs", right_format="short", left_min="0"),
-                fill=1,
-                tooltip_sort=2,
+            duration_panel(
+                "Read Thread Internal Duration",
+                "tiflash_read_thread_internal_us",
+                by_labels=["type"],
+                legend="%s-{{type}} {{$additional_groupby}}",
+                unit="µs",
             ),
             graph_panel(
                 title="Read Thread Scheduling",
@@ -3374,119 +2758,22 @@ def StorageReadPoolDataSharing() -> RowPanel:
                 ),
                 series_overrides=[{"alias": "/cache_hit_ratio/", "yaxis": 2}],
             ),
-            graph_panel(
-                title="Segment MergedTask Duration",
-                targets=[
-                    target(
-                        expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_read_thread_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, type, $additional_groupby) / 1000000000)',
-                        legend_format="max-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.9999",
-                            "tiflash_storage_read_thread_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="9999-{{type}} {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.999",
-                            "tiflash_storage_read_thread_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="999-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.99",
-                            "tiflash_storage_read_thread_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="99-{{type}} {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.80",
-                            "tiflash_storage_read_thread_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="80-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_avg(
-                            "tiflash_storage_read_thread_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="avg-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                ],
-                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                fill=1,
-                tooltip_sort=2,
+            duration_panel(
+                "Segment MergedTask Duration",
+                "tiflash_storage_read_thread_seconds",
+                by_labels=["type"],
+                legend="%s-{{type}} {{$additional_groupby}}",
             ),
         ]
     )
     layout.row(
         [
-            graph_panel(
-                title="VersionChain",
-                targets=[
-                    target(
-                        expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_version_chain_ms_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, type, $additional_groupby) / 1000000000)',
-                        legend_format="max-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.9999",
-                            "tiflash_storage_version_chain_ms",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="9999-{{type}} {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.999",
-                            "tiflash_storage_version_chain_ms",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="999-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.99",
-                            "tiflash_storage_version_chain_ms",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="99-{{type}} {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.80",
-                            "tiflash_storage_version_chain_ms",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="80-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_avg(
-                            "tiflash_storage_version_chain_ms",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="avg-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                ],
-                yaxes=yaxes(left_format="ms", right_format="short", left_min="0"),
-                fill=1,
-                tooltip_sort=2,
+            duration_panel(
+                "VersionChain",
+                "tiflash_storage_version_chain_ms",
+                by_labels=["type"],
+                legend="%s-{{type}} {{$additional_groupby}}",
+                unit="ms",
             ),
             graph_panel(
                 title="DeltaIndexError",
@@ -3603,60 +2890,11 @@ def PageStorage() -> RowPanel:
                     ),
                 ],
             ),
-            graph_panel(
-                title="Page write Duration",
-                targets=[
-                    target(
-                        expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_page_write_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, type, $additional_groupby) / 1000000000)',
-                        legend_format="{{type}}-max {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.9999",
-                            "tiflash_storage_page_write_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-9999 {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.999",
-                            "tiflash_storage_page_write_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-999 {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.99",
-                            "tiflash_storage_page_write_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-99 {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.80",
-                            "tiflash_storage_page_write_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-80 {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_avg(
-                            "tiflash_storage_page_write_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-avg {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                ],
-                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                fill=1,
-                tooltip_sort=2,
+            duration_panel(
+                "Page write Duration",
+                "tiflash_storage_page_write_duration_seconds",
+                by_labels=["type"],
+                legend="{{type}}-%s {{$additional_groupby}}",
             ),
         ]
     )
@@ -3679,60 +2917,11 @@ def PageStorage() -> RowPanel:
                 ),
                 fill=1,
             ),
-            graph_panel(
-                title="Page GC Duration",
-                targets=[
-                    target(
-                        expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_page_gc_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, type, $additional_groupby) / 1000000000)',
-                        legend_format="{{type}}-max {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.9999",
-                            "tiflash_storage_page_gc_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-9999 {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.999",
-                            "tiflash_storage_page_gc_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-999 {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.99",
-                            "tiflash_storage_page_gc_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-99 {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.80",
-                            "tiflash_storage_page_gc_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-80 {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_avg(
-                            "tiflash_storage_page_gc_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-avg {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                ],
-                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                fill=1,
-                tooltip_sort=2,
+            duration_panel(
+                "Page GC Duration",
+                "tiflash_storage_page_gc_duration_seconds",
+                by_labels=["type"],
+                legend="{{type}}-%s {{$additional_groupby}}",
             ),
         ]
     )
@@ -4001,61 +3190,12 @@ def RateLimiter() -> RowPanel:
                 fill=1,
                 series_overrides=[{"alias": "", "yaxis": 2}],
             ),
-            graph_panel(
-                title="I/O Limiter Pending Duration",
+            duration_panel(
+                "I/O Limiter Pending Duration",
+                "tiflash_storage_io_limiter_pending_seconds",
                 description="I/O Limiter pending duration.",
-                targets=[
-                    target(
-                        expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_io_limiter_pending_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, type, $additional_groupby) / 1000000000)',
-                        legend_format="{{type}}-pending-max",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.9999",
-                            "tiflash_storage_io_limiter_pending_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-pending-9999",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.999",
-                            "tiflash_storage_io_limiter_pending_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-pending-999",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.99",
-                            "tiflash_storage_io_limiter_pending_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-pending-99",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.80",
-                            "tiflash_storage_io_limiter_pending_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-pending-80",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_avg(
-                            "tiflash_storage_io_limiter_pending_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-pending-avg",
-                        hide=True,
-                    ),
-                ],
-                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                fill=1,
-                tooltip_sort=2,
+                by_labels=["type"],
+                legend="{{type}}-pending-%s",
             ),
         ]
     )
@@ -4066,63 +3206,12 @@ def StorageWriteStall() -> RowPanel:
     layout = Layout(title="Storage Write Stall")
     layout.row(
         [
-            graph_panel(
-                title="Write Stall Duration",
+            duration_panel(
+                "Write Stall Duration",
+                "tiflash_storage_write_stall_duration_seconds",
                 description="The stall duration of write and delete range",
-                targets=[
-                    target(
-                        expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_write_stall_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, type, instance, $additional_groupby) / 1000000000)',
-                        legend_format="max-{{type}}-{{instance}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.9999",
-                            "tiflash_storage_write_stall_duration_seconds",
-                            by_labels=["type", "instance", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="9999-{{type}}-{{instance}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.999",
-                            "tiflash_storage_write_stall_duration_seconds",
-                            by_labels=["type", "instance", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="999-{{type}}-{{instance}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.99",
-                            "tiflash_storage_write_stall_duration_seconds",
-                            by_labels=["type", "instance", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="99-{{type}}-{{instance}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.80",
-                            "tiflash_storage_write_stall_duration_seconds",
-                            by_labels=["type", "instance", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="80-{{type}}-{{instance}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_avg(
-                            "tiflash_storage_write_stall_duration_seconds",
-                            by_labels=["type", "instance", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="avg-{{type}}-{{instance}}",
-                        hide=True,
-                    ),
-                ],
-                yaxes=yaxes(
-                    left_format="s", right_format="short", left_min="0", right_show=True
-                ),
-                fill=1,
-                tooltip_sort=2,
+                by_labels=["type", "instance"],
+                legend="%s-{{type}}-{{instance}}",
                 series_overrides=[{"alias": "99-delta_merge", "yaxis": 2}],
             ),
         ]
@@ -4391,61 +3480,10 @@ def Raft() -> RowPanel:
                 tooltip_sort=2,
                 series_overrides=[{"alias": "/timeout/", "yaxis": 2}],
             ),
-            graph_panel(
-                title="Raft Batch Read Index Duration",
+            duration_panel(
+                "Raft Batch Read Index Duration",
+                "tiflash_raft_read_index_duration_seconds",
                 description="The number of currently applying snapshots.",
-                targets=[
-                    target(
-                        expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_raft_read_index_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, $additional_groupby) / 1000000000)',
-                        legend_format="max {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.9999",
-                            "tiflash_raft_read_index_duration_seconds",
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="9999 {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.999",
-                            "tiflash_raft_read_index_duration_seconds",
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="999 {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.99",
-                            "tiflash_raft_read_index_duration_seconds",
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="99 {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.80",
-                            "tiflash_raft_read_index_duration_seconds",
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="80 {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_avg(
-                            "tiflash_raft_read_index_duration_seconds",
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="avg {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                ],
-                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                fill=1,
-                tooltip_sort=2,
             ),
         ]
     )
@@ -4776,61 +3814,12 @@ def Raft() -> RowPanel:
                 yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
                 tooltip_sort=2,
             ),
-            graph_panel(
-                title="Raft Eager GC Duration",
+            duration_panel(
+                "Raft Eager GC Duration",
+                "tiflash_raft_eager_gc_duration_seconds",
                 description="Duration of Raft logs eager GC tasks",
-                targets=[
-                    target(
-                        expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_raft_eager_gc_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, type, $additional_groupby) / 1000000000)',
-                        legend_format="max-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.9999",
-                            "tiflash_raft_eager_gc_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="9999-{{type}} {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.999",
-                            "tiflash_raft_eager_gc_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="999-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.99",
-                            "tiflash_raft_eager_gc_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="99-{{type}} {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.80",
-                            "tiflash_raft_eager_gc_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="80-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_avg(
-                            "tiflash_raft_eager_gc_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="avg-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                ],
-                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                fill=1,
-                tooltip_sort=2,
+                by_labels=["type"],
+                legend="%s-{{type}} {{$additional_groupby}}",
             ),
         ]
     )
@@ -4892,60 +3881,11 @@ def Raft() -> RowPanel:
                     ),
                 ],
             ),
-            graph_panel(
-                title="Upstream Latency",
+            duration_panel(
+                "Upstream Latency",
+                "tiflash_raft_upstream_latency",
                 description="Latency that TiKV sends raft log to TiFlash.",
-                targets=[
-                    target(
-                        expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_raft_upstream_latency_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, $additional_groupby) / 1000000000)',
-                        legend_format="max {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.9999",
-                            "tiflash_raft_upstream_latency",
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="9999 {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.999",
-                            "tiflash_raft_upstream_latency",
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="999 {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.99",
-                            "tiflash_raft_upstream_latency",
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="99 {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.80",
-                            "tiflash_raft_upstream_latency",
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="80 {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_avg(
-                            "tiflash_raft_upstream_latency",
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="avg {{$additional_groupby}}",
-                    ),
-                ],
-                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                fill=1,
-                tooltip_sort=2,
+                show_avg=True,
             ),
         ]
     )
@@ -4974,60 +3914,11 @@ def RaftSnapshotIngestSST() -> RowPanel:
     layout = Layout(title="Raft Snapshot / IngestSST")
     layout.row(
         [
-            graph_panel(
-                title="Heavy Raft Apply Duration",
-                targets=[
-                    target(
-                        expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_raft_command_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, type, $additional_groupby) / 1000000000)',
-                        legend_format="max-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.9999",
-                            "tiflash_raft_command_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="9999-{{type}} {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.999",
-                            "tiflash_raft_command_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="999-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.99",
-                            "tiflash_raft_command_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="99-{{type}} {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.80",
-                            "tiflash_raft_command_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="80-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_avg(
-                            "tiflash_raft_command_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="avg-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                ],
-                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                fill=1,
-                tooltip_sort=2,
+            duration_panel(
+                "Heavy Raft Apply Duration",
+                "tiflash_raft_command_duration_seconds",
+                by_labels=["type"],
+                legend="%s-{{type}} {{$additional_groupby}}",
             ),
         ]
     )
@@ -5349,61 +4240,12 @@ def DisaggregatedWrite() -> RowPanel:
     layout = Layout(title="Disaggregated-Write")
     layout.row(
         [
-            graph_panel(
-                title="Checkpoint Upload Duration",
+            duration_panel(
+                "Checkpoint Upload Duration",
+                "tiflash_storage_checkpoint_seconds",
                 description="PageStorage Checkpoint Duration",
-                targets=[
-                    target(
-                        expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_checkpoint_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, type, $additional_groupby) / 1000000000)',
-                        legend_format="{{type}}-max {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.9999",
-                            "tiflash_storage_checkpoint_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-9999 {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.999",
-                            "tiflash_storage_checkpoint_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-999 {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.99",
-                            "tiflash_storage_checkpoint_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-99 {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.80",
-                            "tiflash_storage_checkpoint_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-80 {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_avg(
-                            "tiflash_storage_checkpoint_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-avg {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                ],
-                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                fill=1,
-                tooltip_sort=2,
+                by_labels=["type"],
+                legend="{{type}}-%s {{$additional_groupby}}",
             ),
             graph_panel(
                 title="Checkpoint Upload flow",
@@ -5551,60 +4393,11 @@ def DisaggregatedWrite() -> RowPanel:
                 yaxes=yaxes(left_format="none", right_format="none", left_min="0"),
                 tooltip_sort=2,
             ),
-            graph_panel(
-                title="Remote Object Lock Duration",
-                targets=[
-                    target(
-                        expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_disaggregated_object_lock_request_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, type, $additional_groupby) / 1000000000)',
-                        legend_format="max-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.9999",
-                            "tiflash_disaggregated_object_lock_request_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="9999-{{type}} {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.999",
-                            "tiflash_disaggregated_object_lock_request_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="999-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.99",
-                            "tiflash_disaggregated_object_lock_request_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="99-{{type}} {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.80",
-                            "tiflash_disaggregated_object_lock_request_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="80-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_avg(
-                            "tiflash_disaggregated_object_lock_request_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="avg-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                ],
-                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                fill=1,
-                tooltip_sort=2,
+            duration_panel(
+                "Remote Object Lock Duration",
+                "tiflash_disaggregated_object_lock_request_duration_seconds",
+                by_labels=["type"],
+                legend="%s-{{type}} {{$additional_groupby}}",
             ),
         ]
     )
@@ -5625,62 +4418,11 @@ def DisaggregatedWrite() -> RowPanel:
                 legend=graph_legend(max=False),
                 decimals=1,
             ),
-            graph_panel(
-                title="Remote GC Duration Breakdown",
-                targets=[
-                    target(
-                        expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_s3_gc_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, type, $additional_groupby) / 1000000000)',
-                        legend_format="max-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.9999",
-                            "tiflash_storage_s3_gc_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="9999-{{type}} {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.999",
-                            "tiflash_storage_s3_gc_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="999-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.99",
-                            "tiflash_storage_s3_gc_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="99-{{type}} {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.80",
-                            "tiflash_storage_s3_gc_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="80-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_avg(
-                            "tiflash_storage_s3_gc_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="avg-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                ],
-                yaxes=yaxes(
-                    left_format="s", right_format="short", left_min="0", right_show=True
-                ),
-                fill=1,
-                tooltip_sort=2,
+            duration_panel(
+                "Remote GC Duration Breakdown",
+                "tiflash_storage_s3_gc_seconds",
+                by_labels=["type"],
+                legend="%s-{{type}} {{$additional_groupby}}",
                 series_overrides=[
                     {"alias": "/total/", "yaxis": 2},
                     {"alias": "/one_store/", "yaxis": 2},
@@ -5787,62 +4529,11 @@ def DisaggregatedWrite() -> RowPanel:
     )
     layout.row(
         [
-            graph_panel(
-                title="FAP time by stage",
-                targets=[
-                    target(
-                        expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_fap_task_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, type, $additional_groupby) / 1000000000)',
-                        legend_format="{{type}}-max {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.9999",
-                            "tiflash_fap_task_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-9999 {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.999",
-                            "tiflash_fap_task_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-999 {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.99",
-                            "tiflash_fap_task_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-99 {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.80",
-                            "tiflash_fap_task_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-80 {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_avg(
-                            "tiflash_fap_task_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-avg {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                ],
-                yaxes=yaxes(
-                    left_format="s", right_format="short", left_min="0", right_show=True
-                ),
-                fill=1,
-                tooltip_sort=2,
+            duration_panel(
+                "FAP time by stage",
+                "tiflash_fap_task_duration_seconds",
+                by_labels=["type"],
+                legend="{{type}}-%s {{$additional_groupby}}",
                 series_overrides=[{"alias": "/hit_ratio/", "yaxis": 2}],
             ),
             graph_panel(
@@ -5876,60 +4567,11 @@ def DisaggregatedCompute() -> RowPanel:
     layout = Layout(title="Disaggregated-Compute")
     layout.row(
         [
-            graph_panel(
-                title="Read Duration Breakdown",
-                targets=[
-                    target(
-                        expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_disaggregated_breakdown_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, type, $additional_groupby) / 1000000000)',
-                        legend_format="max-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.9999",
-                            "tiflash_disaggregated_breakdown_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="9999-{{type}} {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.999",
-                            "tiflash_disaggregated_breakdown_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="999-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.99",
-                            "tiflash_disaggregated_breakdown_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="99-{{type}} {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.80",
-                            "tiflash_disaggregated_breakdown_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="80-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_avg(
-                            "tiflash_disaggregated_breakdown_duration_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="avg-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                ],
-                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                fill=1,
-                tooltip_sort=2,
+            duration_panel(
+                "Read Duration Breakdown",
+                "tiflash_disaggregated_breakdown_duration_seconds",
+                by_labels=["type"],
+                legend="%s-{{type}} {{$additional_groupby}}",
             ),
         ]
     )
@@ -5987,115 +4629,17 @@ def DisaggregatedCompute() -> RowPanel:
     )
     layout.row(
         [
-            graph_panel(
-                title="Remote Cache BG Download Duration",
-                targets=[
-                    target(
-                        expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_remote_cache_bg_download_stage_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, stage, file_type, $additional_groupby) / 1000000000)',
-                        legend_format="max-{{stage}}-{{file_type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.9999",
-                            "tiflash_storage_remote_cache_bg_download_stage_seconds",
-                            by_labels=["stage", "file_type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="9999-{{stage}}-{{file_type}} {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.999",
-                            "tiflash_storage_remote_cache_bg_download_stage_seconds",
-                            by_labels=["stage", "file_type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="999-{{stage}}-{{file_type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.99",
-                            "tiflash_storage_remote_cache_bg_download_stage_seconds",
-                            by_labels=["stage", "file_type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="99-{{stage}}-{{file_type}} {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.80",
-                            "tiflash_storage_remote_cache_bg_download_stage_seconds",
-                            by_labels=["stage", "file_type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="80-{{stage}}-{{file_type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_avg(
-                            "tiflash_storage_remote_cache_bg_download_stage_seconds",
-                            by_labels=["stage", "file_type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="avg-{{stage}}-{{file_type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                ],
-                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                fill=1,
-                tooltip_sort=2,
+            duration_panel(
+                "Remote Cache BG Download Duration",
+                "tiflash_storage_remote_cache_bg_download_stage_seconds",
+                by_labels=["stage", "file_type"],
+                legend="%s-{{stage}}-{{file_type}} {{$additional_groupby}}",
             ),
-            graph_panel(
-                title="Remote Cache Wait on Downloading Duration",
-                targets=[
-                    target(
-                        expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_remote_cache_wait_on_downloading_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, result, file_type, $additional_groupby) / 1000000000)',
-                        legend_format="max-{{result}}-{{file_type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.9999",
-                            "tiflash_storage_remote_cache_wait_on_downloading_seconds",
-                            by_labels=["result", "file_type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="9999-{{result}}-{{file_type}} {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.999",
-                            "tiflash_storage_remote_cache_wait_on_downloading_seconds",
-                            by_labels=["result", "file_type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="999-{{result}}-{{file_type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.99",
-                            "tiflash_storage_remote_cache_wait_on_downloading_seconds",
-                            by_labels=["result", "file_type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="99-{{result}}-{{file_type}} {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.80",
-                            "tiflash_storage_remote_cache_wait_on_downloading_seconds",
-                            by_labels=["result", "file_type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="80-{{result}}-{{file_type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_avg(
-                            "tiflash_storage_remote_cache_wait_on_downloading_seconds",
-                            by_labels=["result", "file_type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="avg-{{result}}-{{file_type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                ],
-                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                fill=1,
-                tooltip_sort=2,
+            duration_panel(
+                "Remote Cache Wait on Downloading Duration",
+                "tiflash_storage_remote_cache_wait_on_downloading_seconds",
+                by_labels=["result", "file_type"],
+                legend="%s-{{result}}-{{file_type}} {{$additional_groupby}}",
             ),
         ]
     )
@@ -6285,66 +4829,13 @@ def DisaggregatedCompute() -> RowPanel:
                 ),
                 series_overrides=[{"alias": "/hit_ratio/", "yaxis": 2}],
             ),
-            graph_panel(
-                title="PlaceIndex Tasks Duration",
+            duration_panel(
+                "PlaceIndex Tasks Duration",
+                "tiflash_storage_subtask_duration_seconds",
                 description="Duration of storage's internal sub tasks",
-                targets=[
-                    target(
-                        expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_subtask_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role", type="place_index_update"}[$__rate_interval]))) by (le, type, $additional_groupby) / 1000000000)',
-                        legend_format="max-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.9999",
-                            "tiflash_storage_subtask_duration_seconds",
-                            label_selectors=['type="place_index_update"'],
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="9999-{{type}} {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.999",
-                            "tiflash_storage_subtask_duration_seconds",
-                            label_selectors=['type="place_index_update"'],
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="999-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.99",
-                            "tiflash_storage_subtask_duration_seconds",
-                            label_selectors=['type="place_index_update"'],
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="99-{{type}} {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.80",
-                            "tiflash_storage_subtask_duration_seconds",
-                            label_selectors=['type="place_index_update"'],
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="80-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_avg(
-                            "tiflash_storage_subtask_duration_seconds",
-                            label_selectors=['type="place_index_update"'],
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="avg-{{type}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                ],
-                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                fill=1,
-                tooltip_sort=2,
+                by_labels=["type"],
+                legend="%s-{{type}} {{$additional_groupby}}",
+                extra_label_selectors=['type="place_index_update"'],
             ),
         ]
     )
@@ -6591,61 +5082,12 @@ def S3() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
             ),
-            graph_panel(
-                title="S3 Request Duration",
+            duration_panel(
+                "S3 Request Duration",
+                "tiflash_storage_s3_request_seconds",
                 description="S3 Request Duration",
-                targets=[
-                    target(
-                        expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_s3_request_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, type, $additional_groupby) / 1000000000)',
-                        legend_format="{{type}}-max {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.9999",
-                            "tiflash_storage_s3_request_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-9999 {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.999",
-                            "tiflash_storage_s3_request_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-999 {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.99",
-                            "tiflash_storage_s3_request_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-99 {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.80",
-                            "tiflash_storage_s3_request_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-80 {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_avg(
-                            "tiflash_storage_s3_request_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-avg {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                ],
-                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                fill=1,
-                tooltip_sort=2,
+                by_labels=["type"],
+                legend="{{type}}-%s {{$additional_groupby}}",
             ),
         ]
     )
@@ -6728,61 +5170,12 @@ def S3() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
             ),
-            graph_panel(
-                title="S3 HTTP Request Duration",
+            duration_panel(
+                "S3 HTTP Request Duration",
+                "tiflash_storage_s3_http_request_seconds",
                 description="S3 HTTP Request Duration",
-                targets=[
-                    target(
-                        expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_s3_http_request_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, type, $additional_groupby) / 1000000000)',
-                        legend_format="{{type}}-max {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.9999",
-                            "tiflash_storage_s3_http_request_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-9999 {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.999",
-                            "tiflash_storage_s3_http_request_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-999 {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.99",
-                            "tiflash_storage_s3_http_request_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-99 {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.80",
-                            "tiflash_storage_s3_http_request_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-80 {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_avg(
-                            "tiflash_storage_s3_http_request_seconds",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}}-avg {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                ],
-                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                fill=1,
-                tooltip_sort=2,
+                by_labels=["type"],
+                legend="{{type}}-%s {{$additional_groupby}}",
             ),
         ]
     )
@@ -7295,65 +5688,12 @@ def StatusServer() -> RowPanel:
     layout = Layout(title="Status Server")
     layout.row(
         [
-            graph_panel(
-                title="Status API Request Duration",
-                targets=[
-                    target(
-                        expr='histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_proxy_tikv_status_server_proxy_request_duration_seconds_bucket{k8s_cluster="$k8s_cluster", tidb_cluster="$tidb_cluster", instance=~"$proxy_instance", instance=~"$tiflash_role"}[$__rate_interval]))) by (le, path, $additional_groupby) / 1000000000)',
-                        legend_format="max-{{path}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.9999",
-                            "tiflash_proxy_tikv_status_server_proxy_request_duration_seconds",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            by_labels=["path", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="9999-{{path}} {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.999",
-                            "tiflash_proxy_tikv_status_server_proxy_request_duration_seconds",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            by_labels=["path", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="999-{{path}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.99",
-                            "tiflash_proxy_tikv_status_server_proxy_request_duration_seconds",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            by_labels=["path", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="99-{{path}} {{$additional_groupby}}",
-                    ),
-                    target(
-                        expr=expr_histogram_quantile(
-                            "0.80",
-                            "tiflash_proxy_tikv_status_server_proxy_request_duration_seconds",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            by_labels=["path", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="80-{{path}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                    target(
-                        expr=expr_histogram_avg(
-                            "tiflash_proxy_tikv_status_server_proxy_request_duration_seconds",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            by_labels=["path", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="avg-{{path}} {{$additional_groupby}}",
-                        hide=True,
-                    ),
-                ],
-                yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                fill=1,
-                tooltip_sort=2,
+            duration_panel(
+                "Status API Request Duration",
+                "tiflash_proxy_tikv_status_server_proxy_request_duration_seconds",
+                by_labels=["path"],
+                legend="%s-{{path}} {{$additional_groupby}}",
+                instance_selector=PROXY_LABEL_SELECTORS,
             ),
             graph_panel(
                 title="Status API Request (op/s)",
