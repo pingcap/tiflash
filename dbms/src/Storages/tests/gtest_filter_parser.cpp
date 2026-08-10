@@ -17,6 +17,7 @@
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncCoprocessorUtils.h>
 #include <Debug/dbgQueryCompiler.h>
+#include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
@@ -76,37 +77,22 @@ protected:
         const String & query,
         TimezoneInfo & timezone_info = default_timezone_info,
         bool enable_trim_minmax = false);
+    DM::RSOperatorPtr parseConditions(
+        String table_info_json,
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
+        TimezoneInfo & timezone_info = default_timezone_info,
+        bool enable_trim_minmax = false);
 };
 
 TimezoneInfo FilterParserTest::default_timezone_info;
 
-DM::RSOperatorPtr FilterParserTest::generateRsOperator(
+DM::RSOperatorPtr FilterParserTest::parseConditions(
     const String table_info_json,
-    const String & query,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
     TimezoneInfo & timezone_info,
     bool enable_trim_minmax)
 {
     const TiDB::TableInfo table_info(table_info_json, NullspaceID);
-
-    QueryTasks query_tasks;
-    std::tie(query_tasks, std::ignore) = compileQuery(
-        *ctx,
-        query,
-        [&](const String &, const String &) { return table_info; },
-        getDAGProperties(""));
-    auto & dag_request = *query_tasks[0].dag_request;
-    DAGContext dag_context(dag_request, {}, NullspaceID, "", DAGRequestKind::Cop, "", 0, "", log);
-    ctx->setDAGContext(&dag_context);
-    // Don't care about regions information in this test
-    google::protobuf::RepeatedPtrField<tipb::Expr> conditions;
-    traverseExecutors(&dag_request, [&](const tipb::Executor & executor) {
-        if (executor.has_selection())
-        {
-            conditions = executor.selection().conditions();
-            return false;
-        }
-        return true;
-    });
 
     DM::ColumnDefines columns_to_read;
     columns_to_read.reserve(table_info.columns.size());
@@ -143,6 +129,75 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(
         std::move(create_attr_by_column_id),
         log,
         enable_trim_minmax);
+}
+
+DM::RSOperatorPtr FilterParserTest::generateRsOperator(
+    const String table_info_json,
+    const String & query,
+    TimezoneInfo & timezone_info,
+    bool enable_trim_minmax)
+{
+    const TiDB::TableInfo table_info(table_info_json, NullspaceID);
+
+    QueryTasks query_tasks;
+    std::tie(query_tasks, std::ignore) = compileQuery(
+        *ctx,
+        query,
+        [&](const String &, const String &) { return table_info; },
+        getDAGProperties(""));
+    auto & dag_request = *query_tasks[0].dag_request;
+    DAGContext dag_context(dag_request, {}, NullspaceID, "", DAGRequestKind::Cop, "", 0, "", log);
+    ctx->setDAGContext(&dag_context);
+    // Don't care about regions information in this test
+    google::protobuf::RepeatedPtrField<tipb::Expr> conditions;
+    traverseExecutors(&dag_request, [&](const tipb::Executor & executor) {
+        if (executor.has_selection())
+        {
+            conditions = executor.selection().conditions();
+            return false;
+        }
+        return true;
+    });
+
+    return parseConditions(table_info_json, conditions, timezone_info, enable_trim_minmax);
+}
+
+tipb::Expr buildColumnRefExpr(const TiDB::ColumnInfo & column_info, Int64 column_index)
+{
+    tipb::Expr expr;
+    expr.set_tp(tipb::ExprType::ColumnRef);
+    *expr.mutable_field_type() = columnInfoToFieldType(column_info);
+    WriteBufferFromOwnString ss;
+    encodeDAGInt64(column_index, ss);
+    expr.set_val(ss.releaseStr());
+    return expr;
+}
+
+tipb::Expr buildDecimalLiteralExpr(Decimal64 value, UInt32 precision, UInt32 scale)
+{
+    tipb::Expr expr;
+    expr.set_tp(tipb::ExprType::MysqlDecimal);
+    auto * field_type = expr.mutable_field_type();
+    field_type->set_tp(TiDB::TypeNewDecimal);
+    field_type->set_flen(precision);
+    field_type->set_decimal(scale);
+    WriteBufferFromOwnString ss;
+    encodeDAGDecimal(Field(DecimalField<Decimal64>(value, scale)), ss);
+    expr.set_val(ss.releaseStr());
+    return expr;
+}
+
+tipb::Expr buildScalarFuncExpr(tipb::ScalarFuncSig sig, std::initializer_list<tipb::Expr> children)
+{
+    tipb::Expr expr;
+    expr.set_tp(tipb::ExprType::ScalarFunc);
+    expr.set_sig(sig);
+    auto * field_type = expr.mutable_field_type();
+    field_type->set_tp(TiDB::TypeLongLong);
+    field_type->set_flag(TiDB::ColumnFlagUnsigned);
+    for (const auto & child : children)
+        expr.add_children()->CopyFrom(child);
+    return expr;
 }
 
 // Test cases for col and literal
@@ -1028,7 +1083,8 @@ try
 {
     const String table_info_json = R"json({
     "cols":[
-        {"comment":"","default":null,"default_bit":null,"id":5,"name":{"L":"col_decimal","O":"col_decimal"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":2,"Elems":null,"Flag":4097,"Flen":9,"Tp":246}}
+        {"comment":"","default":null,"default_bit":null,"id":5,"name":{"L":"col_decimal","O":"col_decimal"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":2,"Elems":null,"Flag":4097,"Flen":9,"Tp":246}},
+        {"comment":"","default":null,"default_bit":null,"id":2,"name":{"L":"col_int","O":"col_int"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":0,"Elems":null,"Flag":4097,"Flen":0,"Tp":8}}
     ],
     "pk_is_handle":false,"index_info":[],"is_common_handle":false,
     "name":{"L":"t_111","O":"t_111"},"partition":null,
@@ -1038,13 +1094,51 @@ try
     auto expect_rs_operator = [&](const String & query, const String & expected_name) {
         auto rs_operator = generateRsOperator(table_info_json, query);
         EXPECT_EQ(rs_operator->name(), expected_name) << rs_operator->toDebugString();
-        EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
-        EXPECT_EQ(rs_operator->getColumnIDs()[0], 5);
+        if (expected_name != "unsupported")
+        {
+            EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
+            EXPECT_EQ(rs_operator->getColumnIDs()[0], 5);
+        }
     };
 
-    expect_rs_operator("select * from default.t_111 where col_decimal > 1", "greater");
-    expect_rs_operator("select * from default.t_111 where col_decimal = 1", "equal");
-    expect_rs_operator("select * from default.t_111 where col_decimal in (1, 2)", "in");
+    const TiDB::TableInfo table_info(table_info_json, NullspaceID);
+    const auto decimal_col = buildColumnRefExpr(table_info.columns[0], /*column_index*/ 0);
+    const auto int_col = buildColumnRefExpr(table_info.columns[1], /*column_index*/ 1);
+    const auto decimal_123 = buildDecimalLiteralExpr(Decimal64(123), /*precision*/ 9, /*scale*/ 2);
+    const auto decimal_456 = buildDecimalLiteralExpr(Decimal64(456), /*precision*/ 9, /*scale*/ 2);
+
+    auto expect_dag_rs_operator = [&](const tipb::Expr & expr, const String & expected_name) {
+        google::protobuf::RepeatedPtrField<tipb::Expr> conditions;
+        conditions.Add()->CopyFrom(expr);
+        auto rs_operator = parseConditions(table_info_json, conditions);
+        EXPECT_EQ(rs_operator->name(), expected_name) << rs_operator->toDebugString();
+        if (expected_name != "unsupported")
+        {
+            EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
+            EXPECT_EQ(rs_operator->getColumnIDs()[0], 5);
+        }
+    };
+
+    expect_dag_rs_operator(buildScalarFuncExpr(tipb::ScalarFuncSig::GTDecimal, {decimal_col, decimal_123}), "greater");
+    expect_dag_rs_operator(buildScalarFuncExpr(tipb::ScalarFuncSig::EQDecimal, {decimal_col, decimal_123}), "equal");
+    expect_dag_rs_operator(
+        buildScalarFuncExpr(tipb::ScalarFuncSig::InDecimal, {decimal_col, decimal_123, decimal_456}),
+        "in");
+    expect_dag_rs_operator(
+        buildScalarFuncExpr(tipb::ScalarFuncSig::InDecimal, {decimal_col, decimal_123, constructNULLLiteralTiExpr()}),
+        "in");
+    expect_dag_rs_operator(
+        buildScalarFuncExpr(tipb::ScalarFuncSig::NullEQDecimal, {decimal_col, constructNULLLiteralTiExpr()}),
+        "isnull");
+
+    expect_dag_rs_operator(
+        buildScalarFuncExpr(tipb::ScalarFuncSig::GTDecimal, {decimal_col, constructInt64LiteralTiExpr(1)}),
+        "unsupported");
+    expect_dag_rs_operator(buildScalarFuncExpr(tipb::ScalarFuncSig::GTDecimal, {int_col, decimal_123}), "unsupported");
+
+    expect_rs_operator("select * from default.t_111 where col_decimal > 1", "unsupported");
+    expect_rs_operator("select * from default.t_111 where col_decimal = 1", "unsupported");
+    expect_rs_operator("select * from default.t_111 where col_decimal in (1, 2)", "unsupported");
     expect_rs_operator("select * from default.t_111 where col_decimal is null", "isnull");
 }
 CATCH
