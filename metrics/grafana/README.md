@@ -57,8 +57,4 @@ uv sync
 ```bash
 # Compare two dashboard JSON files (paths are examples):
 python3 scripts/compare_dashboards.py old.json tiflash_summary.json
-
-# Optional: regenerate the grafanalib migration review markdown from two JSON baselines:
-python3 scripts/gen_migration_diff_md.py old.json tiflash_summary.json \
-  -o GRAFANALIB_MIGRATION_DIFF.md
 ```
