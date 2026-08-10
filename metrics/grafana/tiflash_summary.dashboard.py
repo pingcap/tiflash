@@ -162,7 +162,6 @@ def Server() -> RowPanel:
                 yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
                 legend=graph_legend(max=False),
                 fill=5,
-                fill_gradient=0,
                 line_width=0,
                 stack=True,
                 decimals=3,
@@ -182,7 +181,6 @@ def Server() -> RowPanel:
                 yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
                 legend=graph_legend(max=False),
                 fill=5,
-                fill_gradient=0,
                 line_width=0,
                 stack=True,
                 decimals=3,
@@ -202,7 +200,6 @@ def Server() -> RowPanel:
                 yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
                 legend=graph_legend(max=False),
                 fill=5,
-                fill_gradient=0,
                 line_width=0,
                 stack=True,
                 decimals=3,
@@ -222,7 +219,6 @@ def Server() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="dtdurations", right_format="short"),
                 legend=graph_legend(max=False),
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Region",
@@ -250,7 +246,6 @@ def Server() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="short", right_format="short"),
-                fill_gradient=0,
                 null_point_mode="null",
                 decimals=0,
             ),
@@ -281,7 +276,6 @@ def Server() -> RowPanel:
                     left_min="0",
                     left_decimals=1,
                 ),
-                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -411,7 +405,6 @@ def Server() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
-                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -449,7 +442,6 @@ def Server() -> RowPanel:
                     left_min="0",
                     left_decimals=0,
                 ),
-                fill_gradient=0,
                 null_point_mode="null",
             ),
             graph_panel(
@@ -465,7 +457,6 @@ def Server() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
                 legend=graph_legend(max=False),
-                fill_gradient=0,
                 decimals=1,
             ),
         ]
@@ -619,10 +610,9 @@ def Threads() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="none", right_format="short"),
                 fill=1,
-                fill_gradient=0,
+                null_point_mode="null",
                 points=True,
                 pointradius=2,
-                null_point_mode="null",
                 decimals=1,
             ),
             graph_panel(
@@ -640,10 +630,9 @@ def Threads() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="Bps", right_format="short"),
                 fill=1,
-                fill_gradient=0,
+                null_point_mode="null",
                 points=True,
                 pointradius=2,
-                null_point_mode="null",
                 decimals=1,
             ),
         ]
@@ -665,10 +654,9 @@ def Threads() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="none", right_format="short"),
                 fill=1,
-                fill_gradient=0,
+                null_point_mode="null",
                 points=True,
                 pointradius=2,
-                null_point_mode="null",
                 decimals=1,
             ),
             graph_panel(
@@ -686,10 +674,9 @@ def Threads() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="none", right_format="short"),
                 fill=1,
-                fill_gradient=0,
+                null_point_mode="null",
                 points=True,
                 pointradius=2,
-                null_point_mode="null",
                 decimals=1,
             ),
         ]
@@ -712,7 +699,6 @@ def Coprocessor() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="none", left_min="0"),
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
             graph_panel(
@@ -726,7 +712,6 @@ def Coprocessor() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="none", left_min="0"),
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
         ]
@@ -786,7 +771,6 @@ def Coprocessor() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
             graph_panel(
@@ -800,7 +784,6 @@ def Coprocessor() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="none", left_min="0"),
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
         ]
@@ -860,7 +843,6 @@ def Coprocessor() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
             graph_panel(
@@ -875,7 +857,6 @@ def Coprocessor() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
-                fill_gradient=0,
             ),
         ]
     )
@@ -926,7 +907,6 @@ def Coprocessor() -> RowPanel:
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
                 fill=1,
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Exchange Bytes/Seconds",
@@ -940,7 +920,6 @@ def Coprocessor() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
-                fill_gradient=0,
             ),
         ]
     )
@@ -960,7 +939,6 @@ def Coprocessor() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Handling Request Number",
@@ -975,7 +953,6 @@ def Coprocessor() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="none", left_min="0"),
-                fill_gradient=0,
             ),
         ]
     )
@@ -995,7 +972,6 @@ def Coprocessor() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Max Threads of Rpc",
@@ -1011,7 +987,6 @@ def Coprocessor() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
-                fill_gradient=0,
             ),
         ]
     )
@@ -1030,7 +1005,6 @@ def Coprocessor() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Max Threads",
@@ -1046,7 +1020,6 @@ def Coprocessor() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
-                fill_gradient=0,
             ),
         ]
     )
@@ -1062,7 +1035,6 @@ def Coprocessor() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Data size in send and receive queue",
@@ -1074,7 +1046,6 @@ def Coprocessor() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
-                fill_gradient=0,
             ),
         ]
     )
@@ -1092,7 +1063,6 @@ def Coprocessor() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Establish calldata details",
@@ -1109,7 +1079,6 @@ def Coprocessor() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
-                fill_gradient=0,
             ),
         ]
     )
@@ -1141,7 +1110,6 @@ def TaskScheduler() -> RowPanel:
                 ),
                 legend=graph_legend(max=False),
                 fill=1,
-                fill_gradient=0,
                 points=True,
                 pointradius=1,
                 null_point_mode="null",
@@ -1198,7 +1166,6 @@ def TaskScheduler() -> RowPanel:
                     left_log_base=10,
                 ),
                 legend=graph_legend(max=False),
-                fill_gradient=0,
             ),
         ]
     )
@@ -1228,7 +1195,6 @@ def TaskScheduler() -> RowPanel:
                 yaxes=yaxes(
                     left_format="none", right_format="short", left_label="Queries"
                 ),
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Active and Waiting Tasks Count",
@@ -1254,7 +1220,6 @@ def TaskScheduler() -> RowPanel:
                 yaxes=yaxes(
                     left_format="none", right_format="short", left_label="Tasks"
                 ),
-                fill_gradient=0,
             ),
         ]
     )
@@ -1274,7 +1239,6 @@ def TaskScheduler() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="short"),
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Task Waiting Duration",
@@ -1350,7 +1314,6 @@ def TaskScheduler() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
         ]
@@ -1398,7 +1361,6 @@ def DDL() -> RowPanel:
                 legend=graph_legend(
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Schema Apply OPM",
@@ -1414,7 +1376,6 @@ def DDL() -> RowPanel:
                 legend=graph_legend(
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
-                fill_gradient=0,
             ),
         ]
     )
@@ -1483,7 +1444,6 @@ def DDL() -> RowPanel:
                     left_format="s", right_format="short", left_min="0", right_show=True
                 ),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
                 series_overrides=[{"alias": "/^applying/", "yaxis": 2}],
             ),
@@ -1520,7 +1480,6 @@ def ImbalanceReadWrite() -> RowPanel:
                     left_decimals=1,
                 ),
                 legend=graph_legend(side_width=250),
-                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -1547,7 +1506,6 @@ def ImbalanceReadWrite() -> RowPanel:
                 yaxes=yaxes(
                     left_format="percentunit", right_format="short", left_min="0"
                 ),
-                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -1576,7 +1534,6 @@ def ImbalanceReadWrite() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="none", left_min="0"),
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
             graph_panel(
@@ -1609,7 +1566,6 @@ def ImbalanceReadWrite() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="binBps", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 null_point_mode="null",
                 decimals=1,
             ),
@@ -1645,7 +1601,6 @@ def ImbalanceReadWrite() -> RowPanel:
                     right_min="0",
                     right_show=True,
                 ),
-                fill_gradient=0,
                 series_overrides=[{"alias": "/delete_range|ingest/", "yaxis": 2}],
             ),
             graph_panel(
@@ -1677,7 +1632,6 @@ def ImbalanceReadWrite() -> RowPanel:
                     right_show=True,
                 ),
                 legend=graph_legend(side_width=250),
-                fill_gradient=0,
                 null_point_mode="null",
                 decimals=1,
                 series_overrides=[{"alias": "/total/", "yaxis": 2}],
@@ -1702,7 +1656,6 @@ def MemoryTrace() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="short", right_format="s"),
                 fill=1,
-                fill_gradient=0,
                 null_point_mode="null",
             ),
             graph_panel(
@@ -1724,7 +1677,6 @@ def MemoryTrace() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="short", right_format="s"),
                 fill=1,
-                fill_gradient=0,
                 null_point_mode="null",
             ),
         ]
@@ -1749,7 +1701,6 @@ def MemoryTrace() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="short", right_format="s"),
                 fill=1,
-                fill_gradient=0,
                 null_point_mode="null",
             ),
             graph_panel(
@@ -1772,7 +1723,6 @@ def MemoryTrace() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="bytes", right_format="s"),
                 fill=1,
-                fill_gradient=0,
                 null_point_mode="null",
             ),
         ]
@@ -1804,7 +1754,6 @@ def MemoryTrace() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
                 legend=graph_legend(side_width=250),
-                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -1840,7 +1789,6 @@ def MemoryTrace() -> RowPanel:
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
                 fill=1,
-                fill_gradient=0,
                 null_point_mode="null",
             ),
         ]
@@ -1887,7 +1835,6 @@ def MemoryTrace() -> RowPanel:
                 yaxes=yaxes(left_format="short", right_format="short"),
                 legend=graph_legend(max=False),
                 fill=1,
-                fill_gradient=0,
                 null_point_mode="null",
             ),
             graph_panel(
@@ -1916,7 +1863,6 @@ def MemoryTrace() -> RowPanel:
                     right_show=True,
                 ),
                 fill=1,
-                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[{"alias": "/max_snapshot_lifetime/", "yaxis": 2}],
             ),
@@ -1954,7 +1900,6 @@ def MemoryTrace() -> RowPanel:
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
                 fill=1,
-                fill_gradient=0,
                 null_point_mode="null",
             ),
             graph_panel(
@@ -1987,7 +1932,6 @@ def MemoryTrace() -> RowPanel:
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
                 fill=1,
-                fill_gradient=0,
                 null_point_mode="null",
             ),
         ]
@@ -2012,7 +1956,6 @@ def MemoryTrace() -> RowPanel:
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
                 fill=1,
-                fill_gradient=0,
                 null_point_mode="null",
             ),
             graph_panel(
@@ -2031,7 +1974,6 @@ def MemoryTrace() -> RowPanel:
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
                 fill=1,
-                fill_gradient=0,
                 null_point_mode="null",
             ),
         ]
@@ -2086,7 +2028,6 @@ def ColumnarStorage() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
-                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -2156,7 +2097,6 @@ def ColumnarStorage() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
         ]
@@ -2185,7 +2125,6 @@ def ColumnarStorage() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
-                fill_gradient=0,
             ),
             graph_panel(
                 title="IA Segments Remote Read Duration",
@@ -2245,7 +2184,6 @@ def ColumnarStorage() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
         ]
@@ -2274,7 +2212,6 @@ def ColumnarStorage() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Columnar Prefetch Duration",
@@ -2334,7 +2271,6 @@ def ColumnarStorage() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
             graph_panel(
@@ -2395,7 +2331,6 @@ def ColumnarStorage() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
         ]
@@ -2415,7 +2350,6 @@ def ColumnarStorage() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
             graph_panel(
@@ -2476,7 +2410,6 @@ def ColumnarStorage() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
         ]
@@ -2513,7 +2446,6 @@ def ColumnarStorage() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Columnar Meta Cache Gauge",
@@ -2540,7 +2472,6 @@ def ColumnarStorage() -> RowPanel:
                     left_min="0",
                     right_show=True,
                 ),
-                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[{"alias": "/entries/", "yaxis": 2}],
             ),
@@ -2582,7 +2513,6 @@ def Storage() -> RowPanel:
                 legend=graph_legend(
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
-                fill_gradient=0,
                 series_overrides=[{"alias": "/delete_range|ingest/", "yaxis": 2}],
             ),
             graph_panel(
@@ -2631,7 +2561,6 @@ def Storage() -> RowPanel:
                     right_show=True,
                 ),
                 legend=graph_legend(max=False),
-                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[{"alias": "/fs|write/", "yaxis": 2}],
             ),
@@ -2659,7 +2588,6 @@ def Storage() -> RowPanel:
                     right_show=True,
                 ),
                 legend=graph_legend(side_width=250),
-                fill_gradient=0,
                 null_point_mode="null",
                 decimals=1,
                 series_overrides=[{"alias": "/total/", "yaxis": 2}],
@@ -2684,7 +2612,6 @@ def Storage() -> RowPanel:
                     right_show=True,
                 ),
                 legend=graph_legend(side_width=250),
-                fill_gradient=0,
                 null_point_mode="null",
                 decimals=1,
                 series_overrides=[{"alias": "/total/", "yaxis": 2}],
@@ -2709,7 +2636,6 @@ def Storage() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
             graph_panel(
@@ -2781,7 +2707,6 @@ def Storage() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
         ],
@@ -2805,7 +2730,6 @@ def Storage() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
             graph_panel(
@@ -2877,7 +2801,6 @@ def Storage() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
         ],
@@ -2920,7 +2843,6 @@ def Storage() -> RowPanel:
                     left_min="0",
                     left_decimals=0,
                 ),
-                fill_gradient=0,
             ),
         ]
     )
@@ -2969,7 +2891,6 @@ def Storage() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
                 legend=graph_legend(side_width=250),
-                fill_gradient=0,
                 null_point_mode="null",
             ),
             graph_panel(
@@ -2995,7 +2916,6 @@ def Storage() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="ops", right_format="short", left_min="0"),
                 legend=graph_legend(side_width=250),
-                fill_gradient=0,
                 null_point_mode="null",
             ),
             graph_panel(
@@ -3019,7 +2939,6 @@ def Storage() -> RowPanel:
                     left_format="ops", right_format="s", left_min="0", right_show=True
                 ),
                 legend=graph_legend(side_width=250),
-                fill_gradient=0,
                 series_overrides=[{"alias": "/max-fsync/", "yaxis": 2}],
             ),
         ]
@@ -3054,7 +2973,6 @@ def Storage() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Disk Read OPS",
@@ -3083,7 +3001,6 @@ def Storage() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
-                fill_gradient=0,
             ),
         ]
     )
@@ -3118,7 +3035,6 @@ def Storage() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="binBps", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 null_point_mode="null",
                 decimals=1,
             ),
@@ -3151,7 +3067,6 @@ def Storage() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="binBps", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 null_point_mode="null",
                 decimals=1,
             ),
@@ -3175,7 +3090,6 @@ def Storage() -> RowPanel:
                 yaxes=yaxes(left_format="short", right_format="short"),
                 legend=graph_legend(avg=True, max=False),
                 fill=1,
-                fill_gradient=0,
                 null_point_mode="null",
             ),
             graph_panel(
@@ -3193,7 +3107,6 @@ def Storage() -> RowPanel:
                 yaxes=yaxes(left_format="short", right_format="short"),
                 legend=graph_legend(max=False, total=True),
                 fill=1,
-                fill_gradient=0,
                 null_point_mode="null",
             ),
         ]
@@ -3217,7 +3130,6 @@ def StorageReadPoolDataSharing() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
             graph_panel(
@@ -3318,7 +3230,6 @@ def StorageReadPoolDataSharing() -> RowPanel:
                     right_show=True,
                 ),
                 fill=1,
-                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[{"alias": "/max_snapshot_lifetime/", "yaxis": 2}],
             ),
@@ -3379,7 +3290,6 @@ def StorageReadPoolDataSharing() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="µs", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
             graph_panel(
@@ -3405,7 +3315,6 @@ def StorageReadPoolDataSharing() -> RowPanel:
                     right_show=True,
                 ),
                 legend=graph_legend(current=False, max=False),
-                fill_gradient=0,
                 series_overrides=[{"alias": "/push_block/", "yaxis": 2}],
             ),
         ]
@@ -3440,7 +3349,6 @@ def StorageReadPoolDataSharing() -> RowPanel:
                     left_min="0",
                     right_show=True,
                 ),
-                fill_gradient=0,
                 series_overrides=[
                     {"alias": "/cache_hit_ratio/", "yaxis": 2},
                     {"alias": "/cache_hit_ratio/", "yaxis": 2},
@@ -3464,7 +3372,6 @@ def StorageReadPoolDataSharing() -> RowPanel:
                     right_min="0",
                     right_show=True,
                 ),
-                fill_gradient=0,
                 series_overrides=[{"alias": "/cache_hit_ratio/", "yaxis": 2}],
             ),
             graph_panel(
@@ -3520,7 +3427,6 @@ def StorageReadPoolDataSharing() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
         ]
@@ -3580,7 +3486,6 @@ def StorageReadPoolDataSharing() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="ms", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
             graph_panel(
@@ -3598,7 +3503,6 @@ def StorageReadPoolDataSharing() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="cps", right_format="opm", left_min="0"),
                 legend=graph_legend(current=False),
-                fill_gradient=0,
             ),
         ]
     )
@@ -3646,7 +3550,6 @@ def PageStorage() -> RowPanel:
                     right_show=True,
                 ),
                 legend=graph_legend(max=False),
-                fill_gradient=0,
                 decimals=1,
                 series_overrides=[
                     {"alias": "/^valid_rate/", "yaxis": 2},
@@ -3676,7 +3579,6 @@ def PageStorage() -> RowPanel:
                     left_format="short", right_format="percentunit", left_min="0"
                 ),
                 legend=graph_legend(max=False),
-                fill_gradient=0,
                 decimals=1,
             ),
         ]
@@ -3754,7 +3656,6 @@ def PageStorage() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
         ]
@@ -3777,7 +3678,6 @@ def PageStorage() -> RowPanel:
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
                 fill=1,
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Page GC Duration",
@@ -3832,7 +3732,6 @@ def PageStorage() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
         ]
@@ -3858,7 +3757,6 @@ def PageStorage() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="short", right_format="short", left_min="0"),
                 legend=graph_legend(max=False),
-                fill_gradient=0,
                 decimals=1,
             ),
             graph_panel(
@@ -3876,7 +3774,6 @@ def PageStorage() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
                 legend=graph_legend(side_width=250),
-                fill_gradient=0,
                 null_point_mode="null",
             ),
         ]
@@ -3895,7 +3792,6 @@ def PageStorage() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 null_point_mode="null",
                 decimals=1,
             ),
@@ -3936,7 +3832,6 @@ def PageStorage() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="short", right_format="short"),
                 legend=graph_legend(max=False),
-                fill_gradient=0,
                 decimals=1,
             ),
         ]
@@ -3962,7 +3857,6 @@ def PageStorage() -> RowPanel:
                     right_min="0",
                     right_show=True,
                 ),
-                fill_gradient=0,
                 series_overrides=[{"yaxis": 2}],
             ),
         ]
@@ -3988,7 +3882,6 @@ def PageStorage() -> RowPanel:
                     right_min="0",
                     right_show=True,
                 ),
-                fill_gradient=0,
                 series_overrides=[{"yaxis": 2}],
             ),
         ]
@@ -4018,7 +3911,6 @@ def RateLimiter() -> RowPanel:
                     left_decimals=0,
                 ),
                 fill=1,
-                fill_gradient=0,
             ),
             graph_panel(
                 title="I/O Limiter Threshold",
@@ -4035,7 +3927,6 @@ def RateLimiter() -> RowPanel:
                 yaxes=yaxes(left_format="bytes", right_format="short"),
                 legend=graph_legend(max=False),
                 fill=1,
-                fill_gradient=0,
             ),
         ]
     )
@@ -4085,7 +3976,6 @@ def RateLimiter() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="short", right_format="s", right_show=True),
                 fill=1,
-                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[{"alias": "/pending/", "yaxis": 2}],
             ),
@@ -4109,7 +3999,6 @@ def RateLimiter() -> RowPanel:
                     right_show=True,
                 ),
                 fill=1,
-                fill_gradient=0,
                 series_overrides=[{"alias": "", "yaxis": 2}],
             ),
             graph_panel(
@@ -4166,7 +4055,6 @@ def RateLimiter() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
         ]
@@ -4234,7 +4122,6 @@ def StorageWriteStall() -> RowPanel:
                     left_format="s", right_format="short", left_min="0", right_show=True
                 ),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
                 series_overrides=[{"alias": "99-delta_merge", "yaxis": 2}],
             ),
@@ -4267,7 +4154,6 @@ def StorageWriteStall() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="binBps", right_format="bytes", left_min="0"),
                 legend=graph_legend(side_width=250),
-                fill_gradient=0,
                 null_point_mode="null",
                 decimals=1,
             ),
@@ -4296,7 +4182,6 @@ def StorageWriteStall() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="bytes", right_format="bytes", left_min="0"),
                 legend=graph_legend(side_width=250),
-                fill_gradient=0,
                 null_point_mode="null",
                 decimals=1,
             ),
@@ -4333,7 +4218,6 @@ def StorageWriteStall() -> RowPanel:
                     right_show=True,
                 ),
                 legend=graph_legend(side_width=250),
-                fill_gradient=0,
                 null_point_mode="null",
                 decimals=1,
                 series_overrides=[{"alias": "/total/", "yaxis": 2}],
@@ -4370,7 +4254,6 @@ def StorageWriteStall() -> RowPanel:
                     right_min="0",
                     right_show=True,
                 ),
-                fill_gradient=0,
                 series_overrides=[{"alias": "/delete_range|ingest/", "yaxis": 2}],
             ),
         ]
@@ -4393,7 +4276,6 @@ def Raft() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
             graph_panel(
@@ -4407,7 +4289,6 @@ def Raft() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
         ]
@@ -4426,7 +4307,6 @@ def Raft() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
             graph_panel(
@@ -4440,7 +4320,6 @@ def Raft() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
         ]
@@ -4509,7 +4388,6 @@ def Raft() -> RowPanel:
                     left_format="s", right_format="opm", left_min="0", right_show=True
                 ),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
                 series_overrides=[{"alias": "/timeout/", "yaxis": 2}],
             ),
@@ -4567,7 +4445,6 @@ def Raft() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
         ]
@@ -4644,7 +4521,6 @@ def Raft() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
         ]
@@ -4746,7 +4622,6 @@ def Raft() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
             graph_panel(
@@ -4761,7 +4636,6 @@ def Raft() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
         ]
@@ -4900,7 +4774,6 @@ def Raft() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
             graph_panel(
@@ -4957,7 +4830,6 @@ def Raft() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
         ]
@@ -4977,7 +4849,6 @@ def Raft() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="short", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 null_point_mode="null",
                 decimals=1,
             ),
@@ -4997,7 +4868,6 @@ def Raft() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="short", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 null_point_mode="null",
                 decimals=1,
             ),
@@ -5075,7 +4945,6 @@ def Raft() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
         ]
@@ -5095,7 +4964,6 @@ def Raft() -> RowPanel:
                 legend=graph_legend(
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
-                fill_gradient=0,
             ),
         ]
     )
@@ -5159,7 +5027,6 @@ def RaftSnapshotIngestSST() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
         ]
@@ -5205,7 +5072,6 @@ def RaftSnapshotIngestSST() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
             ),
         ]
     )
@@ -5245,7 +5111,6 @@ def RaftSnapshotIngestSST() -> RowPanel:
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
                 fill=1,
-                fill_gradient=0,
                 null_point_mode="null",
             ),
         ]
@@ -5452,7 +5317,6 @@ def RoughSetFilterRateHistogram() -> RowPanel:
                     right_show=True,
                 ),
                 legend=graph_legend(max=False),
-                fill_gradient=0,
                 series_overrides=[
                     {"alias": "/^RS Filter/", "yaxis": 2},
                     {"alias": "/^PK/", "yaxis": 2},
@@ -5539,7 +5403,6 @@ def DisaggregatedWrite() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
             graph_panel(
@@ -5566,7 +5429,6 @@ def DisaggregatedWrite() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="binBps", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 null_point_mode="null",
                 decimals=1,
             ),
@@ -5588,7 +5450,6 @@ def DisaggregatedWrite() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
             graph_panel(
@@ -5605,7 +5466,6 @@ def DisaggregatedWrite() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="binBps", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 null_point_mode="null",
                 decimals=1,
             ),
@@ -5630,7 +5490,6 @@ def DisaggregatedWrite() -> RowPanel:
                     left_format="short", right_format="percentunit", left_min="0"
                 ),
                 legend=graph_legend(max=False),
-                fill_gradient=0,
                 decimals=1,
             ),
             graph_panel(
@@ -5668,7 +5527,6 @@ def DisaggregatedWrite() -> RowPanel:
                     right_show=True,
                 ),
                 legend=graph_legend(max=False),
-                fill_gradient=0,
                 decimals=1,
                 series_overrides=[
                     {"alias": "/^valid_rate/", "yaxis": 2},
@@ -5691,7 +5549,6 @@ def DisaggregatedWrite() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="none", left_min="0"),
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
             graph_panel(
@@ -5747,7 +5604,6 @@ def DisaggregatedWrite() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
         ]
@@ -5767,7 +5623,6 @@ def DisaggregatedWrite() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
                 legend=graph_legend(max=False),
-                fill_gradient=0,
                 decimals=1,
             ),
             graph_panel(
@@ -5825,7 +5680,6 @@ def DisaggregatedWrite() -> RowPanel:
                     left_format="s", right_format="short", left_min="0", right_show=True
                 ),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
                 series_overrides=[
                     {"alias": "/total/", "yaxis": 2},
@@ -5846,7 +5700,6 @@ def DisaggregatedWrite() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="short", right_format="short", left_min="0"),
                 legend=graph_legend(max=False),
-                fill_gradient=0,
                 decimals=1,
             ),
         ]
@@ -5866,7 +5719,6 @@ def DisaggregatedWrite() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="short", right_format="short", left_min="0"),
                 legend=graph_legend(max=False),
-                fill_gradient=0,
                 decimals=1,
             ),
             graph_panel(
@@ -5881,7 +5733,6 @@ def DisaggregatedWrite() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="none", left_min="0"),
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
         ]
@@ -5908,7 +5759,6 @@ def DisaggregatedWrite() -> RowPanel:
                     right_show=True,
                 ),
                 legend=graph_legend(max=False),
-                fill_gradient=0,
                 series_overrides=[{"alias": "/hit_ratio/", "yaxis": 2}],
             ),
             graph_panel(
@@ -5931,7 +5781,6 @@ def DisaggregatedWrite() -> RowPanel:
                     right_show=True,
                 ),
                 legend=graph_legend(max=False),
-                fill_gradient=0,
                 series_overrides=[{"alias": "/hit_ratio/", "yaxis": 2}],
             ),
         ]
@@ -5993,7 +5842,6 @@ def DisaggregatedWrite() -> RowPanel:
                     left_format="s", right_format="short", left_min="0", right_show=True
                 ),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
                 series_overrides=[{"alias": "/hit_ratio/", "yaxis": 2}],
             ),
@@ -6017,7 +5865,6 @@ def DisaggregatedWrite() -> RowPanel:
                     right_show=True,
                 ),
                 legend=graph_legend(max=False),
-                fill_gradient=0,
                 series_overrides=[{"alias": "/hit_ratio/", "yaxis": 2}],
             ),
         ]
@@ -6082,7 +5929,6 @@ def DisaggregatedCompute() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
         ]
@@ -6115,7 +5961,6 @@ def DisaggregatedCompute() -> RowPanel:
                     left_min="0",
                     right_show=True,
                 ),
-                fill_gradient=0,
                 series_overrides=[
                     {"alias": "dtfile_cache_hit_ratio", "yaxis": 2},
                     {"alias": "page_cache_hit_ratio", "yaxis": 2},
@@ -6137,7 +5982,6 @@ def DisaggregatedCompute() -> RowPanel:
                 yaxes=yaxes(
                     left_format="binBps", right_format="percentunit", left_min="0"
                 ),
-                fill_gradient=0,
             ),
         ]
     )
@@ -6196,7 +6040,6 @@ def DisaggregatedCompute() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
             graph_panel(
@@ -6252,7 +6095,6 @@ def DisaggregatedCompute() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
         ]
@@ -6278,7 +6120,6 @@ def DisaggregatedCompute() -> RowPanel:
                     right_show=True,
                 ),
                 fill=1,
-                fill_gradient=0,
                 series_overrides=[{"alias": "", "yaxis": 2}],
             ),
             graph_panel(
@@ -6296,7 +6137,6 @@ def DisaggregatedCompute() -> RowPanel:
                 yaxes=yaxes(
                     left_format="binBps", right_format="percentunit", left_min="0"
                 ),
-                fill_gradient=0,
             ),
         ]
     )
@@ -6315,7 +6155,6 @@ def DisaggregatedCompute() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="short", right_format="short"),
                 fill=1,
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Remote Cache Reject Download Type OPS",
@@ -6336,7 +6175,6 @@ def DisaggregatedCompute() -> RowPanel:
                     right_show=True,
                 ),
                 fill=1,
-                fill_gradient=0,
                 series_overrides=[{"alias": "", "yaxis": 2}],
             ),
         ]
@@ -6380,7 +6218,6 @@ def DisaggregatedCompute() -> RowPanel:
                     left_format="bytes", right_format="percentunit", left_min="0"
                 ),
                 legend=graph_legend(max=False),
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Memory Usage of Storage Tasks",
@@ -6419,7 +6256,6 @@ def DisaggregatedCompute() -> RowPanel:
                     left_format="bytes", right_format="percentunit", left_min="0"
                 ),
                 legend=graph_legend(current=False),
-                fill_gradient=0,
             ),
         ]
     )
@@ -6447,7 +6283,6 @@ def DisaggregatedCompute() -> RowPanel:
                     left_min="0",
                     right_show=True,
                 ),
-                fill_gradient=0,
                 series_overrides=[{"alias": "/hit_ratio/", "yaxis": 2}],
             ),
             graph_panel(
@@ -6509,7 +6344,6 @@ def DisaggregatedCompute() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
         ]
@@ -6539,7 +6373,6 @@ def DisaggregatedCompute() -> RowPanel:
                 yaxes=yaxes(
                     left_format="ops", right_format="opm", left_min="0", left_decimals=1
                 ),
-                fill_gradient=0,
             ),
             graph_panel(
                 title="PlaceIndex update rows/deletes",
@@ -6568,7 +6401,6 @@ def DisaggregatedCompute() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="short", right_format="opm", left_min="0"),
                 fill=1,
-                fill_gradient=0,
             ),
         ]
     )
@@ -6607,7 +6439,6 @@ def S3() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="binBps", right_format="opm", left_min="0"),
-                fill_gradient=0,
             ),
             graph_panel(
                 title="S3 OPS",
@@ -6702,7 +6533,6 @@ def S3() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
-                fill_gradient=0,
             ),
         ]
     )
@@ -6760,7 +6590,6 @@ def S3() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
-                fill_gradient=0,
             ),
             graph_panel(
                 title="S3 Request Duration",
@@ -6816,7 +6645,6 @@ def S3() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
         ]
@@ -6899,7 +6727,6 @@ def S3() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
-                fill_gradient=0,
             ),
             graph_panel(
                 title="S3 HTTP Request Duration",
@@ -6955,7 +6782,6 @@ def S3() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
         ]
@@ -6982,7 +6808,6 @@ def S3() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="opm", left_min="0"),
-                fill_gradient=0,
             ),
             graph_panel(
                 title="S3RandomAccessFile OPS",
@@ -7029,7 +6854,6 @@ def S3() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
-                fill_gradient=0,
             ),
         ]
     )
@@ -7054,7 +6878,6 @@ def PipelineModel() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Task Count",
@@ -7078,7 +6901,6 @@ def PipelineModel() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
-                fill_gradient=0,
             ),
         ]
     )
@@ -7095,7 +6917,6 @@ def PipelineModel() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="none", left_min="0"),
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
             graph_panel(
@@ -7171,7 +6992,6 @@ def PipelineModel() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
         ]
@@ -7220,7 +7040,6 @@ def PipelineModel() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
             ),
             graph_panel(
                 title="Threads CPU of CPU Task Thread Pool",
@@ -7237,7 +7056,6 @@ def PipelineModel() -> RowPanel:
                 yaxes=yaxes(
                     left_format="percentunit", right_format="short", left_min="0"
                 ),
-                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -7269,7 +7087,6 @@ def PipelineModel() -> RowPanel:
                 yaxes=yaxes(
                     left_format="percentunit", right_format="short", left_min="0"
                 ),
-                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -7297,7 +7114,6 @@ def PipelineModel() -> RowPanel:
                 yaxes=yaxes(
                     left_format="percentunit", right_format="short", left_min="0"
                 ),
-                fill_gradient=0,
                 null_point_mode="null",
                 series_overrides=[
                     {
@@ -7334,7 +7150,6 @@ def PipelineModel() -> RowPanel:
                     ),
                 ],
                 yaxes=yaxes(left_format="none", right_format="short", left_min="0"),
-                fill_gradient=0,
             ),
         ]
     )
@@ -7433,7 +7248,6 @@ def TiFlashResourceControl() -> RowPanel:
                 yaxes=yaxes(left_format="short", right_format="short"),
                 legend=graph_legend(avg=True, max=False),
                 fill=1,
-                fill_gradient=0,
                 null_point_mode="null",
             ),
             graph_panel(
@@ -7469,7 +7283,6 @@ def TiFlashResourceControl() -> RowPanel:
                     right_show=True,
                 ),
                 legend=graph_legend(max=False),
-                fill_gradient=0,
                 decimals=1,
                 series_overrides=[{"alias": "/sum/", "yaxis": 2}],
             ),
@@ -7540,7 +7353,6 @@ def StatusServer() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="s", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 tooltip_sort=2,
             ),
             graph_panel(
@@ -7553,7 +7365,6 @@ def StatusServer() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="ops", right_format="short", left_min="0"),
                 fill=1,
-                fill_gradient=0,
                 null_point_mode="null",
             ),
         ]
@@ -7581,7 +7392,6 @@ def VectorSearch() -> RowPanel:
                     left_decimals=0,
                 ),
                 legend=graph_legend(current=False),
-                fill_gradient=0,
                 decimals=0,
             ),
             graph_panel(
@@ -7607,7 +7417,6 @@ def VectorSearch() -> RowPanel:
                     left_decimals=0,
                 ),
                 legend=graph_legend(current=False),
-                fill_gradient=0,
                 decimals=0,
             ),
         ]
@@ -7633,7 +7442,6 @@ def VectorSearch() -> RowPanel:
                     right_show=True,
                 ),
                 legend=graph_legend(current=False),
-                fill_gradient=0,
                 decimals=1,
                 series_overrides=[{"alias": "/download/", "yaxis": 2}],
             ),
@@ -7650,7 +7458,6 @@ def VectorSearch() -> RowPanel:
                     left_format="s", right_format="s", left_min="0", left_decimals=1
                 ),
                 legend=graph_legend(current=False),
-                fill_gradient=0,
                 decimals=1,
             ),
         ]
