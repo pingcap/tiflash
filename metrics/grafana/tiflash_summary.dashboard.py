@@ -1898,7 +1898,7 @@ def ColumnarStorage() -> RowPanel:
                 yaxes=yaxes(left_format="ops", left_min="0"),
             ),
             graph_panel(
-                title="Columnar Meta Cache Gauge",
+                title="Columnar Meta Cache Entries",
                 targets=[
                     target(
                         expr=expr_simple(
@@ -1906,8 +1906,13 @@ def ColumnarStorage() -> RowPanel:
                             instance_selector=PROXY_LABEL_SELECTORS,
                         ),
                         legend_format="entries-{{instance}}",
-                        interval_factor=1,
                     ),
+                ],
+                yaxes=yaxes(left_format="short", left_min="0"),
+            ),
+            graph_panel(
+                title="Columnar Meta Cache Weighted Size",
+                targets=[
                     target(
                         expr=expr_simple(
                             "tiflash_proxy_kv_engine_columnar_meta_cache_weighted_size",
@@ -1916,14 +1921,7 @@ def ColumnarStorage() -> RowPanel:
                         legend_format="weighted_size-{{instance}}",
                     ),
                 ],
-                yaxes=yaxes(
-                    left_format="bytes",
-                    right_format="short",
-                    left_min="0",
-                    right_show=True,
-                ),
-                null_point_mode="null",
-                series_overrides=[{"alias": "/entries/", "yaxis": 2}],
+                yaxes=yaxes(left_format="bytes", left_min="0"),
             ),
         ]
     )
