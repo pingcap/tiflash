@@ -4787,7 +4787,7 @@
             },
             {
               "decimals": null,
-              "format": "none",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -4920,7 +4920,7 @@
             },
             {
               "decimals": null,
-              "format": "none",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -5261,7 +5261,7 @@
             },
             {
               "decimals": null,
-              "format": "none",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -5562,7 +5562,7 @@
               "hide": false,
               "instant": false,
               "interval": "",
-              "intervalFactor": 1,
+              "intervalFactor": 2,
               "legendFormat": "{{type}}",
               "metric": "",
               "query": "sum(rate(\n    tiflash_coprocessor_response_bytes\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$instance\",instance=~\"$tiflash_role\"}\n    [$__rate_interval]\n)) by (type) ",
@@ -5578,7 +5578,7 @@
           "tooltip": {
             "msResolution": true,
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "transformations": [],
@@ -5873,7 +5873,7 @@
               "hide": false,
               "instant": false,
               "interval": "",
-              "intervalFactor": 1,
+              "intervalFactor": 2,
               "legendFormat": "{{type}}",
               "metric": "",
               "query": "sum(rate(\n    tiflash_exchange_data_bytes\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$instance\",instance=~\"$tiflash_role\"}\n    [$__rate_interval]\n)) by (type) ",
@@ -5889,7 +5889,7 @@
           "tooltip": {
             "msResolution": true,
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "transformations": [],
@@ -7070,7 +7070,7 @@
               "hide": false,
               "instant": false,
               "interval": "",
-              "intervalFactor": 1,
+              "intervalFactor": 2,
               "legendFormat": "{{type}}",
               "metric": "",
               "query": "sum(rate(\n    tiflash_network_transmission_bytes\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$instance\",instance=~\"$tiflash_role\"}\n    [$__rate_interval]\n)) by (type) ",
@@ -7086,7 +7086,7 @@
           "tooltip": {
             "msResolution": true,
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "transformations": [],
@@ -9317,7 +9317,7 @@
             },
             {
               "decimals": null,
-              "format": "none",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -13198,7 +13198,7 @@
             },
             {
               "decimals": null,
-              "format": "opm",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -14541,7 +14541,7 @@
             },
             {
               "decimals": null,
-              "format": "opm",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -14882,7 +14882,7 @@
             },
             {
               "decimals": null,
-              "format": "opm",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -16643,7 +16643,7 @@
           "tooltip": {
             "msResolution": true,
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "transformations": [],
@@ -16842,7 +16842,7 @@
             },
             {
               "decimals": null,
-              "format": "none",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -18295,7 +18295,7 @@
               "hide": false,
               "instant": false,
               "interval": "",
-              "intervalFactor": 1,
+              "intervalFactor": 2,
               "legendFormat": "DeltaIndexError-{{instance}}",
               "metric": "",
               "query": "sum(rate(\n    tiflash_system_profile_event_DTDeltaIndexError\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$instance\",instance=~\"$tiflash_role\"}\n    [$__rate_interval]\n)) by (instance) ",
@@ -18311,7 +18311,7 @@
           "tooltip": {
             "msResolution": true,
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "transformations": [],
@@ -20388,7 +20388,7 @@
           "tooltip": {
             "msResolution": true,
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "transformations": [],
@@ -22124,7 +22124,7 @@
             },
             {
               "decimals": null,
-              "format": "none",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -22257,7 +22257,7 @@
             },
             {
               "decimals": null,
-              "format": "none",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -22390,7 +22390,7 @@
             },
             {
               "decimals": null,
-              "format": "none",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -22523,7 +22523,7 @@
             },
             {
               "decimals": null,
-              "format": "none",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -23780,7 +23780,7 @@
             },
             {
               "decimals": null,
-              "format": "none",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -23913,7 +23913,7 @@
             },
             {
               "decimals": null,
-              "format": "none",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -24601,7 +24601,7 @@
             },
             {
               "decimals": null,
-              "format": "none",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -24919,7 +24919,7 @@
           "tooltip": {
             "msResolution": true,
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "transformations": [],
@@ -25053,7 +25053,7 @@
           "tooltip": {
             "msResolution": true,
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "transformations": [],
@@ -26165,7 +26165,7 @@
           "tooltip": {
             "msResolution": true,
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "transformations": [],
@@ -27809,7 +27809,7 @@
             },
             {
               "decimals": null,
-              "format": "none",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -27919,7 +27919,7 @@
           "tooltip": {
             "msResolution": true,
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "transformations": [],
@@ -28383,7 +28383,7 @@
             },
             {
               "decimals": null,
-              "format": "none",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -29347,7 +29347,7 @@
             },
             {
               "decimals": null,
-              "format": "none",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -30489,7 +30489,7 @@
               "hide": false,
               "instant": false,
               "interval": "",
-              "intervalFactor": 1,
+              "intervalFactor": 2,
               "legendFormat": "{{type}} {{$additional_groupby}}",
               "metric": "",
               "query": "sum(rate(\n    tiflash_storage_remote_cache_bytes\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$instance\",instance=~\"$tiflash_role\"}\n    [$__rate_interval]\n)) by (type, $additional_groupby) ",
@@ -30505,7 +30505,7 @@
           "tooltip": {
             "msResolution": true,
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "transformations": [],
@@ -30529,7 +30529,7 @@
             },
             {
               "decimals": null,
-              "format": "percentunit",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -31176,7 +31176,7 @@
               "hide": false,
               "instant": false,
               "interval": "",
-              "intervalFactor": 1,
+              "intervalFactor": 2,
               "legendFormat": "{{result}}-{{file_type}} {{$additional_groupby}}",
               "metric": "",
               "query": "sum(rate(\n    tiflash_storage_remote_cache_wait_on_downloading_bytes\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$instance\",instance=~\"$tiflash_role\"}\n    [$__rate_interval]\n)) by (result, file_type, $additional_groupby) ",
@@ -31192,7 +31192,7 @@
           "tooltip": {
             "msResolution": true,
             "shared": true,
-            "sort": 0,
+            "sort": 2,
             "value_type": "individual"
           },
           "transformations": [],
@@ -31216,7 +31216,7 @@
             },
             {
               "decimals": null,
-              "format": "percentunit",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -34707,7 +34707,7 @@
             },
             {
               "decimals": null,
-              "format": "none",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,

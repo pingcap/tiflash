@@ -1580,8 +1580,19 @@ def ops_panel(
     label_selectors: list[str] = [],
     description=None,
     y_left: str = "ops",
+    y_right: Optional[str] = None,
     fill: int = 0,
+    left_min="0",
+    left_decimals: Optional[int] = None,
+    decimals: Optional[int] = None,
+    null_point_mode=NULL_AS_ZERO,
+    panel_legend=None,
 ) -> Panel:
+    """Single sum(rate(...)) OPS-style panel.
+
+    ``legend`` is the PromQL legendFormat string; pass ``panel_legend`` for
+    Grafana legend table options (``graph_legend(...)``).
+    """
     if legend is None:
         legend = "value" if not by_labels else by_legend(by_labels)
     t = target(
@@ -1597,11 +1608,17 @@ def ops_panel(
         title=title,
         description=description,
         targets=[t],
-        yaxes=yaxes(left_format=y_left),
+        yaxes=yaxes(
+            left_format=y_left,
+            right_format=y_right,
+            left_min=left_min,
+            left_decimals=left_decimals,
+        ),
+        legend=panel_legend,
         fill=fill,
-        fill_gradient=0,
         tooltip_sort=2,
-        null_point_mode=NULL_AS_ZERO,
+        null_point_mode=null_point_mode,
+        decimals=decimals,
     )
 
 

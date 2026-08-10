@@ -37,6 +37,7 @@ from common import (
     graph_legend,
     graph_panel,
     make_heatmap,
+    ops_panel,
     target,
     template,
     yaxes,
@@ -688,31 +689,17 @@ def Coprocessor() -> RowPanel:
     layout = Layout(title="Coprocessor")
     layout.row(
         [
-            graph_panel(
-                title="Request QPS",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_coprocessor_request_count", by_labels=["type"]
-                        ),
-                        legend_format="{{type}}",
-                    ),
-                ],
-                yaxes=yaxes(left_format="none", right_format="none", left_min="0"),
-                tooltip_sort=2,
+            ops_panel(
+                "Request QPS",
+                "tiflash_coprocessor_request_count",
+                by_labels=["type"],
+                y_left="none",
             ),
-            graph_panel(
-                title="Executor QPS",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_coprocessor_executor_count", by_labels=["type"]
-                        ),
-                        legend_format="{{type}}",
-                    ),
-                ],
-                yaxes=yaxes(left_format="none", right_format="none", left_min="0"),
-                tooltip_sort=2,
+            ops_panel(
+                "Executor QPS",
+                "tiflash_coprocessor_executor_count",
+                by_labels=["type"],
+                y_left="none",
             ),
         ]
     )
@@ -724,18 +711,11 @@ def Coprocessor() -> RowPanel:
                 by_labels=["type"],
                 legend="%s-{{type}} {{$additional_groupby}}",
             ),
-            graph_panel(
-                title="Error QPS",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_coprocessor_request_error", by_labels=["reason"]
-                        ),
-                        legend_format="{{reason}}",
-                    ),
-                ],
-                yaxes=yaxes(left_format="none", right_format="none", left_min="0"),
-                tooltip_sort=2,
+            ops_panel(
+                "Error QPS",
+                "tiflash_coprocessor_request_error",
+                by_labels=["reason"],
+                y_left="none",
             ),
         ]
     )
@@ -747,18 +727,11 @@ def Coprocessor() -> RowPanel:
                 by_labels=["type"],
                 legend="%s-{{type}} {{$additional_groupby}}",
             ),
-            graph_panel(
-                title="Response Bytes/Seconds",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_coprocessor_response_bytes", by_labels=["type"]
-                        ),
-                        legend_format="{{type}}",
-                        interval_factor=1,
-                    ),
-                ],
-                yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
+            ops_panel(
+                "Response Bytes/Seconds",
+                "tiflash_coprocessor_response_bytes",
+                by_labels=["type"],
+                y_left="bytes",
             ),
         ]
     )
@@ -810,18 +783,11 @@ def Coprocessor() -> RowPanel:
                 ),
                 fill=1,
             ),
-            graph_panel(
-                title="Exchange Bytes/Seconds",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_exchange_data_bytes", by_labels=["type"]
-                        ),
-                        legend_format="{{type}}",
-                        interval_factor=1,
-                    ),
-                ],
-                yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
+            ops_panel(
+                "Exchange Bytes/Seconds",
+                "tiflash_exchange_data_bytes",
+                by_labels=["type"],
+                y_left="bytes",
             ),
         ]
     )
@@ -953,18 +919,11 @@ def Coprocessor() -> RowPanel:
     )
     layout.row(
         [
-            graph_panel(
-                title="Network Transmission",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_network_transmission_bytes", by_labels=["type"]
-                        ),
-                        legend_format="{{type}}",
-                        interval_factor=1,
-                    ),
-                ],
-                yaxes=yaxes(left_format="bytes", right_format="short", left_min="0"),
+            ops_panel(
+                "Network Transmission",
+                "tiflash_network_transmission_bytes",
+                by_labels=["type"],
+                y_left="bytes",
             ),
             graph_panel(
                 title="Establish calldata details",
@@ -1355,19 +1314,11 @@ def ImbalanceReadWrite() -> RowPanel:
     )
     layout.row(
         [
-            graph_panel(
-                title="Request QPS by instance",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_coprocessor_request_count",
-                            by_labels=["type", "instance"],
-                        ),
-                        legend_format="{{type}}-{{instance}}",
-                    ),
-                ],
-                yaxes=yaxes(left_format="none", right_format="none", left_min="0"),
-                tooltip_sort=2,
+            ops_panel(
+                "Request QPS by instance",
+                "tiflash_coprocessor_request_count",
+                by_labels=["type", "instance"],
+                y_left="none",
             ),
             graph_panel(
                 title="Read Throughput by instance",
@@ -1950,20 +1901,12 @@ def ColumnarStorage() -> RowPanel:
     )
     layout.row(
         [
-            graph_panel(
-                title="Columnar Fetch Snapshot Retry",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_proxy_kv_engine_columnar_fetch_snapshot_retry_count",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            by_labels=[ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="retry {{$additional_groupby}}",
-                    ),
-                ],
-                yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
-                tooltip_sort=2,
+            ops_panel(
+                "Columnar Fetch Snapshot Retry",
+                "tiflash_proxy_kv_engine_columnar_fetch_snapshot_retry_count",
+                by_labels=[ADDITIONAL_GROUPBY],
+                legend="retry {{$additional_groupby}}",
+                instance_selector=PROXY_LABEL_SELECTORS,
             ),
             duration_panel(
                 "Columnar Fetch Snapshot Duration",
@@ -2178,23 +2121,12 @@ def Storage() -> RowPanel:
     )
     layout.row(
         [
-            graph_panel(
-                title="Small Internal Tasks OPS",
+            ops_panel(
+                "Small Internal Tasks OPS",
+                "tiflash_storage_subtask_count",
+                by_labels=["type"],
+                label_selectors=['type!~"(delta_merge|seg_merge|seg_split).*"'],
                 description="Total number of storage's internal sub tasks",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_storage_subtask_count",
-                            label_selectors=[
-                                'type!~"(delta_merge|seg_merge|seg_split).*"'
-                            ],
-                            by_labels=["type"],
-                        ),
-                        legend_format="{{type}}",
-                    ),
-                ],
-                yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
-                tooltip_sort=2,
             ),
             duration_panel(
                 "Small Internal Tasks Duration",
@@ -2209,23 +2141,12 @@ def Storage() -> RowPanel:
     )
     layout.row(
         [
-            graph_panel(
-                title="Large Internal Tasks OPS",
+            ops_panel(
+                "Large Internal Tasks OPS",
+                "tiflash_storage_subtask_count",
+                by_labels=["type"],
+                label_selectors=['type=~"(delta_merge|seg_merge|seg_split).*"'],
                 description="Total number of storage's internal sub tasks",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_storage_subtask_count",
-                            label_selectors=[
-                                'type=~"(delta_merge|seg_merge|seg_split).*"'
-                            ],
-                            by_labels=["type"],
-                        ),
-                        legend_format="{{type}}",
-                    ),
-                ],
-                yaxes=yaxes(left_format="ops", right_format="opm", left_min="0"),
-                tooltip_sort=2,
             ),
             duration_panel(
                 "Large Internal Tasks Duration",
@@ -2524,22 +2445,16 @@ def Storage() -> RowPanel:
                 fill=1,
                 null_point_mode="null",
             ),
-            graph_panel(
-                title="Compression Algorithm Count",
+            ops_panel(
+                "Compression Algorithm Count",
+                "tiflash_storage_pack_compression_algorithm_count",
+                by_labels=["type"],
                 description="The count of the compression algorithm used by each data part",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_storage_pack_compression_algorithm_count",
-                            by_labels=["type"],
-                        ),
-                        legend_format="{{type}}",
-                    ),
-                ],
-                yaxes=yaxes(left_format="short", right_format="short"),
-                legend=graph_legend(max=False, total=True),
+                y_left="short",
                 fill=1,
+                left_min=None,
                 null_point_mode="null",
+                panel_legend=graph_legend(max=False, total=True),
             ),
         ]
     )
@@ -2550,19 +2465,11 @@ def StorageReadPoolDataSharing() -> RowPanel:
     layout = Layout(title="Storage Read Pool & Data Sharing")
     layout.row(
         [
-            graph_panel(
-                title="Read Tasks OPS",
+            ops_panel(
+                "Read Tasks OPS",
+                "tiflash_storage_read_tasks_count",
+                by_labels=["instance"],
                 description="Total number of storage engine read tasks",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_storage_read_tasks_count", by_labels=["instance"]
-                        ),
-                        legend_format="{{instance}}",
-                    ),
-                ],
-                yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
-                tooltip_sort=2,
             ),
             graph_panel(
                 title="Read Snapshots",
@@ -2775,21 +2682,15 @@ def StorageReadPoolDataSharing() -> RowPanel:
                 legend="%s-{{type}} {{$additional_groupby}}",
                 unit="ms",
             ),
-            graph_panel(
-                title="DeltaIndexError",
+            ops_panel(
+                "DeltaIndexError",
+                "tiflash_system_profile_event_DTDeltaIndexError",
+                by_labels=["instance"],
+                legend="DeltaIndexError-{{instance}}",
                 description="Errors of DeltaIndex",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_system_profile_event_DTDeltaIndexError",
-                            by_labels=["instance"],
-                        ),
-                        legend_format="DeltaIndexError-{{instance}}",
-                        interval_factor=1,
-                    ),
-                ],
-                yaxes=yaxes(left_format="cps", right_format="opm", left_min="0"),
-                legend=graph_legend(current=False),
+                y_left="cps",
+                y_right="opm",
+                panel_legend=graph_legend(current=False),
             ),
         ]
     )
@@ -3082,24 +2983,14 @@ def RateLimiter() -> RowPanel:
     layout = Layout(title="Rate Limiter")
     layout.row(
         [
-            graph_panel(
-                title="I/O Limiter Throughput",
+            ops_panel(
+                "I/O Limiter Throughput",
+                "tiflash_storage_io_limiter",
+                by_labels=["type", "instance"],
                 description="The storage I/O limiter metrics.",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_storage_io_limiter", by_labels=["type", "instance"]
-                        ),
-                        legend_format="{{type}}-{{instance}}",
-                    ),
-                ],
-                yaxes=yaxes(
-                    left_format="binBps",
-                    right_format="short",
-                    left_min="0",
-                    left_decimals=0,
-                ),
+                y_left="binBps",
                 fill=1,
+                left_decimals=0,
             ),
             graph_panel(
                 title="I/O Limiter Threshold",
@@ -3354,62 +3245,29 @@ def Raft() -> RowPanel:
     layout = Layout(title="Raft")
     layout.row(
         [
-            graph_panel(
-                title="Stale Read OPS",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_stale_read_count", by_labels=["instance"]
-                        ),
-                        legend_format="{{instance}}",
-                    ),
-                ],
-                yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
-                tooltip_sort=2,
+            ops_panel(
+                "Stale Read OPS",
+                "tiflash_stale_read_count",
+                by_labels=["instance"],
             ),
-            graph_panel(
-                title="Raft Read Index OPS",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_raft_read_index_count", by_labels=["instance"]
-                        ),
-                        legend_format="{{instance}}",
-                    ),
-                ],
-                yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
-                tooltip_sort=2,
+            ops_panel(
+                "Raft Read Index OPS",
+                "tiflash_raft_read_index_count",
+                by_labels=["instance"],
             ),
         ]
     )
     layout.row(
         [
-            graph_panel(
-                title="Learner Read Failures",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_raft_learner_read_failures_count",
-                            by_labels=["type"],
-                        ),
-                        legend_format="{{type}}",
-                    ),
-                ],
-                yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
-                tooltip_sort=2,
+            ops_panel(
+                "Learner Read Failures",
+                "tiflash_raft_learner_read_failures_count",
+                by_labels=["type"],
             ),
-            graph_panel(
-                title="Read Index Events",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_raft_read_index_events_count", by_labels=["type"]
-                        ),
-                        legend_format="{{type}}",
-                    ),
-                ],
-                yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
-                tooltip_sort=2,
+            ops_panel(
+                "Read Index Events",
+                "tiflash_raft_read_index_events_count",
+                by_labels=["type"],
             ),
         ]
     )
@@ -3649,32 +3507,15 @@ def Raft() -> RowPanel:
     )
     layout.row(
         [
-            graph_panel(
-                title="Raft Events QPS",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_raft_raft_events_count", by_labels=["type"]
-                        ),
-                        legend_format="{{type}}",
-                    ),
-                ],
-                yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
-                tooltip_sort=2,
+            ops_panel(
+                "Raft Events QPS",
+                "tiflash_raft_raft_events_count",
+                by_labels=["type"],
             ),
-            graph_panel(
-                title="Raft Frequent Events QPS",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_raft_raft_frequent_events_count",
-                            by_labels=["type"],
-                        ),
-                        legend_format="{{type}}",
-                    ),
-                ],
-                yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
-                tooltip_sort=2,
+            ops_panel(
+                "Raft Frequent Events QPS",
+                "tiflash_raft_raft_frequent_events_count",
+                by_labels=["type"],
             ),
         ]
     )
@@ -3801,18 +3642,10 @@ def Raft() -> RowPanel:
     )
     layout.row(
         [
-            graph_panel(
-                title="Raft Eager GC OPS",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_raft_eager_gc_count", by_labels=["type"]
-                        ),
-                        legend_format="{{type}}",
-                    ),
-                ],
-                yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
-                tooltip_sort=2,
+            ops_panel(
+                "Raft Eager GC OPS",
+                "tiflash_raft_eager_gc_count",
+                by_labels=["type"],
             ),
             duration_panel(
                 "Raft Eager GC Duration",
@@ -3825,18 +3658,12 @@ def Raft() -> RowPanel:
     )
     layout.row(
         [
-            graph_panel(
-                title="Keys flow",
+            ops_panel(
+                "Keys flow",
+                "tiflash_raft_process_keys",
+                by_labels=["type"],
                 description="The keys flow of different kinds of Raft operations",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_raft_process_keys", by_labels=["type"]
-                        ),
-                        legend_format="{{type}}",
-                    ),
-                ],
-                yaxes=yaxes(left_format="short", right_format="short", left_min="0"),
+                y_left="short",
                 fill=1,
                 null_point_mode="null",
                 decimals=1,
@@ -3845,17 +3672,11 @@ def Raft() -> RowPanel:
     )
     layout.row(
         [
-            graph_panel(
-                title="Raft throughput",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_raft_throughput_bytes", by_labels=["type"]
-                        ),
-                        legend_format="{{type}}",
-                    ),
-                ],
-                yaxes=yaxes(left_format="short", right_format="short", left_min="0"),
+            ops_panel(
+                "Raft throughput",
+                "tiflash_raft_throughput_bytes",
+                by_labels=["type"],
+                y_left="short",
                 fill=1,
                 null_point_mode="null",
                 decimals=1,
@@ -3986,23 +3807,18 @@ def RaftSnapshotIngestSST() -> RowPanel:
                     ),
                 ],
             ),
-            graph_panel(
-                title="Ongoing raft snapshot",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_raft_ongoing_snapshot_total_bytes",
-                            by_labels=["type"],
-                        ),
-                        legend_format="{{le}}",
-                    ),
-                ],
-                yaxes=yaxes(left_format="bytes", right_format="short"),
-                legend=graph_legend(
+            ops_panel(
+                "Ongoing raft snapshot",
+                "tiflash_raft_ongoing_snapshot_total_bytes",
+                by_labels=["type"],
+                legend="{{le}}",
+                y_left="bytes",
+                fill=1,
+                left_min=None,
+                null_point_mode="null",
+                panel_legend=graph_legend(
                     current=False, max=False, align_as_table=False, right_side=False
                 ),
-                fill=1,
-                null_point_mode="null",
             ),
         ]
     )
@@ -4278,35 +4094,21 @@ def DisaggregatedWrite() -> RowPanel:
     )
     layout.row(
         [
-            graph_panel(
-                title="Checkpoint Upload keys speed by type (all)",
+            ops_panel(
+                "Checkpoint Upload keys speed by type (all)",
+                "tiflash_storage_checkpoint_keys_by_types",
+                by_labels=["type", ADDITIONAL_GROUPBY],
+                legend="{{type}} {{$additional_groupby}}",
                 description="The keys of checkpoint operations. All keys are uploaded in the checkpoint. Grouped by key types.",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_storage_checkpoint_keys_by_types",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}} {{$additional_groupby}}",
-                    ),
-                ],
-                yaxes=yaxes(left_format="ops", right_format="none", left_min="0"),
                 fill=1,
-                tooltip_sort=2,
             ),
-            graph_panel(
-                title="Checkpoint Upload flow by type (incremental+compaction)",
+            ops_panel(
+                "Checkpoint Upload flow by type (incremental+compaction)",
+                "tiflash_storage_checkpoint_flow_by_types",
+                by_labels=["type", ADDITIONAL_GROUPBY],
+                legend="{{type}} {{$additional_groupby}}",
                 description="The flow of checkpoint operations. Group by key types",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_storage_checkpoint_flow_by_types",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}} {{$additional_groupby}}",
-                    ),
-                ],
-                yaxes=yaxes(left_format="binBps", right_format="short", left_min="0"),
+                y_left="binBps",
                 fill=1,
                 null_point_mode="null",
                 decimals=1,
@@ -4379,19 +4181,12 @@ def DisaggregatedWrite() -> RowPanel:
     )
     layout.row(
         [
-            graph_panel(
-                title="Remote Object Lock Request QPS",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_disaggregated_object_lock_request_count",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}} {{$additional_groupby}}",
-                    ),
-                ],
-                yaxes=yaxes(left_format="none", right_format="none", left_min="0"),
-                tooltip_sort=2,
+            ops_panel(
+                "Remote Object Lock Request QPS",
+                "tiflash_disaggregated_object_lock_request_count",
+                by_labels=["type", ADDITIONAL_GROUPBY],
+                legend="{{type}} {{$additional_groupby}}",
+                y_left="none",
             ),
             duration_panel(
                 "Remote Object Lock Duration",
@@ -4463,19 +4258,12 @@ def DisaggregatedWrite() -> RowPanel:
                 legend=graph_legend(max=False),
                 decimals=1,
             ),
-            graph_panel(
-                title="Local Lock Manager QPS",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_storage_s3_lock_mgr_counter",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}} {{$additional_groupby}}",
-                    ),
-                ],
-                yaxes=yaxes(left_format="none", right_format="none", left_min="0"),
-                tooltip_sort=2,
+            ops_panel(
+                "Local Lock Manager QPS",
+                "tiflash_storage_s3_lock_mgr_counter",
+                by_labels=["type", ADDITIONAL_GROUPBY],
+                legend="{{type}} {{$additional_groupby}}",
+                y_left="none",
             ),
         ]
     )
@@ -4608,22 +4396,13 @@ def DisaggregatedCompute() -> RowPanel:
                     {"alias": "page_cache_hit_ratio", "yaxis": 2},
                 ],
             ),
-            graph_panel(
-                title="Remote Cache Flow",
+            ops_panel(
+                "Remote Cache Flow",
+                "tiflash_storage_remote_cache_bytes",
+                by_labels=["type", ADDITIONAL_GROUPBY],
+                legend="{{type}} {{$additional_groupby}}",
                 description="Remote Cache Flow",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_storage_remote_cache_bytes",
-                            by_labels=["type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{type}} {{$additional_groupby}}",
-                        interval_factor=1,
-                    ),
-                ],
-                yaxes=yaxes(
-                    left_format="binBps", right_format="percentunit", left_min="0"
-                ),
+                y_left="binBps",
             ),
         ]
     )
@@ -4666,21 +4445,12 @@ def DisaggregatedCompute() -> RowPanel:
                 fill=1,
                 series_overrides=[{"alias": "", "yaxis": 2}],
             ),
-            graph_panel(
-                title="Remote Cache Wait on Downloading Flow",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_storage_remote_cache_wait_on_downloading_bytes",
-                            by_labels=["result", "file_type", ADDITIONAL_GROUPBY],
-                        ),
-                        legend_format="{{result}}-{{file_type}} {{$additional_groupby}}",
-                        interval_factor=1,
-                    ),
-                ],
-                yaxes=yaxes(
-                    left_format="binBps", right_format="percentunit", left_min="0"
-                ),
+            ops_panel(
+                "Remote Cache Wait on Downloading Flow",
+                "tiflash_storage_remote_cache_wait_on_downloading_bytes",
+                by_labels=["result", "file_type", ADDITIONAL_GROUPBY],
+                legend="{{result}}-{{file_type}} {{$additional_groupby}}",
+                y_left="binBps",
             ),
         ]
     )
@@ -5299,18 +5069,11 @@ def PipelineModel() -> RowPanel:
     )
     layout.row(
         [
-            graph_panel(
-                title="Task Status Change OPS",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_pipeline_task_change_to_status", by_labels=["type"]
-                        ),
-                        legend_format="{{type}}",
-                    ),
-                ],
-                yaxes=yaxes(left_format="none", right_format="none", left_min="0"),
-                tooltip_sort=2,
+            ops_panel(
+                "Task Status Change OPS",
+                "tiflash_pipeline_task_change_to_status",
+                by_labels=["type"],
+                y_left="none",
             ),
             graph_panel(
                 title="Task Duration",
