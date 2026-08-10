@@ -89,11 +89,8 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(
     const TiDB::TableInfo table_info(table_info_json, NullspaceID);
 
     QueryTasks query_tasks;
-    std::tie(query_tasks, std::ignore) = compileQuery(
-        *ctx,
-        query,
-        [&](const String &, const String &) { return table_info; },
-        getDAGProperties(""));
+    std::tie(query_tasks, std::ignore)
+        = compileQuery(*ctx, query, [&](const String &, const String &) { return table_info; }, getDAGProperties(""));
     auto & dag_request = *query_tasks[0].dag_request;
     DAGContext dag_context(dag_request, {}, NullspaceID, "", DAGRequestKind::Cop, "", 0, "", log);
     ctx->setDAGContext(&dag_context);
@@ -1023,6 +1020,32 @@ try
 }
 CATCH
 
+TEST_F(FilterParserTest, DecimalColumn)
+try
+{
+    const String table_info_json = R"json({
+    "cols":[
+        {"comment":"","default":null,"default_bit":null,"id":5,"name":{"L":"col_decimal","O":"col_decimal"},"offset":-1,"origin_default":null,"state":0,"type":{"Charset":null,"Collate":null,"Decimal":2,"Elems":null,"Flag":4097,"Flen":9,"Tp":246}}
+    ],
+    "pk_is_handle":false,"index_info":[],"is_common_handle":false,
+    "name":{"L":"t_111","O":"t_111"},"partition":null,
+    "comment":"Mocked.","id":30,"schema_version":-1,"state":0,"tiflash_replica":{"Count":0},"update_timestamp":1636471547239654
+})json";
+
+    auto expect_rs_operator = [&](const String & query, const String & expected_name) {
+        auto rs_operator = generateRsOperator(table_info_json, query);
+        EXPECT_EQ(rs_operator->name(), expected_name) << rs_operator->toDebugString();
+        EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
+        EXPECT_EQ(rs_operator->getColumnIDs()[0], 5);
+    };
+
+    expect_rs_operator("select * from default.t_111 where col_decimal > 1", "greater");
+    expect_rs_operator("select * from default.t_111 where col_decimal = 1", "equal");
+    expect_rs_operator("select * from default.t_111 where col_decimal in (1, 2)", "in");
+    expect_rs_operator("select * from default.t_111 where col_decimal is null", "isnull");
+}
+CATCH
+
 // Test cases for unsupported column type
 TEST_F(FilterParserTest, UnsupportedColumnType)
 try
@@ -1048,12 +1071,6 @@ try
     {
         // Greater between col and literal (not supported since the type of col_1 is string)
         auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_1 > '123'");
-        EXPECT_EQ(rs_operator->name(), "unsupported");
-    }
-
-    {
-        // Greater between col and literal (not supported since the type of col_5 is decimal)
-        auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_5 > 1");
         EXPECT_EQ(rs_operator->name(), "unsupported");
     }
 
