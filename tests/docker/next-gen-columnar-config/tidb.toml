@@ -37,10 +37,6 @@ tcp-keep-alive = true
 enable-sem = false
 
 # Turn on the experimental feature to allow related testing
-<<<<<<< HEAD
 # Related PR: https://github.com/pingcap/tidb/pull/69167
-=======
-# Related PR: https://github.com/pingcap/tidb/pull/70328
->>>>>>> 08be6d5d0a (metrics: migrate TiFlash Summary dashboard generation to grafanalib (#11027))
 [experimental]
 allow-enable-foreign-key-check-in-shared-lock = true
