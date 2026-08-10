@@ -14,9 +14,7 @@
 
 from __future__ import annotations
 
-import contextvars
 import re
-from contextlib import contextmanager
 from typing import Optional, Sequence, Union
 
 import attr
@@ -70,56 +68,6 @@ PROXY_LABEL_SELECTORS = (
     r'instance=~"$proxy_instance"',
     r'instance=~"$tiflash_role"',
 )
-
-
-@attr.s(frozen=True)
-class PromQLPolicy:
-    """Implicit label selectors applied while constructing PromQL expressions."""
-
-    default_label_selectors: tuple[str, ...] = attr.ib(converter=tuple)
-    shared_pool_selector: Optional[str] = attr.ib(default=None)
-
-
-STANDARD_PROMQL_POLICY = PromQLPolicy(
-    default_label_selectors=CLUSTER_LABEL_SELECTORS + CPP_LABEL_SELECTORS,
-)
-PROXY_PROMQL_POLICY = PromQLPolicy(
-    default_label_selectors=CLUSTER_LABEL_SELECTORS + PROXY_LABEL_SELECTORS,
-)
-# Alias kept for callers that only need cluster+cpp defaults.
-SERVERLESS_PROMQL_POLICY = STANDARD_PROMQL_POLICY
-_active_promql_policy = contextvars.ContextVar(
-    "active_promql_policy", default=STANDARD_PROMQL_POLICY
-)
-
-
-def instance_selectors_policy(instance_selectors: str = "cpp") -> PromQLPolicy:
-    """Return policy for cpp (default) or proxy instance label selectors."""
-    if instance_selectors == "proxy":
-        return PROXY_PROMQL_POLICY
-    if instance_selectors == "cpp":
-        return STANDARD_PROMQL_POLICY
-    raise ValueError(
-        f"unknown instance_selectors={instance_selectors!r}; use 'cpp' or 'proxy'"
-    )
-
-
-@contextmanager
-def use_instance_selectors(instance_selectors: str = "cpp"):
-    """Select cpp_label_selectors or proxy_label_selectors for Expr construction."""
-    with use_promql_policy(instance_selectors_policy(instance_selectors)):
-        yield
-
-
-@contextmanager
-def use_promql_policy(policy: PromQLPolicy):
-    """Use a PromQL policy for expressions created within this context."""
-
-    token = _active_promql_policy.set(policy)
-    try:
-        yield
-    finally:
-        _active_promql_policy.reset(token)
 
 
 @attr.s
@@ -177,9 +125,7 @@ class Expr(object):
         factory=lambda: tuple(CPP_LABEL_SELECTORS),
         converter=tuple,
     )
-    shared_pool_selector: Optional[str] = attr.ib(
-        factory=lambda: _active_promql_policy.get().shared_pool_selector,
-    )
+    shared_pool_selector: Optional[str] = attr.ib(default=None)
     use_shared_pool: bool = attr.ib(default=False, validator=instance_of(bool))
     extra_expr: str = attr.ib(default="", validator=instance_of(str))
 
@@ -746,7 +692,7 @@ def expr_histogram_quantile(
 
 def expr_topk(
     k: int,
-    metrics: str,
+    metrics: Union[str, Expr],
     instance_selector: Sequence[str] = CPP_LABEL_SELECTORS,
 ) -> Expr:
     """
@@ -757,8 +703,13 @@ def expr_topk(
     topk(20, tikv_thread_voluntary_context_switches)
     """
     # topk({k}, {metric}) — outer clears cluster/instance defaults (metric may already be an Expr).
+    inner = (
+        expr_simple(metrics, instance_selector=instance_selector)
+        if isinstance(metrics, str)
+        else metrics
+    )
     expr = expr_aggr(
-        metric=metrics,
+        metric=inner,
         aggr_op="topk",
         aggr_param=f"{k}",
         instance_selector=(),
@@ -1233,10 +1184,9 @@ def heatmap_panel(
     description=None,
     instance_selector: Sequence[str] = CPP_LABEL_SELECTORS,
     label_selectors: list[str] = [],
-    yaxis=yaxis(UNITS.NO_FORMAT),
+    y_axis=None,
     tooltip=Tooltip(shared=True, valueType="individual"),
     color=heatmap_color(),
-    decimals=1,
     data_source=DATASOURCE,
     # TiFlash Summary defaults to sum(delta); pass func="increase" for CSE-style.
     func: str = "delta",
@@ -1244,6 +1194,8 @@ def heatmap_panel(
     assert metric.endswith(
         "_bucket"
     ), f"'{metric}' should be a histogram metric with '_bucket' suffix"
+    if y_axis is None:
+        y_axis = yaxis(UNITS.NO_FORMAT, decimals=1)
     expr_fn = expr_sum_increase if func == "increase" else expr_sum_delta
     t = target(
         expr=expr_fn(
@@ -1257,14 +1209,12 @@ def heatmap_panel(
     t.format = "heatmap"
     # Heatmap target legendFormat should be "{{le}}"
     t.legendFormat = "{{le}}"
-    # Overrides yaxis decimal places.
-    yaxis.decimals = decimals
     return Heatmap(
         title=title,
         dataSource=data_source,
         description=description,
         targets=[t],
-        yAxis=yaxis,
+        yAxis=y_axis,
         color=color,
         dataFormat="tsbuckets",
         yBucketBound="upper",
@@ -1437,7 +1387,7 @@ def heatmap_panel_graph_panel_histogram_quantile_pairs(
         heatmap_panel(
             title=heatmap_title,
             description=heatmap_description,
-            yaxis=yaxis(format=yaxis_format),
+            y_axis=yaxis(format=yaxis_format, decimals=1),
             metric=f"{metric}_bucket",
             instance_selector=instance_selector,
             label_selectors=label_selectors,
@@ -1665,7 +1615,7 @@ def tiflash_heatmap_panel(
         description=description,
         instance_selector=instance_selector,
         label_selectors=label_selectors,
-        yaxis=yaxis(format=y_format),
+        y_axis=yaxis(format=y_format, decimals=1),
         func=func,
     )
 

@@ -47,7 +47,6 @@ uv sync
   (default: `$instance` + `$tiflash_role`) or
   `instance_selector=PROXY_LABEL_SELECTORS` (`$proxy_instance` +
   `$tiflash_role`). Put non-instance filters only in `label_selectors`.
-  (`use_instance_selectors(...)` remains for shared-pool / legacy paths.)
 - `tiflash_proxy_summary.json` / `tiflash_proxy_details.json` are still
   hand-maintained JSON.
 
