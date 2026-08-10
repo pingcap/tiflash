@@ -282,7 +282,7 @@ gtests_dbms --gtest_filter='MinMaxIndexTest.*'
 If full min/max index gtest is too expensive, run the focused decimal and comparison cases:
 
 ```bash
-gtests_dbms --gtest_filter='MinMaxIndexTest.CheckDecimal:MinMaxIndexTest.CheckIn:MinMaxIndexTest.CheckCmpEqual:MinMaxIndexTest.CheckCmpGreater:MinMaxIndexTest.CheckCmpGreaterEqual:MinMaxIndexTest.CheckNullEqual'
+gtests_dbms --gtest_filter='MinMaxIndexTest.CheckDecimal:MinMaxIndexTest.CheckIn:MinMaxIndexTest.CheckCmpEqual:MinMaxIndexTest.CheckCmpGreater:MinMaxIndexTest.CheckCmpGreaterEqual:MinMaxIndexWriteTest.WriteDecimalMinMaxIndex'
 ```
 
 Do not run Bazel for this change unless explicitly requested.

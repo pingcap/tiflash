@@ -39,6 +39,7 @@
 
 #include <ext/scope_guard.h>
 #include <memory>
+#include <string_view>
 
 namespace DB::DM::tests
 {
@@ -306,7 +307,7 @@ Decimal64 getDecimal64(String s)
 }
 
 template <typename DecimalType>
-DecimalField<DecimalType> getDecimalField(const String & s, PrecType precision, ScaleType scale)
+DecimalField<DecimalType> getDecimalField(std::string_view s, PrecType precision, ScaleType scale)
 {
     DecimalType value;
     ReadBufferFromString buf(s);
@@ -1898,7 +1899,7 @@ try
     auto minmax_index = std::make_shared<MinMaxIndex>(*col_type);
     for (const auto & c : cases)
     {
-        RUNTIME_CHECK(c.column_data.size(), c.del_mark.size());
+        RUNTIME_CHECK(c.column_data.size() == c.del_mark.size());
         auto col_data = createColumn<Nullable<String>>(c.column_data).column;
         auto del_mark_col = createColumn<UInt8>(c.del_mark).column;
         minmax_index->addPack(*col_data, static_cast<const ColumnVector<UInt8> *>(del_mark_col.get()));
@@ -2261,7 +2262,7 @@ MinMaxIndexPtr createMinMaxIndex(const IDataType & col_type, const T & cases)
     auto minmax_index = std::make_shared<MinMaxIndex>(col_type);
     for (const auto & c : cases)
     {
-        RUNTIME_CHECK(c.column_data.size(), c.del_mark.size());
+        RUNTIME_CHECK(c.column_data.size() == c.del_mark.size());
         auto col_data = createColumn<Nullable<Int64>>(c.column_data).column;
         auto del_mark_col = createColumn<UInt8>(c.del_mark).column;
         minmax_index->addPack(*col_data, static_cast<const ColumnVector<UInt8> *>(del_mark_col.get()));
@@ -2298,19 +2299,20 @@ try
     auto minmax_index = std::make_shared<MinMaxIndex>(*col_type);
     for (const auto & c : cases)
     {
-RUNTIME_CHECK(c.column_data.size() == c.del_mark.size());
+        RUNTIME_CHECK(c.column_data.size() == c.del_mark.size());
         auto col_data = createColumn<Nullable<Decimal64>>(std::make_tuple(20, 5), c.column_data).column;
         auto del_mark_col = createColumn<UInt8>(c.del_mark).column;
         minmax_index->addPack(*col_data, static_cast<const ColumnVector<UInt8> *>(del_mark_col.get()));
     }
 
-    auto check_results = [&](const RSResults & actual, const std::array<RSResult, 3> & expected, String test_case) {
-        for (size_t i = 0; i < expected.size(); ++i)
-        {
-            ASSERT_EQ(actual[i], expected[i])
-                << fmt::format("{} pack={} actual={} expected={}", test_case, i, actual[i], expected[i]);
-        }
-    };
+    auto check_results
+        = [&](const RSResults & actual, const std::array<RSResult, 3> & expected, std::string_view test_case) {
+              for (size_t i = 0; i < expected.size(); ++i)
+              {
+                  ASSERT_EQ(actual[i], expected[i])
+                      << fmt::format("{} pack={} actual={} expected={}", test_case, i, actual[i], expected[i]);
+              }
+          };
 
     check_results(
         minmax_index->checkCmp<RoughCheck::CheckEqual>(
