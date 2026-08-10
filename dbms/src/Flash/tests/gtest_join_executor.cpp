@@ -366,6 +366,49 @@ try
 }
 CATCH
 
+TEST_F(JoinExecutorTestRunner, BuildRowsFilteredOutInnerAndSemiJoinSkipsProbe)
+try
+{
+    context.addMockTable(
+        "filtered_build_join",
+        "probe_table",
+        {{"a", TiDB::TP::TypeLong}},
+        {toNullableVec<Int32>("a", {1, 2, 3})});
+    context.addMockTable(
+        "filtered_build_join",
+        "build_table",
+        {{"a", TiDB::TP::TypeLong}},
+        {toNullableVec<Int32>("a", {1, 2, 3})});
+
+    /// Keep non-empty build input, but filter every build row before it reaches the join.
+    for (const auto join_type : {tipb::JoinType::TypeInnerJoin, tipb::JoinType::TypeSemiJoin})
+    {
+        auto request = context.scan("filtered_build_join", "probe_table")
+                           .join(
+                               context.scan("filtered_build_join", "build_table")
+                                   .filter(gt(col("a"), lit(Field(static_cast<Int64>(100))))),
+                               join_type,
+                               {col("a")})
+                           .build(context);
+
+        WRAP_FOR_TEST_BEGIN
+        WRAP_FOR_JOIN_TEST_BEGIN
+        if (!enable_pipeline && cfg.enable_join_v2)
+            continue;
+
+        executeAndAssertColumnsEqual(request, {});
+        Expect expect{
+            {"table_scan_0", {0, 10}},
+            {"table_scan_1", {3, 10}},
+            {"selection_2", {0, 10}},
+            {"Join_3", {0, 10}}};
+        testForExecutionSummary(request, expect);
+        WRAP_FOR_JOIN_TEST_END
+        WRAP_FOR_TEST_END
+    }
+}
+CATCH
+
 TEST_F(JoinExecutorTestRunner, EmptyBuildRightSemiJoinSkipsProbe)
 try
 {
