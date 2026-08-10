@@ -178,7 +178,7 @@ dependencies = [
  "bytes",
  "codec",
  "engine_traits",
- "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
+ "kvproto",
  "match-template",
  "thiserror 1.0.69",
  "tikv_alloc",
@@ -386,7 +386,7 @@ dependencies = [
  "http 0.2.12",
  "hyper 0.14.26",
  "hyper-tls",
- "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
+ "kvproto",
  "lazy_static",
  "md5",
  "prometheus",
@@ -1156,7 +1156,7 @@ dependencies = [
  "http 0.2.12",
  "hyper 0.14.26",
  "kvengine",
- "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
+ "kvproto",
  "pd_client",
  "rand 0.8.6",
  "serde",
@@ -1495,7 +1495,7 @@ dependencies = [
  "derive_more",
  "error_code",
  "futures-io",
- "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
+ "kvproto",
  "lazy_static",
  "openssl",
  "prometheus",
@@ -1520,7 +1520,7 @@ dependencies = [
  "fxhash",
  "hmac 0.10.1",
  "kvenginepb",
- "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
+ "kvproto",
  "lazy_static",
  "log",
  "openssl",
@@ -2256,7 +2256,7 @@ dependencies = [
  "futures 0.3.32",
  "futures-util",
  "hex 0.4.3",
- "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
+ "kvproto",
  "lazy_static",
  "online_config",
  "openssl",
@@ -2283,7 +2283,7 @@ dependencies = [
  "error_code",
  "fail 0.5.1",
  "file_system",
- "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
+ "kvproto",
  "log_wrappers",
  "protobuf 2.8.0",
  "quick_cache",
@@ -2381,7 +2381,7 @@ name = "error_code"
 version = "0.0.1"
 dependencies = [
  "grpcio",
- "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
+ "kvproto",
  "lazy_static",
  "raft",
  "serde",
@@ -3682,7 +3682,7 @@ name = "keys"
 version = "0.1.0"
 dependencies = [
  "byteorder",
- "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
+ "kvproto",
  "log_wrappers",
  "thiserror 1.0.69",
  "tikv_alloc",
@@ -3698,6 +3698,7 @@ dependencies = [
  "aliyun",
  "anyhow",
  "api_version",
+ "arc-swap 1.9.1",
  "arrow-buffer",
  "async-once-cell",
  "async-recursion 1.1.1",
@@ -3723,6 +3724,7 @@ dependencies = [
  "crc32fast",
  "crossbeam",
  "crossbeam-queue",
+ "crossbeam-skiplist",
  "dashmap 5.5.3",
  "dyn-clone",
  "engine_traits",
@@ -3741,7 +3743,7 @@ dependencies = [
  "itertools 0.10.5",
  "keys",
  "kvenginepb",
- "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
+ "kvproto",
  "lazy_static",
  "libc",
  "log_wrappers",
@@ -3768,6 +3770,7 @@ dependencies = [
  "rusoto_s3",
  "schema",
  "security",
+ "seize",
  "serde",
  "serde_derive",
  "serde_json",
@@ -3809,19 +3812,6 @@ dependencies = [
 name = "kvproto"
 version = "0.0.2"
 source = "git+https://github.com/pingcap/kvproto.git?rev=683dad8fa3689deb243f2ff8ab5847c97af53e38#683dad8fa3689deb243f2ff8ab5847c97af53e38"
-dependencies = [
- "bytes",
- "futures 0.3.32",
- "grpcio",
- "protobuf 2.8.0",
- "protobuf-build",
- "raft-proto",
-]
-
-[[package]]
-name = "kvproto"
-version = "0.0.2"
-source = "git+https://github.com/pingcap/kvproto.git#059694ae4472276644613acccefa24cbc89d959f"
 dependencies = [
  "bytes",
  "futures 0.3.32",
@@ -4734,7 +4724,7 @@ checksum = "1a80800c0488c3a21695ea981a54918fbb37abf04f4d0720c453632255e2ff0e"
 [[package]]
 name = "ownedbytes"
 version = "0.7.0"
-source = "git+https://github.com/breezewish/tikv-tantivy.git?branch=patch-0.22.1#efa7643d27289c1ed680fe7ead8c8fffc72b20a2"
+source = "git+https://github.com/pingcap/tantivy.git?branch=cse-0.22.1#392142b1eefa9258731b1c8483632c4a70bc32d8"
 dependencies = [
  "stable_deref_trait",
 ]
@@ -4844,7 +4834,7 @@ dependencies = [
  "grpcio",
  "hex 0.4.3",
  "http 0.2.12",
- "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
+ "kvproto",
  "lazy_static",
  "log",
  "log_wrappers",
@@ -6091,7 +6081,7 @@ dependencies = [
  "hyper 1.10.1",
  "hyper-rustls",
  "hyper-util",
- "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
+ "kvproto",
  "lazy_static",
  "prometheus",
  "rustls",
@@ -6874,7 +6864,7 @@ checksum = "f764005d11ee5f36500a149ace24e00e3da98b0158b3e2d53a7495660d3f4d60"
 [[package]]
 name = "tantivy"
 version = "0.22.1"
-source = "git+https://github.com/breezewish/tikv-tantivy.git?branch=patch-0.22.1#efa7643d27289c1ed680fe7ead8c8fffc72b20a2"
+source = "git+https://github.com/pingcap/tantivy.git?branch=cse-0.22.1#392142b1eefa9258731b1c8483632c4a70bc32d8"
 dependencies = [
  "aho-corasick",
  "arc-swap 1.9.1",
@@ -6924,7 +6914,7 @@ dependencies = [
 [[package]]
 name = "tantivy-bitpacker"
 version = "0.6.0"
-source = "git+https://github.com/breezewish/tikv-tantivy.git?branch=patch-0.22.1#efa7643d27289c1ed680fe7ead8c8fffc72b20a2"
+source = "git+https://github.com/pingcap/tantivy.git?branch=cse-0.22.1#392142b1eefa9258731b1c8483632c4a70bc32d8"
 dependencies = [
  "bitpacking",
 ]
@@ -6932,7 +6922,7 @@ dependencies = [
 [[package]]
 name = "tantivy-columnar"
 version = "0.3.0"
-source = "git+https://github.com/breezewish/tikv-tantivy.git?branch=patch-0.22.1#efa7643d27289c1ed680fe7ead8c8fffc72b20a2"
+source = "git+https://github.com/pingcap/tantivy.git?branch=cse-0.22.1#392142b1eefa9258731b1c8483632c4a70bc32d8"
 dependencies = [
  "downcast-rs",
  "fastdivide",
@@ -6947,7 +6937,7 @@ dependencies = [
 [[package]]
 name = "tantivy-common"
 version = "0.7.0"
-source = "git+https://github.com/breezewish/tikv-tantivy.git?branch=patch-0.22.1#efa7643d27289c1ed680fe7ead8c8fffc72b20a2"
+source = "git+https://github.com/pingcap/tantivy.git?branch=cse-0.22.1#392142b1eefa9258731b1c8483632c4a70bc32d8"
 dependencies = [
  "async-trait",
  "byteorder",
@@ -6970,7 +6960,7 @@ dependencies = [
 [[package]]
 name = "tantivy-query-grammar"
 version = "0.22.0"
-source = "git+https://github.com/breezewish/tikv-tantivy.git?branch=patch-0.22.1#efa7643d27289c1ed680fe7ead8c8fffc72b20a2"
+source = "git+https://github.com/pingcap/tantivy.git?branch=cse-0.22.1#392142b1eefa9258731b1c8483632c4a70bc32d8"
 dependencies = [
  "nom 7.1.3",
 ]
@@ -6978,7 +6968,7 @@ dependencies = [
 [[package]]
 name = "tantivy-sstable"
 version = "0.3.0"
-source = "git+https://github.com/breezewish/tikv-tantivy.git?branch=patch-0.22.1#efa7643d27289c1ed680fe7ead8c8fffc72b20a2"
+source = "git+https://github.com/pingcap/tantivy.git?branch=cse-0.22.1#392142b1eefa9258731b1c8483632c4a70bc32d8"
 dependencies = [
  "tantivy-bitpacker",
  "tantivy-common",
@@ -6989,7 +6979,7 @@ dependencies = [
 [[package]]
 name = "tantivy-stacker"
 version = "0.3.0"
-source = "git+https://github.com/breezewish/tikv-tantivy.git?branch=patch-0.22.1#efa7643d27289c1ed680fe7ead8c8fffc72b20a2"
+source = "git+https://github.com/pingcap/tantivy.git?branch=cse-0.22.1#392142b1eefa9258731b1c8483632c4a70bc32d8"
 dependencies = [
  "murmurhash32",
  "rand_distr",
@@ -6999,7 +6989,7 @@ dependencies = [
 [[package]]
 name = "tantivy-tokenizer-api"
 version = "0.3.0"
-source = "git+https://github.com/breezewish/tikv-tantivy.git?branch=patch-0.22.1#efa7643d27289c1ed680fe7ead8c8fffc72b20a2"
+source = "git+https://github.com/pingcap/tantivy.git?branch=cse-0.22.1#392142b1eefa9258731b1c8483632c4a70bc32d8"
 dependencies = [
  "serde",
 ]
@@ -7046,7 +7036,10 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "slog",
+ "slog-global",
  "thiserror 1.0.69",
+ "tokio",
  "workspace-hack",
 ]
 
@@ -7142,7 +7135,7 @@ dependencies = [
  "derive_more",
  "error_code",
  "futures 0.3.32",
- "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
+ "kvproto",
  "lazy_static",
  "log_wrappers",
  "maybe-async",
@@ -7176,7 +7169,7 @@ dependencies = [
  "encoding_rs 0.8.29",
  "error_code",
  "hex 0.4.3",
- "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
+ "kvproto",
  "lazy_static",
  "log_wrappers",
  "match-template",
@@ -7220,7 +7213,7 @@ dependencies = [
  "keys",
  "kvengine",
  "kvenginepb",
- "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git?rev=683dad8fa3689deb243f2ff8ab5847c97af53e38)",
+ "kvproto",
  "lazy_static",
  "num_cpus",
  "pd_client",
@@ -7337,7 +7330,7 @@ dependencies = [
  "grpcio",
  "http 0.2.12",
  "hyper 0.14.26",
- "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
+ "kvproto",
  "lazy_static",
  "libc",
  "log",
@@ -7766,7 +7759,7 @@ version = "0.0.1"
 dependencies = [
  "collections",
  "crossbeam-utils",
- "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
+ "kvproto",
  "lazy_static",
  "parking_lot 0.12.5",
  "pin-project",
@@ -7793,7 +7786,7 @@ dependencies = [
  "collections",
  "error_code",
  "farmhash",
- "kvproto 0.0.2 (git+https://github.com/pingcap/kvproto.git)",
+ "kvproto",
  "log_wrappers",
  "slog",
  "thiserror 1.0.69",
