@@ -1469,6 +1469,7 @@ pub unsafe fn run_proxy(argc: c_int, argv: *const *const c_char, helper_ptr: *co
         store_registration = Some((store, start_time));
     }
 
+    // Init the cloud helper once and reuse it for the lifetime of the process.
     let cloud_helper = CloudHelper::new(
         CloudEngineBackends {
             dfs,
