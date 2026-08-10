@@ -111,6 +111,7 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
     if (unlikely(block.columns() != schema_snapshot->column_defines->size()))
         throw Exception("block structure doesn't match schema_snapshot.", ErrorCodes::LOGICAL_ERROR);
 
+    // The column_ids to read according to schema_snapshot, each elem is (column_id, block_pos)
     const auto & read_column_ids = schema_snapshot->sorted_column_id_with_pos;
     const auto & pk_column_ids = schema_snapshot->pk_column_ids;
     const auto & pk_pos_map = schema_snapshot->pk_pos_map;
@@ -199,6 +200,8 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
             else
             {
                 // Parse column value from encoded value
+                // Decode the column_ids from `column_ids_iter` to `read_column_ids.end()`
+                // and insert into `block` at position starting from `next_column_pos`
                 if (!appendRowToBlock(
                         *value_ptr,
                         column_ids_iter,

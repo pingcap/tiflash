@@ -691,5 +691,178 @@ try
 }
 CATCH
 
+TEST_F(RegionBlockReaderTest, ReadFromRegionDefaultValue)
+try
+{
+    // With this table_info, column "c1" is "NOT NULL" and has no origin default
+    TableInfo table_info_c1_not_null_no_origin_default(
+        R"({"cols":[{"id":1,"name":{"L":"c0","O":"c0"},"offset":0,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":0,"Flen":4,"Tp":1}},{"id":2,"name":{"L":"handle","O":"handle"},"offset":1,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":515,"Flen":11,"Tp":3}},{"default":"-56083770","id":7,"name":{"L":"c1","O":"c1"},"offset":2,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":1,"Flen":20,"Tp":8}},{"id":4,"name":{"L":"c2","O":"c2"},"offset":3,"origin_default":"0.07954397","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":-1,"Flag":4097,"Flen":12,"Tp":4}},{"id":5,"name":{"L":"c5","O":"c5"},"offset":4,"origin_default":"0","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":0,"Flen":10,"Tp":246}},{"default":"247262911","id":6,"name":{"L":"c4","O":"c4"},"offset":5,"origin_default":"247262911","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":0,"Flen":10,"Tp":246}}],"id":636,"index_info":[],"is_common_handle":false,"keyspace_id":4294967295,"name":{"L":"t0","O":"t0"},"pk_is_handle":true,"state":5,"tiflash_replica":{"Available":true,"Count":1},"update_timestamp":463845180343844895})",
+        NullspaceID);
+
+    // With this table_info, column "c1" is "NOT NULL" and has no default value
+    TableInfo table_info_c1_not_null_no_default_value(
+        R"({"cols":[{"id":1,"name":{"L":"c0","O":"c0"},"offset":0,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":0,"Flen":4,"Tp":1}},{"id":2,"name":{"L":"handle","O":"handle"},"offset":1,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":515,"Flen":11,"Tp":3}},{"id":7,"name":{"L":"c1","O":"c1"},"offset":2,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":4097,"Flen":20,"Tp":8}},{"id":4,"name":{"L":"c2","O":"c2"},"offset":3,"origin_default":"0.07954397","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":-1,"Flag":4097,"Flen":12,"Tp":4}},{"id":5,"name":{"L":"c5","O":"c5"},"offset":4,"origin_default":"0","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":0,"Flen":10,"Tp":246}},{"default":"247262911","id":6,"name":{"L":"c4","O":"c4"},"offset":5,"origin_default":"247262911","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":0,"Flen":10,"Tp":246}}],"id":636,"index_info":[],"is_common_handle":false,"keyspace_id":4294967295,"name":{"L":"t0","O":"t0"},"pk_is_handle":true,"state":5,"tiflash_replica":{"Available":true,"Count":1},"update_timestamp":463845180343844895})",
+        NullspaceID);
+
+    // With this table_info, column "c1" has the "NOT NULL" flag and has origin default "-56083770"
+    TableInfo table_info_c1_not_null_with_origin_default(
+        R"({"cols":[{"id":1,"name":{"L":"c0","O":"c0"},"offset":0,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":0,"Flen":4,"Tp":1}},{"id":2,"name":{"L":"handle","O":"handle"},"offset":1,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":515,"Flen":11,"Tp":3}},{"origin_default":"-56083770","id":7,"name":{"L":"c1","O":"c1"},"offset":2,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":1,"Flen":20,"Tp":8}},{"id":4,"name":{"L":"c2","O":"c2"},"offset":3,"origin_default":"0.07954397","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":-1,"Flag":4097,"Flen":12,"Tp":4}},{"id":5,"name":{"L":"c5","O":"c5"},"offset":4,"origin_default":"0","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":0,"Flen":10,"Tp":246}},{"default":"247262911","id":6,"name":{"L":"c4","O":"c4"},"offset":5,"origin_default":"247262911","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":0,"Flen":10,"Tp":246}}],"id":636,"index_info":[],"is_common_handle":false,"keyspace_id":4294967295,"name":{"L":"t0","O":"t0"},"pk_is_handle":true,"state":5,"tiflash_replica":{"Available":true,"Count":1},"update_timestamp":463845180343844895})",
+        NullspaceID);
+
+    // With this table_info, column "c1" has the "NOT NULL" flag and has origin default "-56083770", but the state is not public
+    TableInfo table_info_c1_not_null_with_origin_default_non_public(
+        R"({"cols":[{"id":1,"name":{"L":"c0","O":"c0"},"offset":0,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":0,"Flen":4,"Tp":1}},{"id":2,"name":{"L":"handle","O":"handle"},"offset":1,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":515,"Flen":11,"Tp":3}},{"origin_default":"-56083770","id":7,"name":{"L":"c1","O":"c1"},"offset":2,"state":3,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":1,"Flen":20,"Tp":8}},{"id":4,"name":{"L":"c2","O":"c2"},"offset":3,"origin_default":"0.07954397","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":-1,"Flag":4097,"Flen":12,"Tp":4}},{"id":5,"name":{"L":"c5","O":"c5"},"offset":4,"origin_default":"0","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":0,"Flen":10,"Tp":246}},{"default":"247262911","id":6,"name":{"L":"c4","O":"c4"},"offset":5,"origin_default":"247262911","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":0,"Flen":10,"Tp":246}}],"id":636,"index_info":[],"is_common_handle":false,"keyspace_id":4294967295,"name":{"L":"t0","O":"t0"},"pk_is_handle":true,"state":5,"tiflash_replica":{"Available":true,"Count":1},"update_timestamp":463845180343844895})",
+        NullspaceID);
+
+    // With this table_info, column "c1" does not have the "NOT NULL" flag
+    TableInfo table_info_c1_nullable(
+        R"({"cols":[{"id":1,"name":{"L":"c0","O":"c0"},"offset":0,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":0,"Flen":4,"Tp":1}},{"id":2,"name":{"L":"handle","O":"handle"},"offset":1,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":515,"Flen":11,"Tp":3}},{"id":7,"name":{"L":"c1","O":"c1"},"offset":2,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":0,"Flen":20,"Tp":8}},{"id":4,"name":{"L":"c2","O":"c2"},"offset":3,"origin_default":"0.07954397","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":-1,"Flag":4097,"Flen":12,"Tp":4}},{"id":5,"name":{"L":"c5","O":"c5"},"offset":4,"origin_default":"0","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":0,"Flen":10,"Tp":246}},{"default":"247262911","id":6,"name":{"L":"c4","O":"c4"},"offset":5,"origin_default":"247262911","state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":0,"Flen":10,"Tp":246}}],"id":636,"index_info":[],"is_common_handle":false,"keyspace_id":4294967295,"name":{"L":"t0","O":"t0"},"pk_is_handle":true,"state":5,"tiflash_replica":{"Available":true,"Count":1},"update_timestamp":463844343842340870})",
+        NullspaceID);
+
+    RegionID region_id = 4;
+    // the start_key and end_key for table_id = 68
+    String region_start_key(bytesFromHexString("7480000000000002FF7C5F720000000000FA"));
+    String region_end_key(bytesFromHexString("7480000000000002FF7D00000000000000F8"));
+    auto region = makeRegion(region_id, region_start_key, region_end_key);
+    // the hex kv dump from RaftLog
+    std::vector<std::tuple<std::string_view, std::string_view>> kvs = {
+        {
+            "7480000000000002FFA95F728000000000FF0000010000000000FAF9901806DEF7FFDA",
+            "50A380A08892FFF9B706762C8000040000000405060708000F0016001A00BFDC4011A00000000A0080000000000A008000003CA339"
+            "1ABC85",
+        },
+        {
+            "7480000000000002FFA95F728000000000FF0000010000000000FAF9901806DEF7FFD8",
+            "50A680A08892FFF9B706762C8000040000000405060708000F0016001A00BFDC4011A00000000A008033E04D600A008000003CA339"
+            "1ABC85",
+        },
+        {
+            "7480000000000002FFA95F728000000000FF0000020000000000FAF9901806DE33FFE8",
+            "509680B08E92FFF9B706762580000300000004050608000F001600BF720CDD400000000A0080000000010A00800000393C",
+        },
+    };
+    for (const auto & [k, v] : kvs)
+    {
+        region->insert("write", TiKVKey(bytesFromHexString(k)), TiKVValue(bytesFromHexString(v)));
+    }
+
+    auto data_list_read = ReadRegionCommitCache(region, true);
+    ASSERT_TRUE(data_list_read.has_value());
+
+    // Test with `table_info_c1_not_null_no_origin_default`
+    auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info_c1_not_null_no_origin_default);
+    {
+        // force_decode=false can not decode because there are
+        // missing value for column with not null flag.
+        auto reader = RegionBlockReader(decoding_schema);
+        Block res_block = createBlockSortByColumnID(decoding_schema);
+        ASSERT_FALSE(reader.read(res_block, *data_list_read, false));
+    }
+    {
+        // force_decode=true can decode the block, and filling the "zero value" for c1
+        auto reader = RegionBlockReader(decoding_schema);
+        Block res_block = createBlockSortByColumnID(decoding_schema);
+        ASSERT_TRUE(reader.read(res_block, *data_list_read, true));
+        LOG_INFO(
+            Logger::get(),
+            "Decoded block:\n{}",
+            DB::tests::getColumnsContent(res_block.getColumnsWithTypeAndName()));
+        ASSERT_EQ(res_block.getByName("c1").type->getName(), "Int64");
+        // verify the default value is filled correctly
+        ASSERT_COLUMN_EQ( //
+            res_block.getByName("c1"),
+            createColumn<Int64>({-2051270087, -2051270087, 0}));
+    }
+
+    // Test with `table_info_c1_not_null_no_default_value`
+    decoding_schema = getDecodingStorageSchemaSnapshot(table_info_c1_not_null_no_default_value);
+    {
+        // force_decode=false can not decode because there are
+        // missing value for column with not null flag.
+        auto reader = RegionBlockReader(decoding_schema);
+        Block res_block = createBlockSortByColumnID(decoding_schema);
+        ASSERT_FALSE(reader.read(res_block, *data_list_read, false));
+    }
+    {
+        // force_decode=true can decode the block, and filling the "zero value" for c1
+        auto reader = RegionBlockReader(decoding_schema);
+        Block res_block = createBlockSortByColumnID(decoding_schema);
+        ASSERT_TRUE(reader.read(res_block, *data_list_read, true));
+        LOG_INFO(
+            Logger::get(),
+            "Decoded block:\n{}",
+            DB::tests::getColumnsContent(res_block.getColumnsWithTypeAndName()));
+        ASSERT_EQ(res_block.getByName("c1").type->getName(), "Int64");
+        // verify the default value is filled correctly
+        ASSERT_COLUMN_EQ( //
+            res_block.getByName("c1"),
+            createColumn<Int64>({-2051270087, -2051270087, 0}));
+    }
+
+    // Test with `table_info_c1_not_null_with_origin_default`
+    decoding_schema = getDecodingStorageSchemaSnapshot(table_info_c1_not_null_with_origin_default);
+    {
+        // force_decode=false can decode because origin_default exists and NoDefaultValue flag is not set
+        // so RegionBlockReader can use origin_default to fill the missing value`
+        auto reader = RegionBlockReader(decoding_schema);
+        Block res_block = createBlockSortByColumnID(decoding_schema);
+        ASSERT_TRUE(reader.read(res_block, *data_list_read, false));
+        LOG_INFO(
+            Logger::get(),
+            "Decoded block:\n{}",
+            DB::tests::getColumnsContent(res_block.getColumnsWithTypeAndName()));
+        ASSERT_EQ(res_block.getByName("c1").type->getName(), "Int64");
+        // verify the default value is filled correctly
+        ASSERT_COLUMN_EQ( //
+            res_block.getByName("c1"),
+            // the third elem is filled wih origin_default
+            createColumn<Int64>({-2051270087, -2051270087, -56083770}));
+    }
+
+    // Test with `table_info_c1_not_null_with_origin_default_non_public`
+    decoding_schema = getDecodingStorageSchemaSnapshot(table_info_c1_not_null_with_origin_default_non_public);
+    {
+        // force_decode=false can not decode because there are
+        // missing value for column with not null flag and the state is not public
+        auto reader = RegionBlockReader(decoding_schema);
+        Block res_block = createBlockSortByColumnID(decoding_schema);
+        ASSERT_FALSE(reader.read(res_block, *data_list_read, false));
+    }
+    {
+        // force_decode=true can decode the block, and filling the default value for c1
+        auto reader = RegionBlockReader(decoding_schema);
+        Block res_block = createBlockSortByColumnID(decoding_schema);
+        ASSERT_TRUE(reader.read(res_block, *data_list_read, true));
+        LOG_INFO(
+            Logger::get(),
+            "Decoded block:\n{}",
+            DB::tests::getColumnsContent(res_block.getColumnsWithTypeAndName()));
+        ASSERT_EQ(res_block.getByName("c1").type->getName(), "Int64");
+        // verify the default value is filled correctly
+        ASSERT_COLUMN_EQ( //
+            res_block.getByName("c1"),
+            // the third elem is filled wih origin_default
+            createColumn<Int64>({-2051270087, -2051270087, -56083770}));
+    }
+
+    // Test with `table_info_c1_nullable`
+    decoding_schema = getDecodingStorageSchemaSnapshot(table_info_c1_nullable);
+    {
+        // force_decode=false should be able to decode because c1 is nullable
+        auto reader = RegionBlockReader(decoding_schema);
+        Block res_block = createBlockSortByColumnID(decoding_schema);
+        ASSERT_TRUE(reader.read(res_block, *data_list_read, false));
+        LOG_INFO(
+            Logger::get(),
+            "Decoded block:\n{}",
+            DB::tests::getColumnsContent(res_block.getColumnsWithTypeAndName()));
+        ASSERT_EQ(res_block.getByName("c1").type->getName(), "Nullable(Int64)");
+        // verify the default value is filled with NULL correctly at the last row
+        ASSERT_COLUMN_EQ( //
+            res_block.getByName("c1"),
+            createNullableColumn<Int64>({-2051270087, -2051270087, 0}, {0, 0, 1}));
+    }
+}
+CATCH
 
 } // namespace DB::tests

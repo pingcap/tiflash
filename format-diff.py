@@ -29,6 +29,23 @@ def run_cmd(cmd, show_cmd=False):
     return res
 
 
+def try_find_clang_format(exec_path):
+    candidates = ['clang-format-15']
+    if exec_path is not None:
+        candidates.insert(0, exec_path)
+    for c in candidates:
+        if which(c) is not None:
+            return c
+    return candidates[-1]
+
+
+def get_clang_format_version(clang_format_cmd):
+    proc = subprocess.run([clang_format_cmd, '--version'],
+                          stdout=subprocess.PIPE, check=True)
+    clang_format_version = proc.stdout.decode().strip()
+    return clang_format_version
+
+
 def main():
     default_suffix = ['.cpp', '.h', '.cc', '.hpp']
     parser = argparse.ArgumentParser(description='TiFlash Code Format',
@@ -45,6 +62,8 @@ def main():
                         help='exit -1 if NOT formatted', action='store_true')
     parser.add_argument('--dump_diff_files_to',
                         help='dump diff file names to specific path', default=None)
+    parser.add_argument('--clang_format',
+                        help='path to clang-format', default=None)
 
     args = parser.parse_args()
     default_suffix = args.suffix.strip().split(' ') if args.suffix else []
@@ -82,10 +101,9 @@ def main():
             len(da), args.dump_diff_files_to))
 
     if files_to_format:
+        clang_format_cmd = try_find_clang_format(args.clang_format)
+        print('Using {}'.format(get_clang_format_version(clang_format_cmd)))
         print('Files to format:\n  {}'.format('\n  '.join(files_to_format)))
-        clang_format_cmd = 'clang-format-13'
-        if which(clang_format_cmd) is None:
-            clang_format_cmd = 'clang-format'
         for file in files_to_format:
             cmd = clang_format_cmd + ' -i {}'.format(file)
             if subprocess.Popen(cmd, shell=True, cwd=tiflash_repo_path).wait():
