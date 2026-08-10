@@ -1888,7 +1888,6 @@ try
                     generateNullEqualOperator(static_cast<MinMaxTestDatatype>(datatype), false, false)));
         }
     }
-
 }
 
 CATCH
