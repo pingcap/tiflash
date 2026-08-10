@@ -134,29 +134,128 @@ enum class IndexType
 };
 
 #if ENABLE_CLARA
+namespace
+{
+FullTextNgramOption parseFullTextNgramOption(const Poco::JSON::Object::Ptr & json)
+{
+    return FullTextNgramOption{
+        .min_gram = json->getValue<UInt64>("min_gram"),
+        .max_gram = json->getValue<UInt64>("max_gram"),
+        .granularity = json->getValue<String>("granularity"),
+        .lower_case = json->getValue<bool>("lower_case"),
+    };
+}
+
+FullTextPathHierarchyOption parseFullTextPathHierarchyOption(const Poco::JSON::Object::Ptr & json)
+{
+    return FullTextPathHierarchyOption{
+        .delimiter = json->getValue<String>("delimiter"),
+    };
+}
+
+FullTextIndexFieldOption parseFullTextIndexFieldOption(const Poco::JSON::Object::Ptr & json)
+{
+    FullTextIndexFieldOption option{
+        .analyzer_type = json->getValue<String>("analyzer_type"),
+        .enable_bm25 = json->getValue<bool>("enable_bm25"),
+    };
+    if (json->has("ngram"))
+    {
+        auto ngram = json->getObject("ngram");
+        RUNTIME_CHECK_MSG(ngram, "Invalid FullTextIndex field option, ngram must be an object");
+        option.ngram = parseFullTextNgramOption(ngram);
+    }
+    if (json->has("path_hierarchy"))
+    {
+        auto path_hierarchy = json->getObject("path_hierarchy");
+        RUNTIME_CHECK_MSG(path_hierarchy, "Invalid FullTextIndex field option, path_hierarchy must be an object");
+        option.path_hierarchy = parseFullTextPathHierarchyOption(path_hierarchy);
+    }
+    return option;
+}
+} // namespace
+
 FullTextIndexDefinitionPtr parseFullTextIndexFromJSON(const Poco::JSON::Object::Ptr & json)
 {
     RUNTIME_CHECK(json); // not nullptr
 
-    RUNTIME_CHECK_MSG(json->has("parser_type"), "Invalid FullTextIndex definition, missing parser_type");
-    auto parser_type_field = json->getValue<String>("parser_type");
-    RUNTIME_CHECK_MSG(
-        ClaraFTS::supports_tokenizer(parser_type_field),
-        "Invalid FullTextIndex definition, unsupported parser_type `{}`",
-        parser_type_field);
+    const auto parser_type = json->has("parser_type") ? json->getValue<String>("parser_type") : String{};
+    std::vector<FullTextIndexFieldInfo> index_fields;
+    if (json->has("index_fields"))
+    {
+        auto fields = json->getArray("index_fields");
+        RUNTIME_CHECK_MSG(fields, "Invalid FullTextIndex definition, index_fields must be an array");
+        index_fields.reserve(fields->size());
+        for (size_t i = 0; i < fields->size(); ++i)
+        {
+            auto field = fields->getObject(i);
+            RUNTIME_CHECK_MSG(field, "Invalid FullTextIndex definition, index_fields[{}] must be an object", i);
+            auto field_option = field->getObject("index_field_option");
+            RUNTIME_CHECK_MSG(
+                field_option,
+                "Invalid FullTextIndex definition, index_fields[{}].index_field_option must be an object",
+                i);
+            index_fields.emplace_back(FullTextIndexFieldInfo{
+                .column_id = field->getValue<Int64>("column_id"),
+                .index_field_option = parseFullTextIndexFieldOption(field_option),
+            });
+        }
+    }
+
+    // CSE owns Spec v1 semantic validation. TiFlash only validates the legacy
+    // parser that its local single-field implementation consumes directly.
+    if (index_fields.empty())
+    {
+        RUNTIME_CHECK_MSG(
+            ClaraFTS::supports_tokenizer(parser_type),
+            "Invalid legacy FullTextIndex definition, unsupported parser_type `{}`",
+            parser_type);
+    }
 
     return std::make_shared<const FullTextIndexDefinition>(FullTextIndexDefinition{
-        .parser_type = parser_type_field,
+        .parser_type = parser_type,
+        .index_fields = std::move(index_fields),
     });
 }
 
 Poco::JSON::Object::Ptr fullTextIndexToJSON(const FullTextIndexDefinitionPtr & full_text_index)
 {
     RUNTIME_CHECK(full_text_index != nullptr);
-    RUNTIME_CHECK(ClaraFTS::supports_tokenizer(full_text_index->parser_type));
 
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
     json->set("parser_type", full_text_index->parser_type);
+    if (!full_text_index->index_fields.empty())
+    {
+        Poco::JSON::Array::Ptr fields = new Poco::JSON::Array();
+        for (const auto & field : full_text_index->index_fields)
+        {
+            Poco::JSON::Object::Ptr field_json = new Poco::JSON::Object();
+            field_json->set("column_id", field.column_id);
+
+            const auto & option = field.index_field_option;
+            Poco::JSON::Object::Ptr option_json = new Poco::JSON::Object();
+            option_json->set("analyzer_type", option.analyzer_type);
+            option_json->set("enable_bm25", option.enable_bm25);
+            if (option.ngram)
+            {
+                Poco::JSON::Object::Ptr ngram = new Poco::JSON::Object();
+                ngram->set("min_gram", option.ngram->min_gram);
+                ngram->set("max_gram", option.ngram->max_gram);
+                ngram->set("granularity", option.ngram->granularity);
+                ngram->set("lower_case", option.ngram->lower_case);
+                option_json->set("ngram", ngram);
+            }
+            if (option.path_hierarchy)
+            {
+                Poco::JSON::Object::Ptr path_hierarchy = new Poco::JSON::Object();
+                path_hierarchy->set("delimiter", option.path_hierarchy->delimiter);
+                option_json->set("path_hierarchy", path_hierarchy);
+            }
+            field_json->set("index_field_option", option_json);
+            fields->add(field_json);
+        }
+        json->set("index_fields", fields);
+    }
     return json;
 }
 #endif

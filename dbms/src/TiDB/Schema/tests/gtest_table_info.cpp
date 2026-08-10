@@ -31,6 +31,7 @@
 #include <gtest/gtest.h>
 
 #include <boost/algorithm/string/replace.hpp>
+#include <string_view>
 
 using TableInfo = TiDB::TableInfo;
 using DBInfo = TiDB::DBInfo;
@@ -290,6 +291,100 @@ try
     {
         ASSERT_THROW({ TableInfo table_info(c, NullspaceID); }, DB::Exception) << c;
     }
+}
+CATCH
+
+String tableInfoWithFullTextIndex(std::string_view full_text_index)
+{
+    String json
+        = R"json({"cols":[{"id":101,"name":{"L":"title","O":"title"},"offset":0,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":0,"Flen":65535,"Tp":252}},{"id":202,"name":{"L":"category","O":"category"},"offset":1,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":0,"Flen":255,"Tp":15}},{"id":203,"name":{"L":"path","O":"path"},"offset":2,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":0,"Flen":1024,"Tp":15}},{"id":204,"name":{"L":"body","O":"body"},"offset":3,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":0,"Flen":65535,"Tp":252}}],"id":30,"index_info":[{"id":5,"idx_cols":[{"length":-1,"name":{"L":"title","O":"title"},"offset":0},{"length":-1,"name":{"L":"category","O":"category"},"offset":1},{"length":-1,"name":{"L":"path","O":"path"},"offset":2},{"length":-1,"name":{"L":"body","O":"body"},"offset":3}],"idx_name":{"L":"ft_docs","O":"ft_docs"},"index_type":3,"is_global":false,"is_invisible":false,"is_primary":false,"is_unique":false,"state":5,"full_text_index":)json";
+    json.append(full_text_index);
+    json
+        += R"json(}],"is_common_handle":false,"name":{"L":"docs","O":"docs"},"partition":null,"pk_is_handle":false,"schema_version":-1,"state":5,"update_timestamp":1723778704444603})json";
+    return json;
+}
+
+void assertFullTextIndexFields(const TiDB::FullTextIndexDefinition & full_text_index)
+{
+    ASSERT_EQ(full_text_index.parser_type, "");
+    ASSERT_EQ(full_text_index.index_fields.size(), 5);
+
+    const auto & path_field = full_text_index.index_fields[0];
+    ASSERT_EQ(path_field.column_id, 203);
+    ASSERT_EQ(path_field.index_field_option.analyzer_type, "PATH_HIERARCHY_V1");
+    ASSERT_FALSE(path_field.index_field_option.enable_bm25);
+    ASSERT_TRUE(path_field.index_field_option.path_hierarchy.has_value());
+    ASSERT_EQ(path_field.index_field_option.path_hierarchy->delimiter, "::");
+
+    const auto & standard_field = full_text_index.index_fields[1];
+    ASSERT_EQ(standard_field.column_id, 101);
+    ASSERT_EQ(standard_field.index_field_option.analyzer_type, "STANDARD_V1");
+    ASSERT_TRUE(standard_field.index_field_option.enable_bm25);
+
+    const auto & ngram_field = full_text_index.index_fields[2];
+    ASSERT_EQ(ngram_field.column_id, 101);
+    ASSERT_EQ(ngram_field.index_field_option.analyzer_type, "NGRAM_V1");
+    ASSERT_TRUE(ngram_field.index_field_option.enable_bm25);
+    ASSERT_TRUE(ngram_field.index_field_option.ngram.has_value());
+    ASSERT_EQ(ngram_field.index_field_option.ngram->min_gram, 2);
+    ASSERT_EQ(ngram_field.index_field_option.ngram->max_gram, 5);
+    ASSERT_EQ(ngram_field.index_field_option.ngram->granularity, "CHAR");
+    ASSERT_TRUE(ngram_field.index_field_option.ngram->lower_case);
+
+    const auto & multilingual_field = full_text_index.index_fields[3];
+    ASSERT_EQ(multilingual_field.column_id, 204);
+    ASSERT_EQ(multilingual_field.index_field_option.analyzer_type, "MULTILINGUAL_V1");
+    ASSERT_FALSE(multilingual_field.index_field_option.enable_bm25);
+
+    const auto & exact_field = full_text_index.index_fields[4];
+    ASSERT_EQ(exact_field.column_id, 202);
+    ASSERT_EQ(exact_field.index_field_option.analyzer_type, "EXACT_VALUE_V1");
+    ASSERT_FALSE(exact_field.index_field_option.enable_bm25);
+}
+
+TEST(TiDBTableInfoTest, FullTextIndexFieldsJSONRoundTrip)
+try
+{
+    const auto table_info_json = tableInfoWithFullTextIndex(R"json({
+        "parser_type":"",
+        "index_fields":[
+            {"column_id":203,"index_field_option":{"analyzer_type":"PATH_HIERARCHY_V1","enable_bm25":false,"path_hierarchy":{"delimiter":"::"}}},
+            {"column_id":101,"index_field_option":{"analyzer_type":"STANDARD_V1","enable_bm25":true}},
+            {"column_id":101,"index_field_option":{"analyzer_type":"NGRAM_V1","enable_bm25":true,"ngram":{"min_gram":2,"max_gram":5,"granularity":"CHAR","lower_case":true}}},
+            {"column_id":204,"index_field_option":{"analyzer_type":"MULTILINGUAL_V1","enable_bm25":false}},
+            {"column_id":202,"index_field_option":{"analyzer_type":"EXACT_VALUE_V1","enable_bm25":false}}
+        ]
+    })json");
+    TableInfo table_info(table_info_json, NullspaceID);
+
+    ASSERT_EQ(table_info.index_infos.size(), 1);
+    ASSERT_NE(table_info.index_infos[0].full_text_index, nullptr);
+    assertFullTextIndexFields(*table_info.index_infos[0].full_text_index);
+
+    const auto serialized = table_info.serialize();
+    ASSERT_NE(serialized.find("\"index_fields\""), String::npos);
+    ASSERT_EQ(serialized.find("\"fields\""), String::npos);
+    ASSERT_EQ(serialized.find("\"filter_columns\""), String::npos);
+
+    const TableInfo round_trip(serialized, NullspaceID);
+    ASSERT_NE(round_trip.index_infos[0].full_text_index, nullptr);
+    assertFullTextIndexFields(*round_trip.index_infos[0].full_text_index);
+    ASSERT_EQ(round_trip.serialize(), serialized);
+}
+CATCH
+
+TEST(TiDBTableInfoTest, LegacyFullTextParserTypeJSONRoundTrip)
+try
+{
+    const TableInfo table_info(tableInfoWithFullTextIndex(R"json({"parser_type":"STANDARD_V1"})json"), NullspaceID);
+
+    ASSERT_NE(table_info.index_infos[0].full_text_index, nullptr);
+    ASSERT_EQ(table_info.index_infos[0].full_text_index->parser_type, "STANDARD_V1");
+    ASSERT_TRUE(table_info.index_infos[0].full_text_index->index_fields.empty());
+
+    const TableInfo round_trip(table_info.serialize(), NullspaceID);
+    ASSERT_EQ(round_trip.index_infos[0].full_text_index->parser_type, "STANDARD_V1");
+    ASSERT_TRUE(round_trip.index_infos[0].full_text_index->index_fields.empty());
 }
 CATCH
 
