@@ -36,7 +36,6 @@ uv sync
 | `tiflash_summary.json.sha256` | SHA256 of the generated JSON |
 | `generate_dashboard.sh` | Generate entrypoint |
 | `pyproject.toml` / `uv.lock` | Python deps (`grafanalib==0.7.1`) |
-| `scripts/compare_dashboards.py` | Semantic diff helper for two dashboard JSON files |
 
 ## Authoring notes
 
@@ -55,6 +54,7 @@ uv sync
 ## Validate
 
 ```bash
-# Compare two dashboard JSON files (paths are examples):
-python3 scripts/compare_dashboards.py old.json tiflash_summary.json
+cd metrics/grafana
+./generate_dashboard.sh
+# Confirm tiflash_summary.json / .sha256 are updated and review the diff.
 ```

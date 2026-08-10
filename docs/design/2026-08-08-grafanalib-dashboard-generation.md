@@ -62,9 +62,11 @@ metrics/grafana/
   tiflash_summary.json.sha256
   generate_dashboard.sh          # uv sync + format + generate
   pyproject.toml / uv.lock       # grafanalib==0.7.1
-  scripts/compare_dashboards.py  # semantic JSON compare
   README.md
 ```
+
+During migration we also used a temporary `scripts/compare_dashboards.py` for
+semantic JSON diffs against legacy baselines; it is not kept in tree afterward.
 
 ### Generation flow
 
@@ -134,8 +136,8 @@ Dashboard rows are ordinary Python functions returning `RowPanel`, composed in t
 
 ### Compatibility Tests
 
-- Semantic compare against a known baseline JSON when available:
-  `python3 scripts/compare_dashboards.py <baseline.json> tiflash_summary.json`
+- Semantic compare against a known baseline JSON when available (migration
+  phase used `scripts/compare_dashboards.py`; not retained after landing).
 
 ### Benchmark Tests
 
@@ -156,7 +158,8 @@ Not applicable: this change does not affect TiFlash query/storage runtime perfor
 ### Risks
 
 - **Silent PromQL drift** if helpers compose selectors incorrectly
-  (mitigation: `compare_dashboards.py`, Grafana spot-check, code review).
+  (mitigation: migration-time `compare_dashboards.py`, Grafana spot-check,
+  code review).
 - **grafanalib version skew** (`0.7.1` pinned in `uv.lock`); upgrading may
   change JSON defaults (mitigation: pin + regenerate in the same PR).
 
