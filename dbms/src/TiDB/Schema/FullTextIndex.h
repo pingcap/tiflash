@@ -18,47 +18,15 @@
 #include <fmt/format.h>
 
 #include <memory>
-#include <optional>
-#include <vector>
 
 namespace TiDB
 {
 
 // Constructed from table definition.
 // See TiDB's pkg/parser/model/index_full_text.go
-struct FullTextNgramOption
-{
-    UInt64 min_gram = 0;
-    UInt64 max_gram = 0;
-    String granularity;
-    bool lower_case = false;
-};
-
-struct FullTextPathHierarchyOption
-{
-    String delimiter;
-};
-
-struct FullTextIndexFieldOption
-{
-    String analyzer_type;
-    bool enable_bm25 = false;
-    std::optional<FullTextNgramOption> ngram;
-    std::optional<FullTextPathHierarchyOption> path_hierarchy;
-};
-
-struct FullTextIndexFieldInfo
-{
-    Int64 column_id = 0;
-    FullTextIndexFieldOption index_field_option;
-};
-
 struct FullTextIndexDefinition
 {
-    // Legacy metadata for rolling upgrades of single-field indexes.
     String parser_type = "INVALID";
-    // Array position is the Tantivy physical field order. Keep duplicates.
-    std::vector<FullTextIndexFieldInfo> index_fields;
 };
 
 // As this is constructed from TiDB's table definition, we should not
