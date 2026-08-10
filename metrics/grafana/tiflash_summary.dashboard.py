@@ -18,6 +18,7 @@ from common import (
     ADDITIONAL_GROUPBY,
     DATASOURCE,
     DATASOURCE_INPUT,
+    PROXY_LABEL_SELECTORS,
     Layout,
     cpu_with_limit_panel,
     duration_panel,
@@ -38,7 +39,6 @@ from common import (
     make_heatmap,
     target,
     template,
-    use_instance_selectors,
     yaxes,
 )
 
@@ -231,25 +231,19 @@ def Server() -> RowPanel:
                     target(
                         expr=expr_sum(
                             "tiflash_proxy_tikv_raftstore_region_count",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'type="region"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="{{instance}}",
                     ),
                     target(
                         expr=expr_sum(
                             "tiflash_proxy_tikv_raftstore_hibernated_peer_state",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=["instance", "state"],
-                            skip_default_instance=True,
                         ),
                         legend_format="{{instance}}-{{state}}",
                         hide=True,
@@ -306,13 +300,11 @@ def Server() -> RowPanel:
                     target(
                         expr=expr_sum(
                             "tiflash_proxy_process_resident_memory_bytes",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'job=~".*tiflash"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="{{instance}}",
                         interval_factor=1,
@@ -441,13 +433,11 @@ def Server() -> RowPanel:
                     target(
                         expr=expr_sum_irate(
                             "tiflash_proxy_threads_io_bytes_total",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'job=~".*tiflash"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="{{instance}}",
                         interval_factor=1,
@@ -494,13 +484,11 @@ def ThreadsCPU() -> RowPanel:
                     target(
                         expr=expr_sum_rate(
                             "tiflash_proxy_thread_cpu_seconds_total",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'name=~"sst_importer.*"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="{{instance}}",
                     ),
@@ -518,13 +506,11 @@ def ThreadsCPU() -> RowPanel:
                     target(
                         expr=expr_sum_rate(
                             "tiflash_proxy_thread_cpu_seconds_total",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'name=~"apply_low_.*"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="{{instance}}",
                     ),
@@ -532,13 +518,11 @@ def ThreadsCPU() -> RowPanel:
                         expr=expr_aggr(
                             "tiflash_proxy_thread_cpu_seconds_total",
                             "count",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'name=~"apply_low_.*"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="Limit",
                     ),
@@ -569,13 +553,11 @@ def ThreadsCPU() -> RowPanel:
                     target(
                         expr=expr_sum_rate(
                             "tiflash_proxy_thread_cpu_seconds_total",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'name=~"region_task.*"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="{{name}} {{instance}}",
                     ),
@@ -583,13 +565,11 @@ def ThreadsCPU() -> RowPanel:
                         expr=expr_aggr(
                             "tiflash_proxy_thread_cpu_seconds_total",
                             "count",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'name=~"region_task.*"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="Limit",
                     ),
@@ -616,13 +596,11 @@ def ThreadsCPU() -> RowPanel:
                     target(
                         expr=expr_sum_rate(
                             "tiflash_proxy_thread_cpu_seconds_total",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'name=~"region_worker.*"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="{{name}} {{instance}}",
                     ),
@@ -630,13 +608,11 @@ def ThreadsCPU() -> RowPanel:
                         expr=expr_aggr(
                             "tiflash_proxy_thread_cpu_seconds_total",
                             "count",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'name=~"region_worker.*"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="Limit",
                     ),
@@ -667,13 +643,11 @@ def ThreadsCPU() -> RowPanel:
                     target(
                         expr=expr_sum_rate(
                             "tiflash_proxy_thread_cpu_seconds_total",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'name=~"raftstore_.*"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="{{name}} {{instance}}",
                     ),
@@ -681,13 +655,11 @@ def ThreadsCPU() -> RowPanel:
                         expr=expr_aggr(
                             "tiflash_proxy_thread_cpu_seconds_total",
                             "count",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'name=~"raftstore_.*"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="Limit",
                     ),
@@ -714,13 +686,11 @@ def ThreadsCPU() -> RowPanel:
                     target(
                         expr=expr_sum_rate(
                             "tiflash_proxy_thread_cpu_seconds_total",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'name=~"apply_.*"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="{{name}} {{instance}}",
                     ),
@@ -728,13 +698,11 @@ def ThreadsCPU() -> RowPanel:
                         expr=expr_aggr(
                             "tiflash_proxy_thread_cpu_seconds_total",
                             "count",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'name=~"apply_.*"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="Limit",
                     ),
@@ -765,13 +733,11 @@ def ThreadsCPU() -> RowPanel:
                     target(
                         expr=expr_sum_rate(
                             "tiflash_proxy_thread_cpu_seconds_total",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'name=~"bg_\\\\\\\\d+"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="{{name}} {{instance}}",
                     ),
@@ -779,13 +745,11 @@ def ThreadsCPU() -> RowPanel:
                         expr=expr_aggr(
                             "tiflash_proxy_thread_cpu_seconds_total",
                             "count",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'name=~"bg_\\\\\\\\d+"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="Limit",
                     ),
@@ -812,13 +776,11 @@ def ThreadsCPU() -> RowPanel:
                     target(
                         expr=expr_sum_rate(
                             "tiflash_proxy_thread_cpu_seconds_total",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'name=~"bg_block_\\\\\\\\d+"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="{{name}} {{instance}}",
                     ),
@@ -826,13 +788,11 @@ def ThreadsCPU() -> RowPanel:
                         expr=expr_aggr(
                             "tiflash_proxy_thread_cpu_seconds_total",
                             "count",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'name=~"bg_block_\\\\\\\\d+"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="Limit",
                     ),
@@ -864,13 +824,11 @@ def ThreadsCPU() -> RowPanel:
                     target(
                         expr=expr_sum_rate(
                             "tiflash_proxy_thread_cpu_seconds_total",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'name=~"m_compact_pool"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="{{name}} {{instance}}",
                     ),
@@ -878,13 +836,11 @@ def ThreadsCPU() -> RowPanel:
                         expr=expr_aggr(
                             "tiflash_proxy_thread_cpu_seconds_total",
                             "count",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'name=~"m_compact_pool"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="Limit",
                     ),
@@ -911,13 +867,11 @@ def ThreadsCPU() -> RowPanel:
                     target(
                         expr=expr_sum_rate(
                             "tiflash_proxy_thread_cpu_seconds_total",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'name=~"async_poller.*"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="{{name}} {{instance}}",
                     ),
@@ -925,13 +879,11 @@ def ThreadsCPU() -> RowPanel:
                         expr=expr_aggr(
                             "tiflash_proxy_thread_cpu_seconds_total",
                             "count",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'name=~"async_poller.*"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="Limit",
                     ),
@@ -962,13 +914,11 @@ def ThreadsCPU() -> RowPanel:
                     target(
                         expr=expr_sum_rate(
                             "tiflash_proxy_thread_cpu_seconds_total",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'name=~"GRPCComp.*"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="{{name}} {{instance}}",
                     ),
@@ -976,13 +926,11 @@ def ThreadsCPU() -> RowPanel:
                         expr=expr_aggr(
                             "tiflash_proxy_thread_cpu_seconds_total",
                             "count",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'name=~"GRPCComp.*"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="Limit",
                     ),
@@ -1009,13 +957,11 @@ def ThreadsCPU() -> RowPanel:
                     target(
                         expr=expr_sum_rate(
                             "tiflash_proxy_thread_cpu_seconds_total",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'name=~"fap_builder.*"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="{{name}} {{instance}}",
                     ),
@@ -1023,13 +969,11 @@ def ThreadsCPU() -> RowPanel:
                         expr=expr_aggr(
                             "tiflash_proxy_thread_cpu_seconds_total",
                             "count",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'name=~"fap_builder.*"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="Limit",
                     ),
@@ -1060,13 +1004,11 @@ def ThreadsCPU() -> RowPanel:
                     target(
                         expr=expr_sum_rate(
                             "tiflash_proxy_thread_cpu_seconds_total",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'name=~"snap_sender.*"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="{{name}} {{instance}}",
                     ),
@@ -1074,13 +1016,11 @@ def ThreadsCPU() -> RowPanel:
                         expr=expr_aggr(
                             "tiflash_proxy_thread_cpu_seconds_total",
                             "count",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'name=~"snap_sender.*"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="Limit",
                     ),
@@ -1107,13 +1047,11 @@ def ThreadsCPU() -> RowPanel:
                     target(
                         expr=expr_sum_rate(
                             "tiflash_proxy_thread_cpu_seconds_total",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'name=~"segment_sched.*"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="{{name}} {{instance}}",
                     ),
@@ -1121,13 +1059,11 @@ def ThreadsCPU() -> RowPanel:
                         expr=expr_aggr(
                             "tiflash_proxy_thread_cpu_seconds_total",
                             "count",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'name=~"segment_sched.*"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="Limit",
                     ),
@@ -1158,13 +1094,11 @@ def ThreadsCPU() -> RowPanel:
                     target(
                         expr=expr_sum_rate(
                             "tiflash_proxy_thread_cpu_seconds_total",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'name=~"LocalIndexPool*"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="pool-{{instance}}",
                     ),
@@ -1172,13 +1106,11 @@ def ThreadsCPU() -> RowPanel:
                         expr=expr_aggr(
                             "tiflash_proxy_thread_cpu_seconds_total",
                             "count",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'name=~"LocalIndexPool*"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="Limit",
                     ),
@@ -1205,13 +1137,11 @@ def ThreadsCPU() -> RowPanel:
                     target(
                         expr=expr_sum_rate(
                             "tiflash_proxy_thread_cpu_seconds_total",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'name=~"SegmentReader.*"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="{{name}} {{instance}}",
                     ),
@@ -1219,13 +1149,11 @@ def ThreadsCPU() -> RowPanel:
                         expr=expr_aggr(
                             "tiflash_proxy_thread_cpu_seconds_total",
                             "count",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'name=~"SegmentReader.*"',
                             ],
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="Limit",
                     ),
@@ -1261,12 +1189,8 @@ def Threads() -> RowPanel:
                     target(
                         expr=expr_sum(
                             "tiflash_proxy_threads_state",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=["instance", "state"],
-                            skip_default_instance=True,
                         ),
                         legend_format="{{instance}}-{{state}}",
                         interval_factor=1,
@@ -1274,12 +1198,8 @@ def Threads() -> RowPanel:
                     target(
                         expr=expr_sum(
                             "tiflash_proxy_threads_state",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=["instance"],
-                            skip_default_instance=True,
                         ),
                         legend_format="{{instance}}-total",
                     ),
@@ -1298,12 +1218,8 @@ def Threads() -> RowPanel:
                     target(
                         expr=expr_sum_rate(
                             "tiflash_proxy_threads_io_bytes_total",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=["name", "io", ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ).extra(extra_expr="> 1024"),
                         legend_format="{{name}}-{{io}} {{$additional_groupby}}",
                         interval_factor=1,
@@ -1327,12 +1243,8 @@ def Threads() -> RowPanel:
                     target(
                         expr=expr_sum_rate(
                             "tiflash_proxy_thread_voluntary_context_switches",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=["instance", "name"],
-                            skip_default_instance=True,
                         ).extra(extra_expr="> 200"),
                         legend_format="{{instance}} - {{name}}",
                         interval_factor=1,
@@ -1352,12 +1264,8 @@ def Threads() -> RowPanel:
                     target(
                         expr=expr_sum_rate(
                             "tiflash_proxy_thread_nonvoluntary_context_switches",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=["instance", "name"],
-                            skip_default_instance=True,
                         ).extra(extra_expr="> 50"),
                         legend_format="{{instance}} - {{name}}",
                         interval_factor=1,
@@ -2728,11 +2636,7 @@ def ColumnarStorage() -> RowPanel:
                     target(
                         expr=expr_simple(
                             "tiflash_proxy_kv_engine_ia_main_queue_capacity",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
-                            skip_default_instance=True,
+                            instance_selector=PROXY_LABEL_SELECTORS,
                         ),
                         legend_format="capacity-main-{{instance}}",
                         interval_factor=1,
@@ -2740,11 +2644,7 @@ def ColumnarStorage() -> RowPanel:
                     target(
                         expr=expr_simple(
                             "tiflash_proxy_kv_engine_ia_small_queue_capacity",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
-                            skip_default_instance=True,
+                            instance_selector=PROXY_LABEL_SELECTORS,
                         ),
                         legend_format="capacity-small-{{instance}}",
                         interval_factor=1,
@@ -2752,11 +2652,7 @@ def ColumnarStorage() -> RowPanel:
                     target(
                         expr=expr_simple(
                             "tiflash_proxy_kv_engine_ia_manager_segments_memory_capacity",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
-                            skip_default_instance=True,
+                            instance_selector=PROXY_LABEL_SELECTORS,
                         ),
                         legend_format="capacity-segments-{{instance}}",
                         interval_factor=1,
@@ -2764,22 +2660,14 @@ def ColumnarStorage() -> RowPanel:
                     target(
                         expr=expr_simple(
                             "tiflash_proxy_kv_engine_ia_manager_segments_memory_size",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
-                            skip_default_instance=True,
+                            instance_selector=PROXY_LABEL_SELECTORS,
                         ),
                         legend_format="segments-mem-size-{{instance}}",
                     ),
                     target(
                         expr=expr_simple(
                             "tiflash_proxy_kv_engine_ia_manager_segments_disk_size",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
-                            skip_default_instance=True,
+                            instance_selector=PROXY_LABEL_SELECTORS,
                         ),
                         legend_format="segments-disk-size-{{instance}}",
                     ),
@@ -2809,12 +2697,8 @@ def ColumnarStorage() -> RowPanel:
                         expr=expr_histogram_quantile(
                             "0.9999",
                             "tiflash_proxy_kv_engine_ia_manager_segments_memory_wait_duration_seconds",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="9999 {{$additional_groupby}}",
                     ),
@@ -2822,12 +2706,8 @@ def ColumnarStorage() -> RowPanel:
                         expr=expr_histogram_quantile(
                             "0.999",
                             "tiflash_proxy_kv_engine_ia_manager_segments_memory_wait_duration_seconds",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="999 {{$additional_groupby}}",
                         hide=True,
@@ -2836,12 +2716,8 @@ def ColumnarStorage() -> RowPanel:
                         expr=expr_histogram_quantile(
                             "0.99",
                             "tiflash_proxy_kv_engine_ia_manager_segments_memory_wait_duration_seconds",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="99 {{$additional_groupby}}",
                     ),
@@ -2849,12 +2725,8 @@ def ColumnarStorage() -> RowPanel:
                         expr=expr_histogram_quantile(
                             "0.80",
                             "tiflash_proxy_kv_engine_ia_manager_segments_memory_wait_duration_seconds",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="80 {{$additional_groupby}}",
                         hide=True,
@@ -2862,12 +2734,8 @@ def ColumnarStorage() -> RowPanel:
                     target(
                         expr=expr_histogram_avg(
                             "tiflash_proxy_kv_engine_ia_manager_segments_memory_wait_duration_seconds",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="avg {{$additional_groupby}}",
                         hide=True,
@@ -2888,12 +2756,8 @@ def ColumnarStorage() -> RowPanel:
                     target(
                         expr=expr_sum_rate(
                             "tiflash_proxy_kv_engine_ia_remote_read_segment_cache_hit",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="cache-hit {{$additional_groupby}}",
                         interval_factor=1,
@@ -2901,12 +2765,8 @@ def ColumnarStorage() -> RowPanel:
                     target(
                         expr=expr_sum_rate(
                             "tiflash_proxy_kv_engine_ia_remote_read_segment_cache_miss",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="cache-miss {{$additional_groupby}}",
                     ),
@@ -2926,12 +2786,8 @@ def ColumnarStorage() -> RowPanel:
                         expr=expr_histogram_quantile(
                             "0.9999",
                             "tiflash_proxy_kv_engine_ia_remote_read_segment_duration_seconds",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="9999 {{$additional_groupby}}",
                     ),
@@ -2939,12 +2795,8 @@ def ColumnarStorage() -> RowPanel:
                         expr=expr_histogram_quantile(
                             "0.999",
                             "tiflash_proxy_kv_engine_ia_remote_read_segment_duration_seconds",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="999 {{$additional_groupby}}",
                         hide=True,
@@ -2953,12 +2805,8 @@ def ColumnarStorage() -> RowPanel:
                         expr=expr_histogram_quantile(
                             "0.99",
                             "tiflash_proxy_kv_engine_ia_remote_read_segment_duration_seconds",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="99 {{$additional_groupby}}",
                     ),
@@ -2966,12 +2814,8 @@ def ColumnarStorage() -> RowPanel:
                         expr=expr_histogram_quantile(
                             "0.80",
                             "tiflash_proxy_kv_engine_ia_remote_read_segment_duration_seconds",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="80 {{$additional_groupby}}",
                         hide=True,
@@ -2979,12 +2823,8 @@ def ColumnarStorage() -> RowPanel:
                     target(
                         expr=expr_histogram_avg(
                             "tiflash_proxy_kv_engine_ia_remote_read_segment_duration_seconds",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="avg {{$additional_groupby}}",
                         hide=True,
@@ -3005,12 +2845,8 @@ def ColumnarStorage() -> RowPanel:
                     target(
                         expr=expr_sum_rate(
                             "tiflash_proxy_kv_engine_columnar_file_cache_hit",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="file-cache-hit {{$additional_groupby}}",
                         interval_factor=1,
@@ -3018,12 +2854,8 @@ def ColumnarStorage() -> RowPanel:
                     target(
                         expr=expr_sum_rate(
                             "tiflash_proxy_kv_engine_columnar_file_cache_miss",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="file-cache-miss {{$additional_groupby}}",
                     ),
@@ -3043,12 +2875,8 @@ def ColumnarStorage() -> RowPanel:
                         expr=expr_histogram_quantile(
                             "0.9999",
                             "tiflash_proxy_kv_engine_columnar_prefetch_duration_seconds",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="9999 {{$additional_groupby}}",
                     ),
@@ -3056,12 +2884,8 @@ def ColumnarStorage() -> RowPanel:
                         expr=expr_histogram_quantile(
                             "0.999",
                             "tiflash_proxy_kv_engine_columnar_prefetch_duration_seconds",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="999 {{$additional_groupby}}",
                         hide=True,
@@ -3070,12 +2894,8 @@ def ColumnarStorage() -> RowPanel:
                         expr=expr_histogram_quantile(
                             "0.99",
                             "tiflash_proxy_kv_engine_columnar_prefetch_duration_seconds",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="99 {{$additional_groupby}}",
                     ),
@@ -3083,12 +2903,8 @@ def ColumnarStorage() -> RowPanel:
                         expr=expr_histogram_quantile(
                             "0.80",
                             "tiflash_proxy_kv_engine_columnar_prefetch_duration_seconds",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="80 {{$additional_groupby}}",
                         hide=True,
@@ -3096,12 +2912,8 @@ def ColumnarStorage() -> RowPanel:
                     target(
                         expr=expr_histogram_avg(
                             "tiflash_proxy_kv_engine_columnar_prefetch_duration_seconds",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="avg {{$additional_groupby}}",
                         hide=True,
@@ -3124,12 +2936,8 @@ def ColumnarStorage() -> RowPanel:
                         expr=expr_histogram_quantile(
                             "0.9999",
                             "tiflash_proxy_kv_engine_columnar_prefetch_cache_hit",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="9999 {{$additional_groupby}}",
                     ),
@@ -3137,12 +2945,8 @@ def ColumnarStorage() -> RowPanel:
                         expr=expr_histogram_quantile(
                             "0.999",
                             "tiflash_proxy_kv_engine_columnar_prefetch_cache_hit",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="999 {{$additional_groupby}}",
                         hide=True,
@@ -3151,12 +2955,8 @@ def ColumnarStorage() -> RowPanel:
                         expr=expr_histogram_quantile(
                             "0.99",
                             "tiflash_proxy_kv_engine_columnar_prefetch_cache_hit",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="99 {{$additional_groupby}}",
                     ),
@@ -3164,12 +2964,8 @@ def ColumnarStorage() -> RowPanel:
                         expr=expr_histogram_quantile(
                             "0.80",
                             "tiflash_proxy_kv_engine_columnar_prefetch_cache_hit",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="80 {{$additional_groupby}}",
                         hide=True,
@@ -3177,12 +2973,8 @@ def ColumnarStorage() -> RowPanel:
                     target(
                         expr=expr_histogram_avg(
                             "tiflash_proxy_kv_engine_columnar_prefetch_cache_hit",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="avg {{$additional_groupby}}",
                         hide=True,
@@ -3203,12 +2995,8 @@ def ColumnarStorage() -> RowPanel:
                     target(
                         expr=expr_sum_rate(
                             "tiflash_proxy_kv_engine_columnar_fetch_snapshot_retry_count",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="retry {{$additional_groupby}}",
                     ),
@@ -3229,12 +3017,8 @@ def ColumnarStorage() -> RowPanel:
                         expr=expr_histogram_quantile(
                             "0.9999",
                             "tiflash_proxy_kv_engine_columnar_fetch_snapshot_duration_seconds",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="9999 {{$additional_groupby}}",
                     ),
@@ -3242,12 +3026,8 @@ def ColumnarStorage() -> RowPanel:
                         expr=expr_histogram_quantile(
                             "0.999",
                             "tiflash_proxy_kv_engine_columnar_fetch_snapshot_duration_seconds",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="999 {{$additional_groupby}}",
                         hide=True,
@@ -3256,12 +3036,8 @@ def ColumnarStorage() -> RowPanel:
                         expr=expr_histogram_quantile(
                             "0.99",
                             "tiflash_proxy_kv_engine_columnar_fetch_snapshot_duration_seconds",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="99 {{$additional_groupby}}",
                     ),
@@ -3269,12 +3045,8 @@ def ColumnarStorage() -> RowPanel:
                         expr=expr_histogram_quantile(
                             "0.80",
                             "tiflash_proxy_kv_engine_columnar_fetch_snapshot_duration_seconds",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="80 {{$additional_groupby}}",
                         hide=True,
@@ -3282,12 +3054,8 @@ def ColumnarStorage() -> RowPanel:
                     target(
                         expr=expr_histogram_avg(
                             "tiflash_proxy_kv_engine_columnar_fetch_snapshot_duration_seconds",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="avg {{$additional_groupby}}",
                         hide=True,
@@ -3308,12 +3076,8 @@ def ColumnarStorage() -> RowPanel:
                     target(
                         expr=expr_sum_rate(
                             "tiflash_proxy_kv_engine_columnar_meta_cache_hit",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="hit {{$additional_groupby}}",
                         interval_factor=1,
@@ -3321,24 +3085,16 @@ def ColumnarStorage() -> RowPanel:
                     target(
                         expr=expr_sum_rate(
                             "tiflash_proxy_kv_engine_columnar_meta_cache_miss",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="miss {{$additional_groupby}}",
                     ),
                     target(
                         expr=expr_sum_rate(
                             "tiflash_proxy_kv_engine_columnar_meta_cache_parse",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=[ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="parse {{$additional_groupby}}",
                     ),
@@ -3352,11 +3108,7 @@ def ColumnarStorage() -> RowPanel:
                     target(
                         expr=expr_simple(
                             "tiflash_proxy_kv_engine_columnar_meta_cache_entries",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
-                            skip_default_instance=True,
+                            instance_selector=PROXY_LABEL_SELECTORS,
                         ),
                         legend_format="entries-{{instance}}",
                         interval_factor=1,
@@ -3364,11 +3116,7 @@ def ColumnarStorage() -> RowPanel:
                     target(
                         expr=expr_simple(
                             "tiflash_proxy_kv_engine_columnar_meta_cache_weighted_size",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
-                            skip_default_instance=True,
+                            instance_selector=PROXY_LABEL_SELECTORS,
                         ),
                         legend_format="weighted_size-{{instance}}",
                     ),
@@ -3772,12 +3520,10 @@ def Storage() -> RowPanel:
                     target(
                         expr=expr_simple(
                             "tiflash_proxy_process_open_fds",
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
                                 'job=~".*tiflash"',
                             ],
-                            skip_default_instance=True,
                         ),
                         legend_format="{{instance}}",
                         hide=True,
@@ -8335,12 +8081,8 @@ def StatusServer() -> RowPanel:
                         expr=expr_histogram_quantile(
                             "0.9999",
                             "tiflash_proxy_tikv_status_server_proxy_request_duration_seconds",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=["path", ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="9999-{{path}} {{$additional_groupby}}",
                     ),
@@ -8348,12 +8090,8 @@ def StatusServer() -> RowPanel:
                         expr=expr_histogram_quantile(
                             "0.999",
                             "tiflash_proxy_tikv_status_server_proxy_request_duration_seconds",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=["path", ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="999-{{path}} {{$additional_groupby}}",
                         hide=True,
@@ -8362,12 +8100,8 @@ def StatusServer() -> RowPanel:
                         expr=expr_histogram_quantile(
                             "0.99",
                             "tiflash_proxy_tikv_status_server_proxy_request_duration_seconds",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=["path", ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="99-{{path}} {{$additional_groupby}}",
                     ),
@@ -8375,12 +8109,8 @@ def StatusServer() -> RowPanel:
                         expr=expr_histogram_quantile(
                             "0.80",
                             "tiflash_proxy_tikv_status_server_proxy_request_duration_seconds",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=["path", ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="80-{{path}} {{$additional_groupby}}",
                         hide=True,
@@ -8388,12 +8118,8 @@ def StatusServer() -> RowPanel:
                     target(
                         expr=expr_histogram_avg(
                             "tiflash_proxy_tikv_status_server_proxy_request_duration_seconds",
-                            label_selectors=[
-                                'instance=~"$proxy_instance"',
-                                'instance=~"$tiflash_role"',
-                            ],
+                            instance_selector=PROXY_LABEL_SELECTORS,
                             by_labels=["path", ADDITIONAL_GROUPBY],
-                            skip_default_instance=True,
                         ),
                         legend_format="avg-{{path}} {{$additional_groupby}}",
                         hide=True,

@@ -45,9 +45,11 @@ uv sync
   `tiflash_heatmap_panel`, `cpu_with_limit_panel`, `ops_hit_ratio_panel`,
   `graph_panel` + `expr_*`).
 - Default PromQL labels always include `k8s_cluster` / `tidb_cluster`.
-  Choose instance selectors with `instance_selectors="cpp"` (default:
-  `$instance` + `$tiflash_role`) or `"proxy"` (`$proxy_instance` +
-  `$tiflash_role`), or `use_instance_selectors(...)`.
+  Choose instance selectors with `instance_selector=CPP_LABEL_SELECTORS`
+  (default: `$instance` + `$tiflash_role`) or
+  `instance_selector=PROXY_LABEL_SELECTORS` (`$proxy_instance` +
+  `$tiflash_role`). Put non-instance filters only in `label_selectors`.
+  (`use_instance_selectors(...)` remains for shared-pool / legacy paths.)
 - `tiflash_proxy_summary.json` / `tiflash_proxy_details.json` are still
   hand-maintained JSON.
 

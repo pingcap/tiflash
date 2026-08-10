@@ -3,7 +3,7 @@ from __future__ import annotations
 import contextvars
 import re
 from contextlib import contextmanager
-from typing import Optional, Union
+from typing import Optional, Sequence, Union
 
 import attr
 from attr.validators import in_, instance_of
@@ -42,10 +42,6 @@ ADDITIONAL_GROUPBY = "$additional_groupby"
 OPTIONAL_QUANTILE = "optional_quantile"
 OPTIONAL_QUANTILE_INPUT = "$" + OPTIONAL_QUANTILE
 
-# Match default instance selectors for skip_default_instance_selector.
-_INSTANCE_SELECTOR_RE = re.compile(
-    r'^\s*instance\s*(=~|=|!=|!~)\s*"\s*\$\{?(instance|proxy_instance|tiflash_role)(?::regex)?\}?\s*"\s*$'
-)
 _TIDB_CLUSTER_SELECTOR_RE = re.compile(r"^\s*tidb_cluster(_id)?\s*(=~|=|!=|!~).*$")
 
 CLUSTER_LABEL_SELECTORS = (
@@ -160,13 +156,16 @@ class Expr(object):
     label_selectors: list[str] = attr.ib(default=[], validator=instance_of(list))
     by_labels: list[str] = attr.ib(default=[], validator=instance_of(list))
     default_label_selectors: list[str] = attr.ib(
-        factory=lambda: list(_active_promql_policy.get().default_label_selectors),
+        factory=lambda: list(CLUSTER_LABEL_SELECTORS),
         validator=instance_of(list),
+    )
+    instance_selector: tuple = attr.ib(
+        factory=lambda: tuple(CPP_LABEL_SELECTORS),
+        converter=tuple,
     )
     shared_pool_selector: Optional[str] = attr.ib(
         factory=lambda: _active_promql_policy.get().shared_pool_selector,
     )
-    skip_default_instance: bool = attr.ib(default=False, validator=instance_of(bool))
     use_shared_pool: bool = attr.ib(default=False, validator=instance_of(bool))
     extra_expr: str = attr.ib(default="", validator=instance_of(str))
 
@@ -177,19 +176,18 @@ class Expr(object):
             "by ({})".format(", ".join(self.by_labels)) if self.by_labels else ""
         )
         func = self.func if self.func else ""
-        label_selectors = self.default_label_selectors
-        if self.skip_default_instance:
-            # Remove instance=~"$instance"
-            label_selectors = [
-                l for l in label_selectors if not _INSTANCE_SELECTOR_RE.match(l)
-            ]
+        # CLUSTER (+ optional cleared defaults) + instance_selector + extra label_selectors.
+        label_selectors = (
+            list(self.default_label_selectors)
+            + list(self.instance_selector)
+            + list(self.label_selectors)
+        )
         if self.use_shared_pool:
             label_selectors = [
                 l for l in label_selectors if not _TIDB_CLUSTER_SELECTOR_RE.match(l)
             ]
             if self.shared_pool_selector is not None:
                 label_selectors.append(self.shared_pool_selector)
-        label_selectors = label_selectors + self.label_selectors
 
         assert all(
             ("=" in item or "~" in item) for item in label_selectors
@@ -240,10 +238,6 @@ class Expr(object):
             self.default_label_selectors = default_label_selectors
         return self
 
-    def skip_default_instance_selector(self) -> "Expr":
-        self.skip_default_instance = True
-        return self
-
     def use_shared_pool_selector(self) -> "Expr":
         self.use_shared_pool = True
         return self
@@ -287,9 +281,9 @@ def expr_aggr(
     metric: Union[str, Expr],
     aggr_op: str,
     aggr_param: str = "",
+    instance_selector: Sequence[str] = CPP_LABEL_SELECTORS,
     label_selectors: list[str] = [],
     by_labels: list[str] = ["instance"],
-    skip_default_instance: bool = False,
     use_shared_pool: bool = False,
 ) -> Expr:
     """
@@ -309,16 +303,16 @@ def expr_aggr(
         by_labels=by_labels,
         label_selectors=label_selectors,
     )
-    expr.skip_default_instance = skip_default_instance
+    expr.instance_selector = tuple(instance_selector)
     expr.use_shared_pool = use_shared_pool
     return expr
 
 
 def expr_sum(
     metric: str,
+    instance_selector: Sequence[str] = CPP_LABEL_SELECTORS,
     label_selectors: list[str] = [],
     by_labels: list[str] = ["instance"],
-    skip_default_instance: bool = False,
 ) -> Expr:
     """
     Calculate the sum of a metric.
@@ -333,17 +327,17 @@ def expr_sum(
     return expr_aggr(
         metric,
         "sum",
+        instance_selector=instance_selector,
         label_selectors=label_selectors,
         by_labels=by_labels,
-        skip_default_instance=skip_default_instance,
     )
 
 
 def expr_avg(
     metric: str,
+    instance_selector: Sequence[str] = CPP_LABEL_SELECTORS,
     label_selectors: list[str] = [],
     by_labels: list[str] = ["instance"],
-    skip_default_instance: bool = False,
 ) -> Expr:
     """
     Calculate the avg of a metric.
@@ -358,17 +352,17 @@ def expr_avg(
     return expr_aggr(
         metric,
         "avg",
+        instance_selector=instance_selector,
         label_selectors=label_selectors,
         by_labels=by_labels,
-        skip_default_instance=skip_default_instance,
     )
 
 
 def expr_max(
     metric: str,
+    instance_selector: Sequence[str] = CPP_LABEL_SELECTORS,
     label_selectors: list[str] = [],
     by_labels: list[str] = ["instance"],
-    skip_default_instance: bool = False,
 ) -> Expr:
     """
     Calculate the max of a metric.
@@ -383,17 +377,17 @@ def expr_max(
     return expr_aggr(
         metric,
         "max",
+        instance_selector=instance_selector,
         label_selectors=label_selectors,
         by_labels=by_labels,
-        skip_default_instance=skip_default_instance,
     )
 
 
 def expr_min(
     metric: str,
+    instance_selector: Sequence[str] = CPP_LABEL_SELECTORS,
     label_selectors: list[str] = [],
     by_labels: list[str] = ["instance"],
-    skip_default_instance: bool = False,
 ) -> Expr:
     """
     Calculate the min of a metric.
@@ -408,9 +402,9 @@ def expr_min(
     return expr_aggr(
         metric,
         "min",
+        instance_selector=instance_selector,
         label_selectors=label_selectors,
         by_labels=by_labels,
-        skip_default_instance=skip_default_instance,
     )
 
 
@@ -419,10 +413,10 @@ def expr_aggr_func(
     aggr_op: str,
     func: str,
     aggr_param: str = "",
+    instance_selector: Sequence[str] = CPP_LABEL_SELECTORS,
     label_selectors: list[str] = [],
     range_selector: str = "",
     by_labels: list[str] = ["instance"],
-    skip_default_instance: bool = False,
     use_shared_pool: bool = False,
 ) -> Expr:
     """
@@ -451,17 +445,17 @@ def expr_aggr_func(
         label_selectors=label_selectors,
         range_selector=range_selector,
     )
-    expr.skip_default_instance = skip_default_instance
+    expr.instance_selector = tuple(instance_selector)
     expr.use_shared_pool = use_shared_pool
     return expr
 
 
 def expr_sum_rate(
     metric: str,
+    instance_selector: Sequence[str] = CPP_LABEL_SELECTORS,
     label_selectors: list[str] = [],
     by_labels: list[str] = ["instance"],
-    skip_default_instance=False,
-    use_shared_pool=False,
+    use_shared_pool: bool = False,
 ) -> Expr:
     """
     Calculate the sum of rate of a metric.
@@ -484,17 +478,17 @@ def expr_sum_rate(
         label_selectors=label_selectors,
         range_selector="$__rate_interval",
         by_labels=by_labels,
-        skip_default_instance=skip_default_instance,
+        instance_selector=instance_selector,
         use_shared_pool=use_shared_pool,
     )
 
 
 def expr_sum_irate(
     metric: str,
+    instance_selector: Sequence[str] = CPP_LABEL_SELECTORS,
     label_selectors: list[str] = [],
     by_labels: list[str] = ["instance"],
-    skip_default_instance=False,
-    use_shared_pool=False,
+    use_shared_pool: bool = False,
 ) -> Expr:
     """sum(irate(metric{...}[$__rate_interval])) by (...)"""
     return expr_aggr_func(
@@ -504,17 +498,17 @@ def expr_sum_irate(
         label_selectors=label_selectors,
         range_selector="$__rate_interval",
         by_labels=by_labels,
-        skip_default_instance=skip_default_instance,
+        instance_selector=instance_selector,
         use_shared_pool=use_shared_pool,
     )
 
 
 def expr_sum_delta(
     metric: str,
+    instance_selector: Sequence[str] = CPP_LABEL_SELECTORS,
     label_selectors: list[str] = [],
     range_selector: str = "$__rate_interval",
     by_labels: list[str] = ["instance"],
-    skip_default_instance: bool = False,
 ) -> Expr:
     """
     Calculate the sum of delta of a metric.
@@ -534,16 +528,16 @@ def expr_sum_delta(
         label_selectors=label_selectors,
         range_selector=range_selector,
         by_labels=by_labels,
-        skip_default_instance=skip_default_instance,
+        instance_selector=instance_selector,
     )
 
 
 def expr_sum_increase(
     metric: str,
+    instance_selector: Sequence[str] = CPP_LABEL_SELECTORS,
     label_selectors: list[str] = [],
     range_selector: str = "$__rate_interval",
     by_labels: list[str] = ["instance"],
-    skip_default_instance=False,
 ) -> Expr:
     """
     Calculate the sum of increase of a metric.
@@ -556,25 +550,24 @@ def expr_sum_increase(
         [$__rate_interval]
     )) by (instance)
     """
-    expr = expr_aggr_func(
+    return expr_aggr_func(
         metric=metric,
         aggr_op="sum",
         func="increase",
+        instance_selector=instance_selector,
         label_selectors=label_selectors,
         range_selector=range_selector,
         by_labels=by_labels,
-        skip_default_instance=skip_default_instance,
     )
-    return expr
 
 
 def expr_sum_aggr_over_time(
     metric: str,
     aggr: str,
     range_selector: str,
+    instance_selector: Sequence[str] = CPP_LABEL_SELECTORS,
     label_selectors: list[str] = [],
     by_labels: list[str] = ["instance"],
-    skip_default_instance: bool = False,
 ) -> Expr:
     """
     Calculate the sum of average value of all points in the specified interval of a metric.
@@ -594,15 +587,15 @@ def expr_sum_aggr_over_time(
         label_selectors=label_selectors,
         range_selector=range_selector,
         by_labels=by_labels,
-        skip_default_instance=skip_default_instance,
+        instance_selector=instance_selector,
     )
 
 
 def expr_max_rate(
     metric: str,
+    instance_selector: Sequence[str] = CPP_LABEL_SELECTORS,
     label_selectors: list[str] = [],
     by_labels: list[str] = ["instance"],
-    skip_default_instance: bool = False,
 ) -> Expr:
     """
     Calculate the max of rate of a metric.
@@ -625,15 +618,15 @@ def expr_max_rate(
         label_selectors=label_selectors,
         range_selector="$__rate_interval",
         by_labels=by_labels,
-        skip_default_instance=skip_default_instance,
+        instance_selector=instance_selector,
     )
 
 
 def expr_count_rate(
     metric: str,
+    instance_selector: Sequence[str] = CPP_LABEL_SELECTORS,
     label_selectors: list[str] = [],
     by_labels: list[str] = ["instance"],
-    skip_default_instance: bool = False,
 ) -> Expr:
     """
     Calculate the count of rate of a metric.
@@ -656,14 +649,14 @@ def expr_count_rate(
         label_selectors=label_selectors,
         range_selector="$__rate_interval",
         by_labels=by_labels,
-        skip_default_instance=skip_default_instance,
+        instance_selector=instance_selector,
     )
 
 
 def expr_simple(
     metric: str,
+    instance_selector: Sequence[str] = CPP_LABEL_SELECTORS,
     label_selectors: list[str] = [],
-    skip_default_instance: bool = False,
 ) -> Expr:
     """
     Query an instant vector of a metric.
@@ -675,7 +668,7 @@ def expr_simple(
     """
     expr = Expr(metric=metric)
     expr.function("", label_selectors=label_selectors)
-    expr.skip_default_instance = skip_default_instance
+    expr.instance_selector = tuple(instance_selector)
     return expr
 
 
@@ -688,11 +681,11 @@ def expr_operator(
 def expr_histogram_quantile(
     quantile: Union[float, str],
     metrics: str,
+    instance_selector: Sequence[str] = CPP_LABEL_SELECTORS,
     label_selectors: list[str] = [],
     by_labels: list[str] = [],
-    is_optional_quantile=False,
-    skip_default_instance=False,
-    use_shared_pool=False,
+    is_optional_quantile: bool = False,
+    use_shared_pool: bool = False,
 ) -> Expr:
     """
     Query a quantile of a histogram metric.
@@ -712,9 +705,9 @@ def expr_histogram_quantile(
     by_labels = list(filter(lambda label: label != "le", by_labels))
     sum_rate_of_buckets = expr_sum_rate(
         metrics + "_bucket",
+        instance_selector=instance_selector,
         label_selectors=label_selectors,
         by_labels=by_labels + ["le"],
-        skip_default_instance=skip_default_instance,
         use_shared_pool=use_shared_pool,
     )
     # histogram_quantile({quantile}, {sum_rate_of_buckets})
@@ -726,13 +719,13 @@ def expr_histogram_quantile(
         metric=sum_rate_of_buckets,
         aggr_op="histogram_quantile",
         aggr_param=quantile_str,
+        instance_selector=(),
         label_selectors=[],
         by_labels=[],
     ).extra(
         # Do not attach default label selector again.
         default_label_selectors=[],
     )
-    expr.skip_default_instance = skip_default_instance
     # Do not set use_shared_pool for the outer expression. It only needs to be set to the innermost layer.
     return expr
 
@@ -740,7 +733,7 @@ def expr_histogram_quantile(
 def expr_topk(
     k: int,
     metrics: str,
-    skip_default_instance: bool = False,
+    instance_selector: Sequence[str] = CPP_LABEL_SELECTORS,
 ) -> Expr:
     """
     Query topk of a metric.
@@ -749,14 +742,14 @@ def expr_topk(
 
     topk(20, tikv_thread_voluntary_context_switches)
     """
-    # topk({k}, {metric})
+    # topk({k}, {metric}) — outer clears cluster/instance defaults (metric may already be an Expr).
     expr = expr_aggr(
         metric=metrics,
         aggr_op="topk",
         aggr_param=f"{k}",
+        instance_selector=(),
         label_selectors=[],
         by_labels=[],
-        skip_default_instance=skip_default_instance,
     ).extra(
         # Do not attach default label selector again.
         default_label_selectors=[]
@@ -766,9 +759,9 @@ def expr_topk(
 
 def expr_histogram_avg(
     metrics: str,
+    instance_selector: Sequence[str] = CPP_LABEL_SELECTORS,
     label_selectors: list[str] = [],
     by_labels: list[str] = ["instance"],
-    skip_default_instance: bool = False,
 ) -> OpExpr:
     """
     Query the avg of a histogram metric.
@@ -793,16 +786,16 @@ def expr_histogram_avg(
     return OpExpr(
         expr_sum_rate(
             metrics + "_sum",
+            instance_selector=instance_selector,
             label_selectors=label_selectors,
             by_labels=by_labels,
-            skip_default_instance=skip_default_instance,
         ),
         "/",
         expr_sum_rate(
             metrics + "_count",
+            instance_selector=instance_selector,
             label_selectors=label_selectors,
             by_labels=by_labels,
-            skip_default_instance=skip_default_instance,
         ),
     )
 
@@ -1210,13 +1203,13 @@ def heatmap_panel(
     title: str,
     metric: str,
     description=None,
+    instance_selector: Sequence[str] = CPP_LABEL_SELECTORS,
     label_selectors: list[str] = [],
     yaxis=yaxis(UNITS.NO_FORMAT),
     tooltip=Tooltip(shared=True, valueType="individual"),
     color=heatmap_color(),
     decimals=1,
     data_source=DATASOURCE,
-    skip_default_instance=False,
     # TiFlash Summary defaults to sum(delta); pass func="increase" for CSE-style.
     func: str = "delta",
 ) -> Panel:
@@ -1227,9 +1220,9 @@ def heatmap_panel(
     t = target(
         expr=expr_fn(
             metric,
+            instance_selector=instance_selector,
             label_selectors=label_selectors,
             by_labels=["le"],
-            skip_default_instance=skip_default_instance,
         ),
     )
     # Make sure targets are in heatmap format.
@@ -1293,13 +1286,13 @@ def graph_panel_histogram_quantiles(
     description: str,
     yaxes: YAxes,
     metric: str,
+    instance_selector: Sequence[str] = CPP_LABEL_SELECTORS,
     label_selectors: list[str] = [],
     by_labels: list[str] = [],
     hide_p9999=False,
     hide_avg=False,
     hide_count=False,
     additional_groupby=True,
-    skip_default_instance=False,
     legend_label_prefix="",
 ) -> Panel:
     """
@@ -1328,9 +1321,9 @@ def graph_panel_histogram_quantiles(
                 expr=expr_histogram_quantile(
                     0.9999,
                     f"{metric}",
+                    instance_selector=instance_selector,
                     label_selectors=label_selectors,
                     by_labels=by_labels,
-                    skip_default_instance=skip_default_instance,
                 ),
                 legend_format=legend("99.99%", by_labels),
                 hide=hide_p9999,
@@ -1340,9 +1333,9 @@ def graph_panel_histogram_quantiles(
                 expr=expr_histogram_quantile(
                     0.99,
                     f"{metric}",
+                    instance_selector=instance_selector,
                     label_selectors=label_selectors,
                     by_labels=by_labels,
-                    skip_default_instance=skip_default_instance,
                 ),
                 legend_format=legend("99%", by_labels),
                 additional_groupby=additional_groupby,
@@ -1350,9 +1343,9 @@ def graph_panel_histogram_quantiles(
             target(
                 expr=expr_histogram_avg(
                     metric,
+                    instance_selector=instance_selector,
                     label_selectors=label_selectors,
                     by_labels=by_labels,
-                    skip_default_instance=skip_default_instance,
                 ),
                 legend_format=legend("avg", by_labels),
                 hide=hide_avg,
@@ -1361,9 +1354,9 @@ def graph_panel_histogram_quantiles(
             target(
                 expr=expr_sum_rate(
                     f"{metric}_count",
+                    instance_selector=instance_selector,
                     label_selectors=label_selectors,
                     by_labels=by_labels,
-                    skip_default_instance=skip_default_instance,
                 ),
                 legend_format=legend("count", by_labels),
                 hide=hide_count,
@@ -1399,10 +1392,10 @@ def heatmap_panel_graph_panel_histogram_quantile_pairs(
     graph_description: str,
     yaxis_format: str,
     metric: str,
+    instance_selector: Sequence[str] = CPP_LABEL_SELECTORS,
     label_selectors=[],
     graph_by_labels=[],
     graph_hides: list[str] = ["count"],
-    skip_default_instance=False,
 ) -> list[Panel]:
     hide_count = False
     hide_avg = False
@@ -1418,19 +1411,19 @@ def heatmap_panel_graph_panel_histogram_quantile_pairs(
             description=heatmap_description,
             yaxis=yaxis(format=yaxis_format),
             metric=f"{metric}_bucket",
+            instance_selector=instance_selector,
             label_selectors=label_selectors,
-            skip_default_instance=skip_default_instance,
         ),
         graph_panel_histogram_quantiles(
             title=graph_title,
             description=graph_description,
             metric=f"{metric}",
             yaxes=yaxes(left_format=yaxis_format),
+            instance_selector=instance_selector,
             label_selectors=label_selectors,
             by_labels=graph_by_labels,
             hide_count=hide_count,
             hide_avg=hide_avg,
-            skip_default_instance=skip_default_instance,
         ),
     ]
 
@@ -1504,7 +1497,7 @@ def duration_panel(
     show_avg: Optional[bool] = None,
     extra_targets: list[Target] = [],
     series_overrides: list = [],
-    instance_selectors: str = "cpp",
+    instance_selector: Sequence[str] = CPP_LABEL_SELECTORS,
     extra_label_selectors: list[str] = [],
 ) -> Panel:
     """Duration histogram panel with S3-style quantile visibility defaults."""
@@ -1516,47 +1509,49 @@ def duration_panel(
                 q["hide"] = not show_avg
 
     targets: list[Target] = []
-    with use_instance_selectors(instance_selectors):
-        for q in qs:
-            hide = bool(q.get("hide"))
-            name = q["name"]
-            if q.get("avg"):
-                expr: Union[Expr, OpExpr, str] = expr_histogram_avg(
-                    metric_base,
-                    label_selectors=extra_label_selectors,
-                    by_labels=by_labels + [ADDITIONAL_GROUPBY],
+    for q in qs:
+        hide = bool(q.get("hide"))
+        name = q["name"]
+        if q.get("avg"):
+            expr: Union[Expr, OpExpr, str] = expr_histogram_avg(
+                metric_base,
+                instance_selector=instance_selector,
+                label_selectors=extra_label_selectors,
+                by_labels=by_labels + [ADDITIONAL_GROUPBY],
+            )
+        else:
+            # Match jsonnet by (le, <by...>, $additional_groupby)
+            bucket_rate = expr_sum_rate(
+                metric_base + "_bucket",
+                instance_selector=instance_selector,
+                label_selectors=extra_label_selectors,
+                by_labels=["le"] + by_labels + [ADDITIONAL_GROUPBY],
+            )
+            q_str = str(q["q"])
+            if q.get("max_hack"):
+                # maxHack: histogram_quantile(q, sum(round(1e9*rate(...)))/1e9)
+                # Keep as raw PromQL for exact parity with jsonnet.
+                sel = (
+                    list(CLUSTER_LABEL_SELECTORS)
+                    + list(instance_selector)
+                    + list(extra_label_selectors)
+                )
+                sel_str = ",".join(sel)
+                by_clause = ", ".join(["le"] + by_labels + [ADDITIONAL_GROUPBY])
+                expr = (
+                    f"histogram_quantile({q_str}, "
+                    f"sum(round(1000000000*rate({metric_base}_bucket{{{sel_str}}}"
+                    f"[$__rate_interval]))) by ({by_clause}) / 1000000000)"
                 )
             else:
-                # Match jsonnet by (le, <by...>, $additional_groupby)
-                bucket_rate = expr_sum_rate(
-                    metric_base + "_bucket",
-                    label_selectors=extra_label_selectors,
-                    by_labels=["le"] + by_labels + [ADDITIONAL_GROUPBY],
-                )
-                q_str = str(q["q"])
-                if q.get("max_hack"):
-                    # maxHack: histogram_quantile(q, sum(round(1e9*rate(...)))/1e9)
-                    # Keep as raw PromQL for exact parity with jsonnet.
-                    sel = list(
-                        instance_selectors_policy(
-                            instance_selectors
-                        ).default_label_selectors
-                    ) + list(extra_label_selectors)
-                    sel_str = ",".join(sel)
-                    by_clause = ", ".join(["le"] + by_labels + [ADDITIONAL_GROUPBY])
-                    expr = (
-                        f"histogram_quantile({q_str}, "
-                        f"sum(round(1000000000*rate({metric_base}_bucket{{{sel_str}}}"
-                        f"[$__rate_interval]))) by ({by_clause}) / 1000000000)"
-                    )
-                else:
-                    expr = expr_aggr(
-                        metric=bucket_rate,
-                        aggr_op="histogram_quantile",
-                        aggr_param=q_str,
-                        by_labels=[],
-                    ).extra(default_label_selectors=[])
-            targets.append(target(expr=expr, legend_format=legend % name, hide=hide))
+                expr = expr_aggr(
+                    metric=bucket_rate,
+                    aggr_op="histogram_quantile",
+                    aggr_param=q_str,
+                    instance_selector=(),
+                    by_labels=[],
+                ).extra(default_label_selectors=[])
+        targets.append(target(expr=expr, legend_format=legend % name, hide=hide))
     targets.extend(extra_targets)
     return graph_panel(
         title=title,
@@ -1581,23 +1576,23 @@ def ops_panel(
     metric: str,
     by_labels: list[str] = [],
     legend: Optional[str] = None,
+    instance_selector: Sequence[str] = CPP_LABEL_SELECTORS,
     label_selectors: list[str] = [],
     description=None,
     y_left: str = "ops",
     fill: int = 0,
-    instance_selectors: str = "cpp",
 ) -> Panel:
     if legend is None:
         legend = "value" if not by_labels else by_legend(by_labels)
-    with use_instance_selectors(instance_selectors):
-        t = target(
-            expr=expr_sum_rate(
-                metric,
-                label_selectors=label_selectors,
-                by_labels=by_labels,
-            ),
-            legend_format=legend,
-        )
+    t = target(
+        expr=expr_sum_rate(
+            metric,
+            instance_selector=instance_selector,
+            label_selectors=label_selectors,
+            by_labels=by_labels,
+        ),
+        legend_format=legend,
+    )
     return graph_panel(
         title=title,
         description=description,
@@ -1615,19 +1610,19 @@ def tiflash_heatmap_panel(
     metric: str,
     description=None,
     y_format: str = UNITS.SECONDS,
+    instance_selector: Sequence[str] = CPP_LABEL_SELECTORS,
     label_selectors: list[str] = [],
-    instance_selectors: str = "cpp",
     func: str = "delta",
 ) -> Panel:
-    with use_instance_selectors(instance_selectors):
-        return heatmap_panel(
-            title=title,
-            metric=metric,
-            description=description,
-            label_selectors=label_selectors,
-            yaxis=yaxis(format=y_format),
-            func=func,
-        )
+    return heatmap_panel(
+        title=title,
+        metric=metric,
+        description=description,
+        instance_selector=instance_selector,
+        label_selectors=label_selectors,
+        yaxis=yaxis(format=y_format),
+        func=func,
+    )
 
 
 def cpu_with_limit_panel(
@@ -1637,43 +1632,44 @@ def cpu_with_limit_panel(
     legend: str = "{{instance}}",
     metric: str = "tiflash_proxy_thread_cpu_seconds_total",
     hide_limit: bool = False,
-    instance_selectors: str = "proxy",
+    instance_selector: Sequence[str] = PROXY_LABEL_SELECTORS,
 ) -> Panel:
     """Thread CPU + optional Limit count line (proxy instance + role selectors)."""
-    with use_instance_selectors(instance_selectors):
-        targets = [
+    targets = [
+        target(
+            expr=expr_sum_rate(
+                metric,
+                instance_selector=instance_selector,
+                label_selectors=[f'name=~"{name_regex}"'],
+                by_labels=["instance"],
+            ),
+            legend_format=legend,
+        )
+    ]
+    overrides: list = []
+    if not hide_limit:
+        targets.append(
             target(
-                expr=expr_sum_rate(
+                expr=expr_aggr(
                     metric,
+                    "count",
+                    instance_selector=instance_selector,
                     label_selectors=[f'name=~"{name_regex}"'],
                     by_labels=["instance"],
                 ),
-                legend_format=legend,
+                legend_format="Limit",
             )
-        ]
-        overrides: list = []
-        if not hide_limit:
-            targets.append(
-                target(
-                    expr=expr_aggr(
-                        metric,
-                        "count",
-                        label_selectors=[f'name=~"{name_regex}"'],
-                        by_labels=["instance"],
-                    ),
-                    legend_format="Limit",
-                )
+        )
+        overrides.append(
+            tiflash_override(
+                "Limit",
+                color="#F2495C",
+                hide_tooltip=True,
+                legend=False,
+                linewidth=2,
+                null_point_mode="connected",
             )
-            overrides.append(
-                tiflash_override(
-                    "Limit",
-                    color="#F2495C",
-                    hide_tooltip=True,
-                    legend=False,
-                    linewidth=2,
-                    null_point_mode="connected",
-                )
-            )
+        )
     return graph_panel(
         title=title,
         description=description,
@@ -1692,50 +1688,62 @@ def ops_hit_ratio_panel(
     ratios: list[dict],
     by_labels: list[str] = [],
     legend: Optional[str] = None,
+    instance_selector: Sequence[str] = CPP_LABEL_SELECTORS,
     label_selectors: list[str] = [],
     description=None,
     y_left: str = "ops",
     fill: int = 0,
-    instance_selectors: str = "cpp",
 ) -> Panel:
     ops_legend = (
         legend
         if legend is not None
         else ("ops" if not by_labels else by_legend(by_labels))
     )
-    with use_instance_selectors(instance_selectors):
-        ops_t = target(
-            expr=expr_sum_rate(
-                metric, label_selectors=label_selectors, by_labels=by_labels
-            ),
-            legend_format=ops_legend,
+    ops_t = target(
+        expr=expr_sum_rate(
+            metric,
+            instance_selector=instance_selector,
+            label_selectors=label_selectors,
+            by_labels=by_labels,
+        ),
+        legend_format=ops_legend,
+    )
+    ratio_targets = []
+    overrides = []
+    for r in ratios:
+        r_metric = r.get("metric", metric)
+        r_by = r.get("by", [])
+        hit = r.get("hit_labels", r.get("hitLabels", []))
+        total = r.get("total_labels", r.get("totalLabels", []))
+        if isinstance(hit, str):
+            hit = [hit] if hit else []
+        if isinstance(total, str):
+            total = [total] if total else []
+        hit_expr = expr_sum_rate(
+            r_metric,
+            instance_selector=instance_selector,
+            label_selectors=hit,
+            by_labels=r_by,
         )
-        ratio_targets = []
-        overrides = []
-        for r in ratios:
-            r_metric = r.get("metric", metric)
-            r_by = r.get("by", [])
-            hit = r.get("hit_labels", r.get("hitLabels", []))
-            total = r.get("total_labels", r.get("totalLabels", []))
-            if isinstance(hit, str):
-                hit = [hit] if hit else []
-            if isinstance(total, str):
-                total = [total] if total else []
-            hit_expr = expr_sum_rate(r_metric, label_selectors=hit, by_labels=r_by)
-            tot_expr = expr_sum_rate(r_metric, label_selectors=total, by_labels=r_by)
-            ratio_targets.append(
-                target(
-                    expr=expr_operator(hit_expr, "/", tot_expr),
-                    legend_format=r["legend"],
-                    hide=bool(r.get("hide")),
-                )
+        tot_expr = expr_sum_rate(
+            r_metric,
+            instance_selector=instance_selector,
+            label_selectors=total,
+            by_labels=r_by,
+        )
+        ratio_targets.append(
+            target(
+                expr=expr_operator(hit_expr, "/", tot_expr),
+                legend_format=r["legend"],
+                hide=bool(r.get("hide")),
             )
-            overrides.append(
-                tiflash_override(
-                    r.get("override_alias", r.get("overrideAlias", r["legend"])),
-                    yaxis=2,
-                )
+        )
+        overrides.append(
+            tiflash_override(
+                r.get("override_alias", r.get("overrideAlias", r["legend"])),
+                yaxis=2,
             )
+        )
     return graph_panel(
         title=title,
         description=description,
