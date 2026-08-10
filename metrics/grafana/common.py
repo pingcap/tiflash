@@ -969,8 +969,22 @@ def yaxis(
     decimals: Optional[int] = None,
     show: bool = True,
 ) -> YAxis:
-    # CSE forbids SI byte units in favor of IEC; TiFlash Summary historically uses
-    # Grafana "bytes"/"Bps" and we preserve those for clinic compatibility.
+    # Prefer IEC byte units (Grafana "bytes"/"binBps"); forbid SI ("decbytes"/"Bps").
+    assert format not in [
+        UNITS.BYTES,
+        UNITS.BITS,
+        UNITS.KILO_BYTES,
+        UNITS.MEGA_BYTES,
+        UNITS.GIGA_BYTES,
+        UNITS.TERA_BYTES,
+        UNITS.PETA_BYTES,
+        UNITS.BYTES_SEC,
+        UNITS.KILO_BYTES_SEC,
+        UNITS.MEGA_BYTES_SEC,
+        UNITS.GIGA_BYTES_SEC,
+        UNITS.TERA_BYTES_SEC,
+        UNITS.PETA_BYTES_SEC,
+    ], "Must not use SI bytes"
     return YAxis(
         format=format,
         logBase=log_base,

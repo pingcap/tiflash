@@ -611,10 +611,6 @@ def Threads() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="none", right_format="short"),
                 fill=1,
-                null_point_mode="null",
-                points=True,
-                pointradius=2,
-                decimals=1,
             ),
             graph_panel(
                 title="Threads IO",
@@ -629,12 +625,8 @@ def Threads() -> RowPanel:
                         interval_factor=1,
                     ),
                 ],
-                yaxes=yaxes(left_format="Bps", right_format="short"),
+                yaxes=yaxes(left_format="binBps", right_format="short"),
                 fill=1,
-                null_point_mode="null",
-                points=True,
-                pointradius=2,
-                decimals=1,
             ),
         ]
     )
@@ -655,10 +647,6 @@ def Threads() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="none", right_format="short"),
                 fill=1,
-                null_point_mode="null",
-                points=True,
-                pointradius=2,
-                decimals=1,
             ),
             graph_panel(
                 title="Thread Nonvoluntary Context Switches",
@@ -675,10 +663,6 @@ def Threads() -> RowPanel:
                 ],
                 yaxes=yaxes(left_format="none", right_format="short"),
                 fill=1,
-                null_point_mode="null",
-                points=True,
-                pointradius=2,
-                decimals=1,
             ),
         ]
     )
