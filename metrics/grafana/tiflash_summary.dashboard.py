@@ -477,702 +477,115 @@ def ThreadsCPU() -> RowPanel:
     layout = Layout(title="Threads CPU")
     layout.row(
         [
-            graph_panel(
-                title="SST Import Service",
+            cpu_with_limit_panel(
+                "SST Import Service",
+                "sst_importer.*",
                 description="Involved when importing data.",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_proxy_thread_cpu_seconds_total",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            label_selectors=[
-                                'name=~"sst_importer.*"',
-                            ],
-                            by_labels=["instance"],
-                        ),
-                        legend_format="{{instance}}",
-                    ),
-                ],
-                yaxes=yaxes(
-                    left_format="percentunit", right_format="short", left_min="0"
-                ),
-                fill_gradient=0,
-                null_point_mode="null",
+                hide_limit=True,
             ),
-            graph_panel(
-                title="SST Apply",
+            cpu_with_limit_panel(
+                "SST Apply",
+                "apply_low_.*",
                 description="Involved when importing data.",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_proxy_thread_cpu_seconds_total",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            label_selectors=[
-                                'name=~"apply_low_.*"',
-                            ],
-                            by_labels=["instance"],
-                        ),
-                        legend_format="{{instance}}",
-                    ),
-                    target(
-                        expr=expr_aggr(
-                            "tiflash_proxy_thread_cpu_seconds_total",
-                            "count",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            label_selectors=[
-                                'name=~"apply_low_.*"',
-                            ],
-                            by_labels=["instance"],
-                        ),
-                        legend_format="Limit",
-                    ),
-                ],
-                yaxes=yaxes(
-                    left_format="percentunit", right_format="short", left_min="0"
-                ),
-                fill_gradient=0,
-                null_point_mode="null",
-                series_overrides=[
-                    {
-                        "alias": "Limit",
-                        "color": "#F2495C",
-                        "hideTooltip": True,
-                        "legend": False,
-                        "linewidth": 2,
-                        "nullPointMode": "connected",
-                    }
-                ],
             ),
         ]
     )
     layout.row(
         [
-            graph_panel(
-                title="Region Task",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_proxy_thread_cpu_seconds_total",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            label_selectors=[
-                                'name=~"region_task.*"',
-                            ],
-                            by_labels=["instance"],
-                        ),
-                        legend_format="{{name}} {{instance}}",
-                    ),
-                    target(
-                        expr=expr_aggr(
-                            "tiflash_proxy_thread_cpu_seconds_total",
-                            "count",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            label_selectors=[
-                                'name=~"region_task.*"',
-                            ],
-                            by_labels=["instance"],
-                        ),
-                        legend_format="Limit",
-                    ),
-                ],
-                yaxes=yaxes(
-                    left_format="percentunit", right_format="short", left_min="0"
-                ),
-                fill_gradient=0,
-                null_point_mode="null",
-                series_overrides=[
-                    {
-                        "alias": "Limit",
-                        "color": "#F2495C",
-                        "hideTooltip": True,
-                        "legend": False,
-                        "linewidth": 2,
-                        "nullPointMode": "connected",
-                    }
-                ],
+            cpu_with_limit_panel(
+                "Region Task",
+                "region_task.*",
+                legend="{{name}} {{instance}}",
             ),
-            graph_panel(
-                title="Region Worker",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_proxy_thread_cpu_seconds_total",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            label_selectors=[
-                                'name=~"region_worker.*"',
-                            ],
-                            by_labels=["instance"],
-                        ),
-                        legend_format="{{name}} {{instance}}",
-                    ),
-                    target(
-                        expr=expr_aggr(
-                            "tiflash_proxy_thread_cpu_seconds_total",
-                            "count",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            label_selectors=[
-                                'name=~"region_worker.*"',
-                            ],
-                            by_labels=["instance"],
-                        ),
-                        legend_format="Limit",
-                    ),
-                ],
-                yaxes=yaxes(
-                    left_format="percentunit", right_format="short", left_min="0"
-                ),
-                fill_gradient=0,
-                null_point_mode="null",
-                series_overrides=[
-                    {
-                        "alias": "Limit",
-                        "color": "#F2495C",
-                        "hideTooltip": True,
-                        "legend": False,
-                        "linewidth": 2,
-                        "nullPointMode": "connected",
-                    }
-                ],
+            cpu_with_limit_panel(
+                "Region Worker",
+                "region_worker.*",
+                legend="{{name}} {{instance}}",
             ),
         ]
     )
     layout.row(
         [
-            graph_panel(
-                title="Raft Store",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_proxy_thread_cpu_seconds_total",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            label_selectors=[
-                                'name=~"raftstore_.*"',
-                            ],
-                            by_labels=["instance"],
-                        ),
-                        legend_format="{{name}} {{instance}}",
-                    ),
-                    target(
-                        expr=expr_aggr(
-                            "tiflash_proxy_thread_cpu_seconds_total",
-                            "count",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            label_selectors=[
-                                'name=~"raftstore_.*"',
-                            ],
-                            by_labels=["instance"],
-                        ),
-                        legend_format="Limit",
-                    ),
-                ],
-                yaxes=yaxes(
-                    left_format="percentunit", right_format="short", left_min="0"
-                ),
-                fill_gradient=0,
-                null_point_mode="null",
-                series_overrides=[
-                    {
-                        "alias": "Limit",
-                        "color": "#F2495C",
-                        "hideTooltip": True,
-                        "legend": False,
-                        "linewidth": 2,
-                        "nullPointMode": "connected",
-                    }
-                ],
+            cpu_with_limit_panel(
+                "Raft Store",
+                "raftstore_.*",
+                legend="{{name}} {{instance}}",
             ),
-            graph_panel(
-                title="Apply Worker",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_proxy_thread_cpu_seconds_total",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            label_selectors=[
-                                'name=~"apply_.*"',
-                            ],
-                            by_labels=["instance"],
-                        ),
-                        legend_format="{{name}} {{instance}}",
-                    ),
-                    target(
-                        expr=expr_aggr(
-                            "tiflash_proxy_thread_cpu_seconds_total",
-                            "count",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            label_selectors=[
-                                'name=~"apply_.*"',
-                            ],
-                            by_labels=["instance"],
-                        ),
-                        legend_format="Limit",
-                    ),
-                ],
-                yaxes=yaxes(
-                    left_format="percentunit", right_format="short", left_min="0"
-                ),
-                fill_gradient=0,
-                null_point_mode="null",
-                series_overrides=[
-                    {
-                        "alias": "Limit",
-                        "color": "#F2495C",
-                        "hideTooltip": True,
-                        "legend": False,
-                        "linewidth": 2,
-                        "nullPointMode": "connected",
-                    }
-                ],
+            cpu_with_limit_panel(
+                "Apply Worker",
+                "apply_.*",
+                legend="{{name}} {{instance}}",
             ),
         ]
     )
     layout.row(
         [
-            graph_panel(
-                title="Storage Background (Small Tasks)",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_proxy_thread_cpu_seconds_total",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            label_selectors=[
-                                'name=~"bg_\\\\\\\\d+"',
-                            ],
-                            by_labels=["instance"],
-                        ),
-                        legend_format="{{name}} {{instance}}",
-                    ),
-                    target(
-                        expr=expr_aggr(
-                            "tiflash_proxy_thread_cpu_seconds_total",
-                            "count",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            label_selectors=[
-                                'name=~"bg_\\\\\\\\d+"',
-                            ],
-                            by_labels=["instance"],
-                        ),
-                        legend_format="Limit",
-                    ),
-                ],
-                yaxes=yaxes(
-                    left_format="percentunit", right_format="short", left_min="0"
-                ),
-                fill_gradient=0,
-                null_point_mode="null",
-                series_overrides=[
-                    {
-                        "alias": "Limit",
-                        "color": "#F2495C",
-                        "hideTooltip": True,
-                        "legend": False,
-                        "linewidth": 2,
-                        "nullPointMode": "connected",
-                    }
-                ],
+            cpu_with_limit_panel(
+                "Storage Background (Small Tasks)",
+                r"bg_\\d+",
+                legend="{{name}} {{instance}}",
             ),
-            graph_panel(
-                title="Storage Background (Large Tasks)",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_proxy_thread_cpu_seconds_total",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            label_selectors=[
-                                'name=~"bg_block_\\\\\\\\d+"',
-                            ],
-                            by_labels=["instance"],
-                        ),
-                        legend_format="{{name}} {{instance}}",
-                    ),
-                    target(
-                        expr=expr_aggr(
-                            "tiflash_proxy_thread_cpu_seconds_total",
-                            "count",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            label_selectors=[
-                                'name=~"bg_block_\\\\\\\\d+"',
-                            ],
-                            by_labels=["instance"],
-                        ),
-                        legend_format="Limit",
-                    ),
-                ],
-                yaxes=yaxes(
-                    left_format="percentunit", right_format="short", left_min="0"
-                ),
-                fill_gradient=0,
-                null_point_mode="null",
-                series_overrides=[
-                    {
-                        "alias": "Limit",
-                        "color": "#F2495C",
-                        "hideTooltip": True,
-                        "legend": False,
-                        "linewidth": 2,
-                        "nullPointMode": "connected",
-                    }
-                ],
+            cpu_with_limit_panel(
+                "Storage Background (Large Tasks)",
+                r"bg_block_\\d+",
+                legend="{{name}} {{instance}}",
             ),
         ]
     )
     layout.row(
         [
-            graph_panel(
-                title="Manual Compaction",
+            cpu_with_limit_panel(
+                "Manual Compaction",
+                "m_compact_pool",
                 description="Involved when manually compacting the data.",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_proxy_thread_cpu_seconds_total",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            label_selectors=[
-                                'name=~"m_compact_pool"',
-                            ],
-                            by_labels=["instance"],
-                        ),
-                        legend_format="{{name}} {{instance}}",
-                    ),
-                    target(
-                        expr=expr_aggr(
-                            "tiflash_proxy_thread_cpu_seconds_total",
-                            "count",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            label_selectors=[
-                                'name=~"m_compact_pool"',
-                            ],
-                            by_labels=["instance"],
-                        ),
-                        legend_format="Limit",
-                    ),
-                ],
-                yaxes=yaxes(
-                    left_format="percentunit", right_format="short", left_min="0"
-                ),
-                fill_gradient=0,
-                null_point_mode="null",
-                series_overrides=[
-                    {
-                        "alias": "Limit",
-                        "color": "#F2495C",
-                        "hideTooltip": True,
-                        "legend": False,
-                        "linewidth": 2,
-                        "nullPointMode": "connected",
-                    }
-                ],
+                legend="{{name}} {{instance}}",
             ),
-            graph_panel(
-                title="GRPC Async Server",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_proxy_thread_cpu_seconds_total",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            label_selectors=[
-                                'name=~"async_poller.*"',
-                            ],
-                            by_labels=["instance"],
-                        ),
-                        legend_format="{{name}} {{instance}}",
-                    ),
-                    target(
-                        expr=expr_aggr(
-                            "tiflash_proxy_thread_cpu_seconds_total",
-                            "count",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            label_selectors=[
-                                'name=~"async_poller.*"',
-                            ],
-                            by_labels=["instance"],
-                        ),
-                        legend_format="Limit",
-                    ),
-                ],
-                yaxes=yaxes(
-                    left_format="percentunit", right_format="short", left_min="0"
-                ),
-                fill_gradient=0,
-                null_point_mode="null",
-                series_overrides=[
-                    {
-                        "alias": "Limit",
-                        "color": "#F2495C",
-                        "hideTooltip": True,
-                        "legend": False,
-                        "linewidth": 2,
-                        "nullPointMode": "connected",
-                    }
-                ],
+            cpu_with_limit_panel(
+                "GRPC Async Server",
+                "async_poller.*",
+                legend="{{name}} {{instance}}",
             ),
         ]
     )
     layout.row(
         [
-            graph_panel(
-                title="GRPC Async Client",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_proxy_thread_cpu_seconds_total",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            label_selectors=[
-                                'name=~"GRPCComp.*"',
-                            ],
-                            by_labels=["instance"],
-                        ),
-                        legend_format="{{name}} {{instance}}",
-                    ),
-                    target(
-                        expr=expr_aggr(
-                            "tiflash_proxy_thread_cpu_seconds_total",
-                            "count",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            label_selectors=[
-                                'name=~"GRPCComp.*"',
-                            ],
-                            by_labels=["instance"],
-                        ),
-                        legend_format="Limit",
-                    ),
-                ],
-                yaxes=yaxes(
-                    left_format="percentunit", right_format="short", left_min="0"
-                ),
-                fill_gradient=0,
-                null_point_mode="null",
-                series_overrides=[
-                    {
-                        "alias": "Limit",
-                        "color": "#F2495C",
-                        "hideTooltip": True,
-                        "legend": False,
-                        "linewidth": 2,
-                        "nullPointMode": "connected",
-                    }
-                ],
+            cpu_with_limit_panel(
+                "GRPC Async Client",
+                "GRPCComp.*",
+                legend="{{name}} {{instance}}",
             ),
-            graph_panel(
-                title="FAP builder",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_proxy_thread_cpu_seconds_total",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            label_selectors=[
-                                'name=~"fap_builder.*"',
-                            ],
-                            by_labels=["instance"],
-                        ),
-                        legend_format="{{name}} {{instance}}",
-                    ),
-                    target(
-                        expr=expr_aggr(
-                            "tiflash_proxy_thread_cpu_seconds_total",
-                            "count",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            label_selectors=[
-                                'name=~"fap_builder.*"',
-                            ],
-                            by_labels=["instance"],
-                        ),
-                        legend_format="Limit",
-                    ),
-                ],
-                yaxes=yaxes(
-                    left_format="percentunit", right_format="short", left_min="0"
-                ),
-                fill_gradient=0,
-                null_point_mode="null",
-                series_overrides=[
-                    {
-                        "alias": "Limit",
-                        "color": "#F2495C",
-                        "hideTooltip": True,
-                        "legend": False,
-                        "linewidth": 2,
-                        "nullPointMode": "connected",
-                    }
-                ],
+            cpu_with_limit_panel(
+                "FAP builder",
+                "fap_builder.*",
+                legend="{{name}} {{instance}}",
             ),
         ]
     )
     layout.row(
         [
-            graph_panel(
-                title="Snapshot Sender",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_proxy_thread_cpu_seconds_total",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            label_selectors=[
-                                'name=~"snap_sender.*"',
-                            ],
-                            by_labels=["instance"],
-                        ),
-                        legend_format="{{name}} {{instance}}",
-                    ),
-                    target(
-                        expr=expr_aggr(
-                            "tiflash_proxy_thread_cpu_seconds_total",
-                            "count",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            label_selectors=[
-                                'name=~"snap_sender.*"',
-                            ],
-                            by_labels=["instance"],
-                        ),
-                        legend_format="Limit",
-                    ),
-                ],
-                yaxes=yaxes(
-                    left_format="percentunit", right_format="short", left_min="0"
-                ),
-                fill_gradient=0,
-                null_point_mode="null",
-                series_overrides=[
-                    {
-                        "alias": "Limit",
-                        "color": "#F2495C",
-                        "hideTooltip": True,
-                        "legend": False,
-                        "linewidth": 2,
-                        "nullPointMode": "connected",
-                    }
-                ],
+            cpu_with_limit_panel(
+                "Snapshot Sender",
+                "snap_sender.*",
+                legend="{{name}} {{instance}}",
             ),
-            graph_panel(
-                title="Segment Scheduler",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_proxy_thread_cpu_seconds_total",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            label_selectors=[
-                                'name=~"segment_sched.*"',
-                            ],
-                            by_labels=["instance"],
-                        ),
-                        legend_format="{{name}} {{instance}}",
-                    ),
-                    target(
-                        expr=expr_aggr(
-                            "tiflash_proxy_thread_cpu_seconds_total",
-                            "count",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            label_selectors=[
-                                'name=~"segment_sched.*"',
-                            ],
-                            by_labels=["instance"],
-                        ),
-                        legend_format="Limit",
-                    ),
-                ],
-                yaxes=yaxes(
-                    left_format="percentunit", right_format="short", left_min="0"
-                ),
-                fill_gradient=0,
-                null_point_mode="null",
-                series_overrides=[
-                    {
-                        "alias": "Limit",
-                        "color": "#F2495C",
-                        "hideTooltip": True,
-                        "legend": False,
-                        "linewidth": 2,
-                        "nullPointMode": "connected",
-                    }
-                ],
+            cpu_with_limit_panel(
+                "Segment Scheduler",
+                "segment_sched.*",
+                legend="{{name}} {{instance}}",
             ),
         ]
     )
     layout.row(
         [
-            graph_panel(
-                title="Local Index Pool",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_proxy_thread_cpu_seconds_total",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            label_selectors=[
-                                'name=~"LocalIndexPool*"',
-                            ],
-                            by_labels=["instance"],
-                        ),
-                        legend_format="pool-{{instance}}",
-                    ),
-                    target(
-                        expr=expr_aggr(
-                            "tiflash_proxy_thread_cpu_seconds_total",
-                            "count",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            label_selectors=[
-                                'name=~"LocalIndexPool*"',
-                            ],
-                            by_labels=["instance"],
-                        ),
-                        legend_format="Limit",
-                    ),
-                ],
-                yaxes=yaxes(
-                    left_format="percentunit", right_format="short", left_min="0"
-                ),
-                fill_gradient=0,
-                null_point_mode="null",
-                series_overrides=[
-                    {
-                        "alias": "Limit",
-                        "color": "#F2495C",
-                        "hideTooltip": True,
-                        "legend": False,
-                        "linewidth": 2,
-                        "nullPointMode": "connected",
-                    }
-                ],
+            cpu_with_limit_panel(
+                "Local Index Pool",
+                "LocalIndexPool*",
+                legend="pool-{{instance}}",
             ),
-            graph_panel(
-                title="Segment Reader",
-                targets=[
-                    target(
-                        expr=expr_sum_rate(
-                            "tiflash_proxy_thread_cpu_seconds_total",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            label_selectors=[
-                                'name=~"SegmentReader.*"',
-                            ],
-                            by_labels=["instance"],
-                        ),
-                        legend_format="{{name}} {{instance}}",
-                    ),
-                    target(
-                        expr=expr_aggr(
-                            "tiflash_proxy_thread_cpu_seconds_total",
-                            "count",
-                            instance_selector=PROXY_LABEL_SELECTORS,
-                            label_selectors=[
-                                'name=~"SegmentReader.*"',
-                            ],
-                            by_labels=["instance"],
-                        ),
-                        legend_format="Limit",
-                    ),
-                ],
-                yaxes=yaxes(
-                    left_format="percentunit", right_format="short", left_min="0"
-                ),
-                fill_gradient=0,
-                null_point_mode="null",
-                series_overrides=[
-                    {
-                        "alias": "Limit",
-                        "color": "#F2495C",
-                        "hideTooltip": True,
-                        "legend": False,
-                        "linewidth": 2,
-                        "nullPointMode": "connected",
-                    }
-                ],
+            cpu_with_limit_panel(
+                "Segment Reader",
+                "SegmentReader.*",
+                legend="{{name}} {{instance}}",
             ),
         ]
     )

@@ -1588,7 +1588,16 @@
           "renderer": "flot",
           "repeat": null,
           "repeatDirection": null,
-          "seriesOverrides": [],
+          "seriesOverrides": [
+            {
+              "alias": "Limit",
+              "color": "#F2495C",
+              "hideTooltip": true,
+              "legend": false,
+              "linewidth": 2,
+              "nullPointMode": "connected"
+            }
+          ],
           "span": null,
           "stack": false,
           "steppedLine": false,
@@ -1604,6 +1613,21 @@
               "legendFormat": "{{instance}}",
               "metric": "",
               "query": "sum(rate(\n    tiflash_proxy_thread_cpu_seconds_total\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$proxy_instance\",instance=~\"$tiflash_role\",name=~\"sst_importer.*\"}\n    [$__rate_interval]\n)) by (instance) ",
+              "refId": "",
+              "step": 10,
+              "target": ""
+            },
+            {
+              "datasource": "${DS_TEST-CLUSTER}",
+              "expr": "count((\n    tiflash_proxy_thread_cpu_seconds_total\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$proxy_instance\",instance=~\"$tiflash_role\",name=~\"sst_importer.*\"}\n    \n)) by (instance) ",
+              "format": "time_series",
+              "hide": true,
+              "instant": false,
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "Limit",
+              "metric": "",
+              "query": "count((\n    tiflash_proxy_thread_cpu_seconds_total\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$proxy_instance\",instance=~\"$tiflash_role\",name=~\"sst_importer.*\"}\n    \n)) by (instance) ",
               "refId": "",
               "step": 10,
               "target": ""
@@ -2522,7 +2546,7 @@
           "targets": [
             {
               "datasource": "${DS_TEST-CLUSTER}",
-              "expr": "sum(rate(\n    tiflash_proxy_thread_cpu_seconds_total\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$proxy_instance\",instance=~\"$tiflash_role\",name=~\"bg_\\\\\\\\d+\"}\n    [$__rate_interval]\n)) by (instance) ",
+              "expr": "sum(rate(\n    tiflash_proxy_thread_cpu_seconds_total\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$proxy_instance\",instance=~\"$tiflash_role\",name=~\"bg_\\\\d+\"}\n    [$__rate_interval]\n)) by (instance) ",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -2530,14 +2554,14 @@
               "intervalFactor": 2,
               "legendFormat": "{{name}} {{instance}}",
               "metric": "",
-              "query": "sum(rate(\n    tiflash_proxy_thread_cpu_seconds_total\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$proxy_instance\",instance=~\"$tiflash_role\",name=~\"bg_\\\\\\\\d+\"}\n    [$__rate_interval]\n)) by (instance) ",
+              "query": "sum(rate(\n    tiflash_proxy_thread_cpu_seconds_total\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$proxy_instance\",instance=~\"$tiflash_role\",name=~\"bg_\\\\d+\"}\n    [$__rate_interval]\n)) by (instance) ",
               "refId": "",
               "step": 10,
               "target": ""
             },
             {
               "datasource": "${DS_TEST-CLUSTER}",
-              "expr": "count((\n    tiflash_proxy_thread_cpu_seconds_total\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$proxy_instance\",instance=~\"$tiflash_role\",name=~\"bg_\\\\\\\\d+\"}\n    \n)) by (instance) ",
+              "expr": "count((\n    tiflash_proxy_thread_cpu_seconds_total\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$proxy_instance\",instance=~\"$tiflash_role\",name=~\"bg_\\\\d+\"}\n    \n)) by (instance) ",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -2545,7 +2569,7 @@
               "intervalFactor": 2,
               "legendFormat": "Limit",
               "metric": "",
-              "query": "count((\n    tiflash_proxy_thread_cpu_seconds_total\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$proxy_instance\",instance=~\"$tiflash_role\",name=~\"bg_\\\\\\\\d+\"}\n    \n)) by (instance) ",
+              "query": "count((\n    tiflash_proxy_thread_cpu_seconds_total\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$proxy_instance\",instance=~\"$tiflash_role\",name=~\"bg_\\\\d+\"}\n    \n)) by (instance) ",
               "refId": "",
               "step": 10,
               "target": ""
@@ -2679,7 +2703,7 @@
           "targets": [
             {
               "datasource": "${DS_TEST-CLUSTER}",
-              "expr": "sum(rate(\n    tiflash_proxy_thread_cpu_seconds_total\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$proxy_instance\",instance=~\"$tiflash_role\",name=~\"bg_block_\\\\\\\\d+\"}\n    [$__rate_interval]\n)) by (instance) ",
+              "expr": "sum(rate(\n    tiflash_proxy_thread_cpu_seconds_total\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$proxy_instance\",instance=~\"$tiflash_role\",name=~\"bg_block_\\\\d+\"}\n    [$__rate_interval]\n)) by (instance) ",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -2687,14 +2711,14 @@
               "intervalFactor": 2,
               "legendFormat": "{{name}} {{instance}}",
               "metric": "",
-              "query": "sum(rate(\n    tiflash_proxy_thread_cpu_seconds_total\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$proxy_instance\",instance=~\"$tiflash_role\",name=~\"bg_block_\\\\\\\\d+\"}\n    [$__rate_interval]\n)) by (instance) ",
+              "query": "sum(rate(\n    tiflash_proxy_thread_cpu_seconds_total\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$proxy_instance\",instance=~\"$tiflash_role\",name=~\"bg_block_\\\\d+\"}\n    [$__rate_interval]\n)) by (instance) ",
               "refId": "",
               "step": 10,
               "target": ""
             },
             {
               "datasource": "${DS_TEST-CLUSTER}",
-              "expr": "count((\n    tiflash_proxy_thread_cpu_seconds_total\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$proxy_instance\",instance=~\"$tiflash_role\",name=~\"bg_block_\\\\\\\\d+\"}\n    \n)) by (instance) ",
+              "expr": "count((\n    tiflash_proxy_thread_cpu_seconds_total\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$proxy_instance\",instance=~\"$tiflash_role\",name=~\"bg_block_\\\\d+\"}\n    \n)) by (instance) ",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -2702,7 +2726,7 @@
               "intervalFactor": 2,
               "legendFormat": "Limit",
               "metric": "",
-              "query": "count((\n    tiflash_proxy_thread_cpu_seconds_total\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$proxy_instance\",instance=~\"$tiflash_role\",name=~\"bg_block_\\\\\\\\d+\"}\n    \n)) by (instance) ",
+              "query": "count((\n    tiflash_proxy_thread_cpu_seconds_total\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$proxy_instance\",instance=~\"$tiflash_role\",name=~\"bg_block_\\\\d+\"}\n    \n)) by (instance) ",
               "refId": "",
               "step": 10,
               "target": ""

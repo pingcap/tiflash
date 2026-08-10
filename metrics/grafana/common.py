@@ -1634,7 +1634,10 @@ def cpu_with_limit_panel(
     hide_limit: bool = False,
     instance_selector: Sequence[str] = PROXY_LABEL_SELECTORS,
 ) -> Panel:
-    """Thread CPU + optional Limit count line (proxy instance + role selectors)."""
+    """Thread CPU + Limit count line (proxy instance + role selectors).
+
+    When hide_limit=True, the Limit target is still included but hidden by default.
+    """
     targets = [
         target(
             expr=expr_sum_rate(
@@ -1644,37 +1647,38 @@ def cpu_with_limit_panel(
                 by_labels=["instance"],
             ),
             legend_format=legend,
+        ),
+        target(
+            expr=expr_aggr(
+                metric,
+                "count",
+                instance_selector=instance_selector,
+                label_selectors=[f'name=~"{name_regex}"'],
+                by_labels=["instance"],
+            ),
+            legend_format="Limit",
+            hide=hide_limit,
+        ),
+    ]
+    overrides = [
+        tiflash_override(
+            "Limit",
+            color="#F2495C",
+            hide_tooltip=True,
+            legend=False,
+            linewidth=2,
+            null_point_mode="connected",
         )
     ]
-    overrides: list = []
-    if not hide_limit:
-        targets.append(
-            target(
-                expr=expr_aggr(
-                    metric,
-                    "count",
-                    instance_selector=instance_selector,
-                    label_selectors=[f'name=~"{name_regex}"'],
-                    by_labels=["instance"],
-                ),
-                legend_format="Limit",
-            )
-        )
-        overrides.append(
-            tiflash_override(
-                "Limit",
-                color="#F2495C",
-                hide_tooltip=True,
-                legend=False,
-                linewidth=2,
-                null_point_mode="connected",
-            )
-        )
     return graph_panel(
         title=title,
         description=description,
         targets=targets,
-        yaxes=yaxes(left_format=UNITS.PERCENT_UNIT, right_format=UNITS.SHORT),
+        yaxes=yaxes(
+            left_format=UNITS.PERCENT_UNIT,
+            right_format=UNITS.SHORT,
+            left_min="0",
+        ),
         fill=0,
         fill_gradient=0,
         series_overrides=overrides,
