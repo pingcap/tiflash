@@ -12,7 +12,7 @@ Currently, for each section in DMFile we generate a separate file. Specifically,
 
 Therefore, we consider merging the small files in DMFiles to cut down the number of inode and enhance TiFlash availability.
 
-## Detailed Desgin
+## Detailed Design
 
 For these files in DMFiles, `x.idx`, `x.null.mrk`, `x.mrk` are always very small, stablely less than 4KB. Besides, when the table contains tiny data,  the file sizes of `x.dat` and `x.null.dat` are also very small. Therefore, for each DMFile, we can always merge `x.idx`, `x.null.mrk` and `x.mrk` together. For `x.dat` and `x.null.dat`, we can decide whether they should be merged based on their actual file size with our min file size threshold. 
 
