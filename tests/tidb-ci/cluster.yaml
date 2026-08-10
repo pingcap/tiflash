@@ -1,1 +1,1 @@
-../docker/classic-yaml/cluster.yaml
+../docker/classic-yaml/cluster_tidb_fail_point.yaml
