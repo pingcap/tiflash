@@ -235,12 +235,12 @@ TEST(JoinKindAndBuildIndexTestRunner, TestFullJoinAllowsLeftAndRightConditions)
     JoinNonEqualConditions left_only_conditions;
     left_only_conditions.left_filter_column = "left_cond";
     ASSERT_EQ(left_only_conditions.validate(ASTTableJoin::Kind::LeftOuter), nullptr);
-    ASSERT_STREQ(left_only_conditions.validate(ASTTableJoin::Kind::Inner), "non left join with left conditions");
+    ASSERT_STREQ(left_only_conditions.validate(ASTTableJoin::Kind::Inner), "left conditions only supported for left outer and full outer join");
 
     JoinNonEqualConditions right_only_conditions;
     right_only_conditions.right_filter_column = "right_cond";
     ASSERT_EQ(right_only_conditions.validate(ASTTableJoin::Kind::RightOuter), nullptr);
-    ASSERT_STREQ(right_only_conditions.validate(ASTTableJoin::Kind::Inner), "non right join with right conditions");
+    ASSERT_STREQ(right_only_conditions.validate(ASTTableJoin::Kind::Inner), "right conditions only supported for right outer and full outer join");
 }
 
 } // namespace tests
