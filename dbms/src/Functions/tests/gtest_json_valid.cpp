@@ -95,6 +95,8 @@ CATCH
 TEST_F(TestJsonValid, GuardStringToJsonParsingInFilter)
 try
 {
+    getDAGContext().log = Logger::get("TestJsonValid");
+
     auto make_field_type = [](Int32 tp, UInt32 flag = 0) {
         tipb::FieldType field_type;
         field_type.set_tp(tp);
