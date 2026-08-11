@@ -95,9 +95,9 @@ struct JoinNonEqualConditions
     const char * validate(ASTTableJoin::Kind kind) const
     {
         if unlikely (!left_filter_column.empty() && !(isLeftOuterJoin(kind) || kind == ASTTableJoin::Kind::Full))
-            return "non left join with left conditions";
+            return "left conditions only supported for left outer and full outer join";
         if unlikely (!right_filter_column.empty() && !(isRightOuterJoin(kind) || kind == ASTTableJoin::Kind::Full))
-            return "non right join with right conditions";
+            return "right conditions only supported for right outer and full outer join";
 
         if unlikely ((!other_cond_name.empty() || !other_eq_cond_from_in_name.empty()) && other_cond_expr == nullptr)
             return "other_cond_name and/or other_eq_cond_from_in_name are not empty but other_cond_expr is nullptr";
