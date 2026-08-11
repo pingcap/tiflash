@@ -12,8 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Operators/CTE.h>
+#include <Operators/CTEPartition.h>
 #include <Operators/CTESinkOp.h>
 #include <Operators/Operator.h>
+#include <fmt/core.h>
+
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -28,8 +33,39 @@ OperatorStatus CTESinkOp::writeImpl(Block && block)
         return OperatorStatus::FINISHED;
 
     this->total_rows += block.rows();
-    if (this->cte->pushBlock<false>(this->id, block))
+    auto status = this->cte->pushBlock<false>(this->id, block);
+    switch (status)
+    {
+    case CTEOpStatus::WAIT_SPILL:
+        // CTE is spilling blocks to disk, we need to wait the finish of spill
+        setNotifyFuture(&(this->io_notifier));
+        return OperatorStatus::WAIT_FOR_NOTIFY;
+    case CTEOpStatus::NEED_SPILL:
+        return OperatorStatus::IO_OUT;
+    case CTEOpStatus::OK:
         return OperatorStatus::NEED_INPUT;
-    return OperatorStatus::CANCELLED;
+    case CTEOpStatus::CANCELLED:
+        return OperatorStatus::CANCELLED;
+    default:
+        throw Exception(fmt::format("Get unexpected CTEOpStatus: {}", magic_enum::enum_name(status)));
+    }
+}
+
+OperatorStatus CTESinkOp::executeIOImpl()
+{
+    auto status = this->cte->spillBlocks(this->id);
+    switch (status)
+    {
+    case CTEOpStatus::OK:
+        return OperatorStatus::NEED_INPUT;
+    case CTEOpStatus::WAIT_SPILL:
+        // CTE is spilling blocks to disk, we need to wait the finish of spill
+        setNotifyFuture(&(this->io_notifier));
+        return OperatorStatus::WAIT_FOR_NOTIFY;
+    case CTEOpStatus::CANCELLED:
+        return OperatorStatus::CANCELLED;
+    default:
+        throw Exception(fmt::format("Unexpected status {}", magic_enum::enum_name(status)));
+    }
 }
 } // namespace DB

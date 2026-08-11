@@ -27,6 +27,7 @@ public:
         : SinkOp(exec_context_, req_id)
         , cte(cte_)
         , id(id_)
+        , io_notifier(this->cte, id)
     {}
 
     String getName() const override { return "CTESinkOp"; }
@@ -34,10 +35,12 @@ public:
 protected:
     void operateSuffixImpl() override;
     OperatorStatus writeImpl(Block && block) override;
+    OperatorStatus executeIOImpl() override;
 
 private:
     std::shared_ptr<CTE> cte;
     size_t total_rows = 0;
     size_t id;
+    CTEIONotifier io_notifier;
 };
 } // namespace DB
