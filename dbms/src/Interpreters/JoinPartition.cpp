@@ -66,7 +66,7 @@ void RowsNotInsertToMap::insertRow(Block * stored_block, size_t index, bool need
     }
     else
     {
-        auto * elem = reinterpret_cast<RowRefList *>(pool.alloc(sizeof(RowRefList)));
+        auto * elem = reinterpret_cast<RowRefList *>(pool.alignedAlloc(sizeof(RowRefList), alignof(RowRefList)));
         new (elem) RowRefList(stored_block, index);
         insertRowToList(&head, elem);
     }
@@ -496,7 +496,7 @@ struct Inserter<ASTTableJoin::Strictness::All, Map, KeyGetter>
                  * We will insert each time the element into the second place.
                  * That is, the former second element, if it was, will be the third, and so on.
                  */
-            auto elem = reinterpret_cast<MappedType *>(pool.alloc(sizeof(MappedType)));
+            auto elem = reinterpret_cast<MappedType *>(pool.alignedAlloc(sizeof(MappedType), alignof(MappedType)));
             new (elem) typename Map::mapped_type(stored_block, i);
             insertRowToList(&emplace_result.getMapped(), elem);
         }
