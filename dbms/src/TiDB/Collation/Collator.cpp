@@ -317,12 +317,12 @@ int Pattern<Collator>::tryMatchAsciiCi(const char * s, size_t length) const
             else
             {
                 // Can't handle non-ASCII characters
-                const auto c = static_cast<unsigned char>(s[str_idx]);
-                if (c >= weight_ascii_ci.size())
+                if (static_cast<unsigned char>(s[str_idx]) >= weight_ascii_ci.size())
                 {
                     return -1;
                 }
-                if ((match_types[p_idx] == Match && weight_ascii_ci[c] == ascii_ci_pattern[p_idx])
+                if ((match_types[p_idx] == Match
+                     && weight_ascii_ci[static_cast<unsigned char>(s[str_idx])] == ascii_ci_pattern[p_idx])
                     || match_types[p_idx] == One)
                 {
                     p_idx++;
@@ -358,13 +358,12 @@ int Pattern<Collator>::tryMatchAsciiCi(const char * s, size_t length) const
                 while (str_idx < length)
                 {
                     // Can't handle non-ASCII characters
-                    const auto c = static_cast<unsigned char>(s[str_idx]);
-                    if (c >= weight_ascii_ci.size())
+                    if (static_cast<unsigned char>(s[str_idx]) >= weight_ascii_ci.size())
                     {
                         return -1;
                     }
 
-                    if (weight_ascii_ci[c] != ascii_ci_pattern[p_idx_after_any])
+                    if (weight_ascii_ci[static_cast<unsigned char>(s[str_idx])] != ascii_ci_pattern[p_idx_after_any])
                     {
                         str_idx = ++backtrack_idx;
                     }
