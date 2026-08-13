@@ -42,5 +42,6 @@ private:
     size_t total_rows = 0;
     size_t id;
     CTEIONotifier io_notifier;
+    bool is_final_spill = false;
 };
 } // namespace DB

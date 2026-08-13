@@ -30,7 +30,15 @@ void CTESinkOp::operateSuffixImpl()
 OperatorStatus CTESinkOp::writeImpl(Block && block)
 {
     if (!block)
+    {
+        if (this->cte->needSpill(this->id, /*try_mark_need_spill=*/true))
+        {
+            RUNTIME_CHECK(!this->is_final_spill);
+            this->is_final_spill = true;
+            return OperatorStatus::IO_OUT;
+        }
         return OperatorStatus::FINISHED;
+    }
 
     this->total_rows += block.rows();
     auto status = this->cte->pushBlock<false>(this->id, block);
@@ -57,7 +65,7 @@ OperatorStatus CTESinkOp::executeIOImpl()
     switch (status)
     {
     case CTEOpStatus::OK:
-        return OperatorStatus::NEED_INPUT;
+        return this->is_final_spill ? OperatorStatus::FINISHED : OperatorStatus::NEED_INPUT;
     case CTEOpStatus::WAIT_SPILL:
         // CTE is spilling blocks to disk, we need to wait the finish of spill
         setNotifyFuture(&(this->io_notifier));

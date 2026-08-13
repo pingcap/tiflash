@@ -137,6 +137,13 @@ CTEOpStatus CTE::spillBlocks(size_t partition_id)
     return this->partitions[partition_id]->spillBlocks(this->total_spilled_blocks, this->total_spilled_rows);
 }
 
+bool CTE::needSpill(size_t partition_id, bool try_mark_need_spill)
+{
+    std::shared_lock<std::shared_mutex> lock(this->rw_lock);
+    this->throwIfCancelledNoLock();
+    return this->partitions[partition_id]->needSpill(try_mark_need_spill);
+}
+
 void CTE::checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_id, size_t partition_id)
 {
     std::shared_lock<std::shared_mutex> rw_lock(this->rw_lock);

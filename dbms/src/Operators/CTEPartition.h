@@ -189,6 +189,7 @@ struct CTEPartition
 
     template <bool for_test>
     CTEOpStatus pushBlock(const Block & block);
+    bool needSpill(bool try_mark_need_spill = false);
     CTEOpStatus tryGetBlock(size_t cte_reader_id, Block & block);
     CTEOpStatus spillBlocks(std::atomic_size_t & block_num, std::atomic_size_t & row_num);
     CTEOpStatus getBlockFromDisk(size_t cte_reader_id, Block & block);

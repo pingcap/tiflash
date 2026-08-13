@@ -16,6 +16,7 @@
 #include <Core/SpillConfig.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Mpp/CTEManager.h>
 #include <IO/Encryption/MockKeyManager.h>
 #include <IO/FileProvider/FileProvider.h>
@@ -23,6 +24,7 @@
 #include <Operators/CTE.h>
 #include <Operators/CTEPartition.h>
 #include <Operators/CTEReader.h>
+#include <Operators/CTESinkOp.h>
 #include <Poco/File.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/types.h>
@@ -228,6 +230,31 @@ try
 
     readers.clear();
     ASSERT_FALSE(manager.hasCTEForTest(QUERY_ID_AND_CTE_ID));
+}
+CATCH
+
+TEST_F(TestCTESpill, SinkFinalSpill)
+try
+{
+    constexpr size_t row_num = 3 * MAX_BLOCK_ROW_NUM;
+    auto sink_blocks = generateSpillTestBlocks(0, row_num);
+
+    CTEManager manager;
+    auto cte = createCTE(manager, PARTITION_NUM * BLOCK_BYTES * 2, sink_blocks.front().cloneEmpty());
+
+    PipelineExecutorContext exec_context;
+    CTESinkOp sink(exec_context, "cte_spill_test", cte, /*id=*/0);
+    sink.setHeader(sink_blocks.front().cloneEmpty());
+
+    ASSERT_EQ(sink.write(std::move(sink_blocks[0])), OperatorStatus::NEED_INPUT);
+    ASSERT_EQ(sink.write(std::move(sink_blocks[1])), OperatorStatus::IO_OUT);
+    ASSERT_EQ(sink.executeIO(), OperatorStatus::NEED_INPUT);
+    ASSERT_EQ(cte->total_spilled_blocks.load(), 2);
+
+    ASSERT_EQ(sink.write(std::move(sink_blocks[2])), OperatorStatus::NEED_INPUT);
+    ASSERT_EQ(sink.write({}), OperatorStatus::IO_OUT);
+    ASSERT_EQ(sink.executeIO(), OperatorStatus::FINISHED);
+    ASSERT_EQ(cte->total_spilled_blocks.load(), 3);
 }
 CATCH
 

@@ -158,6 +158,7 @@ public:
 
     CTEOpStatus getBlockFromDisk(size_t cte_reader_id, size_t partition_id, Block & block);
     CTEOpStatus spillBlocks(size_t partition_id);
+    bool needSpill(size_t partition_id, bool try_mark_need_spill = false);
 
     void registerTask(size_t partition_id, TaskPtr && task, NotifyType type)
     {
@@ -258,8 +259,11 @@ public:
     }
 
 #ifndef NDEBUG
-    std::shared_ptr<CTEPartition> & getPartitionForTest(size_t partition_idx) { return this->partitions[partition_idx]; }
-    
+    std::shared_ptr<CTEPartition> & getPartitionForTest(size_t partition_idx)
+    {
+        return this->partitions[partition_idx];
+    }
+
     std::shared_mutex & getRWLockForTest() { return this->rw_lock; }
 #endif
 

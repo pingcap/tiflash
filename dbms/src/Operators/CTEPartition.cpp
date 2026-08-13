@@ -113,6 +113,22 @@ CTEOpStatus CTEPartition::pushBlock(const Block & block)
     return ret_status;
 }
 
+bool CTEPartition::needSpill(bool try_mark_need_spill)
+{
+    std::lock_guard<std::mutex> aux_lock(*(this->aux_lock));
+    if (this->status != CTEPartitionStatus::NORMAL)
+        return true;
+    if (!try_mark_need_spill)
+        return false;
+
+    std::lock_guard<std::mutex> lock(*(this->mu));
+    if (!this->isSpillTriggeredNoLock() || this->memory_usage.load() == 0)
+        return false;
+
+    this->status = CTEPartitionStatus::NEED_SPILL;
+    return true;
+}
+
 CTEOpStatus CTEPartition::spillBlocks(std::atomic_size_t & block_num, std::atomic_size_t & row_num)
 {
     std::unique_lock<std::mutex> lock(*(this->mu), std::defer_lock);
