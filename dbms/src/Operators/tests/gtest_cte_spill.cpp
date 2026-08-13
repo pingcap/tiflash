@@ -31,9 +31,11 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <exception>
 #include <memory>
 #include <mutex>
+#include <random>
 #include <thread>
 #include <vector>
 
@@ -260,17 +262,44 @@ try
     std::array<std::array<Blocks, PARTITION_NUM>, EXPECTED_SOURCE_NUM> received_blocks;
     std::array<std::atomic_size_t, EXPECTED_SINK_NUM> exited_sink_partitions{};
     std::atomic_bool thread_failed = false;
+    std::atomic_bool cancelled = false;
     std::mutex exception_mu;
-    std::exception_ptr thread_exception;
+    std::exception_ptr unexpected_thread_exception;
+    const String cancel_message = "cte spill concurrent test cancelled";
 
-    auto record_thread_exception = [&](std::exception_ptr exception) {
+    auto record_unexpected_thread_exception = [&](std::exception_ptr exception) {
         {
             std::lock_guard lock(exception_mu);
-            if (thread_exception == nullptr)
-                thread_exception = std::move(exception);
+            if (unexpected_thread_exception == nullptr)
+                unexpected_thread_exception = std::move(exception);
         }
         thread_failed.store(true);
         cte->notifyCancel<true>("cte spill test thread failed");
+    };
+
+    auto is_expected_cancel_exception = [&](const std::exception_ptr & exception) {
+        if (!cancelled.load())
+            return false;
+
+        try
+        {
+            std::rethrow_exception(exception);
+        }
+        catch (const Exception & e)
+        {
+            return e.message() == cancel_message;
+        }
+        catch (...)
+        {
+            return false;
+        }
+    };
+
+    auto handle_thread_exception = [&](std::exception_ptr exception) {
+        if (is_expected_cancel_exception(exception))
+            return;
+
+        record_unexpected_thread_exception(std::move(exception));
     };
 
     auto source_func = [&](size_t source_id, size_t partition_id) {
@@ -321,7 +350,7 @@ try
         }
         catch (...)
         {
-            record_thread_exception(std::current_exception());
+            handle_thread_exception(std::current_exception());
         }
     };
 
@@ -368,23 +397,45 @@ try
         }
         catch (...)
         {
-            record_thread_exception(std::current_exception());
+            handle_thread_exception(std::current_exception());
+        }
+    };
+
+    auto cancel_func = [&] {
+        std::random_device random_device;
+        std::default_random_engine random_engine(random_device());
+        std::uniform_int_distribution<size_t> random_delay_ms(1, 20);
+        const auto delay_ms = random_delay_ms(random_engine);
+        std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
+        if (delay_ms % 10 == 0)
+        {
+            cancelled.store(true);
+            cte->notifyCancel<true>(cancel_message);
         }
     };
 
     std::vector<std::thread> threads;
-    threads.reserve(EXPECTED_SOURCE_NUM * PARTITION_NUM + EXPECTED_SINK_NUM * PARTITION_NUM);
+    threads.reserve(EXPECTED_SOURCE_NUM * PARTITION_NUM + EXPECTED_SINK_NUM * PARTITION_NUM + 1);
     for (size_t source_id = 0; source_id < EXPECTED_SOURCE_NUM; ++source_id)
         for (size_t partition_id = 0; partition_id < PARTITION_NUM; ++partition_id)
             threads.emplace_back(source_func, source_id, partition_id);
     for (size_t sink_id = 0; sink_id < EXPECTED_SINK_NUM; ++sink_id)
         for (size_t partition_id = 0; partition_id < PARTITION_NUM; ++partition_id)
             threads.emplace_back(sink_func, sink_id, partition_id);
+    threads.emplace_back(cancel_func);
 
     for (auto & thread : threads)
         thread.join();
-    if (thread_exception != nullptr)
-        std::rethrow_exception(thread_exception);
+    if (unexpected_thread_exception != nullptr)
+        std::rethrow_exception(unexpected_thread_exception);
+
+    if (cancelled.load())
+    {
+        manager.releaseCTE(QUERY_ID_AND_CTE_ID);
+        readers.clear();
+        ASSERT_FALSE(manager.hasCTEForTest(QUERY_ID_AND_CTE_ID));
+        return;
+    }
 
     const size_t total_row_num = EXPECTED_SINK_NUM * row_num_per_sink;
     const size_t total_block_num = sink_blocks[0].size() + sink_blocks[1].size();

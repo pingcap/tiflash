@@ -80,7 +80,6 @@ CTEOpStatus CTEReader::waitForBlockAvailableForTest(size_t partition_idx)
         case CTEOpStatus::BLOCK_NOT_AVAILABLE:
             break;
         case CTEOpStatus::OK:
-        case CTEOpStatus::CANCELLED:
         case CTEOpStatus::END_OF_FILE:
             return status;
         default:

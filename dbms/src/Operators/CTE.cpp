@@ -57,8 +57,7 @@ void CTE::initCTESpillContextAndPartitionConfig(
 CTEOpStatus CTE::tryGetBlockAt(size_t cte_reader_id, size_t partition_id, Block & block)
 {
     std::shared_lock<std::shared_mutex> rw_lock(this->rw_lock);
-    if unlikely (this->is_cancelled)
-        return CTEOpStatus::CANCELLED;
+    this->throwIfCancelledNoLock();
 
     if unlikely (!this->areAllSinksRegistered<false>())
         return CTEOpStatus::SINK_NOT_REGISTERED;
@@ -89,8 +88,7 @@ template <bool for_test>
 CTEOpStatus CTE::pushBlock(size_t partition_id, const Block & block)
 {
     std::shared_lock<std::shared_mutex> rw_lock(this->rw_lock);
-    if unlikely (this->is_cancelled)
-        return CTEOpStatus::CANCELLED;
+    this->throwIfCancelledNoLock();
 
     if unlikely (block.rows() == 0)
         return CTEOpStatus::OK;
@@ -100,15 +98,14 @@ CTEOpStatus CTE::pushBlock(size_t partition_id, const Block & block)
     this->total_recv_rows.fetch_add(block.rows());
     // ------------------
 
-    return this->partitions[partition_id]->pushBlock<false>(block);
+    return this->partitions[partition_id]->pushBlock<for_test>(block);
 }
 
 CTEOpStatus CTE::getBlockFromDisk(size_t cte_reader_id, size_t partition_id, Block & block)
 {
     {
         std::shared_lock<std::shared_mutex> lock(this->rw_lock);
-        if unlikely (this->is_cancelled)
-            return CTEOpStatus::CANCELLED;
+        this->throwIfCancelledNoLock();
     }
 
     auto ret = this->partitions[partition_id]->getBlockFromDisk(cte_reader_id, block);
@@ -134,8 +131,7 @@ CTEOpStatus CTE::spillBlocks(size_t partition_id)
 {
     {
         std::shared_lock<std::shared_mutex> lock(this->rw_lock);
-        if unlikely (this->is_cancelled)
-            return CTEOpStatus::CANCELLED;
+        this->throwIfCancelledNoLock();
     }
 
     return this->partitions[partition_id]->spillBlocks(this->total_spilled_blocks, this->total_spilled_rows);

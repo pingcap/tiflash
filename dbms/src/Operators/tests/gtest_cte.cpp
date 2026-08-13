@@ -25,6 +25,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <exception>
 #include <memory>
 #include <mutex>
 #include <random>
@@ -128,6 +129,78 @@ try
 }
 CATCH
 
+TEST_F(TestCTE, Cancelled)
+try
+{
+    const String query_id_and_cte_id("pingcap");
+    const String cancel_message("cte cancelled for test");
+    CTEManager manager;
+    auto cte = manager.getOrCreateCTE(query_id_and_cte_id, PARTITION_NUM, EXPECTED_SINK_NUM, EXPECTED_SOURCE_NUM);
+    cte->initForTest();
+    cte->notifyCancel<true>(cancel_message);
+
+    const auto expect_cancelled = [&](auto && action) {
+        try
+        {
+            action();
+            FAIL() << "Expected a CTE cancellation exception";
+        }
+        catch (const Exception & e)
+        {
+            EXPECT_EQ(e.message(), cancel_message);
+        }
+    };
+
+    Block block;
+    expect_cancelled([&] { cte->tryGetBlockAt(0, 0, block); });
+    expect_cancelled([&] { cte->pushBlock<true>(0, block); });
+    expect_cancelled([&] { cte->getBlockFromDisk(0, 0, block); });
+    expect_cancelled([&] { cte->spillBlocks(0); });
+    expect_cancelled([&] { cte->checkBlockAvailable(0, 0); });
+}
+CATCH
+
+TEST_F(TestCTE, CancelledWhileWaiting)
+try
+{
+    const String query_id_and_cte_id("pingcap");
+    const String cancel_message("cte cancelled while waiting for block");
+    CTEManager manager;
+    auto cte = manager.getOrCreateCTE(query_id_and_cte_id, PARTITION_NUM, EXPECTED_SINK_NUM, EXPECTED_SOURCE_NUM);
+    cte->initForTest();
+    CTEReader reader(query_id_and_cte_id, &manager, cte);
+
+    std::atomic_bool waiter_started = false;
+    std::exception_ptr waiter_exception;
+    std::thread waiter([&] {
+        waiter_started.store(true, std::memory_order_release);
+        try
+        {
+            reader.waitForBlockAvailableForTest(0);
+        }
+        catch (...)
+        {
+            waiter_exception = std::current_exception();
+        }
+    });
+
+    while (!waiter_started.load(std::memory_order_acquire))
+        std::this_thread::yield();
+    cte->notifyCancel<true>(cancel_message);
+    waiter.join();
+
+    ASSERT_NE(waiter_exception, nullptr);
+    try
+    {
+        std::rethrow_exception(waiter_exception);
+    }
+    catch (const Exception & e)
+    {
+        EXPECT_EQ(e.message(), cancel_message);
+    }
+}
+CATCH
+
 void concurrentTest()
 {
     std::random_device r;
@@ -169,64 +242,112 @@ void concurrentTest()
 
     ASSERT_ANY_THROW(cte->getCTEReaderID());
 
-    size_t working_thread_num = EXPECTED_SINK_NUM * PARTITION_NUM + EXPECTED_SOURCE_NUM * PARTITION_NUM;
-    size_t thread_num = working_thread_num + 1;
+    std::atomic_bool thread_failed = false;
+    std::atomic_bool cancelled = false;
+    std::mutex exception_mu;
+    std::exception_ptr unexpected_thread_exception;
+    const String cancel_message = "cte concurrent test cancelled";
+
+    auto record_unexpected_thread_exception = [&](std::exception_ptr exception) {
+        {
+            std::lock_guard lock(exception_mu);
+            if (unexpected_thread_exception == nullptr)
+                unexpected_thread_exception = std::move(exception);
+        }
+        thread_failed.store(true);
+        cte->notifyCancel<true>("cte test thread failed");
+    };
+
+    auto is_expected_cancel_exception = [&](const std::exception_ptr & exception) {
+        if (!cancelled.load())
+            return false;
+
+        try
+        {
+            std::rethrow_exception(exception);
+        }
+        catch (const Exception & e)
+        {
+            return e.message() == cancel_message;
+        }
+        catch (...)
+        {
+            return false;
+        }
+    };
+
+    auto handle_thread_exception = [&](std::exception_ptr exception) {
+        if (is_expected_cancel_exception(exception))
+            return;
+
+        record_unexpected_thread_exception(std::move(exception));
+    };
+
+    size_t thread_num = EXPECTED_SINK_NUM * PARTITION_NUM + EXPECTED_SOURCE_NUM * PARTITION_NUM + 1;
     std::vector<std::thread> threads;
     threads.reserve(thread_num);
 
     auto source_func = [&](size_t source_idx, size_t partition_idx) {
-        auto * reader = readers[source_idx].get();
-        Block block;
-        bool exit = false;
-        std::random_device r;
-        std::default_random_engine dre(r());
-        std::uniform_int_distribution<size_t> di1(1, 10);
-        std::uniform_int_distribution<size_t> di2(10, 50);
-        while (!exit)
+        try
         {
-            if unlikely (di1(dre) == 5)
-                std::this_thread::sleep_for(std::chrono::microseconds(di2(dre)));
+            auto * reader = readers[source_idx].get();
+            Block block;
+            bool exit = false;
+            std::random_device r;
+            std::default_random_engine dre(r());
+            std::uniform_int_distribution<size_t> di1(1, 10);
+            std::uniform_int_distribution<size_t> di2(10, 50);
+            while (!exit && !thread_failed.load())
+            {
+                if unlikely (di1(dre) == 5)
+                    std::this_thread::sleep_for(std::chrono::microseconds(di2(dre)));
 
-            auto status = reader->fetchNextBlock(partition_idx, block);
-            switch (status)
-            {
-            case CTEOpStatus::CANCELLED:
-            case CTEOpStatus::END_OF_FILE:
-            {
-                exit = true;
-                break;
-            }
-            case CTEOpStatus::SINK_NOT_REGISTERED:
-            {
-                while (!reader->areAllSinksRegistered())
-                    std::this_thread::sleep_for(std::chrono::microseconds(100));
-                break;
-            }
-            case CTEOpStatus::BLOCK_NOT_AVAILABLE:
-            {
-                auto status = reader->waitForBlockAvailableForTest(partition_idx);
+                auto status = reader->fetchNextBlock(partition_idx, block);
                 switch (status)
                 {
                 case CTEOpStatus::CANCELLED:
                 case CTEOpStatus::END_OF_FILE:
+                {
                     exit = true;
-                case CTEOpStatus::OK:
                     break;
+                }
+                case CTEOpStatus::SINK_NOT_REGISTERED:
+                {
+                    while (!reader->areAllSinksRegistered() && !cancelled.load() && !thread_failed.load())
+                        std::this_thread::sleep_for(std::chrono::microseconds(100));
+                    break;
+                }
+                case CTEOpStatus::BLOCK_NOT_AVAILABLE:
+                {
+                    auto wait_status = reader->waitForBlockAvailableForTest(partition_idx);
+                    switch (wait_status)
+                    {
+                    case CTEOpStatus::CANCELLED:
+                    case CTEOpStatus::END_OF_FILE:
+                        exit = true;
+                    case CTEOpStatus::OK:
+                        break;
+                    default:
+                        throw Exception("Should not reach here");
+                    }
+                    break;
+                }
+                case CTEOpStatus::OK:
+                {
+                    std::lock_guard<std::mutex> lock(*(source_mus[source_idx]));
+                    received_blocks[source_idx].push_back(block);
+                    break;
+                }
                 default:
                     throw Exception("Should not reach here");
                 }
-                break;
-            }
-            case CTEOpStatus::OK:
-            {
-                std::lock_guard<std::mutex> lock(*(source_mus[source_idx]));
-                received_blocks[source_idx].push_back(block);
-                break;
-            }
-            default:
-                throw Exception("Should not reach here");
             }
         }
+        catch (...)
+        {
+            handle_thread_exception(std::current_exception());
+        }
+
         if (partition_idx == 0)
             cte->sourceExit();
     };
@@ -235,48 +356,55 @@ void concurrentTest()
     exit_num_for_each_partition.resize(EXPECTED_SINK_NUM, 0);
 
     auto sink_func = [&](size_t sink_idx, size_t partition_idx) {
-        std::random_device r;
-        std::default_random_engine dre(r());
-        std::uniform_int_distribution<size_t> di1(1, 10);
-        std::uniform_int_distribution<size_t> di2(10, 50);
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(di2(dre)));
-
-        if (partition_idx == 0)
-            cte->registerSink();
-
-        while (true)
+        try
         {
-            size_t next_sink_idx;
-            {
-                std::lock_guard<std::mutex> lock(*(sink_mus[sink_idx]));
-                next_sink_idx = next_sink_idxs[sink_idx]++;
-                if unlikely (next_sink_idx >= sink_blocks[sink_idx].size())
-                {
-                    ++exit_num_for_each_partition[sink_idx];
-                    if (exit_num_for_each_partition[sink_idx] == PARTITION_NUM)
-                        cte->sinkExit<true>();
-                    break;
-                }
-            }
+            std::random_device r;
+            std::default_random_engine dre(r());
+            std::uniform_int_distribution<size_t> di1(1, 10);
+            std::uniform_int_distribution<size_t> di2(10, 50);
 
-            if unlikely (di1(dre) == 5)
-                std::this_thread::sleep_for(std::chrono::microseconds(di2(dre)));
-            cte->pushBlock<true>(partition_idx, sink_blocks[sink_idx][next_sink_idx]);
+            std::this_thread::sleep_for(std::chrono::milliseconds(di2(dre)));
+
+            if (partition_idx == 0)
+                cte->registerSink();
+
+            while (!thread_failed.load())
+            {
+                size_t next_sink_idx;
+                {
+                    std::lock_guard<std::mutex> lock(*(sink_mus[sink_idx]));
+                    next_sink_idx = next_sink_idxs[sink_idx]++;
+                    if unlikely (next_sink_idx >= sink_blocks[sink_idx].size())
+                        break;
+                }
+
+                if unlikely (di1(dre) == 5)
+                    std::this_thread::sleep_for(std::chrono::microseconds(di2(dre)));
+                if (cte->pushBlock<true>(partition_idx, sink_blocks[sink_idx][next_sink_idx]) == CTEOpStatus::CANCELLED)
+                    break;
+            }
         }
+        catch (...)
+        {
+            handle_thread_exception(std::current_exception());
+        }
+
+        std::lock_guard<std::mutex> lock(*(sink_mus[sink_idx]));
+        ++exit_num_for_each_partition[sink_idx];
+        if (exit_num_for_each_partition[sink_idx] == PARTITION_NUM)
+            cte->sinkExit<true>();
     };
 
-    std::atomic_bool cancelled = false;
-    auto cancel_func = [&]() {
+    auto cancel_func = [&] {
         std::random_device r;
         std::default_random_engine dre(r());
         std::uniform_int_distribution<size_t> di(1, 200);
-        auto random_val = di(dre);
+        const auto random_val = di(dre);
         std::this_thread::sleep_for(std::chrono::milliseconds(random_val));
         if (random_val % 10 == 0)
         {
-            cancelled.exchange(true);
-            cte->notifyCancel<true>("");
+            cancelled.store(true);
+            cte->notifyCancel<true>(cancel_message);
         }
     };
 
@@ -292,6 +420,9 @@ void concurrentTest()
 
     for (auto & thd : threads)
         thd.join();
+
+    if (unexpected_thread_exception != nullptr)
+        std::rethrow_exception(unexpected_thread_exception);
 
     ASSERT_TRUE(cte->allExit());
 

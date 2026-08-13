@@ -264,6 +264,13 @@ public:
 #endif
 
 private:
+    /// The caller must hold rw_lock in shared or exclusive mode.
+    void throwIfCancelledNoLock() const
+    {
+        if unlikely (this->is_cancelled)
+            throw Exception(this->err_msg);
+    }
+
     template <bool need_lock>
     CTEOpStatus checkBlockAvailableImpl(size_t cte_reader_id, size_t partition_id)
     {
@@ -276,8 +283,7 @@ private:
             partition_lock.lock();
         }
 
-        if unlikely (this->is_cancelled)
-            return CTEOpStatus::CANCELLED;
+        this->throwIfCancelledNoLock();
 
         if (this->partitions[partition_id]->isBlockAvailableInDiskNoLock(cte_reader_id)
             || this->partitions[partition_id]->isBlockAvailableInMemoryNoLock(cte_reader_id))
