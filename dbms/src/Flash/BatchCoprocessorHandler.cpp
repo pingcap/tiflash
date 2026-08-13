@@ -55,8 +55,9 @@ grpc::Status BatchCoprocessorHandler::execute()
 
     try
     {
+        bool is_tici = cop_request->table_shard_infos_size() != 0;
         RUNTIME_CHECK_MSG(
-            !cop_context.db_context.getSharedContextDisagg()->isDisaggregatedComputeMode(),
+            !cop_context.db_context.getSharedContextDisagg()->isDisaggregatedComputeMode() || is_tici,
             "cannot run cop or batchCop request on tiflash_compute node");
 
         switch (cop_request->tp())
@@ -96,6 +97,7 @@ grpc::Status BatchCoprocessorHandler::execute()
             DAGContext dag_context(
                 dag_request,
                 std::move(tables_regions_info),
+                QueryShardInfos::create(cop_request->table_shard_infos()),
                 RequestUtils::deriveKeyspaceID(cop_request->context()),
                 cop_context.db_context.getClientInfo().current_address.toString(),
                 DAGRequestKind::BatchCop,

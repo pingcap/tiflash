@@ -104,6 +104,7 @@
 #include <common/ErrorHandlers.h>
 #include <common/config_common.h>
 #include <common/logger_useful.h>
+#include <tici-search-lib/src/lib.rs.h>
 
 #include <ext/scope_guard.h>
 #include <magic_enum.hpp>
@@ -1162,6 +1163,7 @@ try
         wn_ps->waitUntilInitedFromRemoteStore();
     }
 
+
     {
         TCPServersHolder tcp_http_servers_holder(
             *this,
@@ -1316,6 +1318,18 @@ try
         });
 
         proxy_machine.runKVStore(tmt_context);
+
+        auto tici_reader_addr = config().getString("tici.reader-node.addr", "");
+        auto tici_reader_port = config().getInt("tici.reader-node.port", 0);
+        if (!tici_reader_addr.empty() || tici_reader_port > 0)
+        {
+            Stopwatch watch;
+            auto service_addr = config().getString("flash.service_addr");
+            auto pd_addr = config().getString("raft.pd_addr");
+            LOG_INFO(log, "TiCI starting, addr={}, port={}", tici_reader_addr, tici_reader_port);
+            start_reader_server(config_path, tici_reader_addr, service_addr, pd_addr);
+            LOG_INFO(log, "TiCI started, cost={}s", watch.elapsedSeconds());
+        }
 
         try
         {

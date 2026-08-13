@@ -98,7 +98,8 @@ void ExecutorStatisticsCollector::initialize(DAGContext * dag_context_)
                 WindowStatistics,
                 ExpandStatistics,
                 CTESinkStatistics,
-                CTESourceStatistics>(&executor))
+                CTESourceStatistics,
+                TiCIStatistics>(&executor))
         {
             throw TiFlashException(
                 fmt::format("Unknown executor type, executor_id: {}", executor.executor_id()),
@@ -250,6 +251,7 @@ void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectRespon
                 }
             }
         }
+        return;
         RUNTIME_CHECK_MSG(target_executor_summary, "cannot find executor summary to put ru consumption");
         RUNTIME_CHECK_MSG(
             local_ru->SerializeToString(target_executor_summary->mutable_ru_consumption()),

@@ -103,7 +103,8 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_cte_source, {"type", "cte_source"}),                                                                                   \
       F(type_window, {"type", "window"}),                                                                                           \
       F(type_window_sort, {"type", "window_sort"}),                                                                                 \
-      F(type_expand, {"type", "expand"}))                                                                                           \
+      F(type_expand, {"type", "expand"}),                                                                                           \
+      F(type_tici, {"type", "tici_scan"}))                                                                                          \
     M(tiflash_memory_exceed_quota_count, "Total number of cases where memory exceeds quota", Counter)                               \
     M(tiflash_coprocessor_request_duration_seconds,                                                                                 \
       "Bucketed histogram of request duration",                                                                                     \
