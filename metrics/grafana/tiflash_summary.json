@@ -13033,7 +13033,7 @@
           "thresholds": [],
           "timeFrom": null,
           "timeShift": null,
-          "title": "Columnar Prefetch Cache Hit Duration",
+          "title": "Columnar Prefetch Cache Hit Ratio",
           "tooltip": {
             "msResolution": true,
             "shared": true,
@@ -13052,7 +13052,7 @@
           "yaxes": [
             {
               "decimals": null,
-              "format": "s",
+              "format": "percent",
               "label": null,
               "logBase": 1,
               "max": null,
