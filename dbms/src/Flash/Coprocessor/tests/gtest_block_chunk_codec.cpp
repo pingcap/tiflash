@@ -451,4 +451,37 @@ try
     }
 }
 CATCH
+
+TEST(CHBlockChunkCodecTest, DecodeAndSquashMixedStringFormats)
+try
+{
+    static constexpr auto compression_mode = CompressionMethod::NONE;
+    static const auto legacy_type_names = std::vector{DataTypeString::LegacyName, DataTypeString::NullableLegacyName};
+    static const auto v2_type_names = std::vector{DataTypeString::NameV2, DataTypeString::NullableNameV2};
+    auto legacy_block = prepareBlockWithString(4, legacy_type_names);
+    auto v2_block = prepareBlockWithString(5, v2_type_names);
+    auto legacy_chunk
+        = CHBlockChunkCodecV1{legacy_block.cloneEmpty(), MPPDataPacketV2}.encode(legacy_block, compression_mode);
+    auto v2_chunk = CHBlockChunkCodecV1{v2_block.cloneEmpty(), MPPDataPacketV2}.encode(v2_block, compression_mode);
+
+    CHBlockChunkDecodeAndSquash decoder(v2_block.cloneEmpty(), 8);
+    ASSERT_FALSE(decoder.decodeAndSquashV1(legacy_chunk));
+    auto result = decoder.decodeAndSquashV1(v2_chunk);
+    ASSERT_TRUE(result);
+    ASSERT_EQ(result->rows(), legacy_block.rows() + v2_block.rows());
+    ASSERT_EQ(result->getByPosition(0).type->getName(), DataTypeString::NameV2);
+    ASSERT_EQ(result->getByPosition(1).type->getName(), DataTypeString::NullableNameV2);
+    for (size_t i = 0; i < result->columns(); ++i)
+    {
+        for (size_t row = 0; row < legacy_block.rows(); ++row)
+            ASSERT_EQ(
+                legacy_block.getByPosition(i).column->operator[](row),
+                result->getByPosition(i).column->operator[](row));
+        for (size_t row = 0; row < v2_block.rows(); ++row)
+            ASSERT_EQ(
+                v2_block.getByPosition(i).column->operator[](row),
+                result->getByPosition(i).column->operator[](legacy_block.rows() + row));
+    }
+}
+CATCH
 } // namespace DB::tests
