@@ -28,6 +28,8 @@
 #include <Interpreters/WindowDescription.h>
 #include <Storages/KVStore/TMTStorages.h>
 
+#include <unordered_set>
+
 namespace DB
 {
 class Set;
@@ -318,10 +320,16 @@ private:
         const std::vector<tipb::FieldType> & require_schema,
         const std::vector<Int32> & output_offsets) const;
 
+    void recordJsonValidGuards(const tipb::Expr & expr);
+    bool isJsonValidGuarded(const tipb::Expr & expr) const;
+
     // all columns from table scan
     NamesAndTypes source_columns;
     DAGPreparedSets prepared_sets;
     const Context & context;
+
+    bool building_filter_conditions = false;
+    std::unordered_set<String> json_valid_guarded_exprs;
 
     friend class DAGExpressionAnalyzerHelper;
 };
