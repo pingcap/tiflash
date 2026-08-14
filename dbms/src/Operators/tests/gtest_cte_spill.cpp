@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Columns/ColumnVector.h>
+#include <Common/SyncPoint/Ctl.h>
 #include <Core/SpillConfig.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/DAGContext.h>
@@ -35,6 +36,7 @@
 #include <atomic>
 #include <chrono>
 #include <exception>
+#include <future>
 #include <memory>
 #include <mutex>
 #include <random>
@@ -186,6 +188,14 @@ void assertBlocksContainRange(const Blocks & blocks, size_t start_i, size_t row_
         ASSERT_EQ(received_results[i], start_i + i);
 }
 
+void assertBlockContainsRange(const Block & block, size_t start_i, size_t row_num)
+{
+    ASSERT_EQ(block.rows(), row_num);
+    const auto * col = static_cast<const ColumnVector<Int32> *>(block.getByPosition(0).column.get());
+    for (size_t i = 0; i < row_num; ++i)
+        ASSERT_EQ(col->get64(i), start_i + i);
+}
+
 [[noreturn]] void throwUnexpectedStatus(CTEOpStatus status)
 {
     throw Exception(fmt::format("Unexpected CTEOpStatus: {}", static_cast<Int32>(status)));
@@ -255,6 +265,53 @@ try
     ASSERT_EQ(sink.write({}), OperatorStatus::IO_OUT);
     ASSERT_EQ(sink.executeIO(), OperatorStatus::FINISHED);
     ASSERT_EQ(cte->total_spilled_blocks.load(), 3);
+}
+CATCH
+
+TEST_F(TestCTESpill, MergeTmpBlocksAfterSpill)
+try
+{
+    constexpr size_t row_num = 3 * MAX_BLOCK_ROW_NUM;
+    auto sink_blocks = generateSpillTestBlocks(0, row_num);
+
+    CTEManager manager;
+    auto cte = createCTE(manager, PARTITION_NUM * BLOCK_BYTES, sink_blocks.front().cloneEmpty());
+    auto readers = createReaders(manager, cte);
+    for (size_t i = 0; i < EXPECTED_SINK_NUM; ++i)
+        cte->registerSink();
+
+    ASSERT_EQ(cte->pushBlock<true>(/*partition_id=*/0, sink_blocks[0]), CTEOpStatus::NEED_SPILL);
+
+    auto sync_point = SyncPointCtl::enableInScope("before_CTEPartition::spillBlocks_merge_tmp_blocks");
+    auto spill_future = std::async(std::launch::async, [&] { return cte->spillBlocks(/*partition_id=*/0); });
+    sync_point.waitAndPause();
+
+    const auto push_during_spill_status = cte->pushBlock<true>(/*partition_id=*/0, sink_blocks[1]);
+    sync_point.next();
+    const auto spill_status = spill_future.get();
+
+    ASSERT_EQ(push_during_spill_status, CTEOpStatus::WAIT_SPILL);
+    ASSERT_EQ(spill_status, CTEOpStatus::OK);
+    ASSERT_EQ(cte->total_spilled_blocks.load(), 1);
+
+    const auto & partition = cte->getPartitionForTest(/*partition_idx=*/0);
+    ASSERT_TRUE(partition->tmp_blocks.empty());
+    ASSERT_EQ(partition->memory_usage.load(), sink_blocks[1].bytes());
+
+    ASSERT_EQ(cte->pushBlock<true>(/*partition_id=*/0, sink_blocks[2]), CTEOpStatus::NEED_SPILL);
+
+    Block received_block;
+    ASSERT_EQ(readers[0]->fetchNextBlock(/*source_id=*/0, received_block), CTEOpStatus::IO_IN);
+    ASSERT_EQ(readers[0]->fetchBlockFromDisk(/*source_id=*/0, received_block), CTEOpStatus::OK);
+    assertBlockContainsRange(received_block, /*start_i=*/0, MAX_BLOCK_ROW_NUM);
+
+    received_block.clear();
+    ASSERT_EQ(readers[0]->fetchNextBlock(/*source_id=*/0, received_block), CTEOpStatus::OK);
+    assertBlockContainsRange(received_block, /*start_i=*/MAX_BLOCK_ROW_NUM, MAX_BLOCK_ROW_NUM);
+
+    received_block.clear();
+    ASSERT_EQ(readers[0]->fetchNextBlock(/*source_id=*/0, received_block), CTEOpStatus::OK);
+    assertBlockContainsRange(received_block, /*start_i=*/2 * MAX_BLOCK_ROW_NUM, MAX_BLOCK_ROW_NUM);
 }
 CATCH
 

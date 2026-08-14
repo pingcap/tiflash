@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Operators/CTEPartition.h>
 
 #include <atomic>
@@ -246,7 +247,9 @@ CTEOpStatus CTEPartition::spillBlocks(std::atomic_size_t & block_num, std::atomi
     this->blocks.clear();
     this->memory_usage.store(0);
 
+    SYNC_FOR("before_CTEPartition::spillBlocks_merge_tmp_blocks");
     std::lock_guard<std::mutex> aux_lock(*(this->aux_lock));
+    this->putTmpBlocksIntoBlocksNoLock();
     this->status = CTEPartitionStatus::NORMAL;
 
     // Many tasks may be waiting for the finish of spill
