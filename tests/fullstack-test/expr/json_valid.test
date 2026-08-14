@@ -28,5 +28,19 @@ mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engi
 |                    1 |                      0 |                      0 |
 +----------------------+------------------------+------------------------+
 
+mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; set tidb_opt_enable_late_materialization=0; select col_string->>'$.a' as extracted from test.t where json_valid(col_string) and col_string->>'$.a' is not null order by extracted;
++-----------+
+| extracted |
++-----------+
+| b         |
++-----------+
+
+mysql> set tidb_allow_mpp=1;set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; set tidb_opt_enable_late_materialization=1; select col_string->>'$.a' as extracted from test.t where json_valid(col_string) and col_string->>'$.a' is not null order by extracted;
++-----------+
+| extracted |
++-----------+
+| b         |
++-----------+
+
 # Clean up.
 mysql> drop table if exists test.t;
