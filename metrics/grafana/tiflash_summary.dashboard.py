@@ -1855,9 +1855,11 @@ def ColumnarStorage() -> RowPanel:
                 instance_selector=PROXY_LABEL_SELECTORS,
             ),
             duration_panel(
-                "Columnar Prefetch Cache Hit Duration",
+                "Columnar Prefetch Cache Hit Ratio",
                 "tiflash_proxy_kv_engine_columnar_prefetch_cache_hit",
                 instance_selector=PROXY_LABEL_SELECTORS,
+                # Observe hit_ratio*100 with linear percent buckets (not duration).
+                unit="percent",
             ),
         ]
     )
