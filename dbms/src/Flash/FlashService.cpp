@@ -533,7 +533,7 @@ grpc::Status FlashService::IsAlive(
         return check_result;
 
     auto & tmt_context = context->getTMTContext();
-    response->set_available(tmt_context.checkRunning());
+    response->set_available(tmt_context.checkRunning() && tmt_context.getMPPTaskManager()->isAvailable());
     response->set_mpp_version(DB::GetMppVersion());
     return grpc::Status::OK;
 }

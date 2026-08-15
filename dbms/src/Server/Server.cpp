@@ -1920,6 +1920,12 @@ try
         LOG_INFO(log, "Start to wait for terminal signal");
         waitForTerminationRequest();
 
+        // Note: `waitAllMPPTasksFinish` must be called before stopping the proxy.
+        // Otherwise, read index requests may fail, which can prevent TiFlash from shutting down gracefully.
+        LOG_INFO(log, "Set unavailable for MPPTask");
+        tmt_context.getMPPTaskManager()->setUnavailable();
+        tmt_context.getMPPTaskManager()->getMPPTaskMonitor()->waitAllMPPTasksFinish(global_context);
+
         {
             // Set limiters stopping and wakeup threads in waitting queue.
             global_context->getIORateLimiter().setStop();
