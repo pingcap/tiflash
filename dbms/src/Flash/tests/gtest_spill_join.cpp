@@ -267,7 +267,15 @@ try
     context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(10000)));
 
     WRAP_FOR_SPILL_TEST_BEGIN
-    ASSERT_COLUMNS_EQ_UR(empty_result, executeStreams(request, 10));
+    DAGContext dag_context(*request, "empty_hash_after_spill", 10);
+    ASSERT_COLUMNS_EQ_UR(empty_result, executeStreams(&dag_context));
+
+    const auto & join_execute_info = dag_context.getJoinExecuteInfoMap().at("Join_2");
+    ASSERT_TRUE(join_execute_info.join_profile_info->is_spilled);
+
+    // A spilled hash join must not skip its probe side even when no build row enters the hash table.
+    Expect expect{{"table_scan_0", {3, 10}}, {"table_scan_1", {8192, 10}}, {"Join_2", {0, 10}}};
+    testForExecutionSummary(request, expect);
     WRAP_FOR_SPILL_TEST_END
 }
 CATCH
