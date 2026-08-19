@@ -1,500 +1,533 @@
-# TiFlash NullEQ Join Key（`<=>` / `tidbNullEQ`）设计文档
+# TiFlash NullEQ Join Key (`<=>` / `tidbNullEQ`) Design
 
-## 背景
+## Background
 
-TiFlash 当前 Hash Join 的默认等值语义是：
+The default equality semantics of TiFlash hash join are currently:
 
-- `NULL` 不参与等值匹配
-- build 侧含 `NULL` key 的行不会进入 hash map
-- probe 侧含 `NULL` key 的行会被直接当作 not matched
+- `NULL` does not participate in equality matching.
+- Build-side rows with a `NULL` key are not inserted into the hash map.
+- Probe-side rows with a `NULL` key are treated directly as not matched.
 
-这与 Null-safe equal（`<=>` / `tidbNullEQ`）要求的语义不同：
+This differs from the semantics required by null-safe equality (`<=>` / `tidbNullEQ`):
 
-- `NULL <=> NULL` 为 `true`
-- `NULL <=> non-NULL` 为 `false`
-- `non-NULL <=> non-NULL` 与普通 `=` 一致
+- `NULL <=> NULL` is `true`.
+- `NULL <=> non-NULL` is `false`.
+- `non-NULL <=> non-NULL` has the same semantics as ordinary `=`.
 
-本设计文档讨论的是：在 TiFlash 已经支持 `FULL OUTER JOIN` 的前提下，如何为 hash join 增加 **join key 粒度的 NullEQ 语义**。
+This document discusses how to add **join-key-level NullEQ semantics** to hash join,
+assuming that TiFlash already supports `FULL OUTER JOIN`.
 
-## 目标
+## Goals
 
-1. TiFlash 的 Hash Join 在 **join key** 使用 NullEQ 语义时结果正确。
-2. 支持 **key 粒度混合语义**：
-   - 同一个 join 中允许部分 key 走 `=`
-   - 允许部分 key 走 `<=>`
-3. 未下发 NullEQ 标记时，保持现有行为不变。
-4. 与已经支持的 `FULL OUTER JOIN` 语义兼容，不引入 `NULL <=> NULL` 相关的 outer join 错误结果。
+1. Make TiFlash hash join produce correct results when a **join key** uses NullEQ semantics.
+2. Support **mixed semantics at key granularity**:
+   - Some keys in the same join may use `=`.
+   - Other keys may use `<=>`.
+3. Preserve the existing behavior when no NullEQ flags are sent.
+4. Remain compatible with the existing `FULL OUTER JOIN` semantics and avoid incorrect
+   results related to `NULL <=> NULL` matching.
 
-## 非目标
+## Non-goals
 
-1. 不把 `other_conditions` 中的 `<=>` 纳入本文新增的 join-key NullEQ 语义范围；若 planner 下发了这类表达式，按普通 other condition 处理。
-2. MVP 不追求最优性能，允许为了正确性强制走 `serialized`。
-3. 不扩大 NullAware join（`NOT IN` 家族）的语义覆盖范围；MVP 阶段建议 fail-fast。
-4. 不在本轮实现 cartesian full join 与 NullEQ 的组合。
+1. `<=>` in `other_conditions` is outside the new join-key NullEQ semantics covered by
+   this document. If the planner sends such an expression, it is handled as an ordinary
+   other condition.
+2. The MVP does not pursue optimal performance and may force the `serialized` method for
+   correctness.
+3. The MVP does not expand the semantic coverage of NullAware joins (`NOT IN` family).
+   Fail-fast is recommended at the MVP stage.
+4. The combination of cartesian full join and NullEQ is not implemented in this iteration.
 
-## 作用范围
+## Scope
 
-本轮 scope 限定为：
+The scope of this iteration is limited to:
 
-- hash join
-- `left_join_keys/right_join_keys` 非空
-- NullEQ 只出现在 join key 上
+- Hash join.
+- Non-empty `left_join_keys/right_join_keys`.
+- NullEQ appearing only on join keys.
 
-不包含：
+The following cases are not included:
 
-- cartesian join
-- 仅通过 `other_conditions` 表达 NullEQ join 语义的计划形态
-- planner 把 `<=>` 重写成其它表达式后再由 TiFlash 反推语义
+- Cartesian join.
+- Plan shapes where NullEQ join semantics are expressed only through `other_conditions`.
+- Plans where the planner rewrites `<=>` into another expression and expects TiFlash to
+  infer the original semantics.
 
-## 输入契约
+## Input Contract
 
-### tipb 协议
+### tipb Protocol
 
-建议在 `tipb::Join` 中增加：
+The recommended change is to add the following field to `tipb::Join`:
 
 - `repeated bool is_null_eq = ...;`
 
-语义如下：
+The semantics are:
 
-- `is_null_eq[i] = false`：第 `i` 对 join key 使用普通 `=`
-- `is_null_eq[i] = true`：第 `i` 对 join key 使用 `<=>`
+- `is_null_eq[i] = false`: the `i`-th join-key pair uses ordinary `=`.
+- `is_null_eq[i] = true`: the `i`-th join-key pair uses `<=>`.
 
-长度约束：
+Length constraints:
 
-- `is_null_eq_size == 0`：视为全 `false`，兼容旧版本
-- 否则必须满足：
-  - `is_null_eq_size == left_join_keys_size`
-  - `is_null_eq_size == right_join_keys_size`
+- `is_null_eq_size == 0`: treat all entries as `false` for backward compatibility.
+- Otherwise, all of the following must hold:
+  - `is_null_eq_size == left_join_keys_size`.
+  - `is_null_eq_size == right_join_keys_size`.
 
-### Join key 表达形式
+### Join-Key Representation
 
-MVP 假设 join key 由 planner 下发为列引用：
+The MVP assumes that the planner sends join keys as column references:
 
-- `left_join_keys[i]` 与 `right_join_keys[i]` 是一一对齐的 key pair
-- TiFlash 如需在执行层插入 cast 做类型对齐，不改变 key 的顺序和数量
-- `is_null_eq[i]` 始终按 key pair index 对齐，而不是按 build/probe 角色对齐
+- `left_join_keys[i]` and `right_join_keys[i]` are aligned key pairs.
+- TiFlash may insert casts in the execution layer to align types, but must not change the
+  order or number of keys.
+- `is_null_eq[i]` is always aligned by key-pair index, not by the build/probe role.
 
-### 语义边界
+### Semantic Boundary
 
-NullEQ 语义只通过 `is_null_eq[]` 表达：
+NullEQ semantics are expressed only through `is_null_eq[]`:
 
-- 若 `<=>` 出现在 `other_conditions` 中，则按普通布尔表达式处理；本文不要求执行层从 `other_conditions` 里的 `<=>` 反推出“这是 join key NullEQ”
-- 不让执行层从通用表达式里反推某个 key 是否是 NullEQ
+- If `<=>` appears in `other_conditions`, it is handled as an ordinary boolean expression.
+  The execution layer is not required to infer join-key NullEQ from `<=>` inside
+  `other_conditions`.
+- The execution layer must not infer whether a key is NullEQ from a generic expression.
 
-### 与 NullAware join 的关系
+### Relationship with NullAware Join
 
-`is_null_aware_semi_join` 与 NullEQ 是两套不同语义：
+`is_null_aware_semi_join` and NullEQ represent different semantics:
 
-- NullAware join 关注 `NOT IN` 的三值逻辑
-- NullEQ 关注 join key 的比较语义
+- NullAware join handles three-valued logic for `NOT IN`.
+- NullEQ handles comparison semantics for join keys.
 
-MVP 建议：
+The MVP recommends the following behavior:
 
-- 若 `is_null_aware_semi_join=true` 且存在任意 `is_null_eq[i]=true`，直接 fail-fast
+- If `is_null_aware_semi_join=true` and any `is_null_eq[i]=true`, fail fast.
 
-原因是这两条路径都对“NULL key 行怎么处理”有强假设，混用很容易产生 silent wrong result。
+Both paths make strong assumptions about how rows with `NULL` keys are handled, so mixing
+them can easily produce silent wrong results.
 
-## 当前实现的关键假设
+## Key Assumptions in the Existing Implementation
 
-当前 Join 框架里，与 NullEQ 直接冲突的假设主要有四类。
+There are four main assumptions in the current join framework that directly conflict with
+NullEQ.
 
-### 1. key-NULL 会被提前过滤
+### 1. Key-NULL Rows Are Filtered Early
 
-当前 build/probe 都会把 nullable key 做两件事：
+The current build and probe paths process nullable keys in two steps:
 
-1. 把 `ColumnNullable` 替换成 nested column
-2. 把 key 中的 `NULL` 行写入 `null_map`
+1. Replace `ColumnNullable` with its nested column.
+2. Write rows containing `NULL` keys into `null_map`.
 
-对应路径：
+The relevant paths are:
 
-- build：`Join::insertFromBlockInternal()`
-- probe：`ProbeProcessInfo::prepareForHashProbe()`
+- Build: `Join::insertFromBlockInternal()`.
+- Probe: `ProbeProcessInfo::prepareForHashProbe()`.
 
-这意味着：
+This means:
 
-- build 侧 `NULL` key 行默认不入 map
-- probe 侧 `NULL` key 行默认不 probe map
+- Build-side rows with `NULL` keys are not inserted into the map by default.
+- Probe-side rows with `NULL` keys do not probe the map by default.
 
-这与 NullEQ 的 `NULL <=> NULL` 可以匹配直接冲突。
+That directly conflicts with the fact that `NULL <=> NULL` must be matchable.
 
-### 2. side-condition 与 key-NULL 共用一张 null_map
+### 2. Side Conditions and Key-NULL Rows Share One null_map
 
-当前 `recordFilteredRows()` 会复用同一张 `null_map`，把 side-condition 过滤结果与 “key 是否为 NULL” 混到一起。
+`recordFilteredRows()` currently reuses the same `null_map` to combine side-condition
+results with the information about whether a key is `NULL`.
 
-对 NullEQ 来说，问题不在于执行链路必须长期维护两张独立的 map，而在于：
+The problem for NullEQ is not that the execution path must permanently maintain two
+independent maps. The problem is that these two sources must be distinguished when the
+final filter result is generated:
 
-- 普通 `=` key 的 `NULL` 过滤
-- left/right side-condition 过滤
+- A `NULL` in an ordinary `=` key must be written to the final filter result.
+- A `NULL` in a NullEQ key must not be written to the final filter result.
+- Side-condition failures must always be written to the final filter result.
 
-这两类来源在**生成过滤结果**时必须区分，因为：
+A more accurate approach is:
 
-- 对普通 `=` key，应把 key 的 `NULL` 写入最终过滤结果
-- 对 NullEQ key，不应把 key 的 `NULL` 写入最终过滤结果
-- side-condition 的过滤结果则始终需要写入最终过滤结果
+- Decide at key granularity which `NULL` values should participate in filtering.
+- Merge those results with side-condition results into one unified `row_filter_map`.
 
-因此更准确的做法是：
+Therefore, the final implementation may still maintain only one map indicating whether a
+row should be skipped, but it must not continue using the current approach of writing all
+key-NULL rows into `null_map` before adding side-condition results.
 
-- 先按 key 粒度决定哪些 `NULL` 需要参与过滤
-- 再与 side-condition 的过滤结果合并成一张统一的 `row_filter_map`
+### 3. RowsNotInsertToMap and Scan-After-Probe Treat NULL Keys as Naturally Unmatched
 
-也就是说，最终可以只有一张“这一行是否跳过 insert/probe”的 map，但不能继续沿用当前这种“先无差别把所有 key-NULL 都写进 null_map，再复用它叠加 side-condition”的实现方式。
+For join kinds that need to preserve special build-side rows, such as right/full/right
+semi/right anti/null-aware joins, the current implementation records rows not inserted
+into the map in `RowsNotInsertToMap`, then outputs them during scan-after-probe.
 
-### 3. RowsNotInsertToMap / scan-after-probe 默认把 NULL key 当作天然 unmatched
+This is valid under ordinary `=` semantics because rows with `NULL` keys do not match.
 
-对于 right/full/right semi/right anti/null-aware 这些需要保留 build 侧特殊行的 join kind，当前实现会把“未入 map 的 build 行”记进 `RowsNotInsertToMap`，之后在 scan-after-probe 阶段输出。
+Under NullEQ semantics:
 
-在普通 `=` 语义下这成立，因为 key-NULL 本来就不参与匹配。
+- A row with a `NULL` key is not necessarily unmatched.
+- It may need to enter the map and match a probe-side row with a `NULL` key.
 
-但在 NullEQ 语义下：
+### 4. KeyGetter Does Not Encode the Nullable Bitmap by Default
 
-- `NULL` key 行不一定是 unmatched
-- 它可能应该入 map，并与 probe 侧 `NULL` key 行成功匹配
+Fixed-key hash methods such as `keys128/keys256` currently default to
+`has_nullable_keys = false`.
 
-### 4. KeyGetter 默认不编码 nullable bitmap
+Consequently, even if `NULL` rows are not filtered early, the existing packed-key path
+may still fail to encode nullness into the hash key correctly.
 
-当前 `keys128/keys256` 这类 fixed key hash method 默认是 `has_nullable_keys = false`。
+## Additional Interaction with FULL OUTER JOIN
 
-这意味着即使不提前过滤 `NULL`，现有 packed key 路径也未必能正确把 nullness 编进 hash key。
+NullEQ is not specific to `FULL OUTER JOIN`; `LEFT OUTER JOIN` and `RIGHT OUTER JOIN`
+are affected as well. However, after TiFlash added `FULL OUTER JOIN`, several interactions
+must be made explicit in the design. Otherwise, both sides can produce incorrect results.
 
-## 与 FULL OUTER JOIN 的额外交互
+### 1. The Natural-Unmatched NULL-Key Path Is Not Full-Join Specific, but FULL Amplifies It
 
-NullEQ 本身不是 `FULL OUTER JOIN` 专属问题，`LEFT OUTER JOIN` 和 `RIGHT OUTER JOIN` 也会受影响。
-但在 TiFlash 已经支持 `FULL OUTER JOIN` 之后，有几件事必须在设计里显式纳入，否则很容易出现双边都错的结果。
-
-### 1. “NULL key 走天然 unmatched 路径”不是 full 特有问题，但 full 会把问题放大
-
-这件事对不同 outer join 的影响不同：
+The impact differs by join type:
 
 - `LEFT OUTER JOIN`
-  - probe 侧 `NULL` key 若仍直接走 `addNotFound()`，本该命中的 `NULL <=> NULL` 会被错误输出成左 unmatched
+  - If a probe-side `NULL` key still goes directly through `addNotFound()`, a row that
+    should match through `NULL <=> NULL` is incorrectly emitted as left unmatched.
 - `RIGHT OUTER JOIN`
-  - build 侧 `NULL` key 若仍进 `RowsNotInsertToMap`，本该命中的行会在 scan-after-probe 阶段被错误输出成右 unmatched
+  - If a build-side `NULL` key still enters `RowsNotInsertToMap`, a row that should match
+    is incorrectly emitted as right unmatched during scan-after-probe.
 - `FULL OUTER JOIN`
-  - 上述两条路径会同时存在
-  - 一组本该匹配的 `NULL <=> NULL` 行，可能被错误拆成：
-    - 一条左 unmatched
-    - 一条右 unmatched
+  - Both paths are present at the same time.
+  - A group of rows that should match through `NULL <=> NULL` may be incorrectly split into:
+    - one left-unmatched row;
+    - one right-unmatched row.
 
-所以这不是 full 独有问题，但 full 会把问题表现得最明显、也最复杂。
+This is not a full-join-only problem, but FULL makes the symptom most obvious and the
+resulting behavior most complex.
 
-### 2. FULL + other condition 必须继续沿用“延后 setUsed”语义
+### 2. FULL + Other Condition Must Continue Using Delayed setUsed Semantics
 
-当前 full 分支已经为 `full + other condition` 做了专门修正：
+The current full-join path has a dedicated correction for `full + other condition`:
 
-- key 命中时不能立刻 `setUsed()`
-- 必须等 `other condition` 真正通过后，再标记 build 行为 used
+- Do not call `setUsed()` immediately when the join key matches.
+- Mark the build row as used only after the other condition actually passes.
 
-否则 probe 后扫描阶段会漏输出本应作为 unmatched build 行的记录。
+Otherwise, scan-after-probe may omit a build row that should be emitted as unmatched.
 
-在 NullEQ 引入后，这个约束仍然成立，而且要覆盖 `NULL <=> NULL` 命中的情况：
+After introducing NullEQ, this constraint still applies to `NULL <=> NULL` matches:
 
-- key 通过是因为 `NULL <=> NULL`
-- other condition 失败
-- 正确语义应该是：
-  - 左侧保留一条右补 null 的 unmatched 行
-  - 右侧 build 行仍然在后扫阶段输出为 unmatched
+- The key matches because `NULL <=> NULL`.
+- The other condition fails.
+- The correct result is:
+  - keep one left-unmatched row with right-side NULLs;
+  - emit the build row as unmatched during the later scan.
 
-因此 NullEQ 不能绕开 full 分支当前的 row-flagged / delayed-used 设计。
+Therefore, NullEQ must continue using the existing row-flagged and delayed-used design
+for the full-join path.
 
-### 3. RowsNotInsertToMap 在 full 下要重新定义语义
+### 3. RowsNotInsertToMap Must Be Redefined for FULL
 
-在支持 full 之后，`RowsNotInsertToMap` 不能再简单理解成“所有 NULL key 行 + 所有 build condition 失败的行”。
+After FULL support, `RowsNotInsertToMap` can no longer simply mean "all NULL-key rows
+plus all rows that failed the build condition".
 
-更准确的语义应该是：
+Its more precise meaning should be:
 
-- build side-condition 失败的行
-- 普通 `=` key 因 key-NULL 被过滤的行
+- rows that failed a build-side condition;
+- rows filtered because an ordinary `=` key contained `NULL`.
 
-不应包含：
+It must not include:
 
-- NullEQ key 为 `NULL` 的行
+- rows whose NullEQ key is `NULL`.
 
-因为这些行应该入 map，并可能成功匹配。
+Those rows should enter the map and may match successfully.
 
-### 4. dispatch hash / spill / fine-grained shuffle 在 full 下更容易暴露错误
+### 4. Dispatch Hash, Spill, and Fine-Grained Shuffle Expose More Errors Under FULL
 
-如果 build/probe 的 dispatch hash 没有把 nullness 编进 key：
+If dispatch hashing does not encode nullness into the key:
 
-- build 侧 `NULL` key 与 probe 侧 `NULL` key 可能落到不同 partition
-- inner join 下通常表现为“不命中”
-- full join 下则可能进一步演变成：
-  - probe 侧输出一条 unmatched
-  - build 侧后扫再输出一条 unmatched
+- Build-side `NULL` keys and probe-side `NULL` keys may be sent to different partitions.
+- An inner join usually appears simply as a missing match.
+- Under FULL, it may additionally become:
+  - one unmatched row from the probe side;
+  - one unmatched row from the build-side scan.
 
-所以 `full + NullEQ + spill/FGS` 应该是 MVP 测试矩阵里的必测项，而不是后续补充项。
+Therefore, `full + NullEQ + spill/FGS` must be part of the MVP test matrix rather than
+being deferred to a later iteration.
 
-### 5. full 的 schema nullable 规则不需要为 NullEQ 再单独扩展
+### 5. FULL Schema Nullability Does Not Need a Separate NullEQ Extension
 
-这一点反而不用新增复杂度：
+No additional complexity is needed here:
 
-- full 输出 schema 两边本来就都应为 nullable
-- other-condition 输入 schema 两边也已经按 full 语义处理成 nullable
+- Both sides of a FULL output schema should already be nullable.
+- Input schemas for other conditions are already made nullable according to FULL semantics.
 
-NullEQ 改变的是 **匹配语义**，不是 full 输出 schema 的 nullable 规则。
+NullEQ changes the **matching semantics**, not the nullable rules for the FULL output schema.
 
-## 设计选择
+## Design Choices
 
-## 1. 总体原则
+## 1. General Principles
 
-NullEQ 设计遵循两个核心原则：
+The NullEQ design follows two core principles:
 
-1. 把“key 是否为 NULL”与“row 是否因 side-condition 被过滤”分离
-2. 让 NullEQ 的 `NULL` 真正进入 key 比较，而不是继续被当成特殊 unmatched 行
+1. Separate "whether a key is NULL" from "whether a row is filtered by a side condition".
+2. Make the `NULL` value of a NullEQ key participate in key comparison instead of treating it
+   as a special unmatched row.
 
-由此得到两个概念：
+This leads to two concepts:
 
 - `row_filter_map`
-  - 表示这一行不需要 insert/probe
-  - 原因可以是 left/right condition 失败，也可以是普通 `=` key 的 `NULL`
+  - Indicates that a row should not be inserted or probed.
+  - The reason may be a failed left/right condition or a `NULL` in an ordinary `=` key.
 - `key_null_map`
-  - 只对普通 `=` key 有意义
-  - NullEQ key 不应把 `NULL` 写进这张 map
+  - Meaningful only for ordinary `=` keys.
+  - A NullEQ key must not write `NULL` into this map.
 
-这里保留这两个名字，主要是为了说明“过滤结果的来源”。
+The names are retained to describe the source of each filtering result.
 
-最终实现里，它们完全可以合并成一张统一的 `row_filter_map`：
+In the final implementation, these concepts may be represented by one unified
+`row_filter_map`:
 
-- 普通 `=` key 的 `NULL` 可以进入这张 map
-- left/right side-condition 的过滤结果也进入这张 map
-- 但 NullEQ key 的 `NULL` 不能进入这张 map
+- `NULL` in an ordinary `=` key may be written to this map.
+- Left/right side-condition results may also be written to this map.
+- `NULL` in a NullEQ key must not be written to this map.
 
-换句话说，关键不是最终一定要维护两张独立的 map，而是生成最终过滤结果时，必须按 key 粒度决定哪些 `NULL` 应该被当作“跳过 insert/probe”的条件。
+In other words, the key requirement is not that two independent maps must always be
+maintained. The key requirement is that generating the final filter result must determine
+at key granularity which `NULL` values mean "skip insert/probe".
 
-## 2. build/probe 都按 key 粒度区分 `=` 与 `<=>`
+## 2. Distinguish `=` and `<=>` by Key
 
-对于每个 key pair：
+For each key pair:
 
-- 若 `is_null_eq[i] = false`
-  - 延续现有 `=` 语义
-  - key 中有 `NULL` 时，这一行不参与匹配
-- 若 `is_null_eq[i] = true`
-  - 保留 nullable key
-  - `NULL` 可以参与 hash / probe / match
+- If `is_null_eq[i] = false`:
+  - Preserve the existing `=` semantics.
+  - A `NULL` in any key component means that the row does not participate in matching.
+- If `is_null_eq[i] = true`:
+  - Preserve the nullable key.
+  - `NULL` may participate in hashing, probing, and matching.
 
-也就是说，NullEQ 不是“整条 join 全都变 null-safe”，而是按 key pair 生效。
+NullEQ does not make the entire join null-safe. It takes effect independently for each
+key pair.
 
-## 3. build 路径设计
+## 3. Build-Path Design
 
-build 阶段的目标是：
+The build path must satisfy the following:
 
-- NullEQ key 为 `NULL` 的行可以入 map
-- 普通 `=` key 为 `NULL` 的行仍不入 map
-- side-condition 失败的行不入 map，但 outer join 语义所需的保底输出仍要保留
+- A row with a `NULL` NullEQ key may enter the map.
+- A row with a `NULL` ordinary `=` key must not enter the map.
+- A row that fails a side condition must not enter the map, while any fallback output
+  required by outer-join semantics must still be preserved.
 
-建议做法：
+Recommended approach:
 
-1. 从原始 key columns 出发，不再无条件对所有 key 调用 `extractNestedColumnsAndNullMap`
-2. 遍历每个 key：
-   - 对 `=` key：
-     - 若是 nullable，则取 nested column
-     - 并把该列 null map OR 进 `row_filter_map`
-   - 对 `<=>` key：
-     - 保留 `ColumnNullable`
-     - 不把该列 null map 写进 `row_filter_map`
-3. 再把 build side-condition 的过滤结果 OR 进 `row_filter_map`
-4. 传给 `JoinPartition::insertBlockIntoMaps(..., row_filter_map, ...)`
+1. Start from the original key columns instead of unconditionally calling
+   `extractNestedColumnsAndNullMap()` for every key.
+2. Process each key:
+   - For an `=` key:
+     - If it is nullable, use its nested column.
+     - OR its null map into `row_filter_map`.
+   - For a `<=>` key:
+     - Preserve `ColumnNullable`.
+     - Do not write its null map into `row_filter_map`.
+3. OR build-side condition results into `row_filter_map`.
+4. Pass `row_filter_map` to `JoinPartition::insertBlockIntoMaps(..., row_filter_map, ...)`.
 
-这样 build 路径上的语义就变成：
+The build-path semantics then become:
 
-- `row_filter_map[i] = 1`
-  - 这一行不入 map
-- `row_filter_map[i] = 0`
-  - 这一行入 map
+- `row_filter_map[i] = 1`: do not insert this row into the map.
+- `row_filter_map[i] = 0`: insert this row into the map.
 
-对于 full/right outer/right semi/right anti 这些会记录 build 特殊行的 join kind：
+For join kinds that record special build-side rows, such as full/right outer, right semi,
+and right anti:
 
-- 只有 side-condition 失败的行、或者普通 `=` key 的 `NULL` 行，才进入 `RowsNotInsertToMap`
-- NullEQ key 的 `NULL` 行不应进入 `RowsNotInsertToMap`
+- Only rows that failed a side condition or contain `NULL` in an ordinary `=` key should
+  enter `RowsNotInsertToMap`.
+- Rows with `NULL` in a NullEQ key must not enter `RowsNotInsertToMap`.
 
-## 4. probe 路径设计
+## 4. Probe-Path Design
 
-probe 阶段的目标是：
+The probe path must satisfy the following:
 
-- NullEQ key 为 `NULL` 的行可以真正 probe map
-- 普通 `=` key 的 `NULL` 行仍然按“不匹配”处理
-- left/full outer 语义下，probe unmatched 的保底输出仍然正确
+- A row with a `NULL` NullEQ key may actually probe the map.
+- A row with a `NULL` ordinary `=` key remains a non-matching row.
+- Fallback output for probe-side unmatched rows remains correct for left/full outer semantics.
 
-建议做法与 build 对称：
+The recommended approach mirrors the build path:
 
-1. 不再无条件对所有 key 做 `extractNestedColumnsAndNullMap`
-2. 逐 key 处理：
-   - `=` key 的 `NULL` 写入 `row_filter_map`
-   - `<=>` key 保留 nullable，不写入 `row_filter_map`
-3. 再把 probe side-condition 的过滤结果 OR 进 `row_filter_map`
-4. probe 时：
-   - `row_filter_map[i] = 1` 的行继续走历史 unmatched 路径
-   - `row_filter_map[i] = 0` 的行真正进入 hash probe
+1. Do not unconditionally call `extractNestedColumnsAndNullMap()` for every key.
+2. Process each key:
+   - Write `NULL` from an `=` key into `row_filter_map`.
+   - Preserve a nullable `<=>` key and do not write its `NULL` into `row_filter_map`.
+3. OR probe-side condition results into `row_filter_map`.
+4. During probing:
+   - Rows with `row_filter_map[i] = 1` continue through the historical unmatched path.
+   - Rows with `row_filter_map[i] = 0` actually probe the hash map.
 
-这条规则对 outer join 的影响是：
+The effects on outer joins are:
 
-- `LEFT OUTER JOIN` 不会再把 NullEQ 的 `NULL` probe 行过早打成 unmatched
-- `FULL OUTER JOIN` 同理，但还要与后扫 build unmatched 语义一起对齐
+- `LEFT OUTER JOIN` no longer prematurely treats a probe-side NullEQ `NULL` row as unmatched.
+- `FULL OUTER JOIN` follows the same rule, while also aligning with build-side
+  scan-after-probe unmatched semantics.
 
-## 5. Hash key 编码策略
+## 5. Hash-Key Encoding Strategy
 
-### 当前实现
+### Current Implementation
 
-当存在 **nullable 的 NullEQ key** 时，当前 Join map method 的选择规则是：
+When a nullable NullEQ key is present, the current Join map-method selection is:
 
-- 若参与编码的 key columns 都是 fixed-size，且 `null bitmap + payload` 能放进 `UInt128/UInt256`
-  - 分别走 `JoinMapMethod::nullable_keys128` / `JoinMapMethod::nullable_keys256`
-- 其它情况继续回退到 `JoinMapMethod::serialized`
+- If all participating key columns are fixed-size and the `null bitmap + payload` fits in
+  `UInt128/UInt256`:
+  - use `JoinMapMethod::nullable_keys128` or `JoinMapMethod::nullable_keys256`;
+- otherwise, fall back to `JoinMapMethod::serialized`.
 
-fixed-size 路径复用了 HashAgg / Set 已有的 nullable packed keys 思路：
+The fixed-size path reuses the nullable packed-key approach already used by HashAgg/Set:
 
-- `keys128/keys256 + has_nullable_keys = true`
-- 把 nullness bitmap 与 key payload 一起编码进 packed key
+- `keys128/keys256 + has_nullable_keys = true`;
+- encode the nullness bitmap together with the key payload in the packed key.
 
-这样常见的 nullable numeric / datetime NullEQ join 不必再一律退化到 `serialized`。
+This means common nullable numeric/datetime NullEQ joins do not always need to fall back
+to `serialized`.
 
-`serialized` 仍然保留为正确性兜底：
+`serialized` remains the correctness fallback:
 
-- 变长 key 仍可自然保留 `ColumnNullable` 的 nullness
-- fixed-size key 若带 bitmap 后放不进 `UInt256`，仍可继续工作
+- Variable-length keys can naturally preserve the nullness of `ColumnNullable`.
+- Fixed-size keys whose bitmap does not fit in `UInt256` can still use `serialized`.
 
-但这里有一个必须显式满足的前提：
+There is one prerequisite that must be satisfied explicitly:
 
-- `serialized` 只是在“当前列对象长什么样”这个层面保留 nullness
-- 它不会自动把 `Nullable(T)` 与 `T` 归一成同一种物理编码
+- `serialized` preserves nullness based on the current column object.
+- It does not automatically normalize `Nullable(T)` and `T` to the same physical encoding.
 
-当前 `ColumnNullable::serializeValueIntoArena()` 会先写入 null flag，再写 nested value。
-因此对于同一个非空值：
+`ColumnNullable::serializeValueIntoArena()` writes a null flag first and then the nested
+value. Therefore, for the same non-NULL value:
 
-- `Nullable(Int32)` 的序列化结果
-- `Int32` 的序列化结果
+- the serialized representation of `Nullable(Int32)`;
+- and the serialized representation of `Int32`;
 
-并不相同。
+are different.
 
-这意味着：
+This means that if one side of a NullEQ key pair is nullable and the other is non-nullable,
+both sides may use `serialized` and still fail to match, as long as their final key schemas
+remain `Nullable(T)` and `T`.
 
-- 若某个 NullEQ key pair 一侧是 nullable、另一侧是 non-nullable
-- 即使 build/probe 两边都走 `serialized`
-- 只要两边最终 key schema 仍分别是 `Nullable(T)` 与 `T`
-- 相同的非空值也可能 hash / probe 不命中
+Therefore, the MVP cannot merely force nullable NullEQ keys to `serialized`. It must also
+ensure that:
 
-因此 MVP 不能只做“nullable NullEQ 强制 serialized”，还必须保证：
+- for each `is_null_eq[i] = true` key pair;
+- whenever either side needs to preserve nullable semantics;
+- both build and probe sides are aligned to the same physical key schema during key preparation;
+- the most direct approach is to normalize both sides to `Nullable(common_type)`.
 
-- 对每个 `is_null_eq[i] = true` 的 key pair
-- 只要任一侧最终需要保留 nullable 语义
-- build/probe 两边就必须在 prepare key 阶段对齐到同一个物理 key schema
-- 最直接的做法是统一到 `Nullable(common_type)`
+This schema-alignment requirement was initially part of the `serialized` correctness fallback.
+It remains necessary after the fixed-size packed-key optimization is introduced.
 
-这一步最初属于 `serialized` 正确性兜底的一部分；在 fixed-size packed key 优化落地后，这个 schema 对齐约束仍然需要继续保持。
+## 6. JoinPartition / KeyGetter Semantics
 
-## 6. JoinPartition / KeyGetter 语义
+When implementing NullEQ in JoinPartition, the important question is not simply whether
+the column is nullable. The key getter must be able to encode nullness into the key.
 
-NullEQ 真正落地到 JoinPartition 时，关键不是“有没有 nullable 列”，而是：
+The current JoinPartition has explicit nullable-aware fixed-key KeyGetter branches:
 
-- key getter 能不能把 nullness 编进 key
+- `nullable_keys128 -> HashMethodKeysFixed<..., UInt128, ..., true, false>`;
+- `nullable_keys256 -> HashMethodKeysFixed<..., UInt256, ..., true, false>`.
 
-当前 JoinPartition 已显式引入 nullable-aware 的 fixed-key KeyGetter 分支：
+The semantics are:
 
-- `nullable_keys128 -> HashMethodKeysFixed<..., UInt128, ..., true, false>`
-- `nullable_keys256 -> HashMethodKeysFixed<..., UInt256, ..., true, false>`
+- The packed-key path includes nullness in the key.
+- Variable-length keys or fixed-size keys that exceed `UInt256` continue to use `serialized`.
 
-对应语义是：
+Regardless of the selected path, the following must hold:
 
-- packed key 路径会把 nullness bitmap 编进 key
-- 变长 key 或超出 `UInt256` 的 fixed-size key 仍走 `serialized`
+- Key columns passed by build and probe preserve nullable information for NullEQ keys.
+- For every NullEQ key pair, the final key schemas used by build and probe are identical.
+- In particular, mixed nullable/non-nullable cases must not remain as `Nullable(T)` versus `T`.
 
-无论走哪条路径，仍要保证：
+## 7. FULL + Other Condition Semantics
 
-- build/probe 传进来的 key columns 保留了 NullEQ key 的 nullable 信息
-- 对任意 NullEQ key pair，build/probe 两边最终参与编码的 key schema 一致
-- 尤其是 mixed nullable / non-nullable 的场景，不能保留成 `Nullable(T)` 对 `T`
+Because the full-join path already has row-flagged logic, NullEQ does not need a separate
+FULL semantic path. It must ensure that a NullEQ key match goes through the existing correct
+path:
 
-## 7. FULL + other condition 语义
+1. For `full + other condition`:
+   - continue using the row-flagged map;
+2. If the key matches but the other condition fails:
+   - delay marking the build row as used until the other condition passes;
+3. Apply this rule to:
+   - ordinary-value matches;
+   - `NULL <=> NULL` matches.
 
-由于 full 分支已经有 row-flagged 逻辑，NullEQ 这里的要求不是新增一套 full 语义，而是确保 NullEQ key 命中也走已有正确链路：
-
-1. 对 `full + other condition`：
-   - 继续使用 row-flagged map
-2. 对 key 命中但 other condition 失败的场景：
-   - build 行的 used 标记必须延后到 other condition 通过后
-3. 这个规则必须覆盖：
-   - 普通值命中
-   - `NULL <=> NULL` 命中
-
-否则 full 下会出现漏右行或重复 unmatched 行。
+Otherwise, FULL may omit a build row or emit duplicate unmatched rows.
 
 ## 8. RuntimeFilter
 
-MVP 建议：
+The MVP recommends:
 
-- 只要 join 含 NullEQ，且存在 nullable 的 NullEQ key，就禁用 runtime filter
+- Disable runtime filters whenever the join contains NullEQ and at least one nullable
+  NullEQ key.
 
-原因：
+The reason is that the current runtime-filter/Set path still drops `NULL` keys by default,
+which conflicts with the NullEQ rule that `NULL` may match.
 
-- 当前 runtime filter / Set 路径仍然默认丢弃 `NULL` key
-- 这与 NullEQ 的 “NULL 可以匹配” 冲突
+A possible long-term direction is:
 
-更长期的方向可以是：
+- maintain an additional `has_null` flag in Set;
+- apply a single-column NullEQ runtime filter as:
+  - `isNull(x) ? has_null : (x IN set)`.
 
-- Set 里额外维护 `has_null`
-- 单列 NullEQ key 的 runtime filter 应用语义改成：
-  - `isNull(x) ? has_null : (x IN set)`
+This is not recommended for the MVP.
 
-但这不建议放进 MVP。
+## 9. Alternative: Rewrite `<=>` in the Planner
 
-## 9. 备选方案：Planner 重写 `<=>`
+Another approach is for the TiDB planner not to send explicit `is_null_eq[]`, but to rewrite
+each `<=>` key into:
 
-另一条路线是让 TiDB planner 不显式下发 `is_null_eq[]`，而是把每个 `<=>` key 重写成：
+1. `isNull(k)`;
+2. `ifNull(k, sentinel)`.
 
-1. `isNull(k)`
-2. `ifNull(k, sentinel)`
+TiFlash could then continue using ordinary `=` joins.
 
-这样 TiFlash 仍然走普通 `=` join。
+The advantage is that execution-layer changes would be smaller. The disadvantages are clear:
 
-这条路线的优点是执行层改动小，但缺点也很明显：
+- Every `<=>` key becomes two keys.
+- Hash keys become wider.
+- Planner, runtime filter, cast, and collation handling become more complicated.
+- Key-level semantics become less explicit.
 
-- 每个 `<=>` key 变成两个 key
-- hash key 变宽
-- planner/runtime filter/cast/collation 都会更绕
-- key 级别语义变得不够直观
+Therefore, this design chooses native key-level NullEQ support in TiFlash.
 
-因此本设计默认选择：
+## Testing Recommendations
 
-- TiFlash 原生支持 key 粒度 NullEQ
+The MVP should cover at least:
 
-## 测试建议
+1. `INNER JOIN`:
+   - `NULL <=> NULL` matches;
+   - `NULL <=> 1` does not match.
+2. `LEFT OUTER JOIN`:
+   - A probe-side `NULL` key is not prematurely treated as unmatched.
+3. `RIGHT OUTER JOIN`:
+   - A build-side `NULL` key is not incorrectly placed in `RowsNotInsertToMap`.
+4. `FULL OUTER JOIN`:
+   - A `NULL <=> NULL` match is not split into two unmatched rows.
+   - If a `NULL <=> NULL` key match fails the other condition, both unmatched sides are correct.
+5. `SEMI / ANTI`:
+   - `NULL <=> NULL` participates in existence checks.
+6. Multiple keys with mixed semantics:
+   - `k1 <=> k1 AND k2 = k2`;
+   - `k1 <=> k1 AND k2 <=> k2`.
+7. Side-condition interaction:
+   - left/right conditions coexist with NullEQ keys.
+8. Spill / fine-grained shuffle:
+   - especially `FULL OUTER JOIN + NullEQ`.
 
-MVP 至少应覆盖：
+### CP3 Test Progress
 
-1. `INNER JOIN`
-   - `NULL <=> NULL` 命中
-   - `NULL <=> 1` 不命中
-2. `LEFT OUTER JOIN`
-   - probe 侧 `NULL` key 不会被过早当作 unmatched
-3. `RIGHT OUTER JOIN`
-   - build 侧 `NULL` key 不会被错误塞进 `RowsNotInsertToMap`
-4. `FULL OUTER JOIN`
-   - `NULL <=> NULL` 命中时，不会被拆成两条 unmatched
-   - `NULL <=> NULL` 命中但 `other condition` 失败时，左右 unmatched 都正确
-5. `SEMI / ANTI`
-   - `NULL <=> NULL` 参与存在性判断
-6. 多列混合语义
-   - `k1 <=> k1 AND k2 = k2`
-   - `k1 <=> k1 AND k2 <=> k2`
-7. side-condition 交互
-   - left/right condition 与 NullEQ key 共存
-8. spill / fine-grained shuffle
-   - 特别是 `FULL OUTER JOIN + NullEQ`
+Based on the current workspace progress, the CP3 spill/FGS paths are covered:
 
-### CP3 测试补充进度
+1. `spill + FULL OUTER JOIN + NullEQ`:
+   - A `NULL <=> NULL` match is not split into two unmatched rows.
+2. `spill + FULL OUTER JOIN + NullEQ + other condition`:
+   - Data covers both `other condition = false` and `other condition = true`.
+   - When `other condition = false`, the build row is still emitted correctly during
+     scan-after-probe.
+   - When `other condition = true`, the build row is consumed normally and is not emitted again.
+3. `fine-grained shuffle + NullEQ`:
+   - Covers a nullable key.
+   - Verifies that after build/probe key-schema alignment, the probe does not incorrectly
+     classify a NullEQ `NULL` as filtered or unmatched.
 
-按当前 workspace 的进度，CP3 的 spill / FGS 链路已补齐，当前已覆盖：
-
-1. `spill + FULL OUTER JOIN + NullEQ`
-   - `NULL <=> NULL` 命中后不会被拆成两条 unmatched
-2. `spill + FULL OUTER JOIN + NullEQ + other condition`
-   - 数据同时覆盖 `other condition = false/true`
-   - `other condition = false` 时，build 行仍会在 scan-after-probe 正确输出
-   - `other condition = true` 时，build 行会被正常消费，不会再次输出
-3. `fine-grained shuffle + NullEQ`
-   - 覆盖了一组 nullable key
-   - 验证 build / probe 两侧 key schema 对齐后，probe 不会把 NullEQ 的 `NULL` 误判成 filtered / unmatched
-
-## 代码热点
+## Code Hotspots
 
 - `dbms/src/Flash/Coprocessor/JoinInterpreterHelper.*`
 - `dbms/src/Flash/Planner/Plans/PhysicalJoin.cpp`
@@ -508,94 +541,102 @@ MVP 至少应覆盖：
 
 ---
 
-## 开发追踪 / Dev Note
+## Development Tracking / Dev Note
 
-这一节放在文档后半部分，用于后续按 checkpoint 推进时记录实现进度。设计结论以前面的章节为准。
+This section is placed in the latter half of the document to record implementation progress
+as development proceeds by checkpoint. The design conclusions in the preceding sections take
+priority.
 
-### How to continue
+### How to Continue
 
-继续开发前建议固定做三件事：
+Before continuing development, it is recommended to always do three things:
 
-1. 先读本文件的设计部分
-2. 再跑 `git status` / `git diff --stat`
-3. 明确本次只推进哪个 checkpoint
+1. Read the design section of this document first.
+2. Run `git status` / `git diff --stat`.
+3. Explicitly identify which checkpoint this change is intended to advance.
 
-建议在后续指令里直接写：
+Suggested wording for future instructions:
 
-- “以 `docs/note/nulleq_join.md` 为准，从 CP2 开始继续”
-- “先读设计文档，再读当前进度”
+- "Use `docs/note/nulleq_join.md` as the source of truth and continue from CP2."
+- "Read the design document first, then read the current progress."
 
-### Milestone 划分
+### Milestones
 
-#### Milestone 0：协议 / Plumbing
+#### Milestone 0: Protocol / Plumbing
 
-Done 标准：
+Done criteria:
 
-- TiFlash 能解析 `is_null_eq[]`
-- 能透传到 `DB::Join`
-- 未下发该字段时行为零变化
+- TiFlash can parse `is_null_eq[]`.
+- The value is passed through to `DB::Join`.
+- Behavior is unchanged when the field is not sent.
 
-#### Milestone 1：正确性 MVP
+#### Milestone 1: Correctness MVP
 
-Done 标准：
+Done criteria:
 
-- nullable NullEQ key 能正确 build / probe
-- mixed nullable / non-nullable 的 NullEQ key pair 能正确对齐 key schema 并命中
-- outer join / scan-after-probe 不把 NullEQ 的 `NULL` 行误判为 unmatched
-- `FULL OUTER JOIN + other condition` 与 NullEQ 组合语义正确
-- runtime filter 在该模式下被禁用
+- Nullable NullEQ keys build and probe correctly.
+- Mixed nullable/non-nullable NullEQ key pairs align their key schemas and match correctly.
+- Outer join and scan-after-probe do not misclassify NullEQ `NULL` rows as unmatched.
+- `FULL OUTER JOIN + other condition` has correct combined semantics with NullEQ.
+- Runtime filters are disabled in this mode.
 
-#### Milestone 2：测试矩阵
+#### Milestone 2: Test Matrix
 
-Done 标准：
+Done criteria:
 
-- inner / left / right / full / semi / anti 的基础矩阵覆盖齐
-- mixed key、side-condition、spill/FGS 覆盖齐
+- The basic inner/left/right/full/semi/anti matrix is covered.
+- Mixed keys, side conditions, and spill/FGS are covered.
 
-#### Milestone 3：性能优化
+#### Milestone 3: Performance Optimization
 
-Done 标准：
+Done criteria:
 
-- nullable fixed-size key 不再强制 serialized
+- Nullable fixed-size keys no longer always fall back to `serialized`.
 
-#### Milestone 4：RuntimeFilter（可选）
+#### Milestone 4: RuntimeFilter (Optional)
 
-Done 标准：
+Done criteria:
 
-- 单列 NullEQ key 的 runtime filter 语义正确，或明确长期禁用
+- Runtime-filter semantics for a single-column NullEQ key are correct, or long-term
+  disabling is explicitly documented.
 
-### Checkpoint 建议
+### Suggested Checkpoints
 
-- CP0：tipb 字段 + TiFlash 解析
-- CP1：`DB::Join` 保存/打印 `is_null_eq`
-- CP2.1：nullable NullEQ 强制 serialized + mixed-nullability key schema 对齐 + NullAware 互斥检查
-- CP2.2：build/probe 的 row_filter_map 语义拆分
-- CP2.3：`RowsNotInsertToMap` / scan-after-probe 调整
-- CP2.4：`FULL OUTER JOIN + other condition` 与 NullEQ 联动自测
-- CP2.5：MVP 禁用 runtime filter
-- CP3：补测试
-- CP4：packed keys 优化
+- CP0: tipb field and TiFlash parsing.
+- CP1: `DB::Join` stores and logs `is_null_eq`.
+- CP2.1: force nullable NullEQ keys to `serialized`, align mixed-nullability key schemas,
+  and add the NullAware mutual-exclusion check.
+- CP2.2: split the build/probe `row_filter_map` semantics.
+- CP2.3: adjust `RowsNotInsertToMap` and scan-after-probe.
+- CP2.4: validate the interaction between `FULL OUTER JOIN + other condition` and NullEQ.
+- CP2.5: disable runtime filters for the MVP.
+- CP3: add tests.
+- CP4: optimize packed keys.
 
-### 当前进度
+### Current Progress
 
-- 说明：以下勾选按当前 workspace 核对，用于记录本轮开发推进状态。
-- [x] tipb: `Join.is_null_eq` 字段定义
-- [x] TiFlash: `JoinInterpreterHelper::TiFlashJoin` 解析 `is_null_eq[]`
-- [x] TiFlash: `DB::Join` 保存/打印 `is_null_eq`
-- [x] TiFlash: nullable NullEQ 强制 serialized + mixed-nullability key schema 对齐 + NullAware 互斥 fail-fast
-- [x] TiFlash: build/probe 的 row_filter_map 语义拆分
-- [x] TiFlash: `RowsNotInsertToMap` / scan-after-probe 调整
-- [x] TiFlash: `FULL OUTER JOIN + other condition` 与 NullEQ 联动验证
-- [x] TiFlash: runtime filter 禁用
-- [x] TiFlash: gtest 已覆盖 inner / left / right / full / semi / anti 基础矩阵
-- [x] TiFlash: gtest 已覆盖 mixed key 与 side-condition 交互
-- [x] TiFlash: spill / fine-grained shuffle 测试覆盖
-- [x] TiFlash: packed keys 优化（nullable fixed-size NullEQ key 可走 `nullable_keys128/256`，其余场景回退 `serialized`）
+- Note: the following checklist was verified against the current workspace and records the
+  progress of this development iteration.
+- [x] tipb: `Join.is_null_eq` field definition.
+- [x] TiFlash: `JoinInterpreterHelper::TiFlashJoin` parses `is_null_eq[]`.
+- [x] TiFlash: `DB::Join` stores and logs `is_null_eq`.
+- [x] TiFlash: force nullable NullEQ keys to `serialized`, align mixed-nullability key
+  schemas, and fail fast for NullAware conflicts.
+- [x] TiFlash: split the build/probe `row_filter_map` semantics.
+- [x] TiFlash: adjust `RowsNotInsertToMap` and scan-after-probe.
+- [x] TiFlash: validate `FULL OUTER JOIN + other condition` with NullEQ.
+- [x] TiFlash: disable runtime filters.
+- [x] TiFlash: gtest covers the basic inner/left/right/full/semi/anti matrix.
+- [x] TiFlash: gtest covers mixed keys and side-condition interaction.
+- [x] TiFlash: spill/fine-grained shuffle coverage.
+- [x] TiFlash: packed-key optimization (nullable fixed-size NullEQ keys may use
+  `nullable_keys128/256`; other cases fall back to `serialized`).
 
 ### Open Questions
 
-- TiDB / kvproto 何时同步 `is_null_eq[]`
-- key 若未来允许表达式，`is_null_eq[i]` 如何稳定对齐
-- string + collation 的性能回退是否可接受
-- spill / FGS 场景下是否需要单独的 profile 或 debug 指标
-- NullAware join 是否永远与 NullEQ 互斥，还是未来要定义组合语义
+- When will TiDB/kvproto synchronize `is_null_eq[]`?
+- If expressions are allowed as keys in the future, how will `is_null_eq[i]` remain aligned?
+- Is the performance fallback for strings and collations acceptable?
+- Are separate profile or debug metrics needed for spill/FGS cases?
+- Will NullAware join always be mutually exclusive with NullEQ, or should combined semantics
+  be defined in the future?
