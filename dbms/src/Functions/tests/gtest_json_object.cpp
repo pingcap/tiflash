@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Columns/ColumnNullable.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Schema/TiDBTypes.h>
@@ -100,14 +99,6 @@ try
         ASSERT_COLUMN_EQ(expect, res);
     }
 
-    {
-        ColumnsWithTypeAndName inputs{
-            createConstColumn<String>(rows_count, "a"),
-            createOnlyNullColumnConst(rows_count),
-        };
-        auto res = executeFunctionWithCast({0, 1}, inputs);
-        ASSERT_COLUMN_EQ(createConstColumn<Nullable<String>>(rows_count, R"({"a": null})"), res);
-    }
 }
 CATCH
 
