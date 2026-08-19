@@ -40,7 +40,7 @@ void appendJoinSchema(DAGSchema & output_schema, const DAGSchema & input_schema,
 
 void buildLeftSideJoinSchema(DAGSchema & schema, const DAGSchema & left_schema, tipb::JoinType tp)
 {
-    appendJoinSchema(schema, left_schema, JoinInterpreterHelper::makeLeftJoinSideNullable(tp));
+    appendJoinSchema(schema, left_schema, JoinInterpreterHelper::shouldMakeLeftJoinSideNullable(tp));
 }
 
 void buildRightSideJoinSchema(DAGSchema & schema, const DAGSchema & right_schema, tipb::JoinType tp)
@@ -61,7 +61,7 @@ void buildRightSideJoinSchema(DAGSchema & schema, const DAGSchema & right_schema
     }
     else if (tp != tipb::JoinType::TypeSemiJoin && tp != tipb::JoinType::TypeAntiSemiJoin)
     {
-        appendJoinSchema(schema, right_schema, JoinInterpreterHelper::makeRightJoinSideNullable(tp));
+        appendJoinSchema(schema, right_schema, JoinInterpreterHelper::shouldMakeRightJoinSideNullable(tp));
     }
 }
 
@@ -71,8 +71,14 @@ DAGSchema buildOtherConditionSchema(
     tipb::JoinType join_type)
 {
     DAGSchema merged_children_schema;
-    appendJoinSchema(merged_children_schema, left_schema, JoinInterpreterHelper::makeLeftJoinSideNullable(join_type));
-    appendJoinSchema(merged_children_schema, right_schema, JoinInterpreterHelper::makeRightJoinSideNullable(join_type));
+    appendJoinSchema(
+        merged_children_schema,
+        left_schema,
+        JoinInterpreterHelper::shouldMakeLeftJoinSideNullable(join_type));
+    appendJoinSchema(
+        merged_children_schema,
+        right_schema,
+        JoinInterpreterHelper::shouldMakeRightJoinSideNullable(join_type));
     return merged_children_schema;
 }
 } // namespace

@@ -173,7 +173,7 @@ bool collectForJoin(std::vector<tipb::FieldType> & output_field_types, const tip
     // collect output_field_types for join self
     for (auto & field_type : children_output_field_types[0])
     {
-        if (JoinInterpreterHelper::makeLeftJoinSideNullable(executor.join().join_type()))
+        if (JoinInterpreterHelper::shouldMakeLeftJoinSideNullable(executor.join().join_type()))
         {
             /// the type of left column for right/full join is always nullable
             auto updated_field_type = field_type;
@@ -211,7 +211,7 @@ bool collectForJoin(std::vector<tipb::FieldType> & output_field_types, const tip
         /// for semi/anti semi join, the right table column is ignored
         for (auto & field_type : children_output_field_types[1])
         {
-            if (JoinInterpreterHelper::makeRightJoinSideNullable(executor.join().join_type()))
+            if (JoinInterpreterHelper::shouldMakeRightJoinSideNullable(executor.join().join_type()))
             {
                 /// the type of right column for left/full join is always nullable
                 auto updated_field_type = field_type;
