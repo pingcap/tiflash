@@ -98,7 +98,6 @@ try
         auto expect = createColumn<Nullable<String>>({R"({"dup": 2})", R"({"dup": 3})"});
         ASSERT_COLUMN_EQ(expect, res);
     }
-
 }
 CATCH
 
