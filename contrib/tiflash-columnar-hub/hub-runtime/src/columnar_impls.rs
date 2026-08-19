@@ -14,14 +14,15 @@
 
 use std::convert::TryInto;
 
-use kvengine::{CloudColumnarReaders, TableCtx};
+use kvengine::{CloudColumnarReaders, LateMaterializationSelection, TableCtx};
 use protobuf::{parse_from_bytes, Message};
 
 use crate::{
     build_from_string, build_from_vec_string,
     interfaces_ffi::{
-        BaseBuffView, ColumnarReaderErrorType, ColumnarReaderPtr, ColumnarScanStats,
-        RaftStoreProxyPtr, RawRustPtr, RawVoidPtr, RustStrWithView, RustStrWithViewVec,
+        BaseBuffView, ColumnarLateMaterializationInterfaces, ColumnarReaderErrorType,
+        ColumnarReaderPtr, ColumnarScanStats, RaftStoreProxyPtr, RawRustPtr, RawVoidPtr,
+        RustStrWithView, RustStrWithViewVec,
     },
     RawRustPtrType,
 };
@@ -247,6 +248,160 @@ pub unsafe extern "C" fn ffi_read_column(
     col_id: i64,
 ) -> RustStrWithView {
     build_from_string(reader.as_mut().ffi_read_column(col_id))
+}
+
+const LM_SELECTION_ALL: u8 = 0;
+const LM_SELECTION_NONE: u8 = 1;
+const LM_SELECTION_BYTES: u8 = 2;
+
+pub unsafe extern "C" fn ffi_read_early_block(
+    mut reader: ColumnarReaderPtr,
+    limit: u64,
+    early_column_ids: BaseBuffView,
+    batch_id: *mut u64,
+    physical_table_id: *mut i64,
+) -> u64 {
+    if batch_id.is_null() || physical_table_id.is_null() || early_column_ids.len % 8 != 0 {
+        error!("invalid late-materialization read_early_block arguments");
+        return u64::MAX;
+    }
+    let early_column_ids = early_column_ids
+        .to_slice()
+        .chunks_exact(8)
+        .map(|bytes| i64::from_le_bytes(bytes.try_into().unwrap()))
+        .collect::<Vec<_>>();
+    match reader
+        .as_mut()
+        .ffi_read_early_block(limit as usize, &early_column_ids)
+    {
+        Ok(Some((id, rows, table_id))) => {
+            *batch_id = id;
+            *physical_table_id = table_id;
+            rows as u64
+        }
+        Ok(None) => 0,
+        Err(err) => {
+            error!("ffi_read_early_block failed, limit={}: {}", limit, err);
+            u64::MAX
+        }
+    }
+}
+
+pub unsafe extern "C" fn ffi_read_early_column(
+    mut reader: ColumnarReaderPtr,
+    batch_id: u64,
+    col_id: i64,
+) -> RustStrWithView {
+    match reader.as_mut().ffi_read_early_column(batch_id, col_id) {
+        Ok(data) => build_from_string(data),
+        Err(err) => {
+            error!(
+                "ffi_read_early_column failed, batch_id={}, col_id={}: {}",
+                batch_id, col_id, err
+            );
+            RustStrWithView::default()
+        }
+    }
+}
+
+pub unsafe extern "C" fn ffi_materialize_selected(
+    mut reader: ColumnarReaderPtr,
+    batch_id: u64,
+    selection_kind: u8,
+    selection: BaseBuffView,
+) -> u64 {
+    let selection = match selection_kind {
+        LM_SELECTION_ALL if selection.len == 0 => LateMaterializationSelection::All,
+        LM_SELECTION_NONE if selection.len == 0 => LateMaterializationSelection::None,
+        LM_SELECTION_BYTES => LateMaterializationSelection::Bytes(selection.to_slice()),
+        _ => {
+            error!("invalid late-materialization selection kind or payload");
+            return u64::MAX;
+        }
+    };
+    match reader
+        .as_mut()
+        .ffi_materialize_selected(batch_id, selection)
+    {
+        Ok(rows) => rows as u64,
+        Err(err) => {
+            error!(
+                "ffi_materialize_selected failed, batch_id={}: {}",
+                batch_id, err
+            );
+            u64::MAX
+        }
+    }
+}
+
+pub unsafe extern "C" fn ffi_read_late_column(
+    mut reader: ColumnarReaderPtr,
+    batch_id: u64,
+    col_id: i64,
+) -> RustStrWithView {
+    match reader.as_mut().ffi_read_late_column(batch_id, col_id) {
+        Ok(data) => build_from_string(data),
+        Err(err) => {
+            error!(
+                "ffi_read_late_column failed, batch_id={}, col_id={}: {}",
+                batch_id, col_id, err
+            );
+            RustStrWithView::default()
+        }
+    }
+}
+
+pub unsafe extern "C" fn ffi_finish_materialized_block(
+    mut reader: ColumnarReaderPtr,
+    batch_id: u64,
+) -> u8 {
+    match reader.as_mut().ffi_finish_materialized_block(batch_id) {
+        Ok(()) => 1,
+        Err(err) => {
+            error!(
+                "ffi_finish_materialized_block failed, batch_id={}: {}",
+                batch_id, err
+            );
+            0
+        }
+    }
+}
+
+pub unsafe extern "C" fn ffi_discard_late_materialization_batch(
+    mut reader: ColumnarReaderPtr,
+    batch_id: u64,
+) -> u8 {
+    match reader
+        .as_mut()
+        .ffi_discard_late_materialization_batch(batch_id)
+    {
+        Ok(()) => 1,
+        Err(err) => {
+            error!(
+                "ffi_discard_late_materialization_batch failed, batch_id={}: {}",
+                batch_id, err
+            );
+            0
+        }
+    }
+}
+
+static LATE_MATERIALIZATION_INTERFACES: ColumnarLateMaterializationInterfaces =
+    ColumnarLateMaterializationInterfaces {
+        version: 1,
+        size: std::mem::size_of::<ColumnarLateMaterializationInterfaces>() as u32,
+        fn_read_early_block: Some(ffi_read_early_block),
+        fn_read_early_column: Some(ffi_read_early_column),
+        fn_materialize_selected: Some(ffi_materialize_selected),
+        fn_read_late_column: Some(ffi_read_late_column),
+        fn_finish_materialized_block: Some(ffi_finish_materialized_block),
+        fn_discard_late_materialization_batch: Some(ffi_discard_late_materialization_batch),
+    };
+
+#[no_mangle]
+pub extern "C" fn tiflash_columnar_get_late_materialization_interfaces(
+) -> *const ColumnarLateMaterializationInterfaces {
+    &LATE_MATERIALIZATION_INTERFACES
 }
 
 pub unsafe extern "C" fn ffi_physical_table_id(mut reader: ColumnarReaderPtr) -> i64 {

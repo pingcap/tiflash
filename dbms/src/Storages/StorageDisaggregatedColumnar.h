@@ -43,6 +43,7 @@
 #include <mutex>
 #include <optional>
 #include <string_view>
+#include <unordered_set>
 #pragma GCC diagnostic pop
 
 namespace DB
@@ -153,6 +154,17 @@ public:
 
     const String & getExecutorID() const;
 
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & getExactFilterConditions() const;
+
+    google::protobuf::RepeatedPtrField<tipb::Expr> getLateMaterializationFilterConditions(
+        const Block & early_block) const;
+
+    std::unordered_set<ColumnID> getExactFilterColumnIDs() const;
+
+    std::unordered_set<ColumnID> getLateMaterializationEarlyColumnIDs() const;
+
+    bool isLateMaterializationFilterEligible() const;
+
     RNColumnarReadTask(
         std::vector<RNColumnarReaderPlan> reader_plans,
         size_t source_num,
@@ -223,6 +235,7 @@ public:
 
 private:
     bool ensureReader();
+    void initializeLateMaterialization();
     void mergeReaderStats();
     void releaseReader();
 
@@ -236,6 +249,8 @@ private:
     TableID table_id;
     const String executor_id;
     Block header;
+    const ColumnarLateMaterializationInterfaces * late_materialization_interfaces = nullptr;
+    bool late_materialization_initialized = false;
 
     bool done = false;
 

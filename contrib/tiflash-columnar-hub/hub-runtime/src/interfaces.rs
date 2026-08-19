@@ -363,6 +363,49 @@ pub mod root {
         }
         #[repr(C)]
         #[derive(Debug)]
+        pub struct ColumnarLateMaterializationInterfaces {
+            pub version: u32,
+            pub size: u32,
+            pub fn_read_early_block: ::std::option::Option<
+                unsafe extern "C" fn(
+                    arg1: root::DB::ColumnarReaderPtr,
+                    arg2: u64,
+                    arg3: root::DB::BaseBuffView,
+                    arg4: *mut u64,
+                    arg5: *mut i64,
+                ) -> u64,
+            >,
+            pub fn_read_early_column: ::std::option::Option<
+                unsafe extern "C" fn(
+                    arg1: root::DB::ColumnarReaderPtr,
+                    arg2: u64,
+                    arg3: i64,
+                ) -> root::DB::RustStrWithView,
+            >,
+            pub fn_materialize_selected: ::std::option::Option<
+                unsafe extern "C" fn(
+                    arg1: root::DB::ColumnarReaderPtr,
+                    arg2: u64,
+                    arg3: u8,
+                    arg4: root::DB::BaseBuffView,
+                ) -> u64,
+            >,
+            pub fn_read_late_column: ::std::option::Option<
+                unsafe extern "C" fn(
+                    arg1: root::DB::ColumnarReaderPtr,
+                    arg2: u64,
+                    arg3: i64,
+                ) -> root::DB::RustStrWithView,
+            >,
+            pub fn_finish_materialized_block: ::std::option::Option<
+                unsafe extern "C" fn(arg1: root::DB::ColumnarReaderPtr, arg2: u64) -> u8,
+            >,
+            pub fn_discard_late_materialization_batch: ::std::option::Option<
+                unsafe extern "C" fn(arg1: root::DB::ColumnarReaderPtr, arg2: u64) -> u8,
+            >,
+        }
+        #[repr(C)]
+        #[derive(Debug)]
         pub struct CloudStorageEngineInterfaces {
             pub fn_get_keyspace_encryption: ::std::option::Option<
                 unsafe extern "C" fn(arg1: root::DB::RaftStoreProxyPtr, arg2: u32) -> bool,
