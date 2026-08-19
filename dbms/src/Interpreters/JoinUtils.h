@@ -88,7 +88,7 @@ inline bool needScanHashMapAfterProbe(ASTTableJoin::Kind kind)
 
 inline bool isNecessaryKindToUseRowFlaggedHashMap(ASTTableJoin::Kind kind)
 {
-    return isRightSemiFamily(kind) || kind == ASTTableJoin::Kind::RightOuter;
+    return isRightSemiFamily(kind) || kind == ASTTableJoin::Kind::RightOuter || kind == ASTTableJoin::Kind::Full;
 }
 
 inline bool useRowFlaggedHashMap(ASTTableJoin::Kind kind, bool has_other_condition)
