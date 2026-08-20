@@ -18,5 +18,16 @@ add_headers_and_sources(tiflash_table_functions .)
 list(REMOVE_ITEM tiflash_table_functions_sources ITableFunction.cpp TableFunctionFactory.cpp)
 list(REMOVE_ITEM tiflash_table_functions_headers ITableFunction.h TableFunctionFactory.h)
 
+<<<<<<< HEAD:dbms/src/TableFunctions/CMakeLists.txt
 add_library(tiflash_table_functions ${tiflash_table_functions_sources})
 target_link_libraries(tiflash_table_functions tiflash_storages_system dbms ${Poco_Foundation_LIBRARY})
+=======
+tikv-worker-url = "tikv-worker0:19000"
+
+enable-telemetry = false
+temp-dir = "/data/tmp"
+[performance]
+tcp-keep-alive = true
+[security]
+enable-sem = false
+>>>>>>> a5e14033f8 (Fix three schema mismatch bugs under disaggregated arch  (#10530)):tests/docker/next-gen-config/tidb.toml
