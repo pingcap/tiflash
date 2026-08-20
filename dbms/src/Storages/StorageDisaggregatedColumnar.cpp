@@ -130,6 +130,7 @@ struct RNColumnarReaderSharedContext
     String table_scan_data;
     String filter_conditions_data;
     google::protobuf::RepeatedPtrField<tipb::Expr> exact_filter_conditions;
+    bool has_pushed_down_filter_conditions = false;
     std::vector<TiDB::ColumnInfo> scan_columns;
     String table_info_data;
     String ann_query_info_data;
@@ -138,6 +139,7 @@ struct RNColumnarReaderSharedContext
     ClearSharedSnapAccessByStartTsFn clear_shared_snap_access_by_start_ts = nullptr;
     std::shared_ptr<std::mutex> output_lock = std::make_shared<std::mutex>();
     bool registered_for_start_ts = false;
+    std::atomic_bool late_materialization_logged{false};
 
     ~RNColumnarReaderSharedContext() noexcept
     {
@@ -490,6 +492,7 @@ std::shared_ptr<RNColumnarReaderSharedContext> buildColumnarReaderSharedContext(
     const auto & pushed_down_filters = table_scan_pb.tp() == tipb::TypePartitionTableScan
         ? table_scan_pb.partition_table_scan().pushed_down_filter_conditions()
         : table_scan_pb.tbl_scan().pushed_down_filter_conditions();
+    shared_context->has_pushed_down_filter_conditions = !pushed_down_filters.empty();
     shared_context->exact_filter_conditions.MergeFrom(pushed_down_filters);
 
     tipb::TableInfo table_info;
@@ -1042,7 +1045,8 @@ std::unordered_set<ColumnID> RNColumnarReadTask::getLateMaterializationEarlyColu
 
 bool RNColumnarReadTask::isLateMaterializationFilterEligible() const
 {
-    if (shared_reader_context->exact_filter_conditions.empty())
+    if (!shared_reader_context->has_pushed_down_filter_conditions
+        || shared_reader_context->exact_filter_conditions.empty())
         return false;
     const auto column_ids = getExactFilterColumnIDs();
     if (column_ids.find(MutSup::extra_table_id_col_id) != column_ids.end())
@@ -1059,6 +1063,11 @@ bool RNColumnarReadTask::isLateMaterializationFilterEligible() const
             return false;
     }
     return true;
+}
+
+bool RNColumnarReadTask::shouldLogLateMaterialization()
+{
+    return !shared_reader_context->late_materialization_logged.exchange(true);
 }
 
 void RNColumnarReadTask::replaceReaderWork(
@@ -1486,26 +1495,31 @@ void RNColumnarInputStream::initializeLateMaterialization()
     if (late_materialization_initialized)
         return;
     late_materialization_initialized = true;
-    if (!context.getSettingsRef().enable_columnar_l2_late_materialization
-        || !task->isLateMaterializationFilterEligible())
-        return;
-
-    const auto predicate_column_ids = task->getExactFilterColumnIDs();
-    bool has_late_column = false;
-    for (const auto & column : header)
+    if (context.getSettingsRef().enable_columnar_l2_late_materialization && task->isLateMaterializationFilterEligible())
     {
-        if (column.column_id == MutSup::extra_table_id_col_id || column.column_id == MutSup::extra_handle_id)
-            continue;
-        if (predicate_column_ids.find(column.column_id) == predicate_column_ids.end())
+        const auto predicate_column_ids = task->getExactFilterColumnIDs();
+        bool has_late_column = false;
+        for (const auto & column : header)
         {
-            has_late_column = true;
-            break;
+            if (column.column_id == MutSup::extra_table_id_col_id || column.column_id == MutSup::extra_handle_id)
+                continue;
+            if (predicate_column_ids.find(column.column_id) == predicate_column_ids.end())
+            {
+                has_late_column = true;
+                break;
+            }
         }
+        if (has_late_column)
+            late_materialization_interfaces = getLateMaterializationInterfaces();
     }
-    if (!has_late_column)
-        return;
 
-    late_materialization_interfaces = getLateMaterializationInterfaces();
+    if (task->shouldLogLateMaterialization())
+        LOG_INFO(
+            log,
+            "Columnar late materialization enabled={}, executor_id={}, table_id={}",
+            late_materialization_interfaces != nullptr,
+            executor_id,
+            table_id);
 }
 
 void RNColumnarInputStream::releaseReader()

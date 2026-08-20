@@ -292,6 +292,7 @@ pub mod root {
             pub rough_check_selected_packs: u64,
             pub rough_check_skipped_packs: u64,
             pub rough_check_unknown_packs: u64,
+            pub late_materialization_skipped_packs: u64,
             pub remote_segments: u64,
             pub total_segments: u64,
         }

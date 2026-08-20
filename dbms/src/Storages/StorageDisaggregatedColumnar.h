@@ -165,6 +165,8 @@ public:
 
     bool isLateMaterializationFilterEligible() const;
 
+    bool shouldLogLateMaterialization();
+
     RNColumnarReadTask(
         std::vector<RNColumnarReaderPlan> reader_plans,
         size_t source_num,

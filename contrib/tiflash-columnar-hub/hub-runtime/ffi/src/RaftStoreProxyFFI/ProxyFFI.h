@@ -223,6 +223,7 @@ struct ColumnarScanStats {
   uint64_t rough_check_selected_packs;
   uint64_t rough_check_skipped_packs;
   uint64_t rough_check_unknown_packs;
+  uint64_t late_materialization_skipped_packs;
   uint64_t remote_segments;
   uint64_t total_segments;
 };
