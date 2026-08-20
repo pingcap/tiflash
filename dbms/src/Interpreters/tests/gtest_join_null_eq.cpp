@@ -19,10 +19,10 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/registerFunctions.h>
 #include <Interpreters/Join.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <gtest/gtest.h>
 
 #include <mutex>
