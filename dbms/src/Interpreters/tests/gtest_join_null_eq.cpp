@@ -142,7 +142,32 @@ JoinPtr makeOuterJoinTestJoin(
     const JoinNonEqualConditions & non_equal_conditions = JoinNonEqualConditions{},
     const String & flag_helper_name = "")
 {
-    auto nullable_value_type = makeNullable(std::make_shared<DataTypeInt32>());
+    auto int_type = std::make_shared<DataTypeInt32>();
+    auto nullable_key_type = makeNullable(key_type);
+    auto nullable_value_type = makeNullable(int_type);
+    DataTypePtr probe_key_type = key_type;
+    DataTypePtr probe_value_type = int_type;
+    DataTypePtr build_key_type = key_type;
+    DataTypePtr build_value_type = int_type;
+    switch (kind)
+    {
+    case ASTTableJoin::Kind::LeftOuter:
+        build_key_type = nullable_key_type;
+        build_value_type = nullable_value_type;
+        break;
+    case ASTTableJoin::Kind::RightOuter:
+        probe_key_type = nullable_key_type;
+        probe_value_type = nullable_value_type;
+        break;
+    case ASTTableJoin::Kind::Full:
+        probe_key_type = nullable_key_type;
+        probe_value_type = nullable_value_type;
+        build_key_type = nullable_key_type;
+        build_value_type = nullable_value_type;
+        break;
+    default:
+        break;
+    }
     SpillConfig build_spill_config("/tmp", "join_null_eq_build", 0, 0, 0, nullptr);
     SpillConfig probe_spill_config("/tmp", "join_null_eq_probe", 0, 0, 0, nullptr);
     return std::make_shared<Join>(
@@ -157,10 +182,10 @@ JoinPtr makeOuterJoinTestJoin(
         probe_spill_config,
         RestoreConfig{1, 0, 0},
         NamesAndTypes{
-            {outer_probe_key_name, key_type},
-            {outer_probe_value_name, nullable_value_type},
-            {outer_build_key_name, key_type},
-            {outer_build_value_name, nullable_value_type},
+            {outer_probe_key_name, probe_key_type},
+            {outer_probe_value_name, probe_value_type},
+            {outer_build_key_name, build_key_type},
+            {outer_build_value_name, build_value_type},
         },
         RegisterOperatorSpillContext{},
         nullptr,
