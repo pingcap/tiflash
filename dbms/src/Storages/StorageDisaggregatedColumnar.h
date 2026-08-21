@@ -238,6 +238,7 @@ public:
 private:
     bool ensureReader();
     void initializeLateMaterialization();
+    Block readLateMaterializedBlock();
     void mergeReaderStats();
     void releaseReader();
 
