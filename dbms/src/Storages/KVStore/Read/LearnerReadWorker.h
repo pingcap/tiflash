@@ -14,6 +14,7 @@
 
 #include <Common/Logger.h>
 #include <Storages/KVStore/Read/LearnerRead.h>
+#include <Storages/KVStore/Read/RegionException.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/RegionQueryInfo_fwd.h>
 
@@ -48,21 +49,38 @@ struct UnavailableRegions
         , is_wn_disagg_read(is_wn_disagg_read_)
     {}
 
-    size_t size() const { return unavailable_ids.size(); }
+    size_t size() const { return unavailable_ids.size() + lock_region_ids.size(); }
 
-    bool empty() const { return unavailable_ids.empty(); }
+    bool empty() const { return unavailable_ids.empty() && lock_region_ids.empty(); }
 
-    bool contains(RegionID region_id) const { return unavailable_ids.contains(region_id); }
+    bool contains(RegionID region_id) const
+    {
+        return unavailable_ids.contains(region_id) || lock_region_ids.contains(region_id);
+    }
 
     void addStatus(RegionID region_id, RegionException::RegionReadStatus status_, std::string && extra_msg_)
     {
         unavailable_ids[region_id] = UnavailableDesc{status_, std::move(extra_msg_)};
     }
 
+    void addReadIndexLockAsUnavailableRegion(RegionID region_id_, LockInfoPtr && region_lock_)
+    {
+        // Read-index locks are reported by the leader-side memory lock check before TiFlash gets a local read
+        // index. Current read-index requests cannot carry bypass_lock_ts/resolved_locks to the leader, so local
+        // bypass retry cannot skip these locks. Keep them out of lock_region_ids and use the existing
+        // unavailable-region/LockException handling.
+        region_locks.emplace_back(region_id_, std::move(region_lock_));
+        unavailable_ids[region_id_] = UnavailableDesc{RegionException::RegionReadStatus::NOT_FOUND, ""};
+    }
+
     void addRegionLock(RegionID region_id_, LockInfoPtr && region_lock_)
     {
+        if (region_lock_)
+        {
+            locks[region_lock_->lock_version()].push_back(std::make_shared<pingcap::kv::Lock>(*region_lock_));
+        }
         region_locks.emplace_back(region_id_, std::move(region_lock_));
-        unavailable_ids[region_id_] = UnavailableDesc{RegionException::RegionReadStatus::MEET_LOCK, ""};
+        lock_region_ids.emplace(region_id_);
     }
 
     void tryThrowRegionException();
@@ -81,6 +99,8 @@ private:
         std::string extra_msg;
     };
     std::unordered_map<RegionID, UnavailableDesc> unavailable_ids;
+    RegionException::UnavailableRegions lock_region_ids;
+    RegionException::LocksByTxn locks;
     std::vector<std::pair<RegionID, LockInfoPtr>> region_locks;
 };
 

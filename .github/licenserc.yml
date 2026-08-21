@@ -48,5 +48,7 @@ header:
     - 'OWNERS_ALIASES'
     - '**/*.sql'
     - 'dbms/src/Common/tests/tls/'
+    - 'metrics/grafana/tiflash_summary.json.sha256'
+    - 'metrics/grafana/uv.lock'
 
   comment: on-failure
