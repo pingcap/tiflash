@@ -1987,12 +1987,6 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info) const
         return {};
     }
 
-    if unlikely (shouldSkipProbe())
-    {
-        probe_process_info.updateEndRow<false>(probe_process_info.block.rows());
-        return output_block_after_finalize;
-    }
-
     std::shared_lock lock(rwlock);
 
     Block block{};

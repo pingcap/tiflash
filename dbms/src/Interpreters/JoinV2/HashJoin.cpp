@@ -623,13 +623,6 @@ Block HashJoin::probeBlock(JoinProbeContext & ctx, size_t stream_index)
     Stopwatch all_watch;
     SCOPE_EXIT({ probe_workers_data[stream_index].probe_time += all_watch.elapsedFromLastTime(); });
 
-    if unlikely (shouldSkipProbe())
-    {
-        ctx.current_row_idx = ctx.rows;
-        probe_workers_data[stream_index].probe_handle_rows += ctx.rows;
-        return output_block_after_finalize;
-    }
-
     const NameSet & probe_output_name_set = has_other_condition
         ? output_columns_names_set_for_other_condition_after_finalize
         : output_column_names_set_after_finalize;

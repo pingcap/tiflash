@@ -80,11 +80,11 @@ OperatorStatus HashJoinV2ProbeTransformOp::tryOutputImpl(Block & block)
         block = {};
         return OperatorStatus::HAS_OUTPUT;
     }
-    if unlikely (probe_context.isAllFinished() && join_ptr->shouldSkipProbe())
+    if unlikely (join_ptr->shouldSkipProbe())
     {
         join_ptr->finishOneProbe(op_index);
         probe_context.input_is_finished = true;
-        block = join_ptr->probeLastResultBlock(op_index);
+        block = {};
         return OperatorStatus::HAS_OUTPUT;
     }
     if (probe_context.isAllFinished())

@@ -128,7 +128,7 @@ PartitionBlock HashJoinProbeExec::getProbeBlock()
 
 Block HashJoinProbeExec::probe()
 {
-    if (probe_process_info.all_rows_joined_finish && join->shouldSkipProbe())
+    if (join->shouldSkipProbe())
         return {};
 
     if (probe_process_info.all_rows_joined_finish)
