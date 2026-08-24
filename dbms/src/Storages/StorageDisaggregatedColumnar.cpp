@@ -61,6 +61,7 @@
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
 
+#include <algorithm>
 #include <ext/scope_guard.h>
 #include <limits>
 #include <unordered_map>
@@ -943,6 +944,10 @@ RNColumnarReadTask::RNColumnarReadTask(
     std::shared_ptr<RNColumnarReaderSharedContext> shared_reader_context_)
     : reader_count(reader_plans.size())
     , source_num(source_num_)
+    , has_multi_table_reader_plan(std::any_of(
+          reader_plans.begin(),
+          reader_plans.end(),
+          [](const auto & reader_plan) { return reader_plan.physical_table_ranges.size() > 1; }))
     , shared_reader_context(std::move(shared_reader_context_))
 {
     RUNTIME_CHECK(source_num > 0);
@@ -1045,6 +1050,8 @@ std::unordered_set<ColumnID> RNColumnarReadTask::getLateMaterializationEarlyColu
 
 bool RNColumnarReadTask::isLateMaterializationFilterEligible() const
 {
+    if (has_multi_table_reader_plan)
+        return false;
     if (!shared_reader_context->has_pushed_down_filter_conditions
         || shared_reader_context->exact_filter_conditions.empty())
         return false;

@@ -183,6 +183,7 @@ private:
 
     size_t reader_count;
     size_t source_num;
+    bool has_multi_table_reader_plan;
     std::shared_ptr<RNColumnarReaderSharedContext> shared_reader_context;
     mutable std::mutex pending_reader_works_mutex;
     std::deque<RNColumnarReaderWorkPtr> pending_reader_works;
