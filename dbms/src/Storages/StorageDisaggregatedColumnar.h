@@ -241,6 +241,7 @@ private:
     bool ensureReader();
     void initializeLateMaterialization();
     Block readLateMaterializedBlock();
+    Block readLegacyBlock(const TiFlashRaftProxyHelper * proxy_helper);
     void mergeReaderStats();
     void releaseReader();
 
@@ -257,6 +258,7 @@ private:
     const ColumnarLateMaterializationInterfaces * late_materialization_interfaces = nullptr;
     std::unique_ptr<FilterTransformAction> late_materialization_filter_action;
     bool late_materialization_initialized = false;
+    bool late_materialization_probed = false;
 
     bool done = false;
 

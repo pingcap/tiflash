@@ -1505,24 +1505,27 @@ void RNColumnarInputStream::initializeLateMaterialization()
     late_materialization_initialized = true;
     if (context.getSettingsRef().enable_columnar_l2_late_materialization && task->isLateMaterializationFilterEligible())
     {
-        const auto predicate_column_ids = task->getExactFilterColumnIDs();
-        bool has_late_column = false;
+        const auto early_column_ids = task->getLateMaterializationEarlyColumnIDs();
+        size_t late_column_count = 0;
+        size_t early_column_count = 0;
         for (const auto & column : header)
         {
-            if (column.column_id == MutSup::extra_table_id_col_id || column.column_id == MutSup::extra_handle_id)
+            if (column.column_id == MutSup::extra_table_id_col_id)
                 continue;
-            if (predicate_column_ids.find(column.column_id) == predicate_column_ids.end())
-            {
-                has_late_column = true;
-                break;
-            }
+            if (early_column_ids.find(column.column_id) == early_column_ids.end())
+                ++late_column_count;
+            else
+                ++early_column_count;
         }
-        if (has_late_column)
+        const auto early_without_system_columns = std::max<size_t>(1, early_column_count - 2);
+        const auto late_to_early_ratio
+            = static_cast<double>(late_column_count) / static_cast<double>(early_without_system_columns);
+        if (late_column_count > 0
+            && late_to_early_ratio > context.getSettingsRef().columnar_l2_late_materialization_min_late_to_early_ratio)
         {
             const auto * interfaces = getLateMaterializationInterfaces();
             if (interfaces != nullptr)
             {
-                const auto early_column_ids = task->getLateMaterializationEarlyColumnIDs();
                 const std::vector<Int64> encoded_ids(early_column_ids.begin(), early_column_ids.end());
                 const bool supported = interfaces->fn_is_late_materialization_supported(
                     reader.value(),
@@ -1535,6 +1538,13 @@ void RNColumnarInputStream::initializeLateMaterialization()
                     LOG_DEBUG(log, "Columnar late materialization is unavailable for this reader");
             }
         }
+        LOG_DEBUG(
+            log,
+            "Columnar late materialization eligibility: late_columns={}, early_columns={}, late_to_early_ratio={:.3f}, min_ratio={:.3f}",
+            late_column_count,
+            early_column_count,
+            late_to_early_ratio,
+            context.getSettingsRef().columnar_l2_late_materialization_min_late_to_early_ratio);
     }
 
     if (task->shouldLogLateMaterialization())
@@ -1556,6 +1566,7 @@ void RNColumnarInputStream::releaseReader()
     late_materialization_interfaces = nullptr;
     late_materialization_filter_action.reset();
     late_materialization_initialized = false;
+    late_materialization_probed = false;
 }
 
 void RNColumnarInputStream::mergeReaderStats()
@@ -1748,6 +1759,42 @@ Block RNColumnarInputStream::readLateMaterializedBlock()
         BaseBuffView{selection_data, selection_size});
     if (selected_rows == std::numeric_limits<UInt64>::max())
         throw Exception(ErrorCodes::LOGICAL_ERROR, "materialize selected rows for batch {} failed", batch_id);
+
+    if (!late_materialization_probed)
+    {
+        late_materialization_probed = true;
+        const auto skip_ratio = rows == 0 ? 0.0 : 1.0 - static_cast<double>(selected_rows) / static_cast<double>(rows);
+        const auto min_skip_ratio
+            = context.getSettingsRef().columnar_l2_late_materialization_min_selection_skip_ratio;
+        if (skip_ratio < min_skip_ratio)
+        {
+            if (late_materialization_interfaces->fn_discard_late_materialization_batch(reader.value(), batch_id) == 0)
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "discard LM probe batch {} failed", batch_id);
+            pending_late_materialization = false;
+            late_materialization_interfaces = nullptr;
+            LOG_INFO(
+                log,
+                "Disable columnar late materialization after probe: rows={}, selected_rows={}, skip_ratio={:.4f}, min_skip_ratio={:.4f}",
+                rows,
+                selected_rows,
+                skip_ratio,
+                min_skip_ratio);
+            const auto * proxy_helper
+                = context.getGlobalContext().getSharedContextDisagg()->getColumnarProxyHelper();
+            RUNTIME_CHECK_MSG(proxy_helper != nullptr, "columnar helper is not initialized");
+            // The probe consumed an independent LM batch. Continue immediately with the
+            // legacy reader so the caller does not mistake the discarded probe for EOF.
+            return readLegacyBlock(proxy_helper);
+        }
+        LOG_DEBUG(
+            log,
+            "Columnar late materialization probe: rows={}, selected_rows={}, skip_ratio={:.4f}, min_skip_ratio={:.4f}",
+            rows,
+            selected_rows,
+            skip_ratio,
+            min_skip_ratio);
+    }
+
     if (selected_rows == 0)
     {
         if (late_materialization_interfaces->fn_discard_late_materialization_batch(reader.value(), batch_id) == 0)
@@ -1820,6 +1867,104 @@ Block RNColumnarInputStream::readLateMaterializedBlock()
     return block;
 }
 
+Block RNColumnarInputStream::readLegacyBlock(const TiFlashRaftProxyHelper * proxy_helper)
+{
+    Stopwatch w{CLOCK_MONOTONIC_COARSE};
+    TableID physical_table_id = -1;
+    const UInt64 rows = proxy_helper->cloud_storage_engine_interfaces.fn_read_block(reader.value(), batch_size);
+    duration_read_sec += w.elapsedSecondsFromLastTime();
+    LOG_DEBUG(log, "Read {} rows from columnar", rows);
+    if (rows == std::numeric_limits<UInt64>::max())
+    {
+        LOG_WARNING(log, "Read block from columnar failed");
+        throw Exception("read_block failed in columnar", ErrorCodes::LOGICAL_ERROR);
+    }
+    if (rows == 0)
+    {
+        releaseReader();
+        if (fixed_reader_work != nullptr)
+            done = true;
+        return {};
+    }
+
+    // Check RSS pressure once the columnar reader has materialized a non-empty block,
+    // before deserializing more column data into TiFlash memory.
+    CurrentMemoryTracker::checkRssLimit();
+
+    Block header = getHeader();
+    const ColumnsWithTypeAndName & col_type_and_name = header.getColumnsWithTypeAndName();
+    // Construct block from columnar column data.
+    MutableColumns columns = header.cloneEmptyColumns();
+    for (UInt32 i = 0; i < col_type_and_name.size(); ++i)
+    {
+        LOG_DEBUG(
+            log,
+            "Read column id={} name={} type={}",
+            col_type_and_name[i].column_id,
+            col_type_and_name[i].name,
+            col_type_and_name[i].type->getName());
+        // Read column data from columnar
+        Int64 col_id = col_type_and_name[i].column_id;
+        if (col_id == MutSup::extra_handle_id)
+        {
+            (void)w.elapsedSecondsFromLastTime();
+            RustStrWithView col_data = proxy_helper->cloud_storage_engine_interfaces.fn_read_handle(reader.value());
+            duration_read_sec += w.elapsedSecondsFromLastTime();
+            SCOPE_EXIT({ RustGcHelper::instance().gcRustPtr(col_data.inner.ptr, col_data.inner.type); });
+            physical_table_id = proxy_helper->cloud_storage_engine_interfaces.fn_physical_table_id(reader.value());
+            ReadBufferFromMemory buf(col_data.buff.data, static_cast<size_t>(col_data.buff.len));
+            auto & col = *columns[i];
+            col_type_and_name[i].type->deserializeBinaryBulkWithMultipleStreams(
+                col,
+                [&](const IDataType::SubstreamPath &) { return &buf; },
+                rows,
+                -1.0, // avg_value_size_hint set to -1 to indicate Decimal format from columnar
+                true,
+                {});
+            duration_deserialize_sec += w.elapsedSecondsFromLastTime();
+        }
+        else if (col_id == MutSup::extra_table_id_col_id)
+        {
+            continue;
+        }
+        else
+        {
+            (void)w.elapsedSecondsFromLastTime();
+            RustStrWithView col_data
+                = proxy_helper->cloud_storage_engine_interfaces.fn_read_column(reader.value(), col_id);
+            duration_read_sec += w.elapsedSecondsFromLastTime();
+            SCOPE_EXIT({ RustGcHelper::instance().gcRustPtr(col_data.inner.ptr, col_data.inner.type); });
+            physical_table_id = proxy_helper->cloud_storage_engine_interfaces.fn_physical_table_id(reader.value());
+            ReadBufferFromMemory buf(col_data.buff.data, static_cast<size_t>(col_data.buff.len));
+            auto & col = *columns[i];
+            col_type_and_name[i].type->deserializeBinaryBulkWithMultipleStreams(
+                col,
+                [&](const IDataType::SubstreamPath &) { return &buf; },
+                rows,
+                -1.0, // avg_value_size_hint set to -1 to indicate Decimal format from columnar
+                true,
+                {});
+            duration_deserialize_sec += w.elapsedSecondsFromLastTime();
+            LOG_DEBUG(log, "Read column data done, col size={}", col.size());
+        }
+    }
+    duration_deserialize_sec += w.elapsedSecondsFromLastTime();
+
+    Block block = header.cloneWithColumns(std::move(columns));
+    LOG_DEBUG(log, "Read block rows={}, structure={}", block.rows(), block.dumpStructure());
+    if (physical_table_id == -1)
+    {
+        LOG_WARNING(log, "physical_table_id is not set, use table_id {} instead", table_id);
+        physical_table_id = table_id;
+    }
+    // Fill extra table id column.
+    action.fill(block, physical_table_id);
+    block.checkNumberOfRows();
+
+    total_bytes += block.bytes();
+    return block;
+}
+
 Block RNColumnarInputStream::readImpl([[maybe_unused]] FilterPtr & res_filter, [[maybe_unused]] bool return_filter)
 {
     if (done)
@@ -1844,103 +1989,9 @@ Block RNColumnarInputStream::readImpl([[maybe_unused]] FilterPtr & res_filter, [
             continue;
         }
 
-        Stopwatch w{CLOCK_MONOTONIC_COARSE};
-        TableID physical_table_id = -1;
-        const UInt64 rows = proxy_helper->cloud_storage_engine_interfaces.fn_read_block(reader.value(), batch_size);
-        duration_read_sec += w.elapsedSecondsFromLastTime();
-        LOG_DEBUG(log, "Read {} rows from columnar", rows);
-        if (rows == std::numeric_limits<UInt64>::max())
-        {
-            LOG_WARNING(log, "Read block from columnar failed");
-            throw Exception("read_block failed in columnar", ErrorCodes::LOGICAL_ERROR);
-        }
-        if (rows == 0)
-        {
-            releaseReader();
-            if (fixed_reader_work != nullptr)
-            {
-                done = true;
-                return {};
-            }
-            continue;
-        }
-
-        // Check RSS pressure once the columnar reader has materialized a non-empty block,
-        // before deserializing more column data into TiFlash memory.
-        CurrentMemoryTracker::checkRssLimit();
-
-        Block header = getHeader();
-        const ColumnsWithTypeAndName & col_type_and_name = header.getColumnsWithTypeAndName();
-        // Construct block from columnar column data.
-        MutableColumns columns = header.cloneEmptyColumns();
-        for (UInt32 i = 0; i < col_type_and_name.size(); ++i)
-        {
-            LOG_DEBUG(
-                log,
-                "Read column id={} name={} type={}",
-                col_type_and_name[i].column_id,
-                col_type_and_name[i].name,
-                col_type_and_name[i].type->getName());
-            // Read column data from columnar
-            Int64 col_id = col_type_and_name[i].column_id;
-            if (col_id == MutSup::extra_handle_id)
-            {
-                (void)w.elapsedSecondsFromLastTime();
-                RustStrWithView col_data = proxy_helper->cloud_storage_engine_interfaces.fn_read_handle(reader.value());
-                duration_read_sec += w.elapsedSecondsFromLastTime();
-                SCOPE_EXIT({ RustGcHelper::instance().gcRustPtr(col_data.inner.ptr, col_data.inner.type); });
-                physical_table_id = proxy_helper->cloud_storage_engine_interfaces.fn_physical_table_id(reader.value());
-                ReadBufferFromMemory buf(col_data.buff.data, static_cast<size_t>(col_data.buff.len));
-                auto & col = *columns[i];
-                col_type_and_name[i].type->deserializeBinaryBulkWithMultipleStreams(
-                    col,
-                    [&](const IDataType::SubstreamPath &) { return &buf; },
-                    rows,
-                    -1.0, // avg_value_size_hint set to -1 to indicate Decimal format from columnar
-                    true,
-                    {});
-                duration_deserialize_sec += w.elapsedSecondsFromLastTime();
-            }
-            else if (col_id == MutSup::extra_table_id_col_id)
-            {
-                continue;
-            }
-            else
-            {
-                (void)w.elapsedSecondsFromLastTime();
-                RustStrWithView col_data
-                    = proxy_helper->cloud_storage_engine_interfaces.fn_read_column(reader.value(), col_id);
-                duration_read_sec += w.elapsedSecondsFromLastTime();
-                SCOPE_EXIT({ RustGcHelper::instance().gcRustPtr(col_data.inner.ptr, col_data.inner.type); });
-                physical_table_id = proxy_helper->cloud_storage_engine_interfaces.fn_physical_table_id(reader.value());
-                ReadBufferFromMemory buf(col_data.buff.data, static_cast<size_t>(col_data.buff.len));
-                auto & col = *columns[i];
-                col_type_and_name[i].type->deserializeBinaryBulkWithMultipleStreams(
-                    col,
-                    [&](const IDataType::SubstreamPath &) { return &buf; },
-                    rows,
-                    -1.0, // avg_value_size_hint set to -1 to indicate Decimal format from columnar
-                    true,
-                    {});
-                duration_deserialize_sec += w.elapsedSecondsFromLastTime();
-                LOG_DEBUG(log, "Read column data done, col size={}", col.size());
-            }
-        }
-        duration_deserialize_sec += w.elapsedSecondsFromLastTime();
-
-        Block block = header.cloneWithColumns(std::move(columns));
-        LOG_DEBUG(log, "Read block rows={}, structure={}", block.rows(), block.dumpStructure());
-        if (physical_table_id == -1)
-        {
-            LOG_WARNING(log, "physical_table_id is not set, use table_id {} instead", table_id);
-            physical_table_id = table_id;
-        }
-        // Fill extra table id column.
-        action.fill(block, physical_table_id);
-        block.checkNumberOfRows();
-
-        total_bytes += block.bytes();
-        return block;
+        Block block = readLegacyBlock(proxy_helper);
+        if (block || done)
+            return block;
     }
 }
 
