@@ -188,7 +188,8 @@ const ColumnarLateMaterializationInterfaces * getLateMaterializationInterfaces()
         || interfaces->fn_read_early_block == nullptr || interfaces->fn_read_early_column == nullptr
         || interfaces->fn_materialize_selected == nullptr || interfaces->fn_read_late_column == nullptr
         || interfaces->fn_finish_materialized_block == nullptr
-        || interfaces->fn_discard_late_materialization_batch == nullptr)
+        || interfaces->fn_discard_late_materialization_batch == nullptr
+        || interfaces->fn_is_late_materialization_supported == nullptr)
         return nullptr;
     return interfaces;
 #else
@@ -1517,7 +1518,23 @@ void RNColumnarInputStream::initializeLateMaterialization()
             }
         }
         if (has_late_column)
-            late_materialization_interfaces = getLateMaterializationInterfaces();
+        {
+            const auto * interfaces = getLateMaterializationInterfaces();
+            if (interfaces != nullptr)
+            {
+                const auto early_column_ids = task->getLateMaterializationEarlyColumnIDs();
+                const std::vector<Int64> encoded_ids(early_column_ids.begin(), early_column_ids.end());
+                const bool supported = interfaces->fn_is_late_materialization_supported(
+                    reader.value(),
+                    BaseBuffView{
+                        reinterpret_cast<const char *>(encoded_ids.data()),
+                        encoded_ids.size() * sizeof(Int64)});
+                if (supported)
+                    late_materialization_interfaces = interfaces;
+                else
+                    LOG_DEBUG(log, "Columnar late materialization is unavailable for this reader");
+            }
+        }
     }
 
     if (task->shouldLogLateMaterialization())
@@ -1537,6 +1554,7 @@ void RNColumnarInputStream::releaseReader()
     reader.reset();
     current_reader_work.reset();
     late_materialization_interfaces = nullptr;
+    late_materialization_filter_action.reset();
     late_materialization_initialized = false;
 }
 
@@ -1664,8 +1682,10 @@ Block RNColumnarInputStream::readLateMaterializedBlock()
         if (column.column_id == MutSup::extra_table_id_col_id
             || early_column_ids.find(column.column_id) == early_column_ids.end())
             continue;
+        (void)w.elapsedSecondsFromLastTime();
         auto col_data
             = late_materialization_interfaces->fn_read_early_column(reader.value(), batch_id, column.column_id);
+        duration_read_sec += w.elapsedSecondsFromLastTime();
         SCOPE_EXIT({ RustGcHelper::instance().gcRustPtr(col_data.inner.ptr, col_data.inner.type); });
         ReadBufferFromMemory buf(col_data.buff.data, static_cast<size_t>(col_data.buff.len));
         auto mutable_column = column.type->createColumn();
@@ -1676,20 +1696,30 @@ Block RNColumnarInputStream::readLateMaterializedBlock()
             -1.0,
             true,
             {});
+        duration_deserialize_sec += w.elapsedSecondsFromLastTime();
         early_block.insert(
             ColumnWithTypeAndName{std::move(mutable_column), column.type, column.name, column.column_id});
     }
 
-    NamesAndTypes early_names_and_types;
-    early_names_and_types.reserve(early_block.columns());
-    for (const auto & column : early_block)
-        early_names_and_types.emplace_back(column.name, column.type);
-    DAGExpressionAnalyzer lm_analyzer(std::move(early_names_and_types), context);
-    auto filter_conditions = task->getLateMaterializationFilterConditions(early_block);
-    auto filter_actions = lm_analyzer.buildPushDownFilter(filter_conditions, true);
-    const auto & before_where = std::get<0>(filter_actions);
-    const auto & filter_column_name = std::get<1>(filter_actions);
-    FilterTransformAction filter_action(early_block, before_where, filter_column_name);
+    if (!late_materialization_filter_action)
+    {
+        // The filter expression and action graph are invariant for one input
+        // stream. Building them for every 10K-row batch makes LM spend most of
+        // its time in planner setup instead of row filtering.
+        Block filter_header = early_block.cloneEmpty();
+        NamesAndTypes early_names_and_types;
+        early_names_and_types.reserve(filter_header.columns());
+        for (const auto & column : filter_header)
+            early_names_and_types.emplace_back(column.name, column.type);
+        DAGExpressionAnalyzer lm_analyzer(std::move(early_names_and_types), context);
+        auto filter_conditions = task->getLateMaterializationFilterConditions(filter_header);
+        auto filter_actions = lm_analyzer.buildPushDownFilter(filter_conditions, true);
+        late_materialization_filter_action = std::make_unique<FilterTransformAction>(
+            filter_header,
+            std::get<0>(filter_actions),
+            std::get<1>(filter_actions));
+    }
+    auto & filter_action = *late_materialization_filter_action;
     Block evaluation_block = early_block;
     FilterPtr selection = nullptr;
     bool any_selected = !filter_action.alwaysFalse();
@@ -1723,8 +1753,15 @@ Block RNColumnarInputStream::readLateMaterializedBlock()
         if (late_materialization_interfaces->fn_discard_late_materialization_batch(reader.value(), batch_id) == 0)
             throw Exception(ErrorCodes::LOGICAL_ERROR, "discard empty late-materialization batch {} failed", batch_id);
         pending_late_materialization = false;
+        // Account for early deserialization, exact filtering, selection, and
+        // discard even when this batch produces no output rows.
+        duration_deserialize_sec += w.elapsedSecondsFromLastTime();
         return {};
     }
+
+    // Exact filter evaluation and selection are post-read processing and
+    // therefore belong to deserialize_cost.
+    duration_deserialize_sec += w.elapsedSecondsFromLastTime();
 
     MutableColumns columns = header.cloneEmptyColumns();
     for (size_t i = 0; i < col_type_and_name.size(); ++i)
@@ -1740,10 +1777,25 @@ Block RNColumnarInputStream::readLateMaterializedBlock()
             else if (selection != nullptr)
                 value = value->filter(*selection, selected_rows);
             columns[i] = value->assumeMutable();
-            continue;
         }
+    }
+    // Account for filtering/copying the early columns before measuring the
+    // late-column callbacks individually.
+    duration_deserialize_sec += w.elapsedSecondsFromLastTime();
+
+    for (size_t i = 0; i < col_type_and_name.size(); ++i)
+    {
+        const auto & column = col_type_and_name[i];
+        if (column.column_id == MutSup::extra_table_id_col_id
+            || early_column_ids.find(column.column_id) != early_column_ids.end())
+            continue;
+        // A late-column callback may perform L2 pack IO, decompression and Rust
+        // serialization. Keep that work in read_cost; only the C++ decode below
+        // belongs to deserialize_cost.
+        (void)w.elapsedSecondsFromLastTime();
         auto col_data
             = late_materialization_interfaces->fn_read_late_column(reader.value(), batch_id, column.column_id);
+        duration_read_sec += w.elapsedSecondsFromLastTime();
         SCOPE_EXIT({ RustGcHelper::instance().gcRustPtr(col_data.inner.ptr, col_data.inner.type); });
         ReadBufferFromMemory buf(col_data.buff.data, static_cast<size_t>(col_data.buff.len));
         column.type->deserializeBinaryBulkWithMultipleStreams(
@@ -1753,6 +1805,7 @@ Block RNColumnarInputStream::readLateMaterializedBlock()
             -1.0,
             true,
             {});
+        duration_deserialize_sec += w.elapsedSecondsFromLastTime();
     }
     if (late_materialization_interfaces->fn_finish_materialized_block(reader.value(), batch_id) == 0)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "finish late-materialization batch {} failed", batch_id);
@@ -1832,7 +1885,9 @@ Block RNColumnarInputStream::readImpl([[maybe_unused]] FilterPtr & res_filter, [
             Int64 col_id = col_type_and_name[i].column_id;
             if (col_id == MutSup::extra_handle_id)
             {
+                (void)w.elapsedSecondsFromLastTime();
                 RustStrWithView col_data = proxy_helper->cloud_storage_engine_interfaces.fn_read_handle(reader.value());
+                duration_read_sec += w.elapsedSecondsFromLastTime();
                 SCOPE_EXIT({ RustGcHelper::instance().gcRustPtr(col_data.inner.ptr, col_data.inner.type); });
                 physical_table_id = proxy_helper->cloud_storage_engine_interfaces.fn_physical_table_id(reader.value());
                 ReadBufferFromMemory buf(col_data.buff.data, static_cast<size_t>(col_data.buff.len));
@@ -1844,6 +1899,7 @@ Block RNColumnarInputStream::readImpl([[maybe_unused]] FilterPtr & res_filter, [
                     -1.0, // avg_value_size_hint set to -1 to indicate Decimal format from columnar
                     true,
                     {});
+                duration_deserialize_sec += w.elapsedSecondsFromLastTime();
             }
             else if (col_id == MutSup::extra_table_id_col_id)
             {
@@ -1851,8 +1907,10 @@ Block RNColumnarInputStream::readImpl([[maybe_unused]] FilterPtr & res_filter, [
             }
             else
             {
+                (void)w.elapsedSecondsFromLastTime();
                 RustStrWithView col_data
                     = proxy_helper->cloud_storage_engine_interfaces.fn_read_column(reader.value(), col_id);
+                duration_read_sec += w.elapsedSecondsFromLastTime();
                 SCOPE_EXIT({ RustGcHelper::instance().gcRustPtr(col_data.inner.ptr, col_data.inner.type); });
                 physical_table_id = proxy_helper->cloud_storage_engine_interfaces.fn_physical_table_id(reader.value());
                 ReadBufferFromMemory buf(col_data.buff.data, static_cast<size_t>(col_data.buff.len));
@@ -1864,6 +1922,7 @@ Block RNColumnarInputStream::readImpl([[maybe_unused]] FilterPtr & res_filter, [
                     -1.0, // avg_value_size_hint set to -1 to indicate Decimal format from columnar
                     true,
                     {});
+                duration_deserialize_sec += w.elapsedSecondsFromLastTime();
                 LOG_DEBUG(log, "Read column data done, col size={}", col.size());
             }
         }

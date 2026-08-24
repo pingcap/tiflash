@@ -387,6 +387,31 @@ pub unsafe extern "C" fn ffi_discard_late_materialization_batch(
     }
 }
 
+pub unsafe extern "C" fn ffi_is_late_materialization_supported(
+    mut reader: ColumnarReaderPtr,
+    early_column_ids: BaseBuffView,
+) -> u8 {
+    if early_column_ids.len % 8 != 0 {
+        error!("invalid late-materialization capability arguments");
+        return 0;
+    }
+    let early_column_ids = early_column_ids
+        .to_slice()
+        .chunks_exact(8)
+        .map(|bytes| i64::from_le_bytes(bytes.try_into().unwrap()))
+        .collect::<Vec<_>>();
+    match reader
+        .as_mut()
+        .ffi_is_late_materialization_supported(&early_column_ids)
+    {
+        Ok(supported) => u8::from(supported),
+        Err(err) => {
+            error!("late-materialization capability check failed: {}", err);
+            0
+        }
+    }
+}
+
 static LATE_MATERIALIZATION_INTERFACES: ColumnarLateMaterializationInterfaces =
     ColumnarLateMaterializationInterfaces {
         version: 1,
@@ -397,6 +422,7 @@ static LATE_MATERIALIZATION_INTERFACES: ColumnarLateMaterializationInterfaces =
         fn_read_late_column: Some(ffi_read_late_column),
         fn_finish_materialized_block: Some(ffi_finish_materialized_block),
         fn_discard_late_materialization_batch: Some(ffi_discard_late_materialization_batch),
+        fn_is_late_materialization_supported: Some(ffi_is_late_materialization_supported),
     };
 
 #[no_mangle]

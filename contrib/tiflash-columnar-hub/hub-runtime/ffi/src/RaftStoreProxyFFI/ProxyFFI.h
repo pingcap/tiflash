@@ -279,6 +279,8 @@ struct ColumnarLateMaterializationInterfaces {
   uint8_t (*fn_finish_materialized_block)(ColumnarReaderPtr, uint64_t);
   uint8_t (*fn_discard_late_materialization_batch)(ColumnarReaderPtr,
                                                    uint64_t);
+  uint8_t (*fn_is_late_materialization_supported)(ColumnarReaderPtr,
+                                                   BaseBuffView);
 };
 
 #if defined(__GNUC__) || defined(__clang__)

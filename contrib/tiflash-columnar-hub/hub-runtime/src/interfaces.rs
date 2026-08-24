@@ -404,6 +404,12 @@ pub mod root {
             pub fn_discard_late_materialization_batch: ::std::option::Option<
                 unsafe extern "C" fn(arg1: root::DB::ColumnarReaderPtr, arg2: u64) -> u8,
             >,
+            pub fn_is_late_materialization_supported: ::std::option::Option<
+                unsafe extern "C" fn(
+                    arg1: root::DB::ColumnarReaderPtr,
+                    arg2: root::DB::BaseBuffView,
+                ) -> u8,
+            >,
         }
         #[repr(C)]
         #[derive(Debug)]

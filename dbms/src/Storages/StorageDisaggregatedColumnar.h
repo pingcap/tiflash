@@ -20,6 +20,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/ThreadManager.h>
 #include <DataStreams/AddExtraTableIDColumnTransformAction.h>
+#include <DataStreams/FilterTransformAction.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
@@ -254,6 +255,7 @@ private:
     const String executor_id;
     Block header;
     const ColumnarLateMaterializationInterfaces * late_materialization_interfaces = nullptr;
+    std::unique_ptr<FilterTransformAction> late_materialization_filter_action;
     bool late_materialization_initialized = false;
 
     bool done = false;
