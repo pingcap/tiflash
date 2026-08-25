@@ -85,4 +85,9 @@ inline bool isInteger(CompressionDataType type)
     return type >= CompressionDataType::Int8 && type <= CompressionDataType::Int64;
 }
 
+inline bool isFloat(CompressionDataType type)
+{
+    return type == CompressionDataType::Float32 || type == CompressionDataType::Float64;
+}
+
 } // namespace DB
