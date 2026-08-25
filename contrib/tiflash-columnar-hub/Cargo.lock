@@ -1043,27 +1043,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bindgen"
-version = "0.65.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfdf7b466f9a4903edc73f95d6d2bcd5baf8ae620638762244d3f60143643cc5"
-dependencies = [
- "bitflags 1.3.2",
- "cexpr",
- "clang-sys",
- "lazy_static",
- "lazycell",
- "peeking_take_while",
- "prettyplease",
- "proc-macro2",
- "quote",
- "regex",
- "rustc-hash",
- "shlex 1.3.0",
- "syn 2.0.117",
-]
-
-[[package]]
 name = "bitfield"
 version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1204,16 +1183,6 @@ checksum = "7dafe3a8757b027e2be6e4e5601ed563c55989fcf1546e933c66c8eb3a058d35"
 dependencies = [
  "bytes",
  "either",
-]
-
-[[package]]
-name = "bzip2-sys"
-version = "0.1.13+1.0.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "225bff33b2141874fe80d71e07d6eec4f85c5c216453dd96388240f96e1acc14"
-dependencies = [
- "cc",
- "pkg-config",
 ]
 
 [[package]]
@@ -2898,7 +2867,7 @@ version = "0.10.3+1.44.0-patched"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f23adc509a3c4dea990e0ab8d2add4a65389ee69c288b7851d75dd1df7a6d6c6"
 dependencies = [
- "bindgen 0.59.2",
+ "bindgen",
  "cc",
  "cmake",
  "libc",
@@ -3754,7 +3723,6 @@ dependencies = [
  "rand 0.8.6",
  "recovery",
  "regex",
- "rocksdb",
  "rusoto_core",
  "rusoto_credential",
  "rusoto_mock",
@@ -3889,39 +3857,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e02f3bb43d335493c96bf3fd3a321600bf6bd07ed34bc64118e9293bdffea46c"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "librocksdb_sys"
-version = "0.1.0"
-source = "git+https://github.com/tikv/rust-rocksdb.git#c9aefbe69f89ade0bda6a51b614a46eee184515a"
-dependencies = [
- "bindgen 0.65.1",
- "bzip2-sys",
- "cc",
- "cmake",
- "libc",
- "libtitan_sys",
- "libz-sys",
- "lz4-sys",
- "openssl-sys",
- "snappy-sys",
- "zstd-sys",
-]
-
-[[package]]
-name = "libtitan_sys"
-version = "0.0.1"
-source = "git+https://github.com/tikv/rust-rocksdb.git#c9aefbe69f89ade0bda6a51b614a46eee184515a"
-dependencies = [
- "bzip2-sys",
- "cc",
- "cmake",
- "libc",
- "libz-sys",
- "lz4-sys",
- "snappy-sys",
- "zstd-sys",
 ]
 
 [[package]]
@@ -4288,15 +4223,6 @@ dependencies = [
  "libc",
  "wasi 0.11.1+wasi-snapshot-preview1",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "mountinfo"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6341a1c48d5425a185c43f75480227dc738cf85ecc6a4bc8ca847406d44f1c17"
-dependencies = [
- "regex",
 ]
 
 [[package]]
@@ -5753,15 +5679,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3582f63211428f83597b51b2ddb88e2a91a9d52d12831f9d08f5e624e8977422"
 
 [[package]]
-name = "rocksdb"
-version = "0.3.0"
-source = "git+https://github.com/tikv/rust-rocksdb.git#c9aefbe69f89ade0bda6a51b614a46eee184515a"
-dependencies = [
- "libc",
- "librocksdb_sys",
-]
-
-[[package]]
 name = "roxmltree"
 version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6485,16 +6402,6 @@ name = "smallvec"
 version = "1.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
-
-[[package]]
-name = "snappy-sys"
-version = "0.1.0"
-source = "git+https://github.com/tikv/rust-snappy.git?branch=static-link#8c12738bad811397600455d6982aff754ea2ac44"
-dependencies = [
- "cmake",
- "libc",
- "pkg-config",
-]
 
 [[package]]
 name = "socket2"
@@ -7320,7 +7227,6 @@ dependencies = [
  "libc",
  "log",
  "log_wrappers",
- "mountinfo",
  "nix 0.24.3",
  "num-traits",
  "num_cpus",
@@ -7760,6 +7666,17 @@ name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
+
+[[package]]
+name = "twox-hash"
+version = "1.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
+dependencies = [
+ "cfg-if",
+ "rand 0.7.3",
+ "static_assertions",
+]
 
 [[package]]
 name = "txn_types"
@@ -8612,6 +8529,7 @@ dependencies = [
  "sqlx-mysql",
  "stable_deref_trait",
  "standback",
+ "static_assertions",
  "strum 0.27.2",
  "syn 1.0.109",
  "syn 2.0.117",
@@ -8625,9 +8543,12 @@ dependencies = [
  "tower 0.4.13",
  "tracing",
  "tracing-core",
+ "twox-hash",
  "typenum",
  "url",
  "uuid 1.23.1",
+ "zstd",
+ "zstd-safe",
  "zstd-sys",
 ]
 
