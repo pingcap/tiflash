@@ -155,8 +155,6 @@ public:
 
     const String & getExecutorID() const;
 
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & getExactFilterConditions() const;
-
     google::protobuf::RepeatedPtrField<tipb::Expr> getLateMaterializationFilterConditions(
         const Block & early_block) const;
 

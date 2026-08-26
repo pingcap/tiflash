@@ -1001,11 +1001,6 @@ const String & RNColumnarReadTask::getExecutorID() const
     return shared_reader_context->executor_id;
 }
 
-const google::protobuf::RepeatedPtrField<tipb::Expr> & RNColumnarReadTask::getExactFilterConditions() const
-{
-    return shared_reader_context->exact_filter_conditions;
-}
-
 google::protobuf::RepeatedPtrField<tipb::Expr> RNColumnarReadTask::getLateMaterializationFilterConditions(
     const Block & early_block) const
 {
