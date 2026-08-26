@@ -88,7 +88,6 @@ impl From<kvengine::table::columnar::ColumnarRuntimeStats> for ColumnarScanStats
             rough_check_selected_packs: stats.rough_check_selected_packs,
             rough_check_skipped_packs: stats.rough_check_skipped_packs,
             rough_check_unknown_packs: stats.rough_check_unknown_packs,
-            late_materialization_skipped_packs: stats.late_materialization_skipped_packs,
             remote_segments: stats.remote_segments,
             total_segments: stats.total_segments,
         }

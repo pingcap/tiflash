@@ -589,11 +589,7 @@ model: the early/late column-count ratio is checked before reading, and the
 first exact batch must satisfy the configured skip ratio. A dense probe is
 discarded and the reader switches to legacy mode for its remaining lifetime.
 
-The currently exported metric is
-`late_materialization_skipped_packs`. For each late column, CSE counts candidate
-packs referenced by deferred rows minus packs actually loaded for selected
-rows, and aggregates the result in `ColumnarRuntimeStats` and TiFlash's
-`ColumnarScanContext`. Existing read, serialization, rough-filter and
+Existing read, serialization, rough-filter and
 deserialize timings remain available. Per-column byte ratios, eager-sidecar
 bytes, repeated-load counters, and pending-batch memory metrics are not
 implemented yet and must not be treated as rollout signals.

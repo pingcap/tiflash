@@ -47,7 +47,6 @@ public:
     std::atomic<UInt64> rough_check_selected_packs{0};
     std::atomic<UInt64> rough_check_skipped_packs{0};
     std::atomic<UInt64> rough_check_unknown_packs{0};
-    std::atomic<UInt64> late_materialization_skipped_packs{0};
 
     std::atomic<UInt64> remote_segments{0};
     std::atomic<UInt64> total_segments{0};
@@ -119,7 +118,6 @@ public:
         rough_check_selected_packs += other.rough_check_selected_packs.load();
         rough_check_skipped_packs += other.rough_check_skipped_packs.load();
         rough_check_unknown_packs += other.rough_check_unknown_packs.load();
-        late_materialization_skipped_packs += other.late_materialization_skipped_packs.load();
         remote_segments += other.remote_segments.load();
         total_segments += other.total_segments.load();
     }
@@ -161,7 +159,6 @@ public:
         rough_check_selected_packs += other.rough_check_selected_packs;
         rough_check_skipped_packs += other.rough_check_skipped_packs;
         rough_check_unknown_packs += other.rough_check_unknown_packs;
-        late_materialization_skipped_packs += other.late_materialization_skipped_packs;
         remote_segments += other.remote_segments;
         total_segments += other.total_segments;
     }
@@ -176,7 +173,6 @@ public:
             R"(,"user_read_bytes":{},"read_block":"{:.3f}ms","serialize_block":"{:.3f}ms")"
             R"(,"init_reader":"{:.3f}ms","prefetch":"{:.3f}ms","deserialize_block":"{:.3f}ms")"
             R"(,"rough_check":{{"total":{},"selected":{},"skipped":{},"unknown":{}}})"
-            R"(,"late_materialization_skipped_packs":{})"
             R"(,"remote_segments":{},"total_segments":{}}})",
             mvcc_input_rows.load(),
             mvcc_input_bytes.load(),
@@ -195,7 +191,6 @@ public:
             rough_check_selected_packs.load(),
             rough_check_skipped_packs.load(),
             rough_check_unknown_packs.load(),
-            late_materialization_skipped_packs.load(),
             remote_segments.load(),
             total_segments.load());
     }
