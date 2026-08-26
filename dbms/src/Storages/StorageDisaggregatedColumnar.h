@@ -164,9 +164,9 @@ public:
 
     std::unordered_set<ColumnID> getLateMaterializationEarlyColumnIDs() const;
 
-    bool isLateMaterializationFilterEligible() const;
+    bool isLateMaterializationFilterEligible(String * reason = nullptr) const;
 
-    bool shouldLogLateMaterialization();
+    bool shouldLogLateMaterialization(bool enabled);
 
     RNColumnarReadTask(
         std::vector<RNColumnarReaderPlan> reader_plans,

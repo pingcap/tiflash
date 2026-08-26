@@ -1038,7 +1038,7 @@ dependencies = [
  "quote",
  "regex",
  "rustc-hash",
- "shlex 1.3.0",
+ "shlex",
  "which",
 ]
 
@@ -1220,7 +1220,7 @@ dependencies = [
  "find-msvc-tools",
  "jobserver",
  "libc",
- "shlex 1.3.0",
+ "shlex",
 ]
 
 [[package]]
@@ -5685,7 +5685,7 @@ dependencies = [
 [[package]]
 name = "rusoto_core"
 version = "0.46.0"
-source = "git+https://github.com/tikv/rusoto?branch=cse#d6ffce8898ce5d03ada531401437985b727393a4"
+source = "git+https://github.com/tikv/rusoto?branch=cse#187f471cc34e1eeb5bb2f3c0e9564284a441593f"
 dependencies = [
  "async-trait",
  "base64 0.13.1",
@@ -5709,7 +5709,7 @@ dependencies = [
 [[package]]
 name = "rusoto_credential"
 version = "0.46.0"
-source = "git+https://github.com/tikv/rusoto?branch=cse#d6ffce8898ce5d03ada531401437985b727393a4"
+source = "git+https://github.com/tikv/rusoto?branch=cse#187f471cc34e1eeb5bb2f3c0e9564284a441593f"
 dependencies = [
  "async-trait",
  "chrono",
@@ -5718,7 +5718,7 @@ dependencies = [
  "hyper 0.14.26",
  "serde",
  "serde_json",
- "shlex 0.1.1",
+ "shlex",
  "tokio",
  "zeroize",
 ]
@@ -5726,7 +5726,7 @@ dependencies = [
 [[package]]
 name = "rusoto_mock"
 version = "0.46.0"
-source = "git+https://github.com/tikv/rusoto?branch=cse#d6ffce8898ce5d03ada531401437985b727393a4"
+source = "git+https://github.com/tikv/rusoto?branch=cse#187f471cc34e1eeb5bb2f3c0e9564284a441593f"
 dependencies = [
  "async-trait",
  "chrono",
@@ -5740,7 +5740,7 @@ dependencies = [
 [[package]]
 name = "rusoto_s3"
 version = "0.46.0"
-source = "git+https://github.com/tikv/rusoto?branch=cse#d6ffce8898ce5d03ada531401437985b727393a4"
+source = "git+https://github.com/tikv/rusoto?branch=cse#187f471cc34e1eeb5bb2f3c0e9564284a441593f"
 dependencies = [
  "async-trait",
  "bytes",
@@ -5752,7 +5752,7 @@ dependencies = [
 [[package]]
 name = "rusoto_signature"
 version = "0.46.0"
-source = "git+https://github.com/tikv/rusoto?branch=cse#d6ffce8898ce5d03ada531401437985b727393a4"
+source = "git+https://github.com/tikv/rusoto?branch=cse#187f471cc34e1eeb5bb2f3c0e9564284a441593f"
 dependencies = [
  "base64 0.13.1",
  "bytes",
@@ -6272,12 +6272,6 @@ checksum = "f40ca3c46823713e0d4209592e8d6e826aa57e928f09752619fc696c499637f6"
 dependencies = [
  "lazy_static",
 ]
-
-[[package]]
-name = "shlex"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7fdf1b9db47230893d76faad238fd6097fd6d6a9245cd7a4d90dbd639536bbd2"
 
 [[package]]
 name = "shlex"
@@ -7357,7 +7351,7 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 [[package]]
 name = "tipb"
 version = "0.0.1"
-source = "git+https://github.com/pingcap/tipb.git#a4d204a193b4f9aa776343ac75281cf8442343ba"
+source = "git+https://github.com/pingcap/tipb.git#7ed1acfec6949dda0395f6615671b542779e1b79"
 dependencies = [
  "futures 0.3.32",
  "grpcio",
@@ -7669,7 +7663,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.6",
  "static_assertions",
 ]
 
@@ -8602,7 +8596,7 @@ checksum = "cfe53a6657fd280eaa890a3bc59152892ffa3e30101319d168b781ed6529b049"
 [[package]]
 name = "yatp"
 version = "0.0.1"
-source = "git+https://github.com/tikv/yatp.git?branch=master#64ccad68f86f06c2cbb5a95fb3258c2c092ecea0"
+source = "git+https://github.com/tikv/yatp.git?branch=master#7ca1723bea900d7f0258de73f44d93cbc7b4326a"
 dependencies = [
  "crossbeam-deque",
  "crossbeam-skiplist",

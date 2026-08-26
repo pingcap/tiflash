@@ -140,7 +140,11 @@ struct RNColumnarReaderSharedContext
     ClearSharedSnapAccessByStartTsFn clear_shared_snap_access_by_start_ts = nullptr;
     std::shared_ptr<std::mutex> output_lock = std::make_shared<std::mutex>();
     bool registered_for_start_ts = false;
-    std::atomic_bool late_materialization_logged{false};
+    // Reader capability is checked independently for every region reader. Report each state
+    // at most once so an empty region cannot hide a later enabled reader without producing one
+    // INFO line for every region in a large scan.
+    std::atomic_bool late_materialization_enabled_logged{false};
+    std::atomic_bool late_materialization_disabled_logged{false};
 
     ~RNColumnarReaderSharedContext() noexcept
     {
@@ -1049,33 +1053,93 @@ std::unordered_set<ColumnID> RNColumnarReadTask::getLateMaterializationEarlyColu
     return column_ids;
 }
 
-bool RNColumnarReadTask::isLateMaterializationFilterEligible() const
+bool RNColumnarReadTask::isLateMaterializationFilterEligible(String * reason) const
 {
+    const auto setReason = [reason](const char * value) {
+        if (reason != nullptr)
+            *reason = value;
+    };
+
     if (has_multi_table_reader_plan)
+    {
+        setReason("multi_table_reader_plan");
+        LOG_DEBUG(
+            shared_reader_context->log,
+            "Columnar late materialization filter is ineligible: reason=multi_table_reader_plan, executor_id={}, table_id={}",
+            getExecutorID(),
+            getLogicalTableID());
         return false;
+    }
     if (!shared_reader_context->has_pushed_down_filter_conditions
         || shared_reader_context->exact_filter_conditions.empty())
+    {
+        setReason("no_pushed_down_filter");
+        LOG_DEBUG(
+            shared_reader_context->log,
+            "Columnar late materialization filter is ineligible: reason=no_pushed_down_filter, has_pushed_down_filter={}, exact_filter_conditions={}, executor_id={}, table_id={}",
+            shared_reader_context->has_pushed_down_filter_conditions,
+            shared_reader_context->exact_filter_conditions.size(),
+            getExecutorID(),
+            getLogicalTableID());
         return false;
+    }
     const auto column_ids = getExactFilterColumnIDs();
     if (column_ids.find(MutSup::extra_table_id_col_id) != column_ids.end())
+    {
+        setReason("filter_uses_extra_table_id");
+        LOG_DEBUG(
+            shared_reader_context->log,
+            "Columnar late materialization filter is ineligible: reason=filter_uses_extra_table_id, executor_id={}, table_id={}",
+            getExecutorID(),
+            getLogicalTableID());
         return false;
+    }
     for (const auto & column : shared_reader_context->scan_columns)
     {
         if (column_ids.find(column.id) == column_ids.end())
             continue;
         if (column.hasGeneratedColumnFlag())
+        {
+            setReason("filter_uses_generated_column");
+            LOG_DEBUG(
+                shared_reader_context->log,
+                "Columnar late materialization filter is ineligible: reason=filter_uses_generated_column, column_id={}, executor_id={}, table_id={}",
+                column.id,
+                getExecutorID(),
+                getLogicalTableID());
             return false;
+        }
         const bool needs_timezone_cast
             = !shared_reader_context->context->getTimezoneInfo().is_utc_timezone && column.tp == TiDB::TypeTimestamp;
         if (needs_timezone_cast || column.tp == TiDB::TypeTime)
+        {
+            setReason("unsupported_filter_column_type");
+            LOG_DEBUG(
+                shared_reader_context->log,
+                "Columnar late materialization filter is ineligible: reason=unsupported_filter_column_type, column_id={}, timezone_cast={}, executor_id={}, table_id={}",
+                column.id,
+                needs_timezone_cast,
+                getExecutorID(),
+                getLogicalTableID());
             return false;
+        }
     }
+    setReason("eligible");
+    LOG_DEBUG(
+        shared_reader_context->log,
+        "Columnar late materialization filter is eligible: filter_columns={}, exact_filter_conditions={}, executor_id={}, table_id={}",
+        column_ids.size(),
+        shared_reader_context->exact_filter_conditions.size(),
+        getExecutorID(),
+        getLogicalTableID());
     return true;
 }
 
-bool RNColumnarReadTask::shouldLogLateMaterialization()
+bool RNColumnarReadTask::shouldLogLateMaterialization(bool enabled)
 {
-    return !shared_reader_context->late_materialization_logged.exchange(true);
+    auto & logged = enabled ? shared_reader_context->late_materialization_enabled_logged
+                            : shared_reader_context->late_materialization_disabled_logged;
+    return !logged.exchange(true);
 }
 
 void RNColumnarReadTask::replaceReaderWork(
@@ -1503,7 +1567,21 @@ void RNColumnarInputStream::initializeLateMaterialization()
     if (late_materialization_initialized)
         return;
     late_materialization_initialized = true;
-    if (context.getSettingsRef().enable_columnar_l2_late_materialization && task->isLateMaterializationFilterEligible())
+    const bool setting_enabled = context.getSettingsRef().enable_columnar_l2_late_materialization;
+    bool filter_eligible = false;
+    String disable_reason = setting_enabled ? "filter_ineligible" : "setting_disabled";
+    if (setting_enabled)
+        filter_eligible = task->isLateMaterializationFilterEligible(&disable_reason);
+
+    LOG_DEBUG(
+        log,
+        "Columnar late materialization prerequisites: setting_enabled={}, filter_eligible={}, executor_id={}, table_id={}",
+        setting_enabled,
+        filter_eligible,
+        executor_id,
+        table_id);
+
+    if (setting_enabled && filter_eligible)
     {
         const auto early_column_ids = task->getLateMaterializationEarlyColumnIDs();
         size_t late_column_count = 0;
@@ -1533,10 +1611,47 @@ void RNColumnarInputStream::initializeLateMaterialization()
                         reinterpret_cast<const char *>(encoded_ids.data()),
                         encoded_ids.size() * sizeof(Int64)});
                 if (supported)
+                {
                     late_materialization_interfaces = interfaces;
+                    disable_reason = "enabled";
+                    LOG_DEBUG(
+                        log,
+                        "Columnar late materialization enabled after reader support check: executor_id={}, table_id={}",
+                        executor_id,
+                        table_id);
+                }
                 else
-                    LOG_DEBUG(log, "Columnar late materialization is unavailable for this reader");
+                {
+                    disable_reason = "reader_unsupported";
+                    LOG_DEBUG(
+                        log,
+                        "Columnar late materialization is unavailable for this reader: executor_id={}, table_id={}",
+                        executor_id,
+                        table_id);
+                }
             }
+            else
+            {
+                disable_reason = "interfaces_unavailable";
+                LOG_DEBUG(
+                    log,
+                    "Columnar late materialization is unavailable: interfaces missing or ABI incompatible, executor_id={}, table_id={}",
+                    executor_id,
+                    table_id);
+            }
+        }
+        else
+        {
+            disable_reason = late_column_count == 0 ? "no_late_columns" : "late_to_early_ratio_below_threshold";
+            LOG_DEBUG(
+                log,
+                "Columnar late materialization skipped by column ratio: late_columns={}, early_columns={}, late_to_early_ratio={:.3f}, min_ratio={:.3f}, executor_id={}, table_id={}",
+                late_column_count,
+                early_column_count,
+                late_to_early_ratio,
+                context.getSettingsRef().columnar_l2_late_materialization_min_late_to_early_ratio,
+                executor_id,
+                table_id);
         }
         LOG_DEBUG(
             log,
@@ -1546,12 +1661,23 @@ void RNColumnarInputStream::initializeLateMaterialization()
             late_to_early_ratio,
             context.getSettingsRef().columnar_l2_late_materialization_min_late_to_early_ratio);
     }
+    else if (!setting_enabled)
+    {
+        LOG_DEBUG(
+            log,
+            "Columnar late materialization skipped: setting enable_columnar_l2_late_materialization is false, executor_id={}, table_id={}",
+            executor_id,
+            table_id);
+    }
 
-    if (task->shouldLogLateMaterialization())
+    if (task->shouldLogLateMaterialization(late_materialization_interfaces != nullptr))
         LOG_INFO(
             log,
-            "Columnar late materialization enabled={}, executor_id={}, table_id={}",
+            "Columnar late materialization enabled={}, scope=reader, reason={}, setting_enabled={}, filter_eligible={}, executor_id={}, table_id={}",
             late_materialization_interfaces != nullptr,
+            disable_reason,
+            setting_enabled,
+            filter_eligible,
             executor_id,
             table_id);
 }
