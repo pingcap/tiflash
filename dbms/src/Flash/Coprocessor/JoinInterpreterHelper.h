@@ -94,10 +94,10 @@ struct JoinNonEqualConditions
     /// Validate this JoinNonEqualConditions and return error message if any.
     const char * validate(ASTTableJoin::Kind kind) const
     {
-        if unlikely (!left_filter_column.empty() && !isLeftOuterJoin(kind))
-            return "non left join with left conditions";
-        if unlikely (!right_filter_column.empty() && !isRightOuterJoin(kind))
-            return "non right join with right conditions";
+        if unlikely (!left_filter_column.empty() && !(isLeftOuterJoin(kind) || kind == ASTTableJoin::Kind::Full))
+            return "left conditions only supported for left outer and full outer join";
+        if unlikely (!right_filter_column.empty() && !(isRightOuterJoin(kind) || kind == ASTTableJoin::Kind::Full))
+            return "right conditions only supported for right outer and full outer join";
 
         if unlikely ((!other_cond_name.empty() || !other_eq_cond_from_in_name.empty()) && other_cond_expr == nullptr)
             return "other_cond_name and/or other_eq_cond_from_in_name are not empty but other_cond_expr is nullptr";
@@ -119,6 +119,16 @@ struct JoinNonEqualConditions
 
 namespace JoinInterpreterHelper
 {
+constexpr bool shouldMakeLeftJoinSideNullable(tipb::JoinType join_type)
+{
+    return join_type == tipb::JoinType::TypeRightOuterJoin || join_type == tipb::JoinType::TypeFullOuterJoin;
+}
+
+constexpr bool shouldMakeRightJoinSideNullable(tipb::JoinType join_type)
+{
+    return join_type == tipb::JoinType::TypeLeftOuterJoin || join_type == tipb::JoinType::TypeFullOuterJoin;
+}
+
 struct TiFlashJoin
 {
     TiFlashJoin(const tipb::Join & join_, bool is_test);

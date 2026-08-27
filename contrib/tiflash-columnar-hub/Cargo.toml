@@ -26,7 +26,7 @@ fs2 = { git = "https://github.com/tikv/fs2-rs", branch = "tikv" }
 sysinfo = { git = "https://github.com/tikv/sysinfo", branch = "0.26-fix-cpu" }
 tokio-executor = { git = "https://github.com/tikv/tokio", branch = "tokio-timer-hotfix" }
 lindera = { git = "https://github.com/breezewish/lindera", branch = "v0.43.1-tokio-1.24" }
-tantivy = { git = "https://github.com/breezewish/tikv-tantivy.git", branch = "patch-0.22.1" }
+tantivy = { git = "https://github.com/pingcap/tantivy.git", branch = "cse-0.22.1" }
 pprof = { git = "https://github.com/tikv/pprof-rs.git", rev = "01cff82dbe6fe110a707bf2b38d8ebb1d14a18f8" }
 prometheus = { git = "https://github.com/solotzg/rust-prometheus.git", rev = "b4fe98a06a58d29f9b9987a0d7186f6ed5230193", features = ["nightly", "push"], default-features = true }
 tipb = { git = "https://github.com/pingcap/tipb.git" }
