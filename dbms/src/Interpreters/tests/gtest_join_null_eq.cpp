@@ -444,6 +444,25 @@ ColumnPtr makeInt32Column(std::initializer_list<Int32> values)
     return column;
 }
 
+ColumnPtr makeInt64Column(std::initializer_list<Int64> values)
+{
+    auto column = ColumnInt64::create();
+    column->reserve(values.size());
+    auto & data = column->getData();
+    for (auto value : values)
+        data.push_back(value);
+    return column;
+}
+
+ColumnPtr makeStringColumn(std::initializer_list<String> values)
+{
+    auto column = ColumnString::create();
+    column->reserve(values.size());
+    for (const auto & value : values)
+        column->insertData(value.data(), value.size());
+    return column;
+}
+
 Block readAllBlocks(const BlockInputStreamPtr & stream)
 {
     stream->readPrefix();
@@ -616,6 +635,254 @@ TEST(JoinNullEqTest, NullableStringNullEqFallsBackToSerializedJoinMapMethod)
     EXPECT_EQ(getInt32Value(probe_result, outer_build_value_name, 0), 100);
     EXPECT_EQ(getInt32Value(probe_result, outer_probe_value_name, 1), 20);
     EXPECT_EQ(getInt32Value(probe_result, outer_build_value_name, 1), 200);
+}
+
+TEST(JoinNullEqTest, NullableToNonNullableNullEqSimplifiedToEqUsesSerializedJoinMapMethod)
+{
+    auto string_type = std::make_shared<DataTypeString>();
+    auto nullable_string_type = makeNullable(string_type);
+    auto int_type = std::make_shared<DataTypeInt32>();
+    SpillConfig build_spill_config("/tmp", "join_null_eq_build", 0, 0, 0, nullptr);
+    SpillConfig probe_spill_config("/tmp", "join_null_eq_probe", 0, 0, 0, nullptr);
+    auto join = std::make_shared<Join>(
+        Names{outer_probe_key_name, mixed_probe_key2_name},
+        Names{outer_build_key_name, mixed_build_key2_name},
+        // A Nullable(T) <=> T key is equivalent to T = T, so the effective flag is false.
+        std::vector<UInt8>{0, 0},
+        ASTTableJoin::Kind::Inner,
+        "join_null_eq_mixed_nullability_test",
+        0,
+        0,
+        build_spill_config,
+        probe_spill_config,
+        RestoreConfig{1, 0, 0},
+        NamesAndTypes{
+            {outer_probe_key_name, nullable_string_type},
+            {mixed_probe_key2_name, int_type},
+            {outer_probe_value_name, int_type},
+            {outer_build_key_name, string_type},
+            {mixed_build_key2_name, int_type},
+            {outer_build_value_name, int_type},
+        },
+        RegisterOperatorSpillContext{},
+        nullptr,
+        TiDB::TiDBCollators{},
+        JoinNonEqualConditions{},
+        1024,
+        0,
+        "",
+        "",
+        0,
+        true);
+
+    join->initBuild(
+        Block{
+            {string_type->createColumn(), string_type, outer_build_key_name},
+            {int_type->createColumn(), int_type, mixed_build_key2_name},
+            {int_type->createColumn(), int_type, outer_build_value_name},
+        },
+        1);
+    join->initProbe(
+        Block{
+            {nullable_string_type->createColumn(), nullable_string_type, outer_probe_key_name},
+            {int_type->createColumn(), int_type, mixed_probe_key2_name},
+            {int_type->createColumn(), int_type, outer_probe_value_name},
+        },
+        1);
+    join->finalize(Names{
+        outer_probe_key_name,
+        mixed_probe_key2_name,
+        outer_probe_value_name,
+        outer_build_key_name,
+        mixed_build_key2_name,
+        outer_build_value_name,
+    });
+
+    ASSERT_EQ(join->getJoinMapMethod(), JoinMapMethod::serialized);
+
+    join->setInitActiveBuildThreads();
+    join->insertFromBlock(
+        Block{
+            {makeStringColumn({"alpha"}), string_type, outer_build_key_name},
+            {makeInt32Column({7}), int_type, mixed_build_key2_name},
+            {makeInt32Column({100}), int_type, outer_build_value_name},
+        },
+        0);
+    ASSERT_TRUE(join->finishOneBuild(0));
+    join->finalizeBuild();
+
+    ProbeProcessInfo probe_process_info(1024, 0);
+    probe_process_info.resetBlock(Block{
+        {makeNullableStringColumn({std::nullopt, "alpha", "beta"}), nullable_string_type, outer_probe_key_name},
+        {makeInt32Column({7, 7, 8}), int_type, mixed_probe_key2_name},
+        {makeInt32Column({10, 20, 30}), int_type, outer_probe_value_name},
+    });
+    Block probe_result = join->joinBlock(probe_process_info);
+
+    ASSERT_EQ(probe_result.rows(), 1);
+    EXPECT_TRUE(probe_result.getByName(outer_probe_key_name).type->isNullable());
+    EXPECT_EQ(getInt32Value(probe_result, outer_probe_value_name, 0), 20);
+    EXPECT_EQ(getInt32Value(probe_result, outer_build_value_name, 0), 100);
+}
+
+TEST(JoinNullEqTest, NullableToNonNullableNullEqSimplifiedToEqUsesStringJoinMapMethod)
+{
+    auto string_type = std::make_shared<DataTypeString>();
+    auto nullable_string_type = makeNullable(string_type);
+    auto int_type = std::make_shared<DataTypeInt32>();
+    SpillConfig build_spill_config("/tmp", "join_null_eq_build", 0, 0, 0, nullptr);
+    SpillConfig probe_spill_config("/tmp", "join_null_eq_probe", 0, 0, 0, nullptr);
+    auto join = std::make_shared<Join>(
+        Names{outer_probe_key_name},
+        Names{outer_build_key_name},
+        // A Nullable(T) <=> T key is equivalent to T = T, so the effective flag is false.
+        std::vector<UInt8>{0},
+        ASTTableJoin::Kind::Inner,
+        "join_null_eq_mixed_nullability_test",
+        0,
+        0,
+        build_spill_config,
+        probe_spill_config,
+        RestoreConfig{1, 0, 0},
+        NamesAndTypes{
+            {outer_probe_key_name, nullable_string_type},
+            {outer_probe_value_name, int_type},
+            {outer_build_key_name, string_type},
+            {outer_build_value_name, int_type},
+        },
+        RegisterOperatorSpillContext{},
+        nullptr,
+        TiDB::TiDBCollators{},
+        JoinNonEqualConditions{},
+        1024,
+        0,
+        "",
+        "",
+        0,
+        true);
+
+    join->initBuild(
+        Block{
+            {string_type->createColumn(), string_type, outer_build_key_name},
+            {int_type->createColumn(), int_type, outer_build_value_name},
+        },
+        1);
+    join->initProbe(
+        Block{
+            {nullable_string_type->createColumn(), nullable_string_type, outer_probe_key_name},
+            {int_type->createColumn(), int_type, outer_probe_value_name},
+        },
+        1);
+    join->finalize(Names{
+        outer_probe_key_name,
+        outer_probe_value_name,
+        outer_build_key_name,
+        outer_build_value_name,
+    });
+
+    ASSERT_EQ(join->getJoinMapMethod(), JoinMapMethod::key_strbin);
+
+    join->setInitActiveBuildThreads();
+    join->insertFromBlock(
+        Block{
+            {makeStringColumn({"alpha"}), string_type, outer_build_key_name},
+            {makeInt32Column({100}), int_type, outer_build_value_name},
+        },
+        0);
+    ASSERT_TRUE(join->finishOneBuild(0));
+    join->finalizeBuild();
+
+    ProbeProcessInfo probe_process_info(1024, 0);
+    probe_process_info.resetBlock(Block{
+        {makeNullableStringColumn({std::nullopt, "alpha", "beta"}), nullable_string_type, outer_probe_key_name},
+        {makeInt32Column({10, 20, 30}), int_type, outer_probe_value_name},
+    });
+    Block probe_result = join->joinBlock(probe_process_info);
+
+    ASSERT_EQ(probe_result.rows(), 1);
+    EXPECT_TRUE(probe_result.getByName(outer_probe_key_name).type->isNullable());
+    EXPECT_EQ(getInt32Value(probe_result, outer_probe_value_name, 0), 20);
+    EXPECT_EQ(getInt32Value(probe_result, outer_build_value_name, 0), 100);
+}
+
+TEST(JoinNullEqTest, NullableToNonNullableInt64NullEqSimplifiedToEqUsesKey64JoinMapMethod)
+{
+    auto int64_type = std::make_shared<DataTypeInt64>();
+    auto nullable_int64_type = makeNullable(int64_type);
+    auto int32_type = std::make_shared<DataTypeInt32>();
+    SpillConfig build_spill_config("/tmp", "join_null_eq_build", 0, 0, 0, nullptr);
+    SpillConfig probe_spill_config("/tmp", "join_null_eq_probe", 0, 0, 0, nullptr);
+    auto join = std::make_shared<Join>(
+        Names{outer_probe_key_name},
+        Names{outer_build_key_name},
+        // A Nullable(T) <=> T key is equivalent to T = T, so the effective flag is false.
+        std::vector<UInt8>{0},
+        ASTTableJoin::Kind::Inner,
+        "join_null_eq_mixed_nullability_int64_test",
+        0,
+        0,
+        build_spill_config,
+        probe_spill_config,
+        RestoreConfig{1, 0, 0},
+        NamesAndTypes{
+            {outer_probe_key_name, nullable_int64_type},
+            {outer_probe_value_name, int32_type},
+            {outer_build_key_name, int64_type},
+            {outer_build_value_name, int32_type},
+        },
+        RegisterOperatorSpillContext{},
+        nullptr,
+        TiDB::TiDBCollators{},
+        JoinNonEqualConditions{},
+        1024,
+        0,
+        "",
+        "",
+        0,
+        true);
+
+    join->initBuild(
+        Block{
+            {int64_type->createColumn(), int64_type, outer_build_key_name},
+            {int32_type->createColumn(), int32_type, outer_build_value_name},
+        },
+        1);
+    join->initProbe(
+        Block{
+            {nullable_int64_type->createColumn(), nullable_int64_type, outer_probe_key_name},
+            {int32_type->createColumn(), int32_type, outer_probe_value_name},
+        },
+        1);
+    join->finalize(Names{
+        outer_probe_key_name,
+        outer_probe_value_name,
+        outer_build_key_name,
+        outer_build_value_name,
+    });
+
+    ASSERT_EQ(join->getJoinMapMethod(), JoinMapMethod::key64);
+
+    join->setInitActiveBuildThreads();
+    join->insertFromBlock(
+        Block{
+            {makeInt64Column({42}), int64_type, outer_build_key_name},
+            {makeInt32Column({100}), int32_type, outer_build_value_name},
+        },
+        0);
+    ASSERT_TRUE(join->finishOneBuild(0));
+    join->finalizeBuild();
+
+    ProbeProcessInfo probe_process_info(1024, 0);
+    probe_process_info.resetBlock(Block{
+        {makeNullableInt64Column({std::nullopt, 42, 43}), nullable_int64_type, outer_probe_key_name},
+        {makeInt32Column({10, 20, 30}), int32_type, outer_probe_value_name},
+    });
+    Block probe_result = join->joinBlock(probe_process_info);
+
+    ASSERT_EQ(probe_result.rows(), 1);
+    EXPECT_TRUE(probe_result.getByName(outer_probe_key_name).type->isNullable());
+    EXPECT_EQ(getInt32Value(probe_result, outer_probe_value_name, 0), 20);
+    EXPECT_EQ(getInt32Value(probe_result, outer_build_value_name, 0), 100);
 }
 
 TEST(JoinNullEqTest, OversizedNullableFixedKeysFallBackToSerializedJoinMapMethod)

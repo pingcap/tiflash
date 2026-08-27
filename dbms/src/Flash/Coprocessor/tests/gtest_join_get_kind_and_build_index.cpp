@@ -127,7 +127,7 @@ TEST(JoinKindAndBuildIndexTestRunner, TestNullAwareJoinRejectsNullEqKeys)
     ASSERT_NE(error_message.find("NullEQ"), String::npos);
 }
 
-TEST(JoinKindAndBuildIndexTestRunner, TestNullEqAlignsMixedNullabilityKeySchema)
+TEST(JoinKindAndBuildIndexTestRunner, TestNullEqSimplifiesMixedNullabilityKeySchema)
 {
     try
     {
@@ -168,18 +168,17 @@ TEST(JoinKindAndBuildIndexTestRunner, TestNullEqAlignsMixedNullabilityKeySchema)
         ASSERT_FALSE(probe_prepare_actions->getSampleBlock().getByName(probe_key_names[0]).type->isNullable());
         ASSERT_TRUE(build_prepare_actions->getSampleBlock().getByName(build_key_names[0]).type->isNullable());
 
-        JoinInterpreterHelper::alignNullEqKeyTypes(
+        JoinInterpreterHelper::simplifyNullEqKeyFlags(
             tiflash_join.is_null_eq,
             probe_prepare_actions,
             probe_key_names,
             build_prepare_actions,
             build_key_names);
 
-        ASSERT_TRUE(probe_prepare_actions->getSampleBlock().getByName(probe_key_names[0]).type->isNullable());
+        ASSERT_EQ(tiflash_join.is_null_eq, std::vector<UInt8>({0}));
+        ASSERT_FALSE(probe_prepare_actions->getSampleBlock().getByName(probe_key_names[0]).type->isNullable());
         ASSERT_TRUE(build_prepare_actions->getSampleBlock().getByName(build_key_names[0]).type->isNullable());
-        ASSERT_TRUE(probe_prepare_actions->getSampleBlock()
-                        .getByName(probe_key_names[0])
-                        .type->equals(*build_prepare_actions->getSampleBlock().getByName(build_key_names[0]).type));
+        ASSERT_FALSE(tiflash_join.shouldDisableRuntimeFilter(build_prepare_actions, build_key_names));
     }
     catch (Exception & e)
     {
@@ -195,7 +194,7 @@ TEST(JoinKindAndBuildIndexTestRunner, TestNullableNullEqDisablesRuntimeFilter)
         auto nullable_int_type = makeNullable(int_type);
         auto context = TiFlashTestEnv::getContext();
 
-        ColumnWithTypeAndName probe_column{nullptr, int_type, "probe_k"};
+        ColumnWithTypeAndName probe_column{nullptr, nullable_int_type, "probe_k"};
         ColumnWithTypeAndName build_column{nullptr, nullable_int_type, "build_k"};
 
         tipb::Join join;
@@ -225,13 +224,14 @@ TEST(JoinKindAndBuildIndexTestRunner, TestNullableNullEqDisablesRuntimeFilter)
                 tiflash_join.join_key_types,
                 tiflash_join.getBuildConditions());
 
-        JoinInterpreterHelper::alignNullEqKeyTypes(
+        JoinInterpreterHelper::simplifyNullEqKeyFlags(
             tiflash_join.is_null_eq,
             probe_prepare_actions,
             probe_key_names,
             build_prepare_actions,
             build_key_names);
 
+        ASSERT_EQ(tiflash_join.is_null_eq, std::vector<UInt8>({1}));
         ASSERT_TRUE(tiflash_join.shouldDisableRuntimeFilter(build_prepare_actions, build_key_names));
     }
     catch (Exception & e)
@@ -277,13 +277,14 @@ TEST(JoinKindAndBuildIndexTestRunner, TestNonNullableNullEqKeepsRuntimeFilterEna
                 tiflash_join.join_key_types,
                 tiflash_join.getBuildConditions());
 
-        JoinInterpreterHelper::alignNullEqKeyTypes(
+        JoinInterpreterHelper::simplifyNullEqKeyFlags(
             tiflash_join.is_null_eq,
             probe_prepare_actions,
             probe_key_names,
             build_prepare_actions,
             build_key_names);
 
+        ASSERT_EQ(tiflash_join.is_null_eq, std::vector<UInt8>({0}));
         ASSERT_FALSE(tiflash_join.shouldDisableRuntimeFilter(build_prepare_actions, build_key_names));
     }
     catch (Exception & e)

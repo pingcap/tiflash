@@ -123,7 +123,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         original_build_key_names,
         join_non_equal_conditions);
 
-    JoinInterpreterHelper::alignNullEqKeyTypes(
+    JoinInterpreterHelper::simplifyNullEqKeyFlags(
         tiflash_join.is_null_eq,
         probe_side_prepare_actions,
         probe_key_names,

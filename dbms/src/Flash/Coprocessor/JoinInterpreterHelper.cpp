@@ -436,8 +436,8 @@ std::tuple<ExpressionActionsPtr, Names, Names, String> prepareJoin(
     return {chain.getLastActions(), std::move(key_names), std::move(original_key_names), std::move(filter_column_name)};
 }
 
-void alignNullEqKeyTypes(
-    const std::vector<UInt8> & is_null_eq,
+void simplifyNullEqKeyFlags(
+    std::vector<UInt8> & is_null_eq,
     const ExpressionActionsPtr & probe_prepare_actions,
     Names & probe_key_names,
     const ExpressionActionsPtr & build_prepare_actions,
@@ -453,23 +453,14 @@ void alignNullEqKeyTypes(
 
         const auto & probe_type = probe_prepare_actions->getSampleBlock().getByName(probe_key_names[i]).type;
         const auto & build_type = build_prepare_actions->getSampleBlock().getByName(build_key_names[i]).type;
-        if (probe_type->equals(*build_type))
-            continue;
-
         RUNTIME_CHECK_MSG(
             removeNullable(probe_type)->equals(*removeNullable(build_type)),
-            "NullEQ key type mismatch after prepareJoin is not a pure nullability mismatch: probe={} build={}",
+            "NullEQ key type mismatch after prepareJoin: probe={} build={}",
             probe_type->getName(),
             build_type->getName());
 
-        if (!probe_type->isNullable())
-        {
-            probe_prepare_actions->add(ExpressionAction::convertToNullable(probe_key_names[i]));
-        }
-        if (!build_type->isNullable())
-        {
-            build_prepare_actions->add(ExpressionAction::convertToNullable(build_key_names[i]));
-        }
+        if (!probe_type->isNullable() || !build_type->isNullable())
+            is_null_eq[i] = 0;
     }
 }
 

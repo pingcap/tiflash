@@ -398,20 +398,15 @@ value. Therefore, for the same non-NULL value:
 
 are different.
 
-This means that if one side of a NullEQ key pair is nullable and the other is non-nullable,
-both sides may use `serialized` and still fail to match, as long as their final key schemas
-remain `Nullable(T)` and `T`.
+This means a mixed `Nullable(T)` / `T` pair cannot be sent directly through the NullEQ
+serialized-key path. However, it also cannot produce a `NULL <=> NULL` match: the `T` side
+never contains `NULL`. Its NullEQ predicate is therefore equivalent to an ordinary equality
+predicate and is simplified to `=` before join construction.
 
-Therefore, the MVP cannot merely force nullable NullEQ keys to `serialized`. It must also
-ensure that:
-
-- for each `is_null_eq[i] = true` key pair;
-- whenever either side needs to preserve nullable semantics;
-- both build and probe sides are aligned to the same physical key schema during key preparation;
-- the most direct approach is to normalize both sides to `Nullable(common_type)`.
-
-This schema-alignment requirement was initially part of the `serialized` correctness fallback.
-It remains necessary after the fixed-size packed-key optimization is introduced.
+After this simplification, the ordinary equality-key path strips the nullable wrapper from the
+nullable side and filters its `NULL` rows. Both sides then serialize the same `T` value format.
+Only a NullEQ key pair whose final types are both `Nullable(common_type)` needs to preserve
+nullable physical encoding.
 
 ## 6. JoinPartition / KeyGetter Semantics
 
@@ -428,11 +423,11 @@ The semantics are:
 - The packed-key path includes nullness in the key.
 - Variable-length keys or fixed-size keys that exceed `UInt256` continue to use `serialized`.
 
-Regardless of the selected path, the following must hold:
+Regardless of the selected path, the following must hold for a remaining NullEQ key:
 
 - Key columns passed by build and probe preserve nullable information for NullEQ keys.
 - For every NullEQ key pair, the final key schemas used by build and probe are identical.
-- In particular, mixed nullable/non-nullable cases must not remain as `Nullable(T)` versus `T`.
+- Both sides must be `Nullable(common_type)`.
 
 ## 7. FULL + Other Condition Semantics
 
@@ -575,7 +570,7 @@ Done criteria:
 Done criteria:
 
 - Nullable NullEQ keys build and probe correctly.
-- Mixed nullable/non-nullable NullEQ key pairs align their key schemas and match correctly.
+- Mixed nullable/non-nullable NullEQ key pairs are simplified to ordinary equality keys.
 - Outer join and scan-after-probe do not misclassify NullEQ `NULL` rows as unmatched.
 - `FULL OUTER JOIN + other condition` has correct combined semantics with NullEQ.
 - Runtime filters are disabled in this mode.
@@ -604,7 +599,7 @@ Done criteria:
 
 - CP0: tipb field and TiFlash parsing.
 - CP1: `DB::Join` stores and logs `is_null_eq`.
-- CP2.1: force nullable NullEQ keys to `serialized`, align mixed-nullability key schemas,
+- CP2.1: preserve nullable NullEQ keys, simplify mixed-nullability pairs to ordinary equality,
   and add the NullAware mutual-exclusion check.
 - CP2.2: split the build/probe `row_filter_map` semantics.
 - CP2.3: adjust `RowsNotInsertToMap` and scan-after-probe.
@@ -620,8 +615,8 @@ Done criteria:
 - [x] tipb: `Join.is_null_eq` field definition.
 - [x] TiFlash: `JoinInterpreterHelper::TiFlashJoin` parses `is_null_eq[]`.
 - [x] TiFlash: `DB::Join` stores and logs `is_null_eq`.
-- [x] TiFlash: force nullable NullEQ keys to `serialized`, align mixed-nullability key
-  schemas, and fail fast for NullAware conflicts.
+- [x] TiFlash: preserve nullable NullEQ keys, simplify mixed-nullability pairs to ordinary
+  equality, and fail fast for NullAware conflicts.
 - [x] TiFlash: split the build/probe `row_filter_map` semantics.
 - [x] TiFlash: adjust `RowsNotInsertToMap` and scan-after-probe.
 - [x] TiFlash: validate `FULL OUTER JOIN + other condition` with NullEQ.

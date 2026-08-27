@@ -234,8 +234,11 @@ std::tuple<ExpressionActionsPtr, Names, Names, String> prepareJoin(
     const JoinKeyTypes & join_key_types,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters);
 
-void alignNullEqKeyTypes(
-    const std::vector<UInt8> & is_null_eq,
+/// A NullEQ key is equivalent to an ordinary equality key when either side cannot be NULL.
+/// Simplify such keys before constructing the join so the regular equality-key path can
+/// strip nullable wrappers and filter NULL rows.
+void simplifyNullEqKeyFlags(
+    std::vector<UInt8> & is_null_eq,
     const ExpressionActionsPtr & probe_prepare_actions,
     Names & probe_key_names,
     const ExpressionActionsPtr & build_prepare_actions,
