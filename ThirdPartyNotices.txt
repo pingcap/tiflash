@@ -20,8 +20,10 @@ submodule; system libraries and compiler/runtime dependencies; or container
 base images and package-manager inputs. Those must be assembled per release
 target.
 
-Each upstream URL below is pinned to the revision actually recorded by this
-source tree. License and NOTICE texts are reproduced after the component index.
+GitHub evidence URLs are pinned to the revision recorded by this source tree.
+Components whose original upstream revision is not recorded say so explicitly;
+canonical license URLs have no version. License and NOTICE texts are reproduced
+after the component index.
 
 Component index
 ---------------
