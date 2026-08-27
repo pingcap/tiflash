@@ -19,14 +19,36 @@ set (TIFLASH_NAME "TiFlash")
 # Release version that follows PD/TiKV/TiDB convention.
 # Variables bellow are important, use `COMMAND_ERROR_IS_FATAL ANY`(since cmake 3.19) to confirm that there is output.
 
-execute_process(
-  # Do not execute with --dirty, because checking dirty state is extremely slow.
-  COMMAND git describe --tags --always
-  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  OUTPUT_VARIABLE TIFLASH_RELEASE_VERSION
-  OUTPUT_STRIP_TRAILING_WHITESPACE
-  COMMAND_ERROR_IS_FATAL ANY
-  )
+if (ENABLE_NEXT_GEN)
+  set(TIFLASH_NEXT_GEN_DEFAULT_VERSION "v27.0.0-pre" CACHE STRING
+      "Fallback release version for next-gen builds")
+
+  # Prefer a next-gen release tag when it is reachable from the current commit.
+  # Development branches may not contain a next-gen tag, so use the default
+  # next-gen version when Git returns a commit hash or an unrelated tag.
+  execute_process(
+    COMMAND git describe --tags --always
+            --match "v2[0-9].*"
+            --match "v3[0-9].*"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE TIFLASH_RELEASE_VERSION
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    COMMAND_ERROR_IS_FATAL ANY
+    )
+
+  if (NOT "${TIFLASH_RELEASE_VERSION}" MATCHES "^v(2[0-9]|3[0-9])\\.[0-9]+\\.[0-9]+([-.].*)?$")
+    set(TIFLASH_RELEASE_VERSION "${TIFLASH_NEXT_GEN_DEFAULT_VERSION}")
+  endif ()
+else ()
+  execute_process(
+    # Do not execute with --dirty, because checking dirty state is extremely slow.
+    COMMAND git describe --tags --always
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE TIFLASH_RELEASE_VERSION
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    COMMAND_ERROR_IS_FATAL ANY
+    )
+endif ()
 
 # Extract the major version number
 string(REGEX REPLACE "^v([0-9]+).*" "\\1" TIFLASH_VERSION_MAJOR ${TIFLASH_RELEASE_VERSION})
@@ -35,7 +57,8 @@ string(REGEX REPLACE "^v[0-9]+\\.([0-9]+).*" "\\1" TIFLASH_VERSION_MINOR ${TIFLA
 # Extract the patch version number
 string(REGEX REPLACE "^v[0-9]+\\.[0-9]+\\.([0-9]+).*" "\\1" TIFLASH_VERSION_PATCH ${TIFLASH_RELEASE_VERSION})
 # Extract the extra information if it exists
-if (${TIFLASH_RELEASE_VERSION} MATCHES "-.*")
+set(TIFLASH_VERSION_EXTRA "")
+if ("${TIFLASH_RELEASE_VERSION}" MATCHES "-.*")
   string(REGEX REPLACE "^v[0-9]+\\.[0-9]+\\.[0-9]+-(.*)$" "\\1" TIFLASH_VERSION_EXTRA ${TIFLASH_RELEASE_VERSION})
   set(TIFLASH_VERSION "${TIFLASH_VERSION_MAJOR}.${TIFLASH_VERSION_MINOR}.${TIFLASH_VERSION_PATCH}-${TIFLASH_VERSION_EXTRA}")
 else ()
