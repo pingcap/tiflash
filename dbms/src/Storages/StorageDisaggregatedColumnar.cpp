@@ -201,6 +201,12 @@ const ColumnarLateMaterializationInterfaces * getLateMaterializationInterfaces()
 #endif
 }
 
+void checkRustStrWithView(const RustStrWithView & value, const char * function_name)
+{
+    if (value.buff.data == nullptr && value.buff.len == 0 && value.inner.ptr == nullptr && value.inner.type == 0)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "{} returned a default RustStrWithView", function_name);
+}
+
 void remapColumnRefsForLateMaterialization(
     tipb::Expr & expr,
     const std::vector<TiDB::ColumnInfo> & scan_columns,
@@ -1831,6 +1837,7 @@ Block RNColumnarInputStream::readLateMaterializedBlock()
             = late_materialization_interfaces->fn_read_early_column(reader.value(), batch_id, column.column_id);
         duration_read_sec += w.elapsedSecondsFromLastTime();
         SCOPE_EXIT({ RustGcHelper::instance().gcRustPtr(col_data.inner.ptr, col_data.inner.type); });
+        checkRustStrWithView(col_data, "fn_read_early_column");
         ReadBufferFromMemory buf(col_data.buff.data, static_cast<size_t>(col_data.buff.len));
         auto mutable_column = column.type->createColumn();
         column.type->deserializeBinaryBulkWithMultipleStreams(
@@ -1976,6 +1983,7 @@ Block RNColumnarInputStream::readLateMaterializedBlock()
             = late_materialization_interfaces->fn_read_late_column(reader.value(), batch_id, column.column_id);
         duration_read_sec += w.elapsedSecondsFromLastTime();
         SCOPE_EXIT({ RustGcHelper::instance().gcRustPtr(col_data.inner.ptr, col_data.inner.type); });
+        checkRustStrWithView(col_data, "fn_read_late_column");
         ReadBufferFromMemory buf(col_data.buff.data, static_cast<size_t>(col_data.buff.len));
         column.type->deserializeBinaryBulkWithMultipleStreams(
             *columns[i],
