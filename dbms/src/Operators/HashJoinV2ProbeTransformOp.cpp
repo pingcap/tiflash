@@ -82,6 +82,8 @@ OperatorStatus HashJoinV2ProbeTransformOp::tryOutputImpl(Block & block)
     }
     if unlikely (join_ptr->shouldSkipProbe())
     {
+        // Do not call onOutput here: it only processes an unfinished ProbeContext.
+        // Finish this worker and emit EOF directly when the build side is empty.
         join_ptr->finishOneProbe(op_index);
         probe_context.input_is_finished = true;
         block = {};

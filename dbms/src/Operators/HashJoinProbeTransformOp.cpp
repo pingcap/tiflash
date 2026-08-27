@@ -163,6 +163,8 @@ OperatorStatus HashJoinProbeTransformOp::tryOutputImpl(Block & block)
 {
     if (status == ProbeStatus::PROBE && probe_process_info.all_rows_joined_finish)
     {
+        // For an empty build, do not fill a probe block. onOutput below still advances
+        // V1's shared probe completion state machine, including RightSemi post-processing.
         if (!probe_transform->shouldSkipProbe())
         {
             if (auto ret = probe_transform->tryFillProcessInfoInProbeStage(probe_process_info);
