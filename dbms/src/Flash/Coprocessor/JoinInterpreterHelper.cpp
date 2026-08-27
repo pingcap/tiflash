@@ -453,14 +453,17 @@ void simplifyNullEqKeyFlags(
 
         const auto & probe_type = probe_prepare_actions->getSampleBlock().getByName(probe_key_names[i]).type;
         const auto & build_type = build_prepare_actions->getSampleBlock().getByName(build_key_names[i]).type;
+        if (!probe_type->isNullable() || !build_type->isNullable())
+        {
+            is_null_eq[i] = 0;
+            continue;
+        }
+
         RUNTIME_CHECK_MSG(
-            removeNullable(probe_type)->equals(*removeNullable(build_type)),
+            probe_type->equals(*build_type),
             "NullEQ key type mismatch after prepareJoin: probe={} build={}",
             probe_type->getName(),
             build_type->getName());
-
-        if (!probe_type->isNullable() || !build_type->isNullable())
-            is_null_eq[i] = 0;
     }
 }
 
