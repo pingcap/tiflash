@@ -507,20 +507,11 @@ std::vector<RuntimeFilterPtr> TiFlashJoin::genRuntimeFilterList(
     return result;
 }
 
-bool TiFlashJoin::shouldDisableRuntimeFilter(
-    const ExpressionActionsPtr & build_prepare_actions,
-    const Names & build_key_names) const
+bool TiFlashJoin::shouldDisableRuntimeFilter() const
 {
-    RUNTIME_CHECK(build_prepare_actions != nullptr);
-    RUNTIME_CHECK(build_key_names.size() == is_null_eq.size());
-
-    const auto & sample_block = build_prepare_actions->getSampleBlock();
-    for (size_t i = 0; i < is_null_eq.size(); ++i)
+    for (const auto flag : is_null_eq)
     {
-        if (is_null_eq[i] == 0)
-            continue;
-
-        if (sample_block.getByName(build_key_names[i]).type->isNullable())
+        if (flag != 0)
             return true;
     }
     return false;

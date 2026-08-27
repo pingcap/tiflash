@@ -211,7 +211,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     };
 
     bool enable_runtime_filter = is_join_key_field_type_compatible();
-    if (tiflash_join.shouldDisableRuntimeFilter(build_side_prepare_actions, build_key_names))
+    if (tiflash_join.shouldDisableRuntimeFilter())
     {
         LOG_INFO(log, "Disable runtime filter because a nullable NullEQ build key is present");
         enable_runtime_filter = false;

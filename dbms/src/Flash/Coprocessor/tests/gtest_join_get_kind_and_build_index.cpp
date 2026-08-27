@@ -178,7 +178,7 @@ TEST(JoinKindAndBuildIndexTestRunner, TestNullEqSimplifiesMixedNullabilityKeySch
         ASSERT_EQ(tiflash_join.is_null_eq, std::vector<UInt8>({0}));
         ASSERT_FALSE(probe_prepare_actions->getSampleBlock().getByName(probe_key_names[0]).type->isNullable());
         ASSERT_TRUE(build_prepare_actions->getSampleBlock().getByName(build_key_names[0]).type->isNullable());
-        ASSERT_FALSE(tiflash_join.shouldDisableRuntimeFilter(build_prepare_actions, build_key_names));
+        ASSERT_FALSE(tiflash_join.shouldDisableRuntimeFilter());
     }
     catch (Exception & e)
     {
@@ -232,7 +232,7 @@ TEST(JoinKindAndBuildIndexTestRunner, TestNullableNullEqDisablesRuntimeFilter)
             build_key_names);
 
         ASSERT_EQ(tiflash_join.is_null_eq, std::vector<UInt8>({1}));
-        ASSERT_TRUE(tiflash_join.shouldDisableRuntimeFilter(build_prepare_actions, build_key_names));
+        ASSERT_TRUE(tiflash_join.shouldDisableRuntimeFilter());
     }
     catch (Exception & e)
     {
@@ -285,7 +285,7 @@ TEST(JoinKindAndBuildIndexTestRunner, TestNonNullableNullEqKeepsRuntimeFilterEna
             build_key_names);
 
         ASSERT_EQ(tiflash_join.is_null_eq, std::vector<UInt8>({0}));
-        ASSERT_FALSE(tiflash_join.shouldDisableRuntimeFilter(build_prepare_actions, build_key_names));
+        ASSERT_FALSE(tiflash_join.shouldDisableRuntimeFilter());
     }
     catch (Exception & e)
     {

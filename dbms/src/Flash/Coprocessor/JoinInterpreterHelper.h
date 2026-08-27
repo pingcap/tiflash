@@ -219,8 +219,8 @@ struct TiFlashJoin
         const std::unordered_map<String, String> & key_names_map,
         const LoggerPtr & log);
 
-    bool shouldDisableRuntimeFilter(const ExpressionActionsPtr & build_prepare_actions, const Names & build_key_names)
-        const;
+    /// Must be called after simplifyNullEqKeyFlags. A remaining NullEQ key has nullable keys on both sides.
+    bool shouldDisableRuntimeFilter() const;
 };
 
 /// @join_prepare_expr_actions: generates join key columns and join filter column
