@@ -238,6 +238,48 @@ try
 }
 CATCH
 
+TEST_F(SpillJoinTestRunner, EmptyHashTableAfterSpillStillReadsProbe)
+try
+{
+    constexpr size_t build_rows = 8192;
+    /// All build keys are NULL, so the hash table has no entries. The payload makes the build side spill.
+    std::vector<std::optional<Int64>> null_keys(build_rows);
+    std::vector<std::optional<String>> payload(build_rows, String(128, 'x'));
+
+    context.addMockTable(
+        "empty_hash_after_spill",
+        "probe_table",
+        {{"a", TiDB::TP::TypeLong}},
+        {toNullableVec<Int32>("a", {1, 2, 3})});
+    context.addMockTable(
+        "empty_hash_after_spill",
+        "build_table",
+        {{"a", TiDB::TP::TypeLong}, {"payload", TiDB::TP::TypeString}},
+        {toNullableVec<Int32>("a", null_keys), toNullableVec<String>("payload", payload)});
+
+    auto request
+        = context.scan("empty_hash_after_spill", "probe_table")
+              .join(context.scan("empty_hash_after_spill", "build_table"), tipb::JoinType::TypeInnerJoin, {col("a")})
+              .build(context);
+    ColumnsWithTypeAndName empty_result;
+
+    context.context->getSettingsRef().enable_hash_join_v2 = false;
+    context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(10000)));
+
+    WRAP_FOR_SPILL_TEST_BEGIN
+    DAGContext dag_context(*request, "empty_hash_after_spill", 10);
+    ASSERT_COLUMNS_EQ_UR(empty_result, executeStreams(&dag_context));
+
+    const auto & join_execute_info = dag_context.getJoinExecuteInfoMap().at("Join_2");
+    ASSERT_TRUE(join_execute_info.join_profile_info->is_spilled);
+
+    // A spilled hash join must not skip its probe side even when no build row enters the hash table.
+    Expect expect{{"table_scan_0", {3, 10}}, {"table_scan_1", {8192, 10}}, {"Join_2", {0, 10}}};
+    testForExecutionSummary(request, expect);
+    WRAP_FOR_SPILL_TEST_END
+}
+CATCH
+
 TEST_F(SpillJoinTestRunner, ScanHashMapAfterProbeDataWithSpillEnabledAndSpillTriggered)
 try
 {

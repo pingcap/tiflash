@@ -148,6 +148,11 @@ public:
     OperatorStatus transform(Block & block);
     virtual OperatorStatus transformImpl(Block & block) = 0;
 
+    /// Return true only when this transform can finish the pipeline without source input.
+    /// PipelineExec uses it to avoid starting the source operator. The transform must be able to emit an EOF block
+    /// from tryOutputImpl so that downstream transforms and the sink can finish normally.
+    virtual bool shouldSkipSource() const { return false; }
+
     virtual void transformHeaderImpl(Block & header_) = 0;
     void transformHeader(Block & header_)
     {
