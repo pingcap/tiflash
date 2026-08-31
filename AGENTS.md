@@ -135,6 +135,8 @@ When creating an **issue** or **pull request**, read the repo templates first an
 - **Issue:** `.github/ISSUE_TEMPLATE/` — pick the template that matches the request (bug, enhancement, feature, question, performance).
 - **PR:** `.github/pull_request_template.md` — use it for the PR title/body, checklists, and release note.
 
+When creating git commits, always use `-s` / `--signoff` so the commit message includes a `Signed-off-by` trailer (DCO).
+
 Typical fork workflow: branch from `upstream/master`, push to `origin`, open the PR against `pingcap/tiflash` (`master`).
 
 ## 📖 References
