@@ -1574,6 +1574,15 @@ void RNColumnarInputStream::initializeLateMaterialization()
     if (late_materialization_initialized)
         return;
     late_materialization_initialized = true;
+    if (!columnar_scan_context)
+    {
+        if (const auto * dag_context = context.getDAGContext(); dag_context != nullptr)
+        {
+            if (const auto iter = dag_context->columnar_scan_context_map.find(executor_id);
+                iter != dag_context->columnar_scan_context_map.end())
+                columnar_scan_context = iter->second;
+        }
+    }
     const bool setting_enabled = context.getSettingsRef().enable_columnar_l2_late_materialization;
     bool filter_eligible = false;
     String disable_reason = setting_enabled ? "filter_ineligible" : "setting_disabled";
@@ -1680,6 +1689,35 @@ void RNColumnarInputStream::initializeLateMaterialization()
             "executor_id={}, table_id={}",
             executor_id,
             table_id);
+    }
+
+    if (late_materialization_interfaces == nullptr && columnar_scan_context)
+    {
+        using Reason = ColumnarScanContext::LateMaterializationDisableReason;
+        const auto reason = [&]() {
+            if (disable_reason == "multi_table_reader_plan")
+                return Reason::MultiTableReaderPlan;
+            if (disable_reason == "no_pushed_down_filter")
+                return Reason::NoPushedDownFilter;
+            if (disable_reason == "filter_uses_extra_table_id")
+                return Reason::FilterUsesExtraTableID;
+            if (disable_reason == "filter_uses_generated_column")
+                return Reason::FilterUsesGeneratedColumn;
+            if (disable_reason == "unsupported_filter_column_type")
+                return Reason::UnsupportedFilterColumnType;
+            if (disable_reason == "no_late_columns")
+                return Reason::NoLateColumns;
+            if (disable_reason == "late_to_early_ratio_below_threshold")
+                return Reason::LateToEarlyRatioBelowThreshold;
+            if (disable_reason == "interfaces_unavailable")
+                return Reason::InterfacesUnavailable;
+            if (disable_reason == "reader_unsupported")
+                return Reason::ReaderUnsupported;
+            if (disable_reason == "setting_disabled")
+                return Reason::SettingDisabled;
+            return Reason::FilterIneligible;
+        }();
+        columnar_scan_context->addLateMaterializationDisableReason(reason);
     }
 
     if (task->shouldLogLateMaterialization(late_materialization_interfaces != nullptr))
@@ -1911,6 +1949,8 @@ Block RNColumnarInputStream::readLateMaterializedBlock()
                 throw Exception(ErrorCodes::LOGICAL_ERROR, "discard LM probe batch {} failed", batch_id);
             pending_late_materialization = false;
             late_materialization_interfaces = nullptr;
+            if (columnar_scan_context)
+                columnar_scan_context->markLateMaterializationProbeDisabled();
             LOG_INFO(
                 log,
                 "Disable columnar late materialization after probe: rows={}, selected_rows={}, skip_ratio={:.4f}, "
@@ -1933,6 +1973,9 @@ Block RNColumnarInputStream::readLateMaterializedBlock()
             skip_ratio,
             min_skip_ratio);
     }
+
+    if (columnar_scan_context)
+        columnar_scan_context->addLateMaterializationBatch(rows, selected_rows);
 
     if (selected_rows == 0)
     {

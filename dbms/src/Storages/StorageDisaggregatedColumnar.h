@@ -22,6 +22,7 @@
 #include <DataStreams/AddExtraTableIDColumnTransformAction.h>
 #include <DataStreams/FilterTransformAction.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <Flash/Coprocessor/ColumnarScanContext_fwd.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
@@ -257,6 +258,7 @@ private:
     std::unique_ptr<FilterTransformAction> late_materialization_filter_action;
     bool late_materialization_initialized = false;
     bool late_materialization_probed = false;
+    ColumnarScanContextPtr columnar_scan_context;
 
     bool done = false;
 
