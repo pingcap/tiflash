@@ -20,7 +20,7 @@ The first CSE version adopts these decisions:
 5. Perform trim eligibility and rough-check selection entirely inside CSE `FilterOperator` (Rust). TiFlash RN continues to push tipb filters and apply TIMESTAMP literal UTC normalization; it does not load CSE min-max bytes.
 6. CSE rough-check results remain `None` / `Some` / `Unknown` and only skip pack I/O. There is **no** `All` that skips row-level filtering on the RN. Therefore CSE only needs `None → Some` correction when a trimmed value must match; the DeltaMerge `All → Some` path is not required for correctness in v1.
 7. Write trim only on **columnar L2** (same gate as ordinary min-max). L0/L1, non-temporal columns, disabled config, and ineligible predicates always fall back to ordinary min-max (or `Some` when no index exists).
-8. Default-disable via a CSE build/read switch; enable gradually. No DDL, no SQL semantic change, no historical backfill.
+8. Default-disable trim **reads** via `TableScanCtx::enable_trim_minmax`; L2 writes always build trim indexes for supported temporal columns when outliers exist.
 
 ## Background
 
@@ -307,7 +307,7 @@ Raw comparison helpers may still share logic with `MinMaxIndex::check_*`, but tr
 
 ### Write Path
 
-Extend `ColumnarColumnBuilder` so that when `need_min_max && enable_trim_minmax && is_supported_temporal(tp)`:
+Extend `ColumnarColumnBuilder` so that when `need_min_max && is_supported_temporal(tp)`:
 
 ```text
 for each row in pack:
@@ -338,7 +338,7 @@ On `finish_min_max_pack`:
 2. If the column-level "any trimmed" flag is set, append trailer with trim payload and bounds.
 3. Compress once into `compressed_min_max_pack`.
 
-No trim for handle / version columns, non-temporal types, L0/L1, empty tables, or disabled config.
+No trim for handle / version columns, non-temporal types, L0/L1, or empty tables. Trim generation is not gated by a runtime switch; only the read path is configurable.
 
 ### Query-Domain Analysis (CSE)
 
@@ -387,20 +387,20 @@ Align with ordinary CSE min-max:
 - `has_value` (bit 3) is set only when at least one in-range non-deleted value exists; otherwise raw trim checks treat the pack as empty for min/max.
 - Pack MVCC stats (`PROP_KEY_PACK_MVCC_STATS`) remain independent of rough-check.
 
-### Configuration
+### Configuration and Switches
 
-Add to CSE `ColumnarTableBuildOptions` (and a matching read-side engine config):
+Read-side only. Add to `TableScanCtx` (and propagate into `FilterOperator` via `ParseCtx`):
 
 ```text
-enable_trim_minmax: bool = false
+enable_trim_minmax: bool = false   // read path only
 ```
 
-- Write: when false, never emit trailers.
-- Read: when false, ignore trailers even if present.
-- Default false; canary enable like DeltaMerge `dt_enable_trim_minmax`.
+- **Write:** L2 columnar builds always maintain trim index state for supported temporal columns. If a column has any trimmed value in the file, the TRMM trailer is emitted during `finish_min_max_pack`. No build-time kill switch.
+- **Read:** when `enable_trim_minmax` is false, ignore trim trailers and use ordinary min-max only. When true, apply per-predicate eligibility and trim rough-check correction.
+- Default read is disabled; enable gradually on canary nodes like DeltaMerge `dt_enable_trim_minmax`.
 - `E` is not runtime-configurable in v1; only persisted bounds matter for eligibility.
 
-TiFlash may later plumb a session/global setting into CSE; v1 may enable via CSE config alone.
+TiFlash may later plumb a session/global setting into `TableScanCtx::with_enable_trim_minmax`; v1 may enable via explicit scan context configuration.
 
 ### Observability
 
@@ -440,8 +440,8 @@ Existing `rough_check_{total,selected,skipped,unknown}_packs` remain the primary
 
 ### Rolling Upgrade
 
-1. Deploy CSE binaries that understand trailers with `enable_trim_minmax = false`.
-2. Canary-enable write+read together.
+1. Deploy CSE binaries that understand trim trailers (writes begin emitting them immediately on L2 rebuild).
+2. Canary-enable **reads** via `TableScanCtx::with_enable_trim_minmax(true)` on a subset of nodes.
 3. Verify old binaries still open new L2 files (ordinary prefix only).
 4. Expand rollout; keep kill switch for one release cycle.
 
@@ -472,7 +472,7 @@ About **17 bytes/pack/column** uncompressed (one byte less than a DeltaMerge-sty
 ### Phase B: Write Path
 
 - Single-pass ordinary+trim update in `ColumnarColumnBuilder::finish_pack`.
-- Gate on L2 + temporal types + `enable_trim_minmax`.
+- Gate on L2 + temporal types only (always build when applicable).
 - Omit trailer when no trimmed value.
 - Compaction/major path inherits via shared builder options.
 
@@ -554,7 +554,7 @@ pack={2100}, query<=2020              -> None
 - Trim trailer appended after ordinary min-max payload inside `compressed_min_max_pack`.
 - Ordinary prefix byte-compatible with existing CSE readers; ordinary still uses separate `has_null_marks` + `has_value_marks`.
 - Trim `pack_marks`: null / low / high / has_value bits; bits 4..7 zero; no separate trim `has_value_marks`.
-- L2-only; temporal types only; default-disabled switch.
+- L2-only; temporal types only; read-side `enable_trim_minmax` switch (default off).
 - CSE `FilterOpResult` model unchanged: no `All`; only `None→Some` trim correction.
 - Per-leaf eligibility; soft-fallback on logical meta problems.
 - No historical backfill; natural L2 rewrite increases coverage.
@@ -563,6 +563,6 @@ pack={2100}, query<=2020              -> None
 
 None that block the v1 shape above. Follow-ups that may be tracked outside this doc:
 
-1. Whether to plumb TiFlash `dt_enable_trim_minmax` (or a sibling setting) into CSE config automatically.
+1. Whether to plumb TiFlash `dt_enable_trim_minmax` into `TableScanCtx::with_enable_trim_minmax` automatically.
 2. Whether to later fix `column_props` length parsing as independent cleanup and migrate trailers into first-class column props in a future format version.
 3. Whether RN should surface trim-specific counters in `EXPLAIN ANALYZE` beyond existing rough-check pack stats.
