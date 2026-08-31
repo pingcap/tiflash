@@ -136,8 +136,7 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(
         column_id_to_attr[cd.id] = DM::Attr{.col_name = cd.name, .col_id = cd.id, .type = cd.type};
     }
 
-    return DM::FilterParser::parseDAGQuery(
-        *dag_query, table_info.columns, column_id_to_attr, log, enable_trim_minmax);
+    return DM::FilterParser::parseDAGQuery(*dag_query, table_info.columns, column_id_to_attr, log, enable_trim_minmax);
 }
 
 // Test cases for col and literal

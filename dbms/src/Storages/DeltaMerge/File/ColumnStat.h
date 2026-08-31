@@ -14,8 +14,6 @@
 
 #pragma once
 
-#include <optional>
-
 #include <DataTypes/DataTypeFactory.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
@@ -23,6 +21,8 @@
 #include <Storages/DeltaMerge/dtpb/dmfile.pb.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/KVStore/Types.h>
+
+#include <optional>
 
 namespace DB::DM
 {

@@ -100,7 +100,11 @@ RSOperatorPtr RSOperator::build(
     }
 
     auto rs_operator = FilterParser::parseDAGQuery(
-        *dag_query, scan_column_infos, column_id_to_attr, tracing_logger, enable_trim_minmax);
+        *dag_query,
+        scan_column_infos,
+        column_id_to_attr,
+        tracing_logger,
+        enable_trim_minmax);
     if (likely(rs_operator != DM::EMPTY_RS_OPERATOR))
         LOG_DEBUG(tracing_logger, "Rough set filter: {}", rs_operator->toDebugString());
 

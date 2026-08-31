@@ -1033,8 +1033,7 @@ BlockInputStreamPtr Segment::getInputStream(
     for (const auto & dmfile : segment_snap->stable->getDMFiles())
     {
         // Normal mode is the query read path; other modes build MVCC bitmaps.
-        const auto pack_filter_read_tag
-            = (read_mode == ReadMode::Normal) ? ReadTag::Query : ReadTag::MVCC;
+        const auto pack_filter_read_tag = (read_mode == ReadMode::Normal) ? ReadTag::Query : ReadTag::MVCC;
         auto result = DMFilePackFilter::loadFrom(
             dm_context,
             dmfile,

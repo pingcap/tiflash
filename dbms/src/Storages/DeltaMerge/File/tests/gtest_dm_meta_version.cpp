@@ -568,7 +568,9 @@ try
         /* meta_version= */ 1);
     ASSERT_TRUE(dm_file->getColumnStat(MutSup::extra_handle_id).trim_minmax_index.has_value());
     EXPECT_EQ(dm_file->getColumnStat(MutSup::extra_handle_id).trim_minmax_index->pack_count(), dm_file->getPacks());
-    EXPECT_EQ(dm_file->getColumnStat(MutSup::extra_handle_id).trim_minmax_index->format_version(), TrimMinMax::FormatVersionV1);
+    EXPECT_EQ(
+        dm_file->getColumnStat(MutSup::extra_handle_id).trim_minmax_index->format_version(),
+        TrimMinMax::FormatVersionV1);
 
     // Simulate an old node rewriting ColumnStat without field 105.
     {

@@ -102,8 +102,10 @@ public:
         IntegerSetPtr set;
         if (domain.lower && domain.upper)
         {
-            auto lower_set = IntegerSet::createGreaterRangeSet(attr.type, *domain.lower, /*not_included=*/!domain.lower_inclusive);
-            auto upper_set = IntegerSet::createLessRangeSet(attr.type, *domain.upper, /*not_included=*/!domain.upper_inclusive);
+            auto lower_set
+                = IntegerSet::createGreaterRangeSet(attr.type, *domain.lower, /*not_included=*/!domain.lower_inclusive);
+            auto upper_set
+                = IntegerSet::createLessRangeSet(attr.type, *domain.upper, /*not_included=*/!domain.upper_inclusive);
             if (lower_set && upper_set)
                 set = lower_set->intersectWith(upper_set);
         }

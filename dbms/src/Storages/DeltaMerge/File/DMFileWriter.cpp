@@ -114,8 +114,8 @@ DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createMetaFile()
 void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
 {
     const auto nested_type = removeNullable(type);
-    const bool can_trim = options.enable_trim_minmax && dmfile->useMetaV2()
-        && col_id != MutSup::extra_handle_id && col_id != MutSup::version_col_id && col_id != MutSup::delmark_col_id
+    const bool can_trim = options.enable_trim_minmax && dmfile->useMetaV2() && col_id != MutSup::extra_handle_id
+        && col_id != MutSup::version_col_id && col_id != MutSup::delmark_col_id
         && TrimMinMax::isSupportedTemporalType(*nested_type);
 
     auto callback = [&](const IDataType::SubstreamPath & substream_path) {
