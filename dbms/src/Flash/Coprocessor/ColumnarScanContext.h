@@ -67,6 +67,8 @@ public:
     std::atomic<UInt64> remote_segments{0};
     std::atomic<UInt64> total_segments{0};
 
+    std::atomic<UInt64> lm_late_packs_loaded{0};
+    std::atomic<UInt64> lm_late_rows_gathered{0};
     std::atomic<UInt64> lm_early_rows{0};
     std::atomic<UInt64> lm_selected_rows{0};
     std::atomic<UInt64> lm_batches{0};
@@ -145,6 +147,8 @@ public:
         rough_check_unknown_packs += other.rough_check_unknown_packs.load();
         remote_segments += other.remote_segments.load();
         total_segments += other.total_segments.load();
+        lm_late_packs_loaded += other.lm_late_packs_loaded.load();
+        lm_late_rows_gathered += other.lm_late_rows_gathered.load();
         lm_early_rows += other.lm_early_rows.load();
         lm_selected_rows += other.lm_selected_rows.load();
         lm_batches += other.lm_batches.load();
@@ -193,6 +197,8 @@ public:
         rough_check_unknown_packs += other.rough_check_unknown_packs;
         remote_segments += other.remote_segments;
         total_segments += other.total_segments;
+        lm_late_packs_loaded += other.lm_late_packs_loaded;
+        lm_late_rows_gathered += other.lm_late_rows_gathered;
     }
 #endif
 
@@ -209,6 +215,7 @@ public:
             R"(,"init_reader":"{:.3f}ms","prefetch":"{:.3f}ms","deserialize_block":"{:.3f}ms")"
             R"(,"rough_check":{{"total":{},"selected":{},"skipped":{},"unknown":{}}})"
             R"(,"late_materialization":{{"enabled":{},"early_rows":{},"selected_rows":{},"skipped_rows":{})"
+            R"(,"late_packs_loaded":{},"late_rows_gathered":{})"
             R"(,"batches":{},"empty_batches":{},"probe_disabled":{},"disable_reason_mask":{}}})"
             R"(,"remote_segments":{},"total_segments":{}}})",
             mvcc_input_rows.load(),
@@ -232,6 +239,8 @@ public:
             early_rows,
             selected_rows,
             skipped_rows,
+            lm_late_packs_loaded.load(),
+            lm_late_rows_gathered.load(),
             lm_batches.load(),
             lm_empty_batches.load(),
             lm_probe_disabled.load(),

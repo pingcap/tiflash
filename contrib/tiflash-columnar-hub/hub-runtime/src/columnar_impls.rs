@@ -90,6 +90,8 @@ impl From<kvengine::table::columnar::ColumnarRuntimeStats> for ColumnarScanStats
             rough_check_unknown_packs: stats.rough_check_unknown_packs,
             remote_segments: stats.remote_segments,
             total_segments: stats.total_segments,
+            lm_late_packs_loaded: stats.lm_late_packs_loaded,
+            lm_late_rows_gathered: stats.lm_late_rows_gathered,
         }
     }
 }

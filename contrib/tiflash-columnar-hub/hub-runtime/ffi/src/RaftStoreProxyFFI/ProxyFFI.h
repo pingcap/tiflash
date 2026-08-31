@@ -225,6 +225,8 @@ struct ColumnarScanStats {
   uint64_t rough_check_unknown_packs;
   uint64_t remote_segments;
   uint64_t total_segments;
+  uint64_t lm_late_packs_loaded;
+  uint64_t lm_late_rows_gathered;
 };
 
 struct SSTReaderInterfaces {

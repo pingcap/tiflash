@@ -294,6 +294,8 @@ pub mod root {
             pub rough_check_unknown_packs: u64,
             pub remote_segments: u64,
             pub total_segments: u64,
+            pub lm_late_packs_loaded: u64,
+            pub lm_late_rows_gathered: u64,
         }
         #[repr(C)]
         #[derive(Debug)]
