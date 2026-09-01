@@ -935,9 +935,27 @@ TEST(JoinNullEqTest, DefaultMethodSelectionRemainsForOtherCases)
     ASSERT_EQ(nullable_non_null_eq_join->getJoinMapMethod(), JoinMapMethod::key32);
 
     auto int_type = std::make_shared<DataTypeInt32>();
-    auto non_nullable_null_eq_join = makeTestJoin(int_type, {1});
-    non_nullable_null_eq_join->initBuild(makeSampleBlock(int_type), 1);
-    ASSERT_EQ(non_nullable_null_eq_join->getJoinMapMethod(), JoinMapMethod::key32);
+    auto non_nullable_eq_join = makeTestJoin(int_type, {0});
+    non_nullable_eq_join->initBuild(makeSampleBlock(int_type), 1);
+    ASSERT_EQ(non_nullable_eq_join->getJoinMapMethod(), JoinMapMethod::key32);
+}
+
+TEST(JoinNullEqTest, NullEqKeyMustBeNullable)
+{
+    auto int_type = std::make_shared<DataTypeInt32>();
+    auto join = makeTestJoin(int_type, {1});
+    ASSERT_THROW(join->initBuild(makeSampleBlock(int_type), 1), Exception);
+
+    auto nullable_int_type = makeNullable(int_type);
+    join = makeTestJoin(nullable_int_type, {1});
+    join->initBuild(makeSampleBlock(nullable_int_type), 1);
+    ASSERT_THROW(join->initProbe(makeSampleBlock(int_type), 1), Exception);
+}
+
+TEST(JoinNullEqTest, NullEqFlagsMustMatchKeyCount)
+{
+    auto int_type = std::make_shared<DataTypeInt32>();
+    ASSERT_THROW(makeTestJoin(int_type, {}), Exception);
 }
 
 TEST(JoinNullEqTest, NullableNullEqBuildRowsAreInsertedIntoHashMap)

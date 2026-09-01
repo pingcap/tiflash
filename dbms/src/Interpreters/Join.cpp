@@ -56,10 +56,10 @@ extern const int TYPE_MISMATCH;
 
 namespace
 {
-ColumnRawPtrs getKeyColumns(const Names & key_names, const Block & block, const std::vector<UInt8> & is_null_eq = {})
+ColumnRawPtrs getKeyColumns(const Names & key_names, const Block & block, const std::vector<UInt8> & is_null_eq)
 {
     size_t keys_size = key_names.size();
-    RUNTIME_CHECK(is_null_eq.empty() || is_null_eq.size() == keys_size);
+    RUNTIME_CHECK(key_names.size() == is_null_eq.size());
     ColumnRawPtrs key_columns(keys_size);
 
     for (size_t i = 0; i < keys_size; ++i)
@@ -68,22 +68,25 @@ ColumnRawPtrs getKeyColumns(const Names & key_names, const Block & block, const 
 
         /// Ordinary '=' keys join only nested values where all components are not NULL.
         /// NullEQ keys must keep their nullable wrapper so nullness can participate in key comparison.
-        if (key_columns[i]->isColumnNullable() && (is_null_eq.empty() || is_null_eq[i] == 0))
+        if (key_columns[i]->isColumnNullable() && is_null_eq[i] == 0)
             key_columns[i] = &static_cast<const ColumnNullable &>(*key_columns[i]).getNestedColumn();
     }
 
     return key_columns;
 }
 
-bool hasNullableNullEqKey(const Names & key_names, const Block & block, const std::vector<UInt8> & is_null_eq)
+void checkNullEqKeyColumns(const Names & key_names, const Block & block, const std::vector<UInt8> & is_null_eq)
 {
     RUNTIME_CHECK(key_names.size() == is_null_eq.size());
     for (size_t i = 0; i < key_names.size(); ++i)
     {
-        if (is_null_eq[i] != 0 && block.getByName(key_names[i]).type->isNullable())
-            return true;
+        const auto & key_type = block.getByName(key_names[i]).type;
+        RUNTIME_CHECK_MSG(
+            is_null_eq[i] == 0 || key_type->isNullable(),
+            "NullEQ key {} must be Nullable, but its type is {}",
+            key_names[i],
+            key_type->getName());
     }
-    return false;
 }
 
 size_t getRestoreJoinBuildConcurrency(
@@ -212,6 +215,16 @@ Join::Join(
     , enable_fine_grained_shuffle(fine_grained_shuffle_count_ > 0)
     , fine_grained_shuffle_count(fine_grained_shuffle_count_)
 {
+    RUNTIME_CHECK_MSG(
+        key_names_left_.size() == key_names_right_.size(),
+        "Left and right join key sizes must be equal, left={}, right={}",
+        key_names_left_.size(),
+        key_names_right_.size());
+    RUNTIME_CHECK_MSG(
+        key_names_left_.size() == is_null_eq_.size(),
+        "Join key size and is_null_eq size must be equal, keys={}, is_null_eq={}",
+        key_names_left_.size(),
+        is_null_eq_.size());
     has_other_condition = non_equal_conditions.other_cond_expr != nullptr;
     bool is_semi = isSemiFamily(kind) || isLeftOuterSemiFamily(kind) || isNullAwareSemiFamily(kind);
     if (is_semi && !has_other_condition)
@@ -443,13 +456,14 @@ void Join::initBuild(const Block & sample_block, size_t build_concurrency_)
     std::unique_lock lock(rwlock);
     if (unlikely(initialized))
         throw Exception("Logical error: Join has been initialized", ErrorCodes::LOGICAL_ERROR);
+    checkNullEqKeyColumns(key_names_right, sample_block, is_null_eq);
     initialized = true;
     join_map_method = chooseJoinMapMethod(
         getKeyColumns(key_names_right, sample_block, is_null_eq),
         key_sizes,
         collators,
         is_null_eq);
-    if (hasNullableNullEqKey(key_names_right, sample_block, is_null_eq))
+    if (hasNullEqKey(is_null_eq))
     {
         if (join_map_method == JoinMapMethod::serialized)
             LOG_DEBUG(log, "Use serialized join map method because nullable NullEQ keys do not fit packed fixed keys");
@@ -486,6 +500,7 @@ void Join::initBuild(const Block & sample_block, size_t build_concurrency_)
 void Join::initProbe(const Block & sample_block, size_t probe_concurrency_)
 {
     std::unique_lock lock(rwlock);
+    checkNullEqKeyColumns(key_names_left, sample_block, is_null_eq);
     setProbeConcurrency(probe_concurrency_);
     probe_sample_block = sample_block;
     if (hash_join_spill_context->isSpillEnabled())

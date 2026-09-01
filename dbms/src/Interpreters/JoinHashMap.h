@@ -272,5 +272,5 @@ JoinMapMethod chooseJoinMapMethod(
     const ColumnRawPtrs & key_columns,
     Sizes & key_sizes,
     const TiDB::TiDBCollators & collators,
-    const std::vector<UInt8> & is_null_eq = {});
+    const std::vector<UInt8> & is_null_eq);
 } // namespace DB

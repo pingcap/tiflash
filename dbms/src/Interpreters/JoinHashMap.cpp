@@ -41,7 +41,7 @@ JoinMapMethod chooseJoinMapMethod(
     const std::vector<UInt8> & is_null_eq)
 {
     const size_t keys_size = key_columns.size();
-    RUNTIME_CHECK(is_null_eq.empty() || is_null_eq.size() == keys_size);
+    RUNTIME_CHECK(is_null_eq.size() == keys_size);
 
     if (keys_size == 0)
         return JoinMapMethod::CROSS;
@@ -52,10 +52,11 @@ JoinMapMethod chooseJoinMapMethod(
     for (size_t j = 0; j < keys_size; ++j)
     {
         const auto * key_column = key_columns[j];
+        RUNTIME_CHECK(is_null_eq[j] == 0 || key_column->isColumnNullable());
         if (const auto * nullable_column = typeid_cast<const ColumnNullable *>(key_column))
         {
             nested_key_columns.push_back(&nullable_column->getNestedColumn());
-            has_nullable_null_eq_key = has_nullable_null_eq_key || (!is_null_eq.empty() && is_null_eq[j] != 0);
+            has_nullable_null_eq_key = has_nullable_null_eq_key || is_null_eq[j] != 0;
         }
         else
         {

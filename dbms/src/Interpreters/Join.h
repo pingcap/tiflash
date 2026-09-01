@@ -159,6 +159,7 @@ using OneTimeNotifyFuturePtr = std::shared_ptr<OneTimeNotifyFuture>;
 class Join
 {
 public:
+    /// is_null_eq has one flag per join key pair. A nonzero flag requires Nullable key columns on both sides.
     Join(
         const Names & key_names_left_,
         const Names & key_names_right_,
