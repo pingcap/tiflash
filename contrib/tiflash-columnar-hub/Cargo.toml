@@ -1,5 +1,5 @@
 [workspace]
-members = ["hub-runtime"]
+members = ["gen-proxy-ffi", "hub-runtime"]
 resolver = "2"
 
 [workspace.dependencies]
