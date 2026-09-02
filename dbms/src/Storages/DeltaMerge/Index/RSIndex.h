@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
+#include <Storages/DeltaMerge/Index/TrimMinMaxIndex.h>
 
 namespace DB::DM
 {
@@ -29,6 +30,14 @@ struct RSIndex
     {}
 };
 
+struct TrimRSIndex
+{
+    DataTypePtr type;
+    MinMaxIndexPtr minmax;
+    TrimMinMaxIndexMeta meta;
+};
+
 using ColumnIndexes = std::unordered_map<ColId, RSIndex>;
+using TrimColumnIndexes = std::unordered_map<ColId, TrimRSIndex>;
 
 } // namespace DB::DM

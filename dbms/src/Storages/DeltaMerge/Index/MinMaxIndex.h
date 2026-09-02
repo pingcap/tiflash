@@ -32,10 +32,10 @@ class MinMaxIndex
 {
 public:
     MinMaxIndex(
-        PaddedPODArray<UInt8> && has_null_marks_,
+        PaddedPODArray<UInt8> && pack_marks_,
         PaddedPODArray<UInt8> && has_value_marks_,
         MutableColumnPtr && minmaxes_)
-        : has_null_marks(std::move(has_null_marks_))
+        : pack_marks(std::move(pack_marks_))
         , has_value_marks(std::move(has_value_marks_))
         , minmaxes(std::move(minmaxes_))
     {}
@@ -47,13 +47,26 @@ public:
     size_t byteSize() const
     {
         // we add 3 * sizeof(PaddedPODArray<UInt8>)
-        // because has_null_marks/ has_value_marks / minmaxes are all use PaddedPODArray
-        // Thus we need to add the structual memory cost of PaddedPODArray for each of them
-        return sizeof(UInt8) * has_null_marks.size() + sizeof(UInt8) * has_value_marks.size() + minmaxes->byteSize()
+        // because pack_marks / has_value_marks / minmaxes all use PaddedPODArray
+        // Thus we need to add the structural memory cost of PaddedPODArray for each of them
+        return sizeof(UInt8) * pack_marks.size() + sizeof(UInt8) * has_value_marks.size() + minmaxes->byteSize()
             + 3 * sizeof(PaddedPODArray<UInt8>);
     }
 
     void addPack(const IColumn & column, const ColumnVector<UInt8> * del_mark);
+
+    /// Append one pack cell. `allowed_mask` restricts which pack-mark bits may be set
+    /// (ordinary: bit0 only; trim: bits 0..2).
+    void appendPack(
+        UInt8 pack_mark,
+        bool has_value,
+        UInt8 allowed_mask,
+        const IColumn * column = nullptr,
+        size_t min_idx = 0,
+        size_t max_idx = 0);
+
+    /// True if any pack has trimmed-low or trimmed-high bits set.
+    bool hasAnyTrimmedValue() const;
 
     void write(const IDataType & type, WriteBuffer & buf);
 
@@ -81,6 +94,17 @@ public:
     RSResults checkIsNull(size_t start_pack, size_t pack_count);
 
     size_t size() const { return has_value_marks.size(); }
+
+    /// Whether this pack has at least one non-NULL, non-deleted value in the index domain.
+    bool hasValue(size_t pack_index) const { return has_value_marks[pack_index] != 0; }
+
+    /// Raw per-pack mark byte. Prefer hasNull() / hasTrimmedLow() / hasTrimmedHigh().
+    UInt8 packMark(size_t pack_index) const { return pack_marks[pack_index]; }
+    bool hasNull(size_t pack_index) const;
+    bool hasTrimmedLow(size_t pack_index) const;
+    bool hasTrimmedHigh(size_t pack_index) const;
+    const PaddedPODArray<UInt8> & packMarks() const { return pack_marks; }
+
     struct Cell
     {
         Field min;
@@ -142,7 +166,9 @@ private:
 
     RSResult addNullIfHasNull(RSResult value_result, size_t i) const;
 
-    PaddedPODArray<UInt8> has_null_marks;
+    // Historically named has_null_marks. Disk layout is unchanged: one UInt8 per pack.
+    // Bit 0 = has_null; trim indexes may also set bits 1/2. Always read NULL via hasNull().
+    PaddedPODArray<UInt8> pack_marks;
     PaddedPODArray<UInt8> has_value_marks;
     MutableColumnPtr minmaxes;
 };

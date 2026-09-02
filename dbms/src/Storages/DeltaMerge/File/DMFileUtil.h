@@ -28,6 +28,7 @@ inline constexpr static const char * FOLDER_PREFIX_READABLE = "dmf_";
 inline constexpr static const char * FOLDER_PREFIX_DROPPED = ".del.dmf_";
 inline constexpr static const char * DATA_FILE_SUFFIX = ".dat";
 inline constexpr static const char * INDEX_FILE_SUFFIX = ".idx";
+inline constexpr static const char * TRIM_INDEX_FILE_SUFFIX = ".trim.idx";
 inline constexpr static const char * MARK_FILE_SUFFIX = ".mrk";
 
 inline String getNGCPath(const String & prefix)
@@ -49,6 +50,7 @@ String getNGCPath(const String & parent_path, UInt64 file_id, DMFileStatus statu
 using FileNameBase = String;
 String colDataFileName(const FileNameBase & file_name_base);
 String colIndexFileName(const FileNameBase & file_name_base);
+String colTrimIndexFileName(const FileNameBase & file_name_base);
 String colMarkFileName(const FileNameBase & file_name_base);
 
 } // namespace DB::DM

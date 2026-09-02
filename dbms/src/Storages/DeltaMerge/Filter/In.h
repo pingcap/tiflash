@@ -14,7 +14,9 @@
 
 #pragma once
 
+#include <Storages/DeltaMerge/Filter/DateQueryDomain.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/Index/TrimMinMaxIndex.h>
 
 namespace DB::DM
 {
@@ -33,6 +35,32 @@ public:
     String name() override { return "in"; }
 
     ColIds getColumnIDs() override { return {attr.col_id}; }
+
+    DateQueryDomain makeQueryDomain() const
+    {
+        DateQueryDomain domain;
+        domain.predicate_class = TrimPredicateClass::EqualityOrInOrBounded;
+        for (const auto & v : values)
+        {
+            if (!v.isNull())
+                domain.values.push_back(v);
+        }
+        return domain;
+    }
+
+    RSIndexRequests getIndexRequests() override
+    {
+        // attr.type can be empty when column id is missing from table defines.
+        if (attr.type && TrimMinMax::isSupportedTemporalType(*attr.type))
+        {
+            return {RSIndexRequest{
+                .col_id = attr.col_id,
+                .preferred_kind = RSIndexKind::PreferTrim,
+                .query_domain = makeQueryDomain(),
+            }};
+        }
+        return RSOperator::getIndexRequests();
+    }
 
     String toDebugString() override
     {
@@ -69,6 +97,18 @@ public:
         // So return none directly.
         if (values.empty())
             return RSResults(pack_count, RSResult::None);
+
+        if (auto trim = getTrimRSIndex(param, attr, makeQueryDomain()))
+        {
+            auto raw = trim->minmax->checkIn(start_pack, pack_count, values, trim->type);
+            return applyTrimRoughCheckCorrection(
+                raw,
+                start_pack,
+                *trim->minmax,
+                TrimPredicateClass::EqualityOrInOrBounded,
+                param.record_trim_metrics);
+        }
+
         auto rs_index = getRSIndex(param, attr);
         return rs_index ? rs_index->minmax->checkIn(start_pack, pack_count, values, rs_index->type)
                         : RSResults(pack_count, RSResult::Some);
