@@ -1819,6 +1819,8 @@ void Join::workAfterBuildFinish(size_t stream_index)
 
         has_build_data_in_memory = !original_blocks.empty();
     }
+
+    build_side_empty.store(!isSpilled() && getTotalRowCount() == 0, std::memory_order_release);
 }
 
 void Join::finalizeNullAwareSemiFamilyBuild()
@@ -2001,6 +2003,7 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info) const
         LOG_WARNING(log, "JoinBlock without non zero active_build_threads, return empty block");
         return {};
     }
+
     std::shared_lock lock(rwlock);
 
     Block block{};

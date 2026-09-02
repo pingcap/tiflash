@@ -465,6 +465,7 @@ void HashJoin::workAfterBuildRowFinish()
     size_t all_build_row_count = 0;
     for (size_t i = 0; i < build_concurrency; ++i)
         all_build_row_count += build_workers_data[i].row_count;
+    build_side_empty.store(all_build_row_count == 0, std::memory_order_release);
 
     bool enable_tagged_pointer = settings.enable_tagged_pointer;
     for (size_t i = 0; i < build_concurrency; ++i)

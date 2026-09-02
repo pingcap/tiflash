@@ -31,6 +31,8 @@ public:
 
     String getName() const override { return "HashJoinV2ProbeTransformOp"; }
 
+    bool shouldSkipSource() const override { return join_ptr->shouldSkipProbe(); }
+
 protected:
     OperatorStatus transformImpl(Block & block) override;
 
