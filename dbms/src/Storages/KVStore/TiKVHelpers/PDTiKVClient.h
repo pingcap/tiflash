@@ -187,12 +187,17 @@ struct PDClientHelper
             {
                 GET_METRIC(tiflash_gc_safepoint_request_count, type_get_gc_state).Increment();
                 auto safe_point = pd_client->getGCSafePoint();
-                cached_gc_safe_point.store(
-                    std::max(cached_gc_safe_point.load(), safe_point), std::memory_order_release);
-                LOG_TRACE(Logger::get(), "use safe point v1, gc_safe_point={}", safe_point);
+                const auto cached_safe_point = cached_gc_safe_point.load(std::memory_order_acquire);
+                if (safe_point < cached_safe_point)
+                    GET_METRIC(tiflash_gc_safepoint_request_count, type_rewind).Increment();
+                const auto merged_safe_point = std::max(cached_safe_point, safe_point);
+                cached_gc_safe_point.store(merged_safe_point, std::memory_order_release);
+                if (merged_safe_point == 0)
+                    GET_METRIC(tiflash_gc_safepoint_request_count, type_zero_gc_safe_point).Increment();
+                LOG_TRACE(Logger::get(), "use safe point v1, gc_safe_point={}", merged_safe_point);
                 safe_point_last_update_time = std::chrono::steady_clock::now();
                 observe_backoff_count(true);
-                return safe_point;
+                return merged_safe_point;
             }
             catch (pingcap::Exception & e)
             {
@@ -257,11 +262,15 @@ struct PDClientHelper
         std::unique_lock<std::shared_mutex> lock(ks_gc_sp_mutex);
         KeyspaceGCInfo new_keyspace_gc_info;
         const auto iter = ks_gc_sp_map.find(keyspace_id);
+        if (iter != ks_gc_sp_map.end() && ks_gc_sp < iter->second.ks_gc_sp)
+            GET_METRIC(tiflash_gc_safepoint_request_count, type_rewind).Increment();
         new_keyspace_gc_info.ks_gc_sp = iter == ks_gc_sp_map.end()
             ? ks_gc_sp
             : std::max(iter->second.ks_gc_sp, ks_gc_sp);
         new_keyspace_gc_info.ks_gc_sp_update_time = std::chrono::steady_clock::now();
         ks_gc_sp_map[keyspace_id] = new_keyspace_gc_info;
+        if (new_keyspace_gc_info.ks_gc_sp == 0)
+            GET_METRIC(tiflash_gc_safepoint_request_count, type_zero_gc_safe_point).Increment();
     }
 
     static KeyspaceGCInfo getKeyspaceGCSafepoint(KeyspaceID keyspace_id)
