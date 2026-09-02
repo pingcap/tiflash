@@ -225,6 +225,8 @@ struct ColumnarScanStats {
   uint64_t rough_check_unknown_packs;
   uint64_t remote_segments;
   uint64_t total_segments;
+  uint64_t lm_late_packs_loaded;
+  uint64_t lm_late_rows_gathered;
 };
 
 struct SSTReaderInterfaces {
@@ -260,6 +262,32 @@ struct CloudStorageEngineInterfaces {
   int64_t (*fn_physical_table_id)(ColumnarReaderPtr);
   ColumnarScanStats (*fn_columnar_scan_stats)(ColumnarReaderPtr);
 };
+
+// Optional extension for the two-phase columnar reader protocol. This is
+// intentionally discovered through an independently exported, weak symbol so
+// that extending it cannot change RaftStoreProxyFFIHelper's ABI.
+struct ColumnarLateMaterializationInterfaces {
+  uint32_t version;
+  uint32_t size;
+  uint64_t (*fn_read_early_block)(ColumnarReaderPtr, uint64_t, BaseBuffView,
+                                  uint64_t *, int64_t *);
+  RustStrWithView (*fn_read_early_column)(ColumnarReaderPtr, uint64_t,
+                                          int64_t);
+  uint64_t (*fn_materialize_selected)(ColumnarReaderPtr, uint64_t, uint8_t,
+                                      BaseBuffView);
+  RustStrWithView (*fn_read_late_column)(ColumnarReaderPtr, uint64_t,
+                                         int64_t);
+  uint8_t (*fn_finish_materialized_block)(ColumnarReaderPtr, uint64_t);
+  uint8_t (*fn_discard_late_materialization_batch)(ColumnarReaderPtr,
+                                                   uint64_t);
+  uint8_t (*fn_is_late_materialization_supported)(ColumnarReaderPtr,
+                                                   BaseBuffView);
+};
+
+#if defined(__GNUC__) || defined(__clang__)
+extern "C" const ColumnarLateMaterializationInterfaces *
+    tiflash_columnar_get_late_materialization_interfaces() __attribute__((weak));
+#endif
 
 enum class MsgPBType : uint32_t {
   ReadIndexResponse = 0,

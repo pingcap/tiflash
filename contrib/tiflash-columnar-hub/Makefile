@@ -26,7 +26,7 @@ ifneq ($(strip $(ENABLE_FEATURES)),)
 FEATURE_ARGS += --features $(ENABLE_FEATURES)
 endif
 
-.PHONY: debug release build clean
+.PHONY: debug release build clean gen_proxy_ffi
 
 build:
 	cargo build --locked --manifest-path hub-runtime/Cargo.toml $(PROFILE_FLAG) $(FEATURE_ARGS)
@@ -41,3 +41,6 @@ release:
 
 clean:
 	cargo clean --manifest-path hub-runtime/Cargo.toml
+
+gen_proxy_ffi:
+	./gen-proxy-ffi.sh
