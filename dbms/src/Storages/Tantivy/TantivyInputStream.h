@@ -78,6 +78,7 @@ public:
         , match_expr(match_expr_)
         , is_count(is_count)
         , shards_snapshot(std::move(shards_snapshot_))
+        , header(return_columns)
     {}
 
     String getName() const override { return NAME; }
@@ -200,7 +201,6 @@ protected:
     }
 
 private:
-    Block header;
     bool done = false;
     LoggerPtr log;
     UInt32 keyspace_id;
@@ -215,6 +215,7 @@ private:
     ::Expr match_expr;
     bool is_count;
     std::shared_ptr<rust::Box<ShardsSnapshot>> shards_snapshot;
+    Block header;
 
     static std::unordered_map<String, size_t> buildColumnPositionMap(const NamesAndTypes & columns)
     {
