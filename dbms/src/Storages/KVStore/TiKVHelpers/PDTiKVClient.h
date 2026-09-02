@@ -35,6 +35,8 @@
 #include <algorithm>
 #include <atomic>
 #include <magic_enum.hpp>
+#include <shared_mutex>
+#include <unordered_map>
 
 using TimePoint = std::atomic<std::chrono::time_point<std::chrono::steady_clock>>;
 
@@ -265,7 +267,8 @@ struct PDClientHelper
     static KeyspaceGCInfo getKeyspaceGCSafepoint(KeyspaceID keyspace_id)
     {
         std::shared_lock<std::shared_mutex> lock(ks_gc_sp_mutex);
-        return ks_gc_sp_map[keyspace_id];
+        const auto iter = ks_gc_sp_map.find(keyspace_id);
+        return iter == ks_gc_sp_map.end() ? KeyspaceGCInfo{} : iter->second;
     }
 
     static void removeKeyspaceGCSafepoint(KeyspaceID keyspace_id)
