@@ -27,6 +27,22 @@ namespace DB
 class ColumnarScanContext
 {
 public:
+    enum class LateMaterializationDisableReason : UInt8
+    {
+        SettingDisabled,
+        FilterIneligible,
+        MultiTableReaderPlan,
+        NoPushedDownFilter,
+        FilterUsesExtraTableID,
+        FilterUsesGeneratedColumn,
+        UnsupportedFilterColumnType,
+        NoLateColumns,
+        LateToEarlyRatioBelowThreshold,
+        InterfacesUnavailable,
+        ReaderUnsupported,
+        ProbeSkipRatioBelowThreshold,
+    };
+
     std::atomic<UInt64> regions{0};
     std::atomic<UInt64> read_tasks{0};
     std::atomic<UInt64> physical_tables{0};
@@ -50,6 +66,17 @@ public:
 
     std::atomic<UInt64> remote_segments{0};
     std::atomic<UInt64> total_segments{0};
+
+    std::atomic<UInt64> lm_late_packs_loaded{0};
+    std::atomic<UInt64> lm_late_rows_gathered{0};
+    std::atomic<UInt64> lm_early_rows{0};
+    std::atomic<UInt64> lm_selected_rows{0};
+    std::atomic<UInt64> lm_batches{0};
+    std::atomic<UInt64> lm_empty_batches{0};
+    std::atomic<UInt64> lm_enabled{0};
+    std::atomic<UInt64> lm_probe_disabled{0};
+    // One bit per LateMaterializationDisableReason. Reasons can differ across reader works.
+    std::atomic<UInt64> lm_disable_reason_mask{0};
 
     void deserialize(const tipb::ColumnarScanContext & pb)
     {
@@ -120,6 +147,15 @@ public:
         rough_check_unknown_packs += other.rough_check_unknown_packs.load();
         remote_segments += other.remote_segments.load();
         total_segments += other.total_segments.load();
+        lm_late_packs_loaded += other.lm_late_packs_loaded.load();
+        lm_late_rows_gathered += other.lm_late_rows_gathered.load();
+        lm_early_rows += other.lm_early_rows.load();
+        lm_selected_rows += other.lm_selected_rows.load();
+        lm_batches += other.lm_batches.load();
+        lm_empty_batches += other.lm_empty_batches.load();
+        mergeMax(lm_enabled, other.lm_enabled.load());
+        mergeMax(lm_probe_disabled, other.lm_probe_disabled.load());
+        lm_disable_reason_mask.fetch_or(other.lm_disable_reason_mask.load());
     }
 
     void merge(const tipb::ColumnarScanContext & other)
@@ -161,18 +197,26 @@ public:
         rough_check_unknown_packs += other.rough_check_unknown_packs;
         remote_segments += other.remote_segments;
         total_segments += other.total_segments;
+        lm_late_packs_loaded += other.lm_late_packs_loaded;
+        lm_late_rows_gathered += other.lm_late_rows_gathered;
     }
 #endif
 
     String toJson() const
     {
         static constexpr double NS_TO_MS_SCALE = 1'000'000.0;
+        const auto early_rows = lm_early_rows.load();
+        const auto selected_rows = lm_selected_rows.load();
+        const auto skipped_rows = early_rows >= selected_rows ? early_rows - selected_rows : 0;
         return fmt::format(
             R"({{"scan_type":"columnar","mvcc_input_rows":{},"mvcc_input_bytes":{},"mvcc_output_rows":{})"
             R"(,"regions":{},"read_tasks":{},"physical_tables":{},"columns":{})"
             R"(,"user_read_bytes":{},"read_block":"{:.3f}ms","serialize_block":"{:.3f}ms")"
             R"(,"init_reader":"{:.3f}ms","prefetch":"{:.3f}ms","deserialize_block":"{:.3f}ms")"
             R"(,"rough_check":{{"total":{},"selected":{},"skipped":{},"unknown":{}}})"
+            R"(,"late_materialization":{{"enabled":{},"early_rows":{},"selected_rows":{},"skipped_rows":{})"
+            R"(,"late_packs_loaded":{},"late_rows_gathered":{})"
+            R"(,"batches":{},"empty_batches":{},"probe_disabled":{},"disable_reason_mask":{}}})"
             R"(,"remote_segments":{},"total_segments":{}}})",
             mvcc_input_rows.load(),
             mvcc_input_bytes.load(),
@@ -191,12 +235,40 @@ public:
             rough_check_selected_packs.load(),
             rough_check_skipped_packs.load(),
             rough_check_unknown_packs.load(),
+            lm_enabled.load(),
+            early_rows,
+            selected_rows,
+            skipped_rows,
+            lm_late_packs_loaded.load(),
+            lm_late_rows_gathered.load(),
+            lm_batches.load(),
+            lm_empty_batches.load(),
+            lm_probe_disabled.load(),
+            lm_disable_reason_mask.load(),
             remote_segments.load(),
             total_segments.load());
     }
 
     void addUserReadBytes(size_t bytes) { user_read_bytes += bytes; }
     void addDeserializeBlockNs(UInt64 ns) { total_deserialize_block_ns += ns; }
+    void addLateMaterializationBatch(UInt64 early_rows, UInt64 selected_rows)
+    {
+        lm_enabled = 1;
+        lm_early_rows += early_rows;
+        lm_selected_rows += selected_rows;
+        ++lm_batches;
+        if (selected_rows == 0)
+            ++lm_empty_batches;
+    }
+    void addLateMaterializationDisableReason(LateMaterializationDisableReason reason)
+    {
+        lm_disable_reason_mask.fetch_or(UInt64{1} << static_cast<UInt8>(reason));
+    }
+    void markLateMaterializationProbeDisabled()
+    {
+        lm_probe_disabled = 1;
+        addLateMaterializationDisableReason(LateMaterializationDisableReason::ProbeSkipRatioBelowThreshold);
+    }
 
 private:
     static void mergeMax(std::atomic<UInt64> & target, UInt64 value)

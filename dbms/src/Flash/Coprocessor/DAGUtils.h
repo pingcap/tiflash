@@ -47,6 +47,7 @@ String getFieldTypeName(Int32 tp);
 String getJoinExecTypeName(const tipb::JoinExecType & tp);
 bool isColumnExpr(const tipb::Expr & expr);
 String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col);
+ColumnID getColumnIDForColumnExpr(const tipb::Expr & expr, const std::vector<TiDB::ColumnInfo> & input_col);
 void getColumnIDsFromExpr(
     const tipb::Expr & expr,
     const std::vector<TiDB::ColumnInfo> & input_col,
