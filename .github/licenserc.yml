@@ -14,7 +14,7 @@ header:
     - '.env'
     - 'Jenkinsfile'
     - 'LICENSE'
-    - 'NOTICE'
+    - 'ThirdPartyNotices.txt'
     - 'tiflash-architecture.png'
     - 'contrib/'
     - 'libs/libclara-prebuilt/'
