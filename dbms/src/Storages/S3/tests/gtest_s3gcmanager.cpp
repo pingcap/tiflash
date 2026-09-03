@@ -87,7 +87,13 @@ public:
         createIfNotExist(tmp_dir);
     }
 
-    void TearDown() override { ::DB::tests::TiFlashTestEnv::deleteBucket(*mock_s3_client); }
+    void TearDown() override
+    {
+        if (DB::tests::TiFlashTestEnv::isMockedS3Client())
+        {
+            ::DB::tests::TiFlashTestEnv::deleteBucket(*mock_s3_client);
+        }
+    }
 
 protected:
     String tmp_dir;
@@ -314,8 +320,11 @@ try
 
     auto timepoint = Aws::Utils::DateTime("2023-02-01T08:00:00Z", Aws::Utils::DateFormat::ISO_8601);
     auto clear_bucket = [&] {
-        DB::tests::TiFlashTestEnv::deleteBucket(*mock_s3_client);
-        DB::tests::TiFlashTestEnv::createBucketIfNotExist(*mock_s3_client);
+        if (DB::tests::TiFlashTestEnv::isMockedS3Client())
+        {
+            DB::tests::TiFlashTestEnv::deleteBucket(*mock_s3_client);
+            DB::tests::TiFlashTestEnv::createBucketIfNotExist(*mock_s3_client);
+        }
     };
 
     {
@@ -400,8 +409,11 @@ try
 
     auto timepoint = Aws::Utils::DateTime("2023-02-01T08:00:00Z", Aws::Utils::DateFormat::ISO_8601);
     auto clear_bucket = [&] {
-        DB::tests::TiFlashTestEnv::deleteBucket(*mock_s3_client);
-        DB::tests::TiFlashTestEnv::createBucketIfNotExist(*mock_s3_client);
+        if (DB::tests::TiFlashTestEnv::isMockedS3Client())
+        {
+            DB::tests::TiFlashTestEnv::deleteBucket(*mock_s3_client);
+            DB::tests::TiFlashTestEnv::createBucketIfNotExist(*mock_s3_client);
+        }
     };
 
     {
@@ -514,8 +526,11 @@ try
 
     auto timepoint = Aws::Utils::DateTime("2023-02-01T08:00:00Z", Aws::Utils::DateFormat::ISO_8601);
     auto clear_bucket = [&] {
-        DB::tests::TiFlashTestEnv::deleteBucket(*mock_s3_client);
-        DB::tests::TiFlashTestEnv::createBucketIfNotExist(*mock_s3_client);
+        if (DB::tests::TiFlashTestEnv::isMockedS3Client())
+        {
+            DB::tests::TiFlashTestEnv::deleteBucket(*mock_s3_client);
+            DB::tests::TiFlashTestEnv::createBucketIfNotExist(*mock_s3_client);
+        }
     };
 
     {
