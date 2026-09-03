@@ -153,13 +153,12 @@ struct PDClientHelper
         // If keyspace id is `NullspaceID` it needs to use safe point v1.
         if (enable_safepoint_v2 && keyspace_id != NullspaceID)
         {
-            auto gc_safe_point
-                = getGCSafePointV2WithRetry(
-                    pd_client,
-                    keyspace_id,
-                    false,
-                    safe_point_update_interval_seconds,
-                    safe_point_get_max_backoff_ms);
+            auto gc_safe_point = getGCSafePointV2WithRetry(
+                pd_client,
+                keyspace_id,
+                false,
+                safe_point_update_interval_seconds,
+                safe_point_get_max_backoff_ms);
             LOG_TRACE(Logger::get(), "use safe point v2, keyspace={} gc_safe_point={}", keyspace_id, gc_safe_point);
             return gc_safe_point;
         }
@@ -264,9 +263,8 @@ struct PDClientHelper
         const auto iter = ks_gc_sp_map.find(keyspace_id);
         if (iter != ks_gc_sp_map.end() && ks_gc_sp < iter->second.ks_gc_sp)
             GET_METRIC(tiflash_gc_safepoint_request_count, type_rewind).Increment();
-        new_keyspace_gc_info.ks_gc_sp = iter == ks_gc_sp_map.end()
-            ? ks_gc_sp
-            : std::max(iter->second.ks_gc_sp, ks_gc_sp);
+        new_keyspace_gc_info.ks_gc_sp
+            = iter == ks_gc_sp_map.end() ? ks_gc_sp : std::max(iter->second.ks_gc_sp, ks_gc_sp);
         new_keyspace_gc_info.ks_gc_sp_update_time = std::chrono::steady_clock::now();
         ks_gc_sp_map[keyspace_id] = new_keyspace_gc_info;
         if (new_keyspace_gc_info.ks_gc_sp == 0)
