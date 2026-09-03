@@ -61,6 +61,7 @@ private:
     DAGContext & dagContext() const;
 
     void buildTableScan(const String & executor_id, const tipb::Executor * executor);
+    void buildTiCIScan(const String & executor_id, const tipb::Executor * executor);
 
 private:
     std::vector<PhysicalPlanNodePtr> cur_plan_nodes{};

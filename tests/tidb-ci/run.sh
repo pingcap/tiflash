@@ -25,7 +25,7 @@ check_env
 docker-compose -f cluster.yaml -f tiflash-dt.yaml down
 clean_data_log
 
-docker-compose -f cluster.yaml -f tiflash-dt.yaml up -d
+start_cluster_with_tiflash cluster.yaml tiflash-dt.yaml
 wait_env
 docker-compose -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/fail-point-tests && ./run-test.sh tidb-ci/fullstack-test true && ./run-test.sh tidb-ci/fullstack-test-dt'
 
@@ -36,7 +36,7 @@ clean_data_log
 docker-compose -f cluster_new_collation.yaml -f tiflash-dt.yaml down
 clean_data_log
 
-docker-compose -f cluster_new_collation.yaml -f tiflash-dt.yaml up -d
+start_cluster_with_tiflash cluster_new_collation.yaml tiflash-dt.yaml
 wait_env
 docker-compose -f cluster_new_collation.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/new_collation_fullstack'
 
@@ -47,7 +47,7 @@ clean_data_log
 docker-compose -f cluster_disable_new_collation.yaml -f tiflash-dt.yaml down
 clean_data_log
 
-docker-compose -f cluster_disable_new_collation.yaml -f tiflash-dt.yaml up -d
+start_cluster_with_tiflash cluster_disable_new_collation.yaml tiflash-dt.yaml
 wait_env
 docker-compose -f cluster_disable_new_collation.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/disable_new_collation_fullstack'
 
@@ -55,15 +55,15 @@ docker-compose -f cluster_disable_new_collation.yaml -f tiflash-dt.yaml down
 clean_data_log
 
 # run force_enable_lm tests
-docker-compose -f cluster.yaml -f tiflash-dt-force-enable-lm.yaml up -d
+start_cluster_with_tiflash cluster.yaml tiflash-dt-force-enable-lm.yaml
 wait_env
 docker-compose -f cluster.yaml -f tiflash-dt-force-enable-lm.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/force_enable_lm'
 
 docker-compose -f cluster.yaml -f tiflash-dt-force-enable-lm.yaml down
 clean_data_log
 
-# run lighweight compression tests
-docker-compose -f cluster.yaml -f tiflash-dt-lightweight-compression.yaml up -d
+# run lightweight compression tests
+start_cluster_with_tiflash cluster.yaml tiflash-dt-lightweight-compression.yaml
 wait_env
 docker-compose -f cluster.yaml -f tiflash-dt-lightweight-compression.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/lightweight_compression'
 

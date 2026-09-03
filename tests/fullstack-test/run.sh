@@ -25,14 +25,15 @@ check_env
 docker-compose -f cluster.yaml -f tiflash-dt.yaml down
 clean_data_log
 
-docker-compose -f cluster.yaml -f tiflash-dt.yaml up -d
+# run fullstack-tests
+start_cluster_with_tiflash cluster.yaml tiflash-dt.yaml
 wait_env
 docker-compose -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test'
 
 docker-compose -f cluster.yaml -f tiflash-dt.yaml down
 clean_data_log
 
-docker-compose -f cluster.yaml -f tiflash-dt-sync-grpc.yaml up -d
+start_cluster_with_tiflash cluster.yaml tiflash-dt-sync-grpc.yaml
 wait_env
 docker-compose -f cluster.yaml -f tiflash-dt-sync-grpc.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test/mpp'
 

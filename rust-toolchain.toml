@@ -1,1 +1,4 @@
-contrib/tiflash-proxy/rust-toolchain.toml
+[toolchain]
+channel = "nightly-2025-02-28"
+components = ["cargo", "rustfmt", "clippy", "rust-src", "rust-analyzer"]
+profile = "minimal"

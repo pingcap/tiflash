@@ -270,7 +270,10 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
         mpp::DispatchTaskResponse resp;
         auto status = rpc.call(&client_context, req, &resp);
         if (!status.ok())
-            throw Exception("Meet grpc error while dispatch mpp task: " + rpc.errMsg(status));
+        {
+            std::string extra_msg = "addr: " + Debug::LOCAL_HOST;
+            throw Exception("Meet grpc error while dispatch mpp task: " + rpc.errMsg(status, extra_msg));
+        }
         if (resp.has_error())
             throw Exception("Meet error while dispatch mpp task: " + resp.error().msg());
     }
@@ -399,8 +402,17 @@ tipb::SelectResponse executeDAGRequest(
         region_id,
         RegionInfo(region_id, region_version, region_conf_version, std::move(key_ranges), nullptr));
 
-    DAGContext
-        dag_context(dag_request, std::move(tables_regions_info), NullspaceID, "", DAGRequestKind::Cop, "", 0, "", log);
+    DAGContext dag_context(
+        dag_request,
+        std::move(tables_regions_info),
+        QueryShardInfos(),
+        NullspaceID,
+        "",
+        DAGRequestKind::Cop,
+        "",
+        0,
+        "",
+        log);
     context.setDAGContext(&dag_context);
 
     DAGDriver<DAGRequestKind::Cop> driver(context, start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
@@ -434,8 +446,17 @@ bool runAndCompareDagReq(
         region_id,
         RegionInfo(region_id, region->version(), region->confVer(), std::move(key_ranges), nullptr));
 
-    DAGContext
-        dag_context(dag_request, std::move(tables_regions_info), NullspaceID, "", DAGRequestKind::Cop, "", 0, "", log);
+    DAGContext dag_context(
+        dag_request,
+        std::move(tables_regions_info),
+        QueryShardInfos(),
+        NullspaceID,
+        "",
+        DAGRequestKind::Cop,
+        "",
+        0,
+        "",
+        log);
     context.setDAGContext(&dag_context);
     DAGDriver<DAGRequestKind::Cop>
         driver(context, properties.start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);

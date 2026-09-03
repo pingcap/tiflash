@@ -96,11 +96,7 @@ void ExecutorStatisticsCollector::initialize(DAGContext * dag_context_)
                 TopNStatistics,
                 WindowStatistics,
                 ExpandStatistics>(&executor))
-        {
-            throw TiFlashException(
-                fmt::format("Unknown executor type, executor_id: {}", executor.executor_id()),
-                Errors::Coprocessor::Internal);
-        }
+        {}
         return true;
     });
 
@@ -118,7 +114,7 @@ void ExecutorStatisticsCollector::fillChildren()
                 assert(child.has_executor_id());
                 children.push_back(child.executor_id());
             });
-            profiles[executor.executor_id()]->setChildren(children);
+            //profiles[executor.executor_id()]->setChildren(children);
             return true;
         });
     }
@@ -233,6 +229,7 @@ void ExecutorStatisticsCollector::fillLocalExecutionSummaries(tipb::SelectRespon
                 }
             }
         }
+        return;
         RUNTIME_CHECK_MSG(target_executor_summary, "cannot find executor summary to put ru consumption");
         RUNTIME_CHECK_MSG(
             local_ru->SerializeToString(target_executor_summary->mutable_ru_consumption()),
