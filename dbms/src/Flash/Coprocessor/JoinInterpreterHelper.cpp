@@ -188,6 +188,19 @@ JoinKeyTypes getJoinKeyTypes(const tipb::Join & join)
     return join_key_types;
 }
 
+std::vector<UInt8> getJoinKeyNullEqFlags(const tipb::Join & join)
+{
+    if (unlikely(join.is_null_eq_size() != 0 && join.is_null_eq_size() != join.left_join_keys_size()))
+        throw TiFlashException(
+            "size of join.is_null_eq does not match size of join.left_join_keys/right_join_keys",
+            Errors::Coprocessor::BadRequest);
+
+    std::vector<UInt8> is_null_eq(join.left_join_keys_size(), 0);
+    for (int i = 0; i < join.is_null_eq_size(); ++i)
+        is_null_eq[i] = join.is_null_eq(i) ? 1 : 0;
+    return is_null_eq;
+}
+
 TiDB::TiDBCollators getJoinKeyCollators(const tipb::Join & join, const JoinKeyTypes & join_key_types, bool is_test)
 {
     TiDB::TiDBCollators collators;
@@ -217,7 +230,18 @@ TiFlashJoin::TiFlashJoin(const tipb::Join & join_, bool is_test) // NOLINT(cppco
     : join(join_)
     , join_key_types(getJoinKeyTypes(join_))
     , join_key_collators(getJoinKeyCollators(join_, join_key_types, is_test))
+    , is_null_eq(getJoinKeyNullEqFlags(join_))
 {
+    if (unlikely(join.is_null_aware_semi_join()))
+    {
+        for (auto flag : is_null_eq)
+        {
+            if (flag != 0)
+                throw TiFlashException(
+                    "NullEQ join keys are incompatible with null-aware semi join",
+                    Errors::Coprocessor::BadRequest);
+        }
+    }
     std::tie(kind, build_side_index) = getJoinKindAndBuildSideIndex(join);
 }
 
@@ -412,6 +436,37 @@ std::tuple<ExpressionActionsPtr, Names, Names, String> prepareJoin(
     return {chain.getLastActions(), std::move(key_names), std::move(original_key_names), std::move(filter_column_name)};
 }
 
+void simplifyNullEqKeyFlags(
+    std::vector<UInt8> & is_null_eq,
+    const ExpressionActionsPtr & probe_prepare_actions,
+    Names & probe_key_names,
+    const ExpressionActionsPtr & build_prepare_actions,
+    Names & build_key_names)
+{
+    RUNTIME_CHECK(probe_key_names.size() == build_key_names.size());
+    RUNTIME_CHECK(probe_key_names.size() == is_null_eq.size());
+
+    for (size_t i = 0; i < is_null_eq.size(); ++i)
+    {
+        if (is_null_eq[i] == 0)
+            continue;
+
+        const auto & probe_type = probe_prepare_actions->getSampleBlock().getByName(probe_key_names[i]).type;
+        const auto & build_type = build_prepare_actions->getSampleBlock().getByName(build_key_names[i]).type;
+        if (!probe_type->isNullable() || !build_type->isNullable())
+        {
+            is_null_eq[i] = 0;
+            continue;
+        }
+
+        RUNTIME_CHECK_MSG(
+            probe_type->equals(*build_type),
+            "NullEQ key type mismatch after prepareJoin: probe={} build={}",
+            probe_type->getName(),
+            build_type->getName());
+    }
+}
+
 std::vector<RuntimeFilterPtr> TiFlashJoin::genRuntimeFilterList(
     const Context & context,
     const NamesAndTypes & source_columns,
@@ -450,6 +505,16 @@ std::vector<RuntimeFilterPtr> TiFlashJoin::genRuntimeFilterList(
         result.push_back(runtime_filter);
     }
     return result;
+}
+
+bool TiFlashJoin::shouldDisableRuntimeFilter() const
+{
+    for (const auto flag : is_null_eq)
+    {
+        if (flag != 0)
+            return true;
+    }
+    return false;
 }
 
 NamesAndTypes genDAGExpressionAnalyzerSourceColumns(Block block, const NamesAndTypes & tidb_schema)

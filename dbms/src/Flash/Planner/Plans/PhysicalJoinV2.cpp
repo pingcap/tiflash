@@ -205,6 +205,11 @@ const Block & PhysicalJoinV2::getSampleBlock() const
 bool PhysicalJoinV2::isSupported(const tipb::Join & join)
 {
     JoinInterpreterHelper::TiFlashJoin tiflash_join(join, false);
+    for (const auto is_nulleq : tiflash_join.is_null_eq)
+    {
+        if (is_nulleq)
+            return false;
+    }
     using enum ASTTableJoin::Kind;
     switch (tiflash_join.kind)
     {

@@ -20,6 +20,7 @@
 #include <Core/Field.h>
 #include <Core/Types.h>
 #include <DataTypes/IDataType.h>
+#include <tipb/expression.pb.h>
 
 namespace DB
 {

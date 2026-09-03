@@ -147,9 +147,8 @@ using OneTimeNotifyFuturePtr = std::shared_ptr<OneTimeNotifyFuture>;
   *
   * How Nullable keys are processed:
   *
-  * NULLs never join to anything, even to each other.
-  * During building of map, we just skip keys with NULL value of any component.
-  * During joining, we simply treat rows with any NULLs in key as non joined.
+  * For ordinary '=' keys, rows with NULL in any key component are filtered before build/probe.
+  * For NullEQ keys, NULL is allowed to participate in key comparison.
   *
   * Default values for outer joins (LEFT, RIGHT, FULL):
   *
@@ -160,9 +159,11 @@ using OneTimeNotifyFuturePtr = std::shared_ptr<OneTimeNotifyFuture>;
 class Join
 {
 public:
+    /// is_null_eq has one flag per join key pair. A nonzero flag requires Nullable key columns on both sides.
     Join(
         const Names & key_names_left_,
         const Names & key_names_right_,
+        const std::vector<UInt8> & is_null_eq_,
         ASTTableJoin::Kind kind_,
         const String & req_id,
         size_t fine_grained_shuffle_count_,
@@ -246,6 +247,7 @@ public:
     size_t getTotalBuildInputRows() const { return total_input_build_rows; }
 
     ASTTableJoin::Kind getKind() const { return kind; }
+    JoinMapMethod getJoinMapMethod() const { return join_map_method; }
 
     /// Inner/Semi cannot produce rows without build entries. RightSemi has no matched build rows to output.
     /// This is available after finalizeBuild and can be used to avoid reading the probe side.
@@ -258,6 +260,7 @@ public:
     }
 
     const Names & getLeftJoinKeys() const { return key_names_left; }
+    const std::vector<UInt8> & getNullEqFlags() const { return is_null_eq; }
 
     void setInitActiveBuildThreads()
     {
@@ -356,6 +359,8 @@ private:
     const Names key_names_left;
     /// Names of key columns (columns for equi-JOIN) in "right" table (in the order they appear in USING clause).
     const Names key_names_right;
+    /// Per join-key-pair null-safe-equal flags, aligned with key_names_left/key_names_right.
+    const std::vector<UInt8> is_null_eq;
 
     mutable std::mutex build_probe_mutex;
 

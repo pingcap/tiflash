@@ -278,6 +278,31 @@ try
 }
 CATCH
 
+TEST_F(MockDAGRequestTest, JoinNullEqSerialization)
+try
+{
+    auto request = context.scan("test_db", "l_table")
+                       .join(
+                           context.scan("test_db", "r_table"),
+                           tipb::JoinType::TypeInnerJoin,
+                           {col("join_c")},
+                           {},
+                           {},
+                           {},
+                           {},
+                           0,
+                           false,
+                           1,
+                           {1})
+                       .build(context);
+
+    ASSERT_EQ(request->root_executor().tp(), tipb::ExecType::TypeJoin);
+    const auto & join = request->root_executor().join();
+    ASSERT_EQ(join.is_null_eq_size(), 1);
+    ASSERT_TRUE(join.is_null_eq(0));
+}
+CATCH
+
 TEST_F(MockDAGRequestTest, FullOuterJoinSchemaIsNullable)
 try
 {
