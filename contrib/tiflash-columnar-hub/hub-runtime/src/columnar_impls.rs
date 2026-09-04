@@ -128,6 +128,7 @@ pub unsafe extern "C" fn ffi_make_columnar_reader(
     filter_conditions: BaseBuffView,
     ann_query_info: BaseBuffView,
     fts_query_info: BaseBuffView,
+    enable_trim_minmax: bool,
     hub_ptr: RaftStoreProxyPtr,
 ) -> ColumnarReaderPtr {
     let mut cols_pb = tipb::TableInfo::default();
@@ -218,6 +219,7 @@ pub unsafe extern "C" fn ffi_make_columnar_reader(
         filter_conditions_pb,
         ann_query_info_pb,
         fts_query_info_pb,
+        enable_trim_minmax,
     ) {
         Ok(reader) => (Box::into_raw(Box::new(reader)) as RawVoidPtr).into(),
         Err(err) => err.into(),

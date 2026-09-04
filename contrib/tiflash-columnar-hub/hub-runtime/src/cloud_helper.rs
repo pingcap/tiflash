@@ -527,6 +527,7 @@ impl CloudHelper {
         filter_conditions: Vec<tipb::Expr>,
         ann_query_info: tipb::AnnQueryInfo,
         fts_query_info: tipb::FtsQueryInfo,
+        enable_trim_minmax: bool,
     ) -> Result<CloudColumnarReaders, Error> {
         let dfs = self.dfs.clone();
         let pd_client = self.pd_client.clone();
@@ -537,12 +538,14 @@ impl CloudHelper {
         let ia_ctx = self.ia_ctx.clone();
         let http_client = self.http_client.clone();
         info!(
-            "make_columnar_reader, start_ts: {:?}, filter_conditions: {:?}, num_tables: {:?}",
+            "make_columnar_reader, start_ts: {:?}, filter_conditions: {:?}, num_tables: {:?}, enable_trim_minmax: {:?}",
             start_ts,
             filter_conditions,
-            tables.len()
+            tables.len(),
+            enable_trim_minmax
         );
-        let scan_ctx = TableScanCtx::new(table_scan, filter_conditions);
+        let scan_ctx =
+            TableScanCtx::new(table_scan, filter_conditions).with_enable_trim_minmax(enable_trim_minmax);
         let (tx, rx) = tikv_util::mpsc::bounded(1);
         let start = Instant::now_coarse();
         let vector_index_cache = self.vector_index_cache.clone();

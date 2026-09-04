@@ -251,7 +251,7 @@ struct CloudStorageEngineInterfaces {
   ColumnarReaderPtr (*fn_get_columnar_reader)(uint64_t, uint64_t, uint64_t,
                                               BaseBuffView, BaseBuffView,
                                               BaseBuffView, BaseBuffView,
-                                              BaseBuffView, BaseBuffView,
+                                              BaseBuffView, BaseBuffView, bool,
                                               RaftStoreProxyPtr);
   uint64_t (*fn_read_block)(ColumnarReaderPtr, uint64_t);
   RustStrWithView (*fn_read_handle)(ColumnarReaderPtr);

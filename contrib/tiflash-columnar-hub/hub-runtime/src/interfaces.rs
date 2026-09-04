@@ -393,7 +393,8 @@ pub mod root {
                     arg7: root::DB::BaseBuffView,
                     arg8: root::DB::BaseBuffView,
                     arg9: root::DB::BaseBuffView,
-                    arg10: root::DB::RaftStoreProxyPtr,
+                    arg10: bool,
+                    arg11: root::DB::RaftStoreProxyPtr,
                 ) -> root::DB::ColumnarReaderPtr,
             >,
             pub fn_read_block: ::std::option::Option<

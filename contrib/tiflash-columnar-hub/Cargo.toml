@@ -10,7 +10,7 @@ cloud_encryption = { git = "https://github.com/tidbcloud/cloud-storage-engine.gi
 keys = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine" }
 kvengine = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine" }
 kvenginepb = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine" }
-kvproto = { git = "https://github.com/pingcap/kvproto.git", rev = "683dad8fa3689deb243f2ff8ab5847c97af53e38" }
+kvproto = { git = "https://github.com/pingcap/kvproto.git", rev = "9327469" }
 pd_client = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine", default-features = false }
 prometheus = { version = "=0.13.0", features = ["nightly", "push"], default-features = true }
 security = { git = "https://github.com/tidbcloud/cloud-storage-engine.git", branch = "cloud-engine", default-features = false }

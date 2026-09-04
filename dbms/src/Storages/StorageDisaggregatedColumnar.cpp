@@ -129,6 +129,7 @@ struct RNColumnarReaderSharedContext
     String table_info_data;
     String ann_query_info_data;
     String fts_query_info_data;
+    bool enable_trim_minmax = false;
     RaftStoreProxyPtr proxy_ptr{};
     ClearSharedSnapAccessByStartTsFn clear_shared_snap_access_by_start_ts = nullptr;
     std::shared_ptr<std::mutex> output_lock = std::make_shared<std::mutex>();
@@ -470,6 +471,7 @@ std::shared_ptr<RNColumnarReaderSharedContext> buildColumnarReaderSharedContext(
     shared_context->table_info_data = table_info.SerializeAsString();
     shared_context->ann_query_info_data = table_scan.getANNQueryInfo().SerializeAsString();
     shared_context->fts_query_info_data = table_scan.getFTSQueryInfo().SerializeAsString();
+    shared_context->enable_trim_minmax = context.getSettingsRef().dt_enable_trim_minmax;
     return shared_context;
 }
 
@@ -764,6 +766,7 @@ ColumnarReaderPtr createColumnarReader(
         std::move(filter_conditions_view),
         std::move(ann_query_info_view),
         std::move(fts_query_info_view),
+        shared_context.enable_trim_minmax,
         proxy_helper->proxy_ptr);
     bool reader_returned = false;
     SCOPE_EXIT({
