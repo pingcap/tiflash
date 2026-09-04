@@ -14,8 +14,11 @@
 
 #pragma once
 
+#include <Flash/Coprocessor/HashTableStats.h>
 #include <Flash/Statistics/ExecutorStatistics.h>
 #include <tipb/executor.pb.h>
+
+#include <optional>
 
 namespace DB
 {
@@ -42,11 +45,13 @@ private:
     String build_side_child;
     bool is_spill_enabled = false;
     bool is_spilled = false;
+    std::optional<HashTableStats> hash_table_stats;
 
     BaseRuntimeStatistics join_build_base;
 
 protected:
     void appendExtraJson(FmtBuffer &) const override;
     void collectExtraRuntimeDetail() override;
+    void fillExtraExecutionSummary(ExecutionSummary &) const override;
 };
 } // namespace DB

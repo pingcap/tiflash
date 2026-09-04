@@ -42,6 +42,12 @@ void ExecutionSummary::merge(const ExecutionSummary & other)
     inner_zone_receive_bytes += other.inner_zone_receive_bytes;
     inter_zone_send_bytes += other.inter_zone_send_bytes;
     inter_zone_receive_bytes += other.inter_zone_receive_bytes;
+    if (other.hash_table_stats)
+    {
+        if (!hash_table_stats)
+            hash_table_stats.emplace();
+        hash_table_stats->merge(*other.hash_table_stats);
+    }
     ru_consumption = mergeRUConsumption(ru_consumption, other.ru_consumption);
     scan_context->merge(*other.scan_context);
     if (other.columnar_scan_context)
@@ -68,6 +74,13 @@ void ExecutionSummary::merge(const tipb::ExecutorExecutionSummary & other)
     inner_zone_receive_bytes += other.tiflash_network_summary().inner_zone_receive_bytes();
     inter_zone_send_bytes += other.tiflash_network_summary().inter_zone_send_bytes();
     inter_zone_receive_bytes += other.tiflash_network_summary().inter_zone_receive_bytes();
+    if (other.has_tiflash_hash_table_stats())
+    {
+        if (!hash_table_stats)
+            hash_table_stats.emplace();
+        hash_table_stats->row_count += other.tiflash_hash_table_stats().ndv();
+        hash_table_stats->bytes += other.tiflash_hash_table_stats().bytes();
+    }
     ru_consumption = mergeRUConsumption(ru_consumption, parseRUConsumption(other));
     if (other.has_tiflash_scan_context())
         scan_context->merge(other.tiflash_scan_context());
@@ -107,6 +120,12 @@ void ExecutionSummary::init(const tipb::ExecutorExecutionSummary & other)
     inner_zone_receive_bytes = other.tiflash_network_summary().inner_zone_receive_bytes();
     inter_zone_send_bytes = other.tiflash_network_summary().inter_zone_send_bytes();
     inter_zone_receive_bytes = other.tiflash_network_summary().inter_zone_receive_bytes();
+    if (other.has_tiflash_hash_table_stats())
+    {
+        hash_table_stats = HashTableStats{
+            .row_count = other.tiflash_hash_table_stats().ndv(),
+            .bytes = other.tiflash_hash_table_stats().bytes()};
+    }
     ru_consumption = parseRUConsumption(other);
     if (other.has_tiflash_scan_context())
         scan_context->deserialize(other.tiflash_scan_context());

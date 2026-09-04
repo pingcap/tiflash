@@ -262,6 +262,25 @@ size_t Join::getTotalHashTableAndPoolByteCount()
     return res;
 }
 
+bool Join::getHashTableStats(UInt64 & row_count, UInt64 & bytes) const
+{
+    if (isCrossJoin(kind) || isSpilled())
+        return false;
+
+    std::shared_lock rw_lock(rwlock);
+    size_t total_rows = 0;
+    size_t total_bytes = 0;
+    for (const auto & partition : partitions)
+    {
+        auto partition_lock = partition->lockPartition();
+        total_rows += partition->getHashTableRowCount();
+        total_bytes += partition->getHashMapAndPoolByteCount();
+    }
+    row_count = total_rows;
+    bytes = total_bytes;
+    return true;
+}
+
 size_t Join::getTotalByteCount()
 {
     size_t res = 0;
@@ -1820,6 +1839,7 @@ void Join::workAfterBuildFinish(size_t stream_index)
         has_build_data_in_memory = !original_blocks.empty();
     }
 
+    finalizeHashTableStats();
     build_side_empty.store(!isSpilled() && getTotalRowCount() == 0, std::memory_order_release);
 }
 
@@ -1888,6 +1908,18 @@ void Join::finalizeProfileInfo()
     profile_info->is_spill_enabled = isEnableSpill();
     profile_info->is_spilled = isSpilled();
     profile_info->peak_build_bytes_usage = getPeakBuildBytesUsage();
+    finalizeHashTableStats();
+}
+
+void Join::finalizeHashTableStats()
+{
+    if (profile_info->hash_table_stats)
+        return;
+
+    UInt64 row_count = 0;
+    UInt64 bytes = 0;
+    if (getHashTableStats(row_count, bytes))
+        profile_info->hash_table_stats = HashTableStats{.row_count = row_count, .bytes = bytes};
 }
 
 void Join::workAfterProbeFinish(size_t stream_index)

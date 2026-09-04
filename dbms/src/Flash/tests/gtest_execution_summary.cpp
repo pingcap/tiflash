@@ -14,6 +14,8 @@
 
 #include <Flash/Mpp/MPPTaskStatistics.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
+#include <Flash/Statistics/ExecutorStatisticsCollector.h>
+#include <Flash/Statistics/traverseExecutors.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
@@ -57,6 +59,86 @@ public:
     }
 
     static constexpr size_t concurrency = 10;
+
+    void testHashTableStats(bool enable_join_v2)
+    {
+        context.context->getSettingsRef().enable_hash_join_v2 = enable_join_v2;
+        enablePipeline(enable_join_v2);
+
+        auto t1 = context.scan("test_db", "test_table");
+        auto t2 = context.scan("test_db", "test_table");
+        auto request = t1.join(t2, tipb::JoinType::TypeInnerJoin, {col("s1")}).build(context);
+        request->set_collect_execution_summaries(true);
+
+        DAGContext dag_context(*request, "test_execution_summary", concurrency);
+        executeStreams(&dag_context);
+        ExecutorStatisticsCollector statistics_collector("test_execution_summary", true);
+        statistics_collector.initialize(&dag_context);
+        statistics_collector.setLocalRUConsumption(
+            RUConsumption{.cpu_ru = 0.0, .cpu_time_ns = 0, .read_ru = 0.0, .read_bytes = 0});
+        const auto summaries = statistics_collector.genExecutionSummaryResponse().execution_summaries();
+
+        const tipb::ExecutorExecutionSummary * join_summary = nullptr;
+        for (const auto & summary : summaries)
+        {
+            if (summary.has_executor_id() && summary.executor_id() == "Join_2")
+            {
+                join_summary = &summary;
+                break;
+            }
+        }
+        ASSERT_NE(join_summary, nullptr);
+        ASSERT_TRUE(join_summary->has_tiflash_hash_table_stats());
+        ASSERT_EQ(join_summary->tiflash_hash_table_stats().ndv(), 8);
+        ASSERT_GT(join_summary->tiflash_hash_table_stats().bytes(), 0);
+    }
+
+    void testHashTableStatsForMultipleJoins(bool enable_join_v2)
+    {
+        context.context->getSettingsRef().enable_hash_join_v2 = enable_join_v2;
+        enablePipeline(enable_join_v2);
+
+        auto t1 = context.scan("test_db", "test_table");
+        auto t2 = context.scan("test_db", "test_table");
+        auto t3 = context.scan("test_db", "test_table");
+        auto request = t1.join(t2, tipb::JoinType::TypeInnerJoin, {col("s1")})
+                           .join(t3, tipb::JoinType::TypeInnerJoin, {col("s1")})
+                           .build(context);
+        request->set_collect_execution_summaries(true);
+
+        std::vector<String> join_executor_ids;
+        traverseExecutors(request.get(), [&](const tipb::Executor & executor) {
+            if (executor.has_join())
+                join_executor_ids.push_back(executor.executor_id());
+            return true;
+        });
+        ASSERT_EQ(join_executor_ids.size(), 2);
+
+        DAGContext dag_context(*request, "test_execution_summary", concurrency);
+        executeStreams(&dag_context);
+        ExecutorStatisticsCollector statistics_collector("test_execution_summary", true);
+        statistics_collector.initialize(&dag_context);
+        statistics_collector.setLocalRUConsumption(
+            RUConsumption{.cpu_ru = 0.0, .cpu_time_ns = 0, .read_ru = 0.0, .read_bytes = 0});
+        const auto summaries = statistics_collector.genExecutionSummaryResponse().execution_summaries();
+
+        for (const auto & join_executor_id : join_executor_ids)
+        {
+            const tipb::ExecutorExecutionSummary * join_summary = nullptr;
+            for (const auto & summary : summaries)
+            {
+                if (summary.has_executor_id() && summary.executor_id() == join_executor_id)
+                {
+                    join_summary = &summary;
+                    break;
+                }
+            }
+            ASSERT_NE(join_summary, nullptr);
+            ASSERT_TRUE(join_summary->has_tiflash_hash_table_stats());
+            ASSERT_EQ(join_summary->tiflash_hash_table_stats().ndv(), 8);
+            ASSERT_GT(join_summary->tiflash_hash_table_stats().bytes(), 0);
+        }
+    }
 
 #define WRAP_FOR_EXCUTION_SUMMARY_TEST_BEGIN                                      \
     std::vector<DAGRequestType> type{DAGRequestType::tree, DAGRequestType::list}; \
@@ -150,6 +232,22 @@ try
             {"Join_2", {64, concurrency}}};
         testForExecutionSummary(request, expect);
     }
+}
+CATCH
+
+TEST_F(ExecutionSummaryTestRunner, hashTableStats)
+try
+{
+    testHashTableStats(false);
+    testHashTableStats(true);
+}
+CATCH
+
+TEST_F(ExecutionSummaryTestRunner, hashTableStatsForMultipleJoins)
+try
+{
+    testHashTableStatsForMultipleJoins(false);
+    testHashTableStatsForMultipleJoins(true);
 }
 CATCH
 

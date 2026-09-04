@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Coprocessor/ExecutionSummary.h>
 #include <Flash/Statistics/JoinImpl.h>
 #include <Interpreters/Join.h>
 
@@ -46,6 +47,7 @@ void JoinStatistics::collectExtraRuntimeDetail()
         build_side_child = join_execute_info.build_side_root_executor_id;
         is_spill_enabled = join_execute_info.join_profile_info->is_spill_enabled;
         is_spilled = join_execute_info.join_profile_info->is_spilled;
+        hash_table_stats = join_execute_info.join_profile_info->hash_table_stats;
         switch (dag_context.getExecutionMode())
         {
         case ExecutionMode::None:
@@ -63,6 +65,12 @@ void JoinStatistics::collectExtraRuntimeDetail()
             break;
         }
     }
+}
+
+void JoinStatistics::fillExtraExecutionSummary(ExecutionSummary & summary) const
+{
+    if (hash_table_stats)
+        summary.hash_table_stats = hash_table_stats;
 }
 
 JoinStatistics::JoinStatistics(const tipb::Executor * executor, DAGContext & dag_context_)
