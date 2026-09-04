@@ -32,11 +32,11 @@ void fillTiExecutionSummary(
     execution_summary->set_num_produced_rows(current.num_produced_rows);
     execution_summary->set_num_iterations(current.num_iterations);
     execution_summary->set_concurrency(current.concurrency);
-    if (current.has_hash_table_stats)
+    if (current.hash_table_stats)
     {
         auto * hash_table_stats = execution_summary->mutable_tiflash_hash_table_stats();
-        hash_table_stats->set_ndv(current.hash_table_rows);
-        hash_table_stats->set_bytes(current.hash_table_bytes);
+        hash_table_stats->set_ndv(current.hash_table_stats->row_count);
+        hash_table_stats->set_bytes(current.hash_table_stats->bytes);
     }
     if (current.columnar_scan_context)
         execution_summary->mutable_columnar_scan_context()->CopyFrom(current.columnar_scan_context->serialize());

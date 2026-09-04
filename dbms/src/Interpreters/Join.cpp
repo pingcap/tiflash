@@ -1913,17 +1913,13 @@ void Join::finalizeProfileInfo()
 
 void Join::finalizeHashTableStats()
 {
-    if (profile_info->has_hash_table_stats)
+    if (profile_info->hash_table_stats)
         return;
 
     UInt64 row_count = 0;
     UInt64 bytes = 0;
     if (getHashTableStats(row_count, bytes))
-    {
-        profile_info->has_hash_table_stats = true;
-        profile_info->hash_table_rows = row_count;
-        profile_info->hash_table_bytes = bytes;
-    }
+        profile_info->hash_table_stats = HashTableStats{.row_count = row_count, .bytes = bytes};
 }
 
 void Join::workAfterProbeFinish(size_t stream_index)

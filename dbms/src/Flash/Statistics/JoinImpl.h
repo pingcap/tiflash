@@ -14,8 +14,11 @@
 
 #pragma once
 
+#include <Flash/Coprocessor/HashTableStats.h>
 #include <Flash/Statistics/ExecutorStatistics.h>
 #include <tipb/executor.pb.h>
+
+#include <optional>
 
 namespace DB
 {
@@ -42,9 +45,7 @@ private:
     String build_side_child;
     bool is_spill_enabled = false;
     bool is_spilled = false;
-    bool has_hash_table_stats = false;
-    UInt64 hash_table_rows = 0;
-    UInt64 hash_table_bytes = 0;
+    std::optional<HashTableStats> hash_table_stats;
 
     BaseRuntimeStatistics join_build_base;
 

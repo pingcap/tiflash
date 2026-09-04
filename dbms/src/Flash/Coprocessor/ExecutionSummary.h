@@ -15,12 +15,14 @@
 #pragma once
 
 #include <Flash/Coprocessor/ColumnarScanContext_fwd.h>
+#include <Flash/Coprocessor/HashTableStats.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <common/types.h>
 #include <kvproto/resource_manager.pb.h>
 #include <tipb/select.pb.h>
 
 #include <memory>
+#include <optional>
 
 namespace DB
 {
@@ -40,9 +42,9 @@ struct ExecutionSummary
     UInt64 inner_zone_receive_bytes = 0;
     UInt64 inter_zone_send_bytes = 0;
     UInt64 inter_zone_receive_bytes = 0;
-    bool has_hash_table_stats = false;
-    UInt64 hash_table_rows = 0;
-    UInt64 hash_table_bytes = 0;
+    /// This summary belongs to one physical executor, identified by executor_id in the protobuf.
+    /// Therefore each hash-table operator gets an independent value; merge only combines fragments of the same operator.
+    std::optional<HashTableStats> hash_table_stats;
     resource_manager::Consumption ru_consumption{};
 
     DM::ScanContextPtr scan_context;

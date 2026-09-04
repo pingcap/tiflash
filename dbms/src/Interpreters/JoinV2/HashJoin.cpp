@@ -479,11 +479,15 @@ void HashJoin::workAfterBuildRowFinish()
         enable_tagged_pointer,
         false);
 
-    profile_info->has_hash_table_stats = method != HashJoinKeyMethod::Cross;
-    profile_info->hash_table_rows = all_build_row_count;
-    profile_info->hash_table_bytes = pointer_table.getMemoryUsage();
-    for (const auto & container : multi_row_containers)
-        profile_info->hash_table_bytes += container->memoryUsage();
+    if (method != HashJoinKeyMethod::Cross)
+    {
+        HashTableStats hash_table_stats;
+        hash_table_stats.row_count = all_build_row_count;
+        hash_table_stats.bytes = pointer_table.getMemoryUsage();
+        for (const auto & container : multi_row_containers)
+            hash_table_stats.bytes += container->memoryUsage();
+        profile_info->hash_table_stats = hash_table_stats;
+    }
 
     /// Conservative threshold: trigger late materialization when lm_row_size average >= 16 bytes.
     constexpr size_t trigger_lm_row_size_threshold = 16;

@@ -35,6 +35,7 @@
 #include <Flash/Coprocessor/ColumnarScanContext_fwd.h>
 #include <Flash/Coprocessor/DAGRequest.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
+#include <Flash/Coprocessor/HashTableStats.h>
 #include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
 #include <Flash/Executor/toRU.h>
@@ -47,6 +48,7 @@
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 
 #include <memory>
+#include <optional>
 #include <unordered_set>
 
 namespace DB
@@ -70,9 +72,8 @@ struct JoinProfileInfo
     UInt64 peak_build_bytes_usage = 0;
     bool is_spill_enabled = false;
     bool is_spilled = false;
-    bool has_hash_table_stats = false;
-    UInt64 hash_table_rows = 0;
-    UInt64 hash_table_bytes = 0;
+    /// Statistics for this physical join. The execution summary keeps one value per executor ID.
+    std::optional<HashTableStats> hash_table_stats;
 };
 using JoinProfileInfoPtr = std::shared_ptr<JoinProfileInfo>;
 struct JoinExecuteInfo
