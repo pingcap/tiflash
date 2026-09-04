@@ -70,6 +70,9 @@ struct JoinProfileInfo
     UInt64 peak_build_bytes_usage = 0;
     bool is_spill_enabled = false;
     bool is_spilled = false;
+    bool has_hash_table_stats = false;
+    UInt64 hash_table_rows = 0;
+    UInt64 hash_table_bytes = 0;
 };
 using JoinProfileInfoPtr = std::shared_ptr<JoinProfileInfo>;
 struct JoinExecuteInfo

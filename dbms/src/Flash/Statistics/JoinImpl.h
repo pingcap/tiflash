@@ -42,11 +42,15 @@ private:
     String build_side_child;
     bool is_spill_enabled = false;
     bool is_spilled = false;
+    bool has_hash_table_stats = false;
+    UInt64 hash_table_rows = 0;
+    UInt64 hash_table_bytes = 0;
 
     BaseRuntimeStatistics join_build_base;
 
 protected:
     void appendExtraJson(FmtBuffer &) const override;
     void collectExtraRuntimeDetail() override;
+    void fillExtraExecutionSummary(ExecutionSummary &) const override;
 };
 } // namespace DB

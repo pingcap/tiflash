@@ -101,6 +101,21 @@ struct alignas(CPU_CACHE_LINE_SIZE) MultipleRowContainer
     std::vector<RowContainer> column_rows;
     size_t all_row_count = 0;
 
+    size_t memoryUsage() const
+    {
+        size_t ret = column_rows.capacity() * sizeof(RowContainer);
+        for (const auto & row : column_rows)
+        {
+            if (row.data.capacity() > 0)
+                ret += row.data.allocated_bytes();
+            if (row.offsets.capacity() > 0)
+                ret += row.offsets.allocated_bytes();
+            if (row.hashes.capacity() > 0)
+                ret += row.hashes.allocated_bytes();
+        }
+        return ret;
+    }
+
     size_t build_table_index = 0;
     size_t scan_table_index = 0;
 

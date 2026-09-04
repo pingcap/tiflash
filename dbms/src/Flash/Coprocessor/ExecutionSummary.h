@@ -40,6 +40,9 @@ struct ExecutionSummary
     UInt64 inner_zone_receive_bytes = 0;
     UInt64 inter_zone_send_bytes = 0;
     UInt64 inter_zone_receive_bytes = 0;
+    bool has_hash_table_stats = false;
+    UInt64 hash_table_rows = 0;
+    UInt64 hash_table_bytes = 0;
     resource_manager::Consumption ru_consumption{};
 
     DM::ScanContextPtr scan_context;
