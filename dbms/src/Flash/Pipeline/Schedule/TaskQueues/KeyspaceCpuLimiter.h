@@ -48,13 +48,13 @@ public:
 
     bool tryAcquire(KeyspaceID keyspace_id)
     {
-        if (max_active_tasks == 0)
+        if (!isEnabled())
             return true;
 
         std::lock_guard lock(mu);
+        auto & quota = getCPUQuotaWithoutLock(keyspace_id);
         if (cpu_quota_per_second_ns != 0)
         {
-            auto & quota = getCPUQuotaWithoutLock(keyspace_id);
             refillCPUQuotaWithoutLock(quota);
             if (quota.tokens_ns <= 0)
             {
@@ -65,19 +65,14 @@ public:
         }
 
         auto & active = active_tasks[keyspace_id];
-        if (active >= max_active_tasks)
+        if (max_active_tasks != 0 && active >= max_active_tasks)
         {
-            if (cpu_quota_per_second_ns != 0)
-            {
-                auto & quota = getCPUQuotaWithoutLock(keyspace_id);
-                quota.metrics->active_tasks_throttled_total->Increment();
-                updateMetricsWithoutLock(keyspace_id, quota);
-            }
+            quota.metrics->active_tasks_throttled_total->Increment();
+            updateMetricsWithoutLock(keyspace_id, quota);
             return false;
         }
         ++active;
-        if (cpu_quota_per_second_ns != 0)
-            updateMetricsWithoutLock(keyspace_id, getCPUQuotaWithoutLock(keyspace_id));
+        updateMetricsWithoutLock(keyspace_id, quota);
         return true;
     }
 
@@ -86,20 +81,20 @@ public:
     /// releasing a slot for a cancelled task that never acquired one.
     void bindOwner(KeyspaceID keyspace_id, const Task * task)
     {
-        if (max_active_tasks == 0)
+        if (!isEnabled())
             return;
 
         std::lock_guard lock(mu);
         active_owners.emplace(task, keyspace_id);
     }
 
-    bool isEnabled() const { return max_active_tasks > 0; }
+    bool isEnabled() const { return max_active_tasks != 0 || cpu_quota_per_second_ns != 0; }
 
     /// Charge CPU consumed since the previous execute() call. Returning true
     /// asks the task thread to yield before it starts another execution round.
     bool consumeCPUTime(const Task * task, UInt64 cpu_time_ns)
     {
-        if (max_active_tasks == 0 || cpu_quota_per_second_ns == 0 || cpu_time_ns == 0)
+        if (cpu_quota_per_second_ns == 0 || cpu_time_ns == 0)
             return false;
 
         std::lock_guard lock(mu);
@@ -124,7 +119,7 @@ public:
 
     void release(const Task * task)
     {
-        if (max_active_tasks == 0)
+        if (!isEnabled())
             return;
 
         std::lock_guard lock(mu);
@@ -135,10 +130,10 @@ public:
         const auto keyspace_id = owner_iter->second;
         active_owners.erase(owner_iter);
         releaseWithoutLock(keyspace_id);
-        if (cpu_quota_per_second_ns != 0)
         {
             auto & quota = getCPUQuotaWithoutLock(keyspace_id);
-            refillCPUQuotaWithoutLock(quota);
+            if (cpu_quota_per_second_ns != 0)
+                refillCPUQuotaWithoutLock(quota);
             updateMetricsWithoutLock(keyspace_id, quota);
         }
         ++change_id;
@@ -148,11 +143,12 @@ public:
     // Kept for direct limiter tests and callers that do not have a task owner.
     void release(KeyspaceID keyspace_id)
     {
-        if (max_active_tasks == 0)
+        if (!isEnabled())
             return;
 
         std::lock_guard lock(mu);
         releaseWithoutLock(keyspace_id);
+        updateMetricsWithoutLock(keyspace_id, getCPUQuotaWithoutLock(keyspace_id));
         ++change_id;
         cv.notify_all();
     }
@@ -168,7 +164,7 @@ public:
     /// avoids a lost wakeup between checking the queues and starting to wait.
     void waitForChange(UInt64 previous_change_id)
     {
-        if (max_active_tasks == 0)
+        if (!isEnabled())
             return;
 
         std::unique_lock lock(mu);
@@ -177,7 +173,7 @@ public:
 
     bool waitForChange(UInt64 previous_change_id, std::chrono::milliseconds timeout)
     {
-        if (max_active_tasks == 0)
+        if (!isEnabled())
             return true;
 
         std::unique_lock lock(mu);
@@ -186,7 +182,7 @@ public:
 
     void notifyAll()
     {
-        if (max_active_tasks == 0)
+        if (!isEnabled())
             return;
 
         std::lock_guard lock(mu);
@@ -259,7 +255,11 @@ private:
         quota.metrics->max_active_tasks->Set(max_active_tasks);
         quota.metrics->cpu_tokens_seconds->Set(quota.tokens_ns / 1'000'000'000.0);
         quota.metrics->cpu_quota_seconds_per_second->Set(cpu_quota_per_second_ns / 1'000'000'000.0);
-        quota.metrics->throttled->Set(quota.tokens_ns <= 0 || active >= max_active_tasks ? 1 : 0);
+        quota.metrics->throttled->Set(
+            (cpu_quota_per_second_ns != 0 && quota.tokens_ns <= 0)
+                    || (max_active_tasks != 0 && active >= max_active_tasks)
+                ? 1
+                : 0);
     }
 
     std::unordered_map<KeyspaceID, CPUQuota> cpu_quotas;
