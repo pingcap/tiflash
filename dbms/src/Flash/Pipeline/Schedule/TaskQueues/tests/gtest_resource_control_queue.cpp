@@ -53,12 +53,12 @@ TEST(KeyspaceCpuLimiterTest, ZeroLimitDisablesLimiter)
         ASSERT_TRUE(limiter.tryAcquire(1));
 }
 
-TEST(KeyspaceCpuLimiterTest, ThrottlesKeyspaceAfterCPUQuotaIsExhausted)
+TEST(KeyspaceCpuLimiterTest, CPUQuotaWorksWithoutPoolLimit)
 {
     constexpr auto cpu_quota_per_second_ns
         = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::milliseconds(10)).count();
     constexpr KeyspaceID keyspace_id = 999999;
-    KeyspaceCpuLimiter limiter(1, cpu_quota_per_second_ns);
+    KeyspaceCpuLimiter limiter(0, cpu_quota_per_second_ns);
     const Task * task = nullptr;
 
     ASSERT_TRUE(limiter.tryAcquire(keyspace_id));

@@ -314,7 +314,7 @@ try
 }
 CATCH
 
-TEST_F(TaskSchedulerTestRunner, keyspaceLimiterIsSharedByCPUPoolAndIOPool)
+TEST_F(TaskSchedulerTestRunner, keyspacePoolLimiterIsSharedByCPUPoolAndIOPool)
 try
 {
     const auto logical_cpu_cores = getNumberOfLogicalCPUCores();
@@ -324,7 +324,7 @@ try
     // core setting that other tests rely on.
     const double one_slot_ratio = 1.0 / static_cast<double>(logical_cpu_cores);
     TaskSchedulerConfig config{
-        {1, TaskQueueType::MLFQ, one_slot_ratio},
+        {1, TaskQueueType::MLFQ, 0.0, one_slot_ratio},
         {1, TaskQueueType::IO_PRIORITY},
     };
 

@@ -29,21 +29,27 @@ namespace
 {
 KeyspaceCpuLimiterPtr createKeyspaceCpuLimiter(const TaskSchedulerConfig & config)
 {
-    const auto ratio = config.cpu_task_thread_pool_config.keyspace_cpu_limit_ratio;
-    RUNTIME_CHECK(ratio >= 0.0 && ratio <= 1.0, ratio);
+    const auto cpu_limit_ratio = config.cpu_task_thread_pool_config.keyspace_cpu_limit_ratio;
+    const auto pool_limit_ratio = config.cpu_task_thread_pool_config.keyspace_pool_limit_ratio;
+    RUNTIME_CHECK(cpu_limit_ratio >= 0.0 && cpu_limit_ratio <= 1.0, cpu_limit_ratio);
+    RUNTIME_CHECK(pool_limit_ratio >= 0.0 && pool_limit_ratio <= 1.0, pool_limit_ratio);
 
     size_t max_active_tasks = 0;
-    if (ratio > 0.0)
+    UInt64 cpu_quota_per_second_ns = 0;
+    const auto logical_cpu_cores = static_cast<double>(getNumberOfLogicalCPUCores());
+    if (pool_limit_ratio > 0.0)
     {
-        const auto logical_cpu_cores = static_cast<double>(getNumberOfLogicalCPUCores());
-        max_active_tasks = std::max<size_t>(1, static_cast<size_t>(std::floor(logical_cpu_cores * ratio)));
-        const auto cpu_quota_per_second_ns = std::max<UInt64>(
+        max_active_tasks = std::max<size_t>(1, static_cast<size_t>(std::floor(logical_cpu_cores * pool_limit_ratio)));
+    }
+    if (cpu_limit_ratio > 0.0)
+    {
+        cpu_quota_per_second_ns = std::max<UInt64>(
             1,
             static_cast<UInt64>(
-                ratio * logical_cpu_cores * static_cast<double>(std::chrono::seconds(1).count() * 1'000'000'000ULL)));
-        return std::make_shared<KeyspaceCpuLimiter>(max_active_tasks, cpu_quota_per_second_ns);
+                cpu_limit_ratio * logical_cpu_cores
+                * static_cast<double>(std::chrono::seconds(1).count() * 1'000'000'000ULL)));
     }
-    return std::make_shared<KeyspaceCpuLimiter>(max_active_tasks);
+    return std::make_shared<KeyspaceCpuLimiter>(max_active_tasks, cpu_quota_per_second_ns);
 }
 } // namespace
 

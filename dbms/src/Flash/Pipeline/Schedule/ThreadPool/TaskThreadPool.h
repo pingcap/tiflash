@@ -36,25 +36,32 @@ struct ThreadPoolConfig
         : pool_size(pool_size_)
     {}
 
-    ThreadPoolConfig(size_t pool_size_, TaskQueueType queue_type_, double keyspace_cpu_limit_ratio_ = 0.0)
+    ThreadPoolConfig(
+        size_t pool_size_,
+        TaskQueueType queue_type_,
+        double keyspace_cpu_limit_ratio_ = 0.0,
+        double keyspace_pool_limit_ratio_ = 0.0)
         : pool_size(pool_size_)
         , queue_type(queue_type_)
         , keyspace_cpu_limit_ratio(keyspace_cpu_limit_ratio_)
+        , keyspace_pool_limit_ratio(keyspace_pool_limit_ratio_)
     {}
 
     size_t pool_size;
     TaskQueueType queue_type = TaskQueueType::DEFAULT;
-    // Only read from the CPU pool configuration. Zero disables the shared
-    // per-keyspace admission guard for both CPU and IO pipeline tasks.
+    // Only read from the CPU pool configuration. CPU and IO pipeline tasks
+    // share the same per-keyspace limits.
     double keyspace_cpu_limit_ratio = 0.0;
+    double keyspace_pool_limit_ratio = 0.0;
 
     String toString() const
     {
         return fmt::format(
-            "[pool_size: {}, queue_type: {}, keyspace_cpu_limit_ratio: {}]",
+            "[pool_size: {}, queue_type: {}, keyspace_cpu_limit_ratio: {}, keyspace_pool_limit_ratio: {}]",
             pool_size,
             magic_enum::enum_name(queue_type),
-            keyspace_cpu_limit_ratio);
+            keyspace_cpu_limit_ratio,
+            keyspace_pool_limit_ratio);
     }
 };
 
