@@ -1359,6 +1359,20 @@ public:
         Count,
     };
 
+    struct KeyspaceCpuLimiterMetrics
+    {
+        prometheus::Gauge * active_tasks;
+        prometheus::Gauge * max_active_tasks;
+        prometheus::Gauge * cpu_tokens_seconds;
+        prometheus::Gauge * cpu_quota_seconds_per_second;
+        prometheus::Gauge * throttled;
+        prometheus::Counter * cpu_seconds_total;
+        prometheus::Counter * cpu_quota_throttled_total;
+        prometheus::Counter * active_tasks_throttled_total;
+    };
+
+    KeyspaceCpuLimiterMetrics & getKeyspaceCpuLimiterMetrics(KeyspaceID keyspace_id);
+
     void addReplicaSyncRU(UInt32 keyspace_id, UInt64 ru);
     UInt64 debugQueryReplicaSyncRU(UInt32 keyspace_id);
     enum class MemoryAllocType
@@ -1422,6 +1436,12 @@ private:
     prometheus::Family<prometheus::Counter> * registered_keyspace_sync_replica_ru_family;
     std::mutex replica_sync_ru_mtx;
     std::unordered_map<KeyspaceID, prometheus::Counter *> registered_keyspace_sync_replica_ru;
+
+    prometheus::Family<prometheus::Gauge> * registered_keyspace_cpu_limiter_family;
+    prometheus::Family<prometheus::Counter> * registered_keyspace_cpu_limiter_cpu_seconds_family;
+    prometheus::Family<prometheus::Counter> * registered_keyspace_cpu_limiter_throttled_family;
+    std::mutex keyspace_cpu_limiter_mtx;
+    std::unordered_map<KeyspaceID, KeyspaceCpuLimiterMetrics> registered_keyspace_cpu_limiter_metrics;
 
     // TODO: Use CAS+HazPtr to remove proxy_thread_report_mtx, or hash some slots here.
     prometheus::Family<prometheus::Gauge> * registered_raft_proxy_thread_memory_usage_family;

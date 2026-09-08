@@ -22,31 +22,31 @@
 
 namespace DB
 {
-TaskQueuePtr CPUImpl::newTaskQueue(TaskQueueType type)
+TaskQueuePtr CPUImpl::newTaskQueue(TaskQueueType type, const KeyspaceCpuLimiterPtr & keyspace_cpu_limiter)
 {
     switch (type)
     {
     // the default queue is RCQ_MLFQ.
     case TaskQueueType::DEFAULT:
     case TaskQueueType::RCQ_MLFQ:
-        return std::make_unique<ResourceControlQueue<CPUMultiLevelFeedbackQueue>>();
+        return std::make_unique<ResourceControlQueue<CPUMultiLevelFeedbackQueue>>(keyspace_cpu_limiter);
     case TaskQueueType::MLFQ:
-        return std::make_unique<CPUMultiLevelFeedbackQueue>();
+        return std::make_unique<CPUMultiLevelFeedbackQueue>(keyspace_cpu_limiter);
     default:
         throw Exception(fmt::format("Unsupported queue type: {}", magic_enum::enum_name(type)));
     }
 }
 
-TaskQueuePtr IOImpl::newTaskQueue(TaskQueueType type)
+TaskQueuePtr IOImpl::newTaskQueue(TaskQueueType type, const KeyspaceCpuLimiterPtr & keyspace_cpu_limiter)
 {
     switch (type)
     {
     // the default queue is io priority queue.
     case TaskQueueType::DEFAULT:
     case TaskQueueType::IO_PRIORITY:
-        return std::make_unique<IOPriorityQueue>();
+        return std::make_unique<IOPriorityQueue>(keyspace_cpu_limiter);
     case TaskQueueType::MLFQ:
-        return std::make_unique<IOMultiLevelFeedbackQueue>();
+        return std::make_unique<IOMultiLevelFeedbackQueue>(keyspace_cpu_limiter);
     default:
         throw Exception(fmt::format("Unsupported queue type: {}", magic_enum::enum_name(type)));
     }

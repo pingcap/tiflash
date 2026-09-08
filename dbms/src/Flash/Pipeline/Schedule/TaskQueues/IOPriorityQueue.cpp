@@ -46,6 +46,7 @@ IOPriorityQueue::~IOPriorityQueue()
 bool IOPriorityQueue::take(TaskPtr & task)
 {
     std::unique_lock lock(mu);
+    const bool limiter_enabled = keyspace_cpu_limiter && keyspace_cpu_limiter->isEnabled();
     while (true)
     {
         // Remaining tasks will be drained in destructor.
@@ -58,12 +59,41 @@ bool IOPriorityQueue::take(TaskPtr & task)
         bool io_out_first = ratio_of_out_to_in * total_io_in_time_microsecond >= total_io_out_time_microsecond;
         auto & first_queue = io_out_first ? io_out_task_queue : io_in_task_queue;
         auto & next_queue = io_out_first ? io_in_task_queue : io_out_task_queue;
-        if (popTask(first_queue, task))
+        if (tryTakeTaskWithoutLock(first_queue, task))
             return true;
-        if (popTask(next_queue, task))
+        if (tryTakeTaskWithoutLock(next_queue, task))
             return true;
-        cv.wait(lock);
+        if (limiter_enabled)
+        {
+            const auto previous_change_id = keyspace_cpu_limiter->getChangeId();
+            lock.unlock();
+            keyspace_cpu_limiter->waitForChange(previous_change_id, keyspace_cpu_limiter->getRefillWaitDuration());
+            lock.lock();
+        }
+        else
+        {
+            cv.wait(lock);
+        }
     }
+}
+
+bool IOPriorityQueue::tryTakeTaskWithoutLock(std::list<TaskPtr> & task_queue, TaskPtr & task)
+{
+    if (!keyspace_cpu_limiter || !keyspace_cpu_limiter->isEnabled())
+        return popTask(task_queue, task);
+
+    for (auto it = task_queue.begin(); it != task_queue.end(); ++it)
+    {
+        const auto keyspace_id = (*it)->getKeyspaceID();
+        if (!keyspace_cpu_limiter->tryAcquire(keyspace_id))
+            continue;
+
+        task = std::move(*it);
+        task_queue.erase(it);
+        keyspace_cpu_limiter->bindOwner(keyspace_id, task.get());
+        return true;
+    }
+    return false;
 }
 
 void IOPriorityQueue::drainTaskQueueWithoutLock()
@@ -83,7 +113,7 @@ void IOPriorityQueue::drainTaskQueueWithoutLock()
     }
 }
 
-void IOPriorityQueue::updateStatistics(const TaskPtr &, ExecTaskStatus exec_task_status, UInt64 inc_ns)
+void IOPriorityQueue::updateStatistics(const TaskPtr & task, ExecTaskStatus exec_task_status, UInt64 inc_ns)
 {
     switch (exec_task_status)
     {
@@ -94,6 +124,14 @@ void IOPriorityQueue::updateStatistics(const TaskPtr &, ExecTaskStatus exec_task
         total_io_out_time_microsecond += (inc_ns / 1000);
         break;
     default:; // ignore not io status.
+    }
+
+    if (keyspace_cpu_limiter)
+    {
+        // A cancelled task can be returned from cancel_task_queue without ever
+        // acquiring a reservation; release() is owner-aware and therefore a no-op.
+        keyspace_cpu_limiter->release(task.get());
+        notifyWaiters();
     }
 }
 
@@ -109,7 +147,7 @@ void IOPriorityQueue::finish()
         std::lock_guard lock(mu);
         is_finished = true;
     }
-    cv.notify_all();
+    notifyWaiters();
 }
 
 void IOPriorityQueue::submitTaskWithoutLock(TaskPtr && task)
@@ -148,7 +186,7 @@ void IOPriorityQueue::submit(TaskPtr && task)
         std::lock_guard lock(mu);
         submitTaskWithoutLock(std::move(task));
     }
-    cv.notify_one();
+    notifyWaiters();
 }
 
 void IOPriorityQueue::submit(std::vector<TaskPtr> & tasks)
@@ -162,12 +200,12 @@ void IOPriorityQueue::submit(std::vector<TaskPtr> & tasks)
         return;
     }
 
-    std::lock_guard lock(mu);
-    for (auto & task : tasks)
     {
-        submitTaskWithoutLock(std::move(task));
-        cv.notify_one();
+        std::lock_guard lock(mu);
+        for (auto & task : tasks)
+            submitTaskWithoutLock(std::move(task));
     }
+    notifyWaiters();
 }
 
 void IOPriorityQueue::cancel(const TaskCancelInfo & cancel_info)
@@ -175,17 +213,24 @@ void IOPriorityQueue::cancel(const TaskCancelInfo & cancel_info)
     if unlikely (cancel_info.query_id.empty())
         return;
 
-    std::lock_guard lock(mu);
-    if (cancel_query_id_cache.add(cancel_info.query_id))
     {
-        collectCancelledTasks(cancel_task_queue, cancel_info.query_id);
-        cv.notify_all();
+        std::lock_guard lock(mu);
+        if (cancel_query_id_cache.add(cancel_info.query_id))
+            collectCancelledTasks(cancel_task_queue, cancel_info.query_id);
     }
+    notifyWaiters();
 }
 
 void IOPriorityQueue::collectCancelledTasks(std::deque<TaskPtr> & cancel_queue, const String & query_id)
 {
     moveCancelledTasks(io_in_task_queue, cancel_queue, query_id);
     moveCancelledTasks(io_out_task_queue, cancel_queue, query_id);
+}
+
+void IOPriorityQueue::notifyWaiters()
+{
+    cv.notify_all();
+    if (keyspace_cpu_limiter)
+        keyspace_cpu_limiter->notifyAll();
 }
 } // namespace DB

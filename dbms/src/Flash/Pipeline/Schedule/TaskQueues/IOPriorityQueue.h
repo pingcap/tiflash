@@ -15,10 +15,12 @@
 #pragma once
 
 #include <Flash/Pipeline/Schedule/TaskQueues/FIFOQueryIdCache.h>
+#include <Flash/Pipeline/Schedule/TaskQueues/KeyspaceCpuLimiter.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/TaskQueue.h>
 
 #include <deque>
 #include <mutex>
+#include <utility>
 
 namespace DB
 {
@@ -32,6 +34,10 @@ class IOPriorityQueue : public TaskQueue
 public:
     // The ratio of total execution time between io_out and io_in is 3:1.
     static constexpr size_t ratio_of_out_to_in = 3;
+
+    explicit IOPriorityQueue(KeyspaceCpuLimiterPtr keyspace_cpu_limiter_ = nullptr)
+        : keyspace_cpu_limiter(std::move(keyspace_cpu_limiter_))
+    {}
 
     ~IOPriorityQueue() override;
 
@@ -52,9 +58,11 @@ public:
     void collectCancelledTasks(std::deque<TaskPtr> & cancel_queue, const String & query_id);
 
 private:
+    bool tryTakeTaskWithoutLock(std::list<TaskPtr> & task_queue, TaskPtr & task);
     void submitTaskWithoutLock(TaskPtr && task);
 
     void drainTaskQueueWithoutLock();
+    void notifyWaiters();
 
 private:
     mutable std::mutex mu;
@@ -69,5 +77,7 @@ private:
 
     FIFOQueryIdCache cancel_query_id_cache;
     std::deque<TaskPtr> cancel_task_queue;
+
+    KeyspaceCpuLimiterPtr keyspace_cpu_limiter;
 };
 } // namespace DB
