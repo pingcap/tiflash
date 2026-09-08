@@ -47,7 +47,7 @@ use tokio::{
 
 use crate::{
     engine_store_helper::{get_engine_store_server_helper, EngineStoreServerHelperExt},
-    interfaces_ffi::RaftProxyStatus,
+    interfaces_ffi::{EngineStoreServerStatus, RaftProxyStatus},
     metrics::STATUS_SERVER_REQUEST_DURATION,
     profile::{
         dump_heap_profile_pprof, dump_heap_profile_svg, set_heap_profile_active,
@@ -272,13 +272,26 @@ async fn handle_request(
         _ => {
             let helper = get_engine_store_server_helper();
             if method == Method::GET && helper.check_http_uri_available(path.as_ref()) {
-                let (resp, api_prefix) = handle_engine_store_http_request(req, helper).await;
-                path_label = if api_prefix.is_empty() {
-                    "/engine-store".to_owned()
+                if allow_engine_store_http(
+                    path.as_ref(),
+                    helper.handle_get_engine_store_server_status(),
+                ) {
+                    let (resp, api_prefix) = handle_engine_store_http_request(req, helper).await;
+                    path_label = if api_prefix.is_empty() {
+                        "/engine-store".to_owned()
+                    } else {
+                        api_prefix
+                    };
+                    resp
                 } else {
-                    api_prefix
-                };
-                resp
+                    // Engine-store HTTP APIs (except livez) need TMTContext, which is assigned
+                    // when status becomes Running. Return 503 instead of forwarding to FFI.
+                    path_label = path.clone();
+                    Ok(make_response(
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        "engine-store is not ready\n",
+                    ))
+                }
             } else {
                 path_label = "unknown".to_owned();
                 Ok(make_response(
@@ -749,5 +762,45 @@ fn proxy_status_name(status: u8) -> &'static str {
         x if x == RaftProxyStatus::Running as u8 => "running",
         x if x == RaftProxyStatus::Stopped as u8 => "stopped",
         _ => "unknown",
+    }
+}
+
+/// `/tiflash/livez` does not touch TMTContext; other engine-store APIs wait until Running.
+fn allow_engine_store_http(path: &str, engine_status: EngineStoreServerStatus) -> bool {
+    path.starts_with("/tiflash/livez") || matches!(engine_status, EngineStoreServerStatus::Running)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn engine_store_http_gate_allows_livez_before_running() {
+        // "tiflash/livez" is allowed even when engine-store is not Running
+        assert!(allow_engine_store_http(
+            "/tiflash/livez",
+            EngineStoreServerStatus::Idle
+        ));
+        assert!(allow_engine_store_http(
+            "/tiflash/livez",
+            EngineStoreServerStatus::Stopping
+        ));
+        // Other engine-store HTTP APIs are not allowed until Running
+        assert!(!allow_engine_store_http(
+            "/tiflash/readyz",
+            EngineStoreServerStatus::Idle
+        ));
+        assert!(!allow_engine_store_http(
+            "/tiflash/store-status",
+            EngineStoreServerStatus::Idle
+        ));
+        assert!(allow_engine_store_http(
+            "/tiflash/readyz",
+            EngineStoreServerStatus::Running
+        ));
+        assert!(allow_engine_store_http(
+            "/tiflash/livez",
+            EngineStoreServerStatus::Running
+        ));
     }
 }
