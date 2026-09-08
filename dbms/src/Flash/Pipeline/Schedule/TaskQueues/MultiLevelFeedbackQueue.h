@@ -16,12 +16,14 @@
 
 #include <Common/Logger.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/FIFOQueryIdCache.h>
+#include <Flash/Pipeline/Schedule/TaskQueues/KeyspaceCpuLimiter.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/TaskQueue.h>
 
 #include <array>
 #include <atomic>
 #include <deque>
 #include <mutex>
+#include <utility>
 
 namespace DB
 {
@@ -96,7 +98,7 @@ template <typename TimeGetter>
 class MultiLevelFeedbackQueue : public TaskQueue
 {
 public:
-    MultiLevelFeedbackQueue();
+    explicit MultiLevelFeedbackQueue(KeyspaceCpuLimiterPtr keyspace_cpu_limiter_ = nullptr);
 
     ~MultiLevelFeedbackQueue() override;
 
@@ -131,7 +133,10 @@ private:
 
     void submitTaskWithoutLock(TaskPtr && task);
 
+    bool tryTakeTaskWithoutLock(UnitQueue & unit_queue, TaskPtr & task);
+
     void drainTaskQueueWithoutLock();
+    void notifyWaiters();
 
 private:
     mutable std::mutex mu;
@@ -146,6 +151,8 @@ private:
 
     FIFOQueryIdCache cancel_query_id_cache;
     std::deque<TaskPtr> cancel_task_queue;
+
+    KeyspaceCpuLimiterPtr keyspace_cpu_limiter;
 };
 
 struct CPUTimeGetter

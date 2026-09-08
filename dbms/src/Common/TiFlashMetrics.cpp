@@ -84,6 +84,18 @@ TiFlashMetrics::TiFlashMetrics()
                                                       .Name("tiflash_storage_sync_replica_ru")
                                                       .Help("RU for synchronous replica of keyspace")
                                                       .Register(*registry);
+    registered_keyspace_cpu_limiter_family = &prometheus::BuildGauge()
+                                                  .Name("tiflash_pipeline_keyspace_cpu_limiter")
+                                                  .Help("Keyspace CPU limiter state")
+                                                  .Register(*registry);
+    registered_keyspace_cpu_limiter_cpu_seconds_family = &prometheus::BuildCounter()
+                                                              .Name("tiflash_pipeline_keyspace_cpu_limiter_cpu_seconds")
+                                                              .Help("CPU time charged to the keyspace CPU limiter")
+                                                              .Register(*registry);
+    registered_keyspace_cpu_limiter_throttled_family = &prometheus::BuildCounter()
+                                                            .Name("tiflash_pipeline_keyspace_cpu_limiter_throttled")
+                                                            .Help("Failed keyspace CPU limiter admission attempts")
+                                                            .Register(*registry);
     registered_raft_proxy_thread_memory_usage_family
         = &prometheus::BuildGauge().Name(raft_proxy_thread_memory_usage).Help("").Register(*registry);
 
@@ -189,6 +201,36 @@ UInt64 TiFlashMetrics::debugQueryReplicaSyncRU(UInt32 keyspace_id)
     std::unique_lock lock(replica_sync_ru_mtx);
     auto * counter = getReplicaSyncRUCounter(keyspace_id, lock);
     return counter->Value();
+}
+
+TiFlashMetrics::KeyspaceCpuLimiterMetrics & TiFlashMetrics::getKeyspaceCpuLimiterMetrics(KeyspaceID keyspace_id)
+{
+    std::lock_guard lock(keyspace_cpu_limiter_mtx);
+    auto [iter, inserted] = registered_keyspace_cpu_limiter_metrics.try_emplace(keyspace_id);
+    if (!inserted)
+        return iter->second;
+
+    const auto keyspace_id_str = std::to_string(keyspace_id);
+    auto labels = [&](const char * type) {
+        return prometheus::Labels{{"keyspace_id", keyspace_id_str}, {"type", type}};
+    };
+    auto reason_labels = [&](const char * reason) {
+        return prometheus::Labels{{"keyspace_id", keyspace_id_str}, {"reason", reason}};
+    };
+
+    iter->second.active_tasks = &registered_keyspace_cpu_limiter_family->Add(labels("active_tasks"));
+    iter->second.max_active_tasks = &registered_keyspace_cpu_limiter_family->Add(labels("max_active_tasks"));
+    iter->second.cpu_tokens_seconds = &registered_keyspace_cpu_limiter_family->Add(labels("cpu_tokens_seconds"));
+    iter->second.cpu_quota_seconds_per_second
+        = &registered_keyspace_cpu_limiter_family->Add(labels("cpu_quota_seconds_per_second"));
+    iter->second.throttled = &registered_keyspace_cpu_limiter_family->Add(labels("throttled"));
+    iter->second.cpu_seconds_total
+        = &registered_keyspace_cpu_limiter_cpu_seconds_family->Add({{"keyspace_id", keyspace_id_str}});
+    iter->second.cpu_quota_throttled_total
+        = &registered_keyspace_cpu_limiter_throttled_family->Add(reason_labels("cpu_quota"));
+    iter->second.active_tasks_throttled_total
+        = &registered_keyspace_cpu_limiter_throttled_family->Add(reason_labels("active_tasks"));
+    return iter->second;
 }
 
 prometheus::Counter * TiFlashMetrics::getReplicaSyncRUCounter(UInt32 keyspace_id, std::unique_lock<std::mutex> &)

@@ -25,11 +25,16 @@ struct TaskTimer
 {
     TaskProfileInfo & profile_info;
     UInt64 executing_time = 0;
+    UInt64 cpu_executing_time = 0;
+    UInt64 cpu_last_time = 0;
     UInt64 updateExecutingTime()
     {
         executing_time += profile_info.elapsedFromPrev();
         return executing_time;
     }
+
+    UInt64 updateCPUExecutingTime();
+    void startCPUTime();
 };
 
 extern thread_local TaskTimer * current_task_timer;

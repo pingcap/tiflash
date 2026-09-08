@@ -28,7 +28,7 @@ void ResourceControlQueue<NestedTaskQueueType>::submit(TaskPtr && task)
         std::lock_guard lock(mu);
         submitWithoutLock(std::move(task));
     }
-    cv.notify_one();
+    notifyWaiters();
 }
 
 template <typename NestedTaskQueueType>
@@ -40,11 +40,9 @@ void ResourceControlQueue<NestedTaskQueueType>::submit(std::vector<TaskPtr> & ta
     {
         std::lock_guard lock(mu);
         for (auto & task : tasks)
-        {
             submitWithoutLock(std::move(task));
-            cv.notify_one();
-        }
     }
+    notifyWaiters();
 }
 
 template <typename NestedTaskQueueType>
@@ -117,18 +115,35 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
             continue;
 
         UInt64 wait_dura = LocalAdmissionController::DEFAULT_MAX_EST_WAIT_DURATION.count();
+        const bool limiter_enabled = keyspace_cpu_limiter && keyspace_cpu_limiter->isEnabled();
         if (!resource_group_infos.empty())
         {
-            const ResourceGroupInfo & group_info = resource_group_infos.top();
-            const bool ru_exhausted = LocalAdmissionController::isRUExhausted(group_info.priority);
-
-            // When highest priority of resource group is less than zero, means RU of all resource groups are exhausted.
-            // Should not take any task from nested task queue for this situation.
-            if (!ru_exhausted)
+            std::vector<ResourceGroupInfo> deferred;
+            bool got_task = false;
+            while (!resource_group_infos.empty())
             {
-                mustTakeTask(group_info.task_queue, task);
-                return true;
+                auto group_info = resource_group_infos.top();
+                resource_group_infos.pop();
+                const bool ru_exhausted = LocalAdmissionController::isRUExhausted(group_info.priority);
+                if (!ru_exhausted && (!limiter_enabled || keyspace_cpu_limiter->tryAcquire(group_info.keyspace_id)))
+                {
+                    mustTakeTask(group_info.task_queue, task);
+                    if (limiter_enabled)
+                        keyspace_cpu_limiter->bindOwner(group_info.keyspace_id, task.get());
+                    deferred.push_back(std::move(group_info));
+                    got_task = true;
+                    break;
+                }
+                deferred.push_back(std::move(group_info));
             }
+
+            for (auto & group_info : deferred)
+                resource_group_infos.push(std::move(group_info));
+
+            if (got_task)
+                return true;
+
+            const auto & group_info = resource_group_infos.top();
             wait_dura
                 = LocalAdmissionController::global_instance->estWaitDuraMS(group_info.keyspace_id, group_info.name);
         }
@@ -139,7 +154,19 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
         // 2. new task submit.
         // 3. LAC got resp from GAC or estWaitDura timeout.
         // so wait_dura is used to avoid stuck.
-        cv.wait_for(lock, std::chrono::milliseconds(wait_dura));
+        if (limiter_enabled)
+        {
+            const auto previous_change_id = keyspace_cpu_limiter->getChangeId();
+            lock.unlock();
+            keyspace_cpu_limiter->waitForChange(
+                previous_change_id,
+                std::min(std::chrono::milliseconds(wait_dura), keyspace_cpu_limiter->getRefillWaitDuration()));
+            lock.lock();
+        }
+        else
+        {
+            cv.wait_for(lock, std::chrono::milliseconds(wait_dura));
+        }
     }
 }
 
@@ -150,10 +177,16 @@ void ResourceControlQueue<NestedTaskQueueType>::updateStatistics(
     UInt64 inc_value)
 {
     assert(task);
-    auto ru = cpuTimeToRU(inc_value);
+    const UInt64 cpu_time_ns = task->profile_info.getThreadCPUTimeNs();
+    auto ru = cpuTimeToRU(cpu_time_ns);
     const String & resource_group_name = task->getResourceGroupName();
     const auto & keyspace_id = task->getKeyspaceID();
-    LocalAdmissionController::global_instance->consumeCPUResource(keyspace_id, resource_group_name, ru, inc_value);
+    if (keyspace_cpu_limiter)
+    {
+        keyspace_cpu_limiter->release(task.get());
+        notifyWaiters();
+    }
+    LocalAdmissionController::global_instance->consumeCPUResource(keyspace_id, resource_group_name, ru, cpu_time_ns);
 
     NestedTaskQueuePtr group_queue = nullptr;
     {
@@ -240,7 +273,7 @@ void ResourceControlQueue<NestedTaskQueueType>::finish()
             ele.second->finish();
     }
 
-    cv.notify_all();
+    notifyWaiters();
 }
 
 template <typename NestedTaskQueueType>
@@ -249,16 +282,16 @@ void ResourceControlQueue<NestedTaskQueueType>::cancel(const TaskCancelInfo & ca
     if unlikely (cancel_info.query_id.empty())
         return;
 
-    std::lock_guard lock(mu);
-    if (cancel_query_id_cache.add(cancel_info.query_id))
     {
-        auto iter = resource_group_task_queues.find({cancel_info.keyspace_id, cancel_info.resource_group_name});
-        if (iter != resource_group_task_queues.end())
+        std::lock_guard lock(mu);
+        if (cancel_query_id_cache.add(cancel_info.query_id))
         {
-            iter->second->collectCancelledTasks(cancel_task_queue, cancel_info.query_id);
+            auto iter = resource_group_task_queues.find({cancel_info.keyspace_id, cancel_info.resource_group_name});
+            if (iter != resource_group_task_queues.end())
+                iter->second->collectCancelledTasks(cancel_task_queue, cancel_info.query_id);
         }
     }
-    cv.notify_all();
+    notifyWaiters();
 }
 
 template <typename NestedTaskQueueType>
@@ -281,6 +314,14 @@ void ResourceControlQueue<NestedTaskQueueType>::mustTakeTask(const NestedTaskQue
     assert(!task_queue->empty());
     RUNTIME_CHECK(task_queue->take(task));
     assert(task);
+}
+
+template <typename NestedTaskQueueType>
+void ResourceControlQueue<NestedTaskQueueType>::notifyWaiters()
+{
+    cv.notify_all();
+    if (keyspace_cpu_limiter)
+        keyspace_cpu_limiter->notifyAll();
 }
 
 template class ResourceControlQueue<CPUMultiLevelFeedbackQueue>;

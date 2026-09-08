@@ -59,6 +59,10 @@ class TaskProfileInfo : public ProfileInfo<UInt64>
 public:
     ALWAYS_INLINE UInt64 elapsedFromPrev() { return stopwatch.elapsedFromLastTime(); }
 
+    ALWAYS_INLINE UInt64 getThreadCPUTimeNs() const { return thread_cpu_time_ns; }
+
+    ALWAYS_INLINE void setThreadCPUTimeNs(UInt64 value) { thread_cpu_time_ns = value; }
+
     ALWAYS_INLINE void addCPUExecuteTime(UInt64 value)
     {
         cpu_execute_time_ns += value;
@@ -126,6 +130,7 @@ public:
 private:
     Stopwatch stopwatch{CLOCK_MONOTONIC_COARSE};
 
+    UInt64 thread_cpu_time_ns = 0;
     UInt64 cpu_execute_max_time_ns_per_round = 0;
     UInt64 io_execute_max_time_ns_per_round = 0;
 };

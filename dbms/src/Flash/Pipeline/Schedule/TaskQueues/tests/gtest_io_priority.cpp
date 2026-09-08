@@ -226,4 +226,43 @@ try
 }
 CATCH
 
+TEST_F(TestIOPriorityTaskQueue, keyspaceLimiterSharesSlots)
+try
+{
+    PipelineExecutorContext context1("id1", "", nullptr, nullptr, nullptr, nullptr, 1);
+    context1.incActiveRefCount();
+    SCOPE_EXIT({ context1.decActiveRefCount(); });
+
+    PipelineExecutorContext context2("id2", "", nullptr, nullptr, nullptr, nullptr, 2);
+    context2.incActiveRefCount();
+    SCOPE_EXIT({ context2.decActiveRefCount(); });
+
+    auto limiter = std::make_shared<KeyspaceCpuLimiter>(1);
+    IOPriorityQueue queue(limiter);
+    queue.submit(std::make_unique<MockIOTask>(context1, true));
+    queue.submit(std::make_unique<MockIOTask>(context1, true));
+    queue.submit(std::make_unique<MockIOTask>(context2, true));
+
+    TaskPtr task;
+    ASSERT_TRUE(queue.take(task));
+    ASSERT_EQ(task->getKeyspaceID(), 1);
+    auto first_task = std::move(task);
+
+    // The second task of keyspace 1 is blocked, but keyspace 2 can use the
+    // remaining shared slot.
+    ASSERT_TRUE(queue.take(task));
+    ASSERT_EQ(task->getKeyspaceID(), 2);
+    queue.updateStatistics(task, ExecTaskStatus::IO_IN, 1);
+    FINALIZE_TASK(task);
+
+    queue.updateStatistics(first_task, ExecTaskStatus::IO_IN, 1);
+    FINALIZE_TASK(first_task);
+
+    ASSERT_TRUE(queue.take(task));
+    ASSERT_EQ(task->getKeyspaceID(), 1);
+    queue.updateStatistics(task, ExecTaskStatus::IO_IN, 1);
+    FINALIZE_TASK(task);
+}
+CATCH
+
 } // namespace DB::tests

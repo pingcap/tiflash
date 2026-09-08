@@ -29,6 +29,54 @@ namespace DB::tests
 
 namespace
 {
+TEST(KeyspaceCpuLimiterTest, LimitsOneKeyspaceIndependently)
+{
+    KeyspaceCpuLimiter limiter(2);
+
+    ASSERT_TRUE(limiter.tryAcquire(1));
+    ASSERT_TRUE(limiter.tryAcquire(1));
+    ASSERT_FALSE(limiter.tryAcquire(1));
+
+    ASSERT_TRUE(limiter.tryAcquire(2));
+    ASSERT_TRUE(limiter.tryAcquire(2));
+
+    limiter.release(1);
+    ASSERT_TRUE(limiter.tryAcquire(1));
+}
+
+TEST(KeyspaceCpuLimiterTest, ZeroLimitDisablesLimiter)
+{
+    KeyspaceCpuLimiter limiter(0);
+
+    ASSERT_FALSE(limiter.isEnabled());
+    for (size_t i = 0; i < 10; ++i)
+        ASSERT_TRUE(limiter.tryAcquire(1));
+}
+
+TEST(KeyspaceCpuLimiterTest, ThrottlesKeyspaceAfterCPUQuotaIsExhausted)
+{
+    constexpr auto cpu_quota_per_second_ns
+        = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::milliseconds(10)).count();
+    constexpr KeyspaceID keyspace_id = 999999;
+    KeyspaceCpuLimiter limiter(1, cpu_quota_per_second_ns);
+    const Task * task = nullptr;
+
+    ASSERT_TRUE(limiter.tryAcquire(keyspace_id));
+    limiter.bindOwner(keyspace_id, task);
+    ASSERT_TRUE(limiter.consumeCPUTime(
+        task,
+        std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::milliseconds(100)).count()));
+    limiter.release(task);
+
+    ASSERT_FALSE(limiter.tryAcquire(keyspace_id));
+
+    auto & metrics = TiFlashMetrics::instance().getKeyspaceCpuLimiterMetrics(keyspace_id);
+    EXPECT_EQ(metrics.active_tasks->Value(), 0);
+    EXPECT_EQ(metrics.throttled->Value(), 1);
+    EXPECT_GT(metrics.cpu_seconds_total->Value(), 0);
+    EXPECT_GT(metrics.cpu_quota_throttled_total->Value(), 0);
+}
+
 class SimpleTask : public Task
 {
 public:

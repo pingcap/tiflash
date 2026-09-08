@@ -30,9 +30,13 @@
 namespace DB
 {
 template <typename Impl>
-TaskThreadPool<Impl>::TaskThreadPool(TaskScheduler & scheduler_, const ThreadPoolConfig & config)
-    : task_queue(Impl::newTaskQueue(config.queue_type))
+TaskThreadPool<Impl>::TaskThreadPool(
+    TaskScheduler & scheduler_,
+    const ThreadPoolConfig & config,
+    const KeyspaceCpuLimiterPtr & keyspace_cpu_limiter)
+    : task_queue(Impl::newTaskQueue(config.queue_type, keyspace_cpu_limiter))
     , scheduler(scheduler_)
+    , keyspace_cpu_limiter(keyspace_cpu_limiter)
 {
     RUNTIME_CHECK(config.pool_size > 0);
     threads.reserve(config.pool_size);
@@ -93,21 +97,29 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
 {
     assert(task);
     TaskTimer timer{task->profile_info};
+    timer.startCPUTime();
     task->beforeExec(&timer);
+    if (keyspace_cpu_limiter)
+        keyspace_cpu_limiter->consumeCPUTime(task.get(), timer.updateCPUExecutingTime());
 
     metrics.incExecutingTask();
     metrics.elapsedPendingTime(task);
 
     auto status_before_exec = task->getStatus();
     auto status_after_exec = status_before_exec;
+    const UInt64 cpu_time_before_exec = timer.cpu_executing_time;
     while (true)
     {
         status_after_exec = Impl::exec(task);
         auto total_time_spent = timer.updateExecutingTime();
+        const bool cpu_quota_exhausted
+            = keyspace_cpu_limiter && keyspace_cpu_limiter->consumeCPUTime(task.get(), timer.updateCPUExecutingTime());
         // The executing task should yield if it takes more than `YIELD_MAX_TIME_SPENT_NS`.
-        if (!Impl::isTargetStatus(status_after_exec) || total_time_spent >= YIELD_MAX_TIME_SPENT_NS)
+        if (!Impl::isTargetStatus(status_after_exec) || total_time_spent >= YIELD_MAX_TIME_SPENT_NS
+            || cpu_quota_exhausted)
             break;
     }
+    task->profile_info.setThreadCPUTimeNs(timer.cpu_executing_time - cpu_time_before_exec);
     task_queue->updateStatistics(task, status_before_exec, timer.executing_time);
     metrics.addExecuteTime(task, timer.executing_time);
     metrics.decExecutingTask();

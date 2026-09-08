@@ -13,8 +13,36 @@
 // limitations under the License.
 
 #include <Flash/Pipeline/Schedule/Tasks/TaskTimer.h>
+#include <time.h>
 
 namespace DB
 {
 thread_local TaskTimer * current_task_timer = nullptr;
+
+UInt64 TaskTimer::updateCPUExecutingTime()
+{
+#if defined(CLOCK_THREAD_CPUTIME_ID)
+    timespec ts{};
+    if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts) != 0)
+        return 0;
+    const auto current_cpu_time = static_cast<UInt64>(ts.tv_sec) * 1'000'000'000ULL + ts.tv_nsec;
+    if (cpu_last_time == 0)
+        cpu_last_time = current_cpu_time;
+    const auto delta = current_cpu_time >= cpu_last_time ? current_cpu_time - cpu_last_time : 0;
+    cpu_last_time = current_cpu_time;
+    cpu_executing_time += delta;
+    return delta;
+#else
+    return 0;
+#endif
+}
+
+void TaskTimer::startCPUTime()
+{
+#if defined(CLOCK_THREAD_CPUTIME_ID)
+    timespec ts{};
+    if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts) == 0)
+        cpu_last_time = static_cast<UInt64>(ts.tv_sec) * 1'000'000'000ULL + ts.tv_nsec;
+#endif
+}
 } // namespace DB
