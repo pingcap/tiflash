@@ -667,7 +667,11 @@ TEST_F(TestResourceControlQueue, cancel)
         queue.submit(tasks);
         for (size_t i = 0; i < resource_groups.size(); ++i)
         {
-            queue.cancel(TaskCancelInfo{.query_id = query_id_prefix + rg_names[i], .resource_group_name = rg_names[i]});
+            queue.cancel(TaskCancelInfo{
+                .query_id = query_id_prefix + rg_names[i],
+                .keyspace_id = all_contexts[i]->getKeyspaceID(),
+                .resource_group_name = rg_names[i]});
+            EXPECT_EQ(queue.cancel_task_queue.size(), tasks_per_resource_group);
             for (size_t j = 0; j < tasks_per_resource_group; ++j)
             {
                 TaskPtr task;
@@ -687,10 +691,14 @@ TEST_F(TestResourceControlQueue, cancel)
         ResourceControlQueue<CPUMultiLevelFeedbackQueue> queue;
         for (size_t i = 0; i < resource_groups.size(); ++i)
         {
-            queue.cancel(TaskCancelInfo{.query_id = query_id_prefix + rg_names[i], .resource_group_name = rg_names[i]});
+            queue.cancel(TaskCancelInfo{
+                .query_id = query_id_prefix + rg_names[i],
+                .keyspace_id = all_contexts[i]->getKeyspaceID(),
+                .resource_group_name = rg_names[i]});
             if (i == 0)
                 queue.submit(tasks);
 
+            EXPECT_EQ(queue.cancel_task_queue.size(), tasks_per_resource_group);
             for (size_t j = 0; j < tasks_per_resource_group; ++j)
             {
                 TaskPtr task;
