@@ -119,28 +119,29 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
         if (!resource_group_infos.empty())
         {
             std::vector<ResourceGroupInfo> deferred;
-            bool got_task = false;
             while (!resource_group_infos.empty())
             {
-                auto group_info = resource_group_infos.top();
-                resource_group_infos.pop();
-                const bool ru_exhausted = LocalAdmissionController::isRUExhausted(group_info.priority);
-                if (!ru_exhausted && (!limiter_enabled || keyspace_cpu_limiter->tryAcquire(group_info.keyspace_id)))
+                const auto & group_info = resource_group_infos.top();
+                // RU-exhausted groups have the lowest priority, so none below can run.
+                if (LocalAdmissionController::isRUExhausted(group_info.priority))
+                    break;
+
+                if (!limiter_enabled || keyspace_cpu_limiter->tryAcquire(group_info.keyspace_id))
                 {
                     mustTakeTask(group_info.task_queue, task);
                     if (limiter_enabled)
                         keyspace_cpu_limiter->bindOwner(group_info.keyspace_id, task.get());
-                    deferred.push_back(std::move(group_info));
-                    got_task = true;
                     break;
                 }
-                deferred.push_back(std::move(group_info));
+
+                deferred.push_back(group_info);
+                resource_group_infos.pop();
             }
 
             for (auto & group_info : deferred)
                 resource_group_infos.push(std::move(group_info));
 
-            if (got_task)
+            if (task)
                 return true;
 
             const auto & group_info = resource_group_infos.top();
