@@ -96,6 +96,11 @@ template <typename Impl>
 void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
 {
     assert(task);
+    const auto * const task_ptr = task.get();
+    SCOPE_EXIT({
+        if (keyspace_cpu_limiter)
+            keyspace_cpu_limiter->release(task_ptr);
+    });
     TaskTimer timer{task->profile_info};
     timer.startCPUTime();
     task->beforeExec(&timer);

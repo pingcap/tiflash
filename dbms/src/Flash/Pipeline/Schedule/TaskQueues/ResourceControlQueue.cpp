@@ -126,11 +126,20 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
                 if (LocalAdmissionController::isRUExhausted(group_info.priority))
                     break;
 
-                if (!limiter_enabled || keyspace_cpu_limiter->tryAcquire(group_info.keyspace_id))
+                const bool acquired = limiter_enabled && keyspace_cpu_limiter->tryAcquire(group_info.keyspace_id);
+                if (!limiter_enabled || acquired)
                 {
+                    bool owner_bound = false;
+                    SCOPE_EXIT({
+                        if (acquired && !owner_bound)
+                            keyspace_cpu_limiter->release(group_info.keyspace_id);
+                    });
                     mustTakeTask(group_info.task_queue, task);
-                    if (limiter_enabled)
+                    if (acquired)
+                    {
                         keyspace_cpu_limiter->bindOwner(group_info.keyspace_id, task.get());
+                        owner_bound = true;
+                    }
                     break;
                 }
 
