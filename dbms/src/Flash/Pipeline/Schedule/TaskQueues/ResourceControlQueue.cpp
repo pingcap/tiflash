@@ -187,8 +187,9 @@ void ResourceControlQueue<NestedTaskQueueType>::updateStatistics(
     UInt64 inc_value)
 {
     assert(task);
-    const UInt64 cpu_time_ns = task->profile_info.getThreadCPUTimeNs();
-    auto ru = cpuTimeToRU(cpu_time_ns);
+    // LAC's pipeline accounting is based on the task execution duration. The
+    // keyspace limiter consumes CLOCK_THREAD_CPUTIME_ID independently.
+    auto ru = cpuTimeToRU(inc_value);
     const String & resource_group_name = task->getResourceGroupName();
     const auto & keyspace_id = task->getKeyspaceID();
     if (keyspace_cpu_limiter)
@@ -196,7 +197,7 @@ void ResourceControlQueue<NestedTaskQueueType>::updateStatistics(
         keyspace_cpu_limiter->release(task.get());
         notifyWaiters();
     }
-    LocalAdmissionController::global_instance->consumeCPUResource(keyspace_id, resource_group_name, ru, cpu_time_ns);
+    LocalAdmissionController::global_instance->consumeCPUResource(keyspace_id, resource_group_name, ru, inc_value);
 
     NestedTaskQueuePtr group_queue = nullptr;
     {
