@@ -16,6 +16,8 @@
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <common/likely.h>
 
+#include <ext/scope_guard.h>
+
 namespace DB
 {
 namespace
@@ -88,9 +90,15 @@ bool IOPriorityQueue::tryTakeTaskWithoutLock(std::list<TaskPtr> & task_queue, Ta
         if (!keyspace_cpu_limiter->tryAcquire(keyspace_id))
             continue;
 
+        bool owner_bound = false;
+        SCOPE_EXIT({
+            if (!owner_bound)
+                keyspace_cpu_limiter->release(keyspace_id);
+        });
         task = std::move(*it);
         task_queue.erase(it);
         keyspace_cpu_limiter->bindOwner(keyspace_id, task.get());
+        owner_bound = true;
         return true;
     }
     return false;
@@ -101,14 +109,20 @@ void IOPriorityQueue::drainTaskQueueWithoutLock()
     TaskPtr task;
     while (popTask(cancel_task_queue, task))
     {
+        if (keyspace_cpu_limiter)
+            keyspace_cpu_limiter->release(task.get());
         FINALIZE_TASK(task);
     }
     while (popTask(io_out_task_queue, task))
     {
+        if (keyspace_cpu_limiter)
+            keyspace_cpu_limiter->release(task.get());
         FINALIZE_TASK(task);
     }
     while (popTask(io_in_task_queue, task))
     {
+        if (keyspace_cpu_limiter)
+            keyspace_cpu_limiter->release(task.get());
         FINALIZE_TASK(task);
     }
 }
