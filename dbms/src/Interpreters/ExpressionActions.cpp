@@ -34,6 +34,7 @@
 #pragma GCC diagnostic pop
 
 #include <optional>
+#include <ranges>
 #include <set>
 #include <sstream>
 
@@ -383,8 +384,10 @@ void ExpressionAction::execute(Block & block) const
             captured.reserve(arguments.size());
             for (auto argument : arguments)
                 captured.push_back(block.getByPosition(argument));
+            // Join blocks may contain unrelated helper columns with a different row count.
+            const size_t rows = captured.empty() ? block.rows() : captured.front().column->size();
             block.getByPosition(num_columns_without_result).column
-                = ColumnFunction::create(block.rows(), function, captured, true);
+                = ColumnFunction::create(rows, function, captured, true);
         }
         else
             function->execute(block, arguments, num_columns_without_result);
@@ -774,9 +777,8 @@ void ExpressionActions::prepareShortCircuitActions()
         output_names.push_back(column.name);
     NameSet eager(output_names.begin(), output_names.end());
     NameSet deferred;
-    for (auto it = actions.rbegin(); it != actions.rend(); ++it)
+    for (auto & action : std::views::reverse(actions))
     {
-        auto & action = *it;
         action.is_lazy_executed = false;
         if (action.type == ExpressionAction::REMOVE_COLUMN)
             continue;

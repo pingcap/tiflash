@@ -30,7 +30,7 @@ protected:
             ExpressionAction::applyFunction(FunctionFactory::instance().get(function, *context), arguments, result));
     }
 
-    size_t lazyCount(const ExpressionActions & actions)
+    static size_t lazyCount(const ExpressionActions & actions)
     {
         return std::count_if(actions.getActions().begin(), actions.getActions().end(), [](const auto & action) {
             return action.is_lazy_executed;
@@ -69,6 +69,27 @@ TEST_F(ShortCircuit, AndOrDivision)
         Block empty = input.cloneEmpty();
         actions.execute(empty);
         ASSERT_EQ(empty.getByName("result").column->size(), 0);
+    }
+}
+
+TEST_F(ShortCircuit, UnrelatedHelperColumnHasDifferentSize)
+{
+    for (const auto & name : {"and", "or", "two_value_and"})
+    {
+        const bool is_or = String(name) == "or";
+        Block input({
+            createColumn<Int8>({}, "match_helper"),
+            createColumn<UInt8>({is_or, !is_or, !is_or}, "guard"),
+            createColumn<Int64>({0, 2, 3}, "denominator"),
+            createConstColumn<Int64>(3, 6, "six"),
+        });
+        ExpressionActions actions(input.getColumnsWithTypeAndName());
+        add(actions, "intDiv", {"six", "denominator"}, "division");
+        add(actions, name, {"guard", "division"}, "result");
+        actions.finalize({"match_helper", "result"});
+        ASSERT_EQ(lazyCount(actions), 1);
+        actions.execute(input);
+        ASSERT_COLUMN_EQ(createColumn<UInt8>({is_or, 1, 1}), input.getByName("result"));
     }
 }
 
