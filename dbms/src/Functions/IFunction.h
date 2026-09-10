@@ -114,6 +114,12 @@ public:
       */
     virtual bool isSuitableForConstantFolding() const { return true; }
 
+    /// Short-circuit functions consume deferred arguments themselves. The first argument is always required.
+    virtual bool isShortCircuit() const { return false; }
+
+    /// Opt in only for row-independent functions that can execute on a filtered block.
+    virtual bool isSuitableForShortCircuitArgumentsExecution() const { return false; }
+
     /** Function is called "injective" if it returns different result for different values of arguments.
       * Example: hex, negate, tuple...
       *
@@ -278,6 +284,12 @@ public:
     virtual bool isDeterministicInScopeOfQuery() const { return true; }
     virtual bool hasInformationAboutMonotonicity() const { return false; }
 
+    virtual bool isShortCircuit() const { return false; }
+    virtual bool isSuitableForShortCircuitArgumentsExecution() const
+    {
+        return isDeterministic() && isDeterministicInScopeOfQuery() && isSuitableForConstantFolding();
+    }
+
     using Monotonicity = IFunctionBase::Monotonicity;
     virtual Monotonicity getMonotonicityForRange(
         const IDataType & /*type*/,
@@ -366,6 +378,12 @@ public:
     }
 
     bool isSuitableForConstantFolding() const override { return function->isSuitableForConstantFolding(); }
+
+    bool isShortCircuit() const override { return function->isShortCircuit(); }
+    bool isSuitableForShortCircuitArgumentsExecution() const override
+    {
+        return function->isSuitableForShortCircuitArgumentsExecution();
+    }
 
     bool isInjective(const Block & sample_block) override { return function->isInjective(sample_block); }
 
