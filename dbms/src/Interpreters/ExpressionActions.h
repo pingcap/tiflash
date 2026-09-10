@@ -94,6 +94,7 @@ public:
     FunctionBasePtr function;
     Names argument_names;
     TiDB::TiDBCollatorPtr collator = nullptr;
+    bool is_lazy_executed = false;
 
     /// For JOIN
     std::shared_ptr<const Join> join;
@@ -218,8 +219,10 @@ private:
     NamesAndTypesList input_columns;
     Actions actions;
     Block sample_block;
+    bool short_circuit_prepared = false;
 
     void addImpl(ExpressionAction action, Names & new_names);
+    void prepareShortCircuitActions();
 };
 
 using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;

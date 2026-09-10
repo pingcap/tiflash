@@ -14,6 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Columns/ColumnFunction.h>
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnUtils.h>
 #include <Common/FmtUtils.h>
@@ -47,6 +48,8 @@ extern const int NOT_FOUND_COLUMN_IN_BLOCK;
 extern const int SIZES_OF_ARRAYS_DOESNT_MATCH;
 extern const int TOO_MANY_TEMPORARY_COLUMNS;
 extern const int TOO_MANY_TEMPORARY_NON_CONST_COLUMNS;
+extern const int MEMORY_LIMIT_EXCEEDED;
+extern const int QUERY_WAS_CANCELLED;
 } // namespace ErrorCodes
 
 
@@ -202,7 +205,20 @@ void ExpressionAction::prepare(Block & sample_block)
             new_column.type = result_type;
             sample_block.insert(std::move(new_column));
 
-            function->execute(sample_block, arguments, result_position);
+            try
+            {
+                function->execute(sample_block, arguments, result_position);
+            }
+            catch (const Exception & e)
+            {
+                if (e.code() == ErrorCodes::LOGICAL_ERROR || e.code() == ErrorCodes::MEMORY_LIMIT_EXCEEDED
+                    || e.code() == ErrorCodes::QUERY_WAS_CANCELLED)
+                    throw;
+                // A parent short-circuit function is not known yet. Leave failed constant
+                // evaluation to execution, where the expression may be on an unselected branch.
+                sample_block.getByPosition(result_position).column = nullptr;
+                break;
+            }
 
             /// If the result is not a constant, just in case, we will consider the result as unknown.
             ColumnWithTypeAndName & col = sample_block.safeGetByPosition(result_position);
@@ -361,7 +377,17 @@ void ExpressionAction::execute(Block & block) const
         size_t num_columns_without_result = block.columns();
         block.insert({nullptr, result_type, result_name});
 
-        function->execute(block, arguments, num_columns_without_result);
+        if (is_lazy_executed)
+        {
+            ColumnsWithTypeAndName captured;
+            captured.reserve(arguments.size());
+            for (auto argument : arguments)
+                captured.push_back(block.getByPosition(argument));
+            block.getByPosition(num_columns_without_result).column
+                = ColumnFunction::create(block.rows(), function, captured, true);
+        }
+        else
+            function->execute(block, arguments, num_columns_without_result);
 
         break;
     }
@@ -537,6 +563,8 @@ void ExpressionActions::addImpl(ExpressionAction action, Names & new_names)
 
     action.prepare(sample_block);
     actions.push_back(action);
+    if (short_circuit_prepared)
+        prepareShortCircuitActions();
 }
 
 void ExpressionActions::prependProjectInput()
@@ -733,6 +761,59 @@ void ExpressionActions::finalize(const Names & output_columns, bool keep_used_in
     }
 
     actions.swap(new_actions);
+    prepareShortCircuitActions();
+}
+
+void ExpressionActions::prepareShortCircuitActions()
+{
+    short_circuit_prepared = true;
+    // Adapted from ClickHouse's lazy-node analysis. In the linear action representation,
+    // reverse traversal visits every consumer before its producer. Any eager consumer wins.
+    Names output_names;
+    for (const auto & column : sample_block)
+        output_names.push_back(column.name);
+    NameSet eager(output_names.begin(), output_names.end());
+    NameSet deferred;
+    for (auto it = actions.rbegin(); it != actions.rend(); ++it)
+    {
+        auto & action = *it;
+        action.is_lazy_executed = false;
+        if (action.type == ExpressionAction::REMOVE_COLUMN)
+            continue;
+
+        if (action.type == ExpressionAction::APPLY_FUNCTION)
+        {
+            action.is_lazy_executed = deferred.contains(action.result_name) && !eager.contains(action.result_name)
+                && action.function->isSuitableForShortCircuitArgumentsExecution();
+            eager.erase(action.result_name);
+            deferred.erase(action.result_name);
+            for (size_t i = 0; i < action.argument_names.size(); ++i)
+            {
+                const bool lazy_argument = action.is_lazy_executed || (action.function->isShortCircuit() && i != 0);
+                (lazy_argument ? deferred : eager).insert(action.argument_names[i]);
+            }
+        }
+        else if (action.type == ExpressionAction::COPY_COLUMN)
+        {
+            const bool lazy = deferred.contains(action.result_name) && !eager.contains(action.result_name);
+            eager.erase(action.result_name);
+            deferred.erase(action.result_name);
+            (lazy ? deferred : eager).insert(action.source_name);
+        }
+        else if (action.type == ExpressionAction::ADD_COLUMN)
+        {
+            eager.erase(action.result_name);
+            deferred.erase(action.result_name);
+        }
+        else
+        {
+            // Do not move deferred computation across projection, join, expand or nullable conversion.
+            eager.insert(deferred.begin(), deferred.end());
+            deferred.clear();
+            for (const auto & name : action.getNeededColumns())
+                eager.insert(name);
+        }
+    }
 }
 
 

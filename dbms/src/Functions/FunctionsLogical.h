@@ -17,6 +17,7 @@
 #pragma once
 
 #include <Columns/ColumnConst.h>
+#include <Columns/ColumnFunction.h>
 #include <Columns/ColumnNothing.h>
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnsNumber.h>
@@ -543,6 +544,7 @@ public:
     size_t getNumberOfArguments() const override { return 0; }
 
     bool useDefaultImplementationForNulls() const override { return !special_impl_for_nulls; }
+    bool isShortCircuit() const override { return Impl::isSaturable; }
 
     /// Get result types by argument types. If the function does not apply to
     /// these arguments, throw an exception.
@@ -994,8 +996,82 @@ public:
         }
     }
 
+    void executeShortCircuit(Block & block, const ColumnNumbers & arguments, size_t result) const
+    {
+        const size_t rows = block.rows();
+        const bool nullable = block.getByPosition(result).type->isNullable();
+        auto values = ColumnUInt8::create(rows, static_cast<UInt8>(std::is_same_v<Impl, AndImpl>));
+        auto nulls = ColumnUInt8::create(rows, 0);
+        auto & data = values->getData();
+        auto & null_map = nulls->getData();
+        IColumn::Filter mask(rows, 1);
+
+        for (auto position : arguments)
+        {
+            // Keep the deferred column immutable: another branch can request a different mask.
+            auto argument = block.getByPosition(position);
+            maskedExecute(argument, mask);
+            const IColumn * column = argument.column.get();
+            const bool constant = column->isColumnConst();
+            if (constant)
+                column = &static_cast<const ColumnConst &>(*column).getDataColumn();
+
+            const UInt8Container * argument_nulls = nullptr;
+            if (const auto * nullable_column = checkAndGetColumn<ColumnNullable>(column))
+            {
+                argument_nulls = &nullable_column->getNullMapData();
+                column = &nullable_column->getNestedColumn();
+            }
+
+            UInt8Container converted;
+            const UInt8Container * argument_values = nullptr;
+            if (const auto * uint8_column = checkAndGetColumn<ColumnUInt8>(column))
+                argument_values = &uint8_column->getData();
+            else
+            {
+                converted.resize(constant ? 1 : rows, 0);
+                if (!argument.column->onlyNull())
+                    convertToUInt8(column, converted);
+                argument_values = &converted;
+            }
+
+            size_t remaining = 0;
+            for (size_t row = 0; row < rows; ++row)
+            {
+                if (!mask[row])
+                    continue;
+                const size_t index = constant ? 0 : row;
+                const bool is_null = argument.column->onlyNull() || (argument_nulls && (*argument_nulls)[index]);
+                const bool value = (*argument_values)[index] != 0;
+                if constexpr (null_as_false)
+                    data[row] = Impl::apply(data[row], !is_null && value);
+                else
+                    std::tie(data[row], null_map[row])
+                        = Impl::applyTwoNullable(data[row], null_map[row], value, is_null);
+                mask[row] = !Impl::isSaturatedValue(data[row], null_map[row]);
+                remaining += mask[row];
+            }
+            if (remaining == 0)
+                break;
+        }
+
+        block.getByPosition(result).column
+            = nullable ? ColumnNullable::create(std::move(values), std::move(nulls)) : ColumnPtr(std::move(values));
+    }
+
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
+        if constexpr (Impl::isSaturable)
+        {
+            for (auto argument : arguments)
+            {
+                if (checkAndGetShortCircuitArgument(block.getByPosition(argument).column))
+                {
+                    executeShortCircuit(block, arguments, result);
+                    return;
+                }
+            }
+        }
         bool has_nullable_input_column = false;
         size_t num_arguments = arguments.size();
 
