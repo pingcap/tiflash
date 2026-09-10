@@ -998,9 +998,9 @@ public:
 
     void executeShortCircuit(Block & block, const ColumnNumbers & arguments, size_t result) const
     {
-        const size_t rows = block.rows();
+        const size_t rows = block.getByPosition(arguments.front()).column->size();
         const bool nullable = block.getByPosition(result).type->isNullable();
-        auto values = ColumnUInt8::create(rows, static_cast<UInt8>(std::is_same_v<Impl, AndImpl>));
+        auto values = ColumnUInt8::create(rows, static_cast<UInt8>(!Impl::isSaturatedValue(true)));
         auto nulls = ColumnUInt8::create(rows, 0);
         auto & data = values->getData();
         auto & null_map = nulls->getData();
