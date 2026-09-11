@@ -263,6 +263,8 @@ void downloadFileByS3RandomAccessFile(
 
 void rewriteObjectWithTagging(const TiFlashS3Client & client, const String & key, const String & tagging);
 
+Aws::S3::Model::GetObjectTaggingResult getObjectTagging(const TiFlashS3Client & client, const String & key);
+
 struct PageResult
 {
     size_t num_keys;
