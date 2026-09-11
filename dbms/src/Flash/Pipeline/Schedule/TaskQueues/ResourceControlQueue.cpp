@@ -102,6 +102,11 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
         if unlikely (is_finished)
             return false;
 
+        // Snapshot before inspecting the queues. A release can happen without
+        // holding `mu`; taking the snapshot afterwards could miss that wakeup.
+        const auto previous_change_id
+            = (keyspace_cpu_limiter && keyspace_cpu_limiter->isEnabled()) ? keyspace_cpu_limiter->getChangeId() : 0;
+
         if (popTask(cancel_task_queue, task))
             return true;
 
@@ -166,12 +171,18 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
         // so wait_dura is used to avoid stuck.
         if (limiter_enabled)
         {
-            const auto previous_change_id = keyspace_cpu_limiter->getChangeId();
-            lock.unlock();
-            keyspace_cpu_limiter->waitForChange(
-                previous_change_id,
-                std::min(std::chrono::milliseconds(wait_dura), keyspace_cpu_limiter->getRefillWaitDuration()));
-            lock.lock();
+            if (!resource_group_infos.empty())
+            {
+                lock.unlock();
+                keyspace_cpu_limiter->waitForChange(
+                    previous_change_id,
+                    std::min(std::chrono::milliseconds(wait_dura), keyspace_cpu_limiter->getRefillWaitDuration()));
+                lock.lock();
+            }
+            else
+            {
+                cv.wait(lock);
+            }
         }
         else
         {

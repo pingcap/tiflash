@@ -179,6 +179,10 @@ bool MultiLevelFeedbackQueue<TimeGetter>::take(TaskPtr & task)
         if (unlikely(is_finished))
             return false;
 
+        // Snapshot before inspecting the queues. A release can happen without
+        // holding `mu`; taking the snapshot afterwards could miss that wakeup.
+        const auto previous_change_id = limiter_enabled ? keyspace_cpu_limiter->getChangeId() : 0;
+
         if (popTask(cancel_task_queue, task))
             return true;
 
@@ -213,10 +217,20 @@ bool MultiLevelFeedbackQueue<TimeGetter>::take(TaskPtr & task)
 
         if (limiter_enabled)
         {
-            const auto previous_change_id = keyspace_cpu_limiter->getChangeId();
-            lock.unlock();
-            keyspace_cpu_limiter->waitForChange(previous_change_id, keyspace_cpu_limiter->getRefillWaitDuration());
-            lock.lock();
+            bool has_pending_tasks = !cancel_task_queue.empty();
+            for (const auto & queue : level_queues)
+                has_pending_tasks = has_pending_tasks || !queue->empty();
+
+            if (has_pending_tasks)
+            {
+                lock.unlock();
+                keyspace_cpu_limiter->waitForChange(previous_change_id, keyspace_cpu_limiter->getRefillWaitDuration());
+                lock.lock();
+            }
+            else
+            {
+                cv.wait(lock);
+            }
         }
         else
         {

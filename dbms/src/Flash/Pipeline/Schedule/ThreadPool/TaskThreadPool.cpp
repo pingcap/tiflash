@@ -97,8 +97,9 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
 {
     assert(task);
     const auto * const task_ptr = task.get();
+    bool reservation_released = false;
     SCOPE_EXIT({
-        if (keyspace_cpu_limiter)
+        if (keyspace_cpu_limiter && !reservation_released)
             keyspace_cpu_limiter->release(task_ptr);
     });
     TaskTimer timer{task->profile_info};
@@ -126,6 +127,7 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
     }
     task->profile_info.setThreadCPUTimeNs(timer.cpu_executing_time - cpu_time_before_exec);
     task_queue->updateStatistics(task, status_before_exec, timer.executing_time);
+    reservation_released = true;
     metrics.addExecuteTime(task, timer.executing_time);
     metrics.decExecutingTask();
     switch (status_after_exec)
