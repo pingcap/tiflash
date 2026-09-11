@@ -55,6 +55,10 @@ bool IOPriorityQueue::take(TaskPtr & task)
         if (unlikely(is_finished))
             return false;
 
+        // Snapshot before inspecting the queues. A release can happen without
+        // holding `mu`; taking the snapshot afterwards could miss that wakeup.
+        const auto previous_change_id = limiter_enabled ? keyspace_cpu_limiter->getChangeId() : 0;
+
         if (popTask(cancel_task_queue, task))
             return true;
 
@@ -67,10 +71,18 @@ bool IOPriorityQueue::take(TaskPtr & task)
             return true;
         if (limiter_enabled)
         {
-            const auto previous_change_id = keyspace_cpu_limiter->getChangeId();
-            lock.unlock();
-            keyspace_cpu_limiter->waitForChange(previous_change_id, keyspace_cpu_limiter->getRefillWaitDuration());
-            lock.lock();
+            const bool has_pending_tasks
+                = !io_out_task_queue.empty() || !io_in_task_queue.empty() || !cancel_task_queue.empty();
+            if (has_pending_tasks)
+            {
+                lock.unlock();
+                keyspace_cpu_limiter->waitForChange(previous_change_id, keyspace_cpu_limiter->getRefillWaitDuration());
+                lock.lock();
+            }
+            else
+            {
+                cv.wait(lock);
+            }
         }
         else
         {

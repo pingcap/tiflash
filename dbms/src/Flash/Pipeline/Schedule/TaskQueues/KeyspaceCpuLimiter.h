@@ -43,7 +43,9 @@ public:
     explicit KeyspaceCpuLimiter(size_t max_active_tasks_, UInt64 cpu_quota_per_second_ns_ = 0)
         : max_active_tasks(max_active_tasks_)
         , cpu_quota_per_second_ns(cpu_quota_per_second_ns_)
-        , cpu_quota_burst_ns(cpu_quota_per_second_ns_ == 0 ? 0 : std::max<UInt64>(1, cpu_quota_per_second_ns_ / 10))
+        // Allow one second of quota to be used as a burst while preserving the
+        // configured long-term rate.
+        , cpu_quota_burst_ns(cpu_quota_per_second_ns_ == 0 ? 0 : std::max<UInt64>(1, cpu_quota_per_second_ns_))
     {}
 
     bool tryAcquire(KeyspaceID keyspace_id)

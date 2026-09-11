@@ -19,6 +19,10 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
+#include <atomic>
+#include <future>
+#include <thread>
+
 namespace DB::tests
 {
 namespace
@@ -262,6 +266,99 @@ try
     ASSERT_EQ(task->getKeyspaceID(), 1);
     queue.updateStatistics(task, ExecTaskStatus::IO_IN, 1);
     FINALIZE_TASK(task);
+}
+CATCH
+
+TEST_F(TestIOPriorityTaskQueue, keyspaceLimiterWaiterWakesAfterRelease)
+try
+{
+    PipelineExecutorContext context("id", "", nullptr, nullptr, nullptr, nullptr, 1);
+    context.incActiveRefCount();
+    SCOPE_EXIT({ context.decActiveRefCount(); });
+
+    auto limiter = std::make_shared<KeyspaceCpuLimiter>(1);
+    IOPriorityQueue queue(limiter);
+    queue.submit(std::make_unique<MockIOTask>(context, true));
+    queue.submit(std::make_unique<MockIOTask>(context, true));
+
+    TaskPtr first_task;
+    ASSERT_TRUE(queue.take(first_task));
+
+    std::atomic_bool waiter_started = false;
+    std::promise<bool> waiter_result;
+    auto waiter_finished = waiter_result.get_future();
+    std::thread waiter([&]() {
+        waiter_started.store(true, std::memory_order_release);
+        TaskPtr task;
+        const bool taken = queue.take(task);
+        if (taken)
+        {
+            queue.updateStatistics(task, ExecTaskStatus::IO_IN, 1);
+            FINALIZE_TASK(task);
+        }
+        waiter_result.set_value(taken);
+    });
+    SCOPE_EXIT({
+        if (waiter.joinable())
+        {
+            queue.finish();
+            waiter.join();
+        }
+    });
+
+    while (!waiter_started.load(std::memory_order_acquire))
+        std::this_thread::yield();
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+    queue.updateStatistics(first_task, ExecTaskStatus::IO_IN, 1);
+    FINALIZE_TASK(first_task);
+
+    ASSERT_EQ(waiter_finished.wait_for(std::chrono::seconds(5)), std::future_status::ready);
+    ASSERT_TRUE(waiter_finished.get());
+    waiter.join();
+}
+CATCH
+
+TEST_F(TestIOPriorityTaskQueue, keyspaceLimiterFinishWakesWaiter)
+try
+{
+    PipelineExecutorContext context("id", "", nullptr, nullptr, nullptr, nullptr, 1);
+    context.incActiveRefCount();
+    SCOPE_EXIT({ context.decActiveRefCount(); });
+
+    auto limiter = std::make_shared<KeyspaceCpuLimiter>(1);
+    IOPriorityQueue queue(limiter);
+    queue.submit(std::make_unique<MockIOTask>(context, true));
+    queue.submit(std::make_unique<MockIOTask>(context, true));
+
+    TaskPtr first_task;
+    ASSERT_TRUE(queue.take(first_task));
+
+    std::promise<bool> waiter_result;
+    auto waiter_finished = waiter_result.get_future();
+    std::thread waiter([&]() {
+        TaskPtr task;
+        const bool taken = queue.take(task);
+        if (taken)
+            FINALIZE_TASK(task);
+        waiter_result.set_value(taken);
+    });
+    SCOPE_EXIT({
+        if (waiter.joinable())
+        {
+            queue.finish();
+            waiter.join();
+        }
+    });
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    queue.finish();
+    ASSERT_EQ(waiter_finished.wait_for(std::chrono::seconds(5)), std::future_status::ready);
+    ASSERT_FALSE(waiter_finished.get());
+
+    queue.updateStatistics(first_task, ExecTaskStatus::IO_IN, 1);
+    FINALIZE_TASK(first_task);
+    waiter.join();
 }
 CATCH
 
