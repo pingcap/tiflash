@@ -299,7 +299,7 @@ public:
     {
         std::unique_lock lock(build_probe_mutex);
         probe_concurrency = concurrency;
-        unfinished_probe_streams = probe_concurrency;
+        pending_probe_streams = probe_concurrency;
         probe_completion_reported_streams.assign(probe_concurrency, 0);
         probe_phase_state.store(ProbePhaseState::Active, std::memory_order_release);
     }
@@ -407,7 +407,7 @@ private:
     mutable std::condition_variable probe_cv;
     size_t probe_concurrency;
     // Streams that have not reported completion through finishOneProbe().
-    size_t unfinished_probe_streams;
+    size_t pending_probe_streams;
     std::atomic<ProbePhaseState> probe_phase_state{ProbePhaseState::Active};
     // Exactly-once guard for completion reports from each probe stream.
     std::vector<UInt8> probe_completion_reported_streams;

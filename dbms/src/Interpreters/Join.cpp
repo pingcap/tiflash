@@ -192,7 +192,7 @@ Join::Join(
     , build_concurrency(0)
     , active_build_threads(0)
     , probe_concurrency(0)
-    , unfinished_probe_streams(0)
+    , pending_probe_streams(0)
     , collators(collators_)
     , non_equal_conditions(non_equal_conditions_)
     , max_block_size(max_block_size_)
@@ -2065,12 +2065,12 @@ bool Join::finishOneProbe(size_t stream_index, ProbeFinishReason reason)
     if (probe_completion_reported_streams[stream_index] == 0)
     {
         probe_completion_reported_streams[stream_index] = 1;
-        --unfinished_probe_streams;
+        --pending_probe_streams;
         first_completion_report = true;
     }
 
     if (probe_phase_state.load(std::memory_order_acquire) != ProbePhaseState::Stopped && first_completion_report
-        && unfinished_probe_streams == 0)
+        && pending_probe_streams == 0)
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_mpp_hash_probe);
         workAfterProbeFinish(stream_index);
@@ -2096,7 +2096,7 @@ void Join::finalizeProbe()
             return;
         if (hash_join_spill_context->getProbeSpiller())
             hash_join_spill_context->getProbeSpiller()->finishSpill();
-        assert(unfinished_probe_streams == 0);
+        assert(pending_probe_streams == 0);
         probe_phase_state.store(ProbePhaseState::AllProbeInputsFinished, std::memory_order_release);
     }
     probe_cv.notify_all();
