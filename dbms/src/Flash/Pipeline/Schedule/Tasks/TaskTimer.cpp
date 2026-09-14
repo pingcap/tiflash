@@ -19,6 +19,12 @@ namespace DB
 {
 thread_local TaskTimer * current_task_timer = nullptr;
 
+UInt64 TaskTimer::updateExecutingTime()
+{
+    executing_time += profile_info.elapsedFromPrev();
+    return executing_time;
+}
+
 UInt64 TaskTimer::updateCPUExecutingTime()
 {
 #if defined(CLOCK_THREAD_CPUTIME_ID)

@@ -17,7 +17,6 @@
 #include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
 #include <Flash/Executor/PipelineExecutorContext.h>
-#include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskProfileInfo.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskTimer.h>
 #include <memory.h>
@@ -32,7 +31,7 @@ namespace DB
  * │     ┌──────────►RUNNING◄──────────┐           │
  * │     │                             │           │
  * │     ▼                             ▼           │
- * │ WATITING/WAIT_FOR_NOTIFY◄────────►IO_IN/OUT   │
+ * │ WAITING/WAIT_FOR_NOTIFY◄────────►IO_IN/OUT    │
  * └───────────────────────────────────────────────┘
  */
 enum class ExecTaskStatus
