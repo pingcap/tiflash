@@ -113,9 +113,9 @@ enum class ProbeFinishReason
 
 enum class ProbeFinishResult
 {
-    Running,
-    AllInputExhausted,
-    Stopped,
+    OtherProbeInputsPending,
+    AllProbeInputsFinished,
+    ProbePhaseStopped,
 };
 
 /** Data structure for implementation of JOIN.

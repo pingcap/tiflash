@@ -92,7 +92,8 @@ ProbeFinishResult HashJoinProbeTransformOp::finishCurrentProbe(ProbeFinishReason
     {
         if (reason != ProbeFinishReason::InputExhausted)
             return probe_transform->finishOneProbe(reason);
-        return probe_transform->isProbeStopped() ? ProbeFinishResult::Stopped : ProbeFinishResult::Running;
+        return probe_transform->isProbeStopped() ? ProbeFinishResult::ProbePhaseStopped
+                                                 : ProbeFinishResult::OtherProbeInputsPending;
     }
 
     current_probe_finished = true;
@@ -137,12 +138,12 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
             {
                 const auto probe_finish_result = finishCurrentProbe(ProbeFinishReason::InputExhausted);
                 FAIL_POINT_PAUSE(FailPoints::pause_after_hash_join_finish_one_probe);
-                if (probe_finish_result == ProbeFinishResult::Stopped)
+                if (probe_finish_result == ProbeFinishResult::ProbePhaseStopped)
                 {
                     switchStatus(ProbeStatus::FINISHED);
                     BREAK;
                 }
-                if (probe_finish_result == ProbeFinishResult::AllInputExhausted)
+                if (probe_finish_result == ProbeFinishResult::AllProbeInputsFinished)
                 {
                     if (probe_transform->hasMarkedSpillData())
                     {

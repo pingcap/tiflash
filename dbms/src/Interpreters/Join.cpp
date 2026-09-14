@@ -2043,13 +2043,13 @@ void Join::waitUntilAllBuildFinished() const
 
 bool Join::finishOneProbe(size_t stream_index)
 {
-    return finishOneProbe(stream_index, ProbeFinishReason::InputExhausted) == ProbeFinishResult::AllInputExhausted;
+    return finishOneProbe(stream_index, ProbeFinishReason::InputExhausted) == ProbeFinishResult::AllProbeInputsFinished;
 }
 
 ProbeFinishResult Join::finishOneProbe(size_t stream_index, ProbeFinishReason reason)
 {
     bool notify_probe_finished = false;
-    ProbeFinishResult result = ProbeFinishResult::Running;
+    ProbeFinishResult result = ProbeFinishResult::OtherProbeInputsPending;
     std::unique_lock lock(build_probe_mutex);
     RUNTIME_CHECK(stream_index < probe_finished_streams.size());
 
@@ -2069,17 +2069,17 @@ ProbeFinishResult Join::finishOneProbe(size_t stream_index, ProbeFinishReason re
 
     if (probe_stopped.load(std::memory_order_acquire))
     {
-        result = ProbeFinishResult::Stopped;
+        result = ProbeFinishResult::ProbePhaseStopped;
     }
     else if (active_probe_threads == 0)
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_mpp_hash_probe);
         workAfterProbeFinish(stream_index);
-        result = ProbeFinishResult::AllInputExhausted;
+        result = ProbeFinishResult::AllProbeInputsFinished;
     }
     else
     {
-        result = ProbeFinishResult::Running;
+        result = ProbeFinishResult::OtherProbeInputsPending;
     }
 
     lock.unlock();
