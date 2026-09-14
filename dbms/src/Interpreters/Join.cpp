@@ -2054,14 +2054,16 @@ bool Join::finishOneProbe(size_t stream_index, ProbeFinishReason reason)
     std::unique_lock lock(build_probe_mutex);
     RUNTIME_CHECK(stream_index < probe_completion_reported_streams.size());
 
-    // A stream can report input EOF and later be stopped while scanning unmatched build rows or restoring spilled partitions.
-    // The second call publishes Stopped and wakes peers, but does not decrement pending_probe_streams again.
+    // Logical early stop or cancellation overrides the current shared probe phase, including a phase that has already
+    // completed normally. Only the caller that first publishes Stopped wakes waiting peers.
     if (reason != ProbeFinishReason::InputExhausted
         && probe_phase_state.exchange(ProbePhaseState::Stopped, std::memory_order_acq_rel) != ProbePhaseState::Stopped)
     {
         notify_probe_phase_done = true;
     }
 
+    // Count one completion report per stream. A later logical stop from a stream that already reported input EOF
+    // must not decrement pending_probe_streams again.
     if (probe_completion_reported_streams[stream_index] == 0)
     {
         probe_completion_reported_streams[stream_index] = 1;

@@ -313,8 +313,9 @@ public:
 
     // Return true when every probe input finishes normally.
     bool finishOneProbe(size_t stream_index);
-    // Return true when this is the last normal input completion. The caller must finish normal work required before
-    // post-probe processing and call finalizeProbe() before publishing ProbePhaseState::AllProbeInputsFinished.
+    // Return true when this is the last normal input completion. The caller becomes the unique probe-barrier finalizer:
+    // it must finish normal work required before post-probe processing and call finalizeProbe() before publishing
+    // ProbePhaseState::AllProbeInputsFinished. A non-InputExhausted reason publishes ProbePhaseState::Stopped instead.
     bool finishOneProbe(size_t stream_index, ProbeFinishReason reason);
     void finalizeProbe();
     void waitUntilProbePhaseDone() const;
