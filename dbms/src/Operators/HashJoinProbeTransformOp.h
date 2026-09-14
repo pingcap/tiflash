@@ -47,6 +47,10 @@ protected:
     void operateSuffixImpl() override;
 
 private:
+    ProbeFinishResult finishCurrentProbe(ProbeFinishReason reason);
+
+    bool finishIfProbeStopped(Block & block);
+
     OperatorStatus onOutput(Block & block);
 
     inline void onWaitProbeFinishDone();
@@ -127,5 +131,6 @@ private:
     size_t scan_hash_map_rows = 0;
 
     ProbeStatus status{ProbeStatus::PROBE};
+    bool current_probe_finished = false;
 };
 } // namespace DB

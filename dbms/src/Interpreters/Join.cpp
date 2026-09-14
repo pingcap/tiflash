@@ -2043,24 +2043,62 @@ void Join::waitUntilAllBuildFinished() const
 
 bool Join::finishOneProbe(size_t stream_index)
 {
+    return finishOneProbe(stream_index, ProbeFinishReason::InputExhausted) == ProbeFinishResult::AllInputExhausted;
+}
+
+ProbeFinishResult Join::finishOneProbe(size_t stream_index, ProbeFinishReason reason)
+{
+    bool notify_probe_finished = false;
+    ProbeFinishResult result = ProbeFinishResult::Running;
     std::unique_lock lock(build_probe_mutex);
-    if (active_probe_threads == 1)
+    RUNTIME_CHECK(stream_index < probe_finished_streams.size());
+
+    // Input completion is reported once per stream, but the operator can be stopped after input EOF while it is
+    // scanning unmatched build rows or restoring spilled partitions. Such a stop must still wake every peer.
+    if (reason != ProbeFinishReason::InputExhausted && !probe_stopped.exchange(true, std::memory_order_acq_rel))
+    {
+        probe_finished.store(true, std::memory_order_release);
+        notify_probe_finished = true;
+    }
+
+    if (!probe_finished_streams[stream_index])
+    {
+        probe_finished_streams[stream_index] = true;
+        --active_probe_threads;
+    }
+
+    if (probe_stopped.load(std::memory_order_acquire))
+    {
+        result = ProbeFinishResult::Stopped;
+    }
+    else if (active_probe_threads == 0)
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_mpp_hash_probe);
-    }
-    --active_probe_threads;
-    if (active_probe_threads == 0)
-    {
         workAfterProbeFinish(stream_index);
-        return true;
+        result = ProbeFinishResult::AllInputExhausted;
     }
-    return false;
+    else
+    {
+        result = ProbeFinishResult::Running;
+    }
+
+    lock.unlock();
+    if (notify_probe_finished)
+    {
+        probe_cv.notify_all();
+        wait_probe_finished_future->finish();
+    }
+    return result;
 }
 
 void Join::finalizeProbe()
 {
     {
         std::unique_lock lock(build_probe_mutex);
+        // A peer can trigger a logical early stop after the last normal probe reports EOF but before this method is
+        // called. The early-stop path has already notified all waiters, and must not finalize spill/restore work.
+        if (probe_stopped.load(std::memory_order_acquire))
+            return;
         if (hash_join_spill_context->getProbeSpiller())
             hash_join_spill_context->getProbeSpiller()->finishSpill();
         assert(active_probe_threads == 0);

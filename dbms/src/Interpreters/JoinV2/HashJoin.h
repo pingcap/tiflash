@@ -52,6 +52,10 @@ public:
 
     /// Return true if it is the last build row worker.
     bool finishOneBuildRow(size_t stream_index);
+
+    /// TODO: If V2 supports a post-probe phase that requires every worker to finish, such as right/full outer join
+    /// unmatched-build scan or spill restore, replace this counter-only protocol with one that distinguishes normal
+    /// input EOF from logical early stop/cancellation and wakes peers without starting those post-probe phases.
     /// Return true if it is the last probe worker.
     bool finishOneProbe(size_t stream_index);
 

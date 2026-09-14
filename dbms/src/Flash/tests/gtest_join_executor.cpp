@@ -12,8 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
+#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/executeQuery.h>
 #include <Flash/tests/gtest_join.h>
 
+#include <chrono>
+#include <future>
 #include <magic_enum.hpp>
 
 namespace DB
@@ -23,6 +28,7 @@ namespace FailPoints
 extern const char force_semi_join_time_exceed[];
 extern const char force_join_v2_probe_enable_lm[];
 extern const char force_join_v2_probe_disable_lm[];
+extern const char pause_after_hash_join_finish_one_probe[];
 } // namespace FailPoints
 namespace tests
 {
@@ -507,6 +513,47 @@ try
     testForExecutionSummary(request, expect);
     WRAP_FOR_JOIN_TEST_END
     WRAP_FOR_TEST_END
+}
+CATCH
+
+TEST_F(JoinExecutorTestRunner, PipelineRightOuterJoinLimitMaySkipProbeFinish)
+try
+{
+    const MockColumnInfoVec columns{{"key", TiDB::TP::TypeLong, false}};
+    context.addExchangeReceiver("probe", columns, {toVec<Int32>("key", {})}, 2);
+    context.mockStorage()->addFineGrainedExchangeData(
+        "probe",
+        {ColumnsWithTypeAndName{toVec<Int32>("key", {1, 1})}, ColumnsWithTypeAndName{toVec<Int32>("key", {})}});
+    context.addMockTable("limit_join", "build", columns, {toVec<Int32>("key", {1, 100})});
+
+    context.context->setSetting("enable_resource_control", "true");
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(1)));
+    auto request = context.receive("probe", 2)
+                       .join(context.scan("limit_join", "build"), tipb::JoinType::TypeRightOuterJoin, {col("key")})
+                       .limit(1)
+                       .build(context);
+
+    DAGContext dag_context(*request, "pipeline_right_outer_join_limit", 2);
+    TiFlashTestEnv::setUpTestContext(*context.context, &dag_context, context.mockStorage(), TestType::EXECUTOR_TEST);
+    auto query_executor = queryExecute(*context.context, true);
+    ASSERT_EQ(dag_context.getExecutionMode(), ExecutionMode::Pipeline);
+
+    // One probe stream reaches EOF and decrements active_probe_threads. The other has two blocks, so it can fill the
+    // limit and finish before seeing EOF.
+    FailPointHelper::enablePauseFailPoint(FailPoints::pause_after_hash_join_finish_one_probe, 10);
+    auto execution
+        = std::async(std::launch::async, [&query_executor]() { return query_executor->execute([](const Block &) {}); });
+
+    if (execution.wait_for(std::chrono::seconds(1)) != std::future_status::timeout)
+    {
+        FailPointHelper::disableFailPoint(FailPoints::pause_after_hash_join_finish_one_probe);
+        auto result = execution.get();
+        FAIL() << "The probe stream expected to reach finishOneProbe() did not pause, success=" << result.is_success;
+    }
+    FailPointHelper::disableFailPoint(FailPoints::pause_after_hash_join_finish_one_probe);
+
+    ASSERT_EQ(execution.wait_for(std::chrono::seconds(1)), std::future_status::ready);
+    ASSERT_TRUE(execution.get().is_success);
 }
 CATCH
 

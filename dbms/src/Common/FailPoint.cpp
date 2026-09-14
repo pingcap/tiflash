@@ -155,6 +155,7 @@ namespace DB
     M(pause_after_copr_streams_acquired_once)     \
     M(pause_before_register_non_root_mpp_task)    \
     M(pause_before_make_non_root_mpp_task_active) \
+    M(pause_after_hash_join_finish_one_probe)     \
     M(pause_before_page_dir_update_local_cache)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS(M) \

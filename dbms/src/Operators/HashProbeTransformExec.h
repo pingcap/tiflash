@@ -60,6 +60,12 @@ public:
         join->finishOneNonJoin(op_index);
         scan_hashmap_after_probe_finished = true;
     }
+    void abortScanHashMapAfterProbe()
+    {
+        assert(needScanHashMapAfterProbe());
+        scan_hash_map_after_probe_stream->readSuffix();
+        scan_hashmap_after_probe_finished = true;
+    }
 
     // For probe stage
     Block joinBlock(ProbeProcessInfo & probe_process_info) { return join->joinBlock(probe_process_info); }
@@ -67,10 +73,11 @@ public:
     {
         join->dispatchProbeBlock(block, partition_blocks_list, op_index);
     }
-    bool finishOneProbe() { return join->finishOneProbe(op_index); }
+    ProbeFinishResult finishOneProbe(ProbeFinishReason reason) { return join->finishOneProbe(op_index, reason); }
     bool shouldSkipProbe() const { return join->shouldSkipProbe(); }
     bool hasMarkedSpillData() const { return join->hasProbeSideMarkedSpillData(op_index); }
     bool isProbeFinishedForPipeline() const { return join->isProbeFinishedForPipeline(); }
+    bool isProbeStopped() const { return join->isProbeStopped(); }
     void finalizeProbe() { join->finalizeProbe(); }
     void flushMarkedSpillData() { join->flushProbeSideMarkedSpillData(op_index); }
 

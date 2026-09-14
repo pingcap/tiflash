@@ -103,6 +103,21 @@ struct RestoreConfig
 class OneTimeNotifyFuture;
 using OneTimeNotifyFuturePtr = std::shared_ptr<OneTimeNotifyFuture>;
 
+enum class ProbeFinishReason
+{
+    InputExhausted,
+    LogicalEarlyStop,
+    // Pipeline task errors cancel the shared executor context before operator suffixes run.
+    Cancelled,
+};
+
+enum class ProbeFinishResult
+{
+    Running,
+    AllInputExhausted,
+    Stopped,
+};
+
 /** Data structure for implementation of JOIN.
   * It is just a hash table: keys -> rows of joined ("right") table.
   * Additionally, CROSS JOIN is supported: instead of hash table, it use just set of blocks without keys.
@@ -282,6 +297,9 @@ public:
         std::unique_lock lock(build_probe_mutex);
         probe_concurrency = concurrency;
         active_probe_threads = probe_concurrency;
+        probe_finished_streams.assign(probe_concurrency, false);
+        probe_finished.store(false, std::memory_order_release);
+        probe_stopped.store(false, std::memory_order_release);
     }
 
     void wakeUpAllWaitingThreads();
@@ -293,9 +311,11 @@ public:
 
     // Return true if it is the last probe thread.
     bool finishOneProbe(size_t stream_index);
+    ProbeFinishResult finishOneProbe(size_t stream_index, ProbeFinishReason reason);
     void finalizeProbe();
     void waitUntilAllProbeFinished() const;
     bool isProbeFinishedForPipeline() const;
+    bool isProbeStopped() const { return probe_stopped.load(std::memory_order_acquire); }
 
     bool isBuildFinishedForPipeline() const;
 
@@ -381,6 +401,8 @@ private:
     size_t probe_concurrency;
     size_t active_probe_threads;
     std::atomic_bool probe_finished{false};
+    std::atomic_bool probe_stopped{false};
+    std::vector<bool> probe_finished_streams;
 
     bool skip_wait = false;
     bool meet_error = false;
