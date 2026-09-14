@@ -60,7 +60,7 @@ void PhysicalJoinProbe::buildPipelineExecGroupImpl(
     // The `join_ptr->wait_build_finished_future` does not need to be added to exec_context here;
     // it is only necessary to add it during the "restore build stage."
     // The order of build/probe here is ensured by the event.
-    exec_context.addOneTimeFuture(join_ptr->wait_probe_finished_future);
+    exec_context.addOneTimeFuture(join_ptr->wait_probe_phase_done_future);
     join_ptr->setCancellationHook([&]() { return exec_context.isCancelled(); });
     join_ptr.reset();
 }

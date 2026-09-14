@@ -71,9 +71,9 @@ void HashJoinProbeExec::waitUntilAllBuildFinished()
     join->waitUntilAllBuildFinished();
 }
 
-void HashJoinProbeExec::waitUntilAllProbeFinished()
+void HashJoinProbeExec::waitUntilProbePhaseDone()
 {
-    join->waitUntilAllProbeFinished();
+    join->waitUntilProbePhaseDone();
 }
 
 void HashJoinProbeExec::restoreBuild()
@@ -193,8 +193,8 @@ HashJoinProbeExecPtr HashJoinProbeExec::doTryGetRestoreExec()
 
 void HashJoinProbeExec::cancel()
 {
-    /// Join::wakeUpAllWaitingThreads wakes up all the threads waiting in Join::waitUntilAllBuildFinished/waitUntilAllProbeFinished,
-    /// and once this function is called, all the subsequent call of Join::waitUntilAllBuildFinished/waitUntilAllProbeFinished will
+    /// Join::wakeUpAllWaitingThreads wakes up all the threads waiting in Join::waitUntilAllBuildFinished/waitUntilProbePhaseDone,
+    /// and once this function is called, all the subsequent call of Join::waitUntilAllBuildFinished/waitUntilProbePhaseDone will
     /// skip waiting directly.
     /// HashJoinProbeBlockInputStream::cancel will be called in two cases:
     /// 1. the query is cancelled by the caller or meet error: in this case, wake up all waiting threads is safe, because no data

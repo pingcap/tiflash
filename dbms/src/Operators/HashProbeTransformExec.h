@@ -73,11 +73,11 @@ public:
     {
         join->dispatchProbeBlock(block, partition_blocks_list, op_index);
     }
-    ProbeFinishResult finishOneProbe(ProbeFinishReason reason) { return join->finishOneProbe(op_index, reason); }
+    bool finishOneProbe(ProbeFinishReason reason) { return join->finishOneProbe(op_index, reason); }
     bool shouldSkipProbe() const { return join->shouldSkipProbe(); }
     bool hasMarkedSpillData() const { return join->hasProbeSideMarkedSpillData(op_index); }
-    bool isProbeFinishedForPipeline() const { return join->isProbeFinishedForPipeline(); }
-    bool isProbeStopped() const { return join->isProbeStopped(); }
+    ProbePhaseState getProbePhaseStateForPipeline() const { return join->getProbePhaseStateForPipeline(); }
+    bool isProbePhaseStopped() const { return join->isProbePhaseStopped(); }
     void finalizeProbe() { join->finalizeProbe(); }
     void flushMarkedSpillData() { join->flushProbeSideMarkedSpillData(op_index); }
 

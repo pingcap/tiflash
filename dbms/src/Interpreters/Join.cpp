@@ -182,7 +182,7 @@ Join::Join(
     , match_helper_name(match_helper_name_)
     , flag_mapped_entry_helper_name(flag_mapped_entry_helper_name_)
     , wait_build_finished_future(std::make_shared<OneTimeNotifyFuture>(NotifyType::WAIT_ON_JOIN_BUILD_FINISH))
-    , wait_probe_finished_future(std::make_shared<OneTimeNotifyFuture>(NotifyType::WAIT_ON_JOIN_PROBE_FINISH))
+    , wait_probe_phase_done_future(std::make_shared<OneTimeNotifyFuture>(NotifyType::WAIT_ON_JOIN_PROBE_FINISH))
     , kind(kind_)
     , join_req_id(req_id)
     , may_probe_side_expanded_after_join(mayProbeSideExpandedAfterJoin(kind))
@@ -192,7 +192,7 @@ Join::Join(
     , build_concurrency(0)
     , active_build_threads(0)
     , probe_concurrency(0)
-    , active_probe_threads(0)
+    , unfinished_probe_streams(0)
     , collators(collators_)
     , non_equal_conditions(non_equal_conditions_)
     , max_block_size(max_block_size_)
@@ -282,7 +282,7 @@ void Join::meetErrorImpl(const String & error_message_, std::unique_lock<std::mu
     error_message = error_message_.empty() ? "Join meet error" : error_message_;
     build_cv.notify_all();
     probe_cv.notify_all();
-    // wait_build/probe_finished_future does not need to call finish here
+    // wait_build/probe_phase_done_future does not need to call finish here
     // because it is called in PipelineExecutorContext.
 }
 
@@ -2043,52 +2043,47 @@ void Join::waitUntilAllBuildFinished() const
 
 bool Join::finishOneProbe(size_t stream_index)
 {
-    return finishOneProbe(stream_index, ProbeFinishReason::InputExhausted) == ProbeFinishResult::AllProbeInputsFinished;
+    return finishOneProbe(stream_index, ProbeFinishReason::InputExhausted);
 }
 
-ProbeFinishResult Join::finishOneProbe(size_t stream_index, ProbeFinishReason reason)
+bool Join::finishOneProbe(size_t stream_index, ProbeFinishReason reason)
 {
-    bool notify_probe_finished = false;
-    ProbeFinishResult result = ProbeFinishResult::OtherProbeInputsPending;
+    bool notify_probe_phase_done = false;
+    bool first_completion_report = false;
+    bool is_last_normal_input_completion = false;
     std::unique_lock lock(build_probe_mutex);
-    RUNTIME_CHECK(stream_index < probe_finished_streams.size());
+    RUNTIME_CHECK(stream_index < probe_completion_reported_streams.size());
 
-    // Input completion is reported once per stream, but the operator can be stopped after input EOF while it is
+    // Completion is reported once per stream, but the operator can be stopped after input EOF while it is
     // scanning unmatched build rows or restoring spilled partitions. Such a stop must still wake every peer.
-    if (reason != ProbeFinishReason::InputExhausted && !probe_stopped.exchange(true, std::memory_order_acq_rel))
+    if (reason != ProbeFinishReason::InputExhausted
+        && probe_phase_state.exchange(ProbePhaseState::Stopped, std::memory_order_acq_rel) != ProbePhaseState::Stopped)
     {
-        probe_finished.store(true, std::memory_order_release);
-        notify_probe_finished = true;
+        notify_probe_phase_done = true;
     }
 
-    if (!probe_finished_streams[stream_index])
+    if (probe_completion_reported_streams[stream_index] == 0)
     {
-        probe_finished_streams[stream_index] = true;
-        --active_probe_threads;
+        probe_completion_reported_streams[stream_index] = 1;
+        --unfinished_probe_streams;
+        first_completion_report = true;
     }
 
-    if (probe_stopped.load(std::memory_order_acquire))
-    {
-        result = ProbeFinishResult::ProbePhaseStopped;
-    }
-    else if (active_probe_threads == 0)
+    if (probe_phase_state.load(std::memory_order_acquire) != ProbePhaseState::Stopped && first_completion_report
+        && unfinished_probe_streams == 0)
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_mpp_hash_probe);
         workAfterProbeFinish(stream_index);
-        result = ProbeFinishResult::AllProbeInputsFinished;
-    }
-    else
-    {
-        result = ProbeFinishResult::OtherProbeInputsPending;
+        is_last_normal_input_completion = true;
     }
 
     lock.unlock();
-    if (notify_probe_finished)
+    if (notify_probe_phase_done)
     {
         probe_cv.notify_all();
-        wait_probe_finished_future->finish();
+        wait_probe_phase_done_future->finish();
     }
-    return result;
+    return is_last_normal_input_completion;
 }
 
 void Join::finalizeProbe()
@@ -2097,33 +2092,33 @@ void Join::finalizeProbe()
         std::unique_lock lock(build_probe_mutex);
         // A peer can trigger a logical early stop after the last normal probe reports EOF but before this method is
         // called. The early-stop path has already notified all waiters, and must not finalize spill/restore work.
-        if (probe_stopped.load(std::memory_order_acquire))
+        if (probe_phase_state.load(std::memory_order_acquire) == ProbePhaseState::Stopped)
             return;
         if (hash_join_spill_context->getProbeSpiller())
             hash_join_spill_context->getProbeSpiller()->finishSpill();
-        assert(active_probe_threads == 0);
-        probe_finished = true;
+        assert(unfinished_probe_streams == 0);
+        probe_phase_state.store(ProbePhaseState::AllProbeInputsFinished, std::memory_order_release);
     }
     probe_cv.notify_all();
-    wait_probe_finished_future->finish();
+    wait_probe_phase_done_future->finish();
 }
 
-void Join::waitUntilAllProbeFinished() const
+void Join::waitUntilProbePhaseDone() const
 {
     std::unique_lock lock(build_probe_mutex);
-    probe_cv.wait(lock, [&]() { return probe_finished || meet_error || skip_wait; });
+    probe_cv.wait(lock, [&]() {
+        return probe_phase_state.load(std::memory_order_acquire) != ProbePhaseState::Active || meet_error || skip_wait;
+    });
     if (meet_error)
         throw Exception(error_message);
 }
 
-bool Join::isProbeFinishedForPipeline() const
+ProbePhaseState Join::getProbePhaseStateForPipeline() const
 {
-    if (!probe_finished)
-    {
-        setNotifyFuture(wait_probe_finished_future.get());
-        return false;
-    }
-    return true;
+    const auto phase_state = probe_phase_state.load(std::memory_order_acquire);
+    if (phase_state == ProbePhaseState::Active)
+        setNotifyFuture(wait_probe_phase_done_future.get());
+    return phase_state;
 }
 
 bool Join::isBuildFinishedForPipeline() const
@@ -2142,7 +2137,9 @@ void Join::finishOneNonJoin(size_t partition_index)
     // When spill is not enabled, all build data blocks are stored in the same partition, so the join partition cannot be released.
     if (isEnableSpill())
     {
-        if likely (build_finished && probe_finished)
+        if likely (
+            build_finished
+            && probe_phase_state.load(std::memory_order_acquire) == ProbePhaseState::AllProbeInputsFinished)
         {
             /// only clear hash table if not active build/probe threads
             while (partition_index < build_concurrency)
@@ -2531,7 +2528,7 @@ void Join::wakeUpAllWaitingThreads()
     probe_cv.notify_all();
     build_cv.notify_all();
     cancelRuntimeFilter("Join has been cancelled.");
-    // wait_build/probe_finished_future does not need to call finish here
+    // wait_build/probe_phase_done_future does not need to call finish here
     // because it is called in PipelineExecutorContext.
 }
 

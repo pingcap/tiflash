@@ -214,12 +214,12 @@ Block ScanHashMapAfterProbeBlockInputStream::readImpl()
     /// just return empty block for extra non joined block input stream read
     if (unlikely(index >= parent.getBuildConcurrency()))
         return {};
-    if unlikely (parent.active_build_threads != 0 || parent.active_probe_threads != 0)
+    if unlikely (parent.active_build_threads != 0 || parent.unfinished_probe_streams != 0)
     {
         /// build/probe is not finished yet, the query must be cancelled, so just return {}
         LOG_WARNING(
             parent.log,
-            "ScanHashMapAfterProbe read without non zero active_build_threads/active_probe_threads, return empty "
+            "ScanHashMapAfterProbe read with unfinished build/probe streams, return empty "
             "block");
         return {};
     }

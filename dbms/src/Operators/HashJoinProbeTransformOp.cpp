@@ -86,23 +86,22 @@ void HashJoinProbeTransformOp::operateSuffixImpl()
         scan_hash_map_rows);
 }
 
-ProbeFinishResult HashJoinProbeTransformOp::finishCurrentProbe(ProbeFinishReason reason)
+bool HashJoinProbeTransformOp::finishCurrentProbe(ProbeFinishReason reason)
 {
-    if (current_probe_finished)
+    if (current_probe_completion_reported)
     {
         if (reason != ProbeFinishReason::InputExhausted)
             return probe_transform->finishOneProbe(reason);
-        return probe_transform->isProbeStopped() ? ProbeFinishResult::ProbePhaseStopped
-                                                 : ProbeFinishResult::OtherProbeInputsPending;
+        return false;
     }
 
-    current_probe_finished = true;
+    current_probe_completion_reported = true;
     return probe_transform->finishOneProbe(reason);
 }
 
 bool HashJoinProbeTransformOp::finishIfProbeStopped(Block & block)
 {
-    if (!probe_transform->isProbeStopped())
+    if (!probe_transform->isProbePhaseStopped())
         return false;
 
     finishCurrentProbe(ProbeFinishReason::LogicalEarlyStop);
@@ -136,14 +135,14 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
             // if all_rows_joined_finish is still true here, it means that there is no input block.
             if unlikely (probe_process_info.all_rows_joined_finish)
             {
-                const auto probe_finish_result = finishCurrentProbe(ProbeFinishReason::InputExhausted);
+                const auto is_last_normal_input_completion = finishCurrentProbe(ProbeFinishReason::InputExhausted);
                 FAIL_POINT_PAUSE(FailPoints::pause_after_hash_join_finish_one_probe);
-                if (probe_finish_result == ProbeFinishResult::ProbePhaseStopped)
+                if (probe_transform->isProbePhaseStopped())
                 {
                     switchStatus(ProbeStatus::FINISHED);
                     BREAK;
                 }
-                if (probe_finish_result == ProbeFinishResult::AllProbeInputsFinished)
+                if (is_last_normal_input_completion)
                 {
                     if (probe_transform->hasMarkedSpillData())
                     {
@@ -176,15 +175,19 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
             scan_hash_map_rows += block.rows();
             return OperatorStatus::HAS_OUTPUT;
         case ProbeStatus::WAIT_PROBE_FINISH:
-            if (probe_transform->isProbeFinishedForPipeline())
+            if (probe_transform->getProbePhaseStateForPipeline() == ProbePhaseState::Active)
             {
-                if (probe_transform->isProbeStopped())
-                    switchStatus(ProbeStatus::FINISHED);
-                else
-                    onWaitProbeFinishDone();
-                BREAK;
+                return OperatorStatus::WAIT_FOR_NOTIFY;
             }
-            return OperatorStatus::WAIT_FOR_NOTIFY;
+            if (probe_transform->isProbePhaseStopped())
+            {
+                switchStatus(ProbeStatus::FINISHED);
+            }
+            else
+            {
+                onWaitProbeFinishDone();
+            }
+            BREAK;
         case ProbeStatus::GET_RESTORE_JOIN:
             onGetRestoreJoin();
             BREAK;
@@ -254,7 +257,7 @@ void HashJoinProbeTransformOp::onWaitProbeFinishDone()
 void HashJoinProbeTransformOp::onRestoreBuildFinish()
 {
     probe_transform->startRestoreProbe();
-    current_probe_finished = false;
+    current_probe_completion_reported = false;
     switchStatus(ProbeStatus::RESTORE_PROBE);
 }
 
@@ -263,7 +266,7 @@ void HashJoinProbeTransformOp::onGetRestoreJoin()
     if (auto restore_exec = probe_transform->tryGetRestoreExec(); restore_exec)
     {
         probe_transform = restore_exec;
-        current_probe_finished = false;
+        current_probe_completion_reported = false;
         switchStatus(ProbeStatus::RESTORE_BUILD);
     }
     else
@@ -274,7 +277,7 @@ void HashJoinProbeTransformOp::onGetRestoreJoin()
 
 OperatorStatus HashJoinProbeTransformOp::executeIOImpl()
 {
-    if (probe_transform->isProbeStopped())
+    if (probe_transform->isProbePhaseStopped())
     {
         finishCurrentProbe(ProbeFinishReason::LogicalEarlyStop);
         switchStatus(ProbeStatus::FINISHED);

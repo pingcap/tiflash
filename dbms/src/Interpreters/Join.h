@@ -111,11 +111,14 @@ enum class ProbeFinishReason
     Cancelled,
 };
 
-enum class ProbeFinishResult
+enum class ProbePhaseState
 {
-    OtherProbeInputsPending,
+    // Normal completion has not been published, so peers must not start post-probe work.
+    Active,
+    // Every probe stream reported input EOF and finalizeProbe() completed normal work required before post-probe processing.
     AllProbeInputsFinished,
-    ProbePhaseStopped,
+    // Logical early stop or cancellation: do not start normal post-probe work.
+    Stopped,
 };
 
 /** Data structure for implementation of JOIN.
@@ -296,10 +299,9 @@ public:
     {
         std::unique_lock lock(build_probe_mutex);
         probe_concurrency = concurrency;
-        active_probe_threads = probe_concurrency;
-        probe_finished_streams.assign(probe_concurrency, false);
-        probe_finished.store(false, std::memory_order_release);
-        probe_stopped.store(false, std::memory_order_release);
+        unfinished_probe_streams = probe_concurrency;
+        probe_completion_reported_streams.assign(probe_concurrency, 0);
+        probe_phase_state.store(ProbePhaseState::Active, std::memory_order_release);
     }
 
     void wakeUpAllWaitingThreads();
@@ -309,13 +311,18 @@ public:
     void finalizeBuild();
     void waitUntilAllBuildFinished() const;
 
-    // Return true if it is the last probe thread.
+    // Return true when every probe input finishes normally.
     bool finishOneProbe(size_t stream_index);
-    ProbeFinishResult finishOneProbe(size_t stream_index, ProbeFinishReason reason);
+    // Return true when this is the last normal input completion. The caller must finish normal work required before
+    // post-probe processing and call finalizeProbe() before publishing ProbePhaseState::AllProbeInputsFinished.
+    bool finishOneProbe(size_t stream_index, ProbeFinishReason reason);
     void finalizeProbe();
-    void waitUntilAllProbeFinished() const;
-    bool isProbeFinishedForPipeline() const;
-    bool isProbeStopped() const { return probe_stopped.load(std::memory_order_acquire); }
+    void waitUntilProbePhaseDone() const;
+    ProbePhaseState getProbePhaseStateForPipeline() const;
+    bool isProbePhaseStopped() const
+    {
+        return probe_phase_state.load(std::memory_order_acquire) == ProbePhaseState::Stopped;
+    }
 
     bool isBuildFinishedForPipeline() const;
 
@@ -372,7 +379,7 @@ public:
     bool isFinalize() const { return finalized; }
 
     OneTimeNotifyFuturePtr wait_build_finished_future;
-    OneTimeNotifyFuturePtr wait_probe_finished_future;
+    OneTimeNotifyFuturePtr wait_probe_phase_done_future;
 
 private:
     friend class ScanHashMapAfterProbeBlockInputStream;
@@ -399,10 +406,11 @@ private:
 
     mutable std::condition_variable probe_cv;
     size_t probe_concurrency;
-    size_t active_probe_threads;
-    std::atomic_bool probe_finished{false};
-    std::atomic_bool probe_stopped{false};
-    std::vector<bool> probe_finished_streams;
+    // Streams that have not reported completion through finishOneProbe().
+    size_t unfinished_probe_streams;
+    std::atomic<ProbePhaseState> probe_phase_state{ProbePhaseState::Active};
+    // Exactly-once guard for completion reports from each probe stream.
+    std::vector<UInt8> probe_completion_reported_streams;
 
     bool skip_wait = false;
     bool meet_error = false;

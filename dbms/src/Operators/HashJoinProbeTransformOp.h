@@ -47,7 +47,7 @@ protected:
     void operateSuffixImpl() override;
 
 private:
-    ProbeFinishResult finishCurrentProbe(ProbeFinishReason reason);
+    bool finishCurrentProbe(ProbeFinishReason reason);
 
     bool finishIfProbeStopped(Block & block);
 
@@ -131,6 +131,7 @@ private:
     size_t scan_hash_map_rows = 0;
 
     ProbeStatus status{ProbeStatus::PROBE};
-    bool current_probe_finished = false;
+    // Whether this operator has reported the current Join stage to finishOneProbe().
+    bool current_probe_completion_reported = false;
 };
 } // namespace DB

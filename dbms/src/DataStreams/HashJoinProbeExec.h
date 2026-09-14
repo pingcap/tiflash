@@ -48,7 +48,7 @@ public:
 
     void waitUntilAllBuildFinished();
 
-    void waitUntilAllProbeFinished();
+    void waitUntilProbePhaseDone();
 
     HashJoinProbeExecPtr tryGetRestoreExec();
 

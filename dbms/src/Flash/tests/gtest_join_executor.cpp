@@ -538,7 +538,7 @@ try
     auto query_executor = queryExecute(*context.context, true);
     ASSERT_EQ(dag_context.getExecutionMode(), ExecutionMode::Pipeline);
 
-    // One probe stream reaches EOF and decrements active_probe_threads. The other has two blocks, so it can fill the
+    // One probe stream reaches EOF and decrements unfinished_probe_streams. The other has two blocks, so it can fill the
     // limit and finish before seeing EOF.
     FailPointHelper::enablePauseFailPoint(FailPoints::pause_after_hash_join_finish_one_probe, 10);
     auto execution
