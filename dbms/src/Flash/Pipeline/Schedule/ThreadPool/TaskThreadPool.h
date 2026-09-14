@@ -19,6 +19,7 @@
 #include <Flash/Pipeline/Schedule/TaskQueues/TaskQueue.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/TaskQueueType.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
+#include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPoolMetrics.h>
 
 #include <magic_enum.hpp>
@@ -75,7 +76,7 @@ public:
         const KeyspaceCpuLimiterPtr & keyspace_cpu_limiter);
 
     // After finish is called, the submitted task will be finalized directly.
-    // And the remaing tasks in task_queue will be taken out and executed normally.
+    // And the remaining tasks in task_queue will be taken out and executed normally.
     void finish();
 
     void waitForStop();

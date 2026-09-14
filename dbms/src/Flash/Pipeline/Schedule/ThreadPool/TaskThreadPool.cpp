@@ -125,7 +125,7 @@ void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
             || cpu_quota_exhausted)
             break;
     }
-    task->profile_info.setThreadCPUTimeNs(timer.cpu_executing_time - cpu_time_before_exec);
+    task->profile_info.addThreadCPUTimeNs(timer.cpu_executing_time - cpu_time_before_exec);
     task_queue->updateStatistics(task, status_before_exec, timer.executing_time);
     reservation_released = true;
     metrics.addExecuteTime(task, timer.executing_time);
