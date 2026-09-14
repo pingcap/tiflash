@@ -203,7 +203,7 @@ void ResourceControlQueue<NestedTaskQueueType>::updateStatistics(
     auto ru = cpuTimeToRU(inc_value);
     const String & resource_group_name = task->getResourceGroupName();
     const auto & keyspace_id = task->getKeyspaceID();
-    if (keyspace_cpu_limiter)
+    if (keyspace_cpu_limiter && keyspace_cpu_limiter->isEnabled())
     {
         keyspace_cpu_limiter->release(task.get());
         notifyWaiters();

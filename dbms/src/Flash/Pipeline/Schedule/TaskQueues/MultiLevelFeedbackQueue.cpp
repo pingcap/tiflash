@@ -224,7 +224,12 @@ bool MultiLevelFeedbackQueue<TimeGetter>::take(TaskPtr & task)
             if (has_pending_tasks)
             {
                 lock.unlock();
-                keyspace_cpu_limiter->waitForChange(previous_change_id, keyspace_cpu_limiter->getRefillWaitDuration());
+                if (keyspace_cpu_limiter->isCPUQuotaEnabled())
+                    keyspace_cpu_limiter->waitForChange(
+                        previous_change_id,
+                        keyspace_cpu_limiter->getRefillWaitDuration());
+                else
+                    keyspace_cpu_limiter->waitForChange(previous_change_id);
                 lock.lock();
             }
             else
@@ -297,7 +302,7 @@ void MultiLevelFeedbackQueue<TimeGetter>::updateStatistics(const TaskPtr & task,
 {
     assert(task);
     level_queues[task->mlfq_level]->accu_consume_time_microsecond += (inc_ns / 1000);
-    if (keyspace_cpu_limiter)
+    if (keyspace_cpu_limiter && keyspace_cpu_limiter->isEnabled())
     {
         keyspace_cpu_limiter->release(task.get());
         notifyWaiters();

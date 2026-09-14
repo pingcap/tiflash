@@ -710,6 +710,48 @@ TEST_F(TestResourceControlQueue, cancel)
     }
 }
 
+TEST_F(TestResourceControlQueue, cancelMatchesKeyspace)
+{
+    constexpr KeyspaceID first_keyspace = 101;
+    constexpr KeyspaceID second_keyspace = 202;
+    const String resource_group_name = "shared-rg";
+    setupMockLAC({createResourceGroupOfDynamicTokenBucket(
+        resource_group_name,
+        ResourceGroup::UserMediumPriority,
+        20000,
+        false)});
+
+    auto make_context = [&](const String & query_id, KeyspaceID keyspace_id) {
+        return std::make_shared<PipelineExecutorContext>(
+            query_id,
+            query_id,
+            mem_tracker,
+            nullptr,
+            nullptr,
+            nullptr,
+            keyspace_id,
+            resource_group_name);
+    };
+    auto first_context = make_context("shared-query-1", first_keyspace);
+    auto second_context = make_context("shared-query-2", second_keyspace);
+
+    ResourceControlQueue<CPUMultiLevelFeedbackQueue> queue;
+    queue.submit(std::make_unique<SimpleTask>(*first_context));
+    queue.submit(std::make_unique<SimpleTask>(*second_context));
+    queue.cancel(TaskCancelInfo{"shared-query-1", first_keyspace, resource_group_name});
+
+    TaskPtr task;
+    ASSERT_TRUE(queue.take(task));
+    EXPECT_EQ(task->getQueryId(), "shared-query-1");
+    EXPECT_EQ(task->getKeyspaceID(), first_keyspace);
+    FINALIZE_TASK(task);
+
+    ASSERT_TRUE(queue.take(task));
+    EXPECT_EQ(task->getQueryId(), "shared-query-2");
+    EXPECT_EQ(task->getKeyspaceID(), second_keyspace);
+    FINALIZE_TASK(task);
+}
+
 TEST_F(TestResourceControlQueue, tokenBucket)
 {
     const double fill_rate = 10.0;
