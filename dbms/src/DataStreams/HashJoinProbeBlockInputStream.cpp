@@ -148,7 +148,7 @@ Block HashJoinProbeBlockInputStream::getOutputBlock()
             }
             case ProbeStatus::WAIT_PROBE_FINISH:
             {
-                probe_exec->waitUntilProbePhaseDone();
+                probe_exec->waitUntilAllProbeFinished();
                 onAllProbeDone();
                 break;
             }

@@ -103,24 +103,6 @@ struct RestoreConfig
 class OneTimeNotifyFuture;
 using OneTimeNotifyFuturePtr = std::shared_ptr<OneTimeNotifyFuture>;
 
-enum class ProbeFinishReason
-{
-    InputExhausted,
-    LogicalEarlyStop,
-    // Pipeline task errors cancel the shared executor context before operator suffixes run.
-    Cancelled,
-};
-
-enum class ProbePhaseState
-{
-    // Normal completion has not been published, so peers must not start post-probe work.
-    Active,
-    // Every probe stream reported input EOF and finalizeProbe() completed normal work required before post-probe processing.
-    AllProbeInputsFinished,
-    // Logical early stop or cancellation: do not start normal post-probe work.
-    Stopped,
-};
-
 /** Data structure for implementation of JOIN.
   * It is just a hash table: keys -> rows of joined ("right") table.
   * Additionally, CROSS JOIN is supported: instead of hash table, it use just set of blocks without keys.
@@ -300,8 +282,8 @@ public:
         std::unique_lock lock(build_probe_mutex);
         probe_concurrency = concurrency;
         pending_probe_streams = probe_concurrency;
-        probe_completion_reported_streams.assign(probe_concurrency, 0);
-        probe_phase_state.store(ProbePhaseState::Active, std::memory_order_release);
+        probe_phase_done.store(false, std::memory_order_release);
+        probe_stopped.store(false, std::memory_order_release);
     }
 
     void wakeUpAllWaitingThreads();
@@ -311,19 +293,14 @@ public:
     void finalizeBuild();
     void waitUntilAllBuildFinished() const;
 
-    // Return true when every probe input finishes normally.
+    // Return true if it is the last probe stream to finish normally.
     bool finishOneProbe(size_t stream_index);
-    // Return true when this is the last normal input completion. The caller becomes the unique probe-barrier finalizer:
-    // it must finish normal work required before post-probe processing and call finalizeProbe() before publishing
-    // ProbePhaseState::AllProbeInputsFinished. A non-InputExhausted reason publishes ProbePhaseState::Stopped instead.
-    bool finishOneProbe(size_t stream_index, ProbeFinishReason reason);
+    // Stop the shared probe phase without counting this stream as a normal input completion.
+    void stopProbePhase();
     void finalizeProbe();
-    void waitUntilProbePhaseDone() const;
-    ProbePhaseState getProbePhaseStateForPipeline() const;
-    bool isProbePhaseStopped() const
-    {
-        return probe_phase_state.load(std::memory_order_acquire) == ProbePhaseState::Stopped;
-    }
+    void waitUntilAllProbeFinished() const;
+    bool isProbeFinishedForPipeline() const;
+    bool isProbeStopped() const { return probe_stopped.load(std::memory_order_acquire); }
 
     bool isBuildFinishedForPipeline() const;
 
@@ -380,7 +357,7 @@ public:
     bool isFinalize() const { return finalized; }
 
     OneTimeNotifyFuturePtr wait_build_finished_future;
-    OneTimeNotifyFuturePtr wait_probe_phase_done_future;
+    OneTimeNotifyFuturePtr wait_probe_finished_future;
 
 private:
     friend class ScanHashMapAfterProbeBlockInputStream;
@@ -407,11 +384,11 @@ private:
 
     mutable std::condition_variable probe_cv;
     size_t probe_concurrency;
-    // Streams that have not reported completion through finishOneProbe().
+    // Streams that have not finished probe input normally.
     size_t pending_probe_streams;
-    std::atomic<ProbePhaseState> probe_phase_state{ProbePhaseState::Active};
-    // Exactly-once guard for completion reports from each probe stream.
-    std::vector<UInt8> probe_completion_reported_streams;
+    // The probe phase is either completed normally or stopped by early termination/cancellation.
+    std::atomic_bool probe_phase_done{false};
+    std::atomic_bool probe_stopped{false};
 
     bool skip_wait = false;
     bool meet_error = false;
