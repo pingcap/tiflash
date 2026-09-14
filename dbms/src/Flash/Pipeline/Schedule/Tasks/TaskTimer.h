@@ -27,7 +27,6 @@ struct TaskTimer
     UInt64 executing_time = 0;
     UInt64 cpu_executing_time = 0;
     UInt64 cpu_last_time = 0;
-
     /// Wall-clock time this task has spent in the current handleTask() round.
     ///
     /// Samples TaskProfileInfo's CLOCK_MONOTONIC_COARSE stopwatch, so blocking

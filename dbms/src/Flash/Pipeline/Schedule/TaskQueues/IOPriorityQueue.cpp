@@ -76,7 +76,12 @@ bool IOPriorityQueue::take(TaskPtr & task)
             if (has_pending_tasks)
             {
                 lock.unlock();
-                keyspace_cpu_limiter->waitForChange(previous_change_id, keyspace_cpu_limiter->getRefillWaitDuration());
+                if (keyspace_cpu_limiter->isCPUQuotaEnabled())
+                    keyspace_cpu_limiter->waitForChange(
+                        previous_change_id,
+                        keyspace_cpu_limiter->getRefillWaitDuration());
+                else
+                    keyspace_cpu_limiter->waitForChange(previous_change_id);
                 lock.lock();
             }
             else
@@ -152,7 +157,7 @@ void IOPriorityQueue::updateStatistics(const TaskPtr & task, ExecTaskStatus exec
     default:; // ignore not io status.
     }
 
-    if (keyspace_cpu_limiter)
+    if (keyspace_cpu_limiter && keyspace_cpu_limiter->isEnabled())
     {
         // A cancelled task can be returned from cancel_task_queue without ever
         // acquiring a reservation; release() is owner-aware and therefore a no-op.

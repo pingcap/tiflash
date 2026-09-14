@@ -92,6 +92,8 @@ public:
 
     bool isEnabled() const { return max_active_tasks != 0 || cpu_quota_per_second_ns != 0; }
 
+    bool isCPUQuotaEnabled() const { return cpu_quota_per_second_ns != 0; }
+
     /// Charge CPU consumed since the previous execute() call. Returning true
     /// asks the task thread to yield before it starts another execution round.
     bool consumeCPUTime(const Task * task, UInt64 cpu_time_ns)
@@ -179,6 +181,11 @@ public:
             return true;
 
         std::unique_lock lock(mu);
+        if (timeout == std::chrono::milliseconds::max())
+        {
+            cv.wait(lock, [&] { return change_id != previous_change_id; });
+            return true;
+        }
         return cv.wait_for(lock, timeout, [&] { return change_id != previous_change_id; });
     }
 
