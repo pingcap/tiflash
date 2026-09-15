@@ -38,6 +38,7 @@
 
 #include <memory>
 #include <shared_mutex>
+#include <vector>
 
 namespace DB
 {
@@ -111,6 +112,9 @@ enum class ProbePhaseState
 
 class OneTimeNotifyFuture;
 using OneTimeNotifyFuturePtr = std::shared_ptr<OneTimeNotifyFuture>;
+
+class SharedQueue;
+using SharedQueuePtr = std::shared_ptr<SharedQueue>;
 
 /** Data structure for implementation of JOIN.
   * It is just a hash table: keys -> rows of joined ("right") table.
@@ -305,6 +309,8 @@ public:
     bool finishOneProbe(size_t stream_index);
     // Stop the shared probe phase without counting this stream as a normal input completion.
     void stopProbePhase();
+    // Register a restore-probe queue. A queue registered after the probe phase has stopped is cancelled immediately.
+    void addRestoreProbeQueue(const SharedQueuePtr & queue);
     void finalizeProbe();
     void waitUntilAllProbeFinished() const;
     bool isProbeFinishedForPipeline() const;
@@ -400,6 +406,9 @@ private:
     // Probe input completion is separate from Join completion: `NormallyFinished` may still be followed by post-probe
     // work. `Stopped` overrides it when a pipeline task terminates before that work is done.
     std::atomic<ProbePhaseState> probe_phase_state{ProbePhaseState::Active};
+    // Each restore probe stream has an independent producer task. Stop them together so none can remain blocked on a
+    // full queue after its probe consumer exits early.
+    std::vector<SharedQueuePtr> restore_probe_queues;
 
     bool skip_wait = false;
     bool meet_error = false;

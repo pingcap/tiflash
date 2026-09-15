@@ -77,8 +77,8 @@ public:
     bool shouldSkipProbe() const { return join->shouldSkipProbe(); }
     bool hasMarkedSpillData() const { return join->hasProbeSideMarkedSpillData(op_index); }
     bool isProbeFinishedForPipeline() const { return join->isProbeFinishedForPipeline(); }
-    bool isProbePhaseStopped() const { return join->isProbeStopped(); }
-    void stopProbePhase() { join->stopProbePhase(); }
+    bool isProbePhaseStopped() const;
+    void stopProbePhase();
     void finalizeProbe() { join->finalizeProbe(); }
     void flushMarkedSpillData() { join->flushProbeSideMarkedSpillData(op_index); }
 

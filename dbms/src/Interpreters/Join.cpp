@@ -33,6 +33,7 @@
 #include <Interpreters/Join.h>
 #include <Interpreters/NullAwareSemiJoinHelper.h>
 #include <Interpreters/NullableUtils.h>
+#include <Operators/SharedQueue.h>
 #include <common/logger_useful.h>
 
 #include <exception>
@@ -2058,16 +2059,36 @@ bool Join::finishOneProbe(size_t stream_index)
 void Join::stopProbePhase()
 {
     bool notify_probe_finished = false;
+    std::vector<SharedQueuePtr> restore_queues_to_cancel;
     {
         std::unique_lock lock(build_probe_mutex);
         if (probe_phase_state.exchange(ProbePhaseState::Stopped, std::memory_order_acq_rel) != ProbePhaseState::Stopped)
+        {
             notify_probe_finished = true;
+            restore_queues_to_cancel = std::move(restore_probe_queues);
+        }
     }
+    // Queue cancellation notifies waiting tasks, so do it after releasing build_probe_mutex.
+    for (const auto & queue : restore_queues_to_cancel)
+        queue->cancel();
     if (notify_probe_finished)
     {
         probe_cv.notify_all();
         wait_probe_finished_future->finish();
     }
+}
+
+void Join::addRestoreProbeQueue(const SharedQueuePtr & queue)
+{
+    bool should_cancel = false;
+    {
+        std::unique_lock lock(build_probe_mutex);
+        should_cancel = probe_phase_state.load(std::memory_order_acquire) == ProbePhaseState::Stopped;
+        if (!should_cancel)
+            restore_probe_queues.emplace_back(queue);
+    }
+    if (should_cancel)
+        queue->cancel();
 }
 
 void Join::finalizeProbe()

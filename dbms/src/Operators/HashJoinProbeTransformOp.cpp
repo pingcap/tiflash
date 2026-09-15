@@ -90,6 +90,9 @@ bool HashJoinProbeTransformOp::finishIfProbeStopped()
     if (!probe_transform->isProbePhaseStopped())
         return false;
 
+    // The stop can originate from an ancestor restore join. Mark this join stopped too, which cancels its restore
+    // probe queues before this pipeline task exits.
+    probe_transform->stopProbePhase();
     if (status == ProbeStatus::READ_SCAN_HASH_MAP_DATA)
         probe_transform->abortScanHashMapAfterProbe();
     switchStatus(ProbeStatus::FINISHED);

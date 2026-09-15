@@ -23,6 +23,7 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/registerFunctions.h>
 #include <Interpreters/Join.h>
+#include <Operators/SharedQueue.h>
 #include <gtest/gtest.h>
 
 #include <mutex>
@@ -101,6 +102,23 @@ JoinPtr makeTestJoin(const DataTypePtr & key_type, const std::vector<UInt8> & is
         "",
         0,
         true);
+}
+
+TEST(JoinProbeStopTest, CancelsAllRestoreProbeQueues)
+{
+    auto join = makeTestJoin(std::make_shared<DataTypeInt32>(), {0});
+    auto registered_queue = SharedQueue::buildInternal(1, 1, -1, 1);
+    join->addRestoreProbeQueue(registered_queue);
+
+    join->stopProbePhase();
+
+    Block block;
+    ASSERT_EQ(registered_queue->tryPush(std::move(block)), MPMCQueueResult::CANCELLED);
+
+    // Registration can race with stopProbePhase. A queue registered after the state transition must be cancelled too.
+    auto late_registered_queue = SharedQueue::buildInternal(1, 1, -1, 1);
+    join->addRestoreProbeQueue(late_registered_queue);
+    ASSERT_EQ(late_registered_queue->tryPop(block), MPMCQueueResult::CANCELLED);
 }
 
 JoinNonEqualConditions makeFullJoinOtherCondition()
