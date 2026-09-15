@@ -86,7 +86,8 @@ public:
     bool isBuildFinishedForPipeline() const { return join->isBuildFinishedForPipeline(); }
 
     // For restore probe stage
-    void startRestoreProbe();
+    // Returns false when the shared probe phase has stopped before the restore task can be started.
+    bool startRestoreProbe();
 
     bool shouldRestore() const { return join->isSpilled() || join->isRestoreJoin(); }
 

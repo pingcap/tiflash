@@ -18,6 +18,7 @@
 #include <Flash/tests/gtest_join.h>
 
 #include <chrono>
+#include <ext/scope_guard.h>
 #include <future>
 #include <magic_enum.hpp>
 
@@ -533,26 +534,31 @@ try
                        .limit(1)
                        .build(context);
 
-    DAGContext dag_context(*request, "pipeline_right_outer_join_limit", 2);
-    TiFlashTestEnv::setUpTestContext(*context.context, &dag_context, context.mockStorage(), TestType::EXECUTOR_TEST);
-    auto query_executor = queryExecute(*context.context, true);
-    ASSERT_EQ(dag_context.getExecutionMode(), ExecutionMode::Pipeline);
+    DAGContext dagContext(*request, "pipeline_right_outer_join_limit", 2);
+    TiFlashTestEnv::setUpTestContext(*context.context, &dagContext, context.mockStorage(), TestType::EXECUTOR_TEST);
+    auto queryExecutor = queryExecute(*context.context, true);
+    ASSERT_EQ(dagContext.getExecutionMode(), ExecutionMode::Pipeline);
 
     // One probe stream reaches EOF and decrements pending_probe_streams. The other has two blocks, so it can fill the
     // limit and finish before seeing EOF.
     FailPointHelper::enablePauseFailPoint(FailPoints::pause_after_hash_join_finish_one_probe, 10);
+    SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::pause_after_hash_join_finish_one_probe); });
     auto execution
-        = std::async(std::launch::async, [&query_executor]() { return query_executor->execute([](const Block &) {}); });
+        = std::async(std::launch::async, [&queryExecutor]() { return queryExecutor->execute([](const Block &) {}); });
 
     if (execution.wait_for(std::chrono::seconds(1)) != std::future_status::timeout)
     {
-        FailPointHelper::disableFailPoint(FailPoints::pause_after_hash_join_finish_one_probe);
         auto result = execution.get();
         FAIL() << "The probe stream expected to reach finishOneProbe() did not pause, success=" << result.is_success;
     }
     FailPointHelper::disableFailPoint(FailPoints::pause_after_hash_join_finish_one_probe);
 
-    ASSERT_EQ(execution.wait_for(std::chrono::seconds(1)), std::future_status::ready);
+    if (execution.wait_for(std::chrono::seconds(1)) != std::future_status::ready)
+    {
+        queryExecutor->cancel();
+        execution.get();
+        FAIL() << "Pipeline execution did not finish after the hash join probe stop.";
+    }
     ASSERT_TRUE(execution.get().is_success);
 }
 CATCH

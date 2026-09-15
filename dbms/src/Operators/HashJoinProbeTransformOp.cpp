@@ -191,6 +191,9 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
 
 OperatorStatus HashJoinProbeTransformOp::transformImpl(Block & block)
 {
+    if (finishIfProbeStopped(block))
+        return OperatorStatus::HAS_OUTPUT;
+
     assert(status == ProbeStatus::PROBE);
     assert(probe_process_info.all_rows_joined_finish);
     if (auto ret = probe_transform->tryFillProcessInfoInProbeStage(probe_process_info, block);
@@ -202,6 +205,9 @@ OperatorStatus HashJoinProbeTransformOp::transformImpl(Block & block)
 
 OperatorStatus HashJoinProbeTransformOp::tryOutputImpl(Block & block)
 {
+    if (finishIfProbeStopped(block))
+        return OperatorStatus::HAS_OUTPUT;
+
     if (status == ProbeStatus::PROBE && probe_process_info.all_rows_joined_finish)
     {
         // For an empty build, do not fill a probe block. onOutput below still advances
@@ -239,7 +245,13 @@ void HashJoinProbeTransformOp::onWaitProbeFinishDone()
 
 void HashJoinProbeTransformOp::onRestoreBuildFinish()
 {
-    probe_transform->startRestoreProbe();
+    if (!probe_transform->startRestoreProbe())
+    {
+        // startRestoreProbe only returns false after observing the shared stop state. Do not enter RESTORE_PROBE
+        // without its input queue.
+        switchStatus(ProbeStatus::FINISHED);
+        return;
+    }
     switchStatus(ProbeStatus::RESTORE_PROBE);
 }
 

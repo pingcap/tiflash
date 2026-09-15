@@ -119,7 +119,7 @@ HashProbeTransformExecPtr HashProbeTransformExec::tryGetRestoreExec()
     return parent ? parent->tryGetRestoreExec() : HashProbeTransformExecPtr{};
 }
 
-void HashProbeTransformExec::startRestoreProbe()
+bool HashProbeTransformExec::startRestoreProbe()
 {
     /// Trigger probe side restore task to get the block from probe_restore_stream.
     ///
@@ -133,7 +133,7 @@ void HashProbeTransformExec::startRestoreProbe()
     if unlikely (isProbePhaseStopped())
     {
         stopProbePhase();
-        return;
+        return false;
     }
 
     assert(!is_probe_restore_done && probe_restore_stream);
@@ -146,11 +146,12 @@ void HashProbeTransformExec::startRestoreProbe()
     if unlikely (isProbePhaseStopped())
     {
         stopProbePhase();
-        return;
+        return false;
     }
     TaskScheduler::instance->submit(
         std::make_unique<StreamRestoreTask>(exec_context, log->identifier(), probe_restore_stream, probe_sink_holder));
     probe_restore_stream.reset();
+    return true;
 }
 
 bool HashProbeTransformExec::prepareProbeRestoredBlock()

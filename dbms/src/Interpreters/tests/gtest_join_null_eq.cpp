@@ -20,9 +20,12 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Debug/TiFlashTestEnv.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/registerFunctions.h>
 #include <Interpreters/Join.h>
+#include <Operators/HashJoinProbeTransformOp.h>
+#include <Operators/HashProbeTransformExec.h>
 #include <Operators/SharedQueue.h>
 #include <gtest/gtest.h>
 
@@ -142,6 +145,31 @@ TEST(JoinProbeStopTest, PropagatesStopToRestoreJoin)
 
     Block block;
     ASSERT_EQ(restore_probe_queue->tryPop(block), MPMCQueueResult::CANCELLED);
+}
+
+TEST(JoinProbeStopTest, StopsProbeOperatorBeforeReadingOrStartingRestore)
+{
+    auto key_type = std::make_shared<DataTypeInt32>();
+    auto join = makeTestJoin(key_type, {0});
+    auto input_header = makeSampleBlock(key_type);
+    join->initBuild(makeSampleBlock(key_type), 1);
+    join->initProbe(input_header, 1);
+    join->finalize(Names{test_key_name});
+
+    PipelineExecutorContext exec_context;
+    HashJoinProbeTransformOp probe_op(exec_context, "join_probe_stop_test", join, 0, 1024, input_header);
+    HashProbeTransformExec restore_probe_exec("join_probe_stop_test", exec_context, 0, join, nullptr, 1024);
+
+    join->stopProbePhase();
+    ASSERT_FALSE(restore_probe_exec.startRestoreProbe());
+
+    Block block;
+    ASSERT_EQ(probe_op.tryOutput(block), OperatorStatus::HAS_OUTPUT);
+    ASSERT_FALSE(block);
+
+    block = input_header;
+    ASSERT_EQ(probe_op.transform(block), OperatorStatus::HAS_OUTPUT);
+    ASSERT_FALSE(block);
 }
 
 JoinNonEqualConditions makeFullJoinOtherCondition()
