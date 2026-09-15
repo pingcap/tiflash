@@ -103,7 +103,9 @@ struct RestoreConfig
 enum class ProbePhaseState
 {
     Active,
+    // All probe inputs are consumed, but the Join may still be scanning unmatched build rows or restoring data.
     NormallyFinished,
+    // Post-probe processing is terminated early, for example by LIMIT, cancellation, or error cleanup.
     Stopped,
 };
 
@@ -395,7 +397,8 @@ private:
     size_t probe_concurrency;
     // Streams that have not finished probe input normally.
     size_t pending_probe_streams;
-    // `Stopped` overrides `NormallyFinished` when a pipeline task terminates before all post-probe work is done.
+    // Probe input completion is separate from Join completion: `NormallyFinished` may still be followed by post-probe
+    // work. `Stopped` overrides it when a pipeline task terminates before that work is done.
     std::atomic<ProbePhaseState> probe_phase_state{ProbePhaseState::Active};
 
     bool skip_wait = false;
