@@ -2044,7 +2044,7 @@ void Join::waitUntilAllBuildFinished() const
 bool Join::finishOneProbe(size_t stream_index)
 {
     std::unique_lock lock(build_probe_mutex);
-    if (unlikely(probe_stopped.load(std::memory_order_acquire)))
+    if (unlikely(probe_phase_state.load(std::memory_order_acquire) == ProbePhaseState::Stopped))
         return false;
     if (pending_probe_streams == 1)
     {
@@ -2060,11 +2060,8 @@ void Join::stopProbePhase()
     bool notify_probe_finished = false;
     {
         std::unique_lock lock(build_probe_mutex);
-        if (!probe_stopped.exchange(true, std::memory_order_acq_rel))
-        {
-            probe_phase_done.store(true, std::memory_order_release);
+        if (probe_phase_state.exchange(ProbePhaseState::Stopped, std::memory_order_acq_rel) != ProbePhaseState::Stopped)
             notify_probe_finished = true;
-        }
     }
     if (notify_probe_finished)
     {
@@ -2077,12 +2074,12 @@ void Join::finalizeProbe()
 {
     {
         std::unique_lock lock(build_probe_mutex);
-        if (probe_stopped.load(std::memory_order_acquire))
+        if (probe_phase_state.load(std::memory_order_acquire) == ProbePhaseState::Stopped)
             return;
         if (hash_join_spill_context->getProbeSpiller())
             hash_join_spill_context->getProbeSpiller()->finishSpill();
         assert(pending_probe_streams == 0);
-        probe_phase_done.store(true, std::memory_order_release);
+        probe_phase_state.store(ProbePhaseState::NormallyFinished, std::memory_order_release);
     }
     probe_cv.notify_all();
     wait_probe_finished_future->finish();
@@ -2091,14 +2088,16 @@ void Join::finalizeProbe()
 void Join::waitUntilAllProbeFinished() const
 {
     std::unique_lock lock(build_probe_mutex);
-    probe_cv.wait(lock, [&]() { return probe_phase_done || meet_error || skip_wait; });
+    probe_cv.wait(lock, [&]() {
+        return probe_phase_state.load(std::memory_order_acquire) != ProbePhaseState::Active || meet_error || skip_wait;
+    });
     if (meet_error)
         throw Exception(error_message);
 }
 
 bool Join::isProbeFinishedForPipeline() const
 {
-    if (!probe_phase_done)
+    if (probe_phase_state.load(std::memory_order_acquire) == ProbePhaseState::Active)
     {
         setNotifyFuture(wait_probe_finished_future.get());
         return false;
@@ -2122,7 +2121,8 @@ void Join::finishOneNonJoin(size_t partition_index)
     // When spill is not enabled, all build data blocks are stored in the same partition, so the join partition cannot be released.
     if (isEnableSpill())
     {
-        if likely (build_finished && probe_phase_done && !probe_stopped)
+        if likely (
+            build_finished && probe_phase_state.load(std::memory_order_acquire) == ProbePhaseState::NormallyFinished)
         {
             /// only clear hash table if not active build/probe threads
             while (partition_index < build_concurrency)

@@ -100,6 +100,13 @@ struct RestoreConfig
     size_t restore_partition_id;
 };
 
+enum class ProbePhaseState
+{
+    Active,
+    NormallyFinished,
+    Stopped,
+};
+
 class OneTimeNotifyFuture;
 using OneTimeNotifyFuturePtr = std::shared_ptr<OneTimeNotifyFuture>;
 
@@ -282,8 +289,7 @@ public:
         std::unique_lock lock(build_probe_mutex);
         probe_concurrency = concurrency;
         pending_probe_streams = probe_concurrency;
-        probe_phase_done.store(false, std::memory_order_release);
-        probe_stopped.store(false, std::memory_order_release);
+        probe_phase_state.store(ProbePhaseState::Active, std::memory_order_release);
     }
 
     void wakeUpAllWaitingThreads();
@@ -300,7 +306,10 @@ public:
     void finalizeProbe();
     void waitUntilAllProbeFinished() const;
     bool isProbeFinishedForPipeline() const;
-    bool isProbeStopped() const { return probe_stopped.load(std::memory_order_acquire); }
+    bool isProbeStopped() const
+    {
+        return probe_phase_state.load(std::memory_order_acquire) == ProbePhaseState::Stopped;
+    }
 
     bool isBuildFinishedForPipeline() const;
 
@@ -386,9 +395,8 @@ private:
     size_t probe_concurrency;
     // Streams that have not finished probe input normally.
     size_t pending_probe_streams;
-    // The probe phase is either completed normally or stopped by early termination/cancellation.
-    std::atomic_bool probe_phase_done{false};
-    std::atomic_bool probe_stopped{false};
+    // `Stopped` overrides `NormallyFinished` when a pipeline task terminates before all post-probe work is done.
+    std::atomic<ProbePhaseState> probe_phase_state{ProbePhaseState::Active};
 
     bool skip_wait = false;
     bool meet_error = false;
