@@ -36,7 +36,9 @@
 #include <Interpreters/ProbeProcessInfo.h>
 #include <Interpreters/SettingsCommon.h>
 
+#include <atomic>
 #include <memory>
+#include <mutex>
 #include <shared_mutex>
 #include <vector>
 
@@ -115,6 +117,29 @@ using OneTimeNotifyFuturePtr = std::shared_ptr<OneTimeNotifyFuture>;
 
 class SharedQueue;
 using SharedQueuePtr = std::shared_ptr<SharedQueue>;
+
+// Shared by an original Join and all of its restore descendants. It only coordinates early stop; each Join keeps its
+// own build/probe completion counters and build_finished state.
+class ProbeStopContext
+{
+public:
+    bool isStopped() const { return stopped.load(std::memory_order_acquire); }
+
+private:
+    friend class Join;
+
+    void registerJoinWaitFutures(
+        const OneTimeNotifyFuturePtr & build_finished_future,
+        const OneTimeNotifyFuturePtr & probe_finished_future);
+    void addRestoreProbeQueue(const SharedQueuePtr & queue);
+    void stop();
+
+    std::atomic_bool stopped{false};
+    std::mutex mutex;
+    std::vector<OneTimeNotifyFuturePtr> wait_futures;
+    std::vector<SharedQueuePtr> restore_probe_queues;
+};
+using ProbeStopContextPtr = std::shared_ptr<ProbeStopContext>;
 
 /** Data structure for implementation of JOIN.
   * It is just a hash table: keys -> rows of joined ("right") table.
@@ -195,7 +220,8 @@ public:
         const String & flag_mapped_entry_helper_name_,
         size_t probe_cache_column_threshold_,
         bool is_test,
-        const std::vector<RuntimeFilterPtr> & runtime_filter_list_ = dummy_runtime_filter_list);
+        const std::vector<RuntimeFilterPtr> & runtime_filter_list_ = dummy_runtime_filter_list,
+        const ProbeStopContextPtr & probe_stop_context_ = nullptr);
 
     RestoreConfig restore_config;
 
@@ -314,10 +340,7 @@ public:
     void finalizeProbe();
     void waitUntilAllProbeFinished() const;
     bool isProbeFinishedForPipeline() const;
-    bool isProbeStopped() const
-    {
-        return probe_phase_state.load(std::memory_order_acquire) == ProbePhaseState::Stopped;
-    }
+    bool isProbeStopped() const;
 
     bool isBuildFinishedForPipeline() const;
 
@@ -406,9 +429,7 @@ private:
     // Probe input completion is separate from Join completion: `NormallyFinished` may still be followed by post-probe
     // work. `Stopped` overrides it when a pipeline task terminates before that work is done.
     std::atomic<ProbePhaseState> probe_phase_state{ProbePhaseState::Active};
-    // Each restore probe stream has an independent producer task. Stop them together so none can remain blocked on a
-    // full queue after its probe consumer exits early.
-    std::vector<SharedQueuePtr> restore_probe_queues;
+    const ProbeStopContextPtr probe_stop_context;
 
     bool skip_wait = false;
     bool meet_error = false;

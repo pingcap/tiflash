@@ -76,7 +76,10 @@ Block makeSampleBlock(const DataTypePtr & key_type)
     return Block{{key_type->createColumn(), key_type, test_key_name}};
 }
 
-JoinPtr makeTestJoin(const DataTypePtr & key_type, const std::vector<UInt8> & is_null_eq)
+JoinPtr makeTestJoin(
+    const DataTypePtr & key_type,
+    const std::vector<UInt8> & is_null_eq,
+    const ProbeStopContextPtr & probe_stop_context = nullptr)
 {
     SpillConfig build_spill_config("/tmp", "join_null_eq_build", 0, 0, 0, nullptr);
     SpillConfig probe_spill_config("/tmp", "join_null_eq_probe", 0, 0, 0, nullptr);
@@ -101,7 +104,9 @@ JoinPtr makeTestJoin(const DataTypePtr & key_type, const std::vector<UInt8> & is
         "",
         "",
         0,
-        true);
+        true,
+        dummy_runtime_filter_list,
+        probe_stop_context);
 }
 
 TEST(JoinProbeStopTest, CancelsAllRestoreProbeQueues)
@@ -119,6 +124,24 @@ TEST(JoinProbeStopTest, CancelsAllRestoreProbeQueues)
     auto late_registered_queue = SharedQueue::buildInternal(1, 1, -1, 1);
     join->addRestoreProbeQueue(late_registered_queue);
     ASSERT_EQ(late_registered_queue->tryPop(block), MPMCQueueResult::CANCELLED);
+}
+
+TEST(JoinProbeStopTest, PropagatesStopToRestoreJoin)
+{
+    auto probe_stop_context = std::make_shared<ProbeStopContext>();
+    auto parent_join = makeTestJoin(std::make_shared<DataTypeInt32>(), {0}, probe_stop_context);
+    auto restore_join = makeTestJoin(std::make_shared<DataTypeInt32>(), {0}, probe_stop_context);
+    auto restore_probe_queue = SharedQueue::buildInternal(1, 1, -1, 1);
+    restore_join->addRestoreProbeQueue(restore_probe_queue);
+
+    parent_join->stopProbePhase();
+
+    ASSERT_TRUE(parent_join->isProbeStopped());
+    ASSERT_TRUE(restore_join->isProbeStopped());
+    ASSERT_TRUE(restore_join->isProbeFinishedForPipeline());
+
+    Block block;
+    ASSERT_EQ(restore_probe_queue->tryPop(block), MPMCQueueResult::CANCELLED);
 }
 
 JoinNonEqualConditions makeFullJoinOtherCondition()
