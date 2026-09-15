@@ -47,6 +47,8 @@ protected:
     void operateSuffixImpl() override;
 
 private:
+    bool finishIfProbeStopped();
+
     bool finishIfProbeStopped(Block & block);
 
     OperatorStatus onOutput(Block & block);

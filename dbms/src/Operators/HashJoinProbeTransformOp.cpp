@@ -85,7 +85,7 @@ void HashJoinProbeTransformOp::operateSuffixImpl()
         scan_hash_map_rows);
 }
 
-bool HashJoinProbeTransformOp::finishIfProbeStopped(Block & block)
+bool HashJoinProbeTransformOp::finishIfProbeStopped()
 {
     if (!probe_transform->isProbePhaseStopped())
         return false;
@@ -93,6 +93,14 @@ bool HashJoinProbeTransformOp::finishIfProbeStopped(Block & block)
     if (status == ProbeStatus::READ_SCAN_HASH_MAP_DATA)
         probe_transform->abortScanHashMapAfterProbe();
     switchStatus(ProbeStatus::FINISHED);
+    return true;
+}
+
+bool HashJoinProbeTransformOp::finishIfProbeStopped(Block & block)
+{
+    if (!finishIfProbeStopped())
+        return false;
+
     block = {};
     return true;
 }
@@ -122,11 +130,6 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
             {
                 const auto is_last_normal_input_completion = probe_transform->finishOneProbe();
                 FAIL_POINT_PAUSE(FailPoints::pause_after_hash_join_finish_one_probe);
-                if (probe_transform->isProbePhaseStopped())
-                {
-                    switchStatus(ProbeStatus::FINISHED);
-                    BREAK;
-                }
                 if (is_last_normal_input_completion)
                 {
                     if (probe_transform->hasMarkedSpillData())
@@ -162,10 +165,7 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
         case ProbeStatus::WAIT_PROBE_FINISH:
             if (probe_transform->isProbeFinishedForPipeline())
             {
-                if (probe_transform->isProbePhaseStopped())
-                    switchStatus(ProbeStatus::FINISHED);
-                else
-                    onWaitProbeFinishDone();
+                onWaitProbeFinishDone();
                 BREAK;
             }
             return OperatorStatus::WAIT_FOR_NOTIFY;
@@ -190,8 +190,6 @@ OperatorStatus HashJoinProbeTransformOp::transformImpl(Block & block)
 {
     assert(status == ProbeStatus::PROBE);
     assert(probe_process_info.all_rows_joined_finish);
-    if (finishIfProbeStopped(block))
-        return OperatorStatus::HAS_OUTPUT;
     if (auto ret = probe_transform->tryFillProcessInfoInProbeStage(probe_process_info, block);
         ret != OperatorStatus::HAS_OUTPUT)
         return ret;
@@ -201,8 +199,6 @@ OperatorStatus HashJoinProbeTransformOp::transformImpl(Block & block)
 
 OperatorStatus HashJoinProbeTransformOp::tryOutputImpl(Block & block)
 {
-    if (finishIfProbeStopped(block))
-        return OperatorStatus::HAS_OUTPUT;
     if (status == ProbeStatus::PROBE && probe_process_info.all_rows_joined_finish)
     {
         // For an empty build, do not fill a probe block. onOutput below still advances
@@ -220,6 +216,9 @@ OperatorStatus HashJoinProbeTransformOp::tryOutputImpl(Block & block)
 
 void HashJoinProbeTransformOp::onWaitProbeFinishDone()
 {
+    if (finishIfProbeStopped())
+        return;
+
     if (probe_transform->needScanHashMapAfterProbe())
     {
         probe_transform->startScanHashMapAfterProbe();
@@ -256,11 +255,8 @@ void HashJoinProbeTransformOp::onGetRestoreJoin()
 
 OperatorStatus HashJoinProbeTransformOp::executeIOImpl()
 {
-    if (probe_transform->isProbePhaseStopped())
-    {
-        switchStatus(ProbeStatus::FINISHED);
+    if (finishIfProbeStopped())
         return OperatorStatus::HAS_OUTPUT;
-    }
 
     switch (status)
     {
