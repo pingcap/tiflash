@@ -2046,13 +2046,13 @@ bool Join::finishOneProbe(size_t stream_index)
     std::unique_lock lock(build_probe_mutex);
     if (unlikely(probe_phase_state.load(std::memory_order_acquire) == ProbePhaseState::Stopped))
         return false;
-    if (pending_probe_streams == 1)
-    {
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_mpp_hash_probe);
-        workAfterProbeFinish(stream_index);
-    }
     --pending_probe_streams;
-    return pending_probe_streams == 0;
+    if (pending_probe_streams != 0)
+        return false;
+
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_mpp_hash_probe);
+    workAfterProbeFinish(stream_index);
+    return true;
 }
 
 void Join::stopProbePhase()
