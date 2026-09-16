@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Operators/HashJoinProbeTransformOp.h>
@@ -73,6 +74,7 @@ void HashJoinProbeTransformOp::operateSuffixImpl()
     if (status != ProbeStatus::FINISHED)
     {
         probe_transform->stopProbePhase();
+        SYNC_FOR("after_hash_join_probe_stop");
         if (status == ProbeStatus::READ_SCAN_HASH_MAP_DATA)
             probe_transform->abortScanHashMapAfterProbe();
     }
@@ -132,6 +134,8 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
             if unlikely (probe_process_info.all_rows_joined_finish)
             {
                 const auto is_last_normal_input_completion = probe_transform->finishOneProbe();
+                if (probe_transform->getStreamIndex() == 1)
+                    SYNC_FOR("after_hash_join_finish_one_probe_stream_1");
                 FAIL_POINT_PAUSE(FailPoints::pause_after_hash_join_finish_one_probe);
                 if (is_last_normal_input_completion)
                 {
@@ -205,6 +209,9 @@ OperatorStatus HashJoinProbeTransformOp::transformImpl(Block & block)
 
 OperatorStatus HashJoinProbeTransformOp::tryOutputImpl(Block & block)
 {
+    if (probe_transform->getStreamIndex() == 0)
+        SYNC_FOR("before_hash_join_probe_stream_0");
+
     if (finishIfProbeStopped(block))
         return OperatorStatus::HAS_OUTPUT;
 

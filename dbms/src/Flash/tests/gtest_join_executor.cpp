@@ -13,12 +13,12 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Common/SyncPoint/Ctl.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/executeQuery.h>
 #include <Flash/tests/gtest_join.h>
 
 #include <chrono>
-#include <ext/scope_guard.h>
 #include <future>
 #include <magic_enum.hpp>
 
@@ -29,7 +29,6 @@ namespace FailPoints
 extern const char force_semi_join_time_exceed[];
 extern const char force_join_v2_probe_enable_lm[];
 extern const char force_join_v2_probe_disable_lm[];
-extern const char pause_after_hash_join_finish_one_probe[];
 } // namespace FailPoints
 namespace tests
 {
@@ -517,6 +516,7 @@ try
 }
 CATCH
 
+#if !defined(NDEBUG) && defined(FIU_ENABLE)
 TEST_F(JoinExecutorTestRunner, PipelineRightOuterJoinLimitMaySkipProbeFinish)
 try
 {
@@ -539,29 +539,72 @@ try
     auto queryExecutor = queryExecute(*context.context, true);
     ASSERT_EQ(dagContext.getExecutionMode(), ExecutionMode::Pipeline);
 
-    // One probe stream reaches EOF and decrements pending_probe_streams. The other has two blocks, so it can fill the
-    // limit and finish before seeing EOF.
-    FailPointHelper::enablePauseFailPoint(FailPoints::pause_after_hash_join_finish_one_probe, 10);
-    SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::pause_after_hash_join_finish_one_probe); });
+    // Keep the stream with data from reaching the probe input until the empty stream has reported probe completion.
+    auto stream_0_gate = SyncPointCtl::enableInScope("before_hash_join_probe_stream_0");
+    auto stream_1_finished = SyncPointCtl::enableInScope("after_hash_join_finish_one_probe_stream_1");
+    auto probe_stopped = SyncPointCtl::enableInScope("after_hash_join_probe_stop");
     auto execution
         = std::async(std::launch::async, [&queryExecutor]() { return queryExecutor->execute([](const Block &) {}); });
 
-    if (execution.wait_for(std::chrono::seconds(1)) != std::future_status::timeout)
+    auto waitForSyncPoint = [](SyncPointScopeGuard & sync_point) {
+        std::promise<void> waiter_started;
+        auto waiter_started_future = waiter_started.get_future();
+        auto waiting = std::async(std::launch::async, [&sync_point, waiter = std::move(waiter_started)]() mutable {
+            waiter.set_value();
+            try
+            {
+                sync_point.waitAndPause();
+                return true;
+            }
+            catch (...)
+            {
+                return false;
+            }
+        });
+        waiter_started_future.wait();
+        if (waiting.wait_for(std::chrono::seconds(1)) == std::future_status::ready)
+            return waiting.get();
+
+        // Closing the sync point releases a thread blocked in SyncPointCtl::sync().
+        sync_point.disable();
+        waiting.get();
+        return false;
+    };
+
+    auto cleanup = [&] {
+        stream_0_gate.disable();
+        stream_1_finished.disable();
+        probe_stopped.disable();
+        queryExecutor->cancel();
+        execution.get();
+    };
+
+    // The empty stream has now decremented pending_probe_streams and is held before it can continue.
+    if (!waitForSyncPoint(stream_1_finished))
     {
-        auto result = execution.get();
-        FAIL() << "The probe stream expected to reach finishOneProbe() did not pause, success=" << result.is_success;
+        cleanup();
+        FAIL() << "The empty probe stream did not reach finishOneProbe().";
     }
-    FailPointHelper::disableFailPoint(FailPoints::pause_after_hash_join_finish_one_probe);
+    stream_0_gate.disable();
+
+    // The data stream reaches LIMIT and publishes the shared stop state before the empty stream is released.
+    if (!waitForSyncPoint(probe_stopped))
+    {
+        cleanup();
+        FAIL() << "The data probe stream did not publish probe stop after LIMIT.";
+    }
+    probe_stopped.next();
+    stream_1_finished.next();
 
     if (execution.wait_for(std::chrono::seconds(1)) != std::future_status::ready)
     {
-        queryExecutor->cancel();
-        execution.get();
+        cleanup();
         FAIL() << "Pipeline execution did not finish after the hash join probe stop.";
     }
     ASSERT_TRUE(execution.get().is_success);
 }
 CATCH
+#endif
 
 TEST_F(JoinExecutorTestRunner, MultiJoin)
 try
