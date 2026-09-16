@@ -181,6 +181,8 @@ public:
         --live_local_connections;
     }
 
+    void cancelReceivedQueue() { received_message_queue.cancel(); }
+
     void connectLocalTunnel(std::vector<MPPTunnelPtr> & tunnels)
     {
         if (static_cast<Int32>(tunnels.size()) != live_connections)
@@ -297,6 +299,17 @@ public:
     }
 
     static bool getTunnelSenderConsumerFinishedFlag(TunnelSenderPtr sender) { return sender->isConsumerFinished(); }
+
+    static bool getTunnelConsumerClosedFlag(MPPTunnelPtr tunnel) { return tunnel->isConsumerClosed(); }
+
+    static bool getLocalTunnelConsumerFinishedCleanlyFlag(MPPTunnelPtr tunnel)
+    {
+        if (tunnel->local_tunnel_v2)
+            return tunnel->local_tunnel_v2->consumer_finished_cleanly;
+        else if (tunnel->local_tunnel_local_only_v2)
+            return tunnel->local_tunnel_local_only_v2->consumer_finished_cleanly;
+        return false;
+    }
 
     std::pair<MockExchangeReceiverPtr, std::vector<MPPTunnelPtr>> prepareLocal(const size_t tunnel_num)
     {
@@ -468,7 +481,12 @@ TEST_F(TestMPPTunnel, SyncWriteError)
     }
 }
 
-// TODO remove try-catch and get where throws the exception
+/// After the producer closed the tunnel (cancelled with a reason) and the
+/// sender thread has settled, a late write must be tolerated and discarded
+/// instead of failing the already-terminating producer task.  Note that
+/// wait_sender_finish=true is required: it waits for the send thread's
+/// consumerFinish to set the consumer state, so the tolerance is
+/// deterministic instead of racing with the send thread.
 TEST_F(TestMPPTunnel, SyncWriteAfterFinished)
 {
     std::unique_ptr<PacketWriter> writer_ptr = nullptr;
@@ -479,13 +497,12 @@ TEST_F(TestMPPTunnel, SyncWriteAfterFinished)
         writer_ptr = std::make_unique<MockPacketWriter>();
         mpp_tunnel_ptr->connectSync(writer_ptr.get());
         GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
-        mpp_tunnel_ptr->close("Canceled", false);
+        mpp_tunnel_ptr->close("Canceled", true);
         mpp_tunnel_ptr->write(newDataPacket("First"));
-        GTEST_FAIL();
     }
     catch (Exception & e)
     {
-        GTEST_ASSERT_EQ(e.message(), "write to tunnel 0000_0001 which is already closed, ");
+        GTEST_FAIL() << "write after the tunnel closed and settled should be tolerated, but got: " << e.message();
     }
     if (mpp_tunnel_ptr != nullptr)
         mpp_tunnel_ptr->waitForFinish();
@@ -785,6 +802,76 @@ TEST_F(TestMPPTunnel, LocalWriteAfterFinished)
     }
     if (tunnel != nullptr)
         tunnel->waitForFinish();
+}
+
+/// The production path of the early-exit race (empty build side / limit):
+/// the receiver finished its message queue cleanly while the producer was
+/// still writing.  The in-flight write returns MPMCQueueResult::FINISHED,
+/// which must be recorded as a clean consumer finish and tolerated: the
+/// producer keeps writing and completes writeDone normally.
+TEST_F(TestMPPTunnel, LocalWriteAfterReceiverCleanFinish)
+{
+    MockExchangeReceiverPtr receiver_ptr;
+    MPPTunnelPtr tunnel = nullptr;
+    try
+    {
+        auto [receiver, tunnels] = prepareLocal(1);
+        receiver_ptr = receiver;
+        tunnel = tunnels[0];
+        GTEST_ASSERT_EQ(getTunnelConnectedFlag(tunnel), true);
+
+        // The consumer side closes only the received message queue; unlike
+        // MPPTunnel::close, the producer-side sender state (is_done /
+        // consumer_state) is not touched yet.
+        receiver_ptr->connectionDone(false, "");
+        GTEST_ASSERT_EQ(getTunnelConsumerClosedFlag(tunnel), false);
+
+        // The in-flight write returns MPMCQueueResult::FINISHED and records
+        // the clean consumer finish instead of failing the producer task.
+        tunnel->write(newDataPacket("First"));
+        GTEST_ASSERT_EQ(getTunnelConsumerClosedFlag(tunnel), true);
+        GTEST_ASSERT_EQ(getLocalTunnelConsumerFinishedCleanlyFlag(tunnel), true);
+
+        // Subsequent writes and writeDone are tolerated for the consumer's
+        // clean exit.
+        tunnel->write(newDataPacket("Second"));
+        tunnel->writeDone();
+    }
+    catch (Exception & e)
+    {
+        GTEST_FAIL() << "in-flight writes after a clean receiver finish should be tolerated, but got: " << e.message();
+    }
+    if (tunnel != nullptr)
+        tunnel->waitForFinish();
+}
+
+/// In contrast, when the received message queue is cancelled (e.g. the query
+/// is aborted), the in-flight write must still fail the producer: only a
+/// clean finish (MPMCQueueResult::FINISHED) is tolerated.
+TEST_F(TestMPPTunnel, LocalWriteAfterReceiverCancel)
+{
+    MockExchangeReceiverPtr receiver_ptr;
+    MPPTunnelPtr tunnel = nullptr;
+    try
+    {
+        auto [receiver, tunnels] = prepareLocal(1);
+        receiver_ptr = receiver;
+        tunnel = tunnels[0];
+        GTEST_ASSERT_EQ(getTunnelConnectedFlag(tunnel), true);
+
+        receiver_ptr->cancelReceivedQueue();
+        GTEST_ASSERT_EQ(getTunnelConsumerClosedFlag(tunnel), false);
+
+        tunnel->write(newDataPacket("First"));
+        GTEST_FAIL();
+    }
+    catch (Exception & e)
+    {
+        GTEST_ASSERT_EQ(e.message(), "write to tunnel 0000_0001 which is already closed, ");
+    }
+    // Finish the local sender so its destructor does not assert.
+    if (tunnel != nullptr)
+        tunnel->close("", false);
 }
 
 TEST_F(TestMPPTunnel, SyncTunnelForceWrite)
