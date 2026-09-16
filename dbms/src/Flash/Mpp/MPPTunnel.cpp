@@ -183,6 +183,8 @@ void MPPTunnel::write(TrackedMppDataPacketPtr && data)
         updateConnProfileInfo(pushed_data_size);
         return;
     }
+    if (isConsumerClosed())
+        return;
     throw Exception(fmt::format(
         "write to tunnel {} which is already closed, {}",
         tunnel_id,
@@ -202,6 +204,8 @@ void MPPTunnel::forceWrite(TrackedMppDataPacketPtr && data)
         updateConnProfileInfo(pushed_data_size);
         return;
     }
+    if (isConsumerClosed())
+        return;
     throw Exception(fmt::format(
         "write to tunnel {} which is already closed, {}",
         tunnel_id,
@@ -219,8 +223,24 @@ void MPPTunnel::writeDone()
         if (tunnel_sender == nullptr)
             throw Exception(fmt::format("write to tunnel {} which is already closed.", tunnel_id));
     }
+    // If the consumer has already closed the channel (it exited early
+    // because of an empty build side or a limit, or its stream failed),
+    // the closure is a fact, not an error of this producer: the failure,
+    // if any, is owned and reported by the consumer side.  Still finish
+    // the bookkeeping (the local tunnel sender requires finish() before
+    // destruction) but do not fail this task for the consumer's exit.
+    const bool consumer_closed = isConsumerClosed();
     tunnel_sender->finish();
-    waitForSenderFinish(/*allow_throw=*/true);
+    if (consumer_closed)
+        return;
+    // Never throw here for how the consumer ended.  The consumer may close
+    // only while finish() drains the send queue (e.g. a reverse gRPC
+    // connection cancelled by an early-exiting consumer task surfaces as
+    // "unexpectedWriteDone" only at that point), so the pre-check above can
+    // miss it; the wait's error message is the consumer's exit status, which
+    // the consumer side observes itself and reports through its own task
+    // result.
+    waitForSenderFinish(/*allow_throw=*/false);
 }
 
 void MPPTunnel::connectSync(PacketWriter * writer)
@@ -331,6 +351,22 @@ void MPPTunnel::connectAsync(IAsyncCallData * call_data)
 void MPPTunnel::waitForFinish()
 {
     waitForSenderFinish(/*allow_throw=*/true);
+}
+
+/// Whether the consumer has already closed this channel, either cleanly
+/// (e.g. it exited early because of an empty build side or a limit) or
+/// with an error (e.g. its stream failed).  The consumer side owns the
+/// failure semantics of its own stream: it observes the stream health
+/// itself and reports its own task result to TiDB.  Therefore the producer
+/// must treat the closure as a fact rather than an error -- stop writing
+/// to this tunnel and keep serving its other consumers.  Without this,
+/// an early consumer exit (PR 11001 / issue #7177) cascades: the producer
+/// task fails, its other output tunnels are closed with error packets,
+/// and tasks that are still reading them get killed, failing a query that
+/// should have succeeded.
+bool MPPTunnel::isConsumerClosed()
+{
+    return tunnel_sender->isConsumerFinishedCleanly() || tunnel_sender->isConsumerFinished();
 }
 
 void MPPTunnel::waitForSenderFinish(bool allow_throw)

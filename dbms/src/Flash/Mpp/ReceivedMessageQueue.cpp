@@ -185,7 +185,7 @@ MPMCQueueResult ReceivedMessageQueue::pop(size_t stream_id, ReceivedMessagePtr &
 }
 
 template <bool is_force>
-bool ReceivedMessageQueue::pushPacket(
+MPMCQueueResult ReceivedMessageQueue::pushPacket(
     size_t source_index,
     const String & req_info,
     const TrackedMppDataPacketPtr & tracked_packet,
@@ -193,19 +193,22 @@ bool ReceivedMessageQueue::pushPacket(
 {
     auto received_message = toReceivedMessage(source_index, req_info, tracked_packet, fine_grained_channel_size);
     if (!received_message->containUsefulMessage())
-        return true;
+        return MPMCQueueResult::OK;
 
-    bool success = false;
+    MPMCQueueResult res;
     if constexpr (is_force)
-        success = grpc_recv_queue.forcePush(std::move(received_message)) == MPMCQueueResult::OK;
+        res = grpc_recv_queue.forcePush(std::move(received_message));
     else
-        success = grpc_recv_queue.push(std::move(received_message)) == MPMCQueueResult::OK;
+        res = grpc_recv_queue.push(std::move(received_message));
 
-    if (success)
+    if (res == MPMCQueueResult::OK)
         ExchangeReceiverMetric::addDataSizeMetric(*data_size_in_queue, tracked_packet->getPacket().ByteSizeLong());
 
-    injectFailPointReceiverPushFail(success, mode);
-    return success;
+    bool push_succeed = (res == MPMCQueueResult::OK);
+    injectFailPointReceiverPushFail(push_succeed, mode);
+    if (!push_succeed)
+        return res == MPMCQueueResult::OK ? MPMCQueueResult::CANCELLED : res;
+    return res;
 }
 
 MPMCQueueResult ReceivedMessageQueue::pushAsyncGRPCPacket(
@@ -229,12 +232,12 @@ MPMCQueueResult ReceivedMessageQueue::pushAsyncGRPCPacket(
 
 template MPMCQueueResult ReceivedMessageQueue::pop<true>(size_t stream_id, ReceivedMessagePtr & recv_msg);
 template MPMCQueueResult ReceivedMessageQueue::pop<false>(size_t stream_id, ReceivedMessagePtr & recv_msg);
-template bool ReceivedMessageQueue::pushPacket<true>(
+template MPMCQueueResult ReceivedMessageQueue::pushPacket<true>(
     size_t source_index,
     const String & req_info,
     const TrackedMppDataPacketPtr & tracked_packet,
     ReceiverMode mode);
-template bool ReceivedMessageQueue::pushPacket<false>(
+template MPMCQueueResult ReceivedMessageQueue::pushPacket<false>(
     size_t source_index,
     const String & req_info,
     const TrackedMppDataPacketPtr & tracked_packet,

@@ -119,6 +119,14 @@ public:
 
     virtual bool isWritable() const = 0;
 
+    /// Returns true if the local receiver's message queue was finished
+    /// cleanly (as opposed to cancelled), i.e. the consumer task exited
+    /// early on purpose (empty build side skip, limit) rather than being
+    /// aborted.  Used by isConsumerClosed() to tolerate the local tunnel
+    /// early-close race; the async/sync senders are covered by
+    /// isConsumerFinished() directly.
+    virtual bool isConsumerFinishedCleanly() const { return false; }
+
     void consumerFinish(const String & err_msg);
     String getConsumerFinishMsg() { return consumer_state.getMsg(); }
     bool isConsumerFinished() { return consumer_state.msgHasSet(); }
@@ -313,6 +321,8 @@ public:
         return true;
     }
 
+    bool isConsumerFinishedCleanly() const override { return consumer_finished_cleanly; }
+
     bool isWritable() const override
     {
         if constexpr (local_only)
@@ -349,13 +359,32 @@ private:
         // grpc thread is hard to get chance to push data into MPMCQueue in ExchangeReceiver.
         // Adding a lock ensures that there is only one other thread competing with async reactor,
         // so the probability of async reactor getting the lock is 1/2.
+        MPMCQueueResult res;
         if constexpr (local_only)
-            return local_request_handler.write<is_force>(source_index, data);
+            res = local_request_handler.write<is_force>(source_index, data);
         else
         {
             std::lock_guard lock(mu);
-            return local_request_handler.write<is_force>(source_index, data);
+            res = local_request_handler.write<is_force>(source_index, data);
         }
+        if (res == MPMCQueueResult::FINISHED)
+        {
+            // The consumer closed the channel cleanly (e.g. it exited early
+            // because of an empty build side or a limit).  The in-flight
+            // packet is legitimately unwanted: record the clean finish so
+            // that MPPTunnel discards the remaining data instead of failing
+            // the whole producer task.
+            consumer_finished_cleanly = true;
+            logCleanDiscardOnce();
+        }
+        return res == MPMCQueueResult::OK;
+    }
+
+    void logCleanDiscardOnce()
+    {
+        bool expected = false;
+        if (clean_discard_logged.compare_exchange_strong(expected, true))
+            LOG_INFO(log, "consumer of tunnel {} finished cleanly, in-flight packets will be discarded", tunnel_id);
     }
 
     bool checkPacketErr(TrackedMppDataPacketPtr & packet)
@@ -391,6 +420,10 @@ private:
     size_t source_index;
     LocalRequestHandler local_request_handler;
     std::atomic_bool is_done;
+    /// True once a push hit the receiver's cleanly-finished queue; see
+    /// isConsumerFinishedCleanly().
+    std::atomic_bool consumer_finished_cleanly{false};
+    std::atomic_bool clean_discard_logged{false};
     mutable std::mutex mu;
 };
 
@@ -565,6 +598,12 @@ private:
     void waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk);
 
     void waitForSenderFinish(bool allow_throw);
+
+    /// True if the consumer has already closed this channel, cleanly or
+    /// with an error.  The producer then stops writing to this tunnel and
+    /// keeps serving its other consumers instead of failing the whole
+    /// task: the failure, if any, is owned by the consumer side.
+    bool isConsumerClosed();
 
     MemoryTracker * getMemTracker() { return mem_tracker ? mem_tracker.get() : nullptr; }
 

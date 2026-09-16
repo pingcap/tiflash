@@ -763,6 +763,9 @@ catch (Exception & e)
     GTEST_ASSERT_EQ(e.message(), "0000_0001: consumer exits unexpected, error message: err ");
 }
 
+/// The consumer closed the tunnel cleanly before the producer finished
+/// writing; the in-flight packet must be discarded instead of failing the
+/// producer task (see MPPTunnel::write / isConsumerClosed).
 TEST_F(TestMPPTunnel, LocalWriteAfterFinished)
 {
     MockExchangeReceiverPtr receiver_ptr;
@@ -775,11 +778,10 @@ TEST_F(TestMPPTunnel, LocalWriteAfterFinished)
         GTEST_ASSERT_EQ(getTunnelConnectedFlag(tunnel), true);
         tunnel->close("", false);
         tunnel->write(newDataPacket("First"));
-        GTEST_FAIL();
     }
     catch (Exception & e)
     {
-        GTEST_ASSERT_EQ(e.message(), "write to tunnel 0000_0001 which is already closed, ");
+        GTEST_FAIL() << "write after a clean consumer close should be tolerated, but got: " << e.message();
     }
     if (tunnel != nullptr)
         tunnel->waitForFinish();
