@@ -60,6 +60,12 @@ public:
         join->finishOneNonJoin(op_index);
         scan_hashmap_after_probe_finished = true;
     }
+    void abortScanHashMapAfterProbe()
+    {
+        assert(needScanHashMapAfterProbe());
+        scan_hash_map_after_probe_stream->readSuffix();
+        scan_hashmap_after_probe_finished = true;
+    }
 
     // For probe stage
     Block joinBlock(ProbeProcessInfo & probe_process_info) { return join->joinBlock(probe_process_info); }
@@ -68,8 +74,15 @@ public:
         join->dispatchProbeBlock(block, partition_blocks_list, op_index);
     }
     bool finishOneProbe() { return join->finishOneProbe(op_index); }
+<<<<<<< HEAD
+=======
+    size_t getStreamIndex() const { return op_index; }
+    bool shouldSkipProbe() const { return join->shouldSkipProbe(); }
+>>>>>>> 11976a50c5 (fix: stop hash join probes on pipeline early termination (#11089))
     bool hasMarkedSpillData() const { return join->hasProbeSideMarkedSpillData(op_index); }
     bool isProbeFinishedForPipeline() const { return join->isProbeFinishedForPipeline(); }
+    bool isProbePhaseStopped() const;
+    void stopProbePhase();
     void finalizeProbe() { join->finalizeProbe(); }
     void flushMarkedSpillData() { join->flushProbeSideMarkedSpillData(op_index); }
 
@@ -77,7 +90,8 @@ public:
     bool isBuildFinishedForPipeline() const { return join->isBuildFinishedForPipeline(); }
 
     // For restore probe stage
-    void startRestoreProbe();
+    // Returns false when the shared probe phase has stopped before the restore task can be started.
+    bool startRestoreProbe();
 
     bool shouldRestore() const { return join->isSpilled() || join->isRestoreJoin(); }
 
