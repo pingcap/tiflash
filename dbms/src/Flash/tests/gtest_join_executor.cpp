@@ -546,7 +546,9 @@ try
     auto execution
         = std::async(std::launch::async, [&queryExecutor]() { return queryExecutor->execute([](const Block &) {}); });
 
-    auto waitForSyncPoint = [](SyncPointScopeGuard & sync_point) {
+    // This is only a watchdog. Sanitizer CI can delay an already scheduled pipeline event for over one second.
+    constexpr auto test_timeout = std::chrono::seconds(10);
+    auto waitForSyncPoint = [test_timeout](SyncPointScopeGuard & sync_point) {
         std::promise<void> waiter_started;
         auto waiter_started_future = waiter_started.get_future();
         auto waiting = std::async(std::launch::async, [&sync_point, waiter = std::move(waiter_started)]() mutable {
@@ -562,7 +564,7 @@ try
             }
         });
         waiter_started_future.wait();
-        if (waiting.wait_for(std::chrono::seconds(1)) == std::future_status::ready)
+        if (waiting.wait_for(test_timeout) == std::future_status::ready)
             return waiting.get();
 
         // Closing the sync point releases a thread blocked in SyncPointCtl::sync().
@@ -602,7 +604,7 @@ try
     probe_stopped.next();
     stream_1_finished.next();
 
-    if (execution.wait_for(std::chrono::seconds(1)) != std::future_status::ready)
+    if (execution.wait_for(test_timeout) != std::future_status::ready)
     {
         cleanup();
         FAIL() << "Pipeline execution did not finish after the hash join probe stop.";
