@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <cassert>
 #include <chrono>
+#include <cmath>
 #include <condition_variable>
 #include <cstddef>
 #include <memory>
@@ -114,11 +115,50 @@ public:
         return quota.tokens_ns <= 0;
     }
 
+    /// How long a waiter should sleep before it re-checks a CPU-quota rejection.
+    ///
     /// Token refill is time based, so a queue with only throttled work must
-    /// periodically retry even when no task is submitted or completed.
+    /// retry even when no task is submitted or completed. Instead of polling at
+    /// a fixed interval, wait until the earliest moment a depleted bucket turns
+    /// positive again, so a waiter is not woken before it can make progress.
+    /// Waiters still wake on `change_id` updates, so a release or a submission
+    /// is not delayed. Returns `milliseconds::max()` when CPU quota is disabled
+    /// or nothing is depleted, which the waiters treat as an unbounded wait.
     std::chrono::milliseconds getRefillWaitDuration() const
     {
-        return cpu_quota_per_second_ns == 0 ? std::chrono::milliseconds::max() : std::chrono::milliseconds(1);
+        if (cpu_quota_per_second_ns == 0)
+            return std::chrono::milliseconds::max();
+
+        const auto nanoseconds_per_second = static_cast<double>(std::chrono::seconds(1).count() * 1'000'000'000ULL);
+        const double quota_ns_per_ns = static_cast<double>(cpu_quota_per_second_ns) / nanoseconds_per_second;
+        std::lock_guard lock(mu);
+        const auto now = std::chrono::steady_clock::now();
+        double min_wait_ms = static_cast<double>(max_refill_wait.count());
+        bool has_depleted_quota = false;
+        for (const auto & quota_entry : cpu_quotas)
+        {
+            const auto & quota = quota_entry.second;
+            // Tokens refill linearly, so the bucket turns positive at
+            // `last_refill + -tokens / rate`. Recompute the balance instead of
+            // mutating the bucket: a keyspace that has been idle long enough to
+            // pay back its deficit is not runnable work, and letting it report a
+            // zero wait would keep the poll interval short forever.
+            const auto elapsed_ns = static_cast<double>(
+                std::chrono::duration_cast<std::chrono::nanoseconds>(now - quota.last_refill).count());
+            const double remaining_tokens_ns = quota.tokens_ns + elapsed_ns * quota_ns_per_ns;
+            if (remaining_tokens_ns > 0)
+                continue;
+
+            has_depleted_quota = true;
+            min_wait_ms = std::min(min_wait_ms, -remaining_tokens_ns / quota_ns_per_ns / 1'000'000.0);
+        }
+        if (!has_depleted_quota)
+            return std::chrono::milliseconds::max();
+
+        // Keep a small floor so a waiter with no other wakeup still re-checks.
+        const double clamped_wait_ms
+            = std::min(std::max(min_wait_ms, 1.0), static_cast<double>(max_refill_wait.count()));
+        return std::chrono::milliseconds(static_cast<std::chrono::milliseconds::rep>(std::ceil(clamped_wait_ms)));
     }
 
     void release(const Task * task)
@@ -215,6 +255,8 @@ private:
     const size_t max_active_tasks;
     const UInt64 cpu_quota_per_second_ns;
     const UInt64 cpu_quota_burst_ns;
+    /// Upper bound on a refill wait, so a waiter still re-checks occasionally.
+    static constexpr std::chrono::milliseconds max_refill_wait{1000};
     mutable std::mutex mu;
     std::condition_variable cv;
     UInt64 change_id = 0;
