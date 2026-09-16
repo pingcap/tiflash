@@ -1,0 +1,287 @@
+# Copyright 2026 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Preparation.
+mysql> drop table if exists test.nulleq_l;
+mysql> drop table if exists test.nulleq_r;
+mysql> drop table if exists test.nulleq_not_null_r;
+mysql> drop table if exists test.nulleq_mixed_l;
+mysql> drop table if exists test.nulleq_mixed_r;
+mysql> drop table if exists test.nulleq_string_l;
+mysql> drop table if exists test.nulleq_string_r;
+
+mysql> create table test.nulleq_l (case_id int not null, row_id int not null, k1 int null, k2 int null, v int, s varchar(32) null);
+mysql> create table test.nulleq_r (case_id int not null, row_id int not null, k1 int null, k2 int null, v int, s varchar(32) null);
+
+# Cases 1-6, 8-15, and 18 use these nullable integer columns.
+mysql> insert into test.nulleq_l values
+   (1,101,NULL,1,10,'l101'),(1,102,1,1,20,'l102'),(1,103,2,1,30,'l103'),
+   (2,401,NULL,1,10,'l401'),(2,402,NULL,2,20,'l402'),(2,403,1,1,30,'l403'),
+   (3,601,NULL,1,10,'l601'),(3,602,1,1,20,'l602'),
+   (4,801,NULL,1,10,'l801'),(4,802,1,1,20,'l802'),
+   (5,1001,1,1,10,'l1001'),(5,1002,2,1,20,'l1002'),
+   (6,1201,NULL,1,10,'l1201'),(6,1202,1,1,20,'l1202'),(6,1203,1,2,30,'l1203'),(6,1204,4,1,40,'l1204'),
+   (8,1401,NULL,1,3,'l1401'),(8,1402,1,1,3,'l1402'),
+   (9,1601,NULL,1,7,'l1601'),
+   (10,1801,1,1,5,'l1801'),
+   (11,2001,1,1,10,'l2001'),
+   (15,2701,NULL,1,10,'l2701'),(15,2702,1,1,20,'l2702'),(15,2703,2,1,30,'l2703'),
+   (12,2201,NULL,NULL,10,'l2201'),(12,2202,NULL,1,20,'l2202'),(12,2203,1,NULL,30,'l2203'),(12,2204,1,1,40,'l2204'),
+   (13,2401,NULL,NULL,10,'l2401'),(13,2402,NULL,1,20,'l2402'),(13,2403,1,NULL,30,'l2403'),(13,2404,1,1,40,'l2404'),
+   (18,3001,NULL,1,10,'l3001'),(18,3002,1,1,20,'l3002'),(18,3003,2,1,30,'l3003');
+
+mysql> insert into test.nulleq_r values
+   (1,201,NULL,1,11,'r201'),(1,202,1,1,21,'r202'),(1,203,3,1,31,'r203'),
+   (2,501,NULL,1,11,'r501'),(2,502,NULL,2,21,'r502'),(2,503,1,1,31,'r503'),
+   (3,701,NULL,1,11,'r701'),(3,702,1,1,21,'r702'),
+   (4,901,NULL,1,11,'r901'),(4,902,2,1,21,'r902'),
+   (5,1101,NULL,1,11,'r1101'),(5,1102,1,1,21,'r1102'),
+   (6,1301,NULL,1,11,'r1301'),(6,1302,1,1,21,'r1302'),(6,1303,1,3,31,'r1303'),(6,1304,2,1,41,'r1304'),
+   (8,1501,NULL,1,4,'r1501'),(8,1502,1,1,2,'r1502'),(8,1503,1,1,5,'r1503'),
+   (9,1701,NULL,1,5,'r1701'),
+   (10,1901,1,1,20,'r1901'),
+   (11,2101,1,1,5,'r2101'),
+   (12,2301,NULL,NULL,11,'r2301'),(12,2302,NULL,1,21,'r2302'),(12,2303,1,NULL,31,'r2303'),(12,2304,1,1,41,'r2304'),
+   (13,2501,NULL,NULL,11,'r2501'),(13,2502,NULL,1,21,'r2502'),(13,2503,1,NULL,31,'r2503'),(13,2504,1,1,41,'r2504'),
+   (18,3101,NULL,1,11,'r3101'),(18,3102,1,1,21,'r3102');
+
+mysql> create table test.nulleq_not_null_r (case_id int not null, row_id int not null, k int not null, v int);
+mysql> insert into test.nulleq_not_null_r values (15,2601,1,10),(15,2602,3,30);
+
+mysql> create table test.nulleq_mixed_l (case_id int not null, row_id int not null, k1 int null, k2 int null, v int);
+mysql> create table test.nulleq_mixed_r (case_id int not null, row_id int not null, k1 int not null, k2 int null, v int);
+mysql> insert into test.nulleq_mixed_l values (16,2801,1,NULL,10),(16,2802,1,2,20),(16,2803,NULL,2,30);
+mysql> insert into test.nulleq_mixed_r values (16,2901,1,NULL,11),(16,2902,1,2,21),(16,2903,2,2,31);
+
+mysql> create table test.nulleq_string_l (case_id int not null, row_id int not null, s varchar(32) null);
+mysql> create table test.nulleq_string_r (case_id int not null, row_id int not null, s varchar(32) null);
+mysql> insert into test.nulleq_string_l values (17,3201,NULL),(17,3202,''),(17,3203,'same');
+mysql> insert into test.nulleq_string_r values (17,3301,NULL),(17,3302,''),(17,3303,'same'),(17,3304,'other');
+
+mysql> alter table test.nulleq_l set tiflash replica 1;
+mysql> alter table test.nulleq_r set tiflash replica 1;
+mysql> alter table test.nulleq_not_null_r set tiflash replica 1;
+mysql> alter table test.nulleq_mixed_l set tiflash replica 1;
+mysql> alter table test.nulleq_mixed_r set tiflash replica 1;
+mysql> alter table test.nulleq_string_l set tiflash replica 1;
+mysql> alter table test.nulleq_string_r set tiflash replica 1;
+mysql> analyze table test.nulleq_l;
+mysql> analyze table test.nulleq_r;
+mysql> analyze table test.nulleq_not_null_r;
+mysql> analyze table test.nulleq_mixed_l;
+mysql> analyze table test.nulleq_mixed_r;
+mysql> analyze table test.nulleq_string_l;
+mysql> analyze table test.nulleq_string_r;
+
+func> wait_table test nulleq_l
+func> wait_table test nulleq_r
+func> wait_table test nulleq_not_null_r
+func> wait_table test nulleq_mixed_l
+func> wait_table test nulleq_mixed_r
+func> wait_table test nulleq_string_l
+func> wait_table test nulleq_string_r
+
+# Confirm that a NullEQ join is planned as a TiFlash MPP HashJoin.
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; desc format='brief' select l.row_id as l_id, r.row_id as r_id from (select row_id, k1 from test.nulleq_l where case_id=1) l join (select row_id, k1 from test.nulleq_r where case_id=1) r on l.k1 <=> r.k1;
+{#LINE}
+{#LINE}
+{#LINE}
+{#LINE}
+{#REGEXP}.*HashJoin\s+\d+\.\d+\s+mpp\[tiflash\]\s+.*inner join.*
+{#LINE}
+{#LINE}
+{#LINE}
+{#LINE}
+{#LINE}
+{#LINE}
+{#LINE}
+{#LINE}
+
+# Case 1: INNER JOIN matches NULL/NULL and equal non-NULL keys only.
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.row_id as l_id, l.k1 as l_k1, r.row_id as r_id, r.k1 as r_k1 from (select row_id, k1 from test.nulleq_l where case_id=1) l join (select row_id, k1 from test.nulleq_r where case_id=1) r on l.k1 <=> r.k1 order by l.row_id, r.row_id;
++------+------+------+------+
+| l_id | l_k1 | r_id | r_k1 |
++------+------+------+------+
+|  101 | NULL |  201 | NULL |
+|  102 |    1 |  202 |    1 |
++------+------+------+------+
+
+# Case 2: NULL keys are not deduplicated; two NULL rows on each side produce four matches.
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.row_id as l_id, l.k1 as l_k1, r.row_id as r_id, r.k1 as r_k1 from (select row_id, k1 from test.nulleq_l where case_id=2) l join (select row_id, k1 from test.nulleq_r where case_id=2) r on l.k1 <=> r.k1 order by l.row_id, r.row_id;
++------+------+------+------+
+| l_id | l_k1 | r_id | r_k1 |
++------+------+------+------+
+|  401 | NULL |  501 | NULL |
+|  401 | NULL |  502 | NULL |
+|  402 | NULL |  501 | NULL |
+|  402 | NULL |  502 | NULL |
+|  403 |    1 |  503 |    1 |
++------+------+------+------+
+
+# Case 3: Ordinary equality keeps the historical NULL != NULL behavior.
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.row_id as l_id, l.k1 as l_k1, r.row_id as r_id, r.k1 as r_k1 from (select row_id, k1 from test.nulleq_l where case_id=3) l join (select row_id, k1 from test.nulleq_r where case_id=3) r on l.k1 = r.k1 order by l.row_id, r.row_id;
++------+------+------+------+
+| l_id | l_k1 | r_id | r_k1 |
++------+------+------+------+
+|  602 |    1 |  702 |    1 |
++------+------+------+------+
+
+# Case 4: LEFT OUTER JOIN preserves an unmatched probe-side row while matching NULL/NULL.
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; set tidb_enable_full_outer_join=1; select l.row_id as l_id, l.k1 as l_k1, r.row_id as r_id, r.k1 as r_k1 from (select row_id, k1 from test.nulleq_l where case_id=4) l left join (select row_id, k1 from test.nulleq_r where case_id=4) r on l.k1 <=> r.k1 order by l.row_id is null, l.row_id, r.row_id is null, r.row_id;
++------+------+------+------+
+| l_id | l_k1 | r_id | r_k1 |
++------+------+------+------+
+|  801 | NULL |  901 | NULL |
+|  802 |    1 | NULL | NULL |
++------+------+------+------+
+
+# Case 5: RIGHT OUTER JOIN matches a build-side NULL and does not emit it again as unmatched.
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; set tidb_enable_full_outer_join=1; select l.row_id as l_id, l.k1 as l_k1, r.row_id as r_id, r.k1 as r_k1 from (select row_id, k1 from test.nulleq_l where case_id=5) l right join (select row_id, k1 from test.nulleq_r where case_id=5) r on l.k1 <=> r.k1 order by l.row_id is null, l.row_id, r.row_id is null, r.row_id;
++------+------+------+------+
+| l_id | l_k1 | r_id | r_k1 |
++------+------+------+------+
+| 1001 |    1 | 1102 |    1 |
+| NULL | NULL | 1101 | NULL |
++------+------+------+------+
+
+# Case 6: FULL OUTER JOIN covers NULL/NULL, one-to-many matches, and unmatched rows.
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; set tidb_enable_full_outer_join=1; select l.row_id as l_id, l.k1 as l_k1, r.row_id as r_id, r.k1 as r_k1 from (select row_id, k1 from test.nulleq_l where case_id=6) l full outer join (select row_id, k1 from test.nulleq_r where case_id=6) r on l.k1 <=> r.k1 order by l.row_id is null, l.row_id, r.row_id is null, r.row_id;
++------+------+------+------+
+| l_id | l_k1 | r_id | r_k1 |
++------+------+------+------+
+| 1201 | NULL | 1301 | NULL |
+| 1202 |    1 | 1302 |    1 |
+| 1202 |    1 | 1303 |    1 |
+| 1203 |    1 | 1302 |    1 |
+| 1203 |    1 | 1303 |    1 |
+| 1204 |    4 | NULL | NULL |
+| NULL | NULL | 1304 |    2 |
++------+------+------+------+
+
+# Case 8: FULL OUTER JOIN marks only rows passing the other condition as matched.
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; set tidb_enable_full_outer_join=1; select l.row_id as l_id, l.k1 as l_k1, r.row_id as r_id, r.k1 as r_k1 from (select row_id, k1, v from test.nulleq_l where case_id=8) l full outer join (select row_id, k1, v from test.nulleq_r where case_id=8) r on l.k1 <=> r.k1 and l.v < r.v order by l.row_id is null, l.row_id, r.row_id is null, r.row_id;
++------+------+------+------+
+| l_id | l_k1 | r_id | r_k1 |
++------+------+------+------+
+| 1401 | NULL | 1501 | NULL |
+| 1402 |    1 | 1503 |    1 |
+| NULL | NULL | 1502 |    1 |
++------+------+------+------+
+
+# Case 9: A NULL/NULL hash match failing the other condition produces two unmatched rows.
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; set tidb_enable_full_outer_join=1; select l.row_id as l_id, l.k1 as l_k1, r.row_id as r_id, r.k1 as r_k1 from (select row_id, k1, v from test.nulleq_l where case_id=9) l full outer join (select row_id, k1, v from test.nulleq_r where case_id=9) r on l.k1 <=> r.k1 and l.v < r.v order by l.row_id is null, l.row_id, r.row_id is null, r.row_id;
++------+------+------+------+
+| l_id | l_k1 | r_id | r_k1 |
++------+------+------+------+
+| 1601 | NULL | NULL | NULL |
+| NULL | NULL | 1701 | NULL |
++------+------+------+------+
+
+# Case 10: A failed left condition preserves both sides as unmatched.
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; set tidb_enable_full_outer_join=1; select l.row_id as l_id, l.k1 as l_k1, r.row_id as r_id, r.k1 as r_k1 from (select row_id, k1, v from test.nulleq_l where case_id=10) l full outer join (select row_id, k1, v from test.nulleq_r where case_id=10) r on l.k1 <=> r.k1 and l.v > 10 order by l.row_id is null, l.row_id, r.row_id is null, r.row_id;
++------+------+------+------+
+| l_id | l_k1 | r_id | r_k1 |
++------+------+------+------+
+| 1801 |    1 | NULL | NULL |
+| NULL | NULL | 1901 |    1 |
++------+------+------+------+
+
+# Case 11: A failed right condition preserves the build row as unmatched.
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; set tidb_enable_full_outer_join=1; select l.row_id as l_id, l.k1 as l_k1, r.row_id as r_id, r.k1 as r_k1 from (select row_id, k1, v from test.nulleq_l where case_id=11) l full outer join (select row_id, k1, v from test.nulleq_r where case_id=11) r on l.k1 <=> r.k1 and r.v > 10 order by l.row_id is null, l.row_id, r.row_id is null, r.row_id;
++------+------+------+------+
+| l_id | l_k1 | r_id | r_k1 |
++------+------+------+------+
+| 2001 |    1 | NULL | NULL |
+| NULL | NULL | 2101 |    1 |
++------+------+------+------+
+
+# Case 12: A NullEQ key and a regular equality key have independent NULL semantics.
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.row_id as l_id, l.k1 as l_k1, l.k2 as l_k2, r.row_id as r_id, r.k1 as r_k1, r.k2 as r_k2 from (select row_id, k1, k2 from test.nulleq_l where case_id=12) l join (select row_id, k1, k2 from test.nulleq_r where case_id=12) r on l.k1 <=> r.k1 and l.k2 = r.k2 order by l.row_id, r.row_id;
++------+------+------+------+------+------+
+| l_id | l_k1 | l_k2 | r_id | r_k1 | r_k2 |
++------+------+------+------+------+------+
+| 2202 | NULL |    1 | 2302 | NULL |    1 |
+| 2204 |    1 |    1 | 2304 |    1 |    1 |
++------+------+------+------+------+------+
+
+# Case 13: Two NullEQ keys apply NULL-safe equality independently at both positions.
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.row_id as l_id, l.k1 as l_k1, l.k2 as l_k2, r.row_id as r_id, r.k1 as r_k1, r.k2 as r_k2 from (select row_id, k1, k2 from test.nulleq_l where case_id=13) l join (select row_id, k1, k2 from test.nulleq_r where case_id=13) r on l.k1 <=> r.k1 and l.k2 <=> r.k2 order by l.row_id, r.row_id;
++------+------+------+------+------+------+
+| l_id | l_k1 | l_k2 | r_id | r_k1 | r_k2 |
++------+------+------+------+------+------+
+| 2401 | NULL | NULL | 2501 | NULL | NULL |
+| 2402 | NULL |    1 | 2502 | NULL |    1 |
+| 2403 |    1 | NULL | 2503 |    1 | NULL |
+| 2404 |    1 |    1 | 2504 |    1 |    1 |
++------+------+------+------+------+------+
+
+# Case 14: Reversing the mixed key flags does not make the first regular key null-safe.
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.row_id as l_id, l.k1 as l_k1, l.k2 as l_k2, r.row_id as r_id, r.k1 as r_k1, r.k2 as r_k2 from (select row_id, k1, k2 from test.nulleq_l where case_id=13) l join (select row_id, k1, k2 from test.nulleq_r where case_id=13) r on l.k1 = r.k1 and l.k2 <=> r.k2 order by l.row_id, r.row_id;
++------+------+------+------+------+------+
+| l_id | l_k1 | l_k2 | r_id | r_k1 | r_k2 |
++------+------+------+------+------+------+
+| 2403 |    1 | NULL | 2503 |    1 | NULL |
+| 2404 |    1 |    1 | 2504 |    1 |    1 |
++------+------+------+------+------+------+
+
+# Case 15: Nullable(T) <=> NOT NULL T is equivalent to ordinary equality.
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.row_id as l_id, l.k1 as l_k1, r.row_id as r_id, r.k as r_k from (select row_id, k1 from test.nulleq_l where case_id=15) l join (select row_id, k from test.nulleq_not_null_r where case_id=15) r on l.k1 <=> r.k order by l.row_id, r.row_id;
++------+------+------+------+
+| l_id | l_k1 | r_id | r_k |
++------+------+------+------+
+| 2702 |    1 | 2601 |    1 |
++------+------+------+------+
+
+# Case 16: A nullable key and a not-null key can coexist with another NullEQ key.
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.row_id as l_id, l.k1 as l_k1, l.k2 as l_k2, r.row_id as r_id, r.k1 as r_k1, r.k2 as r_k2 from test.nulleq_mixed_l l join test.nulleq_mixed_r r on l.k1 <=> r.k1 and l.k2 <=> r.k2 where l.case_id=16 and r.case_id=16 order by l.row_id, r.row_id;
++------+------+------+------+------+------+
+| l_id | l_k1 | l_k2 | r_id | r_k1 | r_k2 |
++------+------+------+------+------+------+
+| 2801 |    1 | NULL | 2901 |    1 | NULL |
+| 2802 |    1 |    2 | 2902 |    1 |    2 |
++------+------+------+------+------+------+
+
+# Case 17: Nullable String uses NULL-safe equality without confusing NULL and the empty string.
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.row_id as l_id, l.s as l_s, r.row_id as r_id, r.s as r_s from test.nulleq_string_l l join test.nulleq_string_r r on l.s <=> r.s where l.case_id=17 and r.case_id=17 order by l.row_id, r.row_id;
++------+------+------+
+| l_id | l_s  | r_id | r_s  |
++------+------+------+
+| 3201 | NULL | 3301 | NULL |
+| 3202 |      | 3302 |      |
+| 3203 | same | 3303 | same |
++------+------+------+
+
+# Case 18: EXISTS and NOT EXISTS use NullEQ existence semantics.
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.row_id from test.nulleq_l l where l.case_id=18 and exists (select 1 from test.nulleq_r r where r.case_id=18 and l.k1 <=> r.k1) order by l.row_id;
++--------+
+| row_id |
++--------+
+|   3001 |
+|   3002 |
++--------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.row_id from test.nulleq_l l where l.case_id=18 and not exists (select 1 from test.nulleq_r r where r.case_id=18 and l.k1 <=> r.k1) order by l.row_id;
++--------+
+| row_id |
++--------+
+|   3003 |
++--------+
+
+# Clean up.
+mysql> drop table if exists test.nulleq_l;
+mysql> drop table if exists test.nulleq_r;
+mysql> drop table if exists test.nulleq_not_null_r;
+mysql> drop table if exists test.nulleq_mixed_l;
+mysql> drop table if exists test.nulleq_mixed_r;
+mysql> drop table if exists test.nulleq_string_l;
+mysql> drop table if exists test.nulleq_string_r;
