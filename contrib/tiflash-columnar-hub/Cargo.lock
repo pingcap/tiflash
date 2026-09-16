@@ -1487,6 +1487,7 @@ dependencies = [
  "dashmap 5.5.3",
  "derive_more",
  "fxhash",
+ "gcp",
  "hmac 0.10.1",
  "kvenginepb",
  "kvproto",
@@ -2745,6 +2746,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "gcp"
+version = "0.0.1"
+dependencies = [
+ "async-trait",
+ "base64 0.13.1",
+ "cloud",
+ "futures-util",
+ "http 0.2.12",
+ "http 1.4.0",
+ "hyper 0.14.26",
+ "hyper-tls",
+ "kvproto",
+ "rusoto_credential",
+ "serde",
+ "serde_json",
+ "slog",
+ "slog-global",
+ "tame-gcs",
+ "tame-oauth",
+ "thiserror 1.0.69",
+ "tikv_util",
+ "tokio",
+ "url",
+ "workspace-hack",
+]
+
+[[package]]
 name = "gen-proxy-ffi"
 version = "0.1.0"
 
@@ -3662,6 +3690,7 @@ dependencies = [
  "aliyun",
  "anyhow",
  "api_version",
+ "arc-swap 1.9.1",
  "arrow-buffer",
  "async-once-cell",
  "async-recursion 1.1.1",
@@ -3679,6 +3708,7 @@ dependencies = [
  "bytemuck",
  "byteorder",
  "bytes",
+ "chrono",
  "clara_fts",
  "cloud_encryption",
  "codec",
@@ -3698,6 +3728,7 @@ dependencies = [
  "fs2",
  "fslock",
  "futures 0.3.32",
+ "gcp",
  "hex 0.4.3",
  "http 0.2.12",
  "hyper 0.14.26",
@@ -3773,7 +3804,7 @@ dependencies = [
 [[package]]
 name = "kvproto"
 version = "0.0.2"
-source = "git+https://github.com/pingcap/kvproto.git?rev=9327469#9327469bb3ce7bec31507d3090b39d2127f019d3"
+source = "git+https://github.com/pingcap/kvproto.git?rev=107095f#107095f1d2508bb8b9aaba877a9e2450ff7d0ab0"
 dependencies = [
  "bytes",
  "futures 0.3.32",
@@ -6751,6 +6782,41 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f764005d11ee5f36500a149ace24e00e3da98b0158b3e2d53a7495660d3f4d60"
 
 [[package]]
+name = "tame-gcs"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d20ec2d6525a66afebdff9e1d8ef143c9deae9a3b040c61d3cfa9ae6fda80060"
+dependencies = [
+ "base64 0.13.1",
+ "bytes",
+ "chrono",
+ "futures-util",
+ "http 0.2.12",
+ "percent-encoding",
+ "pin-utils",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "thiserror 1.0.69",
+ "url",
+]
+
+[[package]]
+name = "tame-oauth"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c206bbecfbc0aea8bf35f57bf34e8be060d2cf7efe3937f8d0bdfdd4205ed771"
+dependencies = [
+ "data-encoding",
+ "http 1.4.0",
+ "ring",
+ "serde",
+ "serde_json",
+ "twox-hash",
+ "url",
+]
+
+[[package]]
 name = "tantivy"
 version = "0.22.1"
 source = "git+https://github.com/pingcap/tantivy.git?branch=cse-0.22.1#392142b1eefa9258731b1c8483632c4a70bc32d8"
@@ -7130,7 +7196,7 @@ dependencies = [
 [[package]]
 name = "tikv-client"
 version = "0.4.0"
-source = "git+https://github.com/tikv/client-rust.git?rev=dda06dbf58f34e9c7633b8a55dc7a1141683cafe#dda06dbf58f34e9c7633b8a55dc7a1141683cafe"
+source = "git+https://github.com/tikv/client-rust.git?rev=ab4be1c2cdd58d4e593202991fb520221c83bdfd#ab4be1c2cdd58d4e593202991fb520221c83bdfd"
 dependencies = [
  "async-recursion 0.3.2",
  "async-trait",
