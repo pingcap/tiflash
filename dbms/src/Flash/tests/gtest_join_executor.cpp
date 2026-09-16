@@ -585,6 +585,12 @@ try
         cleanup();
         FAIL() << "The empty probe stream did not reach finishOneProbe().";
     }
+    // Confirm that stream 0 has acquired the sync channels before disabling the input gate.
+    if (!waitForSyncPoint(stream_0_gate))
+    {
+        cleanup();
+        FAIL() << "The data probe stream did not reach the input gate.";
+    }
     stream_0_gate.disable();
 
     // The data stream reaches LIMIT and publishes the shared stop state before the empty stream is released.
