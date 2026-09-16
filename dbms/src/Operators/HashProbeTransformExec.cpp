@@ -42,9 +42,24 @@ HashProbeTransformExec::HashProbeTransformExec(
     , max_block_size(max_block_size_)
 {}
 
+bool HashProbeTransformExec::isProbePhaseStopped() const
+{
+    return join->isProbeStopped() || (parent && parent->isProbePhaseStopped());
+}
+
+void HashProbeTransformExec::stopProbePhase()
+{
+    join->stopProbePhase();
+
+    // Restore joins are chained to the original join. Stopping only the current restore join would let the ancestor
+    // continue scanning unmatched rows or create more restore work after the pipeline has already stopped.
+    if (parent)
+        parent->stopProbePhase();
+}
+
 HashProbeTransformExecPtr HashProbeTransformExec::tryGetRestoreExec()
 {
-    if unlikely (exec_context.isCancelled())
+    if unlikely (exec_context.isCancelled() || isProbePhaseStopped())
         return {};
 
     // first check if current join has a partition to restore
@@ -62,6 +77,14 @@ HashProbeTransformExecPtr HashProbeTransformExec::tryGetRestoreExec()
                 max_block_size);
             restore_probe_exec->parent = shared_from_this();
             restore_probe_exec->probe_restore_stream = restore_info->probe_stream;
+
+            // The parent may have stopped while it was creating this restore join. Do not start new restore work in
+            // that case, and mark the child stopped as well so no task can wait for its probe completion.
+            if unlikely (restore_probe_exec->isProbePhaseStopped())
+            {
+                restore_probe_exec->stopProbePhase();
+                return {};
+            }
 
             /// Trigger build side restore task to restore and rebuild hash partition.
             /// The probe side operator just waits for the build hash partition to complete.
@@ -96,7 +119,7 @@ HashProbeTransformExecPtr HashProbeTransformExec::tryGetRestoreExec()
     return parent ? parent->tryGetRestoreExec() : HashProbeTransformExecPtr{};
 }
 
-void HashProbeTransformExec::startRestoreProbe()
+bool HashProbeTransformExec::startRestoreProbe()
 {
     /// Trigger probe side restore task to get the block from probe_restore_stream.
     ///
@@ -107,15 +130,28 @@ void HashProbeTransformExec::startRestoreProbe()
     ///                       | pop and probe
     ///                       ▼
     ///             HashProbeTransformExec (probe restored hash partition)
+    if unlikely (isProbePhaseStopped())
+    {
+        stopProbePhase();
+        return false;
+    }
+
     assert(!is_probe_restore_done && probe_restore_stream);
     // Use 1 as the queue_size to avoid accumulating too many blocks and causing the memory to exceed the limit.
     assert(!probe_source_holder);
 
     SharedQueueSinkHolderPtr probe_sink_holder;
     std::tie(probe_sink_holder, probe_source_holder) = SharedQueue::build(exec_context, 1, 1, -1, 1);
+    join->addRestoreProbeQueue(probe_source_holder->getQueue());
+    if unlikely (isProbePhaseStopped())
+    {
+        stopProbePhase();
+        return false;
+    }
     TaskScheduler::instance->submit(
         std::make_unique<StreamRestoreTask>(exec_context, log->identifier(), probe_restore_stream, probe_sink_holder));
     probe_restore_stream.reset();
+    return true;
 }
 
 bool HashProbeTransformExec::prepareProbeRestoredBlock()
