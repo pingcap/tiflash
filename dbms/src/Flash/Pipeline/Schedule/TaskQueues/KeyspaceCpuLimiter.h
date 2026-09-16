@@ -25,6 +25,7 @@
 #include <cstddef>
 #include <memory>
 #include <mutex>
+#include <thread>
 #include <unordered_map>
 
 namespace DB
@@ -47,7 +48,33 @@ public:
         // Allow one second of quota to be used as a burst while preserving the
         // configured long-term rate.
         , cpu_quota_burst_ns(cpu_quota_per_second_ns_ == 0 ? 0 : std::max<UInt64>(1, cpu_quota_per_second_ns_))
-    {}
+    {
+        if (isEnabled())
+            cleanup_thread = std::thread([this] {
+                std::unique_lock lock(mu);
+                while (!cleanup_cv.wait_for(lock, std::chrono::minutes(1), [this] { return stopping; }))
+                    cleanupIdleQuotasWithoutLock(std::chrono::steady_clock::now());
+            });
+    }
+
+    ~KeyspaceCpuLimiter()
+    {
+        {
+            std::lock_guard lock(mu);
+            stopping = true;
+        }
+        cleanup_cv.notify_all();
+        if (cleanup_thread.joinable())
+            cleanup_thread.join();
+        for (const auto & entry : cpu_quotas)
+            TiFlashMetrics::instance().releaseKeyspaceCpuLimiterMetrics(entry.first);
+    }
+
+    size_t cleanupIdleQuotas(std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now())
+    {
+        std::lock_guard lock(mu);
+        return cleanupIdleQuotasWithoutLock(now);
+    }
 
     bool tryAcquire(KeyspaceID keyspace_id)
     {
@@ -56,6 +83,7 @@ public:
 
         std::lock_guard lock(mu);
         auto & quota = getCPUQuotaWithoutLock(keyspace_id);
+        quota.last_activity = std::chrono::steady_clock::now();
         if (cpu_quota_per_second_ns != 0)
         {
             refillCPUQuotaWithoutLock(quota);
@@ -108,6 +136,7 @@ public:
             return false;
 
         auto & quota = cpu_quotas[owner_iter->second];
+        quota.last_activity = std::chrono::steady_clock::now();
         refillCPUQuotaWithoutLock(quota);
         quota.tokens_ns -= static_cast<double>(cpu_time_ns);
         quota.metrics->cpu_seconds_total->Increment(static_cast<double>(cpu_time_ns) / 1'000'000'000.0);
@@ -176,6 +205,7 @@ public:
         releaseWithoutLock(keyspace_id);
         {
             auto & quota = getCPUQuotaWithoutLock(keyspace_id);
+            quota.last_activity = std::chrono::steady_clock::now();
             if (cpu_quota_per_second_ns != 0)
                 refillCPUQuotaWithoutLock(quota);
             updateMetricsWithoutLock(keyspace_id, quota);
@@ -191,8 +221,12 @@ public:
             return;
 
         std::lock_guard lock(mu);
+        if (active_tasks.find(keyspace_id) == active_tasks.end())
+            return;
         releaseWithoutLock(keyspace_id);
-        updateMetricsWithoutLock(keyspace_id, getCPUQuotaWithoutLock(keyspace_id));
+        auto & quota = getCPUQuotaWithoutLock(keyspace_id);
+        quota.last_activity = std::chrono::steady_clock::now();
+        updateMetricsWithoutLock(keyspace_id, quota);
         ++change_id;
         cv.notify_all();
     }
@@ -267,6 +301,7 @@ private:
     {
         double tokens_ns = 0;
         std::chrono::steady_clock::time_point last_refill;
+        std::chrono::steady_clock::time_point last_activity;
         TiFlashMetrics::KeyspaceCpuLimiterMetrics * metrics = nullptr;
     };
 
@@ -278,14 +313,16 @@ private:
         {
             quota.tokens_ns = static_cast<double>(cpu_quota_burst_ns);
             quota.last_refill = std::chrono::steady_clock::now();
-            quota.metrics = &TiFlashMetrics::instance().getKeyspaceCpuLimiterMetrics(keyspace_id);
+            quota.last_activity = quota.last_refill;
+            quota.metrics = &TiFlashMetrics::instance().acquireKeyspaceCpuLimiterMetrics(keyspace_id);
         }
         return quota;
     }
 
-    void refillCPUQuotaWithoutLock(CPUQuota & quota)
+    void refillCPUQuotaWithoutLock(
+        CPUQuota & quota,
+        std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now())
     {
-        const auto now = std::chrono::steady_clock::now();
         const auto elapsed_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now - quota.last_refill).count();
         if (elapsed_ns <= 0)
             return;
@@ -314,6 +351,35 @@ private:
     }
 
     std::unordered_map<KeyspaceID, CPUQuota> cpu_quotas;
+    std::condition_variable cleanup_cv;
+    bool stopping = false;
+    std::thread cleanup_thread;
+
+    size_t cleanupIdleQuotasWithoutLock(std::chrono::steady_clock::time_point now)
+    {
+        size_t removed = 0;
+        for (auto iter = cpu_quotas.begin(); iter != cpu_quotas.end();)
+        {
+            auto & quota = iter->second;
+            if (active_tasks.find(iter->first) != active_tasks.end()
+                || now - quota.last_activity < std::chrono::minutes(60))
+            {
+                ++iter;
+                continue;
+            }
+            refillCPUQuotaWithoutLock(quota, now);
+            // Recreating a bucket must neither forgive CPU debt nor grant extra tokens.
+            if (quota.tokens_ns < static_cast<double>(cpu_quota_burst_ns))
+            {
+                ++iter;
+                continue;
+            }
+            TiFlashMetrics::instance().releaseKeyspaceCpuLimiterMetrics(iter->first);
+            iter = cpu_quotas.erase(iter);
+            ++removed;
+        }
+        return removed;
+    }
 };
 
 using KeyspaceCpuLimiterPtr = std::shared_ptr<KeyspaceCpuLimiter>;

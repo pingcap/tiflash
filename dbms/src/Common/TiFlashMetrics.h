@@ -1375,6 +1375,7 @@ public:
 
     struct KeyspaceCpuLimiterMetrics
     {
+        size_t users = 0;
         prometheus::Gauge * active_tasks;
         prometheus::Gauge * max_active_tasks;
         prometheus::Gauge * cpu_tokens_seconds;
@@ -1385,7 +1386,9 @@ public:
         prometheus::Counter * active_tasks_throttled_total;
     };
 
-    KeyspaceCpuLimiterMetrics & getKeyspaceCpuLimiterMetrics(KeyspaceID keyspace_id);
+    // Each acquisition must be paired with a release.
+    KeyspaceCpuLimiterMetrics & acquireKeyspaceCpuLimiterMetrics(KeyspaceID keyspace_id);
+    void releaseKeyspaceCpuLimiterMetrics(KeyspaceID keyspace_id);
 
     void addReplicaSyncRU(UInt32 keyspace_id, UInt64 ru);
     UInt64 debugQueryReplicaSyncRU(UInt32 keyspace_id);
