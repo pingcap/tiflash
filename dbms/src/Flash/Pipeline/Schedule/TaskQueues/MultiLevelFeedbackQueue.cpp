@@ -224,12 +224,10 @@ bool MultiLevelFeedbackQueue<TimeGetter>::take(TaskPtr & task)
             if (has_pending_tasks)
             {
                 lock.unlock();
-                if (keyspace_cpu_limiter->isCPUQuotaEnabled())
-                    keyspace_cpu_limiter->waitForChange(
-                        previous_change_id,
-                        keyspace_cpu_limiter->getRefillWaitDuration());
-                else
-                    keyspace_cpu_limiter->waitForChange(previous_change_id);
+                // Wait for the earliest quota refill, or for a release or a
+                // submission to update the generation. Without CPU quota the
+                // refill wait is unbounded, which keeps the plain wait.
+                keyspace_cpu_limiter->waitForChange(previous_change_id, keyspace_cpu_limiter->getRefillWaitDuration());
                 lock.lock();
             }
             else
