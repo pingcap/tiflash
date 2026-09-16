@@ -203,10 +203,11 @@ UInt64 TiFlashMetrics::debugQueryReplicaSyncRU(UInt32 keyspace_id)
     return counter->Value();
 }
 
-TiFlashMetrics::KeyspaceCpuLimiterMetrics & TiFlashMetrics::getKeyspaceCpuLimiterMetrics(KeyspaceID keyspace_id)
+TiFlashMetrics::KeyspaceCpuLimiterMetrics & TiFlashMetrics::acquireKeyspaceCpuLimiterMetrics(KeyspaceID keyspace_id)
 {
     std::lock_guard lock(keyspace_cpu_limiter_mtx);
     auto [iter, inserted] = registered_keyspace_cpu_limiter_metrics.try_emplace(keyspace_id);
+    ++iter->second.users;
     if (!inserted)
         return iter->second;
 
@@ -231,6 +232,25 @@ TiFlashMetrics::KeyspaceCpuLimiterMetrics & TiFlashMetrics::getKeyspaceCpuLimite
     iter->second.active_tasks_throttled_total
         = &registered_keyspace_cpu_limiter_throttled_family->Add(reason_labels("active_tasks"));
     return iter->second;
+}
+
+void TiFlashMetrics::releaseKeyspaceCpuLimiterMetrics(KeyspaceID keyspace_id)
+{
+    std::lock_guard lock(keyspace_cpu_limiter_mtx);
+    auto iter = registered_keyspace_cpu_limiter_metrics.find(keyspace_id);
+    if (iter == registered_keyspace_cpu_limiter_metrics.end() || --iter->second.users != 0)
+        return;
+
+    auto & metrics = iter->second;
+    registered_keyspace_cpu_limiter_family->Remove(metrics.active_tasks);
+    registered_keyspace_cpu_limiter_family->Remove(metrics.max_active_tasks);
+    registered_keyspace_cpu_limiter_family->Remove(metrics.cpu_tokens_seconds);
+    registered_keyspace_cpu_limiter_family->Remove(metrics.cpu_quota_seconds_per_second);
+    registered_keyspace_cpu_limiter_family->Remove(metrics.throttled);
+    registered_keyspace_cpu_limiter_cpu_seconds_family->Remove(metrics.cpu_seconds_total);
+    registered_keyspace_cpu_limiter_throttled_family->Remove(metrics.cpu_quota_throttled_total);
+    registered_keyspace_cpu_limiter_throttled_family->Remove(metrics.active_tasks_throttled_total);
+    registered_keyspace_cpu_limiter_metrics.erase(iter);
 }
 
 prometheus::Counter * TiFlashMetrics::getReplicaSyncRUCounter(UInt32 keyspace_id, std::unique_lock<std::mutex> &)

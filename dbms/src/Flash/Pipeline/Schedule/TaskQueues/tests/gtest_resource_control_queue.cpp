@@ -70,11 +70,71 @@ TEST(KeyspaceCpuLimiterTest, CPUQuotaWorksWithoutPoolLimit)
 
     ASSERT_FALSE(limiter.tryAcquire(keyspace_id));
 
-    auto & metrics = TiFlashMetrics::instance().getKeyspaceCpuLimiterMetrics(keyspace_id);
+    auto & metrics = TiFlashMetrics::instance().acquireKeyspaceCpuLimiterMetrics(keyspace_id);
     EXPECT_EQ(metrics.active_tasks->Value(), 0);
     EXPECT_EQ(metrics.throttled->Value(), 1);
     EXPECT_GT(metrics.cpu_seconds_total->Value(), 0);
     EXPECT_GT(metrics.cpu_quota_throttled_total->Value(), 0);
+    TiFlashMetrics::instance().releaseKeyspaceCpuLimiterMetrics(keyspace_id);
+}
+
+TEST(KeyspaceCpuLimiterTest, CleanupPreservesReservationsAndExpiresIdleQuotas)
+{
+    KeyspaceCpuLimiter limiter(1);
+    ASSERT_TRUE(limiter.tryAcquire(999998));
+    const auto later = std::chrono::steady_clock::now() + std::chrono::minutes(61);
+    // A reservation must survive even before bindOwner.
+    EXPECT_EQ(limiter.cleanupIdleQuotas(later), 0u);
+    limiter.release(999998);
+    EXPECT_EQ(limiter.cleanupIdleQuotas(), 0u);
+    EXPECT_EQ(limiter.cleanupIdleQuotas(later), 1u);
+    EXPECT_EQ(limiter.cleanupIdleQuotas(later), 0u);
+    // A duplicate release must not recreate an expired quota.
+    limiter.release(999998);
+    EXPECT_EQ(limiter.cleanupIdleQuotas(later), 0u);
+    EXPECT_TRUE(limiter.tryAcquire(999998));
+}
+
+TEST(KeyspaceCpuLimiterTest, CleanupPreservesCPUQuotaUntilFull)
+{
+    constexpr KeyspaceID keyspace_id = 999997;
+    KeyspaceCpuLimiter limiter(0, 1'000'000);
+    const Task * task = nullptr;
+    ASSERT_TRUE(limiter.tryAcquire(keyspace_id));
+    limiter.bindOwner(keyspace_id, task);
+    ASSERT_TRUE(limiter.consumeCPUTime(task, 6'000'000'000));
+    limiter.release(task);
+    const auto now = std::chrono::steady_clock::now();
+    EXPECT_EQ(limiter.cleanupIdleQuotas(now + std::chrono::minutes(61)), 0u);
+    EXPECT_EQ(limiter.cleanupIdleQuotas(now + std::chrono::milliseconds(5'999'500)), 0u);
+    EXPECT_EQ(limiter.cleanupIdleQuotas(now + std::chrono::minutes(101)), 1u);
+    EXPECT_TRUE(limiter.tryAcquire(keyspace_id));
+}
+
+TEST(KeyspaceCpuLimiterTest, MetricsAreRemovedAfterLastLimiter)
+{
+    constexpr KeyspaceID keyspace_id = 999996;
+    auto & registry = TiFlashMetrics::instance();
+    {
+        KeyspaceCpuLimiter first(1);
+        ASSERT_TRUE(first.tryAcquire(keyspace_id));
+        EXPECT_FALSE(first.tryAcquire(keyspace_id));
+        {
+            KeyspaceCpuLimiter second(1);
+            ASSERT_TRUE(second.tryAcquire(keyspace_id));
+            second.release(keyspace_id);
+            EXPECT_EQ(second.cleanupIdleQuotas(std::chrono::steady_clock::now() + std::chrono::minutes(61)), 1u);
+        }
+        auto & metrics = registry.acquireKeyspaceCpuLimiterMetrics(keyspace_id);
+        EXPECT_EQ(metrics.active_tasks_throttled_total->Value(), 1);
+        registry.releaseKeyspaceCpuLimiterMetrics(keyspace_id);
+        // The first limiter still owns and can update the shared metrics.
+        EXPECT_FALSE(first.tryAcquire(keyspace_id));
+    }
+    auto & metrics = registry.acquireKeyspaceCpuLimiterMetrics(keyspace_id);
+    EXPECT_EQ(metrics.active_tasks_throttled_total->Value(), 0);
+    EXPECT_EQ(metrics.max_active_tasks->Value(), 0);
+    registry.releaseKeyspaceCpuLimiterMetrics(keyspace_id);
 }
 
 class SimpleTask : public Task
