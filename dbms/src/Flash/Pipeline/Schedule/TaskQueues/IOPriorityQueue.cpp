@@ -218,7 +218,7 @@ void IOPriorityQueue::submit(TaskPtr && task)
         std::lock_guard lock(mu);
         submitTaskWithoutLock(std::move(task));
     }
-    notifyWaiters();
+    notifyOneWaiter();
 }
 
 void IOPriorityQueue::submit(std::vector<TaskPtr> & tasks)
@@ -237,7 +237,10 @@ void IOPriorityQueue::submit(std::vector<TaskPtr> & tasks)
         for (auto & task : tasks)
             submitTaskWithoutLock(std::move(task));
     }
-    notifyWaiters();
+    if (tasks.size() == 1)
+        notifyOneWaiter();
+    else
+        notifyWaiters();
 }
 
 void IOPriorityQueue::cancel(const TaskCancelInfo & cancel_info)
@@ -257,6 +260,13 @@ void IOPriorityQueue::collectCancelledTasks(std::deque<TaskPtr> & cancel_queue, 
 {
     moveCancelledTasks(io_in_task_queue, cancel_queue, query_id);
     moveCancelledTasks(io_out_task_queue, cancel_queue, query_id);
+}
+
+void IOPriorityQueue::notifyOneWaiter()
+{
+    cv.notify_one();
+    if (keyspace_cpu_limiter)
+        keyspace_cpu_limiter->notifyAll();
 }
 
 void IOPriorityQueue::notifyWaiters()

@@ -28,7 +28,7 @@ void ResourceControlQueue<NestedTaskQueueType>::submit(TaskPtr && task)
         std::lock_guard lock(mu);
         submitWithoutLock(std::move(task));
     }
-    notifyWaiters();
+    notifyOneWaiter();
 }
 
 template <typename NestedTaskQueueType>
@@ -42,7 +42,10 @@ void ResourceControlQueue<NestedTaskQueueType>::submit(std::vector<TaskPtr> & ta
         for (auto & task : tasks)
             submitWithoutLock(std::move(task));
     }
-    notifyWaiters();
+    if (tasks.size() == 1)
+        notifyOneWaiter();
+    else
+        notifyWaiters();
 }
 
 template <typename NestedTaskQueueType>
@@ -336,6 +339,14 @@ void ResourceControlQueue<NestedTaskQueueType>::mustTakeTask(const NestedTaskQue
     assert(!task_queue->empty());
     RUNTIME_CHECK(task_queue->take(task));
     assert(task);
+}
+
+template <typename NestedTaskQueueType>
+void ResourceControlQueue<NestedTaskQueueType>::notifyOneWaiter()
+{
+    cv.notify_one();
+    if (keyspace_cpu_limiter)
+        keyspace_cpu_limiter->notifyAll();
 }
 
 template <typename NestedTaskQueueType>

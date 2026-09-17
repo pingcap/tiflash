@@ -99,6 +99,7 @@ private:
     // Erase resource group info and task_queue.
     void mustEraseResourceGroupInfoWithoutLock(const KeyspaceID & keyspace_id, const String & name);
     static void mustTakeTask(const NestedTaskQueuePtr & task_queue, TaskPtr & task);
+    void notifyOneWaiter();
     void notifyWaiters();
 
     mutable std::mutex mu;

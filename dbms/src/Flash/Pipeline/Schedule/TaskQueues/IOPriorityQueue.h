@@ -62,6 +62,7 @@ private:
     void submitTaskWithoutLock(TaskPtr && task);
 
     void drainTaskQueueWithoutLock();
+    void notifyOneWaiter();
     void notifyWaiters();
 
 private:
