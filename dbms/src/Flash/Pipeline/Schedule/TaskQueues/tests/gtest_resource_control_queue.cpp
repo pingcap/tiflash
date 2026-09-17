@@ -78,6 +78,31 @@ TEST(KeyspaceCpuLimiterTest, CPUQuotaWorksWithoutPoolLimit)
     TiFlashMetrics::instance().releaseKeyspaceCpuLimiterMetrics(keyspace_id);
 }
 
+TEST(KeyspaceCpuLimiterTest, CPUQuotaRejectionKeepsWaitBoundedWhenRefillIsObserved)
+{
+    constexpr UInt64 cpu_quota_per_second_ns = 1'000'000'000;
+    constexpr KeyspaceID keyspace_id = 999995;
+    KeyspaceCpuLimiter limiter(0, cpu_quota_per_second_ns);
+    const Task * task = nullptr;
+
+    ASSERT_TRUE(limiter.tryAcquire(keyspace_id));
+    limiter.bindOwner(keyspace_id, task);
+    ASSERT_TRUE(limiter.consumeCPUTime(task, cpu_quota_per_second_ns * 2));
+    limiter.release(task);
+
+    bool cpu_quota_rejected = false;
+    ASSERT_FALSE(limiter.tryAcquire(keyspace_id, &cpu_quota_rejected));
+    ASSERT_TRUE(cpu_quota_rejected);
+
+    // Simulate time passing until the bucket has refilled, while keeping it
+    // below the burst so the quota remains live.
+    const auto refilled_at = std::chrono::steady_clock::now() + std::chrono::milliseconds(1500);
+    ASSERT_EQ(limiter.cleanupIdleQuotas(refilled_at), 0u);
+
+    EXPECT_LT(limiter.getRefillWaitDuration(cpu_quota_rejected), std::chrono::milliseconds::max());
+    EXPECT_EQ(limiter.getRefillWaitDuration(), std::chrono::milliseconds::max());
+}
+
 TEST(KeyspaceCpuLimiterTest, CleanupPreservesReservationsAndExpiresIdleQuotas)
 {
     KeyspaceCpuLimiter limiter(1);

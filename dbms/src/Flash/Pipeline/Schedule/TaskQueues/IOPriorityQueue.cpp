@@ -65,9 +65,10 @@ bool IOPriorityQueue::take(TaskPtr & task)
         bool io_out_first = ratio_of_out_to_in * total_io_in_time_microsecond >= total_io_out_time_microsecond;
         auto & first_queue = io_out_first ? io_out_task_queue : io_in_task_queue;
         auto & next_queue = io_out_first ? io_in_task_queue : io_out_task_queue;
-        if (tryTakeTaskWithoutLock(first_queue, task))
+        bool cpu_quota_rejected = false;
+        if (tryTakeTaskWithoutLock(first_queue, task, cpu_quota_rejected))
             return true;
-        if (tryTakeTaskWithoutLock(next_queue, task))
+        if (tryTakeTaskWithoutLock(next_queue, task, cpu_quota_rejected))
             return true;
         if (limiter_enabled)
         {
@@ -79,7 +80,9 @@ bool IOPriorityQueue::take(TaskPtr & task)
                 // Wait for the earliest quota refill, or for a release or a
                 // submission to update the generation. Without CPU quota the
                 // refill wait is unbounded, which keeps the plain wait.
-                keyspace_cpu_limiter->waitForChange(previous_change_id, keyspace_cpu_limiter->getRefillWaitDuration());
+                keyspace_cpu_limiter->waitForChange(
+                    previous_change_id,
+                    keyspace_cpu_limiter->getRefillWaitDuration(cpu_quota_rejected));
                 lock.lock();
             }
             else
@@ -94,7 +97,7 @@ bool IOPriorityQueue::take(TaskPtr & task)
     }
 }
 
-bool IOPriorityQueue::tryTakeTaskWithoutLock(std::list<TaskPtr> & task_queue, TaskPtr & task)
+bool IOPriorityQueue::tryTakeTaskWithoutLock(std::list<TaskPtr> & task_queue, TaskPtr & task, bool & cpu_quota_rejected)
 {
     if (!keyspace_cpu_limiter || !keyspace_cpu_limiter->isEnabled())
         return popTask(task_queue, task);
@@ -102,7 +105,7 @@ bool IOPriorityQueue::tryTakeTaskWithoutLock(std::list<TaskPtr> & task_queue, Ta
     for (auto it = task_queue.begin(); it != task_queue.end(); ++it)
     {
         const auto keyspace_id = (*it)->getKeyspaceID();
-        if (!keyspace_cpu_limiter->tryAcquire(keyspace_id))
+        if (!keyspace_cpu_limiter->tryAcquire(keyspace_id, &cpu_quota_rejected))
             continue;
 
         bool owner_bound = false;

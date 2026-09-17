@@ -189,6 +189,7 @@ bool MultiLevelFeedbackQueue<TimeGetter>::take(TaskPtr & task)
         // A level can contain tasks from several keyspaces. Try levels in
         // MLFQ order until one has a task with an available reservation.
         std::array<bool, QUEUE_SIZE> inspected{};
+        bool cpu_quota_rejected = false;
         for (size_t count = 0; count < QUEUE_SIZE; ++count)
         {
             int queue_idx = -1;
@@ -211,7 +212,7 @@ bool MultiLevelFeedbackQueue<TimeGetter>::take(TaskPtr & task)
                 break;
 
             inspected[queue_idx] = true;
-            if (tryTakeTaskWithoutLock(*level_queues[queue_idx], task))
+            if (tryTakeTaskWithoutLock(*level_queues[queue_idx], task, cpu_quota_rejected))
                 return true;
         }
 
@@ -227,7 +228,9 @@ bool MultiLevelFeedbackQueue<TimeGetter>::take(TaskPtr & task)
                 // Wait for the earliest quota refill, or for a release or a
                 // submission to update the generation. Without CPU quota the
                 // refill wait is unbounded, which keeps the plain wait.
-                keyspace_cpu_limiter->waitForChange(previous_change_id, keyspace_cpu_limiter->getRefillWaitDuration());
+                keyspace_cpu_limiter->waitForChange(
+                    previous_change_id,
+                    keyspace_cpu_limiter->getRefillWaitDuration(cpu_quota_rejected));
                 lock.lock();
             }
             else
@@ -243,7 +246,10 @@ bool MultiLevelFeedbackQueue<TimeGetter>::take(TaskPtr & task)
 }
 
 template <typename TimeGetter>
-bool MultiLevelFeedbackQueue<TimeGetter>::tryTakeTaskWithoutLock(UnitQueue & unit_queue, TaskPtr & task)
+bool MultiLevelFeedbackQueue<TimeGetter>::tryTakeTaskWithoutLock(
+    UnitQueue & unit_queue,
+    TaskPtr & task,
+    bool & cpu_quota_rejected)
 {
     if (!keyspace_cpu_limiter || !keyspace_cpu_limiter->isEnabled())
     {
@@ -254,7 +260,7 @@ bool MultiLevelFeedbackQueue<TimeGetter>::tryTakeTaskWithoutLock(UnitQueue & uni
     for (auto it = unit_queue.task_queue.begin(); it != unit_queue.task_queue.end(); ++it)
     {
         const auto keyspace_id = (*it)->getKeyspaceID();
-        if (!keyspace_cpu_limiter->tryAcquire(keyspace_id))
+        if (!keyspace_cpu_limiter->tryAcquire(keyspace_id, &cpu_quota_rejected))
             continue;
 
         bool owner_bound = false;
