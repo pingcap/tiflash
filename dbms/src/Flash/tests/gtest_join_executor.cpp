@@ -262,8 +262,6 @@ try
 }
 CATCH
 
-<<<<<<< HEAD
-=======
 TEST_F(JoinExecutorTestRunner, EmptyBuildInnerJoinSkipsProbe)
 try
 {
@@ -616,7 +614,6 @@ try
 CATCH
 #endif
 
->>>>>>> 11976a50c5 (fix: stop hash join probes on pipeline early termination (#11089))
 TEST_F(JoinExecutorTestRunner, MultiJoin)
 try
 {

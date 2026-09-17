@@ -74,11 +74,8 @@ public:
         join->dispatchProbeBlock(block, partition_blocks_list, op_index);
     }
     bool finishOneProbe() { return join->finishOneProbe(op_index); }
-<<<<<<< HEAD
-=======
     size_t getStreamIndex() const { return op_index; }
     bool shouldSkipProbe() const { return join->shouldSkipProbe(); }
->>>>>>> 11976a50c5 (fix: stop hash join probes on pipeline early termination (#11089))
     bool hasMarkedSpillData() const { return join->hasProbeSideMarkedSpillData(op_index); }
     bool isProbeFinishedForPipeline() const { return join->isProbeFinishedForPipeline(); }
     bool isProbePhaseStopped() const;

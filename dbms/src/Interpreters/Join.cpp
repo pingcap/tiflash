@@ -222,15 +222,13 @@ Join::Join(
     , log(Logger::get(
           restore_config.restore_round == 0 ? join_req_id
                                             : fmt::format(
-                                                "{}_round_{}_part_{}",
-                                                join_req_id,
-                                                restore_config.restore_round,
-                                                restore_config.restore_partition_id)))
+                                                  "{}_round_{}_part_{}",
+                                                  join_req_id,
+                                                  restore_config.restore_round,
+                                                  restore_config.restore_partition_id)))
     , enable_fine_grained_shuffle(fine_grained_shuffle_count_ > 0)
     , fine_grained_shuffle_count(fine_grained_shuffle_count_)
 {
-<<<<<<< HEAD
-=======
     probe_stop_context->registerJoinWaitFutures(wait_build_finished_future, wait_probe_finished_future);
     RUNTIME_CHECK_MSG(
         key_names_left_.size() == key_names_right_.size(),
@@ -242,7 +240,6 @@ Join::Join(
         "Join key size and is_null_eq size must be equal, keys={}, is_null_eq={}",
         key_names_left_.size(),
         is_null_eq_.size());
->>>>>>> 11976a50c5 (fix: stop hash join probes on pipeline early termination (#11089))
     has_other_condition = non_equal_conditions.other_cond_expr != nullptr;
     bool is_semi = isSemiFamily(kind) || isLeftOuterSemiFamily(kind) || isNullAwareSemiFamily(kind);
     if (is_semi && !has_other_condition)
