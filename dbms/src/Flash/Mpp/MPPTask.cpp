@@ -723,7 +723,8 @@ void MPPTask::reportStatus(const String & err_msg)
         auto rpc_status = rpc.call(&client_context, req, &resp);
         if (!rpc_status.ok())
         {
-            throw Exception(rpc.errMsg(rpc_status));
+            auto extra_msg = "addr: " + meta.coordinator_address();
+            throw Exception(rpc.errMsg(rpc_status, extra_msg));
         }
         if (resp.has_error())
         {

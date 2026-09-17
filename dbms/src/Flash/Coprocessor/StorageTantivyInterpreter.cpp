@@ -138,19 +138,6 @@ CoprocessorReaderPtr StorageTantivyIterpreter::buildCoprocessorReader(
         : concurrent_num * 4;
     bool enable_cop_stream = context.getSettingsRef().enable_cop_stream_for_remote_read;
     UInt64 cop_timeout = context.getSettingsRef().cop_timeout_for_remote_read;
-    String store_zone_label;
-    auto kv_store = tmt.getKVStore();
-    if likely (kv_store)
-    {
-        for (int i = 0; i < kv_store->getStoreMeta().labels_size(); ++i)
-        {
-            if (kv_store->getStoreMeta().labels().at(i).key() == "zone")
-            {
-                store_zone_label = kv_store->getStoreMeta().labels().at(i).value();
-                break;
-            }
-        }
-    }
     auto coprocessor_reader = std::make_shared<CoprocessorReader>(
         schema,
         cluster,
@@ -162,7 +149,7 @@ CoprocessorReaderPtr StorageTantivyIterpreter::buildCoprocessorReader(
         cop_timeout,
         tiflash_label_filter,
         log->identifier(),
-        store_zone_label);
+        tmt.getKVStore()->getStoreID());
     context.getDAGContext()->addCoprocessorReader(coprocessor_reader);
 
     return coprocessor_reader;

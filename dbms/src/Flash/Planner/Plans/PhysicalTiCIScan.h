@@ -51,6 +51,7 @@ public:
     {
         tici_scan.setIsCountAgg(true);
         schema = agg->getSchema();
+        sample_block = Block(schema);
         tici_scan.setNamesAndTypes(agg->getSchema());
         tici_scan.setCountAggExecutorId(agg->execId());
     }

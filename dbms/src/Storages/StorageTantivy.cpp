@@ -37,6 +37,7 @@
 #include <common/logger_useful.h>
 #include <tici-search-lib/src/lib.rs.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdlib>
 #include <memory>
@@ -101,9 +102,9 @@ void StorageTantivy::read(
         context.getTimezoneInfo(),
         std::move(shards_snapshot));
 
-    num_streams = std::max(1, std::min(num_streams, local_read.size()));
+    const auto stream_count = std::max<size_t>(1, std::min<size_t>(num_streams, local_read.size()));
     // local read
-    for (size_t i = 0; i < num_streams; ++i)
+    for (size_t i = 0; i < stream_count; ++i)
     {
         group_builder.addConcurrency(
             std::make_unique<TantivyReaderSourceOp>(exec_status, log->identifier(), tici_task_pool, return_columns));
