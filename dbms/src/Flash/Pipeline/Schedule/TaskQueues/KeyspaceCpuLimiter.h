@@ -76,7 +76,11 @@ public:
         return cleanupIdleQuotasWithoutLock(now);
     }
 
-    bool tryAcquire(KeyspaceID keyspace_id)
+    /// When `cpu_quota_rejected` is provided, it is set to true if this call is
+    /// rejected by the CPU quota. It is intentionally not reset for successful
+    /// acquires or active-task-limit rejections, so callers can accumulate the
+    /// reason across a candidate scan.
+    bool tryAcquire(KeyspaceID keyspace_id, bool * cpu_quota_rejected = nullptr)
     {
         if (!isEnabled())
             return true;
@@ -89,6 +93,8 @@ public:
             refillCPUQuotaWithoutLock(quota);
             if (quota.tokens_ns <= 0)
             {
+                if (cpu_quota_rejected)
+                    *cpu_quota_rejected = true;
                 quota.metrics->cpu_quota_throttled_total->Increment();
                 updateMetricsWithoutLock(keyspace_id, quota);
                 return false;
@@ -151,9 +157,11 @@ public:
     /// a fixed interval, wait until the earliest moment a depleted bucket turns
     /// positive again, so a waiter is not woken before it can make progress.
     /// Waiters still wake on `change_id` updates, so a release or a submission
-    /// is not delayed. Returns `milliseconds::max()` when CPU quota is disabled
-    /// or nothing is depleted, which the waiters treat as an unbounded wait.
-    std::chrono::milliseconds getRefillWaitDuration() const
+    /// is not delayed. Returns `milliseconds::max()` only when CPU quota is
+    /// disabled or nothing is depleted and no CPU quota rejection was observed.
+    /// A rejection keeps the wait bounded even if natural refill is observed
+    /// before this method runs, since refill does not update `change_id`.
+    std::chrono::milliseconds getRefillWaitDuration(bool cpu_quota_rejected = false) const
     {
         if (cpu_quota_per_second_ns == 0)
             return std::chrono::milliseconds::max();
@@ -182,7 +190,12 @@ public:
             min_wait_ms = std::min(min_wait_ms, -remaining_tokens_ns / quota_ns_per_ns / 1'000'000.0);
         }
         if (!has_depleted_quota)
-            return std::chrono::milliseconds::max();
+        {
+            // A quota rejection may have happened just before this method
+            // reacquired the limiter lock. Natural refill does not update
+            // change_id, so keep a bounded retry in that case.
+            return cpu_quota_rejected ? std::chrono::milliseconds(1) : std::chrono::milliseconds::max();
+        }
 
         // Keep a small floor so a waiter with no other wakeup still re-checks.
         const double clamped_wait_ms

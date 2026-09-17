@@ -58,7 +58,7 @@ public:
     void collectCancelledTasks(std::deque<TaskPtr> & cancel_queue, const String & query_id);
 
 private:
-    bool tryTakeTaskWithoutLock(std::list<TaskPtr> & task_queue, TaskPtr & task);
+    bool tryTakeTaskWithoutLock(std::list<TaskPtr> & task_queue, TaskPtr & task, bool & cpu_quota_rejected);
     void submitTaskWithoutLock(TaskPtr && task);
 
     void drainTaskQueueWithoutLock();

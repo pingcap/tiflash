@@ -133,7 +133,7 @@ private:
 
     void submitTaskWithoutLock(TaskPtr && task);
 
-    bool tryTakeTaskWithoutLock(UnitQueue & unit_queue, TaskPtr & task);
+    bool tryTakeTaskWithoutLock(UnitQueue & unit_queue, TaskPtr & task, bool & cpu_quota_rejected);
 
     void drainTaskQueueWithoutLock();
     void notifyWaiters();
