@@ -141,7 +141,7 @@ void MultiLevelFeedbackQueue<TimeGetter>::submit(TaskPtr && task)
         submitTaskWithoutLock(std::move(task));
     }
     assert(!task);
-    notifyWaiters();
+    notifyOneWaiter();
 }
 
 template <typename TimeGetter>
@@ -164,7 +164,10 @@ void MultiLevelFeedbackQueue<TimeGetter>::submit(std::vector<TaskPtr> & tasks)
         for (auto & task : tasks)
             submitTaskWithoutLock(std::move(task));
     }
-    notifyWaiters();
+    if (tasks.size() == 1)
+        notifyOneWaiter();
+    else
+        notifyWaiters();
 }
 
 template <typename TimeGetter>
@@ -363,6 +366,14 @@ void MultiLevelFeedbackQueue<TimeGetter>::collectCancelledTasks(
 {
     for (const auto & queue : level_queues)
         moveCancelledTasks(*queue, cancel_queue, query_id);
+}
+
+template <typename TimeGetter>
+void MultiLevelFeedbackQueue<TimeGetter>::notifyOneWaiter()
+{
+    cv.notify_one();
+    if (keyspace_cpu_limiter)
+        keyspace_cpu_limiter->notifyAll();
 }
 
 template <typename TimeGetter>

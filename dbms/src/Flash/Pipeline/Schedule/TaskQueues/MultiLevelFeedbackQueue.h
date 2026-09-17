@@ -136,6 +136,7 @@ private:
     bool tryTakeTaskWithoutLock(UnitQueue & unit_queue, TaskPtr & task, bool & cpu_quota_rejected);
 
     void drainTaskQueueWithoutLock();
+    void notifyOneWaiter();
     void notifyWaiters();
 
 private:
