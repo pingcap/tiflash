@@ -32,7 +32,8 @@ public:
         const BlockInputStreamPtr & input_,
         const Aggregator::Params & params_,
         const String & req_id,
-        UInt64 row_limit_unit)
+        UInt64 row_limit_unit,
+        const HashTableStatsProfileInfoPtr & hash_table_stats_profile_info = nullptr)
     {
         children.push_back(input_);
         auto_pass_through_context = std::make_unique<AutoPassThroughHashAggContext>(
@@ -40,7 +41,10 @@ public:
             params_,
             [&]() { return this->isCancelled(); },
             req_id,
-            row_limit_unit);
+            row_limit_unit,
+            AutoPassThroughHashAggContext::DEF_NORMAL_UNIT_NUM,
+            AutoPassThroughHashAggContext::DEF_DYNAMIC_UNIT_NUM,
+            hash_table_stats_profile_info);
     }
 
     String getName() const override { return NAME; }

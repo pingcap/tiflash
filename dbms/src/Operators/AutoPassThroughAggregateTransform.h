@@ -29,7 +29,8 @@ public:
         PipelineExecutorContext & exec_context_,
         const Aggregator::Params & params_,
         const String & req_id_,
-        UInt64 row_limit_unit)
+        UInt64 row_limit_unit,
+        const HashTableStatsProfileInfoPtr & hash_table_stats_profile_info = nullptr)
         : TransformOp(exec_context_, req_id_)
         , status(Status::building_hash_map)
     {
@@ -38,7 +39,10 @@ public:
             params_,
             [&]() { return exec_context.isCancelled(); },
             req_id_,
-            row_limit_unit);
+            row_limit_unit,
+            AutoPassThroughHashAggContext::DEF_NORMAL_UNIT_NUM,
+            AutoPassThroughHashAggContext::DEF_DYNAMIC_UNIT_NUM,
+            hash_table_stats_profile_info);
     }
 
     String getName() const override { return "AutoPassThroughAggregateTransform"; }

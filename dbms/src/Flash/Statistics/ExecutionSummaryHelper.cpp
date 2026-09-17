@@ -32,6 +32,16 @@ void fillTiExecutionSummary(
     execution_summary->set_num_produced_rows(current.num_produced_rows);
     execution_summary->set_num_iterations(current.num_iterations);
     execution_summary->set_concurrency(current.concurrency);
+    if (current.hash_table_stats)
+    {
+        auto * hash_table_stats = execution_summary->mutable_tiflash_hash_table_stats();
+        hash_table_stats->set_size(current.hash_table_stats->size);
+        hash_table_stats->set_size_kind(
+            current.hash_table_stats->size_kind == HashTableSizeKind::DistinctKeyCount
+                ? tipb::TIFLASH_HASH_TABLE_SIZE_KIND_DISTINCT_KEY_COUNT
+                : tipb::TIFLASH_HASH_TABLE_SIZE_KIND_BUILD_ROW_COUNT);
+        hash_table_stats->set_memory_bytes(current.hash_table_stats->memory_bytes);
+    }
     if (current.columnar_scan_context)
         execution_summary->mutable_columnar_scan_context()->CopyFrom(current.columnar_scan_context->serialize());
     else

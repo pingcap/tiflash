@@ -83,7 +83,8 @@ MergingAggregatedMemoryEfficientBlockInputStream::MergingAggregatedMemoryEfficie
     bool final_,
     size_t reading_threads_,
     size_t merging_threads_,
-    const String & req_id)
+    const String & req_id,
+    const HashTableStatsProfileInfoPtr & hash_table_stats_profile_info)
     : log(Logger::get(req_id))
     , aggregator(
           params,
@@ -91,7 +92,8 @@ MergingAggregatedMemoryEfficientBlockInputStream::MergingAggregatedMemoryEfficie
           merging_threads_,
           [](const OperatorSpillContextPtr &) {},
           /*is_auto_pass_through=*/false,
-          params.use_magic_hash)
+          params.use_magic_hash,
+          hash_table_stats_profile_info)
     , final(final_)
     , reading_threads(std::min(reading_threads_, inputs_.size()))
     , merging_threads(merging_threads_)

@@ -355,6 +355,21 @@ std::unordered_map<String, JoinExecuteInfo> & DAGContext::getJoinExecuteInfoMap(
     return join_execute_info_map;
 }
 
+void DAGContext::addAggregationProfileInfo(const String & executor_id, const AggregationProfileInfoPtr & profile_info)
+{
+    RUNTIME_CHECK(profile_info);
+    std::lock_guard lock(operator_profile_infos_map_mu);
+    const auto [it, inserted] = aggregation_profile_info_map.emplace(executor_id, profile_info);
+    RUNTIME_CHECK(inserted || it->second == profile_info);
+}
+
+AggregationProfileInfoPtr DAGContext::getAggregationProfileInfo(const String & executor_id)
+{
+    std::lock_guard lock(operator_profile_infos_map_mu);
+    const auto it = aggregation_profile_info_map.find(executor_id);
+    return it == aggregation_profile_info_map.end() ? nullptr : it->second;
+}
+
 std::unordered_map<String, BlockInputStreams> & DAGContext::getInBoundIOInputStreamsMap()
 {
     return inbound_io_input_streams_map;

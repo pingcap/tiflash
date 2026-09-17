@@ -33,7 +33,8 @@ void AggregateContext::initBuild(
         max_threads,
         register_operator_spill_context,
         /*is_auto_pass_through=*/false,
-        params.use_magic_hash);
+        params.use_magic_hash,
+        hash_table_stats_profile_info);
     aggregator->setCancellationHook(is_cancelled);
     aggregator->initThresholdByAggregatedDataVariantsSize(max_threads);
     many_data.reserve(max_threads);

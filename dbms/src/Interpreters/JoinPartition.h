@@ -115,7 +115,7 @@ public:
     void insertBlockForBuild(Block && block);
     void insertBlockForProbe(Block && block);
     size_t getRowCount();
-    size_t getHashMapAndPoolByteCount();
+    size_t getHashMapAndPoolByteCount() const;
     void setResizeCallbackIfNeeded();
     void updateHashMapAndPoolMemoryUsage();
     size_t getHashMapAndPoolMemoryUsage() const { return hash_table_pool_memory_usage; }
@@ -127,7 +127,7 @@ public:
             return rows_not_inserted_to_map.get();
         }
         return nullptr;
-    };
+    }
     Blocks trySpillProbePartition()
     {
         std::unique_lock lock(partition_mutex);

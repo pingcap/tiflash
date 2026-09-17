@@ -262,6 +262,30 @@ size_t Join::getTotalHashTableAndPoolByteCount()
     return res;
 }
 
+bool Join::getHashTableStats(UInt64 & size, UInt64 & memory_bytes) const
+{
+    if (isCrossJoin(kind))
+        return false;
+
+    std::shared_lock rw_lock(rwlock);
+    size_t total_size = 0;
+    size_t total_memory_bytes = 0;
+    for (const auto & partition : partitions)
+    {
+        /// A spilled partition has released its in-memory hash table. Its data will be counted by the
+        /// restore Join after the partition is rebuilt successfully.
+        if (partition->isSpill())
+            continue;
+        auto partition_lock = partition->lockPartition();
+        /// Join V1 maps one entry to each distinct join key.
+        total_size += partition->getRowCount();
+        total_memory_bytes += partition->getHashMapAndPoolByteCount();
+    }
+    size = total_size;
+    memory_bytes = total_memory_bytes;
+    return true;
+}
+
 size_t Join::getTotalByteCount()
 {
     size_t res = 0;
@@ -388,6 +412,7 @@ std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_j
     ret->output_column_names_set_after_finalize = output_column_names_set_after_finalize;
     ret->output_columns_names_set_for_other_condition_after_finalize
         = output_columns_names_set_for_other_condition_after_finalize;
+    ret->profile_info = profile_info;
     ret->required_columns = required_columns;
     ret->output_block_after_finalize = output_block_after_finalize;
     ret->finalized = true;
@@ -1802,6 +1827,8 @@ void Join::workAfterBuildFinish(size_t stream_index)
 
         has_build_data_in_memory = !original_blocks.empty();
     }
+
+    finalizeHashTableStats();
 }
 
 void Join::finalizeNullAwareSemiFamilyBuild()
@@ -1866,9 +1893,36 @@ void Join::finalizeCrossJoinBuild()
 
 void Join::finalizeProfileInfo()
 {
-    profile_info->is_spill_enabled = isEnableSpill();
-    profile_info->is_spilled = isSpilled();
-    profile_info->peak_build_bytes_usage = getPeakBuildBytesUsage();
+    if (!isRestoreJoin())
+    {
+        profile_info->is_spill_enabled = isEnableSpill();
+        profile_info->is_spilled = isSpilled();
+        profile_info->peak_build_bytes_usage = getPeakBuildBytesUsage();
+    }
+    // TODO: Aggregate restore join profile fields, such as peak build memory usage, when exposing
+    // them in execution summaries.
+    finalizeHashTableStats();
+}
+
+void Join::finalizeHashTableStats()
+{
+    if (hash_table_stats_finalized)
+        return;
+
+    UInt64 size = 0;
+    UInt64 memory_bytes = 0;
+    if (!getHashTableStats(size, memory_bytes))
+        return;
+
+    const HashTableStats stats{
+        .size = size,
+        .size_kind = HashTableSizeKind::DistinctKeyCount,
+        .memory_bytes = memory_bytes};
+    if (isRestoreJoin())
+        profile_info->mergeHashTableStats(stats);
+    else
+        profile_info->setHashTableStats(stats);
+    hash_table_stats_finalized = true;
 }
 
 void Join::workAfterProbeFinish(size_t stream_index)

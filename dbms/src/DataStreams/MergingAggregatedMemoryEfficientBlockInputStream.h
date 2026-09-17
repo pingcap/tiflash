@@ -79,7 +79,8 @@ public:
         bool final_,
         size_t reading_threads_,
         size_t merging_threads_,
-        const String & req_id);
+        const String & req_id,
+        const HashTableStatsProfileInfoPtr & hash_table_stats_profile_info = nullptr);
 
     ~MergingAggregatedMemoryEfficientBlockInputStream() override;
 
