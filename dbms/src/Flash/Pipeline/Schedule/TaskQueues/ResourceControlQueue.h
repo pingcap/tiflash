@@ -15,10 +15,14 @@
 #pragma once
 
 #include <Flash/Pipeline/Schedule/TaskQueues/FIFOQueryIdCache.h>
+#include <Flash/Pipeline/Schedule/TaskQueues/KeyspaceCpuLimiter.h>
+#include <Flash/Pipeline/Schedule/TaskQueues/MultiLevelFeedbackQueue.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/TaskQueue.h>
 #include <Flash/ResourceControl/LocalAdmissionController.h>
 
 #include <mutex>
+#include <utility>
+#include <vector>
 
 namespace DB
 {
@@ -28,12 +32,13 @@ class ResourceControlQueue
     , private boost::noncopyable
 {
 public:
-    ResourceControlQueue()
+    explicit ResourceControlQueue(KeyspaceCpuLimiterPtr keyspace_cpu_limiter_ = nullptr)
+        : keyspace_cpu_limiter(std::move(keyspace_cpu_limiter_))
     {
         RUNTIME_CHECK_MSG(
             LocalAdmissionController::global_instance != nullptr,
             "LocalAdmissionController::global_instance has not been initialized yet.");
-        LocalAdmissionController::global_instance->registerRefillTokenCallback([&]() { cv.notify_all(); });
+        LocalAdmissionController::global_instance->registerRefillTokenCallback([this]() { notifyWaiters(); });
     }
 
     ~ResourceControlQueue() override { LocalAdmissionController::global_instance->unregisterRefillTokenCallback(); }
@@ -94,6 +99,8 @@ private:
     // Erase resource group info and task_queue.
     void mustEraseResourceGroupInfoWithoutLock(const KeyspaceID & keyspace_id, const String & name);
     static void mustTakeTask(const NestedTaskQueuePtr & task_queue, TaskPtr & task);
+    void notifyOneWaiter();
+    void notifyWaiters();
 
     mutable std::mutex mu;
     std::condition_variable cv;
@@ -109,5 +116,7 @@ private:
     // Store tasks whose resource group info is not found in LAC,
     // it will be cancelled in take().
     std::deque<TaskPtr> error_task_queue;
+
+    KeyspaceCpuLimiterPtr keyspace_cpu_limiter;
 };
 } // namespace DB

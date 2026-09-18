@@ -28,7 +28,7 @@ void ResourceControlQueue<NestedTaskQueueType>::submit(TaskPtr && task)
         std::lock_guard lock(mu);
         submitWithoutLock(std::move(task));
     }
-    cv.notify_one();
+    notifyOneWaiter();
 }
 
 template <typename NestedTaskQueueType>
@@ -40,11 +40,12 @@ void ResourceControlQueue<NestedTaskQueueType>::submit(std::vector<TaskPtr> & ta
     {
         std::lock_guard lock(mu);
         for (auto & task : tasks)
-        {
             submitWithoutLock(std::move(task));
-            cv.notify_one();
-        }
     }
+    if (tasks.size() == 1)
+        notifyOneWaiter();
+    else
+        notifyWaiters();
 }
 
 template <typename NestedTaskQueueType>
@@ -104,6 +105,11 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
         if unlikely (is_finished)
             return false;
 
+        // Snapshot before inspecting the queues. A release can happen without
+        // holding `mu`; taking the snapshot afterwards could miss that wakeup.
+        const auto previous_change_id
+            = (keyspace_cpu_limiter && keyspace_cpu_limiter->isEnabled()) ? keyspace_cpu_limiter->getChangeId() : 0;
+
         if (popTask(cancel_task_queue, task))
             return true;
 
@@ -117,18 +123,45 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
             continue;
 
         UInt64 wait_dura = LocalAdmissionController::DEFAULT_MAX_EST_WAIT_DURATION.count();
+        const bool limiter_enabled = keyspace_cpu_limiter && keyspace_cpu_limiter->isEnabled();
         if (!resource_group_infos.empty())
         {
-            const ResourceGroupInfo & group_info = resource_group_infos.top();
-            const bool ru_exhausted = LocalAdmissionController::isRUExhausted(group_info.priority);
-
-            // When highest priority of resource group is less than zero, means RU of all resource groups are exhausted.
-            // Should not take any task from nested task queue for this situation.
-            if (!ru_exhausted)
+            std::vector<ResourceGroupInfo> deferred;
+            while (!resource_group_infos.empty())
             {
-                mustTakeTask(group_info.task_queue, task);
-                return true;
+                const auto & group_info = resource_group_infos.top();
+                // RU-exhausted groups have the lowest priority, so none below can run.
+                if (LocalAdmissionController::isRUExhausted(group_info.priority))
+                    break;
+
+                const bool acquired = limiter_enabled && keyspace_cpu_limiter->tryAcquire(group_info.keyspace_id);
+                if (!limiter_enabled || acquired)
+                {
+                    bool owner_bound = false;
+                    SCOPE_EXIT({
+                        if (acquired && !owner_bound)
+                            keyspace_cpu_limiter->release(group_info.keyspace_id);
+                    });
+                    mustTakeTask(group_info.task_queue, task);
+                    if (acquired)
+                    {
+                        keyspace_cpu_limiter->bindOwner(group_info.keyspace_id, task.get());
+                        owner_bound = true;
+                    }
+                    break;
+                }
+
+                deferred.push_back(group_info);
+                resource_group_infos.pop();
             }
+
+            for (auto & group_info : deferred)
+                resource_group_infos.push(std::move(group_info));
+
+            if (task)
+                return true;
+
+            const auto & group_info = resource_group_infos.top();
             wait_dura
                 = LocalAdmissionController::global_instance->estWaitDuraMS(group_info.keyspace_id, group_info.name);
         }
@@ -139,7 +172,25 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
         // 2. new task submit.
         // 3. LAC got resp from GAC or estWaitDura timeout.
         // so wait_dura is used to avoid stuck.
-        cv.wait_for(lock, std::chrono::milliseconds(wait_dura));
+        if (limiter_enabled)
+        {
+            if (!resource_group_infos.empty())
+            {
+                lock.unlock();
+                keyspace_cpu_limiter->waitForChange(
+                    previous_change_id,
+                    std::min(std::chrono::milliseconds(wait_dura), keyspace_cpu_limiter->getRefillWaitDuration()));
+                lock.lock();
+            }
+            else
+            {
+                cv.wait(lock);
+            }
+        }
+        else
+        {
+            cv.wait_for(lock, std::chrono::milliseconds(wait_dura));
+        }
     }
 }
 
@@ -150,9 +201,16 @@ void ResourceControlQueue<NestedTaskQueueType>::updateStatistics(
     UInt64 inc_value)
 {
     assert(task);
+    // LAC's pipeline accounting is based on the task execution duration. The
+    // keyspace limiter consumes CLOCK_THREAD_CPUTIME_ID independently.
     auto ru = cpuTimeToRU(inc_value);
     const String & resource_group_name = task->getResourceGroupName();
     const auto & keyspace_id = task->getKeyspaceID();
+    if (keyspace_cpu_limiter && keyspace_cpu_limiter->isEnabled())
+    {
+        keyspace_cpu_limiter->release(task.get());
+        notifyWaiters();
+    }
     LocalAdmissionController::global_instance->consumeCPUResource(keyspace_id, resource_group_name, ru, inc_value);
 
     NestedTaskQueuePtr group_queue = nullptr;
@@ -240,7 +298,7 @@ void ResourceControlQueue<NestedTaskQueueType>::finish()
             ele.second->finish();
     }
 
-    cv.notify_all();
+    notifyWaiters();
 }
 
 template <typename NestedTaskQueueType>
@@ -249,16 +307,16 @@ void ResourceControlQueue<NestedTaskQueueType>::cancel(const TaskCancelInfo & ca
     if unlikely (cancel_info.query_id.empty())
         return;
 
-    std::lock_guard lock(mu);
-    if (cancel_query_id_cache.add(cancel_info.query_id))
     {
-        auto iter = resource_group_task_queues.find({cancel_info.keyspace_id, cancel_info.resource_group_name});
-        if (iter != resource_group_task_queues.end())
+        std::lock_guard lock(mu);
+        if (cancel_query_id_cache.add(cancel_info.query_id))
         {
-            iter->second->collectCancelledTasks(cancel_task_queue, cancel_info.query_id);
+            auto iter = resource_group_task_queues.find({cancel_info.keyspace_id, cancel_info.resource_group_name});
+            if (iter != resource_group_task_queues.end())
+                iter->second->collectCancelledTasks(cancel_task_queue, cancel_info.query_id);
         }
     }
-    cv.notify_all();
+    notifyWaiters();
 }
 
 template <typename NestedTaskQueueType>
@@ -281,6 +339,22 @@ void ResourceControlQueue<NestedTaskQueueType>::mustTakeTask(const NestedTaskQue
     assert(!task_queue->empty());
     RUNTIME_CHECK(task_queue->take(task));
     assert(task);
+}
+
+template <typename NestedTaskQueueType>
+void ResourceControlQueue<NestedTaskQueueType>::notifyOneWaiter()
+{
+    cv.notify_one();
+    if (keyspace_cpu_limiter)
+        keyspace_cpu_limiter->notifyAll();
+}
+
+template <typename NestedTaskQueueType>
+void ResourceControlQueue<NestedTaskQueueType>::notifyWaiters()
+{
+    cv.notify_all();
+    if (keyspace_cpu_limiter)
+        keyspace_cpu_limiter->notifyAll();
 }
 
 template class ResourceControlQueue<CPUMultiLevelFeedbackQueue>;

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Operators/HashJoinProbeTransformOp.h>
@@ -20,6 +22,11 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char pause_after_hash_join_finish_one_probe[];
+} // namespace FailPoints
+
 #define BREAK                                \
     assert(!current_notify_future);          \
     if unlikely (exec_context.isCancelled()) \
@@ -64,6 +71,14 @@ void HashJoinProbeTransformOp::transformHeaderImpl(Block & header_)
 
 void HashJoinProbeTransformOp::operateSuffixImpl()
 {
+    if (status != ProbeStatus::FINISHED)
+    {
+        probe_transform->stopProbePhase();
+        SYNC_FOR("after_hash_join_probe_stop");
+        if (status == ProbeStatus::READ_SCAN_HASH_MAP_DATA)
+            probe_transform->abortScanHashMapAfterProbe();
+    }
+
     LOG_DEBUG(
         log,
         "Finish join probe, total output rows {}, joined rows {}, scan hash map rows {}",
@@ -72,8 +87,34 @@ void HashJoinProbeTransformOp::operateSuffixImpl()
         scan_hash_map_rows);
 }
 
+bool HashJoinProbeTransformOp::finishIfProbeStopped()
+{
+    if (!probe_transform->isProbePhaseStopped())
+        return false;
+
+    // The stop can originate from an ancestor restore join. Mark this join stopped too, which cancels its restore
+    // probe queues before this pipeline task exits.
+    probe_transform->stopProbePhase();
+    if (status == ProbeStatus::READ_SCAN_HASH_MAP_DATA)
+        probe_transform->abortScanHashMapAfterProbe();
+    switchStatus(ProbeStatus::FINISHED);
+    return true;
+}
+
+bool HashJoinProbeTransformOp::finishIfProbeStopped(Block & block)
+{
+    if (!finishIfProbeStopped())
+        return false;
+
+    block = {};
+    return true;
+}
+
 OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
 {
+    if (finishIfProbeStopped(block))
+        return OperatorStatus::HAS_OUTPUT;
+
     while (true)
     {
         switch (status)
@@ -92,7 +133,11 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
             // if all_rows_joined_finish is still true here, it means that there is no input block.
             if unlikely (probe_process_info.all_rows_joined_finish)
             {
-                if (probe_transform->finishOneProbe())
+                const auto is_last_normal_input_completion = probe_transform->finishOneProbe();
+                if (probe_transform->getStreamIndex() == 1)
+                    SYNC_FOR("after_hash_join_finish_one_probe_stream_1");
+                FAIL_POINT_PAUSE(FailPoints::pause_after_hash_join_finish_one_probe);
+                if (is_last_normal_input_completion)
                 {
                     if (probe_transform->hasMarkedSpillData())
                     {
@@ -150,6 +195,9 @@ OperatorStatus HashJoinProbeTransformOp::onOutput(Block & block)
 
 OperatorStatus HashJoinProbeTransformOp::transformImpl(Block & block)
 {
+    if (finishIfProbeStopped(block))
+        return OperatorStatus::HAS_OUTPUT;
+
     assert(status == ProbeStatus::PROBE);
     assert(probe_process_info.all_rows_joined_finish);
     if (auto ret = probe_transform->tryFillProcessInfoInProbeStage(probe_process_info, block);
@@ -161,6 +209,12 @@ OperatorStatus HashJoinProbeTransformOp::transformImpl(Block & block)
 
 OperatorStatus HashJoinProbeTransformOp::tryOutputImpl(Block & block)
 {
+    if (probe_transform->getStreamIndex() == 0)
+        SYNC_FOR("before_hash_join_probe_stream_0");
+
+    if (finishIfProbeStopped(block))
+        return OperatorStatus::HAS_OUTPUT;
+
     if (status == ProbeStatus::PROBE && probe_process_info.all_rows_joined_finish)
     {
         // For an empty build, do not fill a probe block. onOutput below still advances
@@ -178,6 +232,9 @@ OperatorStatus HashJoinProbeTransformOp::tryOutputImpl(Block & block)
 
 void HashJoinProbeTransformOp::onWaitProbeFinishDone()
 {
+    if (finishIfProbeStopped())
+        return;
+
     if (probe_transform->needScanHashMapAfterProbe())
     {
         probe_transform->startScanHashMapAfterProbe();
@@ -195,7 +252,13 @@ void HashJoinProbeTransformOp::onWaitProbeFinishDone()
 
 void HashJoinProbeTransformOp::onRestoreBuildFinish()
 {
-    probe_transform->startRestoreProbe();
+    if (!probe_transform->startRestoreProbe())
+    {
+        // startRestoreProbe only returns false after observing the shared stop state. Do not enter RESTORE_PROBE
+        // without its input queue.
+        switchStatus(ProbeStatus::FINISHED);
+        return;
+    }
     switchStatus(ProbeStatus::RESTORE_PROBE);
 }
 
@@ -214,6 +277,9 @@ void HashJoinProbeTransformOp::onGetRestoreJoin()
 
 OperatorStatus HashJoinProbeTransformOp::executeIOImpl()
 {
+    if (finishIfProbeStopped())
+        return OperatorStatus::HAS_OUTPUT;
+
     switch (status)
     {
     case ProbeStatus::PROBE:
