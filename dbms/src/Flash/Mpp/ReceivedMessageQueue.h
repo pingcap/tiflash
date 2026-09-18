@@ -102,8 +102,13 @@ public:
     template <bool need_wait>
     MPMCQueueResult pop(size_t stream_id, ReceivedMessagePtr & recv_msg);
 
+    /// Returns MPMCQueueResult so that the caller can distinguish a cleanly
+    /// finished queue (FINISHED, e.g. the consumer task exited early because
+    /// of an empty build side or a limit) from a cancelled one (CANCELLED,
+    /// e.g. the query was aborted).  Only the former means the consumer
+    /// exited on purpose and dropping the in-flight packet is harmless.
     template <bool is_force>
-    bool pushPacket(
+    MPMCQueueResult pushPacket(
         size_t source_index,
         const String & req_info,
         const TrackedMppDataPacketPtr & tracked_packet,

@@ -96,7 +96,7 @@ try
                         "mock",
                         newDataPacket(fmt::format("test_{}", i)),
                         ReceiverMode::Async);
-                    ASSERT_TRUE(result);
+                    ASSERT_TRUE(result == MPMCQueueResult::OK);
                 }
                 ASSERT_TRUE(!queue.isWritable());
                 /// is_force = true
@@ -105,7 +105,7 @@ try
                     "mock",
                     newDataPacket(fmt::format("test_{}", buffer_size)),
                     ReceiverMode::Async);
-                ASSERT_TRUE(result);
+                ASSERT_TRUE(result == MPMCQueueResult::OK);
                 if (fine_grained)
                 {
                     for (size_t i = 0; i <= buffer_size; ++i)

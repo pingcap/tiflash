@@ -256,8 +256,9 @@ private:
             for (size_t i = 0; i < read_packet_index; ++i)
             {
                 auto & packet = packets[i];
-                if (!received_message_queue
-                         ->pushPacket<false>(request->source_index, req_info, packet, ReceiverMode::Async))
+                if (received_message_queue
+                        ->pushPacket<false>(request->source_index, req_info, packet, ReceiverMode::Async)
+                    != MPMCQueueResult::OK)
                 {
                     return {false, "channel write fails"};
                 }
@@ -661,7 +662,8 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
                     break;
                 }
 
-                if (!received_message_queue.pushPacket<false>(req.source_index, req_info, packet, recv_mode))
+                if (received_message_queue.pushPacket<false>(req.source_index, req_info, packet, recv_mode)
+                    != MPMCQueueResult::OK)
                 {
                     meet_error = true;
                     local_err_msg = fmt::format("Push mpp packet failed. {}", getStatusString());
