@@ -181,6 +181,22 @@ try
 }
 CATCH
 
+TEST(TiDBTableInfoTest, Latin1SwedishCICollation)
+try
+{
+    TableInfo table_info(
+        R"json({"id":45,"name":{"O":"t","L":"t"},"charset":"latin1","collate":"latin1_swedish_ci","cols":[{"id":1,"name":{"O":"val","L":"val"},"offset":0,"origin_default":null,"origin_default_bit":null,"default":null,"default_bit":null,"default_is_expr":false,"generated_expr_string":"","generated_stored":false,"dependences":null,"type":{"Tp":15,"Flag":0,"Flen":32,"Decimal":0,"Charset":"latin1","Collate":"latin1_swedish_ci","Elems":null},"state":5,"comment":"","hidden":false,"change_state_info":null,"version":2}],"index_info":null,"constraint_info":null,"fk_info":null,"state":5,"pk_is_handle":false,"is_common_handle":false,"comment":"","auto_inc_id":0,"auto_id_cache":0,"auto_rand_id":0,"max_col_id":1,"max_idx_id":0,"max_cst_id":0,"update_timestamp":418683341902184450,"ShardRowIDBits":0,"max_shard_row_id_bits":0,"auto_random_bits":0,"pre_split_regions":0,"partition":null,"compression":"","view":null,"sequence":null,"Lock":null,"version":3})json",
+        NullspaceID);
+
+    ASSERT_EQ(table_info.columns.size(), 1U);
+    ASSERT_EQ(table_info.columns[0].charset.convert<String>(), "latin1");
+    ASSERT_EQ(table_info.columns[0].collate.convert<String>(), "latin1_swedish_ci");
+
+    auto field_type = columnInfoToFieldType(table_info.columns[0]);
+    ASSERT_EQ(field_type.collate(), TiDB::ITiDBCollator::LATIN1_SWEDISH_CI);
+}
+CATCH
+
 TEST(TiDBTableInfoTest, ParseVectorIndexJSON)
 try
 {

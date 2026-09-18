@@ -30,6 +30,7 @@ class ITiDBCollator
 public:
     enum
     {
+        LATIN1_SWEDISH_CI = 8,
         UTF8_GENERAL_CI = 33,
         UTF8MB4_GENERAL_CI = 45,
         UTF8_UNICODE_CI = 192,
@@ -58,6 +59,7 @@ public:
         UTF8MB4_GENERAL_CI,
         UTF8_UNICODE_CI,
         UTF8MB4_UNICODE_CI,
+        LATIN1_SWEDISH_CI,
         UTF8MB4_0900_AI_CI,
         UTF8MB4_0900_BIN,
         // ----
@@ -357,6 +359,18 @@ using WeightType = uint16_t;
 extern const std::array<WeightType, 256 * 256> weight_lut;
 } // namespace GeneralCI
 
+namespace Latin1CI
+{
+using WeightType = UInt8;
+extern const std::array<WeightType, 256> swedish_ci_weight_lut;
+} // namespace Latin1CI
+
+class Latin1Swedish
+{
+public:
+    static const std::array<Latin1CI::WeightType, 256> & weight_lut;
+};
+
 class GeneralCICollator final : public ITiDBCollator
 {
 public:
@@ -412,10 +426,58 @@ private:
     friend class Pattern<GeneralCICollator>;
 };
 
+template <typename T>
+class Latin1CICollator final : public ITiDBCollator
+{
+public:
+    explicit Latin1CICollator(int32_t id)
+        : ITiDBCollator(id)
+    {}
+
+    int compare(const char * s1, size_t length1, const char * s2, size_t length2) const override;
+
+    StringRef convert(const char * s, size_t length, std::string & container, std::vector<size_t> * lens) const override
+    {
+        return convertImpl<true, false>(s, length, container, lens);
+    }
+
+    StringRef sortKey(const char * s, size_t length, std::string & container) const override
+    {
+        return convertImpl<false, true>(s, length, container, nullptr);
+    }
+
+    StringRef sortKeyNoTrim(const char * s, size_t length, std::string & container) const override
+    {
+        return convertImpl<false, false>(s, length, container, nullptr);
+    }
+
+    std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<Latin1CICollator>>(); }
+
+    size_t sortKeyReservedSpaceMultipler() const override { return sizeof(WeightType); }
+
+    bool isTrivialCollator() const override { return false; }
+
+private:
+    using WeightType = Latin1CI::WeightType;
+    using CharType = Rune;
+
+    template <bool need_len, bool need_trim>
+    StringRef convertImpl(const char * s, size_t length, std::string & container, std::vector<size_t> * lens) const;
+
+    static CharType decodeChar(const char * s, size_t & offset);
+
+    static WeightType weight(CharType c);
+
+    static bool regexEq(CharType a, CharType b) { return weight(a) == weight(b); }
+
+    friend class Pattern<Latin1CICollator>;
+};
+
 using UTF8MB4_BIN_TYPE = BinCollator<Rune, true>;
 using UTF8MB4_0900_BIN_TYPE = BinCollator<Rune, false>;
 using UCACI_0400_PADDING = UCACICollator<Unicode0400, true>;
 using UCACI_0900_NON_PADDING = UCACICollator<Unicode0900, false>;
+using LATIN1_SWEDISH_CI_TYPE = Latin1CICollator<Latin1Swedish>;
 using BIN_COLLATOR_PADDING = BinCollator<char, true>;
 using BIN_COLLATOR_NON_PADDING = BinCollator<char, false>;
 } // namespace TiDB
@@ -433,6 +495,11 @@ using BIN_COLLATOR_NON_PADDING = BinCollator<char, false>;
       utf8mb4_0900_ai_ci,                                                                                              \
       TiDB::UCACI_0900_NON_PADDING,                                                                                    \
       TiDB::ITiDBCollator::UTF8MB4_0900_AI_CI,                                                                         \
+      ##__VA_ARGS__)                                                                                                   \
+    M(VAR_PREFIX,                                                                                                      \
+      latin1_swedish_ci,                                                                                               \
+      TiDB::LATIN1_SWEDISH_CI_TYPE,                                                                                    \
+      TiDB::ITiDBCollator::LATIN1_SWEDISH_CI,                                                                          \
       ##__VA_ARGS__)                                                                                                   \
     M(VAR_PREFIX, utf8mb4_0900_bin, TiDB::UTF8MB4_0900_BIN_TYPE, TiDB::ITiDBCollator::UTF8MB4_0900_BIN, ##__VA_ARGS__) \
     M(VAR_PREFIX, utf8mb4_bin, TiDB::UTF8MB4_BIN_TYPE, TiDB::ITiDBCollator::UTF8MB4_BIN, ##__VA_ARGS__)                \
