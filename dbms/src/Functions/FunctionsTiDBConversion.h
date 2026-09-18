@@ -1828,6 +1828,8 @@ template <typename...>
 class FunctionTiDBCast final : public IFunctionBase
 {
 public:
+    bool isSuitableForShortCircuitArgumentsExecution() const override { return true; }
+
     using WrapperType
         = std::function<void(Block &, const ColumnNumbers &, size_t, bool, const tipb::FieldType &, const Context &)>;
 
