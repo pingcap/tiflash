@@ -126,6 +126,22 @@ public:
         ASSERT_COLUMNS_EQ_UR(expect_columns, readBlock(final_stream));
     }
 
+    /// Builds the request into a physical plan tree and returns its root, without executing it.
+    PhysicalPlanNodePtr buildRootPlanNode(const std::shared_ptr<tipb::DAGRequest> & request)
+    {
+        DAGContext dag_context(*request, "executor_test", /*max_streams=*/1);
+        TiFlashTestEnv::setUpTestContext(
+            *context.context,
+            &dag_context,
+            context.mockStorage(),
+            TestType::EXECUTOR_TEST);
+
+        PhysicalPlan physical_plan{*context.context, log->identifier()};
+        assert(request);
+        physical_plan.build(request.get());
+        return physical_plan.outputAndOptimize();
+    }
+
     std::tuple<DAGRequestBuilder, DAGRequestBuilder, DAGRequestBuilder, DAGRequestBuilder> multiTestScan()
     {
         return {
@@ -568,6 +584,50 @@ CreatingSets
              toNullableVec<Int32>({2, 2, 0}),
              toNullableVec<Int32>({2, 2, 0}),
              toNullableVec<Int32>({2, 2, 0})});
+    }
+}
+CATCH
+
+namespace
+{
+PhysicalPlanNodePtr findFirstNodeOfType(const PhysicalPlanNodePtr & node, PlanType type)
+{
+    if (node->tp() == type)
+        return node;
+    for (size_t i = 0; i < node->childrenSize(); ++i)
+        if (auto found = findFirstNodeOfType(node->children(i), type))
+            return found;
+    return nullptr;
+}
+} // namespace
+
+TEST_F(PhysicalPlanTestRunner, SubtreeContainsExchangeReceiver)
+try
+{
+    {
+        // A remote subtree: the receiver is nested under intermediate nodes.
+        auto request = context.receive("exchange1").filter(eq(col("s1"), col("s2"))).build(context);
+        auto root = buildRootPlanNode(request);
+        ASSERT_TRUE(root->subtreeContainsExchangeReceiver());
+    }
+    {
+        // A local subtree.
+        auto request = context.scan("test_db", "test_table").filter(eq(col("s1"), col("s2"))).build(context);
+        auto root = buildRootPlanNode(request);
+        ASSERT_FALSE(root->subtreeContainsExchangeReceiver());
+    }
+    {
+        // For joins, only the probe subtree matters: the build side below comes from a receiver
+        // while the probe side is local.
+        auto request = context.scan("test_db", "test_table")
+                           .join(context.receive("exchange1"), tipb::JoinType::TypeInnerJoin, {col("s1")})
+                           .build(context);
+        auto root = buildRootPlanNode(request);
+        auto join = findFirstNodeOfType(root, PlanType::Join);
+        ASSERT_TRUE(join);
+        // PhysicalJoin's probe is the left child (children(0)) and the build is the right one.
+        ASSERT_TRUE(join->children(1)->subtreeContainsExchangeReceiver());
+        ASSERT_FALSE(join->children(0)->subtreeContainsExchangeReceiver());
     }
 }
 CATCH

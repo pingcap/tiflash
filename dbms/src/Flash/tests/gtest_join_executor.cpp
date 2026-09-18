@@ -282,6 +282,38 @@ try
 }
 CATCH
 
+TEST_F(JoinExecutorTestRunner, EmptyBuildWithExchangeProbeDoesNotSkipProbe)
+try
+{
+    context.addMockTable(
+        "exchange_probe_join",
+        "build_table",
+        {{"a", TiDB::TP::TypeLong}},
+        {toNullableVec<Int32>("a", {})});
+    context.addExchangeReceiver(
+        "probe_from_exchange_receiver",
+        {{"a", TiDB::TP::TypeLong}},
+        {toNullableVec<Int32>("a", {1, 2, 3})});
+
+    auto request
+        = context.receive("probe_from_exchange_receiver")
+              .join(context.scan("exchange_probe_join", "build_table"), tipb::JoinType::TypeInnerJoin, {col("a")})
+              .build(context);
+
+    WRAP_FOR_TEST_BEGIN
+    WRAP_FOR_JOIN_TEST_BEGIN
+    if (!enable_pipeline && cfg.enable_join_v2)
+        continue;
+
+    // The probe input comes from an exchange receiver, so the probe must not be skipped:
+    // the receiver still consumes all 3 rows although the build side is empty.
+    Expect expect{{"exchange_receiver_0", {3, 10}}, {"table_scan_1", {0, 10}}, {"Join_2", {0, 10}}};
+    testForExecutionSummary(request, expect);
+    WRAP_FOR_JOIN_TEST_END
+    WRAP_FOR_TEST_END
+}
+CATCH
+
 TEST_F(JoinExecutorTestRunner, BuildWithOnlyNullKeysInnerJoinSkipsProbe)
 try
 {
@@ -409,7 +441,7 @@ try
 }
 CATCH
 
-TEST_F(JoinExecutorTestRunner, EmptyBuildRightSemiJoinSkipsProbe)
+TEST_F(JoinExecutorTestRunner, EmptyBuildRightSemiJoinDoesNotSkipExchangeProbe)
 try
 {
     context.addMockTable("empty_build_right_semi_join", "build_table", {{"a", TiDB::TP::TypeLong}});
@@ -437,14 +469,16 @@ try
     if (!enable_pipeline && cfg.enable_join_v2)
         continue;
 
-    Expect expect{{"table_scan_0", {0, 10}}, {"exchange_receiver_1", {0, 10}}, {"Join_2", {0, 10}}};
+    // The probe input comes from an exchange receiver, so the probe must not be skipped:
+    // the receiver still consumes all 3 rows although the build side is empty.
+    Expect expect{{"table_scan_0", {0, 10}}, {"exchange_receiver_1", {3, 10}}, {"Join_2", {0, 10}}};
     testForExecutionSummary(request, expect);
     WRAP_FOR_JOIN_TEST_END
     WRAP_FOR_TEST_END
 }
 CATCH
 
-TEST_F(JoinExecutorTestRunner, BuildWithOnlyNullKeysRightSemiJoinSkipsProbe)
+TEST_F(JoinExecutorTestRunner, BuildWithOnlyNullKeysRightSemiJoinDoesNotSkipExchangeProbe)
 try
 {
     context.addMockTable(
@@ -476,7 +510,9 @@ try
     if (!enable_pipeline && cfg.enable_join_v2)
         continue;
 
-    Expect expect{{"table_scan_0", {1, 10}}, {"exchange_receiver_1", {0, 10}}, {"Join_2", {0, 10}}};
+    // The probe input comes from an exchange receiver, so the probe must not be skipped:
+    // the receiver still consumes all 3 rows although no build row enters the hash table.
+    Expect expect{{"table_scan_0", {1, 10}}, {"exchange_receiver_1", {3, 10}}, {"Join_2", {0, 10}}};
     testForExecutionSummary(request, expect);
     WRAP_FOR_JOIN_TEST_END
     WRAP_FOR_TEST_END
