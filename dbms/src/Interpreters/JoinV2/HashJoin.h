@@ -76,10 +76,16 @@ public:
 
     /// Inner/Semi cannot produce rows if no build row is inserted into the hash table.
     /// The probe pipeline is scheduled after the build pointer-table event, so build_side_empty is already published.
+    /// `local_probe_source` is set by the planner during pipeline building: when the probe input
+    /// comes from an exchange receiver, skipping the probe would fail the remote senders that
+    /// are still transmitting data, so the skip-probe optimization only applies to local sources.
+    /// It defaults to false so that any execution path not setting it explicitly stays on the safe side.
+    void setLocalProbeSource(bool is_local) { local_probe_source = is_local; }
+
     bool shouldSkipProbe() const
     {
         const bool can_skip_probe = kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Semi;
-        return can_skip_probe && build_side_empty.load(std::memory_order_acquire);
+        return local_probe_source && can_skip_probe && build_side_empty.load(std::memory_order_acquire);
     }
 
     const JoinProfileInfoPtr & getProfileInfo() const { return profile_info; }
@@ -154,6 +160,8 @@ private:
     std::vector<JoinBuildWorkerData> build_workers_data;
     std::atomic<size_t> active_build_worker = 0;
     std::atomic_bool build_side_empty{false};
+    /// Set once by the planner during query building, then read-only at runtime.
+    bool local_probe_source = false;
 
     HashJoinPointerTable pointer_table;
 

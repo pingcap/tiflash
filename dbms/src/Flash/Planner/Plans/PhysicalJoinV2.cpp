@@ -159,6 +159,10 @@ void PhysicalJoinV2::buildPipeline(PipelineBuilder & builder, Context & context,
 
     // Join probe pipeline.
     builder.setHasPipelineBreakerWaitTime(true);
+    // The skip-probe optimization for empty build sides only applies to local probe sources:
+    // if the probe input comes from an exchange receiver, early termination would fail the
+    // remote senders that are still transmitting data.
+    join_ptr->setLocalProbeSource(!probe()->subtreeContainsExchangeReceiver());
     probe()->buildPipeline(builder, context, exec_context);
     auto join_probe = std::make_shared<PhysicalJoinV2Probe>(
         executor_id,
