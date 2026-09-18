@@ -294,11 +294,17 @@ public:
 
     /// Inner/Semi cannot produce rows without build entries. RightSemi has no matched build rows to output.
     /// This is available after finalizeBuild and can be used to avoid reading the probe side.
+    /// `local_probe_source` is set by the planner during pipeline building: when the probe input
+    /// comes from an exchange receiver, skipping the probe would fail the remote senders that
+    /// are still transmitting data, so the skip-probe optimization only applies to local sources.
+    /// It defaults to false so that any execution path not setting it explicitly stays on the safe side.
+    void setLocalProbeSource(bool is_local) { local_probe_source = is_local; }
+
     bool shouldSkipProbe() const
     {
         const bool can_skip_probe = kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Semi
             || kind == ASTTableJoin::Kind::RightSemi;
-        return can_skip_probe && build_finished.load(std::memory_order_acquire)
+        return local_probe_source && can_skip_probe && build_finished.load(std::memory_order_acquire)
             && build_side_empty.load(std::memory_order_acquire);
     }
 
@@ -509,6 +515,8 @@ private:
 
     std::atomic<size_t> total_input_build_rows{0};
     std::atomic_bool build_side_empty{false};
+    /// Set once by the planner during query building, then read-only at runtime.
+    bool local_probe_source = false;
 
     /** Protect state for concurrent use in insertFromBlock and joinBlock.
       * Note that these methods could be called simultaneously only while use of StorageJoin,

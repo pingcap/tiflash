@@ -86,6 +86,10 @@ public:
     /// Obtain a sample block that contains the names and types of result columns.
     virtual const Block & getSampleBlock() const = 0;
 
+    /// Whether this subtree contains an exchange receiver node, i.e. part of the input
+    /// comes from remote MPP tasks instead of local scans.
+    bool subtreeContainsExchangeReceiver() const;
+
     bool isTiDBOperator() const { return is_tidb_operator; }
 
     void notTiDBOperator() { is_tidb_operator = false; }

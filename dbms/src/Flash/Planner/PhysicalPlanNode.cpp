@@ -143,6 +143,18 @@ void PhysicalPlanNode::buildPipeline(
     builder.addPlanNode(shared_from_this());
 }
 
+bool PhysicalPlanNode::subtreeContainsExchangeReceiver() const
+{
+    if (type == PlanType::ExchangeReceiver || type == PlanType::MockExchangeReceiver)
+        return true;
+    for (size_t i = 0; i < childrenSize(); ++i)
+    {
+        if (children(i)->subtreeContainsExchangeReceiver())
+            return true;
+    }
+    return false;
+}
+
 EventPtr PhysicalPlanNode::sinkComplete(PipelineExecutorContext & exec_context)
 {
     if (getFineGrainedShuffle().enabled())
