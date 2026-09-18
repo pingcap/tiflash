@@ -125,7 +125,7 @@ private:
     BlockHandle writeSLPackPropertyToBuffer(WriteBuffer & buffer) const;
     BlockHandle writeColumnStatToBuffer(WriteBuffer & buffer);
     BlockHandle writeExtendColumnStatToBuffer(WriteBuffer & buffer);
-    BlockHandle writeMergedSubFilePosotionsToBuffer(WriteBuffer & buffer);
+    BlockHandle writeMergedSubFilePositionsToBuffer(WriteBuffer & buffer);
 
     // read
     void parse(std::string_view buffer);

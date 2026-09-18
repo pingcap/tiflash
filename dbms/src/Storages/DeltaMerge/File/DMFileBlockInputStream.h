@@ -235,10 +235,10 @@ private:
     FileProviderPtr file_provider;
 
     // clean read
-
     bool enable_handle_clean_read = false;
     bool is_fast_scan = false;
     bool enable_del_clean_read = false;
+    bool enable_trim_minmax = false;
     UInt64 max_data_version = std::numeric_limits<UInt64>::max();
     // packs filter (filter by pack index)
     IdSetPtr read_packs;
