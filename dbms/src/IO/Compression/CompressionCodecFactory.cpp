@@ -175,23 +175,21 @@ CompressionCodecPtr CompressionCodecFactory::create(const CompressionSetting & s
 
     if constexpr (IS_COMPRESS)
     {
-        // If method_byte is Lightweight, use LZ4 codec for non-integral types
+        // If method_byte is Lightweight, use LZ4 codec for non-number types
+        if (!isInteger(setting.data_type) && !isFloat(setting.data_type)
+            && setting.method_byte == CompressionMethodByte::Lightweight)
+        {
+            auto method = CompressionMethod::LZ4;
+            CompressionSetting setting(method, CompressionSetting::getDefaultLevel(method));
+            return getStaticCodec<CompressionCodecLZ4>(setting);
+        }
+
         // If method_byte is DeltaFOR/RunLength/FOR, since we do not support use these methods independently,
         // there must be another codec to compress data. Use that compress codec directly.
-        if (!isInteger(setting.data_type))
+        if (!isInteger(setting.data_type) && setting.method_byte != CompressionMethodByte::Lightweight)
         {
-            if (setting.method_byte == CompressionMethodByte::Lightweight)
-            {
-                // Use LZ4 codec for non-integral types
-                // TODO: maybe we can use zstd?
-                auto method = CompressionMethod::LZ4;
-                CompressionSetting setting(method, CompressionSetting::getDefaultLevel(method));
-                return getStaticCodec<CompressionCodecLZ4>(setting);
-            }
-            else
-                return nullptr;
+            return nullptr;
         }
-        // else fallthrough
     }
 
     switch (setting.method_byte)
