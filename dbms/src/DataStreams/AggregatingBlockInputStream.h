@@ -40,7 +40,8 @@ public:
         const Aggregator::Params & params_,
         bool final_,
         const String & req_id,
-        const RegisterOperatorSpillContext & register_operator_spill_context)
+        const RegisterOperatorSpillContext & register_operator_spill_context,
+        const HashTableStatsProfileInfoPtr & hash_table_stats_profile_info = nullptr)
         : log(Logger::get(req_id))
         , params(params_)
         , aggregator(
@@ -49,7 +50,8 @@ public:
               1,
               register_operator_spill_context,
               /*is_auto_pass_through=*/false,
-              params.use_magic_hash)
+              params.use_magic_hash,
+              hash_table_stats_profile_info)
         , final(final_)
     {
         children.push_back(input);

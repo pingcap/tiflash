@@ -241,14 +241,15 @@ void JoinPartition::updateHashMapAndPoolMemoryUsage()
     hash_table_pool_memory_usage = getHashMapAndPoolByteCount();
 }
 
-size_t JoinPartition::getHashMapAndPoolByteCount()
+size_t JoinPartition::getHashMapAndPoolByteCount() const
 {
     size_t ret = 0;
     ret += getByteCountImpl(maps_any, join_map_method);
     ret += getByteCountImpl(maps_all, join_map_method);
     ret += getByteCountImpl(maps_all_full, join_map_method);
     ret += getByteCountImpl(maps_all_full_with_row_flag, join_map_method);
-    ret += pool->size();
+    if (pool)
+        ret += pool->size();
     return ret;
 }
 

@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Flash/Coprocessor/ExecutionSummary.h>
 #include <Flash/Statistics/ExecutorStatistics.h>
 #include <tipb/executor.pb.h>
 
@@ -29,7 +30,28 @@ struct AggImpl
 
     static bool isSourceExecutor() { return false; }
 };
-using AggStatistics = ExecutorStatistics<AggImpl>;
+using AggStatisticsBase = ExecutorStatistics<AggImpl>;
+
+class AggStatistics : public AggStatisticsBase
+{
+public:
+    AggStatistics(const tipb::Executor * executor, DAGContext & dag_context)
+        : AggStatisticsBase(executor, dag_context)
+    {}
+
+    void fillExtraExecutionSummary(ExecutionSummary & summary) const override
+    {
+        // The statistics collector for an MPP task is initialized before the physical
+        // plan is built.  The aggregation profile is registered while building that
+        // plan, so it must be looked up when the summary is filled rather than cached
+        // in the constructor above.
+        const auto hash_table_stats_profile_info = dag_context.getAggregationProfileInfo(executor_id);
+        if (!hash_table_stats_profile_info)
+            return;
+        if (const auto stats = hash_table_stats_profile_info->getHashTableStats(); stats)
+            summary.hash_table_stats = *stats;
+    }
+};
 
 struct WindowImpl
 {

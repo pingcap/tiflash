@@ -18,6 +18,8 @@
 
 namespace DB
 {
+struct ExecutionSummary;
+
 class ExecutorStatisticsBase
 {
 public:
@@ -28,6 +30,8 @@ public:
     virtual void setChildren(const std::vector<String> & children) = 0;
 
     virtual void collectRuntimeDetail() = 0;
+
+    virtual void fillExtraExecutionSummary(ExecutionSummary &) const {}
 
     bool isSourceExecutor() const { return is_source_executor; }
 

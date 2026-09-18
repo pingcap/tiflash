@@ -238,6 +238,42 @@ try
 }
 CATCH
 
+TEST_F(SpillJoinTestRunner, HashTableStatsAfterSpill)
+try
+{
+    context.addMockTable(
+        "hash_table_stats_spill",
+        "probe_table",
+        {{"a", TiDB::TP::TypeLong, false}},
+        {toVec<Int32>("a", {1, 2, 3, 4, 5, 6, 7, 8, 9, 0})});
+    context.addMockTable(
+        "hash_table_stats_spill",
+        "build_table",
+        {{"a", TiDB::TP::TypeLong, false}, {"payload", TiDB::TP::TypeString, false}},
+        {toVec<Int32>("a", {1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9, 0, 0, 0}),
+         toVec<String>("payload", std::vector<String>(30, String(128, 'x')))});
+
+    auto request
+        = context.scan("hash_table_stats_spill", "probe_table")
+              .join(context.scan("hash_table_stats_spill", "build_table"), tipb::JoinType::TypeInnerJoin, {col("a")})
+              .build(context);
+    request->set_collect_execution_summaries(true);
+    context.context->getSettingsRef().enable_hash_join_v2 = false;
+    context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(10000)));
+
+    DAGContext dag_context(*request, "hash_table_stats_spill", 10);
+    executeStreams(&dag_context);
+
+    const auto & join_execute_info = dag_context.getJoinExecuteInfoMap().at("Join_2");
+    ASSERT_TRUE(join_execute_info.join_profile_info->is_spilled);
+    const auto hash_table_stats = join_execute_info.join_profile_info->getHashTableStats();
+    ASSERT_TRUE(hash_table_stats.has_value());
+    ASSERT_EQ(hash_table_stats->size, 10);
+    ASSERT_EQ(hash_table_stats->size_kind, HashTableSizeKind::DistinctKeyCount);
+    ASSERT_GT(hash_table_stats->memory_bytes, 0);
+}
+CATCH
+
 TEST_F(SpillJoinTestRunner, ScanHashMapAfterProbeDataWithSpillEnabledAndSpillTriggered)
 try
 {

@@ -50,6 +50,9 @@ struct AutoPassThroughSwitcher
 class AutoPassThroughHashAggContext
 {
 public:
+    static constexpr size_t DEF_NORMAL_UNIT_NUM = 1;
+    static constexpr size_t DEF_DYNAMIC_UNIT_NUM = 5;
+
     AutoPassThroughHashAggContext(
         const Block & child_header_,
         const Aggregator::Params & params_,
@@ -57,7 +60,8 @@ public:
         const String & req_id_,
         UInt64 row_limit_unit_,
         UInt64 normal_unit_num_ = DEF_NORMAL_UNIT_NUM,
-        UInt64 dynamic_unit_num_ = DEF_DYNAMIC_UNIT_NUM)
+        UInt64 dynamic_unit_num_ = DEF_DYNAMIC_UNIT_NUM,
+        HashTableStatsProfileInfoPtr hash_table_stats_profile_info_ = nullptr)
         : state(State::Init)
         , many_data(std::vector<AggregatedDataVariantsPtr>(1, nullptr))
         , normal_row_limit(row_limit_unit_ * normal_unit_num_)
@@ -72,7 +76,8 @@ public:
             /*concurrency=*/1,
             nullptr,
             /*is_auto_pass_through=*/true,
-            params_.use_magic_hash);
+            params_.use_magic_hash,
+            std::move(hash_table_stats_profile_info_));
         aggregator->setCancellationHook(hook);
         aggregator->initThresholdByAggregatedDataVariantsSize(1);
         RUNTIME_CHECK(aggregator->getParams().keys_size > 0);
@@ -230,9 +235,6 @@ private:
 
     static constexpr size_t INIT_STATE_HASHMAP_THRESHOLD = 2 * 1024 * 1024;
     static constexpr size_t MAX_DYNAMIC_UNIT_LIMIT = 100;
-    static constexpr size_t DEF_NORMAL_UNIT_NUM = 1;
-    static constexpr size_t DEF_DYNAMIC_UNIT_NUM = 5;
-
     std::vector<AutoPassThroughColumnGenerator> column_generators;
 };
 

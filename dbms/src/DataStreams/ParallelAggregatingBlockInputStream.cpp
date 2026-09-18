@@ -34,7 +34,8 @@ ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     Int64 max_buffered_bytes_,
     size_t temporary_data_merge_threads_,
     const String & req_id,
-    const RegisterOperatorSpillContext & register_operator_spill_context)
+    const RegisterOperatorSpillContext & register_operator_spill_context,
+    const HashTableStatsProfileInfoPtr & hash_table_stats_profile_info)
     : log(Logger::get(req_id))
     , max_threads(std::min(inputs.size(), max_threads_))
     , params(params_)
@@ -44,7 +45,8 @@ ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
           max_threads,
           register_operator_spill_context,
           /*is_auto_pass_through=*/false,
-          params.use_magic_hash)
+          params.use_magic_hash,
+          hash_table_stats_profile_info)
     , final(final_)
     , max_buffered_bytes(max_buffered_bytes_)
     , temporary_data_merge_threads(temporary_data_merge_threads_)
@@ -137,7 +139,8 @@ Block ParallelAggregatingBlockInputStream::readImpl()
                 final,
                 temporary_data_merge_threads,
                 temporary_data_merge_threads,
-                log->identifier());
+                log->identifier(),
+                aggregator.getHashTableStatsProfileInfo());
         }
 
         executed = true;

@@ -54,6 +54,10 @@ public:
     }
 
     size_t getPointerTableSize() const { return pointer_table_size; }
+    size_t getMemoryUsage() const
+    {
+        return pointer_table == nullptr ? 0 : pointer_table_size * sizeof(std::atomic<uintptr_t>);
+    }
 
     bool enableProbePrefetch() const { return enable_probe_prefetch; }
     bool enableTaggedPointer() const { return enable_tagged_pointer; }

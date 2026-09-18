@@ -35,6 +35,18 @@
 
 namespace DB
 {
+HashTableStatsProfileInfoPtr PhysicalAggregation::initHashTableStatsProfileInfo(Context & context)
+{
+    if (!hash_table_stats_profile_info)
+    {
+        hash_table_stats_profile_info = std::make_shared<HashTableStatsProfileInfo>();
+        if (auto * dag_context = context.getDAGContext(); dag_context != nullptr)
+            dag_context->addAggregationProfileInfo(executor_id, hash_table_stats_profile_info);
+    }
+
+    return hash_table_stats_profile_info;
+}
+
 PhysicalPlanNodePtr PhysicalAggregation::build(
     const Context & context,
     const String & executor_id,
@@ -121,6 +133,8 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
     // Fine grained shuffle is for 2nd agg, auto pass through is for 1st agg.
     RUNTIME_CHECK(!(fine_grained_shuffle.enabled() && auto_pass_through_switcher.enabled()));
 
+    const auto hash_table_stats_profile = initHashTableStatsProfileInfo(context);
+
     child->buildBlockInputStream(pipeline, context, max_streams);
 
     executeExpression(pipeline, before_agg_actions, log, "before aggregation");
@@ -167,7 +181,8 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
                         fine_grained_spill_context->addOperatorSpillContext(operator_spill_context);
                     else if (context.getDAGContext() != nullptr)
                         context.getDAGContext()->registerOperatorSpillContext(operator_spill_context);
-                });
+                },
+                hash_table_stats_profile);
             stream->setExtraInfo(String(enableFineGrainedShuffleExtraInfo));
         });
         if (fine_grained_spill_context != nullptr)
@@ -182,7 +197,8 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
                     stream,
                     params,
                     log->identifier(),
-                    context.getSettings().max_block_size);
+                    context.getSettings().max_block_size,
+                    hash_table_stats_profile);
                 stream->setExtraInfo(String(autoPassThroughAggregatingExtraInfo));
             });
         }
@@ -193,7 +209,8 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
                     stream,
                     params,
                     log->identifier(),
-                    context.getSettings().max_block_size);
+                    context.getSettings().max_block_size,
+                    hash_table_stats_profile);
                 stream->setExtraInfo(String(autoPassThroughAggregatingExtraInfo));
             });
         }
@@ -222,7 +239,8 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
                 {
                     context.getDAGContext()->registerOperatorSpillContext(operator_spill_context);
                 }
-            });
+            },
+            hash_table_stats_profile);
 
         pipeline.streams.resize(1);
         pipeline.firstStream() = std::move(stream);
@@ -246,7 +264,8 @@ void PhysicalAggregation::buildBlockInputStreamImpl(DAGPipeline & pipeline, Cont
                 {
                     context.getDAGContext()->registerOperatorSpillContext(operator_spill_context);
                 }
-            });
+            },
+            hash_table_stats_profile);
     }
 
     // we can record for agg after restore concurrency.
@@ -266,6 +285,7 @@ void PhysicalAggregation::buildPipelineExecGroupImpl(
     // Because for non fine grained shuffle, AggregateBuild and AggregateConvergent will be used to build aggregation.
     // Also auto pass through hashagg use PhysicalAggregation to build. But they cannot be true at the same time.
     RUNTIME_CHECK(fine_grained_shuffle.enabled() != auto_pass_through_switcher.enabled());
+    const auto hash_table_stats_profile = initHashTableStatsProfileInfo(context);
 
     // Auto pass through hashagg doesn't handle empty_result_for_aggregation_by_empty_set.
     // Also tidb shouldn't generate this kind plan because all data is aggregated into one row if keys_size == 0.
@@ -308,7 +328,8 @@ void PhysicalAggregation::buildPipelineExecGroupImpl(
                 exec_context,
                 log->identifier(),
                 params,
-                fine_grained_spill_context));
+                fine_grained_spill_context,
+                hash_table_stats_profile));
         });
         if (fine_grained_spill_context != nullptr)
             context.getDAGContext()->registerOperatorSpillContext(fine_grained_spill_context);
@@ -323,7 +344,8 @@ void PhysicalAggregation::buildPipelineExecGroupImpl(
                     exec_context,
                     params,
                     log->identifier(),
-                    context.getSettings().max_block_size));
+                    context.getSettings().max_block_size,
+                    hash_table_stats_profile));
             });
         }
         else if (auto_pass_through_switcher.isAuto())
@@ -334,7 +356,8 @@ void PhysicalAggregation::buildPipelineExecGroupImpl(
                     exec_context,
                     params,
                     log->identifier(),
-                    context.getSettings().max_block_size));
+                    context.getSettings().max_block_size,
+                    hash_table_stats_profile));
             });
         }
         else
@@ -358,7 +381,8 @@ void PhysicalAggregation::buildPipeline(
     Context & context,
     PipelineExecutorContext & exec_context)
 {
-    auto aggregate_context = std::make_shared<AggregateContext>(log->identifier());
+    const auto hash_table_stats_profile = initHashTableStatsProfileInfo(context);
+    auto aggregate_context = std::make_shared<AggregateContext>(log->identifier(), hash_table_stats_profile);
     // fine_grained_shuffle and auto_pass_through cannot be ture at the same time.
     RUNTIME_CHECK(!(fine_grained_shuffle.enabled() && auto_pass_through_switcher.enabled()));
     if (fine_grained_shuffle.enabled() || auto_pass_through_switcher.enabled())

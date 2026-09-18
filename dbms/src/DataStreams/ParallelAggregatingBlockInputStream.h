@@ -42,7 +42,8 @@ public:
         Int64 max_buffered_bytes_,
         size_t temporary_data_merge_threads_,
         const String & req_id,
-        const RegisterOperatorSpillContext & register_operator_spill_context);
+        const RegisterOperatorSpillContext & register_operator_spill_context,
+        const HashTableStatsProfileInfoPtr & hash_table_stats_profile_info = nullptr);
 
     String getName() const override { return NAME; }
 
