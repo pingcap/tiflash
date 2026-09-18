@@ -15,9 +15,11 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Flash/Pipeline/Schedule/TaskQueues/KeyspaceCpuLimiter.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/TaskQueue.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/TaskQueueType.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
+#include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPoolMetrics.h>
 
 #include <magic_enum.hpp>
@@ -35,17 +37,32 @@ struct ThreadPoolConfig
         : pool_size(pool_size_)
     {}
 
-    ThreadPoolConfig(size_t pool_size_, TaskQueueType queue_type_)
+    ThreadPoolConfig(
+        size_t pool_size_,
+        TaskQueueType queue_type_,
+        double keyspace_cpu_limit_ratio_ = 0.0,
+        double keyspace_pool_limit_ratio_ = 0.0)
         : pool_size(pool_size_)
         , queue_type(queue_type_)
+        , keyspace_cpu_limit_ratio(keyspace_cpu_limit_ratio_)
+        , keyspace_pool_limit_ratio(keyspace_pool_limit_ratio_)
     {}
 
     size_t pool_size;
     TaskQueueType queue_type = TaskQueueType::DEFAULT;
+    // Only read from the CPU pool configuration. CPU and IO pipeline tasks
+    // share the same per-keyspace limits.
+    double keyspace_cpu_limit_ratio = 0.0;
+    double keyspace_pool_limit_ratio = 0.0;
 
     String toString() const
     {
-        return fmt::format("[pool_size: {}, queue_type: {}]", pool_size, magic_enum::enum_name(queue_type));
+        return fmt::format(
+            "[pool_size: {}, queue_type: {}, keyspace_cpu_limit_ratio: {}, keyspace_pool_limit_ratio: {}]",
+            pool_size,
+            magic_enum::enum_name(queue_type),
+            keyspace_cpu_limit_ratio,
+            keyspace_pool_limit_ratio);
     }
 };
 
@@ -53,10 +70,13 @@ template <typename Impl>
 class TaskThreadPool
 {
 public:
-    TaskThreadPool(TaskScheduler & scheduler_, const ThreadPoolConfig & config);
+    TaskThreadPool(
+        TaskScheduler & scheduler_,
+        const ThreadPoolConfig & config,
+        const KeyspaceCpuLimiterPtr & keyspace_cpu_limiter);
 
     // After finish is called, the submitted task will be finalized directly.
-    // And the remaing tasks in task_queue will be taken out and executed normally.
+    // And the remaining tasks in task_queue will be taken out and executed normally.
     void finish();
 
     void waitForStop();
@@ -83,6 +103,8 @@ private:
     std::vector<std::thread> threads;
 
     TaskThreadPoolMetrics<Impl::is_cpu> metrics;
+
+    KeyspaceCpuLimiterPtr keyspace_cpu_limiter;
 };
 
 } // namespace DB

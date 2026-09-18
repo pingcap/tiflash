@@ -30,9 +30,13 @@
 namespace DB
 {
 template <typename Impl>
-TaskThreadPool<Impl>::TaskThreadPool(TaskScheduler & scheduler_, const ThreadPoolConfig & config)
-    : task_queue(Impl::newTaskQueue(config.queue_type))
+TaskThreadPool<Impl>::TaskThreadPool(
+    TaskScheduler & scheduler_,
+    const ThreadPoolConfig & config,
+    const KeyspaceCpuLimiterPtr & keyspace_cpu_limiter)
+    : task_queue(Impl::newTaskQueue(config.queue_type, keyspace_cpu_limiter))
     , scheduler(scheduler_)
+    , keyspace_cpu_limiter(keyspace_cpu_limiter)
 {
     RUNTIME_CHECK(config.pool_size > 0);
     threads.reserve(config.pool_size);
@@ -92,23 +96,40 @@ template <typename Impl>
 void TaskThreadPool<Impl>::handleTask(TaskPtr & task)
 {
     assert(task);
+    const auto * const task_ptr = task.get();
+    bool reservation_released = false;
+    const bool cpu_quota_enabled = keyspace_cpu_limiter && keyspace_cpu_limiter->isCPUQuotaEnabled();
+    SCOPE_EXIT({
+        if (keyspace_cpu_limiter && !reservation_released)
+            keyspace_cpu_limiter->release(task_ptr);
+    });
     TaskTimer timer{task->profile_info};
+    if (cpu_quota_enabled)
+        timer.startCPUTime();
     task->beforeExec(&timer);
+    if (cpu_quota_enabled)
+        keyspace_cpu_limiter->consumeCPUTime(task.get(), timer.updateCPUExecutingTime());
 
     metrics.incExecutingTask();
     metrics.elapsedPendingTime(task);
 
     auto status_before_exec = task->getStatus();
     auto status_after_exec = status_before_exec;
+    const UInt64 cpu_time_before_exec = timer.cpu_executing_time;
     while (true)
     {
         status_after_exec = Impl::exec(task);
         auto total_time_spent = timer.updateExecutingTime();
+        const bool cpu_quota_exhausted
+            = cpu_quota_enabled && keyspace_cpu_limiter->consumeCPUTime(task.get(), timer.updateCPUExecutingTime());
         // The executing task should yield if it takes more than `YIELD_MAX_TIME_SPENT_NS`.
-        if (!Impl::isTargetStatus(status_after_exec) || total_time_spent >= YIELD_MAX_TIME_SPENT_NS)
+        if (!Impl::isTargetStatus(status_after_exec) || total_time_spent >= YIELD_MAX_TIME_SPENT_NS
+            || cpu_quota_exhausted)
             break;
     }
+    task->profile_info.addThreadCPUTimeNs(timer.cpu_executing_time - cpu_time_before_exec);
     task_queue->updateStatistics(task, status_before_exec, timer.executing_time);
+    reservation_released = true;
     metrics.addExecuteTime(task, timer.executing_time);
     metrics.decExecutingTask();
     switch (status_after_exec)

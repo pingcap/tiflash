@@ -15,9 +15,12 @@
 #pragma once
 
 
+#include <Flash/Pipeline/Schedule/TaskQueues/KeyspaceCpuLimiter.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/TaskQueue.h>
 #include <Flash/Pipeline/Schedule/TaskQueues/TaskQueueType.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
+
+#include <cstddef>
 
 namespace DB
 {
@@ -31,7 +34,7 @@ struct CPUImpl
 
     static ExecTaskStatus exec(TaskPtr & task) { return task->execute(); }
 
-    static TaskQueuePtr newTaskQueue(TaskQueueType type);
+    static TaskQueuePtr newTaskQueue(TaskQueueType type, const KeyspaceCpuLimiterPtr & keyspace_cpu_limiter);
 };
 
 struct IOImpl
@@ -47,6 +50,6 @@ struct IOImpl
 
     static ExecTaskStatus exec(TaskPtr & task) { return task->executeIO(); }
 
-    static TaskQueuePtr newTaskQueue(TaskQueueType type);
+    static TaskQueuePtr newTaskQueue(TaskQueueType type, const KeyspaceCpuLimiterPtr & keyspace_cpu_limiter);
 };
 } // namespace DB

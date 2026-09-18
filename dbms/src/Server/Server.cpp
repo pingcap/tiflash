@@ -1270,9 +1270,18 @@ try
             auto get_pool_size = [](const auto & setting) {
                 return setting == 0 ? getNumberOfLogicalCPUCores() : static_cast<size_t>(setting);
             };
+            RUNTIME_CHECK(
+                settings.pipeline_keyspace_cpu_limit_ratio >= 0.0 && settings.pipeline_keyspace_cpu_limit_ratio <= 1.0,
+                settings.pipeline_keyspace_cpu_limit_ratio);
+            RUNTIME_CHECK(
+                settings.pipeline_keyspace_pool_limit_ratio >= 0.0
+                    && settings.pipeline_keyspace_pool_limit_ratio <= 1.0,
+                settings.pipeline_keyspace_pool_limit_ratio);
             TaskSchedulerConfig config{
                 {get_pool_size(settings.pipeline_cpu_task_thread_pool_size),
-                 settings.pipeline_cpu_task_thread_pool_queue_type},
+                 settings.pipeline_cpu_task_thread_pool_queue_type,
+                 settings.pipeline_keyspace_cpu_limit_ratio,
+                 settings.pipeline_keyspace_pool_limit_ratio},
                 {get_pool_size(settings.pipeline_io_task_thread_pool_size),
                  settings.pipeline_io_task_thread_pool_queue_type},
             };
