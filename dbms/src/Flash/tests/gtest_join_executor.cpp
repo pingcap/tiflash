@@ -12,8 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
+#include <Common/SyncPoint/Ctl.h>
+#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/executeQuery.h>
 #include <Flash/tests/gtest_join.h>
 
+#include <chrono>
+#include <future>
 #include <magic_enum.hpp>
 
 namespace DB
@@ -255,6 +261,104 @@ try
     }
 }
 CATCH
+
+#if !defined(NDEBUG) && defined(FIU_ENABLE)
+TEST_F(JoinExecutorTestRunner, PipelineRightOuterJoinLimitMaySkipProbeFinish)
+try
+{
+    const MockColumnInfoVec columns{{"key", TiDB::TP::TypeLong, false}};
+    context.addExchangeReceiver("probe", columns, {toVec<Int32>("key", {})}, 2);
+    context.mockStorage()->addFineGrainedExchangeData(
+        "probe",
+        {ColumnsWithTypeAndName{toVec<Int32>("key", {1, 1})}, ColumnsWithTypeAndName{toVec<Int32>("key", {})}});
+    context.addMockTable("limit_join", "build", columns, {toVec<Int32>("key", {1, 100})});
+
+    context.context->setSetting("enable_resource_control", "true");
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(1)));
+    auto request = context.receive("probe", 2)
+                       .join(context.scan("limit_join", "build"), tipb::JoinType::TypeRightOuterJoin, {col("key")})
+                       .limit(1)
+                       .build(context);
+
+    DAGContext dagContext(*request, "pipeline_right_outer_join_limit", 2);
+    TiFlashTestEnv::setUpTestContext(*context.context, &dagContext, context.mockStorage(), TestType::EXECUTOR_TEST);
+    auto queryExecutor = queryExecute(*context.context, true);
+    ASSERT_EQ(dagContext.getExecutionMode(), ExecutionMode::Pipeline);
+
+    // Keep the stream with data from reaching the probe input until the empty stream has reported probe completion.
+    auto stream_0_gate = SyncPointCtl::enableInScope("before_hash_join_probe_stream_0");
+    auto stream_1_finished = SyncPointCtl::enableInScope("after_hash_join_finish_one_probe_stream_1");
+    auto probe_stopped = SyncPointCtl::enableInScope("after_hash_join_probe_stop");
+    auto execution
+        = std::async(std::launch::async, [&queryExecutor]() { return queryExecutor->execute([](const Block &) {}); });
+
+    // This is only a watchdog. Sanitizer CI can delay an already scheduled pipeline event for over one second.
+    constexpr auto test_timeout = std::chrono::seconds(10);
+    auto waitForSyncPoint = [test_timeout](SyncPointScopeGuard & sync_point) {
+        std::promise<void> waiter_started;
+        auto waiter_started_future = waiter_started.get_future();
+        auto waiting = std::async(std::launch::async, [&sync_point, waiter = std::move(waiter_started)]() mutable {
+            waiter.set_value();
+            try
+            {
+                sync_point.waitAndPause();
+                return true;
+            }
+            catch (...)
+            {
+                return false;
+            }
+        });
+        waiter_started_future.wait();
+        if (waiting.wait_for(test_timeout) == std::future_status::ready)
+            return waiting.get();
+
+        // Closing the sync point releases a thread blocked in SyncPointCtl::sync().
+        sync_point.disable();
+        waiting.get();
+        return false;
+    };
+
+    auto cleanup = [&] {
+        stream_0_gate.disable();
+        stream_1_finished.disable();
+        probe_stopped.disable();
+        queryExecutor->cancel();
+        execution.get();
+    };
+
+    // The empty stream has now decremented pending_probe_streams and is held before it can continue.
+    if (!waitForSyncPoint(stream_1_finished))
+    {
+        cleanup();
+        FAIL() << "The empty probe stream did not reach finishOneProbe().";
+    }
+    // Confirm that stream 0 has acquired the sync channels before disabling the input gate.
+    if (!waitForSyncPoint(stream_0_gate))
+    {
+        cleanup();
+        FAIL() << "The data probe stream did not reach the input gate.";
+    }
+    stream_0_gate.disable();
+
+    // The data stream reaches LIMIT and publishes the shared stop state before the empty stream is released.
+    if (!waitForSyncPoint(probe_stopped))
+    {
+        cleanup();
+        FAIL() << "The data probe stream did not publish probe stop after LIMIT.";
+    }
+    probe_stopped.next();
+    stream_1_finished.next();
+
+    if (execution.wait_for(test_timeout) != std::future_status::ready)
+    {
+        cleanup();
+        FAIL() << "Pipeline execution did not finish after the hash join probe stop.";
+    }
+    ASSERT_TRUE(execution.get().is_success);
+}
+CATCH
+#endif
 
 TEST_F(JoinExecutorTestRunner, MultiJoin)
 try
