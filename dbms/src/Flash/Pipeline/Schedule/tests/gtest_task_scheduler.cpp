@@ -14,11 +14,16 @@
 
 #include <Common/Exception.h>
 #include <Common/MemoryTrackerSetter.h>
+#include <Common/getNumberOfCPUCores.h>
 #include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
+
+#include <atomic>
+#include <ext/scope_guard.h>
+#include <stdexcept>
 
 namespace DB::tests
 {
@@ -173,6 +178,75 @@ protected:
 
     ExecTaskStatus executeIOImpl() override { return ExecTaskStatus::RUNNING; }
 };
+
+class KeyspaceLimiterTask : public Task
+{
+public:
+    KeyspaceLimiterTask(
+        PipelineExecutorContext & exec_context_,
+        bool enter_io_,
+        std::atomic_bool & cpu_started_,
+        std::atomic_bool & io_started_,
+        std::atomic_bool & allow_io_finish_)
+        : Task(exec_context_)
+        , enter_io(enter_io_)
+        , cpu_started(cpu_started_)
+        , io_started(io_started_)
+        , allow_io_finish(allow_io_finish_)
+    {}
+
+protected:
+    ExecTaskStatus executeImpl() override
+    {
+        cpu_started.store(true, std::memory_order_release);
+        return enter_io ? ExecTaskStatus::IO_IN : ExecTaskStatus::FINISHED;
+    }
+
+    ExecTaskStatus executeIOImpl() override
+    {
+        io_started.store(true, std::memory_order_release);
+        while (!allow_io_finish.load(std::memory_order_acquire))
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        return ExecTaskStatus::FINISHED;
+    }
+
+private:
+    const bool enter_io;
+    std::atomic_bool & cpu_started;
+    std::atomic_bool & io_started;
+    std::atomic_bool & allow_io_finish;
+};
+
+class ThrowingTask : public Task
+{
+public:
+    ThrowingTask(PipelineExecutorContext & exec_context_, std::atomic_bool & started_)
+        : Task(exec_context_)
+        , started(started_)
+    {}
+
+protected:
+    ExecTaskStatus executeImpl() override
+    {
+        started.store(true, std::memory_order_release);
+        throw std::runtime_error("test task failure");
+    }
+
+private:
+    std::atomic_bool & started;
+};
+
+bool waitForFlag(const std::atomic_bool & flag, std::chrono::milliseconds timeout)
+{
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (!flag.load(std::memory_order_acquire))
+    {
+        if (std::chrono::steady_clock::now() >= deadline)
+            return false;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    return true;
+}
 } // namespace
 
 class TaskSchedulerTestRunner : public ::testing::Test
@@ -258,6 +332,136 @@ try
         for (auto task_num : task_nums)
             do_test(task_thread_pool_size, task_num);
     }
+}
+CATCH
+
+TEST_F(TaskSchedulerTestRunner, keyspacePoolLimiterIsSharedByCPUPoolAndIOPool)
+try
+{
+    const auto original_logical_cpu_cores = getNumberOfLogicalCPUCores();
+    setNumberOfLogicalCPUCores(1);
+    SCOPE_EXIT({ setNumberOfLogicalCPUCores(original_logical_cpu_cores); });
+
+    const auto logical_cpu_cores = getNumberOfLogicalCPUCores();
+    const double one_slot_ratio = 1.0 / static_cast<double>(logical_cpu_cores);
+    TaskSchedulerConfig config{
+        {1, TaskQueueType::MLFQ, 0.0, one_slot_ratio},
+        {1, TaskQueueType::IO_PRIORITY},
+    };
+
+    PipelineExecutorContext keyspace_one_context("keyspace-one", "", nullptr, nullptr, nullptr, nullptr, 1);
+    PipelineExecutorContext keyspace_two_context("keyspace-two", "", nullptr, nullptr, nullptr, nullptr, 2);
+    std::atomic_bool first_cpu_started = false;
+    std::atomic_bool first_io_started = false;
+    std::atomic_bool second_cpu_started = false;
+    std::atomic_bool other_keyspace_cpu_started = false;
+    std::atomic_bool unused_io_started = false;
+    std::atomic_bool allow_io_finish = false;
+
+    TaskScheduler task_scheduler{config};
+    SCOPE_EXIT({ allow_io_finish.store(true, std::memory_order_release); });
+
+    task_scheduler.submit(std::make_unique<KeyspaceLimiterTask>(
+        keyspace_one_context,
+        true,
+        first_cpu_started,
+        first_io_started,
+        allow_io_finish));
+    ASSERT_TRUE(waitForFlag(first_io_started, std::chrono::seconds(5)));
+
+    task_scheduler.submit(std::make_unique<KeyspaceLimiterTask>(
+        keyspace_one_context,
+        false,
+        second_cpu_started,
+        unused_io_started,
+        allow_io_finish));
+    task_scheduler.submit(std::make_unique<KeyspaceLimiterTask>(
+        keyspace_two_context,
+        false,
+        other_keyspace_cpu_started,
+        unused_io_started,
+        allow_io_finish));
+
+    ASSERT_TRUE(waitForFlag(other_keyspace_cpu_started, std::chrono::seconds(5)));
+    ASSERT_FALSE(second_cpu_started.load(std::memory_order_acquire));
+
+    allow_io_finish.store(true, std::memory_order_release);
+    ASSERT_TRUE(waitForFlag(second_cpu_started, std::chrono::seconds(5)));
+    keyspace_one_context.waitFor(std::chrono::seconds(15));
+    keyspace_two_context.waitFor(std::chrono::seconds(15));
+}
+CATCH
+
+TEST_F(TaskSchedulerTestRunner, keyspaceLimiterReservationReleasedWhenExecuteReportsError)
+try
+{
+    const auto original_logical_cpu_cores = getNumberOfLogicalCPUCores();
+    setNumberOfLogicalCPUCores(1);
+    SCOPE_EXIT({ setNumberOfLogicalCPUCores(original_logical_cpu_cores); });
+
+    const auto logical_cpu_cores = getNumberOfLogicalCPUCores();
+    const double one_slot_ratio = 1.0 / static_cast<double>(logical_cpu_cores);
+    TaskSchedulerConfig config{
+        {1, TaskQueueType::MLFQ, 0.0, one_slot_ratio},
+        {1, TaskQueueType::IO_PRIORITY},
+    };
+
+    PipelineExecutorContext throwing_context("throwing-task", "", nullptr, nullptr, nullptr, nullptr, 1);
+    PipelineExecutorContext next_context("next-task", "", nullptr, nullptr, nullptr, nullptr, 1);
+    std::atomic_bool throwing_started = false;
+    std::atomic_bool second_started = false;
+    std::atomic_bool unused_io_started = false;
+    std::atomic_bool allow_io_finish = true;
+
+    TaskScheduler task_scheduler{config};
+    task_scheduler.submit(std::make_unique<ThrowingTask>(throwing_context, throwing_started));
+    task_scheduler.submit(
+        std::make_unique<KeyspaceLimiterTask>(next_context, false, second_started, unused_io_started, allow_io_finish));
+
+    ASSERT_TRUE(waitForFlag(throwing_started, std::chrono::seconds(5)));
+    ASSERT_TRUE(waitForFlag(second_started, std::chrono::seconds(5)));
+}
+CATCH
+
+TEST_F(TaskSchedulerTestRunner, keyspaceLimiterSchedulerDestructorWakesWaiter)
+try
+{
+    const auto original_logical_cpu_cores = getNumberOfLogicalCPUCores();
+    setNumberOfLogicalCPUCores(1);
+    SCOPE_EXIT({ setNumberOfLogicalCPUCores(original_logical_cpu_cores); });
+
+    const auto logical_cpu_cores = getNumberOfLogicalCPUCores();
+    const double one_slot_ratio = 1.0 / static_cast<double>(logical_cpu_cores);
+    TaskSchedulerConfig config{
+        {1, TaskQueueType::MLFQ, 0.0, one_slot_ratio},
+        {1, TaskQueueType::IO_PRIORITY},
+    };
+
+    PipelineExecutorContext context("destructor-waiter", "", nullptr, nullptr, nullptr, nullptr, 1);
+    std::atomic_bool first_cpu_started = false;
+    std::atomic_bool first_io_started = false;
+    std::atomic_bool second_cpu_started = false;
+    std::atomic_bool unused_io_started = false;
+    std::atomic_bool allow_io_finish = false;
+
+    {
+        TaskScheduler task_scheduler{config};
+        task_scheduler.submit(
+            std::make_unique<KeyspaceLimiterTask>(context, true, first_cpu_started, first_io_started, allow_io_finish));
+        ASSERT_TRUE(waitForFlag(first_io_started, std::chrono::seconds(5)));
+
+        task_scheduler.submit(std::make_unique<KeyspaceLimiterTask>(
+            context,
+            false,
+            second_cpu_started,
+            unused_io_started,
+            allow_io_finish));
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        ASSERT_FALSE(second_cpu_started.load(std::memory_order_acquire));
+        allow_io_finish.store(true, std::memory_order_release);
+    }
+
+    context.waitFor(std::chrono::seconds(5));
 }
 CATCH
 
