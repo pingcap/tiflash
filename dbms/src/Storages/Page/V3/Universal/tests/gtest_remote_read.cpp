@@ -117,7 +117,11 @@ public:
     }
 
 protected:
-    void deleteBucket() { ::DB::tests::TiFlashTestEnv::deleteBucket(*s3_client); }
+    void deleteBucket()
+    {
+        if (DB::tests::TiFlashTestEnv::isMockedS3Client())
+            ::DB::tests::TiFlashTestEnv::deleteBucket(*s3_client);
+    }
 
 protected:
     StoreID test_store_id = 1234;
