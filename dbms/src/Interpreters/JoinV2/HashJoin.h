@@ -80,7 +80,7 @@ public:
     /// comes from an exchange receiver, skipping the probe would fail the remote senders that
     /// are still transmitting data, so the skip-probe optimization only applies to local sources.
     /// It defaults to false so that any execution path not setting it explicitly stays on the safe side.
-    void setLocalProbeSource(bool is_local) { local_probe_source = is_local; }
+    void setLocalProbeSource(bool isLocal) { local_probe_source = isLocal; }
 
     bool shouldSkipProbe() const
     {
