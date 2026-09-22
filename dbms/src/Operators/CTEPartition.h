@@ -62,10 +62,7 @@ struct CTEPartitionSharedConfig
         , query_id_and_cte_id(query_id_and_cte_id_)
         , log(log_)
         , partition_num(partition_num_)
-    {
-        auto * log = &Poco::Logger::get("LRUCache");
-        LOG_INFO(log, fmt::format("xzxdebug memory threshold is set for {}", this->memory_threshold));
-    }
+    {}
 
     SpillerPtr getSpiller(size_t partition_id, size_t spill_id)
     {
@@ -118,34 +115,6 @@ struct CTEPartition
         , expected_source_num(expected_source_num_)
     {}
 
-    // TODO remove it
-    void debugOutput()
-    {
-        // String total_info = fmt::format("total_blocks: {}, total_spill_blocks: {}", total_blocks, total_spill_blocks);
-        // String spill_ranges_info = "spill_ranges: ";
-        // for (auto & range : this->spill_ranges)
-        //     spill_ranges_info = fmt::format("{}, ({} - {})", spill_ranges_info, range.first, range.second);
-        // String fetch_in_mem_idxs_info = "fetch_in_mem_idxs: ";
-        // for (const auto & v : this->fetch_in_mem_idxs)
-        // {
-        //     String tmp_info;
-        //     for (auto idx : v.second)
-        //         tmp_info = fmt::format("{}, {}", tmp_info, idx);
-        //     fetch_in_mem_idxs_info = fmt::format("{} <{}: {}>", fetch_in_mem_idxs_info, v.first, tmp_info);
-        // }
-        // String fetch_in_disk_idxs_info = "fetch_in_disk_idxs: ";
-        // for (const auto & v : this->fetch_in_disk_idxs)
-        // {
-        //     String tmp_info;
-        //     for (auto idx : v.second)
-        //         tmp_info = fmt::format("{}, {}", tmp_info, idx);
-        //     fetch_in_disk_idxs_info = fmt::format("{} <{}: {}>", fetch_in_disk_idxs_info, v.first, tmp_info);
-        // }
-
-        // auto * log = &Poco::Logger::get("LRUCache");
-        // LOG_INFO(log, fmt::format("xzxdebug | {} | {} | {} | {}", total_info, spill_ranges_info, fetch_in_mem_idxs_info, fetch_in_disk_idxs_info));
-    }
-
     void setSharedConfig(std::shared_ptr<CTEPartitionSharedConfig> config) { this->config = config; }
 
     size_t getIdxInMemoryNoLock(size_t cte_reader_id);
@@ -191,7 +160,7 @@ struct CTEPartition
     CTEOpStatus pushBlock(const Block & block);
     bool needSpill(bool try_mark_need_spill = false);
     CTEOpStatus tryGetBlock(size_t cte_reader_id, Block & block);
-    CTEOpStatus spillBlocks(std::atomic_size_t & block_num, std::atomic_size_t & row_num);
+    CTEOpStatus spillBlocks();
     CTEOpStatus getBlockFromDisk(size_t cte_reader_id, Block & block);
 
     // Need aux_lock and mu
@@ -204,18 +173,6 @@ struct CTEPartition
         }
         tmp_blocks.clear();
     }
-
-    // -----------
-    // TODO delete them
-    std::atomic_size_t total_blocks = 0;
-    std::atomic_size_t total_spill_blocks = 0;
-
-    std::vector<std::pair<size_t, size_t>> spill_ranges;
-    std::map<size_t, std::vector<size_t>> fetch_in_mem_idxs;
-    std::map<size_t, std::vector<size_t>> fetch_in_disk_idxs;
-
-    bool first_log = true;
-    // -----------
 
     size_t total_byte_usage = 0;
 

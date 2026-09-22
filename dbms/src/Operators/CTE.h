@@ -23,7 +23,6 @@
 #include <Operators/CTEPartition.h>
 #include <tipb/select.pb.h>
 
-#include <atomic>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
@@ -32,15 +31,6 @@
 
 namespace DB
 {
-// TODO delete
-inline String genInfo(const String & name, const std::map<size_t, std::atomic_size_t> & data)
-{
-    String info = fmt::format("{}: ", name);
-    for (const auto & item : data)
-        info = fmt::format("{}, <{}, {}>", info, item.first, item.second.load());
-    return info;
-}
-
 class CTE
 {
 public:
@@ -65,42 +55,6 @@ public:
         for (size_t i = 0; i < this->partition_num; i++)
             this->partitions[i]->cv_for_test = std::make_unique<std::condition_variable>();
 #endif
-    }
-
-    // ------------------------
-    // TODO remove, for test
-    std::mutex mu_test;
-    std::atomic_size_t total_recv_blocks = 0;
-    std::atomic_size_t total_recv_rows = 0;
-    std::atomic_size_t total_spilled_blocks = 0;
-    std::atomic_size_t total_spilled_rows = 0;
-    std::map<size_t, std::atomic_size_t> total_fetch_blocks;
-    std::map<size_t, std::atomic_size_t> total_fetch_rows;
-    std::map<size_t, std::atomic_size_t> total_fetch_blocks_in_disk;
-    std::map<size_t, std::atomic_size_t> total_fetch_rows_in_disk;
-    // ------------------------
-
-    ~CTE()
-    {
-        // TODO delete ---------------
-        String info;
-        info = fmt::format(
-            "total_recv_blocks: {}, total_recv_rows: {}, total_spilled_blocks: {}, total_spilled_rows: {}, ",
-            total_recv_blocks.load(),
-            total_recv_rows.load(),
-            total_spilled_blocks.load(),
-            total_spilled_rows.load());
-        info = fmt::format("{} | {}", info, genInfo("total_fetch_blocks", this->total_fetch_blocks));
-        info = fmt::format("{} | {}", info, genInfo("total_fetch_rows", this->total_fetch_rows));
-        info = fmt::format("{} | {}", info, genInfo("total_fetch_blocks_in_disk", this->total_fetch_blocks_in_disk));
-        info = fmt::format("{} | {}", info, genInfo("total_fetch_rows_in_disk", this->total_fetch_rows_in_disk));
-
-        auto * log = &Poco::Logger::get("LRUCache");
-        LOG_INFO(log, fmt::format("xzxdebug CTE {}", info));
-
-        for (auto & p : this->partitions)
-            p->debugOutput();
-        // TODO ---------------
     }
 
     void initCTESpillContextAndPartitionConfig(

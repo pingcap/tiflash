@@ -60,18 +60,6 @@ public:
     {
         this->cte.reset();
         this->cte_manager->releaseCTEBySource(this->query_id_and_cte_id);
-
-        // TODO remove it
-        auto * log = &Poco::Logger::get("LRUCache");
-        LOG_INFO(
-            log,
-            fmt::format(
-                "xzxdebug CTEReader {} fb: {} fr: {}, from mem: {}, from disk: {}",
-                this->cte_reader_id,
-                this->total_fetch_blocks.load(),
-                this->total_fetch_rows.load(),
-                this->total_fetch_from_mem.load(),
-                this->total_fetch_from_disk.load()));
     }
 
     CTEOpStatus fetchNextBlock(size_t source_id, Block & block);

@@ -63,20 +63,9 @@ CTEOpStatus CTE::tryGetBlockAt(size_t cte_reader_id, size_t partition_id, Block 
         return CTEOpStatus::SINK_NOT_REGISTERED;
 
     auto status = this->partitions[partition_id]->tryGetBlock(cte_reader_id, block);
-    std::lock_guard<std::mutex> lock(this->mu_test); // TODO remove, for test
     switch (status)
     {
     case CTEOpStatus::OK:
-        // TODO delete ---------------------
-        {
-            auto [iter, _] = this->total_fetch_blocks.insert(std::make_pair(cte_reader_id, 0));
-            iter->second.fetch_add(1);
-        }
-        {
-            auto [iter, _] = this->total_fetch_rows.insert(std::make_pair(cte_reader_id, 0));
-            iter->second.fetch_add(block.rows());
-        }
-        // ---------------------
         return status;
     case CTEOpStatus::BLOCK_NOT_AVAILABLE:
         return this->is_eof ? CTEOpStatus::END_OF_FILE : CTEOpStatus::BLOCK_NOT_AVAILABLE;
@@ -93,11 +82,6 @@ CTEOpStatus CTE::pushBlock(size_t partition_id, const Block & block)
     if unlikely (block.rows() == 0)
         return CTEOpStatus::OK;
 
-    // TODO delete ------------------
-    this->total_recv_blocks.fetch_add(1);
-    this->total_recv_rows.fetch_add(block.rows());
-    // ------------------
-
     return this->partitions[partition_id]->pushBlock<for_test>(block);
 }
 
@@ -108,23 +92,7 @@ CTEOpStatus CTE::getBlockFromDisk(size_t cte_reader_id, size_t partition_id, Blo
         this->throwIfCancelledNoLock();
     }
 
-    auto ret = this->partitions[partition_id]->getBlockFromDisk(cte_reader_id, block);
-    // ---------------------
-    // TODO delete it
-    std::lock_guard<std::mutex> lock(this->mu_test);
-    if (ret == CTEOpStatus::OK && block)
-    {
-        {
-            auto [iter, _] = this->total_fetch_blocks_in_disk.insert(std::make_pair(cte_reader_id, 0));
-            iter->second.fetch_add(1);
-        }
-        {
-            auto [iter, _] = this->total_fetch_rows_in_disk.insert(std::make_pair(cte_reader_id, 0));
-            iter->second.fetch_add(block.rows());
-        }
-    }
-    // ---------------------
-    return ret;
+    return this->partitions[partition_id]->getBlockFromDisk(cte_reader_id, block);
 }
 
 CTEOpStatus CTE::spillBlocks(size_t partition_id)
@@ -134,7 +102,7 @@ CTEOpStatus CTE::spillBlocks(size_t partition_id)
         this->throwIfCancelledNoLock();
     }
 
-    return this->partitions[partition_id]->spillBlocks(this->total_spilled_blocks, this->total_spilled_rows);
+    return this->partitions[partition_id]->spillBlocks();
 }
 
 bool CTE::needSpill(size_t partition_id, bool try_mark_need_spill)

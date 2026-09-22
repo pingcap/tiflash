@@ -61,12 +61,7 @@ CTEOpStatus CTEPartition::tryGetBlock(size_t cte_reader_id, Block & block)
         this->memory_usage.fetch_sub(this->blocks[idx].block.bytes());
         this->blocks[idx].block.clear();
     }
-    // TODO delete -------------
-    {
-        auto [iter, _] = this->fetch_in_mem_idxs.insert(std::make_pair(cte_reader_id, 0));
-        iter->second.push_back(this->fetch_block_idxs[cte_reader_id]);
-    }
-    // -------------
+
     this->addIdxNoLock(cte_reader_id);
     return CTEOpStatus::OK;
 }
@@ -75,7 +70,6 @@ template <bool for_test>
 CTEOpStatus CTEPartition::pushBlock(const Block & block)
 {
     std::unique_lock<std::mutex> aux_lock(*(this->aux_lock));
-    this->total_blocks.fetch_add(1); // TODO delete
     CTEOpStatus ret_status = CTEOpStatus::OK;
     if unlikely (this->status != CTEPartitionStatus::NORMAL)
         this->tmp_blocks.push_back(block);
@@ -130,7 +124,7 @@ bool CTEPartition::needSpill(bool try_mark_need_spill)
     return true;
 }
 
-CTEOpStatus CTEPartition::spillBlocks(std::atomic_size_t & block_num, std::atomic_size_t & row_num)
+CTEOpStatus CTEPartition::spillBlocks()
 {
     std::unique_lock<std::mutex> lock(*(this->mu), std::defer_lock);
     {
@@ -148,18 +142,6 @@ CTEOpStatus CTEPartition::spillBlocks(std::atomic_size_t & block_num, std::atomi
 
         lock.lock();
         this->putTmpBlocksIntoBlocksNoLock();
-    }
-
-    if (this->first_log)
-    {
-        // TODO remove
-        LOG_INFO(
-            this->config->log,
-            fmt::format(
-                "xzxdebug Partition {} starts cte spill for {}",
-                this->partition_id,
-                this->config->query_id_and_cte_id));
-        this->first_log = false;
     }
 
     // Key represents logical index
@@ -188,16 +170,9 @@ CTEOpStatus CTEPartition::spillBlocks(std::atomic_size_t & block_num, std::atomi
         auto iter = blocks_begin_iter + split_iter->second;
         decltype(iter) end_iter;
         if (next_iter == split_idxs.end() || next_iter->second >= total_block_in_memory_num)
-        {
-            this->spill_ranges.push_back(
-                std::make_pair(split_iter->first, this->blocks.size() - split_iter->second + split_iter->first));
             end_iter = this->blocks.end();
-        }
         else
-        {
-            this->spill_ranges.push_back(std::make_pair(split_iter->first, next_iter->first));
             end_iter = blocks_begin_iter + next_iter->second;
-        }
 
         bool counter_is_zero = false;
         if (iter->counter == 0)
@@ -230,13 +205,6 @@ CTEOpStatus CTEPartition::spillBlocks(std::atomic_size_t & block_num, std::atomi
         this->total_block_in_disk_num += spilled_blocks.size();
 
         auto spiller = this->config->getSpiller(this->partition_id, this->spillers.size());
-
-        // TODO delete -----------------
-        this->total_spill_blocks.fetch_add(spilled_blocks.size());
-        block_num.fetch_add(spilled_blocks.size());
-        for (auto & block : spilled_blocks)
-            row_num.fetch_add(block.rows());
-        // -----------------
 
         spiller->spillBlocks(std::move(spilled_blocks), this->partition_id);
         spiller->finishSpill();
@@ -299,12 +267,6 @@ CTEOpStatus CTEPartition::getBlockFromDisk(size_t cte_reader_id, Block & block)
             continue;
         }
 
-        // TODO delete -------------
-        {
-            auto [iter, _] = this->fetch_in_disk_idxs.insert(std::make_pair(cte_reader_id, 0));
-            iter->second.push_back(this->fetch_block_idxs[cte_reader_id]);
-        }
-        // -------------
         this->addIdxNoLock(cte_reader_id);
         break;
     };
