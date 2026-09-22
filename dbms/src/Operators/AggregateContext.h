@@ -37,8 +37,11 @@ struct ThreadData
 class AggregateContext
 {
 public:
-    explicit AggregateContext(const String & req_id)
-        : log(Logger::get(req_id))
+    explicit AggregateContext(
+        const String & req_id,
+        HashTableStatsProfileInfoPtr hash_table_stats_profile_info_ = nullptr)
+        : hash_table_stats_profile_info(std::move(hash_table_stats_profile_info_))
+        , log(Logger::get(req_id))
     {}
 
     void initBuild(
@@ -94,6 +97,7 @@ public:
 
 private:
     std::unique_ptr<Aggregator> aggregator;
+    HashTableStatsProfileInfoPtr hash_table_stats_profile_info;
     size_t keys_size = 0;
     bool empty_result_for_aggregation_by_empty_set = false;
 

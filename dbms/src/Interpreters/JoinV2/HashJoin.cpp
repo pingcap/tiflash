@@ -465,6 +465,7 @@ void HashJoin::workAfterBuildRowFinish()
     size_t all_build_row_count = 0;
     for (size_t i = 0; i < build_concurrency; ++i)
         all_build_row_count += build_workers_data[i].row_count;
+    build_side_empty.store(all_build_row_count == 0, std::memory_order_release);
 
     bool enable_tagged_pointer = settings.enable_tagged_pointer;
     for (size_t i = 0; i < build_concurrency; ++i)
@@ -477,6 +478,18 @@ void HashJoin::workAfterBuildRowFinish()
         settings.probe_enable_prefetch_threshold,
         enable_tagged_pointer,
         false);
+
+    if (method != HashJoinKeyMethod::Cross)
+    {
+        HashTableStats hash_table_stats;
+        /// V2 reports build-side rows because the pointer table does not track distinct hash keys.
+        hash_table_stats.size = all_build_row_count;
+        hash_table_stats.size_kind = HashTableSizeKind::BuildRowCount;
+        hash_table_stats.memory_bytes = pointer_table.getMemoryUsage();
+        for (const auto & container : multi_row_containers)
+            hash_table_stats.memory_bytes += container->memoryUsage();
+        profile_info->setHashTableStats(hash_table_stats);
+    }
 
     /// Conservative threshold: trigger late materialization when lm_row_size average >= 16 bytes.
     constexpr size_t trigger_lm_row_size_threshold = 16;

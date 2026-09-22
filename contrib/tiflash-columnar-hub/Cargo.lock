@@ -1038,29 +1038,8 @@ dependencies = [
  "quote",
  "regex",
  "rustc-hash",
- "shlex 1.3.0",
+ "shlex",
  "which",
-]
-
-[[package]]
-name = "bindgen"
-version = "0.65.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfdf7b466f9a4903edc73f95d6d2bcd5baf8ae620638762244d3f60143643cc5"
-dependencies = [
- "bitflags 1.3.2",
- "cexpr",
- "clang-sys",
- "lazy_static",
- "lazycell",
- "peeking_take_while",
- "prettyplease",
- "proc-macro2",
- "quote",
- "regex",
- "rustc-hash",
- "shlex 1.3.0",
- "syn 2.0.117",
 ]
 
 [[package]]
@@ -1207,16 +1186,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bzip2-sys"
-version = "0.1.13+1.0.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "225bff33b2141874fe80d71e07d6eec4f85c5c216453dd96388240f96e1acc14"
-dependencies = [
- "cc",
- "pkg-config",
-]
-
-[[package]]
 name = "case_macros"
 version = "0.1.0"
 dependencies = [
@@ -1251,7 +1220,7 @@ dependencies = [
  "find-msvc-tools",
  "jobserver",
  "libc",
- "shlex 1.3.0",
+ "shlex",
 ]
 
 [[package]]
@@ -1467,17 +1436,22 @@ name = "clara_fts"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "base64 0.13.1",
  "charabia",
  "fastrand 2.4.1",
+ "kvenginepb",
  "lazy_static",
  "memmap2 0.9.10",
  "once_cell",
  "ordered-float 5.3.0",
  "prost 0.13.5",
  "prost-build",
+ "serde",
+ "serde_json",
  "stable_deref_trait",
  "tantivy",
  "tempfile",
+ "tidb_query_datatype",
  "tipb",
  "workspace-hack",
 ]
@@ -1513,6 +1487,7 @@ dependencies = [
  "dashmap 5.5.3",
  "derive_more",
  "fxhash",
+ "gcp",
  "hmac 0.10.1",
  "kvenginepb",
  "kvproto",
@@ -2353,22 +2328,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
-name = "erased-serde"
-version = "0.3.31"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c138974f9d5e7fe373eb04df7cae98833802ae4b11c24ac7039a21d5af4b26c"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "errno"
 version = "0.3.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2780,6 +2746,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "gcp"
+version = "0.0.1"
+dependencies = [
+ "async-trait",
+ "base64 0.13.1",
+ "cloud",
+ "futures-util",
+ "http 0.2.12",
+ "http 1.4.0",
+ "hyper 0.14.26",
+ "hyper-tls",
+ "kvproto",
+ "rusoto_credential",
+ "serde",
+ "serde_json",
+ "slog",
+ "slog-global",
+ "tame-gcs",
+ "tame-oauth",
+ "thiserror 1.0.69",
+ "tikv_util",
+ "tokio",
+ "url",
+ "workspace-hack",
+]
+
+[[package]]
+name = "gen-proxy-ffi"
+version = "0.1.0"
+
+[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2902,7 +2899,7 @@ version = "0.10.3+1.44.0-patched"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f23adc509a3c4dea990e0ab8d2add4a65389ee69c288b7851d75dd1df7a6d6c6"
 dependencies = [
- "bindgen 0.59.2",
+ "bindgen",
  "cc",
  "cmake",
  "libc",
@@ -3575,7 +3572,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi 0.5.2",
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3693,6 +3690,7 @@ dependencies = [
  "aliyun",
  "anyhow",
  "api_version",
+ "arc-swap 1.9.1",
  "arrow-buffer",
  "async-once-cell",
  "async-recursion 1.1.1",
@@ -3710,6 +3708,7 @@ dependencies = [
  "bytemuck",
  "byteorder",
  "bytes",
+ "chrono",
  "clara_fts",
  "cloud_encryption",
  "codec",
@@ -3718,6 +3717,7 @@ dependencies = [
  "crc32fast",
  "crossbeam",
  "crossbeam-queue",
+ "crossbeam-skiplist",
  "dashmap 5.5.3",
  "dyn-clone",
  "engine_traits",
@@ -3728,6 +3728,7 @@ dependencies = [
  "fs2",
  "fslock",
  "futures 0.3.32",
+ "gcp",
  "hex 0.4.3",
  "http 0.2.12",
  "hyper 0.14.26",
@@ -3756,13 +3757,13 @@ dependencies = [
  "rand 0.8.6",
  "recovery",
  "regex",
- "rocksdb",
  "rusoto_core",
  "rusoto_credential",
  "rusoto_mock",
  "rusoto_s3",
  "schema",
  "security",
+ "seize",
  "serde",
  "serde_derive",
  "serde_json",
@@ -3803,7 +3804,7 @@ dependencies = [
 [[package]]
 name = "kvproto"
 version = "0.0.2"
-source = "git+https://github.com/pingcap/kvproto.git?rev=683dad8fa3689deb243f2ff8ab5847c97af53e38#683dad8fa3689deb243f2ff8ab5847c97af53e38"
+source = "git+https://github.com/pingcap/kvproto.git?rev=107095f#107095f1d2508bb8b9aaba877a9e2450ff7d0ab0"
 dependencies = [
  "bytes",
  "futures 0.3.32",
@@ -3890,39 +3891,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e02f3bb43d335493c96bf3fd3a321600bf6bd07ed34bc64118e9293bdffea46c"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "librocksdb_sys"
-version = "0.1.0"
-source = "git+https://github.com/tikv/rust-rocksdb.git#c9aefbe69f89ade0bda6a51b614a46eee184515a"
-dependencies = [
- "bindgen 0.65.1",
- "bzip2-sys",
- "cc",
- "cmake",
- "libc",
- "libtitan_sys",
- "libz-sys",
- "lz4-sys",
- "openssl-sys",
- "snappy-sys",
- "zstd-sys",
-]
-
-[[package]]
-name = "libtitan_sys"
-version = "0.0.1"
-source = "git+https://github.com/tikv/rust-rocksdb.git#c9aefbe69f89ade0bda6a51b614a46eee184515a"
-dependencies = [
- "bzip2-sys",
- "cc",
- "cmake",
- "libc",
- "libz-sys",
- "lz4-sys",
- "snappy-sys",
- "zstd-sys",
 ]
 
 [[package]]
@@ -4292,15 +4260,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mountinfo"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6341a1c48d5425a185c43f75480227dc738cf85ecc6a4bc8ca847406d44f1c17"
-dependencies = [
- "regex",
-]
-
-[[package]]
 name = "multimap"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4392,7 +4351,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4716,7 +4675,7 @@ checksum = "1a80800c0488c3a21695ea981a54918fbb37abf04f4d0720c453632255e2ff0e"
 [[package]]
 name = "ownedbytes"
 version = "0.7.0"
-source = "git+https://github.com/breezewish/tikv-tantivy.git?branch=patch-0.22.1#efa7643d27289c1ed680fe7ead8c8fffc72b20a2"
+source = "git+https://github.com/pingcap/tantivy.git?branch=cse-0.22.1#392142b1eefa9258731b1c8483632c4a70bc32d8"
 dependencies = [
  "stable_deref_trait",
 ]
@@ -5206,7 +5165,7 @@ version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be769465445e8c1474e9c5dac2018218498557af32d9ed057325ec9a41ae81bf"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "itertools 0.14.0",
  "log",
  "multimap 0.10.1",
@@ -5754,15 +5713,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3582f63211428f83597b51b2ddb88e2a91a9d52d12831f9d08f5e624e8977422"
 
 [[package]]
-name = "rocksdb"
-version = "0.3.0"
-source = "git+https://github.com/tikv/rust-rocksdb.git#c9aefbe69f89ade0bda6a51b614a46eee184515a"
-dependencies = [
- "libc",
- "librocksdb_sys",
-]
-
-[[package]]
 name = "roxmltree"
 version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5774,7 +5724,7 @@ dependencies = [
 [[package]]
 name = "rusoto_core"
 version = "0.46.0"
-source = "git+https://github.com/tikv/rusoto?branch=cse#d6ffce8898ce5d03ada531401437985b727393a4"
+source = "git+https://github.com/tikv/rusoto?branch=cse#187f471cc34e1eeb5bb2f3c0e9564284a441593f"
 dependencies = [
  "async-trait",
  "base64 0.13.1",
@@ -5798,7 +5748,7 @@ dependencies = [
 [[package]]
 name = "rusoto_credential"
 version = "0.46.0"
-source = "git+https://github.com/tikv/rusoto?branch=cse#d6ffce8898ce5d03ada531401437985b727393a4"
+source = "git+https://github.com/tikv/rusoto?branch=cse#187f471cc34e1eeb5bb2f3c0e9564284a441593f"
 dependencies = [
  "async-trait",
  "chrono",
@@ -5807,7 +5757,7 @@ dependencies = [
  "hyper 0.14.26",
  "serde",
  "serde_json",
- "shlex 0.1.1",
+ "shlex",
  "tokio",
  "zeroize",
 ]
@@ -5815,7 +5765,7 @@ dependencies = [
 [[package]]
 name = "rusoto_mock"
 version = "0.46.0"
-source = "git+https://github.com/tikv/rusoto?branch=cse#d6ffce8898ce5d03ada531401437985b727393a4"
+source = "git+https://github.com/tikv/rusoto?branch=cse#187f471cc34e1eeb5bb2f3c0e9564284a441593f"
 dependencies = [
  "async-trait",
  "chrono",
@@ -5829,7 +5779,7 @@ dependencies = [
 [[package]]
 name = "rusoto_s3"
 version = "0.46.0"
-source = "git+https://github.com/tikv/rusoto?branch=cse#d6ffce8898ce5d03ada531401437985b727393a4"
+source = "git+https://github.com/tikv/rusoto?branch=cse#187f471cc34e1eeb5bb2f3c0e9564284a441593f"
 dependencies = [
  "async-trait",
  "bytes",
@@ -5841,7 +5791,7 @@ dependencies = [
 [[package]]
 name = "rusoto_signature"
 version = "0.46.0"
-source = "git+https://github.com/tikv/rusoto?branch=cse#d6ffce8898ce5d03ada531401437985b727393a4"
+source = "git+https://github.com/tikv/rusoto?branch=cse#187f471cc34e1eeb5bb2f3c0e9564284a441593f"
 dependencies = [
  "base64 0.13.1",
  "bytes",
@@ -5922,7 +5872,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5935,7 +5885,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -6121,7 +6071,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b55fb86dfd3a2f5f76ea78310a88f96c4ea21a3031f8d212443d56123fd0521"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -6364,12 +6314,6 @@ dependencies = [
 
 [[package]]
 name = "shlex"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7fdf1b9db47230893d76faad238fd6097fd6d6a9245cd7a4d90dbd639536bbd2"
-
-[[package]]
-name = "shlex"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
@@ -6428,15 +6372,9 @@ checksum = "826167069c09b99d56f31e9ae5c99049e932a98c9dc2dac47645b08dbbf76ba7"
 
 [[package]]
 name = "slog"
-version = "2.8.2"
+version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b3b8565691b22d2bdfc066426ed48f837fc0c5f2c8cad8d9718f7f99d6995c1"
-dependencies = [
- "anyhow",
- "erased-serde",
- "rustversion",
- "serde_core",
-]
+checksum = "1cc9c640a4adbfbcc11ffb95efe5aa7af7309e002adab54b185507dbf2377b99"
 
 [[package]]
 name = "slog-async"
@@ -6492,16 +6430,6 @@ name = "smallvec"
 version = "1.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
-
-[[package]]
-name = "snappy-sys"
-version = "0.1.0"
-source = "git+https://github.com/tikv/rust-snappy.git?branch=static-link#8c12738bad811397600455d6982aff754ea2ac44"
-dependencies = [
- "cmake",
- "libc",
- "pkg-config",
-]
 
 [[package]]
 name = "socket2"
@@ -6854,9 +6782,44 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f764005d11ee5f36500a149ace24e00e3da98b0158b3e2d53a7495660d3f4d60"
 
 [[package]]
+name = "tame-gcs"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d20ec2d6525a66afebdff9e1d8ef143c9deae9a3b040c61d3cfa9ae6fda80060"
+dependencies = [
+ "base64 0.13.1",
+ "bytes",
+ "chrono",
+ "futures-util",
+ "http 0.2.12",
+ "percent-encoding",
+ "pin-utils",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "thiserror 1.0.69",
+ "url",
+]
+
+[[package]]
+name = "tame-oauth"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c206bbecfbc0aea8bf35f57bf34e8be060d2cf7efe3937f8d0bdfdd4205ed771"
+dependencies = [
+ "data-encoding",
+ "http 1.4.0",
+ "ring",
+ "serde",
+ "serde_json",
+ "twox-hash",
+ "url",
+]
+
+[[package]]
 name = "tantivy"
 version = "0.22.1"
-source = "git+https://github.com/breezewish/tikv-tantivy.git?branch=patch-0.22.1#efa7643d27289c1ed680fe7ead8c8fffc72b20a2"
+source = "git+https://github.com/pingcap/tantivy.git?branch=cse-0.22.1#392142b1eefa9258731b1c8483632c4a70bc32d8"
 dependencies = [
  "aho-corasick",
  "arc-swap 1.9.1",
@@ -6906,7 +6869,7 @@ dependencies = [
 [[package]]
 name = "tantivy-bitpacker"
 version = "0.6.0"
-source = "git+https://github.com/breezewish/tikv-tantivy.git?branch=patch-0.22.1#efa7643d27289c1ed680fe7ead8c8fffc72b20a2"
+source = "git+https://github.com/pingcap/tantivy.git?branch=cse-0.22.1#392142b1eefa9258731b1c8483632c4a70bc32d8"
 dependencies = [
  "bitpacking",
 ]
@@ -6914,7 +6877,7 @@ dependencies = [
 [[package]]
 name = "tantivy-columnar"
 version = "0.3.0"
-source = "git+https://github.com/breezewish/tikv-tantivy.git?branch=patch-0.22.1#efa7643d27289c1ed680fe7ead8c8fffc72b20a2"
+source = "git+https://github.com/pingcap/tantivy.git?branch=cse-0.22.1#392142b1eefa9258731b1c8483632c4a70bc32d8"
 dependencies = [
  "downcast-rs",
  "fastdivide",
@@ -6929,7 +6892,7 @@ dependencies = [
 [[package]]
 name = "tantivy-common"
 version = "0.7.0"
-source = "git+https://github.com/breezewish/tikv-tantivy.git?branch=patch-0.22.1#efa7643d27289c1ed680fe7ead8c8fffc72b20a2"
+source = "git+https://github.com/pingcap/tantivy.git?branch=cse-0.22.1#392142b1eefa9258731b1c8483632c4a70bc32d8"
 dependencies = [
  "async-trait",
  "byteorder",
@@ -6952,7 +6915,7 @@ dependencies = [
 [[package]]
 name = "tantivy-query-grammar"
 version = "0.22.0"
-source = "git+https://github.com/breezewish/tikv-tantivy.git?branch=patch-0.22.1#efa7643d27289c1ed680fe7ead8c8fffc72b20a2"
+source = "git+https://github.com/pingcap/tantivy.git?branch=cse-0.22.1#392142b1eefa9258731b1c8483632c4a70bc32d8"
 dependencies = [
  "nom 7.1.3",
 ]
@@ -6960,7 +6923,7 @@ dependencies = [
 [[package]]
 name = "tantivy-sstable"
 version = "0.3.0"
-source = "git+https://github.com/breezewish/tikv-tantivy.git?branch=patch-0.22.1#efa7643d27289c1ed680fe7ead8c8fffc72b20a2"
+source = "git+https://github.com/pingcap/tantivy.git?branch=cse-0.22.1#392142b1eefa9258731b1c8483632c4a70bc32d8"
 dependencies = [
  "tantivy-bitpacker",
  "tantivy-common",
@@ -6971,7 +6934,7 @@ dependencies = [
 [[package]]
 name = "tantivy-stacker"
 version = "0.3.0"
-source = "git+https://github.com/breezewish/tikv-tantivy.git?branch=patch-0.22.1#efa7643d27289c1ed680fe7ead8c8fffc72b20a2"
+source = "git+https://github.com/pingcap/tantivy.git?branch=cse-0.22.1#392142b1eefa9258731b1c8483632c4a70bc32d8"
 dependencies = [
  "murmurhash32",
  "rand_distr",
@@ -6981,7 +6944,7 @@ dependencies = [
 [[package]]
 name = "tantivy-tokenizer-api"
 version = "0.3.0"
-source = "git+https://github.com/breezewish/tikv-tantivy.git?branch=patch-0.22.1#efa7643d27289c1ed680fe7ead8c8fffc72b20a2"
+source = "git+https://github.com/pingcap/tantivy.git?branch=cse-0.22.1#392142b1eefa9258731b1c8483632c4a70bc32d8"
 dependencies = [
  "serde",
 ]
@@ -7007,7 +6970,7 @@ dependencies = [
  "getrandom 0.4.2",
  "once_cell",
  "rustix 1.1.4",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -7028,7 +6991,10 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "slog",
+ "slog-global",
  "thiserror 1.0.69",
+ "tokio",
  "workspace-hack",
 ]
 
@@ -7038,7 +7004,7 @@ version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8c27177b12a6399ffc08b98f76f7c9a1f4fe9fc967c784c5a071fa8d93cf7e1"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7230,7 +7196,7 @@ dependencies = [
 [[package]]
 name = "tikv-client"
 version = "0.4.0"
-source = "git+https://github.com/tikv/client-rust.git?rev=dda06dbf58f34e9c7633b8a55dc7a1141683cafe#dda06dbf58f34e9c7633b8a55dc7a1141683cafe"
+source = "git+https://github.com/tikv/client-rust.git?rev=ab4be1c2cdd58d4e593202991fb520221c83bdfd#ab4be1c2cdd58d4e593202991fb520221c83bdfd"
 dependencies = [
  "async-recursion 0.3.2",
  "async-trait",
@@ -7324,7 +7290,6 @@ dependencies = [
  "libc",
  "log",
  "log_wrappers",
- "mountinfo",
  "nix 0.24.3",
  "num-traits",
  "num_cpus",
@@ -7460,7 +7425,7 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 [[package]]
 name = "tipb"
 version = "0.0.1"
-source = "git+https://github.com/pingcap/tipb.git#a4d204a193b4f9aa776343ac75281cf8442343ba"
+source = "git+https://github.com/pingcap/tipb.git#7ed1acfec6949dda0395f6615671b542779e1b79"
 dependencies = [
  "futures 0.3.32",
  "grpcio",
@@ -7764,6 +7729,17 @@ name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
+
+[[package]]
+name = "twox-hash"
+version = "1.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
+dependencies = [
+ "cfg-if",
+ "rand 0.8.6",
+ "static_assertions",
+]
 
 [[package]]
 name = "txn_types"
@@ -8208,7 +8184,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -8598,7 +8574,6 @@ dependencies = [
  "proc-macro2",
  "prost 0.11.9",
  "protobuf 2.8.0",
- "protobuf-build",
  "rand 0.8.6",
  "rand_core 0.6.4",
  "regex",
@@ -8617,6 +8592,7 @@ dependencies = [
  "sqlx-mysql",
  "stable_deref_trait",
  "standback",
+ "static_assertions",
  "strum 0.27.2",
  "syn 1.0.109",
  "syn 2.0.117",
@@ -8630,9 +8606,12 @@ dependencies = [
  "tower 0.4.13",
  "tracing",
  "tracing-core",
+ "twox-hash",
  "typenum",
  "url",
  "uuid 1.23.1",
+ "zstd",
+ "zstd-safe",
  "zstd-sys",
 ]
 
@@ -8690,7 +8669,7 @@ checksum = "cfe53a6657fd280eaa890a3bc59152892ffa3e30101319d168b781ed6529b049"
 [[package]]
 name = "yatp"
 version = "0.0.1"
-source = "git+https://github.com/tikv/yatp.git?branch=master#64ccad68f86f06c2cbb5a95fb3258c2c092ecea0"
+source = "git+https://github.com/tikv/yatp.git?branch=master#7ca1723bea900d7f0258de73f44d93cbc7b4326a"
 dependencies = [
  "crossbeam-deque",
  "crossbeam-skiplist",

@@ -1,0 +1,5 @@
+.venv
+build/
+tiflash_grafana_dashboards.egg-info/
+__pycache__/
+*.pyc

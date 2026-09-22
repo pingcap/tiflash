@@ -202,13 +202,20 @@ String DAGExpressionAnalyzerHelper::buildLogicalFunction(
     const ExpressionActionsPtr & actions)
 {
     const String & func_name = getFunctionName(expr);
+    auto guards_before_function = analyzer->json_valid_guarded_exprs;
     Names argument_names;
     for (const auto & child : expr.children())
     {
+        auto guards_before_child = analyzer->json_valid_guarded_exprs;
         String name = analyzer->getActions(child, actions, true);
         argument_names.push_back(name);
+        analyzer->json_valid_guarded_exprs = std::move(guards_before_child);
+        if (func_name == "and" || func_name == "two_value_and")
+            analyzer->recordJsonValidGuards(child);
     }
-    return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
+    String result = analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
+    analyzer->json_valid_guarded_exprs = std::move(guards_before_function);
+    return result;
 }
 
 // left(str,len) = substrUTF8(str,1,len)
@@ -299,7 +306,12 @@ String DAGExpressionAnalyzerHelper::buildSingleParamJsonRelatedFunctions(
     const auto & input_expr = expr.children(0);
     String arg = analyzer->getActions(input_expr, actions);
     const auto & collator = getCollatorFromExpr(expr);
+    const bool ignore_invalid_json
+        = func_name == FunctionCastStringAsJson::name && analyzer->isJsonValidGuarded(input_expr);
     String result_name = genFuncString(func_name, {arg}, {collator}, {&input_expr.field_type(), &expr.field_type()});
+    // Guarded and strict casts can coexist in different logical branches and must not share an action.
+    if (ignore_invalid_json)
+        result_name += "_json_valid_guarded";
     if (actions->getSampleBlock().has(result_name))
         return result_name;
 
@@ -318,6 +330,7 @@ String DAGExpressionAnalyzerHelper::buildSingleParamJsonRelatedFunctions(
         {
             function_cast_string_as_json->setInputTiDBFieldType(input_expr.field_type());
             function_cast_string_as_json->setOutputTiDBFieldType(expr.field_type());
+            function_cast_string_as_json->setIgnoreInvalidJson(ignore_invalid_json);
         }
         else if (auto * function_cast_time_as_json = dynamic_cast<FunctionCastTimeAsJson *>(function_impl);
                  function_cast_time_as_json)

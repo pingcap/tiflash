@@ -197,6 +197,7 @@ void ExecutorStatisticsCollector::fillExecutionSummary(
     {
         current.time_minTSO_wait_ns = dag_context->minTSO_wait_time_ns;
     }
+    profiles.at(executor_id)->fillExtraExecutionSummary(current);
     fillTiExecutionSummary(
         *dag_context,
         response.add_execution_summaries(),

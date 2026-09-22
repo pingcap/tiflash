@@ -29,6 +29,7 @@ public:
         const DAGSchema & output_schema_,
         tipb::JoinType tp_,
         const ASTs & join_cols_,
+        const std::vector<UInt8> & is_null_eq_,
         const ASTs & l_conds,
         const ASTs & r_conds,
         const ASTs & o_conds,
@@ -39,6 +40,7 @@ public:
         : ExecutorBinder(index_, "Join_" + std::to_string(index_), output_schema_)
         , tp(tp_)
         , join_cols(join_cols_)
+        , is_null_eq(is_null_eq_)
         , left_conds(l_conds)
         , right_conds(r_conds)
         , other_conds(o_conds)
@@ -77,6 +79,7 @@ protected:
     tipb::JoinType tp;
 
     const ASTs join_cols{};
+    const std::vector<UInt8> is_null_eq{};
     const ASTs left_conds{};
     const ASTs right_conds{};
     const ASTs other_conds{};
@@ -93,6 +96,7 @@ ExecutorBinderPtr compileJoin(
     ExecutorBinderPtr right,
     tipb::JoinType tp,
     const ASTs & join_cols,
+    const std::vector<UInt8> & is_null_eq = {},
     const ASTs & left_conds = {},
     const ASTs & right_conds = {},
     const ASTs & other_conds = {},

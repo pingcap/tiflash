@@ -1,4 +1,4 @@
-# Copyright 2024 PingCAP, Inc.
+# Copyright 2023 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,15 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-version: '2.3'
-
 services:
   tiflash0:
     image: hub.pingcap.net/tiflash/tiflash-ci-base:rocky8-20241028
     security_opt:
       - seccomp:unconfined
     volumes:
-      - ./config/tiflash_dt_lightweight_compression.toml:/config.toml:ro
+      - ./config/tiflash_dt_disable_local_tunnel.toml:/config.toml:ro
       - ./config/proxy.toml:/proxy.toml:ro
       - ./config/cipher-file-256:/cipher-file-256:ro
       - ./data/tiflash:/tmp/tiflash/data

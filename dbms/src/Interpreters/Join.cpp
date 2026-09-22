@@ -33,6 +33,7 @@
 #include <Interpreters/Join.h>
 #include <Interpreters/NullAwareSemiJoinHelper.h>
 #include <Interpreters/NullableUtils.h>
+#include <Operators/SharedQueue.h>
 #include <common/logger_useful.h>
 
 #include <exception>
@@ -56,22 +57,39 @@ extern const int TYPE_MISMATCH;
 
 namespace
 {
-ColumnRawPtrs getKeyColumns(const Names & key_names, const Block & block)
+ColumnRawPtrs getKeyColumns(const Names & key_names, const Block & block, const std::vector<UInt8> & is_null_eq)
 {
     size_t keys_size = key_names.size();
+    RUNTIME_CHECK(key_names.size() == is_null_eq.size());
     ColumnRawPtrs key_columns(keys_size);
 
     for (size_t i = 0; i < keys_size; ++i)
     {
         key_columns[i] = block.getByName(key_names[i]).column.get();
 
-        /// We will join only keys, where all components are not NULL.
-        if (key_columns[i]->isColumnNullable())
+        /// Ordinary '=' keys join only nested values where all components are not NULL.
+        /// NullEQ keys must keep their nullable wrapper so nullness can participate in key comparison.
+        if (key_columns[i]->isColumnNullable() && is_null_eq[i] == 0)
             key_columns[i] = &static_cast<const ColumnNullable &>(*key_columns[i]).getNestedColumn();
     }
 
     return key_columns;
 }
+
+void checkNullEqKeyColumns(const Names & key_names, const Block & block, const std::vector<UInt8> & is_null_eq)
+{
+    RUNTIME_CHECK(key_names.size() == is_null_eq.size());
+    for (size_t i = 0; i < key_names.size(); ++i)
+    {
+        const auto & key_type = block.getByName(key_names[i]).type;
+        RUNTIME_CHECK_MSG(
+            is_null_eq[i] == 0 || key_type->isNullable(),
+            "NullEQ key {} must be Nullable, but its type is {}",
+            key_names[i],
+            key_type->getName());
+    }
+}
+
 size_t getRestoreJoinBuildConcurrency(
     size_t total_partitions,
     size_t spilled_partitions,
@@ -101,6 +119,31 @@ size_t getRestoreJoinBuildConcurrency(
     }
 }
 
+String formatNullEqFlags(const std::vector<UInt8> & flags)
+{
+    String result;
+    result.reserve(flags.size() * 2 + 2);
+    result += "[";
+    for (size_t i = 0; i < flags.size(); ++i)
+    {
+        if (i != 0)
+            result += ",";
+        result += flags[i] == 0 ? "0" : "1";
+    }
+    result += "]";
+    return result;
+}
+
+bool hasNullEqKey(const std::vector<UInt8> & flags)
+{
+    for (auto flag : flags)
+    {
+        if (flag != 0)
+            return true;
+    }
+    return false;
+}
+
 } // namespace
 
 using PointerHelper = PointerTypeColumnHelper<sizeof(void *)>;
@@ -112,10 +155,66 @@ const DataTypePtr Join::flag_mapped_entry_helper_type = std::make_shared<Pointer
 const size_t MAX_RESTORE_ROUND_IN_GTEST = 2;
 #endif
 
+void ProbeStopContext::registerJoinWaitFutures(
+    const OneTimeNotifyFuturePtr & build_finished_future,
+    const OneTimeNotifyFuturePtr & probe_finished_future)
+{
+    bool should_finish = false;
+    {
+        std::lock_guard lock(mutex);
+        should_finish = stopped.load(std::memory_order_acquire);
+        if (!should_finish)
+        {
+            wait_futures.emplace_back(build_finished_future);
+            wait_futures.emplace_back(probe_finished_future);
+        }
+    }
+    if (should_finish)
+    {
+        build_finished_future->finish();
+        probe_finished_future->finish();
+    }
+}
+
+void ProbeStopContext::addRestoreProbeQueue(const SharedQueuePtr & queue)
+{
+    bool should_cancel = false;
+    {
+        std::lock_guard lock(mutex);
+        should_cancel = stopped.load(std::memory_order_acquire);
+        if (!should_cancel)
+            restore_probe_queues.emplace_back(queue);
+    }
+    if (should_cancel)
+        queue->cancel();
+}
+
+void ProbeStopContext::stop()
+{
+    if (stopped.exchange(true, std::memory_order_acq_rel))
+        return;
+
+    std::vector<OneTimeNotifyFuturePtr> futures_to_finish;
+    std::vector<SharedQueuePtr> queues_to_cancel;
+    {
+        std::lock_guard lock(mutex);
+        futures_to_finish = std::move(wait_futures);
+        queues_to_cancel = std::move(restore_probe_queues);
+    }
+
+    // Stopping does not make a restore build complete. It only wakes waiters so they can observe the shared stop
+    // state and leave the pipeline.
+    for (const auto & future : futures_to_finish)
+        future->finish();
+    for (const auto & queue : queues_to_cancel)
+        queue->cancel();
+}
+
 
 Join::Join(
     const Names & key_names_left_,
     const Names & key_names_right_,
+    const std::vector<UInt8> & is_null_eq_,
     ASTTableJoin::Kind kind_,
     const String & req_id,
     size_t fine_grained_shuffle_count_,
@@ -134,7 +233,8 @@ Join::Join(
     const String & flag_mapped_entry_helper_name_,
     size_t probe_cache_column_threshold_,
     bool is_test_,
-    const std::vector<RuntimeFilterPtr> & runtime_filter_list_)
+    const std::vector<RuntimeFilterPtr> & runtime_filter_list_,
+    const ProbeStopContextPtr & probe_stop_context_)
     : restore_config(restore_config_)
     , match_helper_name(match_helper_name_)
     , flag_mapped_entry_helper_name(flag_mapped_entry_helper_name_)
@@ -145,10 +245,12 @@ Join::Join(
     , may_probe_side_expanded_after_join(mayProbeSideExpandedAfterJoin(kind))
     , key_names_left(key_names_left_)
     , key_names_right(key_names_right_)
+    , is_null_eq(is_null_eq_)
     , build_concurrency(0)
     , active_build_threads(0)
     , probe_concurrency(0)
-    , active_probe_threads(0)
+    , pending_probe_streams(0)
+    , probe_stop_context(probe_stop_context_ ? probe_stop_context_ : std::make_shared<ProbeStopContext>())
     , collators(collators_)
     , non_equal_conditions(non_equal_conditions_)
     , max_block_size(max_block_size_)
@@ -171,6 +273,17 @@ Join::Join(
     , enable_fine_grained_shuffle(fine_grained_shuffle_count_ > 0)
     , fine_grained_shuffle_count(fine_grained_shuffle_count_)
 {
+    probe_stop_context->registerJoinWaitFutures(wait_build_finished_future, wait_probe_finished_future);
+    RUNTIME_CHECK_MSG(
+        key_names_left_.size() == key_names_right_.size(),
+        "Left and right join key sizes must be equal, left={}, right={}",
+        key_names_left_.size(),
+        key_names_right_.size());
+    RUNTIME_CHECK_MSG(
+        key_names_left_.size() == is_null_eq_.size(),
+        "Join key size and is_null_eq size must be equal, keys={}, is_null_eq={}",
+        key_names_left_.size(),
+        is_null_eq_.size());
     has_other_condition = non_equal_conditions.other_cond_expr != nullptr;
     bool is_semi = isSemiFamily(kind) || isLeftOuterSemiFamily(kind) || isNullAwareSemiFamily(kind);
     if (is_semi && !has_other_condition)
@@ -207,9 +320,11 @@ Join::Join(
 
     LOG_DEBUG(
         log,
-        "FineGrainedShuffle flag {}, stream count {}",
+        "FineGrainedShuffle flag {}, stream count {}, has_null_eq_key {}, is_null_eq {}",
         enable_fine_grained_shuffle,
-        fine_grained_shuffle_count);
+        fine_grained_shuffle_count,
+        hasNullEqKey(is_null_eq),
+        formatNullEqFlags(is_null_eq));
 }
 
 void Join::meetError(const String & error_message_)
@@ -260,6 +375,30 @@ size_t Join::getTotalHashTableAndPoolByteCount()
     for (const auto & partition : partitions)
         res += partition->getHashMapAndPoolMemoryUsage();
     return res;
+}
+
+bool Join::getHashTableStats(UInt64 & size, UInt64 & memory_bytes) const
+{
+    if (isCrossJoin(kind))
+        return false;
+
+    std::shared_lock rw_lock(rwlock);
+    size_t total_size = 0;
+    size_t total_memory_bytes = 0;
+    for (const auto & partition : partitions)
+    {
+        /// A spilled partition has released its in-memory hash table. Its data will be counted by the
+        /// restore Join after the partition is rebuilt successfully.
+        if (partition->isSpill())
+            continue;
+        auto partition_lock = partition->lockPartition();
+        /// Join V1 maps one entry to each distinct join key.
+        total_size += partition->getRowCount();
+        total_memory_bytes += partition->getHashMapAndPoolByteCount();
+    }
+    size = total_size;
+    memory_bytes = total_memory_bytes;
+    return true;
 }
 
 size_t Join::getTotalByteCount()
@@ -362,6 +501,7 @@ std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_j
     auto ret = std::make_shared<Join>(
         key_names_left,
         key_names_right,
+        is_null_eq,
         kind,
         join_req_id,
         /// restore join never enable fine grained shuffle
@@ -382,12 +522,15 @@ std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_j
         match_helper_name,
         flag_mapped_entry_helper_name,
         probe_cache_column_threshold,
-        is_test);
+        is_test,
+        dummy_runtime_filter_list,
+        probe_stop_context);
     /// init output names after finalize, the restored join don't need to finalize
     ret->output_columns_after_finalize = output_columns_after_finalize;
     ret->output_column_names_set_after_finalize = output_column_names_set_after_finalize;
     ret->output_columns_names_set_for_other_condition_after_finalize
         = output_columns_names_set_for_other_condition_after_finalize;
+    ret->profile_info = profile_info;
     ret->required_columns = required_columns;
     ret->output_block_after_finalize = output_block_after_finalize;
     ret->finalized = true;
@@ -399,8 +542,18 @@ void Join::initBuild(const Block & sample_block, size_t build_concurrency_)
     std::unique_lock lock(rwlock);
     if (unlikely(initialized))
         throw Exception("Logical error: Join has been initialized", ErrorCodes::LOGICAL_ERROR);
+    checkNullEqKeyColumns(key_names_right, sample_block, is_null_eq);
     initialized = true;
-    join_map_method = chooseJoinMapMethod(getKeyColumns(key_names_right, sample_block), key_sizes, collators);
+    join_map_method = chooseJoinMapMethod(
+        getKeyColumns(key_names_right, sample_block, is_null_eq),
+        key_sizes,
+        collators,
+        is_null_eq);
+    if (hasNullEqKey(is_null_eq))
+    {
+        if (join_map_method == JoinMapMethod::serialized)
+            LOG_DEBUG(log, "Use serialized join map method because nullable NullEQ keys do not fit packed fixed keys");
+    }
     build_sample_block = sample_block;
     setBuildConcurrencyAndInitJoinPartition(build_concurrency_);
     hash_join_spill_context->init(build_concurrency);
@@ -433,6 +586,7 @@ void Join::initBuild(const Block & sample_block, size_t build_concurrency_)
 void Join::initProbe(const Block & sample_block, size_t probe_concurrency_)
 {
     std::unique_lock lock(rwlock);
+    checkNullEqKeyColumns(key_names_left, sample_block, is_null_eq);
     setProbeConcurrency(probe_concurrency_);
     probe_sample_block = sample_block;
     if (hash_join_spill_context->isSpillEnabled())
@@ -680,13 +834,12 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
         }
     }
 
-    /// We will insert to the map only keys, where all components are not NULL.
-    ColumnPtr null_map_holder;
-    ConstNullMapPtr null_map{};
-    extractNestedColumnsAndNullMap(key_columns, null_map_holder, null_map);
-    /// Reuse null_map to record the filtered rows, the rows contains NULL or does not
-    /// match the join filter will not insert to the maps
-    recordFilteredRows(block, non_equal_conditions.right_filter_column, null_map_holder, null_map);
+    /// Build a unified row filter map: ordinary '=' key NULLs and side-condition failures skip insertion,
+    /// while NullEQ key NULLs remain eligible for matching.
+    ColumnPtr row_filter_map_holder;
+    ConstNullMapPtr row_filter_map{};
+    extractJoinKeyColumnsAndFilterNullMap(key_columns, is_null_eq, row_filter_map_holder, row_filter_map);
+    recordFilteredRows(block, non_equal_conditions.right_filter_column, row_filter_map_holder, row_filter_map);
 
     size_t size = stored_block->columns();
 
@@ -721,7 +874,7 @@ void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
             key_sizes,
             collators,
             stored_block,
-            null_map,
+            row_filter_map,
             stream_index,
             getBuildConcurrency(),
             enable_fine_grained_shuffle,
@@ -917,13 +1070,24 @@ void Join::handleOtherConditions(Block & block, IColumn::Filter * anti_filter, I
     mergeNullAndFilterResult(block, filter, non_equal_conditions.other_eq_cond_from_in_name, isAntiJoin(kind));
     assert(block_rows == filter.size());
 
-    if (isInnerJoin(kind) || isNecessaryKindToUseRowFlaggedHashMap(kind))
+    if (isInnerJoin(kind) || (isNecessaryKindToUseRowFlaggedHashMap(kind) && kind != ASTTableJoin::Kind::Full))
     {
         erase_useless_column(block);
         /// inner | rightSemi | rightAnti | rightOuter join,  just use other_filter_column to filter result
         for (size_t i = 0; i < block.columns(); ++i)
             block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->filter(filter, -1);
         return;
+    }
+
+    PointerHelper::ArrayType * full_join_mapped_entries = nullptr;
+    if (kind == ASTTableJoin::Kind::Full)
+    {
+        RUNTIME_CHECK(!flag_mapped_entry_helper_name.empty());
+        auto & mapped_column = block.getByName(flag_mapped_entry_helper_name).column;
+        auto mutable_mapped_column = (*std::move(mapped_column)).mutate();
+        auto & ptr_col = static_cast<PointerHelper::ColumnType &>(*mutable_mapped_column);
+        full_join_mapped_entries = &ptr_col.getData();
+        mapped_column = std::move(mutable_mapped_column);
     }
 
     bool is_semi_family = isSemiFamily(kind) || isLeftOuterSemiFamily(kind);
@@ -948,8 +1112,12 @@ void Join::handleOtherConditions(Block & block, IColumn::Filter * anti_filter, I
         if (prev_offset < current_offset)
         {
             /// for outer join, at least one row must be kept
-            if (isLeftOuterJoin(kind) && !has_row_kept)
+            if ((isLeftOuterJoin(kind) || kind == ASTTableJoin::Kind::Full) && !has_row_kept)
+            {
                 row_filter[prev_offset] = 1;
+                if (full_join_mapped_entries != nullptr)
+                    (*full_join_mapped_entries)[prev_offset] = 0;
+            }
             if (isAntiJoin(kind))
             {
                 if (has_row_kept && !(*anti_filter)[i])
@@ -966,9 +1134,9 @@ void Join::handleOtherConditions(Block & block, IColumn::Filter * anti_filter, I
         prev_offset = current_offset;
     }
     erase_useless_column(block);
-    if (isLeftOuterJoin(kind))
+    if (isLeftOuterJoin(kind) || kind == ASTTableJoin::Kind::Full)
     {
-        /// for left join, convert right column to null if not joined
+        /// for left/full join, convert right column to null if not joined
         applyNullToNotMatchedRows(block, right_sample_block, *filter_column);
         for (size_t i = 0; i < block.columns(); ++i)
             block.getByPosition(i).column = block.getByPosition(i).column->filter(row_filter, -1);
@@ -1220,7 +1388,7 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info, const JoinBui
         probe_process_info.hash_join_data->key_columns,
         key_sizes,
         added_columns,
-        probe_process_info.null_map,
+        probe_process_info.row_filter_map,
         current_offset,
         offsets_to_replicate,
         right_indexes,
@@ -1283,6 +1451,8 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info, const JoinBui
             for (size_t i = 0; i < block.rows(); ++i)
             {
                 auto ptr_value = container[i];
+                if (ptr_value == 0)
+                    continue;
                 auto * current = reinterpret_cast<RowRefListWithUsedFlag *>(ptr_value);
                 current->setUsed();
             }
@@ -1292,8 +1462,9 @@ Block Join::doJoinBlockHash(ProbeProcessInfo & probe_process_info, const JoinBui
                 // Return build table header for right semi/anti join
                 block = right_sample_block;
             }
-            else if (kind == ASTTableJoin::Kind::RightOuter)
+            else
             {
+                // flag_mapped_entry_helper_name is only used inside join, so it will not be returned to outside, we can safely remove it after setting hash table used flag.
                 block.erase(flag_mapped_entry_helper_name);
             }
         }
@@ -1331,6 +1502,7 @@ Block Join::joinBlockHash(ProbeProcessInfo & probe_process_info) const
         restore_config.restore_round};
     probe_process_info.prepareForHashProbe(
         key_names_left,
+        is_null_eq,
         non_equal_conditions.left_filter_column,
         kind,
         strictness,
@@ -1560,8 +1732,8 @@ Block Join::joinBlockNullAwareSemiImpl(ProbeProcessInfo & probe_process_info) co
             max_block_size,
             non_equal_conditions);
         NALeftSideInfo left_side_info(
-            probe_process_info.null_map,
-            probe_process_info.null_aware_join_data->filter_map,
+            probe_process_info.null_aware_join_data->key_null_map,
+            probe_process_info.row_filter_map,
             probe_process_info.null_aware_join_data->all_key_null_map);
         NARightSideInfo right_side_info(
             right_has_all_key_null_row.load(std::memory_order_relaxed),
@@ -1653,6 +1825,7 @@ Block Join::joinBlockSemiImpl(ProbeProcessInfo & probe_process_info) const
         // probe a new block
         probe_process_info.prepareForHashProbe(
             key_names_left,
+            is_null_eq,
             non_equal_conditions.left_filter_column,
             kind,
             strictness,
@@ -1802,6 +1975,9 @@ void Join::workAfterBuildFinish(size_t stream_index)
 
         has_build_data_in_memory = !original_blocks.empty();
     }
+
+    finalizeHashTableStats();
+    build_side_empty.store(!isSpilled() && getTotalRowCount() == 0, std::memory_order_release);
 }
 
 void Join::finalizeNullAwareSemiFamilyBuild()
@@ -1866,9 +2042,36 @@ void Join::finalizeCrossJoinBuild()
 
 void Join::finalizeProfileInfo()
 {
-    profile_info->is_spill_enabled = isEnableSpill();
-    profile_info->is_spilled = isSpilled();
-    profile_info->peak_build_bytes_usage = getPeakBuildBytesUsage();
+    if (!isRestoreJoin())
+    {
+        profile_info->is_spill_enabled = isEnableSpill();
+        profile_info->is_spilled = isSpilled();
+        profile_info->peak_build_bytes_usage = getPeakBuildBytesUsage();
+    }
+    // TODO: Aggregate restore join profile fields, such as peak build memory usage, when exposing
+    // them in execution summaries.
+    finalizeHashTableStats();
+}
+
+void Join::finalizeHashTableStats()
+{
+    if (hash_table_stats_finalized)
+        return;
+
+    UInt64 size = 0;
+    UInt64 memory_bytes = 0;
+    if (!getHashTableStats(size, memory_bytes))
+        return;
+
+    const HashTableStats stats{
+        .size = size,
+        .size_kind = HashTableSizeKind::DistinctKeyCount,
+        .memory_bytes = memory_bytes};
+    if (isRestoreJoin())
+        profile_info->mergeHashTableStats(stats);
+    else
+        profile_info->setHashTableStats(stats);
+    hash_table_stats_finalized = true;
 }
 
 void Join::workAfterProbeFinish(size_t stream_index)
@@ -1902,27 +2105,48 @@ void Join::waitUntilAllBuildFinished() const
 bool Join::finishOneProbe(size_t stream_index)
 {
     std::unique_lock lock(build_probe_mutex);
-    if (active_probe_threads == 1)
+    if (unlikely(isProbeStopped()))
+        return false;
+    --pending_probe_streams;
+    if (pending_probe_streams != 0)
+        return false;
+
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_mpp_hash_probe);
+    workAfterProbeFinish(stream_index);
+    return true;
+}
+
+void Join::stopProbePhase()
+{
+    bool notify_probe_finished = false;
     {
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_mpp_hash_probe);
+        std::unique_lock lock(build_probe_mutex);
+        if (probe_phase_state.exchange(ProbePhaseState::Stopped, std::memory_order_acq_rel) != ProbePhaseState::Stopped)
+            notify_probe_finished = true;
     }
-    --active_probe_threads;
-    if (active_probe_threads == 0)
+    probe_stop_context->stop();
+    if (notify_probe_finished)
     {
-        workAfterProbeFinish(stream_index);
-        return true;
+        probe_cv.notify_all();
+        wait_probe_finished_future->finish();
     }
-    return false;
+}
+
+void Join::addRestoreProbeQueue(const SharedQueuePtr & queue)
+{
+    probe_stop_context->addRestoreProbeQueue(queue);
 }
 
 void Join::finalizeProbe()
 {
     {
         std::unique_lock lock(build_probe_mutex);
+        if (isProbeStopped())
+            return;
         if (hash_join_spill_context->getProbeSpiller())
             hash_join_spill_context->getProbeSpiller()->finishSpill();
-        assert(active_probe_threads == 0);
-        probe_finished = true;
+        assert(pending_probe_streams == 0);
+        probe_phase_state.store(ProbePhaseState::NormallyFinished, std::memory_order_release);
     }
     probe_cv.notify_all();
     wait_probe_finished_future->finish();
@@ -1931,19 +2155,28 @@ void Join::finalizeProbe()
 void Join::waitUntilAllProbeFinished() const
 {
     std::unique_lock lock(build_probe_mutex);
-    probe_cv.wait(lock, [&]() { return probe_finished || meet_error || skip_wait; });
+    probe_cv.wait(lock, [&]() {
+        return isProbeStopped() || probe_phase_state.load(std::memory_order_acquire) != ProbePhaseState::Active
+            || meet_error || skip_wait;
+    });
     if (meet_error)
         throw Exception(error_message);
 }
 
 bool Join::isProbeFinishedForPipeline() const
 {
-    if (!probe_finished)
+    if (!isProbeStopped() && probe_phase_state.load(std::memory_order_acquire) == ProbePhaseState::Active)
     {
         setNotifyFuture(wait_probe_finished_future.get());
         return false;
     }
     return true;
+}
+
+bool Join::isProbeStopped() const
+{
+    return probe_stop_context->isStopped()
+        || probe_phase_state.load(std::memory_order_acquire) == ProbePhaseState::Stopped;
 }
 
 bool Join::isBuildFinishedForPipeline() const
@@ -1962,7 +2195,8 @@ void Join::finishOneNonJoin(size_t partition_index)
     // When spill is not enabled, all build data blocks are stored in the same partition, so the join partition cannot be released.
     if (isEnableSpill())
     {
-        if likely (build_finished && probe_finished)
+        if likely (
+            build_finished && probe_phase_state.load(std::memory_order_acquire) == ProbePhaseState::NormallyFinished)
         {
             /// only clear hash table if not active build/probe threads
             while (partition_index < build_concurrency)
@@ -1984,6 +2218,7 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info) const
         LOG_WARNING(log, "JoinBlock without non zero active_build_threads, return empty block");
         return {};
     }
+
     std::shared_lock lock(rwlock);
 
     Block block{};

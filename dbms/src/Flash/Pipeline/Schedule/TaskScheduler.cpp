@@ -13,18 +13,50 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/getNumberOfCPUCores.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <assert.h>
 #include <common/likely.h>
 
+#include <algorithm>
+#include <cmath>
 #include <magic_enum.hpp>
 
 namespace DB
 {
+namespace
+{
+KeyspaceCpuLimiterPtr createKeyspaceCpuLimiter(const TaskSchedulerConfig & config)
+{
+    const auto cpu_limit_ratio = config.cpu_task_thread_pool_config.keyspace_cpu_limit_ratio;
+    const auto pool_limit_ratio = config.cpu_task_thread_pool_config.keyspace_pool_limit_ratio;
+    RUNTIME_CHECK(cpu_limit_ratio >= 0.0 && cpu_limit_ratio <= 1.0, cpu_limit_ratio);
+    RUNTIME_CHECK(pool_limit_ratio >= 0.0 && pool_limit_ratio <= 1.0, pool_limit_ratio);
+
+    size_t max_active_tasks = 0;
+    UInt64 cpu_quota_per_second_ns = 0;
+    const auto logical_cpu_cores = static_cast<double>(getNumberOfLogicalCPUCores());
+    if (pool_limit_ratio > 0.0)
+    {
+        max_active_tasks = std::max<size_t>(1, static_cast<size_t>(std::floor(logical_cpu_cores * pool_limit_ratio)));
+    }
+    if (cpu_limit_ratio > 0.0)
+    {
+        cpu_quota_per_second_ns = std::max<UInt64>(
+            1,
+            static_cast<UInt64>(
+                cpu_limit_ratio * logical_cpu_cores
+                * static_cast<double>(std::chrono::seconds(1).count() * 1'000'000'000ULL)));
+    }
+    return std::make_shared<KeyspaceCpuLimiter>(max_active_tasks, cpu_quota_per_second_ns);
+}
+} // namespace
+
 TaskScheduler::TaskScheduler(const TaskSchedulerConfig & config)
-    : cpu_task_thread_pool(*this, config.cpu_task_thread_pool_config)
-    , io_task_thread_pool(*this, config.io_task_thread_pool_config)
+    : keyspace_cpu_limiter(createKeyspaceCpuLimiter(config))
+    , cpu_task_thread_pool(*this, config.cpu_task_thread_pool_config, keyspace_cpu_limiter)
+    , io_task_thread_pool(*this, config.io_task_thread_pool_config, keyspace_cpu_limiter)
     , wait_reactor(*this)
 {}
 

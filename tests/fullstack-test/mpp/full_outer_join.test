@@ -1,0 +1,306 @@
+# Copyright 2026 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Preparation.
+mysql> drop table if exists test.foj_l;
+mysql> drop table if exists test.foj_r;
+mysql> create table test.foj_l (case_id int not null, id int, c int);
+mysql> create table test.foj_r (case_id int not null, id int, c int);
+
+mysql> insert into test.foj_l values (1,1,10),(2,1,10),(3,1,10),(4,1,5),(5,1,10),(6,NULL,10),(7,1,10),(8,1,5),(8,2,20);
+mysql> insert into test.foj_l values (9,1,10),(9,1,11),(10,NULL,10),(11,1,10),(11,2,20),(11,3,30),(12,1,10),(13,1,3),(14,1,7);
+mysql> insert into test.foj_l values (15,1,9),(16,1,3),(17,1,3),(18,1,3),(19,1,5),(20,1,10),(21,NULL,10),(22,1,10),(23,NULL,10);
+mysql> insert into test.foj_l values (24,1,3),(24,1,4),(25,1,9),(25,2,3),(25,3,3),(26,1,5),(26,2,20);
+
+mysql> insert into test.foj_r values (1,2,20),(2,1,20),(3,1,20),(3,1,30),(4,1,20),(5,1,5),(6,1,20),(7,NULL,20),(8,1,200),(8,3,50);
+mysql> insert into test.foj_r values (9,1,20),(10,NULL,20),(11,2,200),(11,3,300),(11,3,301),(11,4,400),(12,2,20),(13,1,5),(14,1,5);
+mysql> insert into test.foj_r values (15,1,3),(15,1,4),(16,1,2),(16,1,4),(16,1,1),(17,1,4),(17,1,5),(18,1,2),(18,1,4),(18,1,5);
+mysql> insert into test.foj_r values (19,1,20),(20,1,5),(21,1,20),(22,NULL,20),(23,NULL,20),(24,1,5),(25,1,4),(25,1,5),(25,2,4);
+mysql> insert into test.foj_r values (25,3,2),(25,3,5),(25,4,8),(26,1,200),(26,2,10),(26,3,50);
+
+mysql> alter table test.foj_l set tiflash replica 1;
+mysql> alter table test.foj_r set tiflash replica 1;
+mysql> analyze table test.foj_l;
+mysql> analyze table test.foj_r;
+
+func> wait_table test foj_l
+func> wait_table test foj_r
+
+# Check full outer join is pushed down to TiFlash MPP as a hash join.
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enable_full_outer_join=1; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; desc format='brief' select l.id as l_id, r.id as r_id from (select id from test.foj_l where case_id=1) l full outer join (select id from test.foj_r where case_id=1) r on l.id = r.id;
+{#LINE}
+{#LINE}
+{#LINE}
+{#LINE}
+{#REGEXP}.*HashJoin\s+\d+\.\d+\s+mpp\[tiflash\]\s+.*full outer join.*
+{#LINE}
+{#LINE}
+{#LINE}
+{#LINE}
+{#LINE}
+{#LINE}
+{#LINE}
+{#LINE}
+
+# Case 1: FOJ_NoOther_BasicMiss_NotNullKey
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enable_full_outer_join=1; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.id as l_id, l.c as l_c, r.id as r_id, r.c as r_c from (select id, c from test.foj_l where case_id=1) l full outer join (select id, c from test.foj_r where case_id=1) r on l.id = r.id order by l.id is null, l.id, l.c is null, l.c, r.id is null, r.id, r.c is null, r.c;
++------+------+------+------+
+| l_id | l_c  | r_id | r_c  |
++------+------+------+------+
+|    1 |   10 | NULL | NULL |
+| NULL | NULL |    2 |   20 |
++------+------+------+------+
+
+# Case 2: FOJ_NoOther_SingleMatch_NotNullKey
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enable_full_outer_join=1; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.id as l_id, l.c as l_c, r.id as r_id, r.c as r_c from (select id, c from test.foj_l where case_id=2) l full outer join (select id, c from test.foj_r where case_id=2) r on l.id = r.id order by l.id is null, l.id, l.c is null, l.c, r.id is null, r.id, r.c is null, r.c;
++------+------+------+------+
+| l_id | l_c  | r_id | r_c  |
++------+------+------+------+
+|    1 |   10 |    1 |   20 |
++------+------+------+------+
+
+# Case 3: FOJ_NoOther_MultiMatch_NotNullKey
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enable_full_outer_join=1; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.id as l_id, l.c as l_c, r.id as r_id, r.c as r_c from (select id, c from test.foj_l where case_id=3) l full outer join (select id, c from test.foj_r where case_id=3) r on l.id = r.id order by l.id is null, l.id, l.c is null, l.c, r.id is null, r.id, r.c is null, r.c;
++------+------+------+------+
+| l_id | l_c  | r_id | r_c  |
++------+------+------+------+
+|    1 |   10 |    1 |   20 |
+|    1 |   10 |    1 |   30 |
++------+------+------+------+
+
+# Case 4: FOJ_NoOther_LeftConditionFiltered
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enable_full_outer_join=1; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.id as l_id, l.c as l_c, r.id as r_id, r.c as r_c from (select id, c from test.foj_l where case_id=4) l full outer join (select id, c from test.foj_r where case_id=4) r on l.id = r.id and l.c > 10 order by l.id is null, l.id, l.c is null, l.c, r.id is null, r.id, r.c is null, r.c;
++------+------+------+------+
+| l_id | l_c  | r_id | r_c  |
++------+------+------+------+
+|    1 |    5 | NULL | NULL |
+| NULL | NULL |    1 |   20 |
++------+------+------+------+
+
+# Case 5: FOJ_NoOther_RightConditionFiltered
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enable_full_outer_join=1; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.id as l_id, l.c as l_c, r.id as r_id, r.c as r_c from (select id, c from test.foj_l where case_id=5) l full outer join (select id, c from test.foj_r where case_id=5) r on l.id = r.id and r.c > 10 order by l.id is null, l.id, l.c is null, l.c, r.id is null, r.id, r.c is null, r.c;
++------+------+------+------+
+| l_id | l_c  | r_id | r_c  |
++------+------+------+------+
+|    1 |   10 | NULL | NULL |
+| NULL | NULL |    1 |    5 |
++------+------+------+------+
+
+# Case 6: FOJ_NoOther_NullProbeKey
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enable_full_outer_join=1; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.id as l_id, l.c as l_c, r.id as r_id, r.c as r_c from (select id, c from test.foj_l where case_id=6) l full outer join (select id, c from test.foj_r where case_id=6) r on l.id = r.id order by l.id is null, l.id, l.c is null, l.c, r.id is null, r.id, r.c is null, r.c;
++------+------+------+------+
+| l_id | l_c  | r_id | r_c  |
++------+------+------+------+
+| NULL |   10 | NULL | NULL |
+| NULL | NULL |    1 |   20 |
++------+------+------+------+
+
+# Case 7: FOJ_NoOther_NullBuildKey
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enable_full_outer_join=1; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.id as l_id, l.c as l_c, r.id as r_id, r.c as r_c from (select id, c from test.foj_l where case_id=7) l full outer join (select id, c from test.foj_r where case_id=7) r on l.id = r.id order by l.id is null, l.id, l.c is null, l.c, r.id is null, r.id, r.c is null, r.c;
++------+------+------+------+
+| l_id | l_c  | r_id | r_c  |
++------+------+------+------+
+|    1 |   10 | NULL | NULL |
+| NULL | NULL | NULL |   20 |
++------+------+------+------+
+
+# Case 8: FOJ_NoOther_LeftAndRightCondition_Mixed
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enable_full_outer_join=1; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.id as l_id, l.c as l_c, r.id as r_id, r.c as r_c from (select id, c from test.foj_l where case_id=8) l full outer join (select id, c from test.foj_r where case_id=8) r on l.id = r.id and l.c > 10 and r.c > 100 order by l.id is null, l.id, l.c is null, l.c, r.id is null, r.id, r.c is null, r.c;
++------+------+------+------+
+| l_id | l_c  | r_id | r_c  |
++------+------+------+------+
+|    1 |    5 | NULL | NULL |
+|    2 |   20 | NULL | NULL |
+| NULL | NULL |    1 |  200 |
+| NULL | NULL |    3 |   50 |
++------+------+------+------+
+
+# Case 9: FOJ_NoOther_MultiProbeToOneBuild
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enable_full_outer_join=1; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.id as l_id, l.c as l_c, r.id as r_id, r.c as r_c from (select id, c from test.foj_l where case_id=9) l full outer join (select id, c from test.foj_r where case_id=9) r on l.id = r.id order by l.id is null, l.id, l.c is null, l.c, r.id is null, r.id, r.c is null, r.c;
++------+------+------+------+
+| l_id | l_c  | r_id | r_c  |
++------+------+------+------+
+|    1 |   10 |    1 |   20 |
+|    1 |   11 |    1 |   20 |
++------+------+------+------+
+
+# Case 10: FOJ_NoOther_BothSidesNullKey
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enable_full_outer_join=1; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.id as l_id, l.c as l_c, r.id as r_id, r.c as r_c from (select id, c from test.foj_l where case_id=10) l full outer join (select id, c from test.foj_r where case_id=10) r on l.id = r.id order by l.id is null, l.id, l.c is null, l.c, r.id is null, r.id, r.c is null, r.c;
++------+------+------+------+
+| l_id | l_c  | r_id | r_c  |
++------+------+------+------+
+| NULL |   10 | NULL | NULL |
+| NULL | NULL | NULL |   20 |
++------+------+------+------+
+
+# Case 11: FOJ_NoOther_MixedMatchCardinality
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enable_full_outer_join=1; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.id as l_id, l.c as l_c, r.id as r_id, r.c as r_c from (select id, c from test.foj_l where case_id=11) l full outer join (select id, c from test.foj_r where case_id=11) r on l.id = r.id order by l.id is null, l.id, l.c is null, l.c, r.id is null, r.id, r.c is null, r.c;
++------+------+------+------+
+| l_id | l_c  | r_id | r_c  |
++------+------+------+------+
+|    1 |   10 | NULL | NULL |
+|    2 |   20 |    2 |  200 |
+|    3 |   30 |    3 |  300 |
+|    3 |   30 |    3 |  301 |
+| NULL | NULL |    4 |  400 |
++------+------+------+------+
+
+# Case 12: FOJ_WithOther_BasicMiss_NotNullKey
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enable_full_outer_join=1; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.id as l_id, l.c as l_c, r.id as r_id, r.c as r_c from (select id, c from test.foj_l where case_id=12) l full outer join (select id, c from test.foj_r where case_id=12) r on l.id = r.id and l.c < r.c order by l.id is null, l.id, l.c is null, l.c, r.id is null, r.id, r.c is null, r.c;
++------+------+------+------+
+| l_id | l_c  | r_id | r_c  |
++------+------+------+------+
+|    1 |   10 | NULL | NULL |
+| NULL | NULL |    2 |   20 |
++------+------+------+------+
+
+# Case 13: FOJ_WithOther_SingleHashMatch_OtherPass
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enable_full_outer_join=1; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.id as l_id, l.c as l_c, r.id as r_id, r.c as r_c from (select id, c from test.foj_l where case_id=13) l full outer join (select id, c from test.foj_r where case_id=13) r on l.id = r.id and l.c < r.c order by l.id is null, l.id, l.c is null, l.c, r.id is null, r.id, r.c is null, r.c;
++------+------+------+------+
+| l_id | l_c  | r_id | r_c  |
++------+------+------+------+
+|    1 |    3 |    1 |    5 |
++------+------+------+------+
+
+# Case 14: FOJ_WithOther_SingleHashMatch_OtherFail
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enable_full_outer_join=1; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.id as l_id, l.c as l_c, r.id as r_id, r.c as r_c from (select id, c from test.foj_l where case_id=14) l full outer join (select id, c from test.foj_r where case_id=14) r on l.id = r.id and l.c < r.c order by l.id is null, l.id, l.c is null, l.c, r.id is null, r.id, r.c is null, r.c;
++------+------+------+------+
+| l_id | l_c  | r_id | r_c  |
++------+------+------+------+
+|    1 |    7 | NULL | NULL |
+| NULL | NULL |    1 |    5 |
++------+------+------+------+
+
+# Case 15: FOJ_WithOther_MultiHashMatch_AllOtherFail
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enable_full_outer_join=1; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.id as l_id, l.c as l_c, r.id as r_id, r.c as r_c from (select id, c from test.foj_l where case_id=15) l full outer join (select id, c from test.foj_r where case_id=15) r on l.id = r.id and l.c < r.c order by l.id is null, l.id, l.c is null, l.c, r.id is null, r.id, r.c is null, r.c;
++------+------+------+------+
+| l_id | l_c  | r_id | r_c  |
++------+------+------+------+
+|    1 |    9 | NULL | NULL |
+| NULL | NULL |    1 |    3 |
+| NULL | NULL |    1 |    4 |
++------+------+------+------+
+
+# Case 16: FOJ_WithOther_MultiHashMatch_OnlyOneOtherPass
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enable_full_outer_join=1; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.id as l_id, l.c as l_c, r.id as r_id, r.c as r_c from (select id, c from test.foj_l where case_id=16) l full outer join (select id, c from test.foj_r where case_id=16) r on l.id = r.id and l.c < r.c order by l.id is null, l.id, l.c is null, l.c, r.id is null, r.id, r.c is null, r.c;
++------+------+------+------+
+| l_id | l_c  | r_id | r_c  |
++------+------+------+------+
+|    1 |    3 |    1 |    4 |
+| NULL | NULL |    1 |    1 |
+| NULL | NULL |    1 |    2 |
++------+------+------+------+
+
+# Case 17: FOJ_WithOther_MultiHashMatch_AllOtherPass
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enable_full_outer_join=1; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.id as l_id, l.c as l_c, r.id as r_id, r.c as r_c from (select id, c from test.foj_l where case_id=17) l full outer join (select id, c from test.foj_r where case_id=17) r on l.id = r.id and l.c < r.c order by l.id is null, l.id, l.c is null, l.c, r.id is null, r.id, r.c is null, r.c;
++------+------+------+------+
+| l_id | l_c  | r_id | r_c  |
++------+------+------+------+
+|    1 |    3 |    1 |    4 |
+|    1 |    3 |    1 |    5 |
++------+------+------+------+
+
+# Case 18: FOJ_WithOther_MultiHashMatch_MultiOtherPass
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enable_full_outer_join=1; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.id as l_id, l.c as l_c, r.id as r_id, r.c as r_c from (select id, c from test.foj_l where case_id=18) l full outer join (select id, c from test.foj_r where case_id=18) r on l.id = r.id and l.c < r.c order by l.id is null, l.id, l.c is null, l.c, r.id is null, r.id, r.c is null, r.c;
++------+------+------+------+
+| l_id | l_c  | r_id | r_c  |
++------+------+------+------+
+|    1 |    3 |    1 |    4 |
+|    1 |    3 |    1 |    5 |
+| NULL | NULL |    1 |    2 |
++------+------+------+------+
+
+# Case 19: FOJ_WithOther_LeftConditionFiltered
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enable_full_outer_join=1; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.id as l_id, l.c as l_c, r.id as r_id, r.c as r_c from (select id, c from test.foj_l where case_id=19) l full outer join (select id, c from test.foj_r where case_id=19) r on l.id = r.id and l.c > 10 and l.c < r.c order by l.id is null, l.id, l.c is null, l.c, r.id is null, r.id, r.c is null, r.c;
++------+------+------+------+
+| l_id | l_c  | r_id | r_c  |
++------+------+------+------+
+|    1 |    5 | NULL | NULL |
+| NULL | NULL |    1 |   20 |
++------+------+------+------+
+
+# Case 20: FOJ_WithOther_RightConditionFiltered
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enable_full_outer_join=1; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.id as l_id, l.c as l_c, r.id as r_id, r.c as r_c from (select id, c from test.foj_l where case_id=20) l full outer join (select id, c from test.foj_r where case_id=20) r on l.id = r.id and r.c > 10 and l.c < r.c order by l.id is null, l.id, l.c is null, l.c, r.id is null, r.id, r.c is null, r.c;
++------+------+------+------+
+| l_id | l_c  | r_id | r_c  |
++------+------+------+------+
+|    1 |   10 | NULL | NULL |
+| NULL | NULL |    1 |    5 |
++------+------+------+------+
+
+# Case 21: FOJ_WithOther_NullProbeKey
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enable_full_outer_join=1; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.id as l_id, l.c as l_c, r.id as r_id, r.c as r_c from (select id, c from test.foj_l where case_id=21) l full outer join (select id, c from test.foj_r where case_id=21) r on l.id = r.id and l.c < r.c order by l.id is null, l.id, l.c is null, l.c, r.id is null, r.id, r.c is null, r.c;
++------+------+------+------+
+| l_id | l_c  | r_id | r_c  |
++------+------+------+------+
+| NULL |   10 | NULL | NULL |
+| NULL | NULL |    1 |   20 |
++------+------+------+------+
+
+# Case 22: FOJ_WithOther_NullBuildKey
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enable_full_outer_join=1; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.id as l_id, l.c as l_c, r.id as r_id, r.c as r_c from (select id, c from test.foj_l where case_id=22) l full outer join (select id, c from test.foj_r where case_id=22) r on l.id = r.id and l.c < r.c order by l.id is null, l.id, l.c is null, l.c, r.id is null, r.id, r.c is null, r.c;
++------+------+------+------+
+| l_id | l_c  | r_id | r_c  |
++------+------+------+------+
+|    1 |   10 | NULL | NULL |
+| NULL | NULL | NULL |   20 |
++------+------+------+------+
+
+# Case 23: FOJ_WithOther_BothSidesNullKey
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enable_full_outer_join=1; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.id as l_id, l.c as l_c, r.id as r_id, r.c as r_c from (select id, c from test.foj_l where case_id=23) l full outer join (select id, c from test.foj_r where case_id=23) r on l.id = r.id and l.c < r.c order by l.id is null, l.id, l.c is null, l.c, r.id is null, r.id, r.c is null, r.c;
++------+------+------+------+
+| l_id | l_c  | r_id | r_c  |
++------+------+------+------+
+| NULL |   10 | NULL | NULL |
+| NULL | NULL | NULL |   20 |
++------+------+------+------+
+
+# Case 24: FOJ_WithOther_MultiProbeToOneBuild_OtherPass
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enable_full_outer_join=1; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.id as l_id, l.c as l_c, r.id as r_id, r.c as r_c from (select id, c from test.foj_l where case_id=24) l full outer join (select id, c from test.foj_r where case_id=24) r on l.id = r.id and l.c < r.c order by l.id is null, l.id, l.c is null, l.c, r.id is null, r.id, r.c is null, r.c;
++------+------+------+------+
+| l_id | l_c  | r_id | r_c  |
++------+------+------+------+
+|    1 |    3 |    1 |    5 |
+|    1 |    4 |    1 |    5 |
++------+------+------+------+
+
+# Case 25: FOJ_WithOther_MixedMatchCardinality
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enable_full_outer_join=1; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.id as l_id, l.c as l_c, r.id as r_id, r.c as r_c from (select id, c from test.foj_l where case_id=25) l full outer join (select id, c from test.foj_r where case_id=25) r on l.id = r.id and l.c < r.c order by l.id is null, l.id, l.c is null, l.c, r.id is null, r.id, r.c is null, r.c;
++------+------+------+------+
+| l_id | l_c  | r_id | r_c  |
++------+------+------+------+
+|    1 |    9 | NULL | NULL |
+|    2 |    3 |    2 |    4 |
+|    3 |    3 |    3 |    5 |
+| NULL | NULL |    1 |    4 |
+| NULL | NULL |    1 |    5 |
+| NULL | NULL |    3 |    2 |
+| NULL | NULL |    4 |    8 |
++------+------+------+------+
+
+# Case 26: FOJ_WithOther_LeftAndRightCondition_Mixed
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enable_full_outer_join=1; set tidb_allow_mpp=1; set tidb_enforce_mpp=1; select l.id as l_id, l.c as l_c, r.id as r_id, r.c as r_c from (select id, c from test.foj_l where case_id=26) l full outer join (select id, c from test.foj_r where case_id=26) r on l.id = r.id and l.c > 10 and r.c > 100 and l.c < r.c order by l.id is null, l.id, l.c is null, l.c, r.id is null, r.id, r.c is null, r.c;
++------+------+------+------+
+| l_id | l_c  | r_id | r_c  |
++------+------+------+------+
+|    1 |    5 | NULL | NULL |
+|    2 |   20 | NULL | NULL |
+| NULL | NULL |    1 |  200 |
+| NULL | NULL |    2 |   10 |
+| NULL | NULL |    3 |   50 |
++------+------+------+------+
+
+# Clean up.
+mysql> drop table if exists test.foj_l;
+mysql> drop table if exists test.foj_r;

@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Flash/Pipeline/Schedule/Reactor/WaitReactor.h>
+#include <Flash/Pipeline/Schedule/TaskQueues/KeyspaceCpuLimiter.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPool.h>
 #include <Flash/Pipeline/Schedule/ThreadPool/TaskThreadPoolImpl.h>
@@ -80,6 +81,8 @@ public:
     static std::unique_ptr<TaskScheduler> instance;
 
 private:
+    KeyspaceCpuLimiterPtr keyspace_cpu_limiter;
+
     TaskThreadPool<CPUImpl> cpu_task_thread_pool;
 
     TaskThreadPool<IOImpl> io_task_thread_pool;

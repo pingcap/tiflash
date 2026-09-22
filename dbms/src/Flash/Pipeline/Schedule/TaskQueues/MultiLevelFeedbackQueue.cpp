@@ -17,6 +17,8 @@
 #include <assert.h>
 #include <common/likely.h>
 
+#include <ext/scope_guard.h>
+
 namespace DB
 {
 namespace
@@ -72,7 +74,8 @@ MultiLevelFeedbackQueue<TimeGetter>::~MultiLevelFeedbackQueue()
 }
 
 template <typename TimeGetter>
-MultiLevelFeedbackQueue<TimeGetter>::MultiLevelFeedbackQueue()
+MultiLevelFeedbackQueue<TimeGetter>::MultiLevelFeedbackQueue(KeyspaceCpuLimiterPtr keyspace_cpu_limiter_)
+    : keyspace_cpu_limiter(std::move(keyspace_cpu_limiter_))
 {
     UInt64 time_slices[QUEUE_SIZE];
     UInt64 time_slice = 0;
@@ -138,7 +141,7 @@ void MultiLevelFeedbackQueue<TimeGetter>::submit(TaskPtr && task)
         submitTaskWithoutLock(std::move(task));
     }
     assert(!task);
-    cv.notify_one();
+    notifyOneWaiter();
 }
 
 template <typename TimeGetter>
@@ -156,57 +159,125 @@ void MultiLevelFeedbackQueue<TimeGetter>::submit(std::vector<TaskPtr> & tasks)
     for (auto & task : tasks)
         computeQueueLevel(task);
 
-    std::lock_guard lock(mu);
-    for (auto & task : tasks)
     {
-        submitTaskWithoutLock(std::move(task));
-        cv.notify_one();
+        std::lock_guard lock(mu);
+        for (auto & task : tasks)
+            submitTaskWithoutLock(std::move(task));
     }
+    if (tasks.size() == 1)
+        notifyOneWaiter();
+    else
+        notifyWaiters();
 }
 
 template <typename TimeGetter>
 bool MultiLevelFeedbackQueue<TimeGetter>::take(TaskPtr & task)
 {
     assert(!task);
+    std::unique_lock lock(mu);
+    const bool limiter_enabled = keyspace_cpu_limiter && keyspace_cpu_limiter->isEnabled();
+    while (true)
     {
-        // -1 means no candidates; else has candidate.
-        int queue_idx = -1;
-        double target_accu_time_microsecond = 0;
-        std::unique_lock lock(mu);
-        while (true)
+        // Remaining tasks will be drained in destructor.
+        if (unlikely(is_finished))
+            return false;
+
+        // Snapshot before inspecting the queues. A release can happen without
+        // holding `mu`; taking the snapshot afterwards could miss that wakeup.
+        const auto previous_change_id = limiter_enabled ? keyspace_cpu_limiter->getChangeId() : 0;
+
+        if (popTask(cancel_task_queue, task))
+            return true;
+
+        // A level can contain tasks from several keyspaces. Try levels in
+        // MLFQ order until one has a task with an available reservation.
+        std::array<bool, QUEUE_SIZE> inspected{};
+        bool cpu_quota_rejected = false;
+        for (size_t count = 0; count < QUEUE_SIZE; ++count)
         {
-            // Remaining tasks will be drained in destructor.
-            if (unlikely(is_finished))
-                return false;
-
-            if (popTask(cancel_task_queue, task))
-                return true;
-
-            // Find the queue with the smallest execution time.
+            int queue_idx = -1;
+            double target_accu_time_microsecond = 0;
             for (size_t i = 0; i < QUEUE_SIZE; ++i)
             {
-                // we just search for queue has element
                 const auto & cur_queue = level_queues[i];
-                if (!cur_queue->empty())
+                if (!inspected[i] && !cur_queue->empty())
                 {
                     double local_target_time_microsecond = cur_queue->normalizedTimeMicrosecond();
                     if (queue_idx < 0 || local_target_time_microsecond < target_accu_time_microsecond)
                     {
                         target_accu_time_microsecond = local_target_time_microsecond;
-                        queue_idx = i;
+                        queue_idx = static_cast<int>(i);
                     }
                 }
             }
 
-            if (queue_idx >= 0)
+            if (queue_idx < 0)
                 break;
+
+            inspected[queue_idx] = true;
+            if (tryTakeTaskWithoutLock(*level_queues[queue_idx], task, cpu_quota_rejected))
+                return true;
+        }
+
+        if (limiter_enabled)
+        {
+            bool has_pending_tasks = !cancel_task_queue.empty();
+            for (const auto & queue : level_queues)
+                has_pending_tasks = has_pending_tasks || !queue->empty();
+
+            if (has_pending_tasks)
+            {
+                lock.unlock();
+                // Wait for the earliest quota refill, or for a release or a
+                // submission to update the generation. Without CPU quota the
+                // refill wait is unbounded, which keeps the plain wait.
+                keyspace_cpu_limiter->waitForChange(
+                    previous_change_id,
+                    keyspace_cpu_limiter->getRefillWaitDuration(cpu_quota_rejected));
+                lock.lock();
+            }
+            else
+            {
+                cv.wait(lock);
+            }
+        }
+        else
+        {
             cv.wait(lock);
         }
-        level_queues[queue_idx]->take(task);
+    }
+}
+
+template <typename TimeGetter>
+bool MultiLevelFeedbackQueue<TimeGetter>::tryTakeTaskWithoutLock(
+    UnitQueue & unit_queue,
+    TaskPtr & task,
+    bool & cpu_quota_rejected)
+{
+    if (!keyspace_cpu_limiter || !keyspace_cpu_limiter->isEnabled())
+    {
+        unit_queue.take(task);
+        return true;
     }
 
-    assert(task);
-    return true;
+    for (auto it = unit_queue.task_queue.begin(); it != unit_queue.task_queue.end(); ++it)
+    {
+        const auto keyspace_id = (*it)->getKeyspaceID();
+        if (!keyspace_cpu_limiter->tryAcquire(keyspace_id, &cpu_quota_rejected))
+            continue;
+
+        bool owner_bound = false;
+        SCOPE_EXIT({
+            if (!owner_bound)
+                keyspace_cpu_limiter->release(keyspace_id);
+        });
+        task = std::move(*it);
+        unit_queue.task_queue.erase(it);
+        keyspace_cpu_limiter->bindOwner(keyspace_id, task.get());
+        owner_bound = true;
+        return true;
+    }
+    return false;
 }
 
 template <typename TimeGetter>
@@ -215,6 +286,8 @@ void MultiLevelFeedbackQueue<TimeGetter>::drainTaskQueueWithoutLock()
     TaskPtr task;
     while (popTask(cancel_task_queue, task))
     {
+        if (keyspace_cpu_limiter)
+            keyspace_cpu_limiter->release(task.get());
         FINALIZE_TASK(task);
     }
 
@@ -224,6 +297,8 @@ void MultiLevelFeedbackQueue<TimeGetter>::drainTaskQueueWithoutLock()
         while (!cur_queue->empty())
         {
             cur_queue->take(task);
+            if (keyspace_cpu_limiter)
+                keyspace_cpu_limiter->release(task.get());
             FINALIZE_TASK(task);
         }
     }
@@ -234,6 +309,11 @@ void MultiLevelFeedbackQueue<TimeGetter>::updateStatistics(const TaskPtr & task,
 {
     assert(task);
     level_queues[task->mlfq_level]->accu_consume_time_microsecond += (inc_ns / 1000);
+    if (keyspace_cpu_limiter && keyspace_cpu_limiter->isEnabled())
+    {
+        keyspace_cpu_limiter->release(task.get());
+        notifyWaiters();
+    }
 }
 
 template <typename TimeGetter>
@@ -255,7 +335,7 @@ void MultiLevelFeedbackQueue<TimeGetter>::finish()
         std::lock_guard lock(mu);
         is_finished = true;
     }
-    cv.notify_all();
+    notifyWaiters();
 }
 
 template <typename TimeGetter>
@@ -271,12 +351,12 @@ void MultiLevelFeedbackQueue<TimeGetter>::cancel(const TaskCancelInfo & cancel_i
     if unlikely (cancel_info.query_id.empty())
         return;
 
-    std::lock_guard lock(mu);
-    if (cancel_query_id_cache.add(cancel_info.query_id))
     {
-        collectCancelledTasks(cancel_task_queue, cancel_info.query_id);
-        cv.notify_all();
+        std::lock_guard lock(mu);
+        if (cancel_query_id_cache.add(cancel_info.query_id))
+            collectCancelledTasks(cancel_task_queue, cancel_info.query_id);
     }
+    notifyWaiters();
 }
 
 template <typename TimeGetter>
@@ -286,6 +366,22 @@ void MultiLevelFeedbackQueue<TimeGetter>::collectCancelledTasks(
 {
     for (const auto & queue : level_queues)
         moveCancelledTasks(*queue, cancel_queue, query_id);
+}
+
+template <typename TimeGetter>
+void MultiLevelFeedbackQueue<TimeGetter>::notifyOneWaiter()
+{
+    cv.notify_one();
+    if (keyspace_cpu_limiter)
+        keyspace_cpu_limiter->notifyAll();
+}
+
+template <typename TimeGetter>
+void MultiLevelFeedbackQueue<TimeGetter>::notifyWaiters()
+{
+    cv.notify_all();
+    if (keyspace_cpu_limiter)
+        keyspace_cpu_limiter->notifyAll();
 }
 
 template class MultiLevelFeedbackQueue<CPUTimeGetter>;

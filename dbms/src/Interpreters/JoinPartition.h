@@ -115,7 +115,7 @@ public:
     void insertBlockForBuild(Block && block);
     void insertBlockForProbe(Block && block);
     size_t getRowCount();
-    size_t getHashMapAndPoolByteCount();
+    size_t getHashMapAndPoolByteCount() const;
     void setResizeCallbackIfNeeded();
     void updateHashMapAndPoolMemoryUsage();
     size_t getHashMapAndPoolMemoryUsage() const { return hash_table_pool_memory_usage; }
@@ -127,7 +127,7 @@ public:
             return rows_not_inserted_to_map.get();
         }
         return nullptr;
-    };
+    }
     Blocks trySpillProbePartition()
     {
         std::unique_lock lock(partition_mutex);
@@ -176,7 +176,7 @@ public:
         const std::vector<size_t> & key_sizes,
         const TiDB::TiDBCollators & collators,
         Block * stored_block,
-        ConstNullMapPtr & null_map,
+        ConstNullMapPtr & row_filter_map,
         size_t stream_index,
         size_t insert_concurrency,
         bool enable_fine_grained_shuffle,
@@ -190,7 +190,7 @@ public:
         const ColumnRawPtrs & key_columns,
         const std::vector<size_t> & key_sizes,
         MutableColumns & added_columns,
-        ConstNullMapPtr null_map,
+        ConstNullMapPtr row_filter_map,
         IColumn::Offset & current_offset,
         std::unique_ptr<IColumn::Offsets> & offsets_to_replicate,
         const std::vector<size_t> & right_indexes,
@@ -205,7 +205,7 @@ public:
         const ColumnRawPtrs & key_columns,
         const std::vector<size_t> & key_sizes,
         MutableColumns & added_columns,
-        ConstNullMapPtr null_map,
+        ConstNullMapPtr row_filter_map,
         IColumn::Offset & current_offset,
         std::unique_ptr<IColumn::Offsets> & offsets_to_replicate,
         const std::vector<size_t> & right_indexes,

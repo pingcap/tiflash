@@ -154,6 +154,9 @@ if(TIFLASH_LLVM_TOOLCHAIN AND USE_LIBCXX)
             DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
             FILE_PERMISSIONS OWNER_WRITE OWNER_READ OWNER_EXECUTE)
     set(TIFLASH_RUSTFLAGS "-C rpath=yes -C linker=${TIFLASH_RUST_LINKER}")
+    if (ENABLE_NEXT_GEN_COLUMNAR)
+        set(TIFLASH_RUSTFLAGS "${TIFLASH_RUSTFLAGS} -A deprecated")
+    endif()
     if(ARCH_AARCH64)
         set(TIFLASH_RUSTFLAGS "-C link-arg=-Wl,-Bsymbolic ${TIFLASH_RUSTFLAGS}")
     endif()
@@ -171,6 +174,24 @@ set(_TIFLASH_PROXY_CUSTOM_DEPENDS
     "${_TIFLASH_PROXY_MAKEFILE}"
     "${_TIFLASH_PROXY_CARGO_MANIFEST}"
     "${_TIFLASH_PROXY_RUST_TOOLCHAIN}")
+
+# In columnar next-gen mode, the hub links crates from the local
+# cloud-storage-engine checkout through Cargo's [patch] entries.  Those files
+# are outside _TIFLASH_PROXY_SOURCE_DIR, so they must be added explicitly;
+# otherwise CMake considers libtiflash_proxy.so up to date after a local Rust
+# change and never invokes Cargo.
+if (ENABLE_NEXT_GEN_COLUMNAR)
+    set(_CLOUD_STORAGE_ENGINE_SOURCE_DIR "${TiFlash_SOURCE_DIR}/contrib/cloud-storage-engine")
+    if (EXISTS "${_CLOUD_STORAGE_ENGINE_SOURCE_DIR}")
+        file(GLOB_RECURSE _CLOUD_STORAGE_ENGINE_SRCS CONFIGURE_DEPENDS
+            "${_CLOUD_STORAGE_ENGINE_SOURCE_DIR}/*.rs"
+            "${_CLOUD_STORAGE_ENGINE_SOURCE_DIR}/*.toml"
+            "${_CLOUD_STORAGE_ENGINE_SOURCE_DIR}/*.proto")
+        list(FILTER _CLOUD_STORAGE_ENGINE_SRCS EXCLUDE REGEX "/target/")
+        list(APPEND _TIFLASH_PROXY_CUSTOM_DEPENDS ${_CLOUD_STORAGE_ENGINE_SRCS})
+    endif()
+endif()
+
 if (EXISTS "${_TIFLASH_PROXY_CARGO_LOCK}")
     list(APPEND _TIFLASH_PROXY_CUSTOM_DEPENDS "${_TIFLASH_PROXY_CARGO_LOCK}")
 endif()

@@ -29,6 +29,139 @@ namespace DB::tests
 
 namespace
 {
+TEST(KeyspaceCpuLimiterTest, LimitsOneKeyspaceIndependently)
+{
+    KeyspaceCpuLimiter limiter(2);
+
+    ASSERT_TRUE(limiter.tryAcquire(1));
+    ASSERT_TRUE(limiter.tryAcquire(1));
+    ASSERT_FALSE(limiter.tryAcquire(1));
+
+    ASSERT_TRUE(limiter.tryAcquire(2));
+    ASSERT_TRUE(limiter.tryAcquire(2));
+
+    limiter.release(1);
+    ASSERT_TRUE(limiter.tryAcquire(1));
+}
+
+TEST(KeyspaceCpuLimiterTest, ZeroLimitDisablesLimiter)
+{
+    KeyspaceCpuLimiter limiter(0);
+
+    ASSERT_FALSE(limiter.isEnabled());
+    for (size_t i = 0; i < 10; ++i)
+        ASSERT_TRUE(limiter.tryAcquire(1));
+}
+
+TEST(KeyspaceCpuLimiterTest, CPUQuotaWorksWithoutPoolLimit)
+{
+    constexpr auto cpu_quota_per_second_ns
+        = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::milliseconds(10)).count();
+    constexpr KeyspaceID keyspace_id = 999999;
+    KeyspaceCpuLimiter limiter(0, cpu_quota_per_second_ns);
+    const Task * task = nullptr;
+
+    ASSERT_TRUE(limiter.tryAcquire(keyspace_id));
+    limiter.bindOwner(keyspace_id, task);
+    ASSERT_TRUE(limiter.consumeCPUTime(
+        task,
+        std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::milliseconds(100)).count()));
+    limiter.release(task);
+
+    ASSERT_FALSE(limiter.tryAcquire(keyspace_id));
+
+    auto & metrics = TiFlashMetrics::instance().acquireKeyspaceCpuLimiterMetrics(keyspace_id);
+    EXPECT_EQ(metrics.active_tasks->Value(), 0);
+    EXPECT_EQ(metrics.throttled->Value(), 1);
+    EXPECT_GT(metrics.cpu_seconds_total->Value(), 0);
+    EXPECT_GT(metrics.cpu_quota_throttled_total->Value(), 0);
+    TiFlashMetrics::instance().releaseKeyspaceCpuLimiterMetrics(keyspace_id);
+}
+
+TEST(KeyspaceCpuLimiterTest, CPUQuotaRejectionKeepsWaitBoundedWhenRefillIsObserved)
+{
+    constexpr UInt64 cpu_quota_per_second_ns = 1'000'000'000;
+    constexpr UInt64 cpu_debt_ns = 100'000'000;
+    constexpr KeyspaceID keyspace_id = 999995;
+    KeyspaceCpuLimiter limiter(0, cpu_quota_per_second_ns);
+    const Task * task = nullptr;
+
+    ASSERT_TRUE(limiter.tryAcquire(keyspace_id));
+    limiter.bindOwner(keyspace_id, task);
+    ASSERT_TRUE(limiter.consumeCPUTime(task, cpu_quota_per_second_ns + cpu_debt_ns));
+    limiter.release(task);
+
+    bool cpu_quota_rejected = false;
+    ASSERT_FALSE(limiter.tryAcquire(keyspace_id, &cpu_quota_rejected));
+    ASSERT_TRUE(cpu_quota_rejected);
+
+    // Let the negative balance refill past zero without changing last_refill
+    // through a synthetic future cleanup timestamp.
+    std::this_thread::sleep_for(std::chrono::milliseconds(150));
+
+    EXPECT_LT(limiter.getRefillWaitDuration(cpu_quota_rejected), std::chrono::milliseconds::max());
+    EXPECT_EQ(limiter.getRefillWaitDuration(), std::chrono::milliseconds::max());
+}
+
+TEST(KeyspaceCpuLimiterTest, CleanupPreservesReservationsAndExpiresIdleQuotas)
+{
+    KeyspaceCpuLimiter limiter(1);
+    ASSERT_TRUE(limiter.tryAcquire(999998));
+    const auto later = std::chrono::steady_clock::now() + std::chrono::minutes(61);
+    // A reservation must survive even before bindOwner.
+    EXPECT_EQ(limiter.cleanupIdleQuotas(later), 0u);
+    limiter.release(999998);
+    EXPECT_EQ(limiter.cleanupIdleQuotas(), 0u);
+    EXPECT_EQ(limiter.cleanupIdleQuotas(later), 1u);
+    EXPECT_EQ(limiter.cleanupIdleQuotas(later), 0u);
+    // A duplicate release must not recreate an expired quota.
+    limiter.release(999998);
+    EXPECT_EQ(limiter.cleanupIdleQuotas(later), 0u);
+    EXPECT_TRUE(limiter.tryAcquire(999998));
+}
+
+TEST(KeyspaceCpuLimiterTest, CleanupPreservesCPUQuotaUntilFull)
+{
+    constexpr KeyspaceID keyspace_id = 999997;
+    KeyspaceCpuLimiter limiter(0, 1'000'000);
+    const Task * task = nullptr;
+    ASSERT_TRUE(limiter.tryAcquire(keyspace_id));
+    limiter.bindOwner(keyspace_id, task);
+    ASSERT_TRUE(limiter.consumeCPUTime(task, 6'000'000'000));
+    limiter.release(task);
+    const auto now = std::chrono::steady_clock::now();
+    EXPECT_EQ(limiter.cleanupIdleQuotas(now + std::chrono::minutes(61)), 0u);
+    EXPECT_EQ(limiter.cleanupIdleQuotas(now + std::chrono::milliseconds(5'999'500)), 0u);
+    EXPECT_EQ(limiter.cleanupIdleQuotas(now + std::chrono::minutes(101)), 1u);
+    EXPECT_TRUE(limiter.tryAcquire(keyspace_id));
+}
+
+TEST(KeyspaceCpuLimiterTest, MetricsAreRemovedAfterLastLimiter)
+{
+    constexpr KeyspaceID keyspace_id = 999996;
+    auto & registry = TiFlashMetrics::instance();
+    {
+        KeyspaceCpuLimiter first(1);
+        ASSERT_TRUE(first.tryAcquire(keyspace_id));
+        EXPECT_FALSE(first.tryAcquire(keyspace_id));
+        {
+            KeyspaceCpuLimiter second(1);
+            ASSERT_TRUE(second.tryAcquire(keyspace_id));
+            second.release(keyspace_id);
+            EXPECT_EQ(second.cleanupIdleQuotas(std::chrono::steady_clock::now() + std::chrono::minutes(61)), 1u);
+        }
+        auto & metrics = registry.acquireKeyspaceCpuLimiterMetrics(keyspace_id);
+        EXPECT_EQ(metrics.active_tasks_throttled_total->Value(), 1);
+        registry.releaseKeyspaceCpuLimiterMetrics(keyspace_id);
+        // The first limiter still owns and can update the shared metrics.
+        EXPECT_FALSE(first.tryAcquire(keyspace_id));
+    }
+    auto & metrics = registry.acquireKeyspaceCpuLimiterMetrics(keyspace_id);
+    EXPECT_EQ(metrics.active_tasks_throttled_total->Value(), 0);
+    EXPECT_EQ(metrics.max_active_tasks->Value(), 0);
+    registry.releaseKeyspaceCpuLimiterMetrics(keyspace_id);
+}
+
 class SimpleTask : public Task
 {
 public:
@@ -619,7 +752,11 @@ TEST_F(TestResourceControlQueue, cancel)
         queue.submit(tasks);
         for (size_t i = 0; i < resource_groups.size(); ++i)
         {
-            queue.cancel(TaskCancelInfo{.query_id = query_id_prefix + rg_names[i], .resource_group_name = rg_names[i]});
+            queue.cancel(TaskCancelInfo{
+                .query_id = query_id_prefix + rg_names[i],
+                .keyspace_id = all_contexts[i]->getKeyspaceID(),
+                .resource_group_name = rg_names[i]});
+            EXPECT_EQ(queue.cancel_task_queue.size(), tasks_per_resource_group);
             for (size_t j = 0; j < tasks_per_resource_group; ++j)
             {
                 TaskPtr task;
@@ -639,10 +776,14 @@ TEST_F(TestResourceControlQueue, cancel)
         ResourceControlQueue<CPUMultiLevelFeedbackQueue> queue;
         for (size_t i = 0; i < resource_groups.size(); ++i)
         {
-            queue.cancel(TaskCancelInfo{.query_id = query_id_prefix + rg_names[i], .resource_group_name = rg_names[i]});
+            queue.cancel(TaskCancelInfo{
+                .query_id = query_id_prefix + rg_names[i],
+                .keyspace_id = all_contexts[i]->getKeyspaceID(),
+                .resource_group_name = rg_names[i]});
             if (i == 0)
                 queue.submit(tasks);
 
+            EXPECT_EQ(queue.cancel_task_queue.size(), tasks_per_resource_group);
             for (size_t j = 0; j < tasks_per_resource_group; ++j)
             {
                 TaskPtr task;
@@ -652,6 +793,48 @@ TEST_F(TestResourceControlQueue, cancel)
             }
         }
     }
+}
+
+TEST_F(TestResourceControlQueue, cancelMatchesKeyspace)
+{
+    constexpr KeyspaceID first_keyspace = 101;
+    constexpr KeyspaceID second_keyspace = 202;
+    const String resource_group_name = "shared-rg";
+    setupMockLAC({createResourceGroupOfDynamicTokenBucket(
+        resource_group_name,
+        ResourceGroup::UserMediumPriority,
+        20000,
+        false)});
+
+    auto make_context = [&](const String & query_id, KeyspaceID keyspace_id) {
+        return std::make_shared<PipelineExecutorContext>(
+            query_id,
+            query_id,
+            mem_tracker,
+            nullptr,
+            nullptr,
+            nullptr,
+            keyspace_id,
+            resource_group_name);
+    };
+    auto first_context = make_context("shared-query-1", first_keyspace);
+    auto second_context = make_context("shared-query-2", second_keyspace);
+
+    ResourceControlQueue<CPUMultiLevelFeedbackQueue> queue;
+    queue.submit(std::make_unique<SimpleTask>(*first_context));
+    queue.submit(std::make_unique<SimpleTask>(*second_context));
+    queue.cancel(TaskCancelInfo{"shared-query-1", first_keyspace, resource_group_name});
+
+    TaskPtr task;
+    ASSERT_TRUE(queue.take(task));
+    EXPECT_EQ(task->getQueryId(), "shared-query-1");
+    EXPECT_EQ(task->getKeyspaceID(), first_keyspace);
+    FINALIZE_TASK(task);
+
+    ASSERT_TRUE(queue.take(task));
+    EXPECT_EQ(task->getQueryId(), "shared-query-2");
+    EXPECT_EQ(task->getKeyspaceID(), second_keyspace);
+    FINALIZE_TASK(task);
 }
 
 TEST_F(TestResourceControlQueue, tokenBucket)

@@ -164,6 +164,11 @@ const typename CollatorCases::PatternCase CollatorCases::pattern_cases[] = {
       {"中国", {false, false, false, false, false, false, false}},
       {"中国中", {true, true, true, true, true, true, true}},
       {"", {false, false, false, false, false, false, false}}}},
+    {"%报告%",
+     {{"报告", {true, true, true, true, true, true, true}},
+      {"测试报告完成", {true, true, true, true, true, true, true}},
+      {"报表", {false, false, false, false, false, false, false}},
+      {"", {false, false, false, false, false, false, false}}}},
     {"A%",
      {{"a", {false, false, true, false, true, true, false}},
       {"aaa", {false, false, true, false, true, true, false}},
@@ -273,6 +278,44 @@ const typename CollatorCases::PatternCase CollatorCases::pattern_cases[] = {
         {
             {"1234567\\910", {false, false, false, false, false, false, false}},
             {"1234567910", {true, true, true, true, true, true, true}},
+        },
+    },
+    {
+        "a\\%%b", // escaped '%' followed by wildcard '%'
+        {
+            {"a%b", {true, true, true, true, true, true, true}},
+            {"a%foob", {true, true, true, true, true, true, true}},
+            {"a%x", {false, false, false, false, false, false, false}},
+            {"afoob", {false, false, false, false, false, false, false}},
+        },
+    },
+    {
+        "a%%b", // test consecutive '%' deduplication - two '%'s
+        {
+            {"ab", {true, true, true, true, true, true, true}},
+            {"axb", {true, true, true, true, true, true, true}},
+            {"a123b", {true, true, true, true, true, true, true}},
+            {"a", {false, false, false, false, false, false, false}},
+        },
+    },
+    {
+        "a%%%b", // test consecutive '%' deduplication - three '%'s
+        {
+            {"ab", {true, true, true, true, true, true, true}},
+            {"axb", {true, true, true, true, true, true, true}},
+            {"a456b", {true, true, true, true, true, true, true}},
+            {"", {false, false, false, false, false, false, false}},
+        },
+    },
+    {
+        "a\\%%%b", // escaped '%' followed by two wildcard '%'s (dedup to one)
+        {
+            {"a%b", {true, true, true, true, true, true, true}},
+            {"a%xb", {true, true, true, true, true, true, true}},
+            {"a%123b", {true, true, true, true, true, true, true}},
+            {"a%x", {false, false, false, false, false, false, false}},
+            {"a%123c", {false, false, false, false, false, false, false}},
+            {"ab", {false, false, false, false, false, false, false}},
         },
     },
     {

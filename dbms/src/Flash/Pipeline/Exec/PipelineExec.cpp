@@ -91,9 +91,17 @@ PipelineExec::PipelineExec(
 void PipelineExec::executePrefix()
 {
     sink_op->operatePrefix();
+    bool skip_source = false;
     for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it) // NOLINT(modernize-loop-convert)
+    {
         (*it)->operatePrefix();
-    source_op->operatePrefix();
+        skip_source |= (*it)->shouldSkipSource();
+    }
+    if (!skip_source)
+    {
+        source_op->operatePrefix();
+        source_prefix_executed = true;
+    }
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_execute_prefix_failpoint);
 }
 
@@ -102,7 +110,8 @@ void PipelineExec::executeSuffix()
     sink_op->operateSuffix();
     for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it) // NOLINT(modernize-loop-convert)
         (*it)->operateSuffix();
-    source_op->operateSuffix();
+    if (source_prefix_executed)
+        source_op->operateSuffix();
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_execute_suffix_failpoint);
 }
 

@@ -225,6 +225,53 @@ try
 }
 CATCH
 
+// /tiflash/readyz must not crash when engine-store is still initializing.
+TEST_F(StatusServerTest, TestReadyzBeforeTMTInit)
+try
+{
+    EngineStoreServerWrap unused_wrap{};
+    auto helper = GetEngineStoreServerHelper(&unused_wrap);
+
+    const String path = "/tiflash/readyz";
+    const String verbose_query = "verbose";
+
+    {
+        EngineStoreServerWrap uninitialized_wrap{};
+        auto res = helper.fn_handle_http_request(
+            &uninitialized_wrap,
+            BaseBuffView{path.data(), path.length()},
+            BaseBuffView{"", 0},
+            BaseBuffView{"", 0});
+        EXPECT_EQ(res.status, HttpRequestStatus::InternalError) << magic_enum::enum_name(res.status);
+        EXPECT_EQ(std::string_view(res.res.view.data, res.res.view.len), "fail\n");
+        releaseResp(helper, std::move(res));
+    }
+
+    {
+        EngineStoreServerWrap uninitialized_wrap{};
+        auto res = helper.fn_handle_http_request(
+            &uninitialized_wrap,
+            BaseBuffView{path.data(), path.length()},
+            BaseBuffView{verbose_query.data(), verbose_query.length()},
+            BaseBuffView{"", 0});
+        EXPECT_EQ(res.status, HttpRequestStatus::InternalError) << magic_enum::enum_name(res.status);
+        EXPECT_EQ(std::string_view(res.res.view.data, res.res.view.len), "[-]tmt not initialized\nfail\n");
+        releaseResp(helper, std::move(res));
+    }
+
+    {
+        auto res = helper.fn_handle_http_request(
+            nullptr,
+            BaseBuffView{path.data(), path.length()},
+            BaseBuffView{verbose_query.data(), verbose_query.length()},
+            BaseBuffView{"", 0});
+        EXPECT_EQ(res.status, HttpRequestStatus::InternalError) << magic_enum::enum_name(res.status);
+        EXPECT_EQ(std::string_view(res.res.view.data, res.res.view.len), "[-]tmt not initialized\nfail\n");
+        releaseResp(helper, std::move(res));
+    }
+}
+CATCH
+
 
 ASTPtr parseCreateStatement(const String & statement)
 {

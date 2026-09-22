@@ -296,8 +296,10 @@ Aggregator::Aggregator(
     size_t concurrency,
     const RegisterOperatorSpillContext & register_operator_spill_context,
     bool is_auto_pass_through_,
-    bool use_magic_hash_)
+    bool use_magic_hash_,
+    HashTableStatsProfileInfoPtr hash_table_stats_profile_info_)
     : params(params_)
+    , hash_table_stats_profile_info(std::move(hash_table_stats_profile_info_))
     , log(Logger::get(req_id))
     , is_cancelled([]() { return false; })
     , is_auto_pass_through(is_auto_pass_through_)
@@ -2435,6 +2437,39 @@ void NO_INLINE Aggregator::mergeBucketImpl(ManyAggregatedDataVariants & data, In
     }
 }
 
+void Aggregator::reportHashTableStats(const ManyAggregatedDataVariants & data_variants) const
+{
+    if (!hash_table_stats_profile_info || params.keys_size == 0)
+        return;
+
+    HashTableStats stats{
+        .size_kind = HashTableSizeKind::DistinctKeyCount,
+    };
+    bool has_hash_table = false;
+    for (const auto & data : data_variants)
+    {
+        if (!data || !data->inited())
+            continue;
+
+        has_hash_table = true;
+        stats.size += data->size();
+        stats.memory_bytes += data->bytesCount();
+    }
+    if (has_hash_table)
+        hash_table_stats_profile_info->mergeHashTableStats(stats);
+}
+
+void Aggregator::reportHashTableStats(const AggregatedDataVariants & data) const
+{
+    if (!hash_table_stats_profile_info || params.keys_size == 0 || !data.inited())
+        return;
+
+    hash_table_stats_profile_info->mergeHashTableStats({
+        .size = data.size(),
+        .size_kind = HashTableSizeKind::DistinctKeyCount,
+        .memory_bytes = data.bytesCount(),
+    });
+}
 
 MergingBucketsPtr Aggregator::mergeAndConvertToBlocks(
     ManyAggregatedDataVariants & data_variants,
@@ -2443,6 +2478,12 @@ MergingBucketsPtr Aggregator::mergeAndConvertToBlocks(
 {
     if (unlikely(data_variants.empty()))
         throw Exception("Empty data passed to Aggregator::mergeAndConvertToBlocks.", ErrorCodes::EMPTY_DATA_PASSED);
+
+    if (!hash_table_stats_reported)
+    {
+        reportHashTableStats(data_variants);
+        hash_table_stats_reported = true;
+    }
 
     LOG_TRACE(log, "Merging aggregated data");
 
@@ -2701,6 +2742,9 @@ BlocksList Aggregator::vstackBlocks(BlocksList & blocks, bool final)
         }
 #undef M
     }
+
+    // Each restore bucket builds one final effective hash table. Report it before aggregate states move out.
+    reportHashTableStats(result);
 
     BlocksList return_blocks;
     if (result.type == AggregatedDataVariants::Type::without_key)

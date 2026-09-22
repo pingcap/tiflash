@@ -219,10 +219,13 @@ if [ -z "$fullstack" ]; then
 	fullstack="false"
 fi
 
-"$storage_bin" client --host="$storage_server" --port="$storage_port" --query="create database if not exists $storage_db"
-if [ $? != 0 ]; then
-	echo "create database '"$storage_db"' failed" >&2
-	exit 1
+# Debug-only escape hatch for local runs that do not have the TiFlash client port available.
+if [ "${skip_storage_db_init:-false}" != "true" ]; then
+	"$storage_bin" client --host="$storage_server" --port="$storage_port" --query="create database if not exists $storage_db"
+	if [ $? != 0 ]; then
+		echo "create database '"$storage_db"' failed" >&2
+		exit 1
+	fi
 fi
 
 mysql_client="mysql -u root -P $tidb_port -h $tidb_server -e"

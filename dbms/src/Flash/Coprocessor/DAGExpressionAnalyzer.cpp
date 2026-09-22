@@ -49,6 +49,8 @@
 #include <tipb/executor.pb.h>
 #include <tipb/expression.pb.h>
 
+#include <ext/scope_guard.h>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -1001,6 +1003,13 @@ String DAGExpressionAnalyzer::buildFilterColumn(
     const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
     bool null_as_false)
 {
+    building_filter_conditions = true;
+    json_valid_guarded_exprs.clear();
+    SCOPE_EXIT({
+        building_filter_conditions = false;
+        json_valid_guarded_exprs.clear();
+    });
+
     String filter_column_name;
     if (conditions.size() == 1)
     {
@@ -1021,7 +1030,12 @@ String DAGExpressionAnalyzer::buildFilterColumn(
     {
         Names arg_names;
         for (const auto & condition : conditions)
+        {
+            auto guards_before_condition = json_valid_guarded_exprs;
             arg_names.push_back(getActions(condition, actions, true));
+            json_valid_guarded_exprs = std::move(guards_before_condition);
+            recordJsonValidGuards(condition);
+        }
         // connect all the conditions by logical and
         // two_value_and treats null as false inside the `two_value_and` function, so the output column
         // will always be UInt8 type, which can save the merge step in FilterDescription
@@ -1030,6 +1044,30 @@ String DAGExpressionAnalyzer::buildFilterColumn(
         filter_column_name = applyFunction(fun_name, arg_names, actions, nullptr);
     }
     return filter_column_name;
+}
+
+void DAGExpressionAnalyzer::recordJsonValidGuards(const tipb::Expr & expr)
+{
+    if (!building_filter_conditions || !isScalarFunctionExpr(expr))
+        return;
+
+    if (expr.sig() == tipb::ScalarFuncSig::JsonValidStringSig && expr.children_size() == 1)
+    {
+        json_valid_guarded_exprs.emplace(exprToString(expr.children(0), getCurrentInputColumns()));
+        return;
+    }
+
+    if (expr.sig() == tipb::ScalarFuncSig::LogicalAnd)
+    {
+        for (const auto & child : expr.children())
+            recordJsonValidGuards(child);
+    }
+}
+
+bool DAGExpressionAnalyzer::isJsonValidGuarded(const tipb::Expr & expr) const
+{
+    return building_filter_conditions
+        && json_valid_guarded_exprs.contains(exprToString(expr, getCurrentInputColumns()));
 }
 
 std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> DAGExpressionAnalyzer::buildPushDownFilter(

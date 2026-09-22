@@ -32,8 +32,8 @@ void ProbeProcessInfo::resetBlock(Block && block_, size_t partition_index_)
     // min_result_block_size is used to avoid generating too many small block, use 50% of the block size as the default value
     min_result_block_size = std::max(1, (std::min(block.rows(), max_block_size) + 1) / 2);
     prepare_for_probe_done = false;
-    null_map = nullptr;
-    null_map_holder = nullptr;
+    row_filter_map = nullptr;
+    row_filter_map_holder = nullptr;
     filter.reset();
     offsets_to_replicate.reset();
     if (hash_join_data)
@@ -46,6 +46,7 @@ void ProbeProcessInfo::resetBlock(Block && block_, size_t partition_index_)
 
 void ProbeProcessInfo::prepareForHashProbe(
     const Names & key_names,
+    const std::vector<UInt8> & is_null_eq,
     const String & filter_column,
     ASTTableJoin::Kind kind,
     ASTTableJoin::Strictness strictness,
@@ -61,11 +62,14 @@ void ProbeProcessInfo::prepareForHashProbe(
     /// Note: this variable can't be removed because it will take smart pointers' lifecycle to the end of this function.
     hash_join_data->key_columns
         = extractAndMaterializeKeyColumns(block, hash_join_data->materialized_columns, key_names);
-    /// Keys with NULL value in any column won't join to anything.
-    extractNestedColumnsAndNullMap(hash_join_data->key_columns, null_map_holder, null_map);
-    /// reuse null_map to record the filtered rows, the rows contains NULL or does not
-    /// match the join filter won't join to anything
-    recordFilteredRows(block, filter_column, null_map_holder, null_map);
+    /// Build a unified row filter map: ordinary '=' key NULLs and side-condition failures skip probing,
+    /// while NullEQ key NULLs remain probeable.
+    extractJoinKeyColumnsAndFilterNullMap(
+        hash_join_data->key_columns,
+        is_null_eq,
+        row_filter_map_holder,
+        row_filter_map);
+    recordFilteredRows(block, filter_column, row_filter_map_holder, row_filter_map);
     size_t existing_columns = block.columns();
 
     /** If you use FULL or RIGHT JOIN, then the columns from the "left" table must be materialized.
@@ -121,7 +125,7 @@ void ProbeProcessInfo::prepareForCrossProbe(
     cross_join_data->cross_probe_mode = cross_probe_mode_;
     cross_join_data->right_block_size = right_block_size_;
 
-    recordFilteredRows(block, filter_column, null_map_holder, null_map);
+    recordFilteredRows(block, filter_column, row_filter_map_holder, row_filter_map);
     if (kind == ASTTableJoin::Kind::Cross_Anti && strictness == ASTTableJoin::Strictness::All)
         /// `CrossJoinAdder<Cross_Anti, Any>` will skip the matched rows directly, so filter is not needed
         filter = std::make_unique<IColumn::Filter>(block.rows());
@@ -157,8 +161,8 @@ void ProbeProcessInfo::prepareForCrossProbe(
             }
         }
     }
-    if (cross_join_data->cross_probe_mode == CrossProbeMode::SHALLOW_COPY_RIGHT_BLOCK && null_map != nullptr)
-        cross_join_data->row_num_filtered_by_left_condition = countBytesInFilter(*null_map);
+    if (cross_join_data->cross_probe_mode == CrossProbeMode::SHALLOW_COPY_RIGHT_BLOCK && row_filter_map != nullptr)
+        cross_join_data->row_num_filtered_by_left_condition = countBytesInFilter(*row_filter_map);
     prepare_for_probe_done = true;
 }
 
@@ -179,9 +183,14 @@ void ProbeProcessInfo::prepareForNullAware(const Names & key_names, const String
         null_aware_join_data->all_key_null_map_holder,
         null_aware_join_data->all_key_null_map);
 
-    extractNestedColumnsAndNullMap(null_aware_join_data->key_columns, null_map_holder, null_map);
+    extractNestedColumnsAndNullMap(
+        null_aware_join_data->key_columns,
+        null_aware_join_data->key_null_map_holder,
+        null_aware_join_data->key_null_map);
 
-    recordFilteredRows(block, filter_column, null_aware_join_data->filter_map_holder, null_aware_join_data->filter_map);
+    // Reuse the generic probe-side row filter map, but for null-aware join it only records
+    // rows filtered out by side conditions. Key-null rows are tracked separately in key_null_map.
+    recordFilteredRows(block, filter_column, row_filter_map_holder, row_filter_map);
     prepare_for_probe_done = true;
 }
 

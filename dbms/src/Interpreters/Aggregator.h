@@ -31,6 +31,7 @@
 #include <Common/HashTable/TwoLevelStringHashMap.h>
 #include <Common/Logger.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/Coprocessor/HashTableStats.h>
 #include <Interpreters/AggSpillContext.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/AggregationCommon.h>
@@ -947,7 +948,8 @@ public:
         size_t concurrency,
         const RegisterOperatorSpillContext & register_operator_spill_context,
         bool is_auto_pass_through_,
-        bool use_magic_hash_);
+        bool use_magic_hash_,
+        HashTableStatsProfileInfoPtr hash_table_stats_profile_info_ = nullptr);
 
     /// Aggregate the source. Get the result in the form of one of the data structures.
     void execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, size_t thread_num);
@@ -1067,14 +1069,21 @@ public:
     Block getSourceHeader() const;
 
     const Params & getParams() const { return params; }
+    const HashTableStatsProfileInfoPtr & getHashTableStatsProfileInfo() const { return hash_table_stats_profile_info; }
 
 protected:
     friend struct AggregatedDataVariants;
     friend class MergingBuckets;
 
+    void reportHashTableStats(const ManyAggregatedDataVariants & data_variants) const;
+    void reportHashTableStats(const AggregatedDataVariants & data) const;
+
     Params params;
 
     AggregatedDataVariants::Type method_chosen;
+
+    HashTableStatsProfileInfoPtr hash_table_stats_profile_info;
+    mutable bool hash_table_stats_reported = false;
 
 
     Sizes key_sizes;

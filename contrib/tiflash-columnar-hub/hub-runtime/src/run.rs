@@ -298,27 +298,20 @@ fn build_dfs(config: &ConfigFile, pd_client: Arc<dyn PdClient>) -> Arc<dyn Dfs> 
         && dfs_conf.s3_endpoint.is_empty()
         && !dfs_s3_bucket.is_empty()
     {
-        let dfs_prefix = std::env::var("DFS_PREFIX").unwrap_or_default();
-        let dfs_s3_endpoint = std::env::var("DFS_S3_ENDPOINT").unwrap_or_default();
-        let dfs_s3_key_id = std::env::var("DFS_S3_KEY_ID").unwrap_or_default();
-        let dfs_s3_secret_key = std::env::var("DFS_S3_SECRET_KEY").unwrap_or_default();
-        let dfs_s3_region = std::env::var("DFS_S3_REGION").unwrap_or_default();
+        let mut conf = dfs_conf.clone();
+        conf.prefix = std::env::var("DFS_PREFIX").unwrap_or_default();
+        conf.s3_endpoint = std::env::var("DFS_S3_ENDPOINT").unwrap_or_default();
+        conf.s3_key_id = std::env::var("DFS_S3_KEY_ID").unwrap_or_default();
+        conf.s3_secret_key = std::env::var("DFS_S3_SECRET_KEY").unwrap_or_default();
+        conf.s3_region = std::env::var("DFS_S3_REGION").unwrap_or_default();
+        conf.s3_bucket = dfs_s3_bucket;
         info!(
             "TiFlash Columnar Hub uses env-overridden S3 DFS backend";
-            "endpoint" => &dfs_s3_endpoint,
-            "bucket" => &dfs_s3_bucket,
-            "prefix" => &dfs_prefix,
+            "endpoint" => &conf.s3_endpoint,
+            "bucket" => &conf.s3_bucket,
+            "prefix" => &conf.prefix,
         );
-        Arc::new(S3Fs::new(
-            dfs_prefix,
-            dfs_s3_endpoint,
-            dfs_s3_key_id,
-            dfs_s3_secret_key,
-            dfs_s3_region,
-            dfs_s3_bucket,
-            config.dfs.conn_options.clone(),
-            true,
-        ))
+        Arc::new(S3Fs::new_from_config(as_read_only_dfs_config(conf)))
     } else {
         info!(
             "TiFlash Columnar Hub uses configured S3 DFS backend";
@@ -326,17 +319,29 @@ fn build_dfs(config: &ConfigFile, pd_client: Arc<dyn PdClient>) -> Arc<dyn Dfs> 
             "bucket" => &dfs_conf.s3_bucket,
             "prefix" => &dfs_conf.prefix,
         );
-        Arc::new(S3Fs::new(
-            dfs_conf.prefix.clone(),
-            dfs_conf.s3_endpoint.clone(),
-            dfs_conf.s3_key_id.clone(),
-            dfs_conf.s3_secret_key.clone(),
-            dfs_conf.s3_region.clone(),
-            dfs_conf.s3_bucket.clone(),
-            dfs_conf.conn_options.clone(),
-            true,
-        ))
+        Arc::new(S3Fs::new_from_config(as_read_only_dfs_config(
+            dfs_conf.clone(),
+        )))
     }
+}
+
+/// Prepares a DFS config for the read-only client the hub builds.
+///
+/// The hub used to call `S3Fs::new()`, which hardcodes an empty `gcs_auth_mode`.
+/// `use_gcs_oauth()` needs that field to be "oauth", so against a GCS endpoint
+/// the client silently fell back to the AWS credential chain: on GKE that means
+/// EC2 IMDS, which answers 404, and every columnar file read then retries
+/// "Timeout getting credentials" forever. `S3Fs::new_from_config()` forwards
+/// `gcs_auth_mode`, which `Config::override_from_env()` has already filled in
+/// from `DFS_GCS_AUTH_MODE` by the time `build_dfs()` runs.
+///
+/// `read_only` and `max_read_throughput` are pinned to the values `S3Fs::new()`
+/// hardcoded so this change stays limited to credentials. Whether a configured
+/// `dfs.max-read-throughput` should apply to the hub is a separate decision.
+fn as_read_only_dfs_config(mut conf: DFSConfig) -> DFSConfig {
+    conf.read_only = true;
+    conf.max_read_throughput = ReadableSize(0);
+    conf
 }
 
 fn overwrite_config_with_cmd_args(config: &mut ConfigFile, matches: &clap::ArgMatches<'_>) -> bool {
@@ -1469,6 +1474,7 @@ pub unsafe fn run_proxy(argc: c_int, argv: *const *const c_char, helper_ptr: *co
         store_registration = Some((store, start_time));
     }
 
+    // Init the cloud helper once and reuse it for the lifetime of the process.
     let cloud_helper = CloudHelper::new(
         CloudEngineBackends {
             dfs,

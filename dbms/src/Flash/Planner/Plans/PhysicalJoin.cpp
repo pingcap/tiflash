@@ -123,6 +123,13 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         original_build_key_names,
         join_non_equal_conditions);
 
+    JoinInterpreterHelper::simplifyNullEqKeyFlags(
+        tiflash_join.is_null_eq,
+        probe_side_prepare_actions,
+        probe_key_names,
+        build_side_prepare_actions,
+        build_key_names);
+
     const Settings & settings = context.getSettingsRef();
     size_t max_bytes_before_external_join = settings.max_bytes_before_external_join;
     auto join_req_id = fmt::format("{}_{}", log->identifier(), executor_id);
@@ -151,13 +158,6 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         left_input_header,
         right_input_header,
         join_non_equal_conditions.other_cond_expr != nullptr);
-
-    assert(build_key_names.size() == original_build_key_names.size());
-    std::unordered_map<String, String> build_key_names_map;
-    for (size_t i = 0; i < original_build_key_names.size(); ++i)
-    {
-        build_key_names_map[original_build_key_names[i]] = build_key_names[i];
-    }
 
     // Conservative correctness guard:
     // If join key *protobuf field types* across sides are not compatible, skip runtime filter as early as possible
@@ -210,8 +210,13 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         return true;
     };
 
-    const bool enable_runtime_filter = is_join_key_field_type_compatible();
-    if (!enable_runtime_filter && !join.runtime_filter_list().empty())
+    bool enable_runtime_filter = is_join_key_field_type_compatible();
+    if (tiflash_join.shouldDisableRuntimeFilter())
+    {
+        LOG_INFO(log, "Disable runtime filter because a nullable NullEQ build key is present");
+        enable_runtime_filter = false;
+    }
+    else if (!enable_runtime_filter && !join.runtime_filter_list().empty())
     {
         LOG_DEBUG(
             log,
@@ -219,15 +224,24 @@ PhysicalPlanNodePtr PhysicalJoin::build(
             executor_id);
     }
 
-    auto runtime_filter_list = enable_runtime_filter
-        ? tiflash_join.genRuntimeFilterList(context, build_source_columns, build_key_names_map, log)
-        : std::vector<RuntimeFilterPtr>{};
+    std::vector<RuntimeFilterPtr> runtime_filter_list;
+    if (enable_runtime_filter)
+    {
+        assert(build_key_names.size() == original_build_key_names.size());
+        std::unordered_map<String, String> build_key_names_map;
+        for (size_t i = 0; i < original_build_key_names.size(); ++i)
+            build_key_names_map[original_build_key_names[i]] = build_key_names[i];
+        runtime_filter_list
+            = tiflash_join.genRuntimeFilterList(context, build_source_columns, build_key_names_map, log);
+    }
+
     LOG_DEBUG(log, "before register runtime filter list, list size:{}", runtime_filter_list.size());
     context.getDAGContext()->runtime_filter_mgr.registerRuntimeFilterList(runtime_filter_list);
 
     JoinPtr join_ptr = std::make_shared<Join>(
         probe_key_names,
         build_key_names,
+        tiflash_join.is_null_eq,
         tiflash_join.kind,
         join_req_id,
         fine_grained_shuffle.stream_count,

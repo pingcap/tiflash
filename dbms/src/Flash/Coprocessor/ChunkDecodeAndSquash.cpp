@@ -72,8 +72,12 @@ std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashV1Impl(ReadBuff
     else
     {
         size_t rows{};
-        DecodeHeader(istr, codec.header, rows);
-        DecodeColumns(istr, *accumulated_block, rows, 0);
+        Block block = DecodeHeader(istr, codec.header, rows);
+        // The chunk header determines its serialization format. It can use legacy
+        // String even when the receiver's output header uses StringV2.
+        block.setColumns(accumulated_block->mutateColumns());
+        DecodeColumns(istr, block, rows, 0);
+        accumulated_block->setColumns(block.mutateColumns());
     }
 
     if (accumulated_block && accumulated_block->rows() >= rows_limit)

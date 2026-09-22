@@ -117,6 +117,25 @@ kvengine = { path = "../../../cloud-storage-engine/components/kvengine" }
 
 Adjust paths relative to `contrib/tiflash-columnar-hub/`. Then run `cargo check` / `make release` and rebuild TiFlash. Remember to revert path patches before committing lockfile changes meant for upstream CI.
 
+### Lockfile out of sync after cloud-storage-engine commit bump
+
+When the cloud-storage-engine commit is bumped, `Cargo.toml` files inside it may change (new / removed dependencies). The committed `Cargo.lock` then no longer matches the resolved dependency graph, and the build fails with:
+
+```
+error: cannot update the lock file contrib/tiflash-columnar-hub/Cargo.lock because --locked was passed to prevent this
+```
+
+To fix:
+
+```bash
+cd contrib/tiflash-columnar-hub
+cargo update -p workspace-hack   # re-resolve; commit submodule pointer + Cargo.lock together:
+```
+
+Notes:
+
+- `cargo update -p workspace-hack` is enough in most cases; the resolver may also pick up a few compatible upgrades because it re-solves the whole graph — that is fine as long as `make release` builds.
+
 ## Standalone commands
 
 ```bash
@@ -140,6 +159,6 @@ make release ENABLE_FEATURES=external-jemalloc
 
 ## Notes
 
-- `workspace-hack/` intentionally overrides cloud-storage-engine's generated workspace-hack so the cdylib does not export a second jemalloc into the TiFlash process.
+- `workspace-hack/` exists to override cloud-storage-engine's generated workspace-hack so the cdylib does not export a second jemalloc into the TiFlash process. Note the `[patch]` in `Cargo.toml` does not actually take effect (path dependencies inside the submodule cannot be patched), yet the built `libtiflash_proxy.so` contains no jemalloc symbols, because the linker drops un-referenced allocator code from the cdylib.
 - Changing `Cargo.lock` alone is not enough for runtime behavior: always rebuild and redeploy `libtiflash_proxy.so`.
 - Columnar integration tests under `tests/fullstack-test-next-gen-columnar/` also use separate TiKV / TiDB binaries from `_env.sh`; upgrading proxy kvengine does not upgrade TiKV. For end-to-end columnar behavior, consider keeping proxy and TiKV cloud-storage-engine commits compatible.

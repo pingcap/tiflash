@@ -35,6 +35,7 @@
 #include <Flash/Coprocessor/ColumnarScanContext_fwd.h>
 #include <Flash/Coprocessor/DAGRequest.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
+#include <Flash/Coprocessor/HashTableStats.h>
 #include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
 #include <Flash/Executor/toRU.h>
@@ -45,6 +46,10 @@
 #include <Parsers/makeDummyQuery.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
+
+#include <memory>
+#include <optional>
+#include <unordered_set>
 
 namespace DB
 {
@@ -67,8 +72,35 @@ struct JoinProfileInfo
     UInt64 peak_build_bytes_usage = 0;
     bool is_spill_enabled = false;
     bool is_spilled = false;
+    /// Empty only for a cross join, which does not have a hash table.
+    std::optional<HashTableStats> hash_table_stats;
+
+    void setHashTableStats(const HashTableStats & stats)
+    {
+        std::lock_guard lock(hash_table_stats_mutex);
+        hash_table_stats = stats;
+    }
+
+    void mergeHashTableStats(const HashTableStats & stats)
+    {
+        std::lock_guard lock(hash_table_stats_mutex);
+        if (!hash_table_stats)
+            hash_table_stats = stats;
+        else
+            hash_table_stats->merge(stats);
+    }
+
+    std::optional<HashTableStats> getHashTableStats() const
+    {
+        std::lock_guard lock(hash_table_stats_mutex);
+        return hash_table_stats;
+    }
+
+private:
+    mutable std::mutex hash_table_stats_mutex;
 };
 using JoinProfileInfoPtr = std::shared_ptr<JoinProfileInfo>;
+using AggregationProfileInfoPtr = HashTableStatsProfileInfoPtr;
 struct JoinExecuteInfo
 {
     String build_side_root_executor_id;
@@ -207,6 +239,10 @@ public:
 
     std::unordered_map<String, JoinExecuteInfo> & getJoinExecuteInfoMap();
 
+    void addAggregationProfileInfo(const String & executor_id, const AggregationProfileInfoPtr & profile_info);
+
+    AggregationProfileInfoPtr getAggregationProfileInfo(const String & executor_id);
+
     std::unordered_map<String, BlockInputStreams> & getInBoundIOInputStreamsMap();
 
     std::unordered_map<String, IOProfileInfos> & getInboundIOProfileInfosMap();
@@ -278,6 +314,17 @@ public:
     const SingleTableRegions & getTableRegionsInfoByTableID(Int64 table_id) const;
 
     bool containsRegionsInfoForTable(Int64 table_id) const;
+
+    std::unordered_set<UInt64> & getBypassLockTs()
+    {
+        if (bypass_lock_ts == nullptr)
+            bypass_lock_ts = std::make_unique<std::unordered_set<UInt64>>();
+        return *bypass_lock_ts;
+    }
+    void setBypassLockTs(std::unique_ptr<std::unordered_set<UInt64>> && bypass_lock_ts_)
+    {
+        bypass_lock_ts = std::move(bypass_lock_ts_);
+    }
 
     UInt64 getFlags() const { return flags; }
     void setFlags(UInt64 f) { flags = f; }
@@ -456,6 +503,7 @@ public:
     // `tunnel_set` is always set by `MPPTask` and is used later.
     MPPTunnelSetPtr tunnel_set;
     TablesRegionsInfo tables_regions_info;
+    std::unique_ptr<std::unordered_set<UInt64>> bypass_lock_ts;
     // part of regions_for_local_read + regions_for_remote_read, only used for batch-cop
     RegionInfoList retry_regions;
 
@@ -506,6 +554,8 @@ private:
     /// join_execute_info_map is a map that maps from join_probe_executor_id to JoinExecuteInfo
     /// DAGResponseWriter / JoinStatistics gets JoinExecuteInfo through it.
     std::unordered_map<std::string, JoinExecuteInfo> join_execute_info_map;
+    /// aggregation_profile_info_map maps an aggregation executor to its hash-table statistics accumulator.
+    std::unordered_map<String, AggregationProfileInfoPtr> aggregation_profile_info_map;
     /// inbound_io_input_streams_map is a map that maps from executor_id (table_scan / exchange_receiver) to BlockInputStreams.
     /// BlockInputStreams contains ExchangeReceiverInputStream, CoprocessorBlockInputStream and local_read_input_stream etc.
     std::unordered_map<String, BlockInputStreams> inbound_io_input_streams_map;

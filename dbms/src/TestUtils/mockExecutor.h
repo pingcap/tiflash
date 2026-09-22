@@ -146,7 +146,8 @@ public:
         MockAstVec other_eq_conds_from_in,
         uint64_t fine_grained_shuffle_stream_count = 0,
         bool is_null_aware_semi_join = false,
-        int64_t inner_index = 1);
+        int64_t inner_index = 1,
+        std::vector<UInt8> is_null_eq = {});
     DAGRequestBuilder & join(
         const DAGRequestBuilder & right,
         tipb::JoinType tp,

@@ -36,8 +36,11 @@
 #include <Interpreters/ProbeProcessInfo.h>
 #include <Interpreters/SettingsCommon.h>
 
+#include <atomic>
 #include <memory>
+#include <mutex>
 #include <shared_mutex>
+#include <vector>
 
 namespace DB
 {
@@ -100,8 +103,43 @@ struct RestoreConfig
     size_t restore_partition_id;
 };
 
+enum class ProbePhaseState
+{
+    Active,
+    // All probe inputs are consumed, but the Join may still be scanning unmatched build rows or restoring data.
+    NormallyFinished,
+    // Post-probe processing is terminated early, for example by LIMIT, cancellation, or error cleanup.
+    Stopped,
+};
+
 class OneTimeNotifyFuture;
 using OneTimeNotifyFuturePtr = std::shared_ptr<OneTimeNotifyFuture>;
+
+class SharedQueue;
+using SharedQueuePtr = std::shared_ptr<SharedQueue>;
+
+// Shared by an original Join and all of its restore descendants. It only coordinates early stop; each Join keeps its
+// own build/probe completion counters and build_finished state.
+class ProbeStopContext
+{
+public:
+    bool isStopped() const { return stopped.load(std::memory_order_acquire); }
+
+private:
+    friend class Join;
+
+    void registerJoinWaitFutures(
+        const OneTimeNotifyFuturePtr & build_finished_future,
+        const OneTimeNotifyFuturePtr & probe_finished_future);
+    void addRestoreProbeQueue(const SharedQueuePtr & queue);
+    void stop();
+
+    std::atomic_bool stopped{false};
+    std::mutex mutex;
+    std::vector<OneTimeNotifyFuturePtr> wait_futures;
+    std::vector<SharedQueuePtr> restore_probe_queues;
+};
+using ProbeStopContextPtr = std::shared_ptr<ProbeStopContext>;
 
 /** Data structure for implementation of JOIN.
   * It is just a hash table: keys -> rows of joined ("right") table.
@@ -147,9 +185,8 @@ using OneTimeNotifyFuturePtr = std::shared_ptr<OneTimeNotifyFuture>;
   *
   * How Nullable keys are processed:
   *
-  * NULLs never join to anything, even to each other.
-  * During building of map, we just skip keys with NULL value of any component.
-  * During joining, we simply treat rows with any NULLs in key as non joined.
+  * For ordinary '=' keys, rows with NULL in any key component are filtered before build/probe.
+  * For NullEQ keys, NULL is allowed to participate in key comparison.
   *
   * Default values for outer joins (LEFT, RIGHT, FULL):
   *
@@ -160,9 +197,11 @@ using OneTimeNotifyFuturePtr = std::shared_ptr<OneTimeNotifyFuture>;
 class Join
 {
 public:
+    /// is_null_eq has one flag per join key pair. A nonzero flag requires Nullable key columns on both sides.
     Join(
         const Names & key_names_left_,
         const Names & key_names_right_,
+        const std::vector<UInt8> & is_null_eq_,
         ASTTableJoin::Kind kind_,
         const String & req_id,
         size_t fine_grained_shuffle_count_,
@@ -181,7 +220,8 @@ public:
         const String & flag_mapped_entry_helper_name_,
         size_t probe_cache_column_threshold_,
         bool is_test,
-        const std::vector<RuntimeFilterPtr> & runtime_filter_list_ = dummy_runtime_filter_list);
+        const std::vector<RuntimeFilterPtr> & runtime_filter_list_ = dummy_runtime_filter_list,
+        const ProbeStopContextPtr & probe_stop_context_ = nullptr);
 
     RestoreConfig restore_config;
 
@@ -235,6 +275,10 @@ public:
     /// The peak build bytes usage, if spill is not enabled, the same as getTotalByteCount
     size_t getPeakBuildBytesUsage();
 
+    /// Get the number of distinct hash entries and memory bytes currently stored in the in-memory hash tables.
+    /// Partitions already spilled to disk are not included.
+    bool getHashTableStats(UInt64 & size, UInt64 & memory_bytes) const;
+
     void checkAndMarkPartitionSpilledIfNeeded(size_t stream_index);
 
     void checkAndMarkPartitionSpilledIfNeededInternal(
@@ -246,8 +290,20 @@ public:
     size_t getTotalBuildInputRows() const { return total_input_build_rows; }
 
     ASTTableJoin::Kind getKind() const { return kind; }
+    JoinMapMethod getJoinMapMethod() const { return join_map_method; }
+
+    /// Inner/Semi cannot produce rows without build entries. RightSemi has no matched build rows to output.
+    /// This is available after finalizeBuild and can be used to avoid reading the probe side.
+    bool shouldSkipProbe() const
+    {
+        const bool can_skip_probe = kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Semi
+            || kind == ASTTableJoin::Kind::RightSemi;
+        return can_skip_probe && build_finished.load(std::memory_order_acquire)
+            && build_side_empty.load(std::memory_order_acquire);
+    }
 
     const Names & getLeftJoinKeys() const { return key_names_left; }
+    const std::vector<UInt8> & getNullEqFlags() const { return is_null_eq; }
 
     void setInitActiveBuildThreads()
     {
@@ -264,7 +320,8 @@ public:
     {
         std::unique_lock lock(build_probe_mutex);
         probe_concurrency = concurrency;
-        active_probe_threads = probe_concurrency;
+        pending_probe_streams = probe_concurrency;
+        probe_phase_state.store(ProbePhaseState::Active, std::memory_order_release);
     }
 
     void wakeUpAllWaitingThreads();
@@ -274,11 +331,16 @@ public:
     void finalizeBuild();
     void waitUntilAllBuildFinished() const;
 
-    // Return true if it is the last probe thread.
+    // Return true if it is the last probe stream to finish normally.
     bool finishOneProbe(size_t stream_index);
+    // Stop the shared probe phase without counting this stream as a normal input completion.
+    void stopProbePhase();
+    // Register a restore-probe queue. A queue registered after the probe phase has stopped is cancelled immediately.
+    void addRestoreProbeQueue(const SharedQueuePtr & queue);
     void finalizeProbe();
     void waitUntilAllProbeFinished() const;
     bool isProbeFinishedForPipeline() const;
+    bool isProbeStopped() const;
 
     bool isBuildFinishedForPipeline() const;
 
@@ -323,7 +385,11 @@ public:
     // used to name the column that records matched map entry before other conditions filter
     const String flag_mapped_entry_helper_name;
 
-    const JoinProfileInfoPtr profile_info = std::make_shared<JoinProfileInfo>();
+    /// Root and restore joins of the same logical join share one profile. Only the root join updates
+    /// per-instance fields; every join contributes its final hash table stats.
+    JoinProfileInfoPtr profile_info = std::make_shared<JoinProfileInfo>();
+    /// Keep this flag per Join object so every completed restore hash table is merged exactly once.
+    bool hash_table_stats_finalized = false;
     HashJoinSpillContextPtr hash_join_spill_context;
     const Block & getOutputBlock() const { return finalized ? output_block_after_finalize : output_block; }
     const Names & getRequiredColumns() const { return required_columns; }
@@ -346,6 +412,8 @@ private:
     const Names key_names_left;
     /// Names of key columns (columns for equi-JOIN) in "right" table (in the order they appear in USING clause).
     const Names key_names_right;
+    /// Per join-key-pair null-safe-equal flags, aligned with key_names_left/key_names_right.
+    const std::vector<UInt8> is_null_eq;
 
     mutable std::mutex build_probe_mutex;
 
@@ -356,8 +424,12 @@ private:
 
     mutable std::condition_variable probe_cv;
     size_t probe_concurrency;
-    size_t active_probe_threads;
-    std::atomic_bool probe_finished{false};
+    // Streams that have not finished probe input normally.
+    size_t pending_probe_streams;
+    // Probe input completion is separate from Join completion: `NormallyFinished` may still be followed by post-probe
+    // work. `Stopped` overrides it when a pipeline task terminates before that work is done.
+    std::atomic<ProbePhaseState> probe_phase_state{ProbePhaseState::Active};
+    const ProbeStopContextPtr probe_stop_context;
 
     bool skip_wait = false;
     bool meet_error = false;
@@ -436,6 +508,7 @@ private:
     const LoggerPtr log;
 
     std::atomic<size_t> total_input_build_rows{0};
+    std::atomic_bool build_side_empty{false};
 
     /** Protect state for concurrent use in insertFromBlock and joinBlock.
       * Note that these methods could be called simultaneously only while use of StorageJoin,
@@ -524,6 +597,7 @@ private:
     void cancelRuntimeFilter(const String & reason);
 
     void finalizeProfileInfo();
+    void finalizeHashTableStats();
 
     void finalizeNullAwareSemiFamilyBuild();
 

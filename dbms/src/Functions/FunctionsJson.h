@@ -1473,6 +1473,7 @@ public:
 
     void setInputTiDBFieldType(const tipb::FieldType & tidb_tp_) { input_tidb_tp = tidb_tp_; }
     void setOutputTiDBFieldType(const tipb::FieldType & tidb_tp_) { output_tidb_tp = tidb_tp_; }
+    void setIgnoreInvalidJson(bool value) { ignore_invalid_json = value; }
     void setCollator(const TiDB::TiDBCollatorPtr & collator_) override { collator = collator_; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
@@ -1572,11 +1573,18 @@ public:
                     offsets_to,
                     input_source,
                     column_nullable.getNullMapData(),
-                    block.rows());
+                    block.rows(),
+                    ignore_invalid_json);
             }
             else
             {
-                doExecuteForParsingJson<false>(data_to, offsets_to, input_source, {}, block.rows());
+                doExecuteForParsingJson<false>(
+                    data_to,
+                    offsets_to,
+                    input_source,
+                    {},
+                    block.rows(),
+                    ignore_invalid_json);
             }
         }
         else
@@ -1697,7 +1705,8 @@ private:
         ColumnString::Offsets & offsets_to,
         const std::unique_ptr<IStringSource> & data_from,
         const NullMap & null_map_from,
-        size_t size)
+        size_t size,
+        bool ignore_invalid_json)
     {
         // json_type + size of data_from.
         size_t reserve_size = size + data_from->getSizeForReserve();
@@ -1718,16 +1727,32 @@ private:
 
             const auto & slice = data_from->getWhole();
             if (unlikely(slice.size == 0))
-                throw Exception("Invalid JSON text: The document is empty.");
+            {
+                if (!ignore_invalid_json)
+                    throw Exception("Invalid JSON text: The document is empty.");
+                JsonBinary::appendNull(write_buffer);
+                writeChar(0, write_buffer);
+                offsets_to[i] = write_buffer.count();
+                data_from->next();
+                continue;
+            }
 
             const auto & json_elem = parser.parse(slice.data, slice.size);
             if (unlikely(json_elem.error()))
             {
-                throw Exception(fmt::format(
-                    "Invalid JSON text: The document root must not be followed by other values, details: {}",
-                    simdjson::error_message(json_elem.error())));
+                if (!ignore_invalid_json || checkJsonValid(reinterpret_cast<const char *>(slice.data), slice.size))
+                {
+                    throw Exception(fmt::format(
+                        "Invalid JSON text: The document root must not be followed by other values, details: {}",
+                        simdjson::error_message(json_elem.error())));
+                }
+                // Keep vectorized evaluation alive until the matching JSON_VALID conjunct filters this row.
+                JsonBinary::appendNull(write_buffer);
             }
-            JsonBinary::appendSIMDJsonElem(write_buffer, json_elem.value_unsafe());
+            else
+            {
+                JsonBinary::appendSIMDJsonElem(write_buffer, json_elem.value_unsafe());
+            }
 
             writeChar(0, write_buffer);
             offsets_to[i] = write_buffer.count();
@@ -1758,6 +1783,7 @@ private:
     std::optional<tipb::FieldType> input_tidb_tp;
     std::optional<tipb::FieldType> output_tidb_tp;
     TiDB::TiDBCollatorPtr collator = nullptr;
+    bool ignore_invalid_json = false;
 };
 
 class FunctionCastTimeAsJson : public IFunction

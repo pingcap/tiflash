@@ -108,11 +108,25 @@ enum class SchemaActionType : Int8
     ActionAlterTableMode = 75,
     ActionRefreshMeta = 76,
     ActionModifySchemaReadOnly = 77,
+    ActionAlterTableAffinity = 78,
+    ActionAlterTableSoftDeleteInfo = 79,
+    ActionModifySchemaSoftDeleteAndActiveActive = 80,
+    ActionCreateMaskingPolicy = 81,
+    ActionAlterMaskingPolicy = 82,
+    ActionDropMaskingPolicy = 83,
+    ActionAlterTableSetRegionSplitPolicy = 84,
+    ActionCreateMaterializedViewLog = 85,
+    ActionCreateMaterializedView = 86,
+    ActionDropMaterializedViewLog = 87,
+    ActionDropMaterializedView = 88,
+    ActionAlterMaterializedViewRefresh = 89,
+    ActionAlterMaterializedViewLogPurge = 90,
+    ActionAlterMaterializedViewAttributes = 91,
 
     // If we support new type from TiDB.
     // MaxRecognizedType also needs to be changed.
     // It should always be equal to the maximum supported type + 1
-    MaxRecognizedType = 78,
+    MaxRecognizedType = 92,
 };
 
 struct AffectedOption

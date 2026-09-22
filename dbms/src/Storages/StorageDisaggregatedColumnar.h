@@ -20,7 +20,9 @@
 #include <Common/Stopwatch.h>
 #include <Common/ThreadManager.h>
 #include <DataStreams/AddExtraTableIDColumnTransformAction.h>
+#include <DataStreams/FilterTransformAction.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <Flash/Coprocessor/ColumnarScanContext_fwd.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
@@ -43,6 +45,7 @@
 #include <mutex>
 #include <optional>
 #include <string_view>
+#include <unordered_set>
 #pragma GCC diagnostic pop
 
 namespace DB
@@ -153,6 +156,17 @@ public:
 
     const String & getExecutorID() const;
 
+    google::protobuf::RepeatedPtrField<tipb::Expr> getLateMaterializationFilterConditions(
+        const Block & early_block) const;
+
+    std::unordered_set<ColumnID> getExactFilterColumnIDs() const;
+
+    std::unordered_set<ColumnID> getLateMaterializationEarlyColumnIDs() const;
+
+    bool isLateMaterializationFilterEligible(String * reason = nullptr) const;
+
+    bool shouldLogLateMaterialization(bool enabled);
+
     RNColumnarReadTask(
         std::vector<RNColumnarReaderPlan> reader_plans,
         size_t source_num,
@@ -169,6 +183,7 @@ private:
 
     size_t reader_count;
     size_t source_num;
+    bool has_multi_table_reader_plan;
     std::shared_ptr<RNColumnarReaderSharedContext> shared_reader_context;
     mutable std::mutex pending_reader_works_mutex;
     std::deque<RNColumnarReaderWorkPtr> pending_reader_works;
@@ -223,6 +238,9 @@ public:
 
 private:
     bool ensureReader();
+    void initializeLateMaterialization();
+    Block readLateMaterializedBlock();
+    Block readLegacyBlock(const TiFlashRaftProxyHelper * proxy_helper);
     void mergeReaderStats();
     void releaseReader();
 
@@ -236,6 +254,11 @@ private:
     TableID table_id;
     const String executor_id;
     Block header;
+    const ColumnarLateMaterializationInterfaces * late_materialization_interfaces = nullptr;
+    std::unique_ptr<FilterTransformAction> late_materialization_filter_action;
+    bool late_materialization_initialized = false;
+    bool late_materialization_probed = false;
+    ColumnarScanContextPtr columnar_scan_context;
 
     bool done = false;
 

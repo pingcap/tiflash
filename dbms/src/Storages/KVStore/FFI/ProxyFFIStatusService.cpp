@@ -210,6 +210,18 @@ HttpRequestRes HandleHttpRequestReadyz(
     bool is_ready = true;
     std::string response_lines;
 
+    // Columnar Hub may expose the status server before startProxyService assigns tmt.
+    // Return not-ready instead of crashing on the Kubernetes readiness probe.
+    if (server == nullptr || server->tmt == nullptr)
+    {
+        if (verbose)
+        {
+            response_lines += "[-]tmt not initialized\n";
+        }
+        response_lines += "fail\n";
+        return buildRespWithCode(HttpRequestStatus::InternalError, api_name, std::move(response_lines));
+    }
+
     // Check whether store_status == "running",
     auto store_status = server->tmt->getStoreStatus(std::memory_order_relaxed);
     switch (store_status)

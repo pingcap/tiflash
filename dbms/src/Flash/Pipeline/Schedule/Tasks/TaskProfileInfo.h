@@ -32,17 +32,19 @@ public:
     ALWAYS_INLINE UInt64 getIOPendingTimeNs() const { return io_pending_time_ns; }
     ALWAYS_INLINE UInt64 getAwaitTimeNs() const { return await_time_ns; }
     ALWAYS_INLINE UInt64 getWaitForNotifyTimeNs() const { return wait_for_notify_time_ns; }
+    ALWAYS_INLINE UInt64 getThreadCPUTimeNs() const { return thread_cpu_time_ns; }
 
     ALWAYS_INLINE String toJson() const
     {
         return fmt::format(
-            R"({{"cpu_execute_time_ns":{},"cpu_pending_time_ns":{},"io_execute_time_ns":{},"io_pending_time_ns":{},"await_time_ns":{},"wait_for_notify_time_ns":{}}})",
+            R"({{"cpu_execute_time_ns":{},"cpu_pending_time_ns":{},"io_execute_time_ns":{},"io_pending_time_ns":{},"await_time_ns":{},"wait_for_notify_time_ns":{},"thread_cpu_time_ns":{}}})",
             cpu_execute_time_ns,
             cpu_pending_time_ns,
             io_execute_time_ns,
             io_pending_time_ns,
             await_time_ns,
-            wait_for_notify_time_ns);
+            wait_for_notify_time_ns,
+            thread_cpu_time_ns);
     }
 
 protected:
@@ -52,12 +54,15 @@ protected:
     UnitType io_pending_time_ns = 0;
     UnitType await_time_ns = 0;
     UnitType wait_for_notify_time_ns = 0;
+    UnitType thread_cpu_time_ns = 0;
 };
 
 class TaskProfileInfo : public ProfileInfo<UInt64>
 {
 public:
     ALWAYS_INLINE UInt64 elapsedFromPrev() { return stopwatch.elapsedFromLastTime(); }
+
+    ALWAYS_INLINE void addThreadCPUTimeNs(UInt64 value) { thread_cpu_time_ns += value; }
 
     ALWAYS_INLINE void addCPUExecuteTime(UInt64 value)
     {
@@ -141,6 +146,7 @@ public:
         io_pending_time_ns += task_profile_info.getIOPendingTimeNs();
         await_time_ns += task_profile_info.getAwaitTimeNs();
         wait_for_notify_time_ns += task_profile_info.getWaitForNotifyTimeNs();
+        thread_cpu_time_ns += task_profile_info.getThreadCPUTimeNs();
     }
 };
 } // namespace DB

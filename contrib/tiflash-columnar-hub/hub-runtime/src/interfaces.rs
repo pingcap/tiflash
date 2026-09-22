@@ -294,6 +294,8 @@ pub mod root {
             pub rough_check_unknown_packs: u64,
             pub remote_segments: u64,
             pub total_segments: u64,
+            pub lm_late_packs_loaded: u64,
+            pub lm_late_rows_gathered: u64,
         }
         #[repr(C)]
         #[derive(Debug)]
@@ -359,6 +361,55 @@ pub mod root {
                     arg1: root::DB::SSTReaderPtr,
                     splits_count: u64,
                 ) -> root::DB::RustStrWithViewVec,
+            >,
+        }
+        #[repr(C)]
+        #[derive(Debug)]
+        pub struct ColumnarLateMaterializationInterfaces {
+            pub version: u32,
+            pub size: u32,
+            pub fn_read_early_block: ::std::option::Option<
+                unsafe extern "C" fn(
+                    arg1: root::DB::ColumnarReaderPtr,
+                    arg2: u64,
+                    arg3: root::DB::BaseBuffView,
+                    arg4: *mut u64,
+                    arg5: *mut i64,
+                ) -> u64,
+            >,
+            pub fn_read_early_column: ::std::option::Option<
+                unsafe extern "C" fn(
+                    arg1: root::DB::ColumnarReaderPtr,
+                    arg2: u64,
+                    arg3: i64,
+                ) -> root::DB::RustStrWithView,
+            >,
+            pub fn_materialize_selected: ::std::option::Option<
+                unsafe extern "C" fn(
+                    arg1: root::DB::ColumnarReaderPtr,
+                    arg2: u64,
+                    arg3: u8,
+                    arg4: root::DB::BaseBuffView,
+                ) -> u64,
+            >,
+            pub fn_read_late_column: ::std::option::Option<
+                unsafe extern "C" fn(
+                    arg1: root::DB::ColumnarReaderPtr,
+                    arg2: u64,
+                    arg3: i64,
+                ) -> root::DB::RustStrWithView,
+            >,
+            pub fn_finish_materialized_block: ::std::option::Option<
+                unsafe extern "C" fn(arg1: root::DB::ColumnarReaderPtr, arg2: u64) -> u8,
+            >,
+            pub fn_discard_late_materialization_batch: ::std::option::Option<
+                unsafe extern "C" fn(arg1: root::DB::ColumnarReaderPtr, arg2: u64) -> u8,
+            >,
+            pub fn_is_late_materialization_supported: ::std::option::Option<
+                unsafe extern "C" fn(
+                    arg1: root::DB::ColumnarReaderPtr,
+                    arg2: root::DB::BaseBuffView,
+                ) -> u8,
             >,
         }
         #[repr(C)]
@@ -898,7 +949,7 @@ pub mod root {
                 arg3: root::DB::RawVoidPtr,
             ) -> u32;
         }
-        pub const RAFT_STORE_PROXY_VERSION: u64 = 5493270813306750334;
+        pub const RAFT_STORE_PROXY_VERSION: u64 = 5429784359048998305;
         pub const RAFT_STORE_PROXY_MAGIC_NUMBER: u32 = 324508639;
     }
 }

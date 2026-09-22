@@ -33,6 +33,8 @@ public:
 
     String getName() const override { return "HashJoinProbeTransformOp"; }
 
+    bool shouldSkipSource() const override { return probe_transform->shouldSkipProbe(); }
+
 protected:
     OperatorStatus transformImpl(Block & block) override;
 
@@ -45,6 +47,10 @@ protected:
     void operateSuffixImpl() override;
 
 private:
+    bool finishIfProbeStopped();
+
+    bool finishIfProbeStopped(Block & block);
+
     OperatorStatus onOutput(Block & block);
 
     inline void onWaitProbeFinishDone();

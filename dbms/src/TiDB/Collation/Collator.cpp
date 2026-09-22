@@ -134,44 +134,60 @@ template <typename Collator>
 void Pattern<Collator>::tryCompileAsciiCi(const std::string & pattern, char escape)
 {
     is_ascii_ci_pattern = false;
+    const auto unsigned_escape = static_cast<unsigned char>(escape);
     // Can't handle non-ASCII escape
-    if (escape < 0)
+    if (unsigned_escape >= weight_ascii_ci.size())
     {
         return;
     }
     ascii_ci_pattern.clear();
     ascii_ci_pattern.reserve(pattern.length());
 
+    auto last_tp = MatchType::Match;
     for (size_t i = 0; i < pattern.length(); i++)
     {
-        auto c = pattern[i];
-        // Can't handle non-ASCII character
-        if (c < 0)
-        {
-            return;
-        }
+        auto c = static_cast<unsigned char>(pattern[i]);
+        MatchType tp;
 
-        if (c == escape)
+        if (c == unsigned_escape)
         {
+            tp = MatchType::Match;
             if (i < pattern.length() - 1)
             {
                 // use next char to match
-                c = pattern[++i];
+                c = static_cast<unsigned char>(pattern[++i]);
             }
             else
             {
                 // use `escape` to match
             }
         }
+        else if (c == '_')
+        {
+            tp = MatchType::One;
+        }
         else if (c == '%')
         {
-            if (i > 0 && pattern[i - 1] == '%')
+            // Only keep one '%' for continuous unescaped '%'s
+            if (last_tp == MatchType::Any)
             {
                 continue;
             }
+            tp = MatchType::Any;
+        }
+        else
+        {
+            tp = MatchType::Match;
+        }
+
+        // Can't handle non-ASCII characters
+        if (c >= weight_ascii_ci.size())
+        {
+            return;
         }
 
         ascii_ci_pattern.push_back(weight_ascii_ci[c]);
+        last_tp = tp;
     }
     is_ascii_ci_pattern = true;
 }
@@ -300,12 +316,13 @@ int Pattern<Collator>::tryMatchAsciiCi(const char * s, size_t length) const
             }
             else
             {
-                // Can't handle non-ASCII escape
-                if (s[str_idx] < 0)
+                // Can't handle non-ASCII characters
+                if (static_cast<unsigned char>(s[str_idx]) >= weight_ascii_ci.size())
                 {
                     return -1;
                 }
-                if ((match_types[p_idx] == Match && weight_ascii_ci[s[str_idx]] == ascii_ci_pattern[p_idx])
+                if ((match_types[p_idx] == Match
+                     && weight_ascii_ci[static_cast<unsigned char>(s[str_idx])] == ascii_ci_pattern[p_idx])
                     || match_types[p_idx] == One)
                 {
                     p_idx++;
@@ -340,13 +357,13 @@ int Pattern<Collator>::tryMatchAsciiCi(const char * s, size_t length) const
             { // Fast forward to the first match position
                 while (str_idx < length)
                 {
-                    // Can't handle non-ASCII escape
-                    if (s[str_idx] < 0)
+                    // Can't handle non-ASCII characters
+                    if (static_cast<unsigned char>(s[str_idx]) >= weight_ascii_ci.size())
                     {
                         return -1;
                     }
 
-                    if (weight_ascii_ci[s[str_idx]] != ascii_ci_pattern[p_idx_after_any])
+                    if (weight_ascii_ci[static_cast<unsigned char>(s[str_idx])] != ascii_ci_pattern[p_idx_after_any])
                     {
                         str_idx = ++backtrack_idx;
                     }

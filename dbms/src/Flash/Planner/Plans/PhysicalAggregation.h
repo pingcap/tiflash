@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Flash/Coprocessor/HashTableStats.h>
 #include <Flash/Planner/Plans/PhysicalUnary.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ExpressionActions.h>
@@ -67,6 +68,8 @@ public:
     const Block & getSampleBlock() const override;
 
 private:
+    HashTableStatsProfileInfoPtr initHashTableStatsProfileInfo(Context & context);
+
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 
     void buildPipelineExecGroupImpl(
@@ -85,5 +88,6 @@ private:
     const AutoPassThroughSwitcher auto_pass_through_switcher;
     AggregateDescriptions aggregate_descriptions;
     ExpressionActionsPtr expr_after_agg;
+    HashTableStatsProfileInfoPtr hash_table_stats_profile_info;
 };
 } // namespace DB
