@@ -94,6 +94,14 @@ protected:
         return cte;
     }
 
+    static size_t getTotalSpilledBlockNum(const std::shared_ptr<CTE> & cte)
+    {
+        size_t total_spilled_block_num = 0;
+        for (size_t partition_id = 0; partition_id < PARTITION_NUM; ++partition_id)
+            total_spilled_block_num += cte->getPartitionForTest(partition_id)->total_block_in_disk_num;
+        return total_spilled_block_num;
+    }
+
     static void assertSpillFilesExist()
     {
         std::vector<String> files;
@@ -201,6 +209,166 @@ void assertBlockContainsRange(const Block & block, size_t start_i, size_t row_nu
     throw Exception(fmt::format("Unexpected CTEOpStatus: {}", static_cast<Int32>(status)));
 }
 
+TEST_F(TestCTESpill, CTEPartitionSpillUsesStartBoundary)
+try
+{
+    auto sink_blocks = generateSpillTestBlocks(0, 2 * MAX_BLOCK_ROW_NUM);
+
+    CTEManager manager;
+    auto cte = createCTE(manager, /*operator_spill_threshold=*/0, sink_blocks.front().cloneEmpty());
+    auto partition = cte->getPartitionForTest(/*partition_idx=*/0);
+
+    for (const auto & block : sink_blocks)
+        ASSERT_EQ(partition->pushBlock<true>(block), CTEOpStatus::OK);
+
+    // Both readers start at logical index 0. The first split must therefore
+    // start from blocks[0], even though no reader contributes a > 0 boundary.
+    partition->status = CTEPartitionStatus::NEED_SPILL;
+    ASSERT_EQ(partition->spillBlocks(), CTEOpStatus::OK);
+
+    ASSERT_EQ(partition->total_block_released_num, 0);
+    ASSERT_EQ(partition->total_block_in_disk_num, sink_blocks.size());
+    ASSERT_EQ(partition->spillers.count(0), 1);
+    ASSERT_TRUE(partition->blocks.empty());
+
+    Block block;
+    ASSERT_EQ(partition->getBlockFromDisk(/*cte_reader_id=*/0, block), CTEOpStatus::OK);
+    assertBlockContainsRange(block, /*start_i=*/0, MAX_BLOCK_ROW_NUM);
+}
+CATCH
+
+TEST_F(TestCTESpill, CTEPartitionSpillReleasesPrefixBeforeFirstBoundary)
+try
+{
+    auto sink_blocks = generateSpillTestBlocks(0, 4 * MAX_BLOCK_ROW_NUM);
+
+    CTEManager manager;
+    auto cte = createCTE(manager, /*operator_spill_threshold=*/0, sink_blocks.front().cloneEmpty());
+    auto partition = cte->getPartitionForTest(/*partition_idx=*/0);
+
+    for (const auto & block : sink_blocks)
+        ASSERT_EQ(partition->pushBlock<true>(block), CTEOpStatus::OK);
+
+    // Both readers have consumed B0 and B1. Those blocks have counter 0 and
+    // can be released without creating a spill range for them.
+    for (size_t reader_id = 0; reader_id < EXPECTED_SOURCE_NUM; ++reader_id)
+    {
+        for (size_t block_id = 0; block_id < 2; ++block_id)
+        {
+            Block block;
+            ASSERT_EQ(partition->tryGetBlock(reader_id, block), CTEOpStatus::OK);
+        }
+    }
+
+    partition->status = CTEPartitionStatus::NEED_SPILL;
+    ASSERT_EQ(partition->spillBlocks(), CTEOpStatus::OK);
+
+    ASSERT_EQ(partition->total_block_released_num, 2);
+    ASSERT_EQ(partition->total_block_in_disk_num, 2);
+    ASSERT_EQ(partition->spillers.count(0), 0);
+    ASSERT_EQ(partition->spillers.count(2), 1);
+
+    Block block;
+    ASSERT_EQ(partition->getBlockFromDisk(/*cte_reader_id=*/0, block), CTEOpStatus::OK);
+    assertBlockContainsRange(block, /*start_i=*/2 * MAX_BLOCK_ROW_NUM, MAX_BLOCK_ROW_NUM);
+    ASSERT_EQ(partition->getBlockFromDisk(/*cte_reader_id=*/0, block), CTEOpStatus::OK);
+    assertBlockContainsRange(block, /*start_i=*/3 * MAX_BLOCK_ROW_NUM, MAX_BLOCK_ROW_NUM);
+}
+CATCH
+
+TEST_F(TestCTESpill, CTEPartitionSpillKeepsBoundaryForReaderBehindOnDisk)
+try
+{
+    auto sink_blocks = generateSpillTestBlocks(0, 4 * MAX_BLOCK_ROW_NUM);
+
+    CTEManager manager;
+    auto cte = createCTE(manager, /*operator_spill_threshold=*/0, sink_blocks.front().cloneEmpty());
+    auto partition = cte->getPartitionForTest(/*partition_idx=*/0);
+
+    for (size_t block_id = 0; block_id < 2; ++block_id)
+        ASSERT_EQ(partition->pushBlock<true>(sink_blocks[block_id]), CTEOpStatus::OK);
+
+    // Create the first disk range [B0, B2).
+    partition->status = CTEPartitionStatus::NEED_SPILL;
+    ASSERT_EQ(partition->spillBlocks(), CTEOpStatus::OK);
+
+    // Reader 0 catches up to the in-memory boundary, while reader 1 is still
+    // restoring B0 and B1 from the old disk range.
+    for (size_t block_id = 0; block_id < 2; ++block_id)
+    {
+        Block block;
+        ASSERT_EQ(partition->getBlockFromDisk(/*cte_reader_id=*/0, block), CTEOpStatus::OK);
+        assertBlockContainsRange(block, block_id * MAX_BLOCK_ROW_NUM, MAX_BLOCK_ROW_NUM);
+    }
+
+    ASSERT_EQ(partition->pushBlock<true>(sink_blocks[2]), CTEOpStatus::OK);
+    ASSERT_EQ(partition->pushBlock<true>(sink_blocks[3]), CTEOpStatus::OK);
+
+    // reader 1 has logical_idx == 0 < evicted_block_num == 2. Its position
+    // must not be converted with unsigned subtraction, and the new range must
+    // still start at logical index 2.
+    partition->status = CTEPartitionStatus::NEED_SPILL;
+    ASSERT_EQ(partition->spillBlocks(), CTEOpStatus::OK);
+
+    ASSERT_EQ(partition->total_block_released_num, 0);
+    ASSERT_EQ(partition->total_block_in_disk_num, 4);
+    ASSERT_EQ(partition->spillers.count(0), 1);
+    ASSERT_EQ(partition->spillers.count(2), 1);
+
+    // Reader 1 must be able to cross from the old range to the new range.
+    for (size_t block_id = 0; block_id < 4; ++block_id)
+    {
+        Block block;
+        ASSERT_EQ(partition->getBlockFromDisk(/*cte_reader_id=*/1, block), CTEOpStatus::OK);
+        assertBlockContainsRange(block, block_id * MAX_BLOCK_ROW_NUM, MAX_BLOCK_ROW_NUM);
+    }
+}
+CATCH
+
+TEST_F(TestCTESpill, CTEPartitionSpillCreatesRangesAtReaderBoundaries)
+try
+{
+    auto sink_blocks = generateSpillTestBlocks(0, 4 * MAX_BLOCK_ROW_NUM);
+
+    CTEManager manager;
+    auto cte = createCTE(manager, /*operator_spill_threshold=*/0, sink_blocks.front().cloneEmpty());
+    auto partition = cte->getPartitionForTest(/*partition_idx=*/0);
+
+    for (const auto & block : sink_blocks)
+        ASSERT_EQ(partition->pushBlock<true>(block), CTEOpStatus::OK);
+
+    // The reader positions become 3 and 2. The first two blocks are fully
+    // consumed, then B2 and B3 form two different spill ranges.
+    for (size_t block_id = 0; block_id < 3; ++block_id)
+    {
+        Block block;
+        ASSERT_EQ(partition->tryGetBlock(/*cte_reader_id=*/0, block), CTEOpStatus::OK);
+    }
+    for (size_t block_id = 0; block_id < 2; ++block_id)
+    {
+        Block block;
+        ASSERT_EQ(partition->tryGetBlock(/*cte_reader_id=*/1, block), CTEOpStatus::OK);
+    }
+
+    partition->status = CTEPartitionStatus::NEED_SPILL;
+    ASSERT_EQ(partition->spillBlocks(), CTEOpStatus::OK);
+
+    ASSERT_EQ(partition->total_block_released_num, 2);
+    ASSERT_EQ(partition->total_block_in_disk_num, 2);
+    ASSERT_EQ(partition->spillers.count(2), 1);
+    ASSERT_EQ(partition->spillers.count(3), 1);
+
+    Block block;
+    ASSERT_EQ(partition->getBlockFromDisk(/*cte_reader_id=*/1, block), CTEOpStatus::OK);
+    assertBlockContainsRange(block, /*start_i=*/2 * MAX_BLOCK_ROW_NUM, MAX_BLOCK_ROW_NUM);
+    ASSERT_EQ(partition->getBlockFromDisk(/*cte_reader_id=*/1, block), CTEOpStatus::OK);
+    assertBlockContainsRange(block, /*start_i=*/3 * MAX_BLOCK_ROW_NUM, MAX_BLOCK_ROW_NUM);
+
+    ASSERT_EQ(partition->getBlockFromDisk(/*cte_reader_id=*/0, block), CTEOpStatus::OK);
+    assertBlockContainsRange(block, /*start_i=*/3 * MAX_BLOCK_ROW_NUM, MAX_BLOCK_ROW_NUM);
+}
+CATCH
+
 TEST_F(TestCTESpill, Basic)
 try
 {
@@ -221,8 +389,7 @@ try
         pushBlockAndSpill(*cte, i % PARTITION_NUM, sink_blocks[i]);
 
     constexpr size_t expected_spilled_block_num = 12;
-    ASSERT_EQ(cte->total_spilled_blocks.load(), expected_spilled_block_num);
-    ASSERT_EQ(cte->total_spilled_rows.load(), expected_spilled_block_num * MAX_BLOCK_ROW_NUM);
+    ASSERT_EQ(getTotalSpilledBlockNum(cte), expected_spilled_block_num);
     assertSpillFilesExist();
 
     for (size_t i = 0; i < EXPECTED_SINK_NUM; ++i)
@@ -259,12 +426,12 @@ try
     ASSERT_EQ(sink.write(std::move(sink_blocks[0])), OperatorStatus::NEED_INPUT);
     ASSERT_EQ(sink.write(std::move(sink_blocks[1])), OperatorStatus::IO_OUT);
     ASSERT_EQ(sink.executeIO(), OperatorStatus::NEED_INPUT);
-    ASSERT_EQ(cte->total_spilled_blocks.load(), 2);
+    ASSERT_EQ(getTotalSpilledBlockNum(cte), 2);
 
     ASSERT_EQ(sink.write(std::move(sink_blocks[2])), OperatorStatus::NEED_INPUT);
     ASSERT_EQ(sink.write({}), OperatorStatus::IO_OUT);
     ASSERT_EQ(sink.executeIO(), OperatorStatus::FINISHED);
-    ASSERT_EQ(cte->total_spilled_blocks.load(), 3);
+    ASSERT_EQ(getTotalSpilledBlockNum(cte), 3);
 }
 CATCH
 
@@ -292,7 +459,7 @@ try
 
     ASSERT_EQ(push_during_spill_status, CTEOpStatus::WAIT_SPILL);
     ASSERT_EQ(spill_status, CTEOpStatus::OK);
-    ASSERT_EQ(cte->total_spilled_blocks.load(), 1);
+    ASSERT_EQ(getTotalSpilledBlockNum(cte), 1);
 
     const auto & partition = cte->getPartitionForTest(/*partition_idx=*/0);
     ASSERT_TRUE(partition->tmp_blocks.empty());
@@ -340,7 +507,7 @@ try
         for (size_t block_id = 0; block_id < pre_spill_block_num_per_sink; ++block_id)
             pushBlockAndSpill(*cte, block_id % PARTITION_NUM, sink_blocks[sink_id][block_id]);
     }
-    ASSERT_EQ(cte->total_spilled_blocks.load(), EXPECTED_SINK_NUM * pre_spill_block_num_per_sink);
+    ASSERT_EQ(getTotalSpilledBlockNum(cte), EXPECTED_SINK_NUM * pre_spill_block_num_per_sink);
     assertSpillFilesExist();
 
     std::array<std::array<Blocks, PARTITION_NUM>, EXPECTED_SOURCE_NUM> received_blocks;
@@ -523,7 +690,7 @@ try
 
     const size_t total_row_num = EXPECTED_SINK_NUM * row_num_per_sink;
     const size_t total_block_num = sink_blocks[0].size() + sink_blocks[1].size();
-    ASSERT_GE(cte->total_spilled_blocks.load(), EXPECTED_SINK_NUM * pre_spill_block_num_per_sink);
+    ASSERT_GE(getTotalSpilledBlockNum(cte), EXPECTED_SINK_NUM * pre_spill_block_num_per_sink);
     for (size_t source_id = 0; source_id < EXPECTED_SOURCE_NUM; ++source_id)
     {
         Blocks all_blocks;

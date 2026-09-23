@@ -124,6 +124,33 @@ bool CTEPartition::needSpill(bool try_mark_need_spill)
     return true;
 }
 
+// `fetch_block_idxs` stores the next logical block index for every reader.
+// The spill ranges use two coordinate systems. In the example below,
+// `evicted_block_num == 10`, so logical index 10 maps to physical index 0:
+//
+//   logical index:  10       11       12       13       14
+//   physical index:  0        1        2        3        4
+//   in memory:     [ B10 ]  [ B11 ]  [ B12 ]  [ B13 ]
+//
+// If a reader is at 10, the range must start at physical index 0. If all
+// readers are already past 10, [B10, B<min_reader_idx>) has counter 0 for
+// every reader and can be released directly; the first spill range then
+// starts at the first reader boundary. Readers at a logical index smaller
+// than 10 are still restoring old data from disk and must not be converted
+// to a physical index by unsigned subtraction.
+//
+// Example when every reader has passed the in-memory prefix:
+//
+//   readers:       A -> 12, B -> 14
+//   split_idxs:          { 12 -> 2, 14 -> 4 }
+//   released:       [ B10, B11 )
+//   spill ranges:                 [ B12, B13 ]
+//
+// Example when one reader still needs the current memory prefix:
+//
+//   readers:       A -> 10, B -> 12
+//   split_idxs:   { 10 -> 0, 12 -> 2 }
+//   spill ranges: [ B10, B11 )  [ B12, ... )
 CTEOpStatus CTEPartition::spillBlocks()
 {
     std::unique_lock<std::mutex> lock(*(this->mu), std::defer_lock);
@@ -147,13 +174,41 @@ CTEOpStatus CTEPartition::spillBlocks()
     // Key represents logical index
     // Value represents physical index in `this->blocks`
     std::map<size_t, size_t> split_idxs;
-    auto evicted_block_num = this->getTotalEvictedBlockNumNoLock();
-    split_idxs.insert(std::make_pair(evicted_block_num, 0));
+    const auto evicted_block_num = this->getTotalEvictedBlockNumNoLock();
+    bool has_reader_at_or_before_evicted = false;
     for (const auto & [cte_reader_id, logical_idx] : this->fetch_block_idxs)
     {
         if (logical_idx > evicted_block_num)
             split_idxs.insert(std::make_pair(logical_idx, logical_idx - evicted_block_num));
+        else
+            has_reader_at_or_before_evicted = true;
     }
+
+    size_t released_prefix_num = 0;
+    if (has_reader_at_or_before_evicted)
+    {
+        // The first in-memory block may still be needed by a reader, so the
+        // split must start from blocks[0].
+        split_idxs.insert(std::make_pair(evicted_block_num, 0));
+    }
+    else if (!split_idxs.empty())
+    {
+        // Every reader has passed the prefix before the first split point.
+        // Those blocks have counter 0 and can be released without spilling.
+        released_prefix_num = split_idxs.begin()->second;
+    }
+    else
+    {
+        // This is only possible when there are no readers. Such a partition
+        // cannot have a block that needs to be spilled.
+        released_prefix_num = this->blocks.size();
+    }
+
+    RUNTIME_CHECK(released_prefix_num <= this->blocks.size());
+    for (size_t i = 0; i < released_prefix_num; ++i)
+        RUNTIME_CHECK(this->blocks[i].counter == 0);
+
+    this->total_block_released_num += released_prefix_num;
 
     auto split_iter = split_idxs.begin();
     auto blocks_begin_iter = this->blocks.begin();
@@ -174,30 +229,11 @@ CTEOpStatus CTEPartition::spillBlocks()
         else
             end_iter = blocks_begin_iter + next_iter->second;
 
-        bool counter_is_zero = false;
-        if (iter->counter == 0)
-            // In one slice, all blocks' counter should be 0 or not be 0. Check it.
-            counter_is_zero = true;
-
         while (iter != end_iter)
         {
-            if (counter_is_zero)
-            {
-                RUNTIME_CHECK(iter->counter == 0);
-                this->total_block_released_num++;
-            }
-            else
-            {
-                RUNTIME_CHECK(iter->counter != 0);
-                spilled_blocks.push_back(iter->block);
-            }
+            RUNTIME_CHECK(iter->counter != 0);
+            spilled_blocks.push_back(iter->block);
             ++iter;
-        }
-
-        if (counter_is_zero)
-        {
-            split_iter = next_iter;
-            continue;
         }
 
         RUNTIME_CHECK(!spilled_blocks.empty());
