@@ -152,6 +152,7 @@ void updateSettingsFromTiDB(const grpc::ServerContext * grpc_context, ContextPtr
         std::make_pair("tidb_max_bytes_before_tiflash_external_join", "max_bytes_before_external_join"),
         std::make_pair("tidb_max_bytes_before_tiflash_external_group_by", "max_bytes_before_external_group_by"),
         std::make_pair("tidb_max_bytes_before_tiflash_external_sort", "max_bytes_before_external_sort"),
+        std::make_pair("tidb_max_bytes_before_tiflash_cte_spill", "max_bytes_before_cte_spill"),
         std::make_pair("tiflash_mem_quota_query_per_node", "max_memory_usage"),
         std::make_pair("tiflash_query_spill_ratio", "auto_memory_revoke_trigger_threshold"),
         std::make_pair("tiflash_use_hash_join_v2", "enable_hash_join_v2"),
@@ -188,6 +189,11 @@ void updateSettingsForAutoSpill(ContextPtr & context, const LoggerPtr & log)
         {
             need_log_warning = true;
             context->setSetting("max_bytes_before_external_join", "0");
+        }
+        if (context->getSettingsRef().max_bytes_before_cte_spill > 0)
+        {
+            need_log_warning = true;
+            context->setSetting("max_bytes_before_cte_spill", "0");
         }
         if (need_log_warning)
             LOG_WARNING(log, "auto spill is enabled, so per operator's memory threshold is disabled");
