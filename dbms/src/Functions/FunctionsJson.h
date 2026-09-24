@@ -1718,13 +1718,15 @@ private:
 
             const auto & slice = data_from->getWhole();
             if (unlikely(slice.size == 0))
-                throw Exception("Invalid JSON text: The document is empty.");
+                throw Exception("Invalid JSON text: The document is empty.", ErrorCodes::ILLEGAL_COLUMN);
 
             const auto & json_elem = parser.parse(slice.data, slice.size);
             if (unlikely(json_elem.error()))
-                throw Exception(fmt::format(
-                    "Invalid JSON text: The document root must not be followed by other values, details: {}",
-                    simdjson::error_message(json_elem.error())));
+                throw Exception(
+                    fmt::format(
+                        "Invalid JSON text: The document root must not be followed by other values, details: {}",
+                        simdjson::error_message(json_elem.error())),
+                    ErrorCodes::ILLEGAL_COLUMN);
             JsonBinary::appendSIMDJsonElem(write_buffer, json_elem.value_unsafe());
 
             writeChar(0, write_buffer);
