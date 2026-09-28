@@ -163,6 +163,61 @@ try
 }
 CATCH
 
+TEST_F(TestFullText, MatchExpressionStandardAnalyzerProtocolSettings)
+try
+{
+    const auto make_metadata = [](const String & term, UInt32 min_token_size, UInt32 max_token_size, bool enable_stopword) {
+        tipb::FTSBooleanQuery boolean_query;
+        boolean_query.set_query_tokenizer("STANDARD_V1");
+        boolean_query.set_innodb_ft_min_token_size(min_token_size);
+        boolean_query.set_innodb_ft_max_token_size(max_token_size);
+        boolean_query.set_innodb_ft_enable_stopword(enable_stopword);
+        auto * required = boolean_query.add_nodes();
+        required->set_occur(tipb::FTSBooleanOccurMust);
+        required->mutable_term()->set_term_type(tipb::FTSBooleanTermWord);
+        required->mutable_term()->set_text(term);
+        return String("__tiflash_fts_bool_query__:") + boolean_query.SerializeAsString();
+    };
+
+    const auto short_term_metadata = make_metadata("go", 1, 84, true);
+    ASSERT_COLUMN_EQ(
+        createColumn<Float64>({1, 0}),
+        executeFunction(
+            "fts_match_expression",
+            {createConstColumn<String>(2, "+go"),
+             createColumn<String>({"go", "good"}),
+             createConstColumn<String>(2, short_term_metadata)}));
+
+    const auto stopword_metadata = make_metadata("the", 1, 84, false);
+    ASSERT_COLUMN_EQ(
+        createColumn<Float64>({1, 0}),
+        executeFunction(
+            "fts_match_expression",
+            {createConstColumn<String>(2, "+the"),
+             createColumn<String>({"the", "there"}),
+             createConstColumn<String>(2, stopword_metadata)}));
+
+    const auto collated_stopword_metadata = make_metadata("thé", 3, 84, true);
+    ASSERT_COLUMN_EQ(
+        createColumn<Float64>({0}),
+        executeFunction(
+            "fts_match_expression",
+            {createConstColumn<String>(1, "+thé"),
+             createColumn<String>({"thé"}),
+             createConstColumn<String>(1, collated_stopword_metadata)},
+            TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI)));
+
+    const auto max_size_metadata = make_metadata("extraordinary", 1, 10, false);
+    ASSERT_COLUMN_EQ(
+        createColumn<Float64>({0}),
+        executeFunction(
+            "fts_match_expression",
+            {createConstColumn<String>(1, "+extraordinary"),
+             createColumn<String>({"extraordinary"}),
+             createConstColumn<String>(1, max_size_metadata)}));
+}
+CATCH
+
 TEST_F(TestFullText, MatchExpressionNgramProtocolBooleanQuery)
 try
 {

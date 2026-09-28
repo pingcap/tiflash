@@ -127,7 +127,7 @@ std::vector<FullTextToken> tokenizeText(std::string_view text, const TiDB::TiDBC
     return result;
 }
 
-bool isDefaultStopword(const String & token)
+bool isDefaultStopword(const String & token, const TiDB::TiDBCollatorPtr & collator = nullptr)
 {
     static const std::unordered_set<String> stopwords{
         "a",    "about", "an",   "are",  "as",   "at",   "be",   "by",   "com", "de", "en", "for",
@@ -135,10 +135,23 @@ bool isDefaultStopword(const String & token)
         "this", "to",    "was",  "what",  "when",  "where", "who",  "will", "with", "und", "www"};
     // Stopwords are stored in canonical lower-case form. Keep their existing
     // case-insensitive behavior independently from document matching.
-    return stopwords.contains(Poco::UTF8::toLower(token));
+    if (stopwords.contains(Poco::UTF8::toLower(token)))
+        return true;
+    if (collator)
+    {
+        return std::any_of(stopwords.begin(), stopwords.end(), [&](const String & stopword) {
+            return collator->compare(token.data(), token.size(), stopword.data(), stopword.size()) == 0;
+        });
+    }
+    return false;
 }
 
-std::vector<FullTextToken> analyzeText(std::string_view text, const TiDB::TiDBCollatorPtr & collator = nullptr)
+std::vector<FullTextToken> analyzeText(
+    std::string_view text,
+    const TiDB::TiDBCollatorPtr & collator = nullptr,
+    size_t min_token_size = default_min_token_size,
+    size_t max_token_size = default_max_token_size,
+    bool enable_stopword = true)
 {
     std::vector<FullTextToken> result;
     for (auto & token : tokenizeText(text, collator))
@@ -146,8 +159,8 @@ std::vector<FullTextToken> analyzeText(std::string_view text, const TiDB::TiDBCo
         const auto code_points = UTF8::countCodePoints(
             reinterpret_cast<const UInt8 *>(token.text.data()),
             token.text.size());
-        if (code_points >= default_min_token_size && code_points <= default_max_token_size
-            && !isDefaultStopword(token.text))
+        if (code_points >= min_token_size && code_points <= max_token_size
+            && (!enable_stopword || !isDefaultStopword(token.text, collator)))
             result.push_back(std::move(token));
     }
     return result;
@@ -432,9 +445,13 @@ FullTextColumn analyzeColumn(
     std::string_view document,
     bool use_ngram,
     size_t ngram_token_size,
-    const TiDB::TiDBCollatorPtr & collator = nullptr)
+    const TiDB::TiDBCollatorPtr & collator = nullptr,
+    size_t min_token_size = default_min_token_size,
+    size_t max_token_size = default_max_token_size,
+    bool enable_stopword = true)
 {
-    return use_ngram ? analyzeNgramText(document, ngram_token_size, collator) : analyzeText(document, collator);
+    return use_ngram ? analyzeNgramText(document, ngram_token_size, collator)
+                     : analyzeText(document, collator, min_token_size, max_token_size, enable_stopword);
 }
 
 Float64 matchBooleanScore(
@@ -536,8 +553,15 @@ Float64 matchBooleanScore(
 	std::vector<BooleanClause> clauses;
 	const bool use_ngram = query.query_tokenizer() == ngram_parser;
 	const size_t ngram_token_size = query.ngram_token_size() == 0 ? default_ngram_token_size : query.ngram_token_size();
+	const bool has_standard_config = query.innodb_ft_min_token_size() != 0 || query.innodb_ft_max_token_size() != 0;
+	const size_t min_token_size = has_standard_config ? query.innodb_ft_min_token_size() : default_min_token_size;
+	const size_t max_token_size = has_standard_config ? query.innodb_ft_max_token_size() : default_max_token_size;
+	const bool enable_stopword = has_standard_config ? query.innodb_ft_enable_stopword() : true;
+	if (!use_ngram && (max_token_size == 0 || min_token_size > max_token_size))
+		return 0;
 	auto analyze_query = [&](std::string_view text) {
-		return use_ngram ? analyzeNgramText(text, ngram_token_size, collator) : analyzeText(text, collator);
+		return use_ngram ? analyzeNgramText(text, ngram_token_size, collator)
+					 : analyzeText(text, collator, min_token_size, max_token_size, enable_stopword);
 	};
 	for (const auto & node : query.nodes())
 	{
@@ -637,7 +661,7 @@ Float64 matchBooleanScore(
 			const auto code_points = UTF8::countCodePoints(
 				reinterpret_cast<const UInt8 *>(terms.front().text.data()),
 				terms.front().text.size());
-			if (code_points > default_max_token_size)
+			if (code_points > max_token_size)
 			{
 				if (clause.modifier == BooleanClause::Modifier::Must)
 					clauses.push_back(std::move(clause));
@@ -939,6 +963,16 @@ public:
         const size_t ngram_token_size = !use_ngram || protocol_boolean_query.ngram_token_size() == 0
             ? default_ngram_token_size
             : protocol_boolean_query.ngram_token_size();
+        const bool has_standard_config = has_protocol_boolean_query
+            && (protocol_boolean_query.innodb_ft_min_token_size() != 0
+                || protocol_boolean_query.innodb_ft_max_token_size() != 0);
+        const size_t min_token_size = has_standard_config
+            ? protocol_boolean_query.innodb_ft_min_token_size()
+            : default_min_token_size;
+        const size_t max_token_size = has_standard_config
+            ? protocol_boolean_query.innodb_ft_max_token_size()
+            : default_max_token_size;
+        const bool enable_stopword = !has_standard_config || protocol_boolean_query.innodb_ft_enable_stopword();
 
         for (size_t row = 0; row < rows; ++row)
         {
@@ -959,7 +993,10 @@ public:
                         getStringAt(*block.getByPosition(arguments[arg]).column, row),
                         use_ngram,
                         ngram_token_size,
-                        collator));
+                        collator,
+                        min_token_size,
+                        max_token_size,
+                        enable_stopword));
             }
             if (has_protocol_boolean_query)
                 output_data[row] = matchBooleanScore(protocol_boolean_query, document, collator);
