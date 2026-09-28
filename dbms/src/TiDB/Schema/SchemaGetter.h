@@ -122,11 +122,14 @@ enum class SchemaActionType : Int8
     ActionAlterMaterializedViewRefresh = 89,
     ActionAlterMaterializedViewLogPurge = 90,
     ActionAlterMaterializedViewAttributes = 91,
+    ActionMViewRefreshOutOfPlaceCutover = 92,
+    ActionCreateMaterializedViewShadow = 93,
+    ActionDropMaterializedViewShadow = 94,
 
     // If we support new type from TiDB.
     // MaxRecognizedType also needs to be changed.
     // It should always be equal to the maximum supported type + 1
-    MaxRecognizedType = 92,
+    MaxRecognizedType = 95,
 };
 
 struct AffectedOption
