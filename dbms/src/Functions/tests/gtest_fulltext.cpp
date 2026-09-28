@@ -205,6 +205,41 @@ try
 }
 CATCH
 
+TEST_F(TestFullText, MatchExpressionNgramPrefix)
+try
+{
+    const auto make_metadata = [](UInt32 token_size, const String & prefix) {
+        tipb::FTSBooleanQuery boolean_query;
+        boolean_query.set_query_tokenizer("NGRAM_V1");
+        boolean_query.set_ngram_token_size(token_size);
+        auto * node = boolean_query.add_nodes();
+        node->set_occur(tipb::FTSBooleanOccurMust);
+        node->mutable_term()->set_term_type(tipb::FTSBooleanTermPrefix);
+        node->mutable_term()->set_text(prefix);
+        return String("__tiflash_fts_bool_query__:") + boolean_query.SerializeAsString();
+    };
+
+    const auto query = createConstColumn<String>(4, "+caf*");
+    const auto documents = createColumn<String>({"CAFE", "café", "cafe", "decaf"});
+    const auto metadata = createConstColumn<String>(4, make_metadata(2, "caf"));
+    const auto utf8mb4_bin = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_BIN);
+    ASSERT_COLUMN_EQ(
+        createColumn<Float64>({0, 1, 1, 1}),
+        executeFunction("fts_match_expression", {query, documents, metadata}, utf8mb4_bin));
+
+    const auto utf8mb4_general_ci = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI);
+    ASSERT_COLUMN_EQ(
+        createColumn<Float64>({1, 1, 1, 1}),
+        executeFunction("fts_match_expression", {query, documents, metadata}, utf8mb4_general_ci));
+
+    const auto short_query = createConstColumn<String>(4, "+c*");
+    const auto short_metadata = createConstColumn<String>(4, make_metadata(2, "c"));
+    ASSERT_COLUMN_EQ(
+        createColumn<Float64>({1, 1, 1, 1}),
+        executeFunction("fts_match_expression", {short_query, documents, short_metadata}, utf8mb4_general_ci));
+}
+CATCH
+
 TEST_F(TestFullText, MatchExpressionScore)
 try
 {

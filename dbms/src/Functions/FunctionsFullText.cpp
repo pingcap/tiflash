@@ -585,9 +585,49 @@ Float64 matchBooleanScore(
 		}
 		case tipb::FTSBooleanTermType::FTSBooleanTermPrefix:
 		{
-			clause.prefix = true;
 			const auto terms = use_ngram ? analyzeNgramText(term.text(), ngram_token_size, collator)
-										 : tokenizeText(term.text(), collator);
+							 : tokenizeText(term.text(), collator);
+			if (use_ngram)
+			{
+				if (!terms.empty())
+				{
+					// TiDB expands an NGRAM prefix at least as long as one
+					// gram into a positional phrase of query ngrams. Matching
+					// only one analyzed term here makes prefixes such as
+					// "caf*" ("ca", "af" at token size 2) never match.
+					clause.phrase = true;
+					const size_t first_position = terms.front().position;
+					for (const auto & token : terms)
+					{
+						clause.terms.push_back(token.text);
+						clause.offsets.push_back(token.position - first_position);
+					}
+					break;
+				}
+
+				// A query shorter than the configured gram size is retained
+				// by TiDB as a prefix over document ngrams instead of being
+				// discarded by the analyzer.
+				const auto source_terms = tokenizeText(term.text(), collator);
+				if (source_terms.size() == 1)
+				{
+					const auto code_points = UTF8::countCodePoints(
+						reinterpret_cast<const UInt8 *>(source_terms.front().text.data()),
+						source_terms.front().text.size());
+					if (code_points < ngram_token_size)
+					{
+						clause.prefix = true;
+						clause.terms.push_back(source_terms.front().text);
+						break;
+					}
+				}
+
+				if (clause.modifier == BooleanClause::Modifier::Must)
+					clauses.push_back(std::move(clause));
+				continue;
+			}
+
+			clause.prefix = true;
 			if (terms.size() != 1)
 			{
 				if (clause.modifier == BooleanClause::Modifier::Must)
