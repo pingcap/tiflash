@@ -93,6 +93,9 @@ public:
     bool useDefaultImplementationForNulls() const override { return false; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
+    /// Throws on an invalid json path expression.
+    bool canThrow() const override { return true; }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if unlikely (arguments.size() < 2)
@@ -338,6 +341,10 @@ public:
 
     void setNeedValidCheck(bool need_valid_check_) { need_valid_check = need_valid_check_; }
     bool useDefaultImplementationForConstants() const override { return true; }
+
+    /// Throws on an invalid json document when validation is enabled.
+    bool canThrow() const override { return true; }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if unlikely (!arguments[0]->isString())
@@ -995,6 +1002,10 @@ public:
 
     bool useDefaultImplementationForNulls() const override { return false; }
     bool useDefaultImplementationForConstants() const override { return true; }
+
+    /// Throws when a member name is NULL or too long.
+    bool canThrow() const override { return true; }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (unlikely(arguments.size() % 2 != 0))
@@ -1470,6 +1481,9 @@ public:
 
     bool useDefaultImplementationForNulls() const override { return false; }
     bool useDefaultImplementationForConstants() const override { return true; }
+
+    /// Throws on an invalid json document.
+    bool canThrow() const override { return true; }
 
     void setInputTiDBFieldType(const tipb::FieldType & tidb_tp_) { input_tidb_tp = tidb_tp_; }
     void setOutputTiDBFieldType(const tipb::FieldType & tidb_tp_) { output_tidb_tp = tidb_tp_; }
@@ -1994,6 +2008,9 @@ public:
 
     bool useDefaultImplementationForNulls() const override { return false; }
     bool useDefaultImplementationForConstants() const override { return true; }
+
+    /// Throws on an invalid json path expression.
+    bool canThrow() const override { return true; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {

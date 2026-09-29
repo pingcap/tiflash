@@ -336,7 +336,15 @@ struct NameDivideIntegralOrZero { static constexpr auto name = "intDivOrZero"; }
 
 using FunctionDivideFloating = FunctionBinaryArithmetic<DivideFloatingImpl_t, NameDivideFloating>;
 using FunctionTiDBDivideFloating = FunctionBinaryArithmetic<TiDBDivideFloatingImpl_t, NameTiDBDivideFloating, false>;
-using FunctionDivideIntegral = FunctionBinaryArithmetic<DivideIntegralImpl_t, NameDivideIntegral>;
+/// intDiv throws on division by zero, so its subtree is worth deferring under short-circuit
+/// evaluation (see IFunctionBase::canThrow).
+class FunctionDivideIntegral final : public FunctionBinaryArithmetic<DivideIntegralImpl_t, NameDivideIntegral>
+{
+public:
+    using FunctionBinaryArithmetic<DivideIntegralImpl_t, NameDivideIntegral>::FunctionBinaryArithmetic;
+    static FunctionPtr create(const Context & context) { return std::make_shared<FunctionDivideIntegral>(context); }
+    bool canThrow() const override { return true; }
+};
 using FunctionDivideIntegralOrZero = FunctionBinaryArithmetic<DivideIntegralOrZeroImpl_t, NameDivideIntegralOrZero>;
 
 } // namespace
