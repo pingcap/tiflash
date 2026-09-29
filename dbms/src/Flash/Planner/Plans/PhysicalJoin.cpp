@@ -365,6 +365,9 @@ void PhysicalJoin::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & c
 
     {
         DAGPipeline & probe_pipeline = pipeline;
+        // The skip-probe optimization for empty build sides only applies to local probe sources.
+        // It is set before the probe input streams are wrapped by HashJoinProbeBlockInputStream.
+        join_ptr->setLocalProbeSource(!probe()->subtreeContainsExchangeReceiver());
         probe()->buildBlockInputStream(probe_pipeline, context, max_streams);
         probeSideTransform(probe_pipeline, context);
     }
@@ -388,6 +391,10 @@ void PhysicalJoin::buildPipeline(PipelineBuilder & builder, Context & context, P
 
     // Join probe pipeline.
     builder.setHasPipelineBreakerWaitTime(true);
+    // The skip-probe optimization for empty build sides only applies to local probe sources:
+    // if the probe input comes from an exchange receiver, early termination would fail the
+    // remote senders that are still transmitting data.
+    join_ptr->setLocalProbeSource(!probe()->subtreeContainsExchangeReceiver());
     probe()->buildPipeline(builder, context, exec_context);
     auto join_probe = std::make_shared<PhysicalJoinProbe>(
         executor_id,
