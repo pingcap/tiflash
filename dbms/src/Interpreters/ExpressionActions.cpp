@@ -566,8 +566,6 @@ void ExpressionActions::addImpl(ExpressionAction action, Names & new_names)
 
     action.prepare(sample_block);
     actions.push_back(action);
-    if (short_circuit_prepared)
-        prepareShortCircuitActions();
 }
 
 void ExpressionActions::prependProjectInput()
@@ -769,7 +767,32 @@ void ExpressionActions::finalize(const Names & output_columns, bool keep_used_in
 
 void ExpressionActions::prepareShortCircuitActions()
 {
-    short_circuit_prepared = true;
+    // Only subtrees that may throw are worth deferring, so that a false guard suppresses
+    // the error just like MySQL's short-circuit evaluation (e.g. `and(json_valid(s),
+    // json_extract(cast(s as json), p))`), while ordinary functions stay eager to avoid
+    // the overhead of lazy execution. Wrapper functions themselves (not/isNull/equals/...)
+    // cannot throw, so the property must be tracked at subtree level: a result column is
+    // "throwing" if its producing subtree contains at least one function that can throw.
+    // The linear action list is in topological order, so a forward pass propagates the
+    // property from every producer to its consumers.
+    NameSet throwing;
+    for (const auto & action : actions)
+    {
+        if (action.type == ExpressionAction::APPLY_FUNCTION)
+        {
+            bool subtree_can_throw = action.function->canThrow();
+            for (const auto & argument : action.argument_names)
+                subtree_can_throw = subtree_can_throw || throwing.contains(argument);
+            if (subtree_can_throw)
+                throwing.insert(action.result_name);
+        }
+        else if (action.type == ExpressionAction::COPY_COLUMN)
+        {
+            if (throwing.contains(action.source_name))
+                throwing.insert(action.result_name);
+        }
+    }
+
     // Adapted from ClickHouse's lazy-node analysis. In the linear action representation,
     // reverse traversal visits every consumer before its producer. Any eager consumer wins.
     Names output_names;
@@ -786,6 +809,7 @@ void ExpressionActions::prepareShortCircuitActions()
         if (action.type == ExpressionAction::APPLY_FUNCTION)
         {
             action.is_lazy_executed = deferred.contains(action.result_name) && !eager.contains(action.result_name)
+                && throwing.contains(action.result_name)
                 && action.function->isSuitableForShortCircuitArgumentsExecution();
             eager.erase(action.result_name);
             deferred.erase(action.result_name);
@@ -797,7 +821,8 @@ void ExpressionActions::prepareShortCircuitActions()
         }
         else if (action.type == ExpressionAction::COPY_COLUMN)
         {
-            const bool lazy = deferred.contains(action.result_name) && !eager.contains(action.result_name);
+            const bool lazy = deferred.contains(action.result_name) && !eager.contains(action.result_name)
+                && throwing.contains(action.result_name);
             eager.erase(action.result_name);
             deferred.erase(action.result_name);
             (lazy ? deferred : eager).insert(action.source_name);

@@ -219,7 +219,6 @@ private:
     NamesAndTypesList input_columns;
     Actions actions;
     Block sample_block;
-    bool short_circuit_prepared = false;
 
     void addImpl(ExpressionAction action, Names & new_names);
     void prepareShortCircuitActions();

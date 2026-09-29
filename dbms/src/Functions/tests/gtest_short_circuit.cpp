@@ -132,14 +132,14 @@ TEST_F(ShortCircuit, NullableTruthTables)
 try
 {
     Block input({
-        createColumn<Nullable<Float64>>({0, 0, 0, -0.5, -0.5, -0.5, {}, {}, {}}, "left"),
-        createColumn<Nullable<Float64>>({0, 0.5, {}, 0, 0.5, {}, 0, 0.5, {}}, "right"),
-        createConstColumn<Float64>(9, 0, "zero"),
+        createColumn<Nullable<Int64>>({0, 0, 0, -1, -1, -1, {}, {}, {}}, "left"),
+        createColumn<Nullable<Int64>>({0, 1, {}, 0, 1, {}, 0, 1, {}}, "right"),
+        createConstColumn<Int64>(9, 1, "one"),
     });
     for (const String name : {"and", "or", "two_value_and"})
     {
         ExpressionActions actions(input.getColumnsWithTypeAndName());
-        add(actions, "plus", {"right", "zero"}, "deferred_right");
+        add(actions, "intDiv", {"right", "one"}, "deferred_right");
         add(actions, name, {"left", "deferred_right"}, "result");
         actions.finalize({"result"});
         ASSERT_EQ(lazyCount(actions), 1);
@@ -187,13 +187,13 @@ try
             createColumn<UInt8>({0, 1, 0, 1}, "first"),
             createColumn<Nullable<Int64>>({{}, 0, 2, {}}, "last"),
             createConstColumn<UInt8>(4, constant, "constant"),
-            createConstColumn<Int64>(4, 0, "zero"),
+            createConstColumn<Int64>(4, 1, "one"),
             null_column,
         });
         for (const String name : {"and", "or", "two_value_and"})
         {
             ExpressionActions actions(input.getColumnsWithTypeAndName());
-            add(actions, "plus", {"last", "zero"}, "deferred_last");
+            add(actions, "intDiv", {"last", "one"}, "deferred_last");
             add(actions, name, {"first", "null", "constant", "deferred_last"}, "result");
             actions.finalize({"result"});
             Block block = input;
