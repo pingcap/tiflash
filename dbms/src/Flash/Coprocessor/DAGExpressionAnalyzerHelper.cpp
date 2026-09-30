@@ -520,14 +520,13 @@ String DAGExpressionAnalyzerHelper::buildDefaultFunction(
         String name = analyzer->getActions(child, actions);
         argument_names.push_back(name);
     }
-    if (expr.sig() == tipb::ScalarFuncSig::FTSMatchExpression && expr.has_fts_boolean_query())
+    if (expr.sig() == tipb::ScalarFuncSig::FTSMatchExpression && !expr.val().empty())
     {
-        // Keep the wire representation typed on Expr. The scalar function's
-        // runtime interface uses a private function variant with a required
-        // final constant argument, so the query cannot be confused with a
-        // constant MATCH document column.
+        // FTS metadata is carried in the generic scalar-function metadata slot
+        // and must not be confused with SQL arguments. The runtime function
+        // interface uses a private variant with a required final constant.
         func_name = "fts_match_expression_with_boolean_query";
-        const auto metadata_expr = constructStringLiteralTiExpr(expr.fts_boolean_query().SerializeAsString());
+        const auto metadata_expr = constructStringLiteralTiExpr(expr.val());
         argument_names.push_back(analyzer->getActions(metadata_expr, actions));
     }
     return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));

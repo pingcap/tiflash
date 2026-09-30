@@ -101,7 +101,12 @@ tipb::Expr buildFTSExpression(const TiDBTableScan & table_scan, Int32 result_typ
         expression.mutable_field_type()->set_flag(0);
 
     if (query_func == tipb::ScalarFuncSig::FTSMatchExpression && query_info.has_boolean_query())
-        *expression.mutable_fts_boolean_query() = query_info.boolean_query();
+    {
+        tipb::FTSMatchExpressionMetadata metadata;
+        metadata.set_version(1);
+        *metadata.mutable_boolean_query() = query_info.boolean_query();
+        expression.set_val(metadata.SerializeAsString());
+    }
     return expression;
 }
 

@@ -24,6 +24,17 @@ class TestFullText : public DB::tests::FunctionTest
 {
 };
 
+namespace
+{
+String serializeFTSBooleanQuery(const tipb::FTSBooleanQuery & query)
+{
+    tipb::FTSMatchExpressionMetadata metadata;
+    metadata.set_version(1);
+    *metadata.mutable_boolean_query() = query;
+    return metadata.SerializeAsString();
+}
+} // namespace
+
 TEST_F(TestFullText, MatchWordBoolean)
 try
 {
@@ -113,7 +124,7 @@ try
     required->mutable_term()->set_term_type(tipb::FTSBooleanTermWord);
     required->mutable_term()->set_text("quick");
 
-    const String metadata = boolean_query.SerializeAsString();
+    const String metadata = serializeFTSBooleanQuery(boolean_query);
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Float64>>({1, 1, 0, 0}),
         executeFunction(
@@ -140,7 +151,7 @@ try
     prohibited->mutable_term()->set_term_type(tipb::FTSBooleanTermWord);
     prohibited->mutable_term()->set_text("slow");
 
-    const String metadata = boolean_query.SerializeAsString();
+    const String metadata = serializeFTSBooleanQuery(boolean_query);
     ASSERT_COLUMN_EQ(
         createColumn<Float64>({1, 0, 0}),
         executeFunction(
@@ -156,7 +167,7 @@ try
     prohibited_only->set_occur(tipb::FTSBooleanOccurMustNot);
     prohibited_only->mutable_term()->set_term_type(tipb::FTSBooleanTermWord);
     prohibited_only->mutable_term()->set_text("slow");
-    const String prohibited_metadata = prohibited_query.SerializeAsString();
+    const String prohibited_metadata = serializeFTSBooleanQuery(prohibited_query);
     ASSERT_COLUMN_EQ(
         createColumn<Float64>({0, 0, 0}),
         executeFunction(
@@ -166,6 +177,42 @@ try
              createConstColumn<String>(3, prohibited_metadata)},
             nullptr,
             true));
+}
+CATCH
+
+TEST_F(TestFullText, MatchExpressionRejectsInvalidMetadata)
+try
+{
+    tipb::FTSBooleanQuery boolean_query;
+    auto * required = boolean_query.add_nodes();
+    required->set_occur(tipb::FTSBooleanOccurMust);
+    required->mutable_term()->set_term_type(tipb::FTSBooleanTermWord);
+    required->mutable_term()->set_text("quick");
+
+    tipb::FTSMatchExpressionMetadata metadata;
+    metadata.set_version(2);
+    *metadata.mutable_boolean_query() = boolean_query;
+    ASSERT_THROW(
+        executeFunction(
+            "fts_match_expression_with_boolean_query",
+            {createConstColumn<String>(1, "+quick"),
+             createColumn<String>({"quick brown"}),
+             createConstColumn<String>(1, metadata.SerializeAsString())},
+            nullptr,
+            true),
+        Exception);
+
+    metadata.set_version(1);
+    metadata.clear_boolean_query();
+    ASSERT_THROW(
+        executeFunction(
+            "fts_match_expression_with_boolean_query",
+            {createConstColumn<String>(1, "+quick"),
+             createColumn<String>({"quick brown"}),
+             createConstColumn<String>(1, metadata.SerializeAsString())},
+            nullptr,
+            true),
+        Exception);
 }
 CATCH
 
@@ -182,7 +229,7 @@ try
         required->set_occur(tipb::FTSBooleanOccurMust);
         required->mutable_term()->set_term_type(tipb::FTSBooleanTermWord);
         required->mutable_term()->set_text(term);
-        return boolean_query.SerializeAsString();
+        return serializeFTSBooleanQuery(boolean_query);
     };
 
     const auto short_term_metadata = make_metadata("go", 1, 84, true);
@@ -246,7 +293,7 @@ try
     prohibited->mutable_term()->set_term_type(tipb::FTSBooleanTermWord);
     prohibited->mutable_term()->set_text("mysql");
 
-    const String metadata = boolean_query.SerializeAsString();
+    const String metadata = serializeFTSBooleanQuery(boolean_query);
     ASSERT_COLUMN_EQ(
         createColumn<Float64>({1, 0, 1, 0}),
         executeFunction(
@@ -265,7 +312,7 @@ try
     case_term->set_occur(tipb::FTSBooleanOccurMust);
     case_term->mutable_term()->set_term_type(tipb::FTSBooleanTermWord);
     case_term->mutable_term()->set_text("mysql");
-    const String case_metadata = case_query.SerializeAsString();
+    const String case_metadata = serializeFTSBooleanQuery(case_query);
     ASSERT_COLUMN_EQ(
         createColumn<Float64>({1, 0}),
         executeFunction(
@@ -287,7 +334,7 @@ try
         node->set_occur(tipb::FTSBooleanOccurMust);
         node->mutable_term()->set_term_type(tipb::FTSBooleanTermPrefix);
         node->mutable_term()->set_text(prefix);
-        return boolean_query.SerializeAsString();
+        return serializeFTSBooleanQuery(boolean_query);
     };
 
     const auto query = createConstColumn<String>(4, "+caf*");
@@ -364,7 +411,7 @@ try
         node->set_occur(tipb::FTSBooleanOccurMust);
         node->mutable_term()->set_term_type(term_type);
         node->mutable_term()->set_text(term);
-        return boolean_query.SerializeAsString();
+        return serializeFTSBooleanQuery(boolean_query);
     };
     const auto word_metadata = createConstColumn<String>(
         3, make_metadata(tipb::FTSBooleanTermWord, "cafe"));

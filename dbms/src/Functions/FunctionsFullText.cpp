@@ -51,6 +51,7 @@ constexpr size_t default_min_token_size = 3;
 constexpr size_t default_max_token_size = 84;
 constexpr size_t default_ngram_token_size = 2;
 constexpr std::string_view ngram_parser = "NGRAM_V1";
+constexpr UInt32 fts_match_expression_metadata_version = 1;
 
 struct FullTextToken
 {
@@ -787,7 +788,12 @@ bool decodeFTSBooleanQuery(const IColumn & column, tipb::FTSBooleanQuery & query
     if (constant == nullptr)
         return false;
     const auto encoded = constant->getValue<String>();
-    return query.ParseFromString(encoded);
+    tipb::FTSMatchExpressionMetadata metadata;
+    if (!metadata.ParseFromString(encoded) || metadata.version() != fts_match_expression_metadata_version
+        || !metadata.has_boolean_query())
+        return false;
+    query = metadata.boolean_query();
+    return true;
 }
 
 class FunctionFTSMatchWord final : public IFunction
