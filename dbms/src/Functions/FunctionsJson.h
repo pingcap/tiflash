@@ -552,6 +552,9 @@ public:
     bool useDefaultImplementationForNulls() const override { return false; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
+    /// The two-argument form throws on an invalid json path expression.
+    bool canThrow() const override { return true; }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (unlikely(arguments.size() != 1 && arguments.size() != 2))
@@ -2639,6 +2642,9 @@ public:
 
     bool useDefaultImplementationForNulls() const override { return false; }
     bool useDefaultImplementationForConstants() const override { return true; }
+
+    /// Throws on an invalid json path expression.
+    bool canThrow() const override { return true; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
