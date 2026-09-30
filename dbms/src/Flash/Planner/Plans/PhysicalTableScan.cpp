@@ -37,8 +37,6 @@ namespace DB
 {
 namespace
 {
-constexpr std::string_view fts_boolean_query_marker = "__tiflash_fts_bool_query__:";
-
 tipb::Expr buildFTSExpression(const TiDBTableScan & table_scan, Int32 result_type)
 {
     const auto & query_info = table_scan.getFTSQueryInfo();
@@ -103,10 +101,7 @@ tipb::Expr buildFTSExpression(const TiDBTableScan & table_scan, Int32 result_typ
         expression.mutable_field_type()->set_flag(0);
 
     if (query_func == tipb::ScalarFuncSig::FTSMatchExpression && query_info.has_boolean_query())
-    {
-        *expression.add_children()
-            = constructStringLiteralTiExpr(String(fts_boolean_query_marker) + query_info.boolean_query().SerializeAsString());
-    }
+        *expression.mutable_fts_boolean_query() = query_info.boolean_query();
     return expression;
 }
 

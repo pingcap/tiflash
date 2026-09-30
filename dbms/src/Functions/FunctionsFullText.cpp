@@ -51,7 +51,6 @@ constexpr size_t default_min_token_size = 3;
 constexpr size_t default_max_token_size = 84;
 constexpr size_t default_ngram_token_size = 2;
 constexpr std::string_view ngram_parser = "NGRAM_V1";
-constexpr std::string_view fts_boolean_query_marker = "__tiflash_fts_bool_query__:";
 
 struct FullTextToken
 {
@@ -788,10 +787,7 @@ bool decodeFTSBooleanQuery(const IColumn & column, tipb::FTSBooleanQuery & query
     if (constant == nullptr)
         return false;
     const auto encoded = constant->getValue<String>();
-    const std::string_view value(encoded);
-    if (!value.starts_with(fts_boolean_query_marker))
-        return false;
-    return query.ParseFromString(std::string(value.substr(fts_boolean_query_marker.size())));
+    return query.ParseFromString(encoded);
 }
 
 class FunctionFTSMatchWord final : public IFunction
@@ -891,11 +887,15 @@ private:
     TiDB::TiDBCollatorPtr collator;
 };
 
-class FunctionFTSMatchExpression final : public IFunction
+class FunctionFTSMatchExpression : public IFunction
 {
 public:
     static constexpr auto name = "fts_match_expression";
     static FunctionPtr create(const Context &) { return std::make_shared<FunctionFTSMatchExpression>(); }
+
+    explicit FunctionFTSMatchExpression(bool require_boolean_query = false)
+        : require_boolean_query(require_boolean_query)
+    {}
 
     String getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 0; }
@@ -955,8 +955,13 @@ public:
         const auto query = query_column->getValue<String>();
         size_t document_argument_end = arguments.size();
         tipb::FTSBooleanQuery protocol_boolean_query;
-        const bool has_protocol_boolean_query = arguments.size() > 2
-            && decodeFTSBooleanQuery(*block.getByPosition(arguments.back()).column, protocol_boolean_query);
+        const bool has_protocol_boolean_query = require_boolean_query;
+        if (require_boolean_query
+            && (arguments.size() <= 2
+                || !decodeFTSBooleanQuery(*block.getByPosition(arguments.back()).column, protocol_boolean_query)))
+            throw Exception(
+                "fts_match_expression_with_boolean_query requires valid Boolean query metadata",
+                ErrorCodes::ILLEGAL_COLUMN);
         if (has_protocol_boolean_query)
             --document_argument_end;
         const bool use_ngram = has_protocol_boolean_query && protocol_boolean_query.query_tokenizer() == ngram_parser;
@@ -1015,6 +1020,20 @@ public:
 
 private:
     TiDB::TiDBCollatorPtr collator;
+    bool require_boolean_query;
+};
+
+class FunctionFTSMatchExpressionWithBooleanQuery final : public FunctionFTSMatchExpression
+{
+public:
+    static constexpr auto name = "fts_match_expression_with_boolean_query";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionFTSMatchExpressionWithBooleanQuery>(); }
+
+    FunctionFTSMatchExpressionWithBooleanQuery()
+        : FunctionFTSMatchExpression(true)
+    {}
+
+    String getName() const override { return name; }
 };
 }
 
@@ -1022,5 +1041,6 @@ void registerFunctionsFullText(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionFTSMatchWord>(FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionFTSMatchExpression>(FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionFTSMatchExpressionWithBooleanQuery>(FunctionFactory::CaseInsensitive);
 }
 } // namespace DB
