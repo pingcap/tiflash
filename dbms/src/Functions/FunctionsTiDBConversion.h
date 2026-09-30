@@ -1830,6 +1830,12 @@ class FunctionTiDBCast final : public IFunctionBase
 public:
     bool isSuitableForShortCircuitArgumentsExecution() const override { return true; }
 
+    /// Deliberately not canThrow: value errors (overflow/truncation/invalid datetime)
+    /// return boundary values or NULL plus a warning per TiDB semantics, so deferring
+    /// this function cannot suppress an error; type-level errors are thrown at plan
+    /// time; and casting to JSON goes through cast_string_as_json, which is marked.
+    /// If a data-dependent throw is ever found, add a canThrow override.
+
     using WrapperType
         = std::function<void(Block &, const ColumnNumbers &, size_t, bool, const tipb::FieldType &, const Context &)>;
 
