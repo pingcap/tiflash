@@ -28,6 +28,7 @@
 #include <Storages/System/StorageSystemNumbers.h>
 #include <Storages/System/StorageSystemOne.h>
 #include <Storages/System/StorageSystemProcesses.h>
+#include <Storages/System/StorageSystemRegionInfos.h>
 #include <Storages/System/StorageSystemSettings.h>
 #include <Storages/System/StorageSystemTables.h>
 #include <Storages/System/attachSystemTables.h>
@@ -44,6 +45,7 @@ void attachSystemTablesLocal(IDatabase & system_database)
     system_database.attachTable("dt_tables", StorageSystemDTTables::create("dt_tables"));
     system_database.attachTable("dt_segments", StorageSystemDTSegments::create("dt_segments"));
     system_database.attachTable("dt_local_indexes", StorageSystemDTLocalIndexes::create("dt_local_indexes"));
+    system_database.attachTable("tiflash_regions", StorageSystemRegionInfos::create("tiflash_regions"));
     system_database.attachTable("tables", StorageSystemTables::create("tables"));
     system_database.attachTable("columns", StorageSystemColumns::create("columns"));
     system_database.attachTable("functions", StorageSystemFunctions::create("functions"));
