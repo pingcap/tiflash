@@ -28,94 +28,16 @@ namespace
 {
 String serializeFTSBooleanQuery(const tipb::FTSBooleanQuery & query)
 {
-    tipb::FTSMatchExpressionMetadata metadata;
+    tipb::FTSMatchBooleanMetadata metadata;
     metadata.set_version(1);
     *metadata.mutable_boolean_query() = query;
+    if (metadata.boolean_query().query_tokenizer().empty())
+        metadata.mutable_boolean_query()->set_query_tokenizer("STANDARD_V1");
     return metadata.SerializeAsString();
 }
 } // namespace
 
-TEST_F(TestFullText, MatchWordBoolean)
-try
-{
-    const auto query = createConstColumn<String>(4, "+quick -slow");
-    const auto documents = createColumn<String>({
-        "A quick brown fox",
-        "A slow brown fox",
-        "A brown fox",
-        "A QUICK runner",
-    });
-    ASSERT_COLUMN_EQ(createColumn<Float64>({1, 0, 0, 1}), executeFunction("fts_match_word", {query, documents}));
-}
-CATCH
-
-TEST_F(TestFullText, MatchWordPhraseAndPrefix)
-try
-{
-    ASSERT_COLUMN_EQ(
-        createColumn<Float64>({1, 0}),
-        executeFunction(
-            "fts_match_word",
-            {createConstColumn<String>(2, "\"quick brown\""), createColumn<String>({"quick brown fox", "quick fox brown"})}));
-    ASSERT_COLUMN_EQ(
-        createColumn<Float64>({1, 0}),
-        executeFunction(
-            "fts_match_word",
-            {createConstColumn<String>(2, "run*"), createColumn<String>({"runner", "walk"})}));
-}
-CATCH
-
-TEST_F(TestFullText, MatchWordTokenBoundaryAndPhrasePositions)
-try
-{
-    ASSERT_COLUMN_EQ(
-        createColumn<Float64>({0, 1}),
-        executeFunction(
-            "fts_match_word",
-            {createConstColumn<String>(2, "cat"), createColumn<String>({"concatenate", "a cat"})}));
-    ASSERT_COLUMN_EQ(
-        createColumn<Float64>({0, 1}),
-        executeFunction(
-            "fts_match_word",
-            {createConstColumn<String>(2, "\"quick the brown\""),
-             createColumn<String>({"quick brown", "quick the brown"})}));
-}
-CATCH
-
-TEST_F(TestFullText, MatchWordNull)
-try
-{
-    ASSERT_COLUMN_EQ(
-        createColumn<Nullable<Float64>>({1, {}}),
-        executeFunction(
-            "fts_match_word",
-            {createConstColumn<String>(2, "hello"), createColumn<Nullable<String>>({"hello world", {}})}));
-}
-CATCH
-
-TEST_F(TestFullText, MatchWordScore)
-try
-{
-    ASSERT_COLUMN_EQ(
-        createColumn<Float64>({1, 2, 0}),
-        executeFunction(
-            "fts_match_word",
-            {createConstColumn<String>(3, "quick"), createColumn<String>({"quick", "quick quick", "slow"})}));
-}
-CATCH
-
-TEST_F(TestFullText, MatchExpression)
-try
-{
-    ASSERT_COLUMN_EQ(
-        createColumn<Float64>({1, 0}),
-        executeFunction(
-            "fts_match_expression",
-            {createConstColumn<String>(2, "quick fox"), createColumn<String>({"quick brown", "slow turtle"})}));
-}
-CATCH
-
-TEST_F(TestFullText, MatchExpressionMultiColumnNullable)
+TEST_F(TestFullText, MatchBooleanMultiColumnNullable)
 try
 {
     tipb::FTSBooleanQuery boolean_query;
@@ -128,7 +50,7 @@ try
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Float64>>({1, 1, 0, 0}),
         executeFunction(
-            "fts_match_expression_with_boolean_query",
+            "fts_match_boolean_expression",
             {createConstColumn<String>(4, "+quick"),
              createColumn<Nullable<String>>({{}, "quick fox", {}, "slow fox"}),
              createColumn<Nullable<String>>({"quick fox", {}, "slow fox", {}}),
@@ -138,7 +60,7 @@ try
 }
 CATCH
 
-TEST_F(TestFullText, MatchExpressionProtocolBooleanQuery)
+TEST_F(TestFullText, MatchBooleanProtocolQuery)
 try
 {
     tipb::FTSBooleanQuery boolean_query;
@@ -155,7 +77,7 @@ try
     ASSERT_COLUMN_EQ(
         createColumn<Float64>({1, 0, 0}),
         executeFunction(
-            "fts_match_expression_with_boolean_query",
+            "fts_match_boolean_expression",
             {createConstColumn<String>(3, "+quick -slow"),
              createColumn<String>({"quick brown", "slow fox", "brown fox"}),
              createConstColumn<String>(3, metadata)},
@@ -171,7 +93,7 @@ try
     ASSERT_COLUMN_EQ(
         createColumn<Float64>({0, 0, 0}),
         executeFunction(
-            "fts_match_expression_with_boolean_query",
+            "fts_match_boolean_expression",
             {createConstColumn<String>(3, "-slow"),
              createColumn<String>({"quick brown", "slow fox", "brown fox"}),
              createConstColumn<String>(3, prohibited_metadata)},
@@ -180,7 +102,7 @@ try
 }
 CATCH
 
-TEST_F(TestFullText, MatchExpressionRejectsInvalidMetadata)
+TEST_F(TestFullText, MatchBooleanRejectsInvalidMetadata)
 try
 {
     tipb::FTSBooleanQuery boolean_query;
@@ -189,12 +111,12 @@ try
     required->mutable_term()->set_term_type(tipb::FTSBooleanTermWord);
     required->mutable_term()->set_text("quick");
 
-    tipb::FTSMatchExpressionMetadata metadata;
+    tipb::FTSMatchBooleanMetadata metadata;
     metadata.set_version(2);
     *metadata.mutable_boolean_query() = boolean_query;
     ASSERT_THROW(
         executeFunction(
-            "fts_match_expression_with_boolean_query",
+            "fts_match_boolean_expression",
             {createConstColumn<String>(1, "+quick"),
              createColumn<String>({"quick brown"}),
              createConstColumn<String>(1, metadata.SerializeAsString())},
@@ -206,7 +128,7 @@ try
     metadata.clear_boolean_query();
     ASSERT_THROW(
         executeFunction(
-            "fts_match_expression_with_boolean_query",
+            "fts_match_boolean_expression",
             {createConstColumn<String>(1, "+quick"),
              createColumn<String>({"quick brown"}),
              createConstColumn<String>(1, metadata.SerializeAsString())},
@@ -216,7 +138,7 @@ try
 }
 CATCH
 
-TEST_F(TestFullText, MatchExpressionStandardAnalyzerProtocolSettings)
+TEST_F(TestFullText, MatchBooleanStandardAnalyzerProtocolSettings)
 try
 {
     const auto make_metadata = [](const String & term, UInt32 min_token_size, UInt32 max_token_size, bool enable_stopword) {
@@ -236,7 +158,7 @@ try
     ASSERT_COLUMN_EQ(
         createColumn<Float64>({1, 0}),
         executeFunction(
-            "fts_match_expression_with_boolean_query",
+            "fts_match_boolean_expression",
             {createConstColumn<String>(2, "+go"),
              createColumn<String>({"go", "good"}),
              createConstColumn<String>(2, short_term_metadata)},
@@ -247,7 +169,7 @@ try
     ASSERT_COLUMN_EQ(
         createColumn<Float64>({1, 0}),
         executeFunction(
-            "fts_match_expression_with_boolean_query",
+            "fts_match_boolean_expression",
             {createConstColumn<String>(2, "+the"),
              createColumn<String>({"the", "there"}),
              createConstColumn<String>(2, stopword_metadata)},
@@ -258,7 +180,7 @@ try
     ASSERT_COLUMN_EQ(
         createColumn<Float64>({0}),
         executeFunction(
-            "fts_match_expression_with_boolean_query",
+            "fts_match_boolean_expression",
             {createConstColumn<String>(1, "+thé"),
              createColumn<String>({"thé"}),
              createConstColumn<String>(1, collated_stopword_metadata)},
@@ -269,7 +191,7 @@ try
     ASSERT_COLUMN_EQ(
         createColumn<Float64>({0}),
         executeFunction(
-            "fts_match_expression_with_boolean_query",
+            "fts_match_boolean_expression",
             {createConstColumn<String>(1, "+extraordinary"),
              createColumn<String>({"extraordinary"}),
              createConstColumn<String>(1, max_size_metadata)},
@@ -278,7 +200,7 @@ try
 }
 CATCH
 
-TEST_F(TestFullText, MatchExpressionNgramProtocolBooleanQuery)
+TEST_F(TestFullText, MatchBooleanNgramProtocolQuery)
 try
 {
     tipb::FTSBooleanQuery boolean_query;
@@ -297,7 +219,7 @@ try
     ASSERT_COLUMN_EQ(
         createColumn<Float64>({1, 0, 1, 0}),
         executeFunction(
-            "fts_match_expression_with_boolean_query",
+            "fts_match_boolean_expression",
             {createConstColumn<String>(4, "+数据库 -mysql"),
              createColumn<String>({"数据库系统", "MySQL 数据库", "数据库", "数据科学"}),
              createConstColumn<String>(4, metadata)},
@@ -316,14 +238,14 @@ try
     ASSERT_COLUMN_EQ(
         createColumn<Float64>({1, 0}),
         executeFunction(
-            "fts_match_expression_with_boolean_query",
+            "fts_match_boolean_expression",
             {createConstColumn<String>(2, "+mysql"), createColumn<String>({"MySQL", "PostgreSQL"}), createConstColumn<String>(2, case_metadata)},
             ci_collator,
             true));
 }
 CATCH
 
-TEST_F(TestFullText, MatchExpressionNgramPrefix)
+TEST_F(TestFullText, MatchBooleanNgramPrefix)
 try
 {
     const auto make_metadata = [](UInt32 token_size, const String & prefix) {
@@ -343,62 +265,22 @@ try
     const auto utf8mb4_bin = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_BIN);
     ASSERT_COLUMN_EQ(
         createColumn<Float64>({0, 1, 1, 1}),
-        executeFunction("fts_match_expression_with_boolean_query", {query, documents, metadata}, utf8mb4_bin, true));
+        executeFunction("fts_match_boolean_expression", {query, documents, metadata}, utf8mb4_bin, true));
 
     const auto utf8mb4_general_ci = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI);
     ASSERT_COLUMN_EQ(
         createColumn<Float64>({1, 1, 1, 1}),
-        executeFunction("fts_match_expression_with_boolean_query", {query, documents, metadata}, utf8mb4_general_ci, true));
+        executeFunction("fts_match_boolean_expression", {query, documents, metadata}, utf8mb4_general_ci, true));
 
     const auto short_query = createConstColumn<String>(4, "+c*");
     const auto short_metadata = createConstColumn<String>(4, make_metadata(2, "c"));
     ASSERT_COLUMN_EQ(
         createColumn<Float64>({1, 1, 1, 1}),
-        executeFunction("fts_match_expression_with_boolean_query", {short_query, documents, short_metadata}, utf8mb4_general_ci, true));
+        executeFunction("fts_match_boolean_expression", {short_query, documents, short_metadata}, utf8mb4_general_ci, true));
 }
 CATCH
 
-TEST_F(TestFullText, MatchExpressionScore)
-try
-{
-    ASSERT_COLUMN_EQ(
-        createColumn<Float64>({1, 3, 0}),
-        executeFunction(
-            "fts_match_expression",
-            {createConstColumn<String>(3, "quick fox"),
-             createColumn<String>({"quick brown", "quick fox fox", "slow turtle"})}));
-}
-CATCH
-
-TEST_F(TestFullText, MatchExpressionCollation)
-try
-{
-    const auto ci_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI);
-    ASSERT_COLUMN_EQ(
-        createColumn<Float64>({1, 1}),
-        executeFunction(
-            "fts_match_expression",
-            {createConstColumn<String>(2, "+quick"), createColumn<String>({"QUICK runner", "quick runner"})},
-            ci_collator));
-
-    const auto binary_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_BIN);
-    ASSERT_COLUMN_EQ(
-        createColumn<Float64>({0, 1}),
-        executeFunction(
-            "fts_match_expression",
-            {createConstColumn<String>(2, "+quick"), createColumn<String>({"QUICK runner", "quick runner"})},
-            binary_collator));
-
-    ASSERT_COLUMN_EQ(
-        createColumn<Float64>({1, 0}),
-        executeFunction(
-            "fts_match_expression",
-            {createConstColumn<String>(2, "+run*"), createColumn<String>({"RUNNER", "walk"})},
-            ci_collator));
-}
-CATCH
-
-TEST_F(TestFullText, MatchExpressionCollationMatrix)
+TEST_F(TestFullText, MatchBooleanCollationMatrix)
 try
 {
     const auto query = createConstColumn<String>(3, "+cafe");
@@ -421,66 +303,43 @@ try
     const auto utf8mb4_bin = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_BIN);
     ASSERT_COLUMN_EQ(
         createColumn<Float64>({0, 0, 1}),
-        executeFunction("fts_match_expression_with_boolean_query", {query, documents, word_metadata}, utf8mb4_bin, true));
+        executeFunction("fts_match_boolean_expression", {query, documents, word_metadata}, utf8mb4_bin, true));
     ASSERT_COLUMN_EQ(
         createColumn<Float64>({0, 1, 1}),
-        executeFunction("fts_match_expression_with_boolean_query", {prefix_query, documents, prefix_metadata}, utf8mb4_bin, true));
+        executeFunction("fts_match_boolean_expression", {prefix_query, documents, prefix_metadata}, utf8mb4_bin, true));
 
     const auto utf8mb4_0900_bin = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_0900_BIN);
     ASSERT_COLUMN_EQ(
         createColumn<Float64>({0, 0, 1}),
-        executeFunction("fts_match_expression_with_boolean_query", {query, documents, word_metadata}, utf8mb4_0900_bin, true));
+        executeFunction("fts_match_boolean_expression", {query, documents, word_metadata}, utf8mb4_0900_bin, true));
     ASSERT_COLUMN_EQ(
         createColumn<Float64>({0, 1, 1}),
-        executeFunction("fts_match_expression_with_boolean_query", {prefix_query, documents, prefix_metadata}, utf8mb4_0900_bin, true));
+        executeFunction("fts_match_boolean_expression", {prefix_query, documents, prefix_metadata}, utf8mb4_0900_bin, true));
 
     const auto utf8mb4_general_ci = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI);
     ASSERT_COLUMN_EQ(
         createColumn<Float64>({1, 1, 1}),
-        executeFunction("fts_match_expression_with_boolean_query", {query, documents, word_metadata}, utf8mb4_general_ci, true));
+        executeFunction("fts_match_boolean_expression", {query, documents, word_metadata}, utf8mb4_general_ci, true));
     ASSERT_COLUMN_EQ(
         createColumn<Float64>({1, 1, 1}),
-        executeFunction("fts_match_expression_with_boolean_query", {prefix_query, documents, prefix_metadata}, utf8mb4_general_ci, true));
+        executeFunction("fts_match_boolean_expression", {prefix_query, documents, prefix_metadata}, utf8mb4_general_ci, true));
 
     const auto utf8mb4_unicode_ci = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_UNICODE_CI);
     ASSERT_COLUMN_EQ(
         createColumn<Float64>({1, 1, 1}),
-        executeFunction("fts_match_expression_with_boolean_query", {query, documents, word_metadata}, utf8mb4_unicode_ci, true));
+        executeFunction("fts_match_boolean_expression", {query, documents, word_metadata}, utf8mb4_unicode_ci, true));
     ASSERT_COLUMN_EQ(
         createColumn<Float64>({1, 1, 1}),
-        executeFunction("fts_match_expression_with_boolean_query", {prefix_query, documents, prefix_metadata}, utf8mb4_unicode_ci, true));
+        executeFunction("fts_match_boolean_expression", {prefix_query, documents, prefix_metadata}, utf8mb4_unicode_ci, true));
 
     const auto utf8mb4_0900_ai_ci = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_0900_AI_CI);
     ASSERT_COLUMN_EQ(
         createColumn<Float64>({1, 1, 1}),
-        executeFunction("fts_match_expression_with_boolean_query", {query, documents, word_metadata}, utf8mb4_0900_ai_ci, true));
+        executeFunction("fts_match_boolean_expression", {query, documents, word_metadata}, utf8mb4_0900_ai_ci, true));
     ASSERT_COLUMN_EQ(
         createColumn<Float64>({1, 1, 1}),
-        executeFunction("fts_match_expression_with_boolean_query", {prefix_query, documents, prefix_metadata}, utf8mb4_0900_ai_ci, true));
+        executeFunction("fts_match_boolean_expression", {prefix_query, documents, prefix_metadata}, utf8mb4_0900_ai_ci, true));
 }
 CATCH
 
-TEST_F(TestFullText, MatchExpressionNullColumn)
-try
-{
-    ASSERT_COLUMN_EQ(
-        createColumn<Nullable<Float64>>({0, 1}),
-        executeFunction(
-            "fts_match_expression",
-            {createConstColumn<String>(2, "+indexing -postgresql"),
-             createColumn<String>({"Indexing", "Indexing"}),
-             createColumn<Nullable<String>>({"PostgreSQL", {}})}));
-}
-CATCH
-
-TEST_F(TestFullText, MatchBooleanUnsupportedScoreOperator)
-try
-{
-    ASSERT_COLUMN_EQ(
-        createColumn<Float64>({0}),
-        executeFunction(
-            "fts_match_word",
-            {createConstColumn<String>(1, ">quick"), createColumn<String>({"quick"})}));
-}
-CATCH
 } // namespace DB::tests

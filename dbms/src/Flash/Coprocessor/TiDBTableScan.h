@@ -23,16 +23,6 @@ namespace DB
 {
 class DAGContext;
 
-// TiDB allocates this negative column ID for the synthetic MATCH_AGAINST score
-// column. It is not part of the physical table schema and must be represented
-// by a generated-column placeholder in the TiFlash scan pipeline.
-inline constexpr ColumnID TiDBVirtualColFTSScoreID = -2050;
-
-inline bool isTiDBFTSScoreColumn(ColumnID column_id)
-{
-    return column_id == TiDBVirtualColFTSScoreID;
-}
-
 /// TiDBTableScan is a wrap to hide the difference of `TableScan` and `PartitionTableScan`
 class TiDBTableScan
 {
@@ -56,7 +46,6 @@ public:
     const google::protobuf::RepeatedPtrField<tipb::Expr> & getPushedDownFilters() const { return pushed_down_filters; }
 
     const tipb::ANNQueryInfo & getANNQueryInfo() const { return ann_query_info; }
-    const tipb::FTSQueryInfo & getFTSQueryInfo() const { return fts_query_info; }
 
 private:
     const tipb::Executor * table_scan;
@@ -79,7 +68,6 @@ private:
     const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters;
 
     const tipb::ANNQueryInfo ann_query_info;
-    const tipb::FTSQueryInfo fts_query_info;
 
     bool keep_order;
     bool is_fast_scan;

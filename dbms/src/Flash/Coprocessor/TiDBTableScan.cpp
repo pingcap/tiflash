@@ -17,31 +17,6 @@
 
 namespace DB
 {
-namespace
-{
-tipb::FTSQueryInfo extractFtsQuery(const tipb::Executor * table_scan)
-{
-    const auto & indexes = table_scan->tp() == tipb::TypePartitionTableScan
-        ? table_scan->partition_table_scan().used_columnar_indexes()
-        : table_scan->tbl_scan().used_columnar_indexes();
-    const tipb::ColumnarIndexInfo * fts_index = nullptr;
-    for (const auto & index : indexes)
-    {
-        if (index.index_type() != tipb::ColumnarIndexType::TypeFulltext)
-            continue;
-        if (fts_index != nullptr)
-            throw TiFlashException(
-                "A table scan cannot contain multiple full-text indexes",
-                Errors::Coprocessor::BadRequest);
-        fts_index = &index;
-    }
-    if (fts_index == nullptr)
-        return {};
-    RUNTIME_CHECK(fts_index->has_fts_query_info());
-    return fts_index->fts_query_info();
-}
-}
-
 TiDBTableScan::TiDBTableScan(
     const tipb::Executor * table_scan_,
     const String & executor_id_,
@@ -57,7 +32,6 @@ TiDBTableScan::TiDBTableScan(
                                   : table_scan->tbl_scan().pushed_down_filter_conditions())
     , ann_query_info(
           is_partition_table_scan ? table_scan->partition_table_scan().ann_query() : table_scan->tbl_scan().ann_query())
-    , fts_query_info(extractFtsQuery(table_scan))
     // Only No-partition table need keep order when tablescan executor required keep order.
     // If keep_order is not set, keep order for safety.
     , keep_order(
@@ -125,8 +99,6 @@ void TiDBTableScan::constructTableScanForRemoteRead(tipb::TableScan * tipb_table
             *tipb_table_scan->add_columns() = column;
         for (const auto & filter : partition_table_scan.pushed_down_filter_conditions())
             *tipb_table_scan->add_pushed_down_filter_conditions() = filter;
-        for (const auto & index : partition_table_scan.used_columnar_indexes())
-            *tipb_table_scan->add_used_columnar_indexes() = index;
         tipb_table_scan->set_desc(partition_table_scan.desc());
         for (auto id : partition_table_scan.primary_column_ids())
             tipb_table_scan->add_primary_column_ids(id);

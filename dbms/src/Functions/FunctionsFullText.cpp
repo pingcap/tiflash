@@ -34,7 +34,6 @@
 #include <memory>
 #include <string>
 #include <string_view>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -51,7 +50,7 @@ constexpr size_t default_min_token_size = 3;
 constexpr size_t default_max_token_size = 84;
 constexpr size_t default_ngram_token_size = 2;
 constexpr std::string_view ngram_parser = "NGRAM_V1";
-constexpr UInt32 fts_match_expression_metadata_version = 1;
+constexpr UInt32 fts_match_boolean_metadata_version = 1;
 
 struct FullTextToken
 {
@@ -236,107 +235,6 @@ bool textStartsWith(std::string_view value, std::string_view prefix, const TiDB:
     return matcher->match(value.data(), value.size());
 }
 
-bool isBooleanWhitespace(char c)
-{
-    return c == ' ' || c == '\t' || c == '\n' || c == '\r';
-}
-
-bool parseBooleanQuery(
-    std::string_view query,
-    std::vector<BooleanClause> & clauses,
-    const TiDB::TiDBCollatorPtr & collator = nullptr)
-{
-    for (size_t i = 0; i < query.size();)
-    {
-        while (i < query.size() && isBooleanWhitespace(query[i]))
-            ++i;
-        if (i == query.size())
-            break;
-
-        BooleanClause clause;
-        // The STANDARD parser used by #70485 accepts only the operators that
-        // affect filtering. Other InnoDB operators affect scoring or phrase
-        // proximity and must not be silently treated as ordinary text.
-        if (query[i] == '%' || query[i] == '(' || query[i] == ')' || query[i] == '<' || query[i] == '>'
-            || query[i] == '~' || query[i] == '@')
-            return false;
-
-        if (query[i] == '+' || query[i] == '-')
-        {
-            clause.modifier = query[i] == '+' ? BooleanClause::Modifier::Must : BooleanClause::Modifier::MustNot;
-            ++i;
-        }
-
-        if (i == query.size())
-            return false;
-
-        // InnoDB accepts a leading wildcard as a no-op. A trailing wildcard
-        // is handled below and turns a term into a prefix query.
-        if (query[i] == '*')
-        {
-            ++i;
-            if (i == query.size())
-                continue;
-        }
-
-        String raw;
-        if (query[i] == '"')
-        {
-            clause.phrase = true;
-            ++i;
-            const size_t start = i;
-            while (i < query.size() && query[i] != '"' && query[i] != '\n')
-                ++i;
-            if (i == query.size() || query[i] != '"')
-                return false;
-            raw.assign(query.substr(start, i - start));
-            ++i;
-        }
-        else
-        {
-            const size_t start = i;
-            while (i < query.size() && !isBooleanWhitespace(query[i]) && query[i] != '+' && query[i] != '-'
-                   && query[i] != '*' && query[i] != '%' && query[i] != '(' && query[i] != ')' && query[i] != '<'
-                   && query[i] != '>' && query[i] != '~' && query[i] != '@')
-                ++i;
-            if (start == i)
-                return false;
-            raw.assign(query.substr(start, i - start));
-            // The scan above stops before `*`, so consume the wildcard here
-            // and attach prefix semantics to this term. Leaving it for the
-            // next iteration incorrectly turns `run*` into an exact `run`
-            // match (and makes it fail against `runner`).
-            if (i < query.size() && query[i] == '*')
-            {
-                clause.prefix = true;
-                ++i;
-            }
-        }
-
-        const auto terms = clause.prefix ? tokenizeText(raw, collator) : analyzeText(raw, collator);
-        if (clause.prefix && terms.size() != 1)
-            continue;
-
-        const size_t first_position = terms.empty() ? 0 : terms.front().position;
-        for (const auto & term : terms)
-        {
-            const auto code_points = UTF8::countCodePoints(
-                reinterpret_cast<const UInt8 *>(term.text.data()),
-                term.text.size());
-            if (code_points <= default_max_token_size && (clause.prefix || code_points >= default_min_token_size)
-                && (clause.prefix || !isDefaultStopword(term.text)))
-            {
-                clause.terms.push_back(term.text);
-                if (clause.phrase)
-                    clause.offsets.push_back(term.position - first_position);
-            }
-        }
-        if (!clause.terms.empty() || clause.modifier == BooleanClause::Modifier::Must)
-            clauses.push_back(std::move(clause));
-    }
-    return true;
-}
-
 bool matchesPhraseInColumn(
     const BooleanClause & clause,
     const FullTextColumn & document,
@@ -388,59 +286,6 @@ bool matchesClause(
     });
 }
 
-size_t countClauseMatches(
-    const BooleanClause & clause,
-    const FullTextDocument & document,
-    const TiDB::TiDBCollatorPtr & collator)
-{
-    if (!matchesClause(clause, document, collator))
-        return 0;
-
-    if (!clause.phrase)
-    {
-        size_t count = 0;
-        for (const auto & term : clause.terms)
-        {
-            for (const auto & column : document)
-            {
-                count += std::count_if(column.begin(), column.end(), [&](const FullTextToken & token) {
-                    return clause.prefix ? textStartsWith(token.text, term, collator) : textEquals(token.text, term, collator);
-                });
-            }
-        }
-        return count;
-    }
-
-    size_t count = 0;
-    for (const auto & column : document)
-    {
-        for (const auto & start : column)
-        {
-            bool matched = true;
-            for (size_t i = 0; i < clause.terms.size(); ++i)
-            {
-                const auto expected_position = start.position + clause.offsets[i];
-                const auto it = std::find_if(column.begin(), column.end(), [&](const FullTextToken & token) {
-                    return token.position == expected_position;
-                });
-                if (it == column.end() || !textEquals(it->text, clause.terms[i], collator))
-                {
-                    matched = false;
-                    break;
-                }
-            }
-            if (matched)
-                ++count;
-        }
-    }
-    return count;
-}
-
-FullTextColumn analyzeColumn(std::string_view document, const TiDB::TiDBCollatorPtr & collator = nullptr)
-{
-    return analyzeText(document, collator);
-}
-
 FullTextColumn analyzeColumn(
     std::string_view document,
     bool use_ngram,
@@ -452,51 +297,6 @@ FullTextColumn analyzeColumn(
 {
     return use_ngram ? analyzeNgramText(document, ngram_token_size, collator)
                      : analyzeText(document, collator, min_token_size, max_token_size, enable_stopword);
-}
-
-Float64 matchBooleanScore(
-    const std::vector<BooleanClause> & clauses,
-    const FullTextDocument & document,
-    const TiDB::TiDBCollatorPtr & collator = nullptr)
-{
-	if (clauses.empty())
-		return 0;
-
-	bool has_positive = false;
-	bool has_must = false;
-	bool positive_match = false;
-	Float64 score = 0;
-	for (const auto & clause : clauses)
-	{
-        const bool matched = matchesClause(clause, document, collator);
-        const auto clause_score = static_cast<Float64>(countClauseMatches(clause, document, collator));
-		switch (clause.modifier)
-		{
-		case BooleanClause::Modifier::Must:
-			has_must = true;
-			if (!matched)
-				return 0;
-			score += clause_score;
-			break;
-		case BooleanClause::Modifier::MustNot:
-			if (matched)
-				return 0;
-			break;
-		case BooleanClause::Modifier::Should:
-			has_positive = true;
-			positive_match = positive_match || matched;
-			score += clause_score;
-			break;
-		}
-	}
-
-	// With a required term, unprefixed terms are optional. Without one, at
-	// least one unprefixed term must match, matching BOOLEAN MODE semantics.
-	if (!(has_must || !has_positive || positive_match))
-		return 0;
-	// A query containing only prohibited terms has no positive term to score,
-	// but an accepted row still has to pass the boolean filter.
-    return score > 0 ? score : 1;
 }
 
 bool matchBooleanPredicate(
@@ -532,17 +332,6 @@ bool matchBooleanPredicate(
     }
 
     return has_must || !has_positive || positive_match;
-}
-
-Float64 matchBooleanScore(
-    std::string_view query,
-    const FullTextDocument & document,
-    const TiDB::TiDBCollatorPtr & collator = nullptr)
-{
-    std::vector<BooleanClause> clauses;
-    if (!parseBooleanQuery(query, clauses, collator))
-        return 0;
-    return matchBooleanScore(clauses, document, collator);
 }
 
 Float64 matchBooleanScore(
@@ -703,50 +492,6 @@ Float64 matchBooleanScore(
 	return matchBooleanPredicate(clauses, document, collator) ? 1 : 0;
 }
 
-Float64 matchBooleanScore(
-    std::string_view query,
-    std::string_view document,
-    const TiDB::TiDBCollatorPtr & collator = nullptr)
-{
-    return matchBooleanScore(query, FullTextDocument{analyzeColumn(document, collator)}, collator);
-}
-
-size_t countTermMatches(
-    const String & term,
-    const FullTextColumn & document,
-    const TiDB::TiDBCollatorPtr & collator)
-{
-    return std::count_if(document.begin(), document.end(), [&](const FullTextToken & token) {
-        return textEquals(token.text, term, collator);
-    });
-}
-
-Float64 matchNaturalLanguageScore(
-    std::string_view query,
-    const FullTextDocument & document,
-    const TiDB::TiDBCollatorPtr & collator = nullptr)
-{
-    const auto query_tokens = analyzeText(query, collator);
-    if (query_tokens.empty())
-        return 0;
-
-    std::unordered_set<String> unique_query_tokens;
-    Float64 score = 0;
-    for (const auto & query_token : query_tokens)
-    {
-        if (!unique_query_tokens.insert(query_token.text).second)
-            continue;
-        for (const auto & column : document)
-            score += static_cast<Float64>(countTermMatches(query_token.text, column, collator));
-    }
-    return score;
-}
-
-bool queryUsesBooleanSyntax(std::string_view query)
-{
-    return query.find_first_of("+-\"*%()<>~@") != std::string_view::npos;
-}
-
 String getStringAt(const IColumn & column, size_t row)
 {
     if (const auto * column_nullable = typeid_cast<const ColumnNullable *>(&column))
@@ -788,120 +533,21 @@ bool decodeFTSBooleanQuery(const IColumn & column, tipb::FTSBooleanQuery & query
     if (constant == nullptr)
         return false;
     const auto encoded = constant->getValue<String>();
-    tipb::FTSMatchExpressionMetadata metadata;
-    if (!metadata.ParseFromString(encoded) || metadata.version() != fts_match_expression_metadata_version
+    tipb::FTSMatchBooleanMetadata metadata;
+    if (!metadata.ParseFromString(encoded) || metadata.version() != fts_match_boolean_metadata_version
         || !metadata.has_boolean_query())
         return false;
     query = metadata.boolean_query();
+    if (query.query_tokenizer() != "STANDARD_V1" && query.query_tokenizer() != ngram_parser)
+        return false;
     return true;
 }
 
-class FunctionFTSMatchWord final : public IFunction
+class FunctionFTSMatchBooleanExpression final : public IFunction
 {
 public:
-    static constexpr auto name = "fts_match_word";
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionFTSMatchWord>(); }
-
-    String getName() const override { return name; }
-    size_t getNumberOfArguments() const override { return 2; }
-    bool useDefaultImplementationForConstants() const override { return false; }
-    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {0}; }
-    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override { collator = collator_; }
-
-    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
-    {
-        bool nullable = false;
-        for (const auto & argument : arguments)
-        {
-            if (!removeNullable(argument)->isString())
-                throw Exception(
-                    "Illegal type " + argument->getName() + " of argument of function " + getName(),
-                    ErrorCodes::ILLEGAL_COLUMN);
-            nullable = nullable || argument->isNullable();
-        }
-        DataTypePtr result_type = std::make_shared<DataTypeFloat64>();
-        return nullable ? std::make_shared<DataTypeNullable>(result_type) : result_type;
-    }
-
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
-    {
-        const auto * query_column = typeid_cast<const ColumnConst *>(&*block.getByPosition(arguments[0]).column);
-        if (query_column == nullptr)
-            throw Exception(
-                "The query argument of fts_match_word must be constant",
-                ErrorCodes::ILLEGAL_COLUMN);
-
-        const auto & document_column = block.getByPosition(arguments[1]).column;
-        auto output = ColumnFloat64::create(document_column->size());
-        auto & output_data = output->getData();
-
-        if (isNullAt(*query_column, 0))
-        {
-            auto null_map = ColumnUInt8::create(document_column->size(), 1);
-            block.getByPosition(result).column = ColumnNullable::create(std::move(output), std::move(null_map));
-            return;
-        }
-        const auto query = query_column->getValue<String>();
-
-        if (block.getByPosition(arguments[1]).type->isNullable() || document_column->isColumnNullable())
-        {
-            auto null_map = ColumnUInt8::create(document_column->size(), 0);
-            auto & null_map_data = null_map->getData();
-            for (size_t row = 0; row < document_column->size(); ++row)
-            {
-                if (isNullAt(*document_column, row))
-                    null_map_data[row] = 1;
-                else
-                    output_data[row] = matchBooleanScore(query, getStringAt(*document_column, row), collator);
-            }
-            block.getByPosition(result).column = ColumnNullable::create(std::move(output), std::move(null_map));
-            return;
-        }
-
-        if (const auto * document = checkAndGetColumn<ColumnString>(&*document_column))
-        {
-            const auto & chars = document->getChars();
-            const auto & offsets = document->getOffsets();
-            for (size_t row = 0, begin = 0; row < offsets.size(); ++row)
-            {
-                const size_t end = offsets[row];
-                const size_t length = end - begin - 1;
-                output_data[row]
-                    = matchBooleanScore(
-                        query,
-                        std::string_view(reinterpret_cast<const char *>(&chars[begin]), length),
-                        collator);
-                begin = end;
-            }
-        }
-        else if (const auto * document = typeid_cast<const ColumnConst *>(&*document_column))
-        {
-            const auto value = document->getValue<String>();
-            const Float64 matched = matchBooleanScore(query, value, collator);
-            std::fill(output_data.begin(), output_data.end(), matched);
-        }
-        else
-        {
-            throw Exception(
-                "Illegal column " + document_column->getName() + " of argument of function " + getName(),
-                ErrorCodes::ILLEGAL_COLUMN);
-        }
-        block.getByPosition(result).column = std::move(output);
-    }
-
-private:
-    TiDB::TiDBCollatorPtr collator;
-};
-
-class FunctionFTSMatchExpression : public IFunction
-{
-public:
-    static constexpr auto name = "fts_match_expression";
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionFTSMatchExpression>(); }
-
-    explicit FunctionFTSMatchExpression(bool require_boolean_query = false)
-        : require_boolean_query(require_boolean_query)
-    {}
+    static constexpr auto name = "fts_match_boolean_expression";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionFTSMatchBooleanExpression>(); }
 
     String getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 0; }
@@ -916,8 +562,8 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (arguments.size() < 2)
-            throw Exception("fts_match_expression requires a query and at least one column");
+        if (arguments.size() < 3)
+            throw Exception("fts_match_boolean_expression requires a query, at least one column, and metadata");
         bool nullable = false;
         for (const auto & argument : arguments)
         {
@@ -936,7 +582,7 @@ public:
         const auto * query_column = typeid_cast<const ColumnConst *>(&*block.getByPosition(arguments[0]).column);
         if (query_column == nullptr)
             throw Exception(
-                "The query argument of fts_match_expression must be constant",
+                "The query argument of fts_match_boolean_expression must be constant",
                 ErrorCodes::ILLEGAL_COLUMN);
 
         const size_t rows = block.getByPosition(arguments[1]).column->size();
@@ -958,25 +604,19 @@ public:
             block.getByPosition(result).column = std::move(result_column);
             return;
         }
-        const auto query = query_column->getValue<String>();
-        size_t document_argument_end = arguments.size();
+        size_t document_argument_end = arguments.size() - 1;
         tipb::FTSBooleanQuery protocol_boolean_query;
-        const bool has_protocol_boolean_query = require_boolean_query;
-        if (require_boolean_query
-            && (arguments.size() <= 2
-                || !decodeFTSBooleanQuery(*block.getByPosition(arguments.back()).column, protocol_boolean_query)))
+        if (arguments.size() <= 2
+            || !decodeFTSBooleanQuery(*block.getByPosition(arguments.back()).column, protocol_boolean_query))
             throw Exception(
-                "fts_match_expression_with_boolean_query requires valid Boolean query metadata",
+                "fts_match_boolean_expression requires valid Boolean query metadata",
                 ErrorCodes::ILLEGAL_COLUMN);
-        if (has_protocol_boolean_query)
-            --document_argument_end;
-        const bool use_ngram = has_protocol_boolean_query && protocol_boolean_query.query_tokenizer() == ngram_parser;
+        const bool use_ngram = protocol_boolean_query.query_tokenizer() == ngram_parser;
         const size_t ngram_token_size = !use_ngram || protocol_boolean_query.ngram_token_size() == 0
             ? default_ngram_token_size
             : protocol_boolean_query.ngram_token_size();
-        const bool has_standard_config = has_protocol_boolean_query
-            && (protocol_boolean_query.innodb_ft_min_token_size() != 0
-                || protocol_boolean_query.innodb_ft_max_token_size() != 0);
+        const bool has_standard_config = protocol_boolean_query.innodb_ft_min_token_size() != 0
+            || protocol_boolean_query.innodb_ft_max_token_size() != 0;
         const size_t min_token_size = has_standard_config
             ? protocol_boolean_query.innodb_ft_min_token_size()
             : default_min_token_size;
@@ -1009,12 +649,7 @@ public:
                         max_token_size,
                         enable_stopword));
             }
-            if (has_protocol_boolean_query)
-                output_data[row] = matchBooleanScore(protocol_boolean_query, document, collator);
-            else if (queryUsesBooleanSyntax(query))
-                output_data[row] = matchBooleanScore(query, document, collator);
-            else
-                output_data[row] = matchNaturalLanguageScore(query, document, collator);
+            output_data[row] = matchBooleanScore(protocol_boolean_query, document, collator);
         }
         ColumnPtr result_column;
         if (null_map)
@@ -1026,27 +661,11 @@ public:
 
 private:
     TiDB::TiDBCollatorPtr collator;
-    bool require_boolean_query;
-};
-
-class FunctionFTSMatchExpressionWithBooleanQuery final : public FunctionFTSMatchExpression
-{
-public:
-    static constexpr auto name = "fts_match_expression_with_boolean_query";
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionFTSMatchExpressionWithBooleanQuery>(); }
-
-    FunctionFTSMatchExpressionWithBooleanQuery()
-        : FunctionFTSMatchExpression(true)
-    {}
-
-    String getName() const override { return name; }
 };
 }
 
 void registerFunctionsFullText(FunctionFactory & factory)
 {
-    factory.registerFunction<FunctionFTSMatchWord>(FunctionFactory::CaseInsensitive);
-    factory.registerFunction<FunctionFTSMatchExpression>(FunctionFactory::CaseInsensitive);
-    factory.registerFunction<FunctionFTSMatchExpressionWithBooleanQuery>(FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionFTSMatchBooleanExpression>(FunctionFactory::CaseInsensitive);
 }
 } // namespace DB

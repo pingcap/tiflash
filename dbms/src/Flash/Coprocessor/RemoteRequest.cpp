@@ -54,7 +54,7 @@ RemoteRequest RemoteRequest::build(
             const auto & col = table_scan.getColumns()[i];
             auto col_id = col.id;
 
-            if (col.hasGeneratedColumnFlag() || isTiDBFTSScoreColumn(col_id))
+            if (col.hasGeneratedColumnFlag())
             {
                 const auto & col_name = GeneratedColumnPlaceholderBlockInputStream::getColumnName(i);
                 schema.emplace_back(std::make_pair(col_name, std::move(col)));

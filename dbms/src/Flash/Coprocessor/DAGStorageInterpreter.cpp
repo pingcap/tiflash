@@ -1584,7 +1584,7 @@ std::pair<Names, std::vector<UInt8>> DAGStorageInterpreter::getColumnsForTableSc
         auto const & ci = table_scan.getColumns()[i];
         const ColumnID cid = ci.id;
 
-        if (ci.hasGeneratedColumnFlag() || isTiDBFTSScoreColumn(cid))
+        if (ci.hasGeneratedColumnFlag())
         {
             LOG_DEBUG(log, "got column({}) with generated column flag", i);
             const auto & data_type = getDataTypeByColumnInfoForComputingLayer(ci);
@@ -1617,8 +1617,7 @@ std::pair<Names, std::vector<UInt8>> DAGStorageInterpreter::getColumnsForTableSc
     // If the column is not generated column, not in the filter columns and column id is not -1, then it may need cast.
     for (const auto & col : table_scan.getColumns())
         may_need_add_cast_column_tmp.push_back(
-            !col.hasGeneratedColumnFlag() && !isTiDBFTSScoreColumn(col.id) && !filter_col_id_set.contains(col.id)
-            && col.id != -1);
+            !col.hasGeneratedColumnFlag() && !filter_col_id_set.contains(col.id) && col.id != -1);
 
     return {required_columns_tmp, may_need_add_cast_column_tmp};
 }
