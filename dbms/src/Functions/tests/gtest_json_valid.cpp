@@ -146,6 +146,7 @@ try
         auto actions = std::make_shared<ExpressionActions>(block.getColumnsWithTypeAndName());
         DAGExpressionAnalyzer analyzer(block, *context);
         const auto filter_column = analyzer.buildFilterColumn(actions, conditions, true);
+        actions->finalize({filter_column});
         actions->execute(block);
         return block.getByName(filter_column);
     };
@@ -183,6 +184,27 @@ try
         make_field_type(TiDB::TypeLongLong, TiDB::ColumnFlagIsBooleanFlag));
     *guarded_and.add_children() = json_valid;
     *guarded_and.add_children() = is_not_null;
+
+    {
+        Block block({createColumn<String>({"", "invalid json", R"({"a": 1})"}, "json")});
+        auto actions = std::make_shared<ExpressionActions>(block.getColumnsWithTypeAndName());
+        DAGExpressionAnalyzer analyzer(block, *context);
+        const auto result = analyzer.getActions(guarded_and, actions, true);
+        actions->finalize({result});
+        actions->execute(block);
+        ASSERT_COLUMN_EQ(createColumn<UInt8>({0, 0, 1}), block.getByName(result));
+    }
+    {
+        Block block({createColumn<String>({"", "invalid json", R"({"a": 1})"}, "json")});
+        DAGExpressionAnalyzer analyzer(block, *context);
+        auto [before_where, filter_column, after_where] = analyzer.buildPushDownFilter(guarded_conditions, true);
+        before_where->execute(block);
+        ASSERT_COLUMN_EQ(createColumn<UInt8>({0, 0, 1}), block.getByName(filter_column));
+        after_where->execute(block);
+        ASSERT_EQ(block.columns(), 1);
+        ASSERT_TRUE(block.has("json"));
+    }
+
     auto unguarded_or = make_scalar(
         tipb::ScalarFuncSig::LogicalOr,
         make_field_type(TiDB::TypeLongLong, TiDB::ColumnFlagIsBooleanFlag));

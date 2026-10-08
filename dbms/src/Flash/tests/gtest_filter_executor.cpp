@@ -90,6 +90,43 @@ try
 }
 CATCH
 
+TEST_F(FilterExecutorTestRunner, ShortCircuitJsonGuard)
+try
+{
+    context.addMockTable(
+        {"test_db", "json_guard"},
+        {{"document", TiDB::TP::TypeString}},
+        {toNullableVec<String>("document", {"", "invalid json", R"({"a": 1})", {}, R"({"b": 2})"})});
+    auto request = context.scan("test_db", "json_guard").filter(eq(col("document"), col("document"))).build(context);
+    auto * executor = request->has_root_executor() ? request->mutable_root_executor()
+                                                   : request->mutable_executors(request->executors_size() - 1);
+    ASSERT_TRUE(executor->has_selection());
+    auto * selection = executor->mutable_selection();
+    const auto column_ref = selection->conditions(0).children(0);
+    auto json_valid = selection->conditions(0);
+    json_valid.set_sig(tipb::ScalarFuncSig::JsonValidStringSig);
+    json_valid.clear_children();
+    *json_valid.add_children() = column_ref;
+    auto cast_json = json_valid;
+    cast_json.set_sig(tipb::ScalarFuncSig::CastStringAsJson);
+    cast_json.mutable_field_type()->set_tp(TiDB::TypeJSON);
+    cast_json.mutable_field_type()->set_flag(TiDB::ColumnFlagParseToJSON);
+    auto is_null = json_valid;
+    is_null.set_sig(tipb::ScalarFuncSig::StringIsNull);
+    *is_null.mutable_children(0) = cast_json;
+    auto is_not_null = json_valid;
+    is_not_null.set_sig(tipb::ScalarFuncSig::UnaryNotInt);
+    *is_not_null.mutable_children(0) = is_null;
+    selection->clear_conditions();
+    *selection->add_conditions() = json_valid;
+    *selection->add_conditions() = is_not_null;
+
+    WRAP_FOR_TEST_BEGIN
+    executeAndAssertColumnsEqual(request, {toNullableVec<String>({R"({"a": 1})", R"({"b": 2})"})});
+    WRAP_FOR_TEST_END
+}
+CATCH
+
 TEST_F(FilterExecutorTestRunner, andOr)
 try
 {

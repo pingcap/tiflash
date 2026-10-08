@@ -17,6 +17,7 @@
 #include <Columns/ColumnFunction.h>
 #include <Columns/countBytesInFilter.h>
 #include <Columns/filterColumn.h>
+#include <Common/typeid_cast.h>
 #include <Functions/IFunction.h>
 #include <Interpreters/ExpressionActions.h>
 #include <fmt/format.h>
@@ -28,9 +29,14 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-ColumnFunction::ColumnFunction(size_t size, FunctionBasePtr function, const ColumnsWithTypeAndName & columns_to_capture)
+ColumnFunction::ColumnFunction(
+    size_t size,
+    FunctionBasePtr function,
+    const ColumnsWithTypeAndName & columns_to_capture,
+    bool is_short_circuit_argument_)
     : column_size(size)
     , function(function)
+    , is_short_circuit_argument(is_short_circuit_argument_)
 {
     appendArguments(columns_to_capture);
 }
@@ -41,7 +47,7 @@ MutableColumnPtr ColumnFunction::cloneResized(size_t size) const
     for (auto & column : capture)
         column.column = column.column->cloneResized(size);
 
-    return ColumnFunction::create(size, function, capture);
+    return ColumnFunction::create(size, function, capture, is_short_circuit_argument);
 }
 
 ColumnPtr ColumnFunction::replicateRange(size_t start_row, size_t end_row, const IColumn::Offsets & offsets) const
@@ -59,7 +65,7 @@ ColumnPtr ColumnFunction::replicateRange(size_t start_row, size_t end_row, const
         column.column = column.column->replicateRange(start_row, end_row, offsets);
 
     size_t replicated_size = 0 == column_size ? 0 : (offsets[end_row - 1]);
-    return ColumnFunction::create(replicated_size, function, capture);
+    return ColumnFunction::create(replicated_size, function, capture, is_short_circuit_argument);
 }
 
 ColumnPtr ColumnFunction::cut(size_t start, size_t length) const
@@ -68,7 +74,7 @@ ColumnPtr ColumnFunction::cut(size_t start, size_t length) const
     for (auto & column : capture)
         column.column = column.column->cut(start, length);
 
-    return ColumnFunction::create(length, function, capture);
+    return ColumnFunction::create(length, function, capture, is_short_circuit_argument);
 }
 
 ColumnPtr ColumnFunction::filter(const Filter & filter, ssize_t result_size_hint) const
@@ -88,7 +94,7 @@ ColumnPtr ColumnFunction::filter(const Filter & filter, ssize_t result_size_hint
     else
         filtered_size = capture.front().column->size();
 
-    return ColumnFunction::create(filtered_size, function, capture);
+    return ColumnFunction::create(filtered_size, function, capture, is_short_circuit_argument);
 }
 
 ColumnPtr ColumnFunction::permute(const Permutation & perm, size_t limit) const
@@ -107,7 +113,7 @@ ColumnPtr ColumnFunction::permute(const Permutation & perm, size_t limit) const
     for (auto & column : capture)
         column.column = column.column->permute(perm, limit);
 
-    return ColumnFunction::create(limit, function, capture);
+    return ColumnFunction::create(limit, function, capture, is_short_circuit_argument);
 }
 
 std::vector<MutableColumnPtr> ColumnFunction::scatter(
@@ -138,7 +144,7 @@ std::vector<MutableColumnPtr> ColumnFunction::scatter(
     {
         auto & capture = captures[part];
         size_t s = capture.empty() ? counts[part] : capture.front().column->size();
-        columns.emplace_back(ColumnFunction::create(s, function, std::move(capture)));
+        columns.emplace_back(ColumnFunction::create(s, function, std::move(capture), is_short_circuit_argument));
     }
 
     return columns;
@@ -253,7 +259,19 @@ ColumnWithTypeAndName ColumnFunction::reduce() const
                 captured),
             ErrorCodes::LOGICAL_ERROR);
 
-    Block block(captured_columns);
+    if (is_short_circuit_argument && column_size == 0)
+        return {function->getReturnType()->createColumn(), function->getReturnType(), ""};
+
+    auto columns = captured_columns;
+    if (is_short_circuit_argument)
+    {
+        const size_t required_arguments = function->isShortCircuit() ? 1 : columns.size();
+        for (size_t i = 0; i < required_arguments; ++i)
+            if (const auto * deferred = checkAndGetShortCircuitArgument(columns[i].column))
+                columns[i].column = deferred->reduce().column;
+    }
+
+    Block block(columns);
     block.insert({nullptr, function->getReturnType(), ""});
 
     ColumnNumbers arguments(captured_columns.size());
@@ -263,6 +281,58 @@ ColumnWithTypeAndName ColumnFunction::reduce() const
     function->execute(block, arguments, captured_columns.size());
 
     return block.getByPosition(captured_columns.size());
+}
+
+const ColumnFunction * checkAndGetShortCircuitArgument(const ColumnPtr & column)
+{
+    const auto * function = typeid_cast<const ColumnFunction *>(column.get());
+    return function && function->isShortCircuitArgument() ? function : nullptr;
+}
+
+void maskedExecute(ColumnWithTypeAndName & column, const IColumn::Filter & mask)
+{
+    const auto * deferred = checkAndGetShortCircuitArgument(column.column);
+    if (!deferred)
+        return;
+
+    RUNTIME_CHECK(column.column->size() == mask.size());
+    const size_t selected = countBytesInFilter(mask);
+    if (selected == 0)
+    {
+        column.column = column.type->createColumnConstWithDefaultValue(mask.size());
+        return;
+    }
+    if (selected == mask.size())
+    {
+        column.column = deferred->reduce().column;
+        return;
+    }
+
+    auto filtered = deferred->filter(mask, selected);
+    auto result = static_cast<const ColumnFunction &>(*filtered).reduce().column;
+    if (auto materialized = result->convertToFullColumnIfConst())
+        result = std::move(materialized);
+    RUNTIME_CHECK(result->size() == selected);
+
+    // Use the existing bulk insertion interface instead of adding expand() to every TiFlash column type.
+    auto expanded = result->cloneEmpty();
+    expanded->reserve(mask.size());
+    size_t source = 0;
+    for (size_t begin = 0; begin < mask.size();)
+    {
+        size_t end = begin + 1;
+        while (end < mask.size() && (mask[end] != 0) == (mask[begin] != 0))
+            ++end;
+        if (mask[begin])
+        {
+            expanded->insertRangeFrom(*result, source, end - begin);
+            source += end - begin;
+        }
+        else
+            expanded->insertManyDefaults(end - begin);
+        begin = end;
+    }
+    column.column = std::move(expanded);
 }
 
 } // namespace DB

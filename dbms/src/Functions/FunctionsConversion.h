@@ -2650,6 +2650,8 @@ private:
 class FunctionCast final : public IFunctionBase
 {
 public:
+    bool isSuitableForShortCircuitArgumentsExecution() const override { return true; }
+
     using WrapperType = std::function<void(Block &, const ColumnNumbers &, size_t)>;
     using MonotonicityForRange = std::function<Monotonicity(const IDataType &, const Field &, const Field &)>;
 

@@ -114,6 +114,21 @@ public:
       */
     virtual bool isSuitableForConstantFolding() const { return true; }
 
+    /// Short-circuit functions consume deferred arguments themselves. The first argument is always required.
+    virtual bool isShortCircuit() const { return false; }
+
+    /// Opt in only for row-independent functions that can execute on a filtered block.
+    virtual bool isSuitableForShortCircuitArgumentsExecution() const { return false; }
+
+    /// True if the function may throw an exception at execution time,
+    /// e.g. casting an invalid string as JSON, or integer division by zero.
+    /// Note this is different from isSuitableForShortCircuitArgumentsExecution: the latter
+    /// tells whether the function is *safe* to run on a filtered block, while this tells
+    /// whether deferring the function can *avoid an error* (to match MySQL's short-circuit
+    /// semantics). Only subtrees containing functions that can throw are worth deferring;
+    /// ordinary functions are always evaluated eagerly to avoid lazy-execution overhead.
+    virtual bool canThrow() const { return false; }
+
     /** Function is called "injective" if it returns different result for different values of arguments.
       * Example: hex, negate, tuple...
       *
@@ -278,6 +293,15 @@ public:
     virtual bool isDeterministicInScopeOfQuery() const { return true; }
     virtual bool hasInformationAboutMonotonicity() const { return false; }
 
+    virtual bool isShortCircuit() const { return false; }
+    virtual bool isSuitableForShortCircuitArgumentsExecution() const
+    {
+        return isDeterministic() && isDeterministicInScopeOfQuery() && isSuitableForConstantFolding();
+    }
+
+    /// See IFunctionBase::canThrow.
+    virtual bool canThrow() const { return false; }
+
     using Monotonicity = IFunctionBase::Monotonicity;
     virtual Monotonicity getMonotonicityForRange(
         const IDataType & /*type*/,
@@ -366,6 +390,13 @@ public:
     }
 
     bool isSuitableForConstantFolding() const override { return function->isSuitableForConstantFolding(); }
+
+    bool isShortCircuit() const override { return function->isShortCircuit(); }
+    bool isSuitableForShortCircuitArgumentsExecution() const override
+    {
+        return function->isSuitableForShortCircuitArgumentsExecution();
+    }
+    bool canThrow() const override { return function->canThrow(); }
 
     bool isInjective(const Block & sample_block) override { return function->isInjective(sample_block); }
 
