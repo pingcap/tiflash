@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Operators/CTE.h>
 #include <Operators/CTEPartition.h>
@@ -27,6 +28,12 @@ void CTESourceOp::operateSuffixImpl()
 
 OperatorStatus CTESourceOp::readImpl(Block & block)
 {
+    if unlikely (this->block_from_disk)
+    {
+        block.swap(block_from_disk);
+        return OperatorStatus::HAS_OUTPUT;
+    }
+
     auto ret = this->cte_reader->fetchNextBlock(this->id, block);
     switch (ret)
     {
@@ -36,14 +43,42 @@ OperatorStatus CTESourceOp::readImpl(Block & block)
     case CTEOpStatus::OK:
         this->total_rows += block.rows();
         return OperatorStatus::HAS_OUTPUT;
+    case CTEOpStatus::IO_IN:
+        // Expected block is in disk, we need to read it from disk
+        return OperatorStatus::IO_IN;
+    case CTEOpStatus::WAIT_SPILL:
+        // CTE is spilling blocks to disk, we need to wait the finish of spill
+        DB::setNotifyFuture(&(this->io_notifier));
+        return OperatorStatus::WAIT_FOR_NOTIFY;
+    case CTEOpStatus::CANCELLED:
+        return OperatorStatus::CANCELLED;
     case CTEOpStatus::BLOCK_NOT_AVAILABLE:
         DB::setNotifyFuture(&(this->notifier));
         return OperatorStatus::WAIT_FOR_NOTIFY;
     case CTEOpStatus::SINK_NOT_REGISTERED:
         this->sw.start();
         return OperatorStatus::WAITING;
+    default:
+        throw Exception("Should not reach here");
+    }
+}
+
+OperatorStatus CTESourceOp::executeIOImpl()
+{
+    RUNTIME_CHECK(!this->block_from_disk);
+    auto status = this->cte_reader->fetchBlockFromDisk(this->id, this->block_from_disk);
+    switch (status)
+    {
+    case CTEOpStatus::OK:
+        return OperatorStatus::HAS_OUTPUT;
+    case CTEOpStatus::WAIT_SPILL:
+        // CTE is spilling blocks to disk, we need to wait the finish of spill
+        DB::setNotifyFuture(&(this->io_notifier));
+        return OperatorStatus::WAIT_FOR_NOTIFY;
     case CTEOpStatus::CANCELLED:
-        throw Exception(this->cte_reader->getCTE()->getError());
+        return OperatorStatus::CANCELLED;
+    default:
+        throw Exception(fmt::format("Get unexpected status {}", magic_enum::enum_name(status)));
     }
 }
 } // namespace DB
