@@ -33,6 +33,7 @@
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/registerStorages.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TiDB/Schema/SchemaBuilder.h>
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <common/defines.h>
@@ -242,6 +243,76 @@ try
     std::string data = "{\"version\":40,\"type\":31,\"schema_id\":69,\"table_id\":71,\"old_table_id\":0,\"old_schema_"
                        "id\":0,\"affected_options\":null}";
     ASSERT_NO_THROW(diff.deserialize(data));
+
+    const auto assert_mv_action = [](const Int8 action, const SchemaActionType expected_action) {
+        SchemaDiff mv_diff;
+        const auto mv_data = fmt::format(
+            "{{\"version\":40,\"type\":{},\"schema_id\":69,\"table_id\":71,\"old_table_id\":70,\"old_schema_id\":0,"
+            "\"affected_options\":null}}",
+            action);
+        ASSERT_NO_THROW(mv_diff.deserialize(mv_data));
+        ASSERT_EQ(mv_diff.type, expected_action);
+    };
+    assert_mv_action(92, SchemaActionType::ActionMViewRefreshOutOfPlaceCutover);
+    assert_mv_action(93, SchemaActionType::ActionCreateMaterializedViewShadow);
+    assert_mv_action(94, SchemaActionType::ActionDropMaterializedViewShadow);
+}
+CATCH
+
+TEST_F(SchemaSyncTest, MaterializedViewShadowDDL)
+try
+{
+    auto pd_client = global_ctx.getTMTContext().getPDClient();
+    const String db_name = "mock_db";
+    const String mv_name = "mv";
+    const String shadow_name = "__mv_shadow";
+    MockTiDB::instance().newDataBase(db_name);
+
+    const auto columns = ColumnsDescription({{"a", typeFromString("Int64")}});
+    const auto old_mv_id = MockTiDB::instance().newTable(db_name, mv_name, columns, pd_client->getTS(), "");
+    const auto shadow_id = MockTiDB::instance().newTable(db_name, shadow_name, columns, pd_client->getTS(), "");
+    const auto cleanup_shadow_id
+        = MockTiDB::instance().newTable(db_name, "__mv_shadow_cleanup", columns, pd_client->getTS(), "");
+    const auto [db_exists, database_id] = MockTiDB::instance().getDBIDByName(db_name);
+    ASSERT_TRUE(db_exists);
+
+    refreshSchema();
+    refreshTableSchema(old_mv_id);
+    refreshTableSchema(shadow_id);
+    refreshTableSchema(cleanup_shadow_id);
+
+    MockSchemaGetter getter;
+    DatabaseInfoCache databases;
+    TableIDMap table_id_map(Logger::get("MaterializedViewShadowDDL"));
+    SchemaBuilder<MockSchemaGetter, SchemaNameMapper> builder(getter, global_ctx, databases, table_id_map);
+
+    builder.applyDiff(SchemaDiff{
+        .type = SchemaActionType::ActionCreateMaterializedViewShadow,
+        .schema_id = database_id,
+        .table_id = shadow_id,
+    });
+    ASSERT_EQ(table_id_map.findTableIDInDatabaseMap(shadow_id), database_id);
+
+    builder.applyDiff(SchemaDiff{
+        .type = SchemaActionType::ActionDropMaterializedViewShadow,
+        .schema_id = database_id,
+        .table_id = cleanup_shadow_id,
+    });
+    ASSERT_TRUE(mustGetSyncedTable(cleanup_shadow_id)->isTombstone());
+
+    auto shadow_table = MockTiDB::instance().getTableByName(db_name, shadow_name);
+    shadow_table->table_info.name = mv_name;
+    SCOPE_EXIT({ shadow_table->table_info.name = shadow_name; });
+    builder.applyDiff(SchemaDiff{
+        .type = SchemaActionType::ActionMViewRefreshOutOfPlaceCutover,
+        .schema_id = database_id,
+        .table_id = shadow_id,
+        .old_table_id = old_mv_id,
+    });
+
+    ASSERT_TRUE(mustGetSyncedTable(old_mv_id)->isTombstone());
+    ASSERT_FALSE(mustGetSyncedTable(shadow_id)->isTombstone());
+    ASSERT_EQ(mustGetSyncedTable(shadow_id)->getTableInfo().name, mv_name);
 }
 CATCH
 

@@ -299,6 +299,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
     // So in TiFlash schema sync, these actions follow the same path as CreateTable.
     case SchemaActionType::ActionCreateMaterializedViewLog:
     case SchemaActionType::ActionCreateMaterializedView:
+    case SchemaActionType::ActionCreateMaterializedViewShadow:
     {
         /// Because we can't ensure set tiflash replica is earlier than insert,
         /// so we have to update table_id_map when create table.
@@ -323,8 +324,18 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
     case SchemaActionType::DropView:
     case SchemaActionType::ActionDropMaterializedViewLog:
     case SchemaActionType::ActionDropMaterializedView:
+    case SchemaActionType::ActionDropMaterializedViewShadow:
     {
         applyDropTable(diff.schema_id, diff.table_id, magic_enum::enum_name(diff.type));
+        break;
+    }
+    case SchemaActionType::ActionMViewRefreshOutOfPlaceCutover:
+    {
+        // TiDB atomically replaces the old materialized view with the already-built shadow table.
+        // `old_table_id` is the old MV and `table_id` is the shadow table after it takes the MV name.
+        // Tombstone the old local storage and update the shadow storage's local display name.
+        applyDropTable(diff.schema_id, diff.old_table_id, magic_enum::enum_name(diff.type));
+        applyRenameTable(diff.schema_id, diff.table_id);
         break;
     }
     case SchemaActionType::TruncateTable:
