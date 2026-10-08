@@ -18,5 +18,5 @@
 
 namespace DB
 {
-void registerFunctionsFullText(FunctionFactory & factory);
+void registerFunctionsLocalMatchAgainst(FunctionFactory & factory);
 }

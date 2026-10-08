@@ -455,7 +455,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::RegexpInStrSig, "regexp_instr"},
     {tipb::ScalarFuncSig::RegexpReplaceSig, "regexp_replace"},
     {tipb::ScalarFuncSig::RegexpSubstrSig, "regexp_substr"},
-    {tipb::ScalarFuncSig::FTSMatchBooleanExpression, "fts_match_boolean_expression"},
+    {tipb::ScalarFuncSig::LocalMatchAgainstBoolean, "local_match_against_boolean"},
 
     {tipb::ScalarFuncSig::JsonExtractSig, "json_extract"},
     {tipb::ScalarFuncSig::JsonUnquoteSig, "json_unquote"},
