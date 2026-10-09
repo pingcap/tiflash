@@ -44,7 +44,8 @@ public:
 
     void SetUp() override
     {
-        ::DB::tests::TiFlashTestEnv::deleteBucket(*s3_client);
+        if (DB::tests::TiFlashTestEnv::isMockedS3Client())
+            ::DB::tests::TiFlashTestEnv::deleteBucket(*s3_client);
         ::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*s3_client);
     }
 
