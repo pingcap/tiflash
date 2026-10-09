@@ -915,11 +915,6 @@ const DM::ColumnDefines & RNColumnarReadTask::getColumnsToRead() const
     return *shared_reader_context->column_defines;
 }
 
-const TiDB::ColumnInfos & RNColumnarReadTask::getScanColumns() const
-{
-    return shared_reader_context->scan_columns;
-}
-
 int RNColumnarReadTask::getExtraTableIDIndex() const
 {
     return shared_reader_context->extra_table_id_index;
@@ -1654,7 +1649,6 @@ void RNColumnarInputStream::releaseReader()
     current_reader_work.reset();
     late_materialization_interfaces = nullptr;
     late_materialization_filter_action.reset();
-    late_materialization_extra_cast.reset();
     late_materialization_initialized = false;
     late_materialization_probed = false;
 }
@@ -1814,41 +1808,6 @@ Block RNColumnarInputStream::readLateMaterializedBlock()
         for (const auto & column : filter_header)
             early_names_and_types.emplace_back(column.name, column.type);
         DAGExpressionAnalyzer lm_analyzer(std::move(early_names_and_types), context);
-        // The early projection still uses the FFI Nullable(UInt64) version type.
-        // Cast commit_ts before evaluating predicates, keeping the original early
-        // block for materializing the selected output rows.
-        TiDB::ColumnInfos early_column_infos;
-        std::vector<UInt8> need_cast;
-        for (const auto & column : filter_header)
-        {
-            const auto & scan_columns = task->getScanColumns();
-            const auto it = std::find_if(scan_columns.begin(), scan_columns.end(), [&](const auto & info) {
-                return getStorageColumnIDForColumnarRead(info.id) == column.column_id;
-            });
-            RUNTIME_CHECK(it != scan_columns.end(), column.column_id);
-            early_column_infos.push_back(*it);
-            need_cast.push_back(it->id == MutSup::extra_commit_ts_col_id);
-        }
-        ExpressionActionsChain cast_chain;
-        auto & cast_step = lm_analyzer.initAndGetLastStep(cast_chain);
-        auto [has_cast, casted_columns]
-            = lm_analyzer.buildExtraCastsAfterTS(cast_step.actions, need_cast, early_column_infos);
-        if (has_cast)
-        {
-            NamesWithAliases projection;
-            for (size_t i = 0; i < filter_header.columns(); ++i)
-            {
-                const auto & name = filter_header.getByPosition(i).name;
-                projection.emplace_back(casted_columns[i], name);
-                cast_step.required_output.push_back(name);
-            }
-            cast_step.actions->add(ExpressionAction::project(projection));
-            late_materialization_extra_cast = cast_chain.getLastActions();
-            cast_chain.finalize();
-            late_materialization_extra_cast->execute(filter_header);
-        }
-        // Cast results have no storage column ID. Use the original projection
-        // for ID-to-offset mapping; the cast projection preserves its order.
         auto filter_conditions = task->getLateMaterializationFilterConditions(early_block);
         auto filter_actions = lm_analyzer.buildPushDownFilter(filter_conditions, true);
         late_materialization_filter_action = std::make_unique<FilterTransformAction>(
@@ -1858,8 +1817,6 @@ Block RNColumnarInputStream::readLateMaterializedBlock()
     }
     auto & filter_action = *late_materialization_filter_action;
     Block evaluation_block = early_block;
-    if (late_materialization_extra_cast)
-        late_materialization_extra_cast->execute(evaluation_block);
     FilterPtr selection = nullptr;
     bool any_selected = !filter_action.alwaysFalse();
     if (any_selected)

@@ -38,13 +38,11 @@
 #include <pingcap/kv/RegionCache.h>
 #include <tipb/executor.pb.h>
 
-#include <atomic>
 #include <condition_variable>
 #include <deque>
 #include <exception>
 #include <mutex>
 #include <optional>
-#include <string_view>
 #include <unordered_set>
 #pragma GCC diagnostic pop
 
@@ -149,7 +147,6 @@ public:
     const LoggerPtr & getLog() const;
 
     const DM::ColumnDefines & getColumnsToRead() const;
-    const TiDB::ColumnInfos & getScanColumns() const;
 
     int getExtraTableIDIndex() const;
 
@@ -256,7 +253,6 @@ private:
     const String executor_id;
     Block header;
     const ColumnarLateMaterializationInterfaces * late_materialization_interfaces = nullptr;
-    ExpressionActionsPtr late_materialization_extra_cast;
     std::unique_ptr<FilterTransformAction> late_materialization_filter_action;
     bool late_materialization_initialized = false;
     bool late_materialization_probed = false;

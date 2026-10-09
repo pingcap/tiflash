@@ -63,7 +63,8 @@ try
 {
     for (bool partition_scan : {false, true})
     {
-        for (UInt32 flags : {static_cast<UInt32>(0), static_cast<UInt32>(TiDB::ColumnFlagNotNull | TiDB::ColumnFlagUnsigned)})
+        for (UInt32 flags :
+             {static_cast<UInt32>(0), static_cast<UInt32>(TiDB::ColumnFlagNotNull | TiDB::ColumnFlagUnsigned)})
         {
             SCOPED_TRACE(fmt::format("partition_scan={} flags={}", partition_scan, flags));
             tipb::Executor executor;
@@ -281,7 +282,8 @@ CATCH
 TEST_F(HiddenCommitTSColumnTest, ColumnarFilterRemappingUsesStorageProjectionBeforeCast)
 try
 {
-    for (UInt32 flags : {static_cast<UInt32>(0), static_cast<UInt32>(TiDB::ColumnFlagNotNull | TiDB::ColumnFlagUnsigned)})
+    for (UInt32 flags :
+         {static_cast<UInt32>(0), static_cast<UInt32>(TiDB::ColumnFlagNotNull | TiDB::ColumnFlagUnsigned)})
     {
         SCOPED_TRACE(flags);
         TiDB::ColumnInfo business;
