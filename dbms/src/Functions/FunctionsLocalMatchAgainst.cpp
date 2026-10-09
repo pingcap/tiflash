@@ -16,7 +16,6 @@
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnVector.h>
-#include <Common/StringUtils/StringUtils.h>
 #include <Common/UTF8Helpers.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -25,8 +24,8 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsLocalMatchAgainst.h>
+#include <Functions/LocalMatchAgainstTokenChars.h>
 #include <Poco/UTF8String.h>
-#include <Poco/Unicode.h>
 #include <TiDB/Collation/Collator.h>
 #include <tipb/executor.pb.h>
 
@@ -163,15 +162,14 @@ void lowercaseTokenInPlace(String & token)
 
 bool isFullTextToken(UInt32 code_point)
 {
-    return isAlphaNumericASCII(static_cast<char>(code_point)) || code_point == '_' || Poco::Unicode::isAlpha(code_point)
-        || Poco::Unicode::isDigit(code_point);
+    return LocalMatchAgainst::isTokenChar(code_point);
 }
 
 std::pair<UInt32, size_t> decodeCodePoint(std::string_view text, size_t offset)
 {
     const auto decoded = UTF8::utf8Decode(text.data() + offset, text.size() - offset);
     if (decoded.second == 0 || decoded.first == UTF8::UTF8_Error || decoded.second > text.size() - offset)
-        return {static_cast<UInt8>(text[offset]), 1};
+        return {0xFFFD, 1}; // Go's utf8.DecodeRuneInString also consumes one invalid byte as RuneError.
     return {decoded.first, decoded.second};
 }
 
@@ -607,7 +605,12 @@ ColumnMatchResult updateBooleanMatchStatesForColumn(
                     state.matched_terms[term_index] = 1;
                     --state.remaining_terms;
                 }
-            state.matched = state.remaining_terms == 0;
+            // STANDARD may split one SQL term into several words. Required
+            // terms intersect those words, but optional/prohibited terms use
+            // their union, exactly like TiDB's combineBooleanTermNodes.
+            state.matched = clause.modifier == BooleanClause::Modifier::Must
+                ? state.remaining_terms == 0
+                : state.remaining_terms < clause.terms.size();
             if (state.matched)
             {
                 const auto result = markClauseMatched(clause_index);
