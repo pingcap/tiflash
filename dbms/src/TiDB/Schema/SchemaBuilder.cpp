@@ -318,8 +318,8 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
     {
         // Cutover keeps the shadow table ID, updates its display metadata to the logical MV name,
         // and removes the old MV table ID in the same schema version.
-        applyRenameTable(diff.schema_id, diff.table_id);
         applyDropTable(diff.schema_id, diff.old_table_id, magic_enum::enum_name(diff.type));
+        applyRenameTable(diff.schema_id, diff.table_id);
         break;
     }
     case SchemaActionType::RecoverTable:
@@ -329,6 +329,9 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
     }
     case SchemaActionType::DropTable:
     case SchemaActionType::DropView:
+    case SchemaActionType::ActionDropMaterializedViewLog:
+    case SchemaActionType::ActionDropMaterializedView:
+    case SchemaActionType::ActionDropMaterializedViewShadow:
     {
         applyDropTable(diff.schema_id, diff.table_id, magic_enum::enum_name(diff.type));
         break;

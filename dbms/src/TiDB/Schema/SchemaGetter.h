@@ -104,19 +104,20 @@ enum class SchemaActionType : Int8
     ActionAlterTablePartitioning = 71,
     ActionRemovePartitioning = 72,
     ActionAddVectorIndex = 73,
-    ActionCreateMaterializedViewLog = 74,
-    ActionCreateMaterializedView = 75,
-    ActionAlterMaterializedViewRefresh = 76,
-    ActionAlterMaterializedViewLogPurge = 77,
-    ActionAlterMaterializedViewAttributes = 78,
-    ActionMViewRefreshOutOfPlaceCutover = 79,
-    ActionCreateMaterializedViewShadow = 80,
-
-
+    ActionCreateMaterializedViewLog = 85,
+    ActionCreateMaterializedView = 86,
+    ActionDropMaterializedViewLog = 87,
+    ActionDropMaterializedView = 88,
+    ActionAlterMaterializedViewRefresh = 89,
+    ActionAlterMaterializedViewLogPurge = 90,
+    ActionAlterMaterializedViewAttributes = 91,
+    ActionMViewRefreshOutOfPlaceCutover = 92,
+    ActionCreateMaterializedViewShadow = 93,
+    ActionDropMaterializedViewShadow = 94,
     // If we support new type from TiDB.
     // MaxRecognizedType also needs to be changed.
     // It should always be equal to the maximum supported type + 1
-    MaxRecognizedType = 81,
+    MaxRecognizedType = 95,
 };
 
 struct AffectedOption
