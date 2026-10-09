@@ -294,16 +294,28 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         break;
     }
     case SchemaActionType::CreateTable:
-    // In TiDB metadata, CREATE MATERIALIZED VIEW/VIEW LOG creates physical TableInfo entries.
-    // So in TiFlash schema sync, these actions follow the same path as CreateTable.
-    case SchemaActionType::ActionCreateMaterializedViewLog:
-    case SchemaActionType::ActionCreateMaterializedView:
     case SchemaActionType::ActionCreateMaterializedViewShadow:
     {
         /// Because we can't ensure set tiflash replica is earlier than insert,
         /// so we have to update table_id_map when create table.
         /// the table will not be created physically here.
         applyCreateTable(diff.schema_id, diff.table_id, magic_enum::enum_name(diff.type));
+        break;
+    }
+    case SchemaActionType::ActionCreateMaterializedViewLog:
+    case SchemaActionType::ActionCreateMaterializedView:
+    {
+        // TiDB encodes a rolled-back CREATE MV/MLog with table_id=0 and old_table_id
+        // set to the ID created in the earlier schema version. Other diffs, including
+        // the phase-2 metadata reload where table_id == old_table_id, are creates.
+        if (diff.table_id == 0 && diff.old_table_id != 0)
+        {
+            applyDropTable(diff.schema_id, diff.old_table_id, magic_enum::enum_name(diff.type));
+        }
+        else
+        {
+            applyCreateTable(diff.schema_id, diff.table_id, magic_enum::enum_name(diff.type));
+        }
         break;
     }
     case SchemaActionType::ActionAlterMaterializedViewRefresh:
