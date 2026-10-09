@@ -38,4 +38,17 @@ NamesAndTypes toNamesAndTypes(const DAGSchema & dag_schema);
 std::tuple<DM::ColumnDefinesPtr, int, std::vector<std::tuple<UInt64, String, DataTypePtr>>> genColumnDefinesForDisaggregatedRead(
     const TiDBTableScan & table_scan);
 
+// Map filters against the original storage projection, before casts discard column IDs.
+google::protobuf::RepeatedPtrField<tipb::Expr> remapColumnarFilterConditions(
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & filter_conditions,
+    const TiDB::ColumnInfos & scan_columns,
+    const Block & early_block);
+
+// Columnar keeps MVCC versions outside its business-column schema.
+ColumnID getStorageColumnIDForColumnarRead(ColumnID column_id);
+tipb::Executor genTableScanForColumnarRead(const TiDBTableScan & table_scan);
+tipb::TableInfo genTableInfoForColumnarRead(const TiDBTableScan & table_scan);
+std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedReadThroughColumnar(
+    const TiDBTableScan & table_scan);
+
 } // namespace DB

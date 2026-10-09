@@ -224,7 +224,8 @@ ExpressionActionsPtr StorageDisaggregated::getExtraCastExpr(
     {
         if (col.hasGeneratedColumnFlag() || col.id == -1)
             continue;
-        if ((need_timezone_cast && col.tp == TiDB::TypeTimestamp) || col.tp == TiDB::TypeTime)
+        if ((need_timezone_cast && col.tp == TiDB::TypeTimestamp) || col.tp == TiDB::TypeTime
+            || col.id == MutSup::extra_commit_ts_col_id)
         {
             has_cast_candidate = true;
             break;

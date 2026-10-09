@@ -13,17 +13,49 @@
 // limitations under the License.
 
 #include <DataStreams/GeneratedColumnPlaceholderBlockInputStream.h>
+#include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <Flash/Coprocessor/CodecUtils.h>
+#include <Flash/Coprocessor/DAGCodec.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
+#include <IO/Buffer/WriteBufferFromString.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/MutableSupport.h>
 #include <TiDB/Decode/TypeMapping.h>
 #include <TiDB/Schema/TiDB.h>
+
+#include <unordered_map>
 
 
 namespace DB
 {
 namespace
 {
+void remapColumnRefsForLateMaterialization(
+    tipb::Expr & expr,
+    const std::vector<TiDB::ColumnInfo> & scan_columns,
+    const std::unordered_map<ColumnID, size_t> & early_column_indexes)
+{
+    if (expr.tp() == tipb::ExprType::ColumnRef)
+    {
+        const auto column_id = getStorageColumnIDForColumnarRead(getColumnIDForColumnExpr(expr, scan_columns));
+        const auto it = early_column_indexes.find(column_id);
+        if (it == early_column_indexes.end())
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Late-materialization predicate column {} is absent from the early projection",
+                column_id);
+
+        WriteBufferFromOwnString buffer;
+        encodeDAGInt64(static_cast<Int64>(it->second), buffer);
+        expr.set_val(buffer.releaseStr());
+    }
+
+    for (int i = 0; i < expr.children_size(); ++i)
+        remapColumnRefsForLateMaterialization(*expr.mutable_children(i), scan_columns, early_column_indexes);
+}
+
 DataTypePtr getPkType(const TiDB::ColumnInfo & column_info)
 {
     const auto & pk_data_type = getDataTypeByColumnInfoForComputingLayer(column_info);
@@ -136,7 +168,10 @@ std::tuple<DM::ColumnDefinesPtr, int, std::vector<std::tuple<UInt64, String, Dat
             break;
         }
         case MutSup::extra_commit_ts_col_id:
-            throw Exception("Not supported in disaggregated read now");
+            // Read the MVCC version using its storage ID and type. The computing
+            // layer casts it to the type requested by TiDB after the scan.
+            column_defines->emplace_back(MutSup::version_col_id, output_name, MutSup::getVersionColumnType());
+            break;
         default:
             column_defines->emplace_back(DM::ColumnDefine{
                 column_info.id,
@@ -147,6 +182,105 @@ std::tuple<DM::ColumnDefinesPtr, int, std::vector<std::tuple<UInt64, String, Dat
         }
     }
     return {std::move(column_defines), extra_table_id_index, std::move(generated_column_infos)};
+}
+
+google::protobuf::RepeatedPtrField<tipb::Expr> remapColumnarFilterConditions(
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & filter_conditions,
+    const TiDB::ColumnInfos & scan_columns,
+    const Block & early_block)
+{
+    std::unordered_map<ColumnID, size_t> early_column_indexes;
+    early_column_indexes.reserve(early_block.columns());
+    for (size_t index = 0; index < early_block.columns(); ++index)
+    {
+        const auto [it, inserted] = early_column_indexes.emplace(early_block.getByPosition(index).column_id, index);
+        if (!inserted)
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Late-materialization early projection contains duplicate column ID {} at indexes {} and {}",
+                it->first,
+                it->second,
+                index);
+    }
+
+    auto conditions = filter_conditions;
+    for (int i = 0; i < conditions.size(); ++i)
+        remapColumnRefsForLateMaterialization(*conditions.Mutable(i), scan_columns, early_column_indexes);
+    return conditions;
+}
+
+ColumnID getStorageColumnIDForColumnarRead(ColumnID column_id)
+{
+    return column_id == MutSup::extra_commit_ts_col_id ? MutSup::version_col_id : column_id;
+}
+
+tipb::Executor genTableScanForColumnarRead(const TiDBTableScan & table_scan)
+{
+    auto executor = *table_scan.getTableScanPB();
+    auto * columns = table_scan.isPartitionTableScan() ? executor.mutable_partition_table_scan()->mutable_columns()
+                                                       : executor.mutable_tbl_scan()->mutable_columns();
+    // ColumnRef offsets stay unchanged; only the IDs used by storage filters change.
+    for (auto & column : *columns)
+        column.set_column_id(getStorageColumnIDForColumnarRead(column.column_id()));
+    return executor;
+}
+
+tipb::TableInfo genTableInfoForColumnarRead(const TiDBTableScan & table_scan)
+{
+    tipb::TableInfo table_info;
+    bool needs_version = false;
+    bool has_handle = false;
+    const auto & columns = table_scan.isPartitionTableScan()
+        ? table_scan.getTableScanPB()->partition_table_scan().columns()
+        : table_scan.getTableScanPB()->tbl_scan().columns();
+    for (int i = 0; i < columns.size(); ++i)
+    {
+        const auto & column = columns[i];
+        if (table_scan.getColumns()[i].hasGeneratedColumnFlag() || column.column_id() == MutSup::extra_table_id_col_id)
+            continue;
+        if (column.column_id() == MutSup::extra_commit_ts_col_id)
+        {
+            needs_version = true;
+            continue;
+        }
+        *table_info.add_columns() = column;
+        has_handle |= column.column_id() == MutSup::extra_handle_id || column.pk_handle();
+    }
+    if (needs_version && !has_handle)
+    {
+        // CSE pack clean reads synthesize dummy handles AND versions when neither
+        // is requested. Request the handle to require real MVCC buffers. CSE uses
+        // the stored handle schema (including common handles) for this system ID;
+        // this dependency is not added to the TiFlash output columns.
+        auto * handle = table_info.add_columns();
+        handle->set_column_id(MutSup::extra_handle_id);
+        handle->set_tp(TiDB::TypeLongLong);
+        handle->set_flag(TiDB::ColumnFlagNotNull);
+    }
+    return table_info;
+}
+
+std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedReadThroughColumnar(
+    const TiDBTableScan & table_scan)
+{
+    auto [column_defines, extra_table_id_index, generated_column_infos]
+        = genColumnDefinesForDisaggregatedRead(table_scan);
+    for (auto & column : *column_defines)
+    {
+        if (column.id == MutSup::version_col_id)
+        {
+            // CSE's version buffer is nullable: the null map represents tombstones.
+            // MVCC removes them, but the FFI wire format still includes the null map.
+            column.type = makeNullable(MutSup::getVersionColumnType());
+        }
+        else
+        {
+            const auto & converted_type = CodecUtils::convertDataType(*column.type);
+            if (&converted_type != column.type.get())
+                column.type = DataTypeFactory::instance().getOrSet(converted_type.getName());
+        }
+    }
+    return {std::move(column_defines), extra_table_id_index};
 }
 
 ColumnsWithTypeAndName getColumnWithTypeAndName(const NamesAndTypes & names_and_types)

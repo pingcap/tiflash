@@ -207,30 +207,6 @@ void checkRustStrWithView(const RustStrWithView & value, const char * function_n
         throw Exception(ErrorCodes::LOGICAL_ERROR, "{} returned a default RustStrWithView", function_name);
 }
 
-void remapColumnRefsForLateMaterialization(
-    tipb::Expr & expr,
-    const std::vector<TiDB::ColumnInfo> & scan_columns,
-    const std::unordered_map<ColumnID, size_t> & early_column_indexes)
-{
-    if (expr.tp() == tipb::ExprType::ColumnRef)
-    {
-        const auto column_id = getColumnIDForColumnExpr(expr, scan_columns);
-        const auto it = early_column_indexes.find(column_id);
-        if (it == early_column_indexes.end())
-            throw Exception(
-                ErrorCodes::LOGICAL_ERROR,
-                "Late-materialization predicate column {} is absent from the early projection",
-                column_id);
-
-        WriteBufferFromOwnString buffer;
-        encodeDAGInt64(static_cast<Int64>(it->second), buffer);
-        expr.set_val(buffer.releaseStr());
-    }
-
-    for (int i = 0; i < expr.children_size(); ++i)
-        remapColumnRefsForLateMaterialization(*expr.mutable_children(i), scan_columns, early_column_indexes);
-}
-
 void normalizeTimestampCompareDateTimeLiteralToUTC(tipb::Expr & expr, const TimezoneInfo & timezone_info);
 
 struct BucketSplitResult
@@ -423,29 +399,6 @@ std::vector<std::tuple<UInt64, String, DataTypePtr>> genGeneratedColumnInfosForD
     return generated_column_infos;
 }
 
-std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedReadThroughColumnar(
-    const TiDBTableScan & table_scan)
-{
-    DM::ColumnDefinesPtr column_defines;
-    int extra_table_id_index;
-    std::vector<std::tuple<UInt64, String, DataTypePtr>> generated_column_infos;
-    std::tie(column_defines, extra_table_id_index, generated_column_infos)
-        = genColumnDefinesForDisaggregatedRead(table_scan);
-
-    // Columnar only support the legacy string format for now, so convert the data type to legacy one.
-    // We can remove this when columnar supports the new string data type.
-    for (auto & cd : *column_defines)
-    {
-        const auto & converted_type = CodecUtils::convertDataType(*cd.type);
-        if (&converted_type != cd.type.get())
-            cd.type = DataTypeFactory::instance().getOrSet(converted_type.getName());
-    }
-
-    // genColumnDefinesForDisaggregatedRead already skips generated columns.
-    // executeGeneratedColumnPlaceholder fills virtual columns later in the pipeline.
-    return {std::move(column_defines), extra_table_id_index};
-}
-
 std::shared_ptr<RNColumnarReaderSharedContext> buildColumnarReaderSharedContext(
     const LoggerPtr & log,
     const Context & context,
@@ -473,7 +426,7 @@ std::shared_ptr<RNColumnarReaderSharedContext> buildColumnarReaderSharedContext(
         = genColumnDefinesForDisaggregatedReadThroughColumnar(table_scan);
     shared_context->scan_columns = table_scan.getColumns();
 
-    auto table_scan_pb = *table_scan.getTableScanPB();
+    auto table_scan_pb = genTableScanForColumnarRead(table_scan);
     const auto & timezone_info = context.getTimezoneInfo();
     if (table_scan_pb.tp() == tipb::TypePartitionTableScan)
     {
@@ -507,37 +460,7 @@ std::shared_ptr<RNColumnarReaderSharedContext> buildColumnarReaderSharedContext(
     shared_context->has_pushed_down_filter_conditions = !pushed_down_filters.empty();
     shared_context->exact_filter_conditions.MergeFrom(pushed_down_filters);
 
-    tipb::TableInfo table_info;
-    bool is_partition_scan = table_scan.isPartitionTableScan();
-    const auto & tidb_columns = table_scan.getColumns();
-    const auto should_skip_column_for_columnar_table_info = [&](ColumnID column_id) {
-        if (column_id == MutSup::extra_table_id_col_id)
-            return true;
-        for (const auto & ci : tidb_columns)
-        {
-            if (ci.id == column_id && ci.hasGeneratedColumnFlag())
-                return true;
-        }
-        return false;
-    };
-    if (is_partition_scan)
-    {
-        for (const auto & column : table_scan_pb.partition_table_scan().columns())
-        {
-            if (should_skip_column_for_columnar_table_info(column.column_id()))
-                continue;
-            *table_info.add_columns() = column;
-        }
-    }
-    else
-    {
-        for (const auto & column : table_scan_pb.tbl_scan().columns())
-        {
-            if (should_skip_column_for_columnar_table_info(column.column_id()))
-                continue;
-            *table_info.add_columns() = column;
-        }
-    }
+    const auto table_info = genTableInfoForColumnarRead(table_scan);
     shared_context->table_info_data = table_info.SerializeAsString();
     shared_context->ann_query_info_data = table_scan.getANNQueryInfo().SerializeAsString();
     shared_context->fts_query_info_data = table_scan.getFTSQueryInfo().SerializeAsString();
@@ -1010,27 +933,10 @@ const String & RNColumnarReadTask::getExecutorID() const
 google::protobuf::RepeatedPtrField<tipb::Expr> RNColumnarReadTask::getLateMaterializationFilterConditions(
     const Block & early_block) const
 {
-    std::unordered_map<ColumnID, size_t> early_column_indexes;
-    early_column_indexes.reserve(early_block.columns());
-    for (size_t index = 0; index < early_block.columns(); ++index)
-    {
-        const auto [it, inserted] = early_column_indexes.emplace(early_block.getByPosition(index).column_id, index);
-        if (!inserted)
-            throw Exception(
-                ErrorCodes::LOGICAL_ERROR,
-                "Late-materialization early projection contains duplicate column ID {} at indexes {} and {}",
-                it->first,
-                it->second,
-                index);
-    }
-
-    auto conditions = shared_reader_context->exact_filter_conditions;
-    for (int i = 0; i < conditions.size(); ++i)
-        remapColumnRefsForLateMaterialization(
-            *conditions.Mutable(i),
-            shared_reader_context->scan_columns,
-            early_column_indexes);
-    return conditions;
+    return remapColumnarFilterConditions(
+        shared_reader_context->exact_filter_conditions,
+        shared_reader_context->scan_columns,
+        early_block);
 }
 
 std::unordered_set<ColumnID> RNColumnarReadTask::getExactFilterColumnIDs() const
@@ -1044,6 +950,7 @@ std::unordered_set<ColumnID> RNColumnarReadTask::getExactFilterColumnIDs() const
 std::unordered_set<ColumnID> RNColumnarReadTask::getLateMaterializationEarlyColumnIDs() const
 {
     auto column_ids = getExactFilterColumnIDs();
+    column_ids.erase(MutSup::extra_commit_ts_col_id);
     column_ids.insert(MutSup::extra_handle_id);
     column_ids.insert(MutSup::version_col_id);
     for (const auto & column : shared_reader_context->scan_columns)
@@ -1901,7 +1808,7 @@ Block RNColumnarInputStream::readLateMaterializedBlock()
         for (const auto & column : filter_header)
             early_names_and_types.emplace_back(column.name, column.type);
         DAGExpressionAnalyzer lm_analyzer(std::move(early_names_and_types), context);
-        auto filter_conditions = task->getLateMaterializationFilterConditions(filter_header);
+        auto filter_conditions = task->getLateMaterializationFilterConditions(early_block);
         auto filter_actions = lm_analyzer.buildPushDownFilter(filter_conditions, true);
         late_materialization_filter_action = std::make_unique<FilterTransformAction>(
             filter_header,
@@ -2113,8 +2020,11 @@ Block RNColumnarInputStream::readLegacyBlock(const TiFlashRaftProxyHelper * prox
         else
         {
             (void)w.elapsedSecondsFromLastTime();
-            RustStrWithView col_data
-                = proxy_helper->cloud_storage_engine_interfaces.fn_read_column(reader.value(), col_id);
+            // MVCC versions live in a separate buffer, not in the business columns.
+            const auto & interfaces = proxy_helper->cloud_storage_engine_interfaces;
+            RustStrWithView col_data = col_id == MutSup::version_col_id
+                ? interfaces.fn_read_version(reader.value())
+                : interfaces.fn_read_column(reader.value(), col_id);
             duration_read_sec += w.elapsedSecondsFromLastTime();
             SCOPE_EXIT({ RustGcHelper::instance().gcRustPtr(col_data.inner.ptr, col_data.inner.type); });
             physical_table_id = proxy_helper->cloud_storage_engine_interfaces.fn_physical_table_id(reader.value());

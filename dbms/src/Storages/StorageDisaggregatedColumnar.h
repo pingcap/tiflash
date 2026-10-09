@@ -38,13 +38,11 @@
 #include <pingcap/kv/RegionCache.h>
 #include <tipb/executor.pb.h>
 
-#include <atomic>
 #include <condition_variable>
 #include <deque>
 #include <exception>
 #include <mutex>
 #include <optional>
-#include <string_view>
 #include <unordered_set>
 #pragma GCC diagnostic pop
 
