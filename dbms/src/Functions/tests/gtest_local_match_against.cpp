@@ -741,6 +741,20 @@ TEST(LocalMatchAgainstTokenChars, ProtocolV1Classification)
             ASSERT_TRUE(LocalMatchAgainst::isTokenChar(code_point)) << code_point;
         previous = span.last;
     }
+    for (UInt32 code_point = previous + 1; code_point <= 0x10FFFFU; ++code_point)
+        ASSERT_FALSE(LocalMatchAgainst::isTokenChar(code_point)) << code_point;
+
+    // FNV-1a over one 0/1 byte per code point, U+0000..U+10FFFF. The paired
+    // TiDB tests hash Go's Unicode 15.0.0 IsLetter/IsNumber/'_' classification
+    // identically. This fixed regression checksum must not change in v1,
+    // even when the header is regenerated or either toolchain is upgraded.
+    std::uint64_t fingerprint = 14695981039346656037ULL;
+    for (UInt32 code_point = 0; code_point <= 0x10FFFFU; ++code_point)
+    {
+        fingerprint ^= static_cast<std::uint64_t>(LocalMatchAgainst::isTokenChar(code_point));
+        fingerprint *= 1099511628211ULL;
+    }
+    EXPECT_EQ(0x71f51f3810b3b529ULL, fingerprint);
 }
 
 } // namespace DB::tests
