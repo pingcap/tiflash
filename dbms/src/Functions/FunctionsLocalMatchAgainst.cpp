@@ -143,6 +143,8 @@ struct AnalyzerScratch
 struct CompiledBooleanQuery
 {
     std::vector<BooleanClause> clauses;
+    size_t must_clause_count = 0;
+    bool has_must_not = false;
     bool matches_nothing = false;
 };
 
@@ -531,15 +533,49 @@ void resetClauseMatchStates(std::vector<ClauseMatchState> & states)
     }
 }
 
-bool updateBooleanMatchStatesForColumn(
+struct BooleanMatchProgress
+{
+    size_t matched_must_clauses = 0;
+    bool matched_should_clause = false;
+};
+
+enum class ColumnMatchResult
+{
+    Continue,
+    Accepted,
+    Rejected,
+};
+
+ColumnMatchResult updateBooleanMatchStatesForColumn(
     const CompiledBooleanQuery & query,
     const FullTextColumn & column,
     const TiDB::TiDBCollatorPtr & collator,
-    std::vector<ClauseMatchState> & states)
+    std::vector<ClauseMatchState> & states,
+    BooleanMatchProgress & progress)
 {
     const auto & clauses = query.clauses;
     if (query.matches_nothing || clauses.empty())
-        return false;
+        return ColumnMatchResult::Continue;
+
+    const auto markClauseMatched = [&](size_t clause_index) {
+        states[clause_index].matched = true;
+        switch (clauses[clause_index].modifier)
+        {
+        case BooleanClause::Modifier::Must:
+            ++progress.matched_must_clauses;
+            break;
+        case BooleanClause::Modifier::Should:
+            progress.matched_should_clause = true;
+            break;
+        case BooleanClause::Modifier::MustNot:
+            return ColumnMatchResult::Rejected;
+        }
+        if (!query.has_must_not
+            && (query.must_clause_count != 0 ? progress.matched_must_clauses == query.must_clause_count
+                                             : progress.matched_should_clause))
+            return ColumnMatchResult::Accepted;
+        return ColumnMatchResult::Continue;
+    };
 
     // Walk this MATCH column's analyzed tokens once and update every clause's
     // state. Phrase clauses are checked only when their final term is
@@ -557,7 +593,11 @@ bool updateBooleanMatchStatesForColumn(
             if (clause.phrase)
             {
                 if (matchesPhraseEndingAt(clause, column, token, collator))
-                    state.matched = true;
+                {
+                    const auto result = markClauseMatched(clause_index);
+                    if (result != ColumnMatchResult::Continue)
+                        return result;
+                }
                 continue;
             }
 
@@ -568,11 +608,15 @@ bool updateBooleanMatchStatesForColumn(
                     --state.remaining_terms;
                 }
             state.matched = state.remaining_terms == 0;
-            if (state.matched && clause.modifier == BooleanClause::Modifier::MustNot)
-                return true;
+            if (state.matched)
+            {
+                const auto result = markClauseMatched(clause_index);
+                if (result != ColumnMatchResult::Continue)
+                    return result;
+            }
         }
     }
-    return false;
+    return ColumnMatchResult::Continue;
 }
 
 bool evaluateBooleanMatchResult(
@@ -763,6 +807,14 @@ CompiledBooleanQuery compileBooleanQuery(
             compiled.clauses.push_back(std::move(clause));
     }
 
+    for (const auto & clause : compiled.clauses)
+    {
+        if (clause.modifier == BooleanClause::Modifier::Must)
+            ++compiled.must_clause_count;
+        else if (clause.modifier == BooleanClause::Modifier::MustNot)
+            compiled.has_must_not = true;
+    }
+
     // A BOOLEAN MODE query containing only prohibited terms has no positive
     // branch. TiDB's local evaluator treats it as matching no rows.
     if (std::none_of(compiled.clauses.begin(), compiled.clauses.end(), [](const BooleanClause & clause) {
@@ -951,6 +1003,16 @@ public:
             enable_stopword,
             collator,
             stopword_collator);
+        if (compiled_query.matches_nothing)
+        {
+            ColumnPtr result_column;
+            if (null_map)
+                result_column = ColumnNullable::create(std::move(output), std::move(null_map));
+            else
+                result_column = std::move(output);
+            block.getByPosition(result).column = std::move(result_column);
+            return;
+        }
         std::vector<FullTextColumnAccessor> document_columns;
         document_columns.reserve(document_argument_end - 1);
         for (size_t arg = 1; arg < document_argument_end; ++arg)
@@ -963,7 +1025,9 @@ public:
         for (size_t row = 0; row < rows; ++row)
         {
             resetClauseMatchStates(clause_states);
-            bool rejected_by_prohibited_clause = false;
+            BooleanMatchProgress match_progress;
+            bool result_known = false;
+            bool row_matches = false;
             for (const auto & document_column : document_columns)
             {
                 // A NULL MATCH column contributes no tokens. This is
@@ -985,13 +1049,22 @@ public:
                     min_token_size,
                     max_token_size,
                     enable_stopword);
-                if (updateBooleanMatchStatesForColumn(compiled_query, analyzed_column, collator, clause_states))
+                const auto match_result
+                    = updateBooleanMatchStatesForColumn(
+                        compiled_query, analyzed_column, collator, clause_states, match_progress);
+                if (match_result == ColumnMatchResult::Rejected)
                 {
-                    rejected_by_prohibited_clause = true;
+                    result_known = true;
+                    break;
+                }
+                if (match_result == ColumnMatchResult::Accepted)
+                {
+                    result_known = true;
+                    row_matches = true;
                     break;
                 }
             }
-            output_data[row] = rejected_by_prohibited_clause ? 0 : matchBooleanScore(compiled_query, clause_states);
+            output_data[row] = result_known ? (row_matches ? 1 : 0) : matchBooleanScore(compiled_query, clause_states);
         }
         ColumnPtr result_column;
         if (null_map)

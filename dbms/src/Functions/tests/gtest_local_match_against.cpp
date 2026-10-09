@@ -186,6 +186,83 @@ try
 }
 CATCH
 
+TEST_F(TestLocalMatchAgainst, MatchBooleanDecidesPositiveMatchEarly)
+try
+{
+    tipb::LocalMatchAgainstBooleanQuery required_query;
+    auto * required_quick = required_query.add_nodes();
+    required_quick->set_occur(tipb::LocalMatchAgainstBooleanOccurMust);
+    required_quick->set_term_type(tipb::LocalMatchAgainstBooleanTermWord);
+    required_quick->set_text("quick");
+    auto * required_fox = required_query.add_nodes();
+    required_fox->set_occur(tipb::LocalMatchAgainstBooleanOccurMust);
+    required_fox->set_term_type(tipb::LocalMatchAgainstBooleanTermWord);
+    required_fox->set_text("fox");
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Float64>({1, 0}),
+        executeFunction(
+            "local_match_against_boolean",
+            {createConstColumn<String>(2, "+quick +fox"),
+             createColumn<String>({"quick", "quick"}),
+             createColumn<String>({"fox", "quiet"}),
+             createConstColumn<String>(2, serializeLocalMatchAgainstBooleanQuery(required_query))},
+            nullptr,
+            true));
+
+    tipb::LocalMatchAgainstBooleanQuery optional_query;
+    auto * optional_quick = optional_query.add_nodes();
+    optional_quick->set_occur(tipb::LocalMatchAgainstBooleanOccurShould);
+    optional_quick->set_term_type(tipb::LocalMatchAgainstBooleanTermWord);
+    optional_quick->set_text("quick");
+    auto * optional_fox = optional_query.add_nodes();
+    optional_fox->set_occur(tipb::LocalMatchAgainstBooleanOccurShould);
+    optional_fox->set_term_type(tipb::LocalMatchAgainstBooleanTermWord);
+    optional_fox->set_text("fox");
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Float64>({1, 0}),
+        executeFunction(
+            "local_match_against_boolean",
+            {createConstColumn<String>(2, "quick fox"),
+             createColumn<String>({"quick", "quiet"}),
+             createConstColumn<String>(2, serializeLocalMatchAgainstBooleanQuery(optional_query))},
+            nullptr,
+            true));
+}
+CATCH
+
+TEST_F(TestLocalMatchAgainst, MatchBooleanStillChecksProhibitedTermsAfterPositiveMatch)
+try
+{
+    tipb::LocalMatchAgainstBooleanQuery boolean_query;
+    auto * required_quick = boolean_query.add_nodes();
+    required_quick->set_occur(tipb::LocalMatchAgainstBooleanOccurMust);
+    required_quick->set_term_type(tipb::LocalMatchAgainstBooleanTermWord);
+    required_quick->set_text("quick");
+    auto * required_fox = boolean_query.add_nodes();
+    required_fox->set_occur(tipb::LocalMatchAgainstBooleanOccurMust);
+    required_fox->set_term_type(tipb::LocalMatchAgainstBooleanTermWord);
+    required_fox->set_text("fox");
+    auto * prohibited_slow = boolean_query.add_nodes();
+    prohibited_slow->set_occur(tipb::LocalMatchAgainstBooleanOccurMustNot);
+    prohibited_slow->set_term_type(tipb::LocalMatchAgainstBooleanTermWord);
+    prohibited_slow->set_text("slow");
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Float64>({1, 0, 0}),
+        executeFunction(
+            "local_match_against_boolean",
+            {createConstColumn<String>(3, "+quick +fox -slow"),
+             createColumn<String>({"quick", "quick", "quick"}),
+             createColumn<String>({"fox", "fox", "quiet"}),
+             createColumn<String>({"calm", "slow", "slow"}),
+             createConstColumn<String>(3, serializeLocalMatchAgainstBooleanQuery(boolean_query))},
+            nullptr,
+            true));
+}
+CATCH
+
 TEST_F(TestLocalMatchAgainst, MatchBooleanRejectsInvalidProtocol)
 try
 {
