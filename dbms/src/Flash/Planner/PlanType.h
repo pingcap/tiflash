@@ -44,6 +44,7 @@ struct PlanType
         GetResult = 19,
         CTESource = 20,
         CTESink = 21,
+        TiCiScan = 22,
     };
     PlanTypeEnum enum_value;
 

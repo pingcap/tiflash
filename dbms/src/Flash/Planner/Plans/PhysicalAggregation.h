@@ -67,6 +67,14 @@ public:
 
     const Block & getSampleBlock() const override;
 
+    bool isCountNotNullableColumnWithoutGroupbyKey() const
+    {
+        // Only single count(const/not-null column) without any group by key pattern can be optimized by TiCI
+        // TiFlash will convert count(const/not-null column) to count(), so the argument_names is empty.
+        return aggregate_descriptions.size() == 1 && aggregate_descriptions[0].function->getName() == "count"
+            && aggregate_descriptions[0].argument_names.empty() && aggregation_keys.empty();
+    }
+
 private:
     HashTableStatsProfileInfoPtr initHashTableStatsProfileInfo(Context & context);
 

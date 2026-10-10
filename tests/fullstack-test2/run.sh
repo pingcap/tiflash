@@ -36,7 +36,7 @@ ${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml down
 clean_data_log
 
 # FIXME: now vector does not support run with encryption-at-rest enabled
-${COMPOSE} -f cluster.yaml -f tiflash-dt-disable-encrypt.yaml up -d
+start_cluster_with_tiflash cluster.yaml tiflash-dt-disable-encrypt.yaml
 wait_env
 
 echo "PD version:"
@@ -51,13 +51,13 @@ ${COMPOSE} -f cluster.yaml -f tiflash-dt-disable-encrypt.yaml down
 clean_data_log
 
 
-${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml up -d
+start_cluster_with_tiflash cluster.yaml tiflash-dt.yaml
 wait_env
 ${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test2 true'
 ${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml down
 clean_data_log
 
-${COMPOSE} -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml up -d
+start_cluster_with_tiflash cluster.yaml tiflash-dt-disable-local-tunnel.yaml
 wait_env
 ${COMPOSE} -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test/mpp'
 ${COMPOSE} -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml down
