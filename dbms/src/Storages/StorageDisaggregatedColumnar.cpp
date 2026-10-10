@@ -474,6 +474,13 @@ std::shared_ptr<RNColumnarReaderSharedContext> buildColumnarReaderSharedContext(
     shared_context->scan_columns = table_scan.getColumns();
 
     auto table_scan_pb = *table_scan.getTableScanPB();
+    // Exact LM evaluation uses session-timezone expressions after extra casts.
+    // Keep these separate from the UTC-normalized conditions sent to columnar.
+    shared_context->exact_filter_conditions = filter_conditions.conditions;
+    shared_context->exact_filter_conditions.MergeFrom(
+        table_scan_pb.tp() == tipb::TypePartitionTableScan
+            ? table_scan_pb.partition_table_scan().pushed_down_filter_conditions()
+            : table_scan_pb.tbl_scan().pushed_down_filter_conditions());
     const auto & timezone_info = context.getTimezoneInfo();
     if (table_scan_pb.tp() == tipb::TypePartitionTableScan)
     {
@@ -500,12 +507,10 @@ std::shared_ptr<RNColumnarReaderSharedContext> buildColumnarReaderSharedContext(
         shared_context->filter_conditions_data.append(reinterpret_cast<const char *>(&len), sizeof(len));
         shared_context->filter_conditions_data.append(data.data(), data.size());
     }
-    shared_context->exact_filter_conditions = conditions;
     const auto & pushed_down_filters = table_scan_pb.tp() == tipb::TypePartitionTableScan
         ? table_scan_pb.partition_table_scan().pushed_down_filter_conditions()
         : table_scan_pb.tbl_scan().pushed_down_filter_conditions();
     shared_context->has_pushed_down_filter_conditions = !pushed_down_filters.empty();
-    shared_context->exact_filter_conditions.MergeFrom(pushed_down_filters);
 
     tipb::TableInfo table_info;
     bool is_partition_scan = table_scan.isPartitionTableScan();
@@ -1054,6 +1059,50 @@ std::unordered_set<ColumnID> RNColumnarReadTask::getLateMaterializationEarlyColu
     return column_ids;
 }
 
+std::unique_ptr<FilterTransformAction> RNColumnarReadTask::buildLateMaterializationFilterAction(
+    const Block & header) const
+{
+    DAGExpressionAnalyzer analyzer(header, getContext());
+    ExpressionActionsChain chain;
+    auto & step = analyzer.initAndGetLastStep(chain);
+    const auto & actions = step.actions;
+
+    TiDB::ColumnInfos early_scan_columns(header.columns());
+    std::vector<UInt8> may_need_cast(header.columns(), 0);
+    for (size_t i = 0; i < header.columns(); ++i)
+    {
+        const auto column_id = header.getByPosition(i).column_id;
+        const auto scan_column = std::find_if(
+            shared_reader_context->scan_columns.begin(),
+            shared_reader_context->scan_columns.end(),
+            [column_id](const auto & candidate) { return candidate.id == column_id; });
+        if (scan_column != shared_reader_context->scan_columns.end())
+        {
+            early_scan_columns[i] = *scan_column;
+            may_need_cast[i] = 1;
+        }
+    }
+
+    // LM evaluates before the normal pipeline's extraCast. Use the same casts
+    // on this evaluation copy: UTC timestamp -> session timezone, Int64 -> MyDuration.
+    auto [has_cast, casted_columns] = analyzer.buildExtraCastsAfterTS(actions, may_need_cast, early_scan_columns);
+    if (has_cast)
+    {
+        NamesWithAliases projection;
+        for (size_t i = 0; i < header.columns(); ++i)
+            projection.emplace_back(casted_columns[i], header.getByPosition(i).name);
+        actions->add(ExpressionAction::project(projection));
+    }
+
+    const auto conditions = getLateMaterializationFilterConditions(header);
+    const auto filter_column = analyzer.buildFilterColumn(actions, conditions, true);
+    for (const auto & column : header)
+        step.required_output.push_back(column.name);
+    step.required_output.push_back(filter_column);
+    chain.finalize();
+    return std::make_unique<FilterTransformAction>(header, actions, filter_column);
+}
+
 bool RNColumnarReadTask::isLateMaterializationFilterEligible(String * reason) const
 {
     const auto setReason = [reason](const char * value) {
@@ -1110,21 +1159,6 @@ bool RNColumnarReadTask::isLateMaterializationFilterEligible(String * reason) co
                 "Columnar late materialization filter is ineligible: reason=filter_uses_generated_column, "
                 "column_id={}, executor_id={}, table_id={}",
                 column.id,
-                getExecutorID(),
-                getLogicalTableID());
-            return false;
-        }
-        const bool needs_timezone_cast
-            = !shared_reader_context->context->getTimezoneInfo().is_utc_timezone && column.tp == TiDB::TypeTimestamp;
-        if (needs_timezone_cast || column.tp == TiDB::TypeTime)
-        {
-            setReason("unsupported_filter_column_type");
-            LOG_DEBUG(
-                shared_reader_context->log,
-                "Columnar late materialization filter is ineligible: reason=unsupported_filter_column_type, "
-                "column_id={}, timezone_cast={}, executor_id={}, table_id={}",
-                column.id,
-                needs_timezone_cast,
                 getExecutorID(),
                 getLogicalTableID());
             return false;
@@ -1892,21 +1926,8 @@ Block RNColumnarInputStream::readLateMaterializedBlock()
 
     if (!late_materialization_filter_action)
     {
-        // The filter expression and action graph are invariant for one input
-        // stream. Building them for every 10K-row batch makes LM spend most of
-        // its time in planner setup instead of row filtering.
-        Block filter_header = early_block.cloneEmpty();
-        NamesAndTypes early_names_and_types;
-        early_names_and_types.reserve(filter_header.columns());
-        for (const auto & column : filter_header)
-            early_names_and_types.emplace_back(column.name, column.type);
-        DAGExpressionAnalyzer lm_analyzer(std::move(early_names_and_types), context);
-        auto filter_conditions = task->getLateMaterializationFilterConditions(filter_header);
-        auto filter_actions = lm_analyzer.buildPushDownFilter(filter_conditions, true);
-        late_materialization_filter_action = std::make_unique<FilterTransformAction>(
-            filter_header,
-            std::get<0>(filter_actions),
-            std::get<1>(filter_actions));
+        // The filter expression and action graph are invariant for one input stream.
+        late_materialization_filter_action = task->buildLateMaterializationFilterAction(early_block.cloneEmpty());
     }
     auto & filter_action = *late_materialization_filter_action;
     Block evaluation_block = early_block;

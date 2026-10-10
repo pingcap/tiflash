@@ -163,6 +163,8 @@ public:
 
     std::unordered_set<ColumnID> getLateMaterializationEarlyColumnIDs() const;
 
+    std::unique_ptr<FilterTransformAction> buildLateMaterializationFilterAction(const Block & header) const;
+
     bool isLateMaterializationFilterEligible(String * reason = nullptr) const;
 
     bool shouldLogLateMaterialization(bool enabled);
