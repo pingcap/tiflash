@@ -22,7 +22,7 @@
 namespace DB::LocalMatchAgainst
 {
 // Generated from Go's Unicode 15.0.0 categories L and N. TiDB uses its standard
-// library and strictly tests that Unicode version and the protocol-v1 checksum.
+// library and strictly tests that Unicode version and the Unicode 15.0.0 checksum.
 // Regenerate/check this header using the paired TiDB generator. Never change
 // an existing protocol version's classification; deploy TiFlash support for a
 // new version before TiDB emits it. ASCII and '_' use the fast path below.

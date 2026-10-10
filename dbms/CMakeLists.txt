@@ -404,6 +404,29 @@ if (ENABLE_TESTS)
     endif()
 
     add_check(bench_dbms)
+
+    # Allow Local MATCH smoke/Release benchmarks without building unrelated
+    # vector-index benchmarks and their external dataset dependencies.
+    add_executable(bench_local_match_against EXCLUDE_FROM_ALL
+        ${TiFlash_SOURCE_DIR}/dbms/src/Functions/tests/bench_local_match_against.cpp
+        ${TiFlash_SOURCE_DIR}/dbms/src/Server/StorageConfigParser.cpp
+        ${TiFlash_SOURCE_DIR}/dbms/src/Server/UserConfigParser.cpp
+        ${TiFlash_SOURCE_DIR}/dbms/src/Server/RaftConfigParser.cpp
+        ${TiFlash_SOURCE_DIR}/dbms/src/AggregateFunctions/AggregateFunctionSum.cpp)
+    target_include_directories(bench_local_match_against BEFORE PRIVATE
+        ${SPARCEHASH_INCLUDE_DIR} ${benchmark_SOURCE_DIR}/include)
+    target_compile_definitions(bench_local_match_against PUBLIC DBMS_PUBLIC_GTEST)
+    target_link_libraries(bench_local_match_against
+        gtest
+        benchmark
+        dbms
+        test_util_bench_main
+        tiflash_functions
+        server_for_test
+        delta_merge
+        tiflash_aggregate_functions
+        kvstore)
+    add_check(bench_local_match_against)
 endif ()
 
 # dbms

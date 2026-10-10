@@ -27,11 +27,48 @@ class TestLocalMatchAgainst : public DB::tests::FunctionTest
 
 namespace
 {
+// Count token comparisons rather than wall time, so a repeated full-column
+// verification regression is deterministic even on a loaded CI host.
+class CountingMatchCollator final : public TiDB::ITiDBCollator
+{
+public:
+    CountingMatchCollator()
+        : ITiDBCollator(UTF8MB4_BIN)
+        , inner(getCollator(UTF8MB4_BIN))
+    {
+        collator_type = inner->getCollatorType();
+    }
+
+    int compare(const char * lhs, size_t lhs_size, const char * rhs, size_t rhs_size) const override
+    {
+        ++comparisons;
+        return inner->compare(lhs, lhs_size, rhs, rhs_size);
+    }
+    StringRef convert(const char * s, size_t size, String & buffer, std::vector<size_t> * lens) const override
+    {
+        return inner->convert(s, size, buffer, lens);
+    }
+    StringRef sortKeyNoTrim(const char * s, size_t size, String & buffer) const override
+    {
+        return inner->sortKeyNoTrim(s, size, buffer);
+    }
+    StringRef sortKey(const char * s, size_t size, String & buffer) const override
+    {
+        return inner->sortKey(s, size, buffer);
+    }
+    std::unique_ptr<IPattern> pattern() const override { return inner->pattern(); }
+
+    mutable size_t comparisons = 0;
+
+private:
+    TiDB::TiDBCollatorPtr inner;
+};
+
 String serializeLocalMatchAgainstBooleanQuery(const tipb::LocalMatchAgainstBooleanQuery & query)
 {
     auto encoded_query = query;
     if (encoded_query.version() == 0)
-        encoded_query.set_version(1); // The tests exercise the currently supported Local MATCH semantic protocol.
+        encoded_query.set_version(2); // The tests exercise the currently supported Local MATCH semantic protocol.
     if (encoded_query.parser() == tipb::LocalMatchAgainstParser::LocalMatchAgainstParserInvalid)
         encoded_query.set_parser(tipb::LocalMatchAgainstParser::LocalMatchAgainstParserStandard);
     if (encoded_query.stopword_mode() == tipb::LocalMatchAgainstStopwordMode::LocalMatchAgainstStopwordModeInvalid)
@@ -62,6 +99,283 @@ try
              createConstColumn<String>(4, metadata)},
             nullptr,
             true));
+}
+CATCH
+
+TEST_F(TestLocalMatchAgainst, FilteredPhraseVerificationComparisonGrowth)
+try
+{
+    tipb::LocalMatchAgainstBooleanQuery query;
+    auto * node = query.add_nodes();
+    node->set_occur(tipb::LocalMatchAgainstBooleanOccurMust);
+    node->set_term_type(tipb::LocalMatchAgainstBooleanTermPhrase);
+    node->set_text("foo a bar");
+    size_t small_comparisons = 0;
+    for (const size_t repeats : {32, 256})
+    {
+        String document;
+        for (size_t i = 0; i < repeats; ++i)
+            document += "foo x bar ";
+        CountingMatchCollator collator;
+        ASSERT_COLUMN_EQ(
+            createColumn<Float64>({0}),
+            executeFunction(
+                "local_match_against_boolean",
+                {createConstColumn<String>(1, "+\"foo a bar\""),
+                 createColumn<String>({document}),
+                 createConstColumn<String>(1, serializeLocalMatchAgainstBooleanQuery(query))},
+                &collator,
+                true));
+        if (repeats == 32)
+            small_comparisons = collator.comparisons;
+        else
+        {
+            EXPECT_GT(small_comparisons, 0);
+            // Eight times the input may add proportional token work, not
+            // 64 times the work from rechecking every failed anchor.
+            EXPECT_LE(collator.comparisons, small_comparisons * 12);
+        }
+    }
+}
+CATCH
+
+TEST_F(TestLocalMatchAgainst, FilteredPhraseVerificationCacheScope)
+try
+{
+    String miss;
+    for (size_t i = 0; i < 64; ++i)
+        miss += "foo x bar ";
+    for (const auto occur :
+         {tipb::LocalMatchAgainstBooleanOccurMust,
+          tipb::LocalMatchAgainstBooleanOccurShould,
+          tipb::LocalMatchAgainstBooleanOccurMustNot})
+    {
+        tipb::LocalMatchAgainstBooleanQuery query;
+        if (occur != tipb::LocalMatchAgainstBooleanOccurShould)
+        {
+            auto * anchor = query.add_nodes();
+            anchor->set_occur(tipb::LocalMatchAgainstBooleanOccurMust);
+            anchor->set_term_type(tipb::LocalMatchAgainstBooleanTermWord);
+            anchor->set_text("foo");
+        }
+        auto * phrase = query.add_nodes();
+        phrase->set_occur(occur);
+        phrase->set_term_type(tipb::LocalMatchAgainstBooleanTermPhrase);
+        phrase->set_text("foo a bar");
+        const Float64 hit = occur == tipb::LocalMatchAgainstBooleanOccurMustNot ? 0 : 1;
+        const Float64 no_phrase = occur == tipb::LocalMatchAgainstBooleanOccurMustNot ? 1 : 0;
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<Float64>>({hit, hit, no_phrase, hit, no_phrase}),
+            executeFunction(
+                "local_match_against_boolean",
+                {createConstColumn<String>(5, "foo \"foo a bar\""),
+                 createColumn<Nullable<String>>({miss, "foo a bar", miss, {}, miss}),
+                 createColumn<Nullable<String>>({"foo a bar", miss, {}, "foo a bar", miss}),
+                 createConstColumn<String>(5, serializeLocalMatchAgainstBooleanQuery(query))},
+                nullptr,
+                true));
+    }
+
+    tipb::LocalMatchAgainstBooleanQuery query;
+    auto * required = query.add_nodes();
+    required->set_occur(tipb::LocalMatchAgainstBooleanOccurMust);
+    required->set_term_type(tipb::LocalMatchAgainstBooleanTermPhrase);
+    required->set_text("foo x bar");
+    auto * excluded = query.add_nodes();
+    excluded->set_occur(tipb::LocalMatchAgainstBooleanOccurMustNot);
+    excluded->set_term_type(tipb::LocalMatchAgainstBooleanTermPhrase);
+    excluded->set_text("foo a bar");
+    ASSERT_COLUMN_EQ(
+        createColumn<Float64>({1, 0, 1}),
+        executeFunction(
+            "local_match_against_boolean",
+            {createConstColumn<String>(3, "+\"foo x bar\" -\"foo a bar\""),
+             createColumn<String>({miss, "foo x bar foo a bar", miss}),
+             createConstColumn<String>(3, serializeLocalMatchAgainstBooleanQuery(query))},
+            nullptr,
+            true));
+
+    // NGRAM size 3 removes "the" but retains "foo" and "zoo".
+    // STANDARD exercises the same cache with a filtered stopword.
+    for (const bool ngram : {false, true})
+    {
+        tipb::LocalMatchAgainstBooleanQuery filtered;
+        filtered.set_parser(ngram ? tipb::LocalMatchAgainstParserNgram : tipb::LocalMatchAgainstParserStandard);
+        filtered.set_ngram_token_size(3);
+        auto * node = filtered.add_nodes();
+        node->set_occur(tipb::LocalMatchAgainstBooleanOccurMust);
+        node->set_term_type(tipb::LocalMatchAgainstBooleanTermPhrase);
+        node->set_text("foo the zoo");
+        String repetitive_miss;
+        for (size_t i = 0; i < 64; ++i)
+            repetitive_miss += "foo xyz zoo ";
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<Float64>>({1, 1, 0, 1}),
+            executeFunction(
+                "local_match_against_boolean",
+                {createConstColumn<String>(4, "+\"foo the zoo\""),
+                 createColumn<Nullable<String>>({repetitive_miss, "foo the zoo", repetitive_miss, {}}),
+                 createColumn<Nullable<String>>({"foo the zoo", repetitive_miss, {}, "foo the zoo"}),
+                 createConstColumn<String>(4, serializeLocalMatchAgainstBooleanQuery(filtered))},
+                nullptr,
+                true));
+    }
+}
+CATCH
+
+TEST_F(TestLocalMatchAgainst, MatchBooleanMySQLCharacterBoundaries)
+try
+{
+    tipb::LocalMatchAgainstBooleanQuery query;
+    query.set_parser(tipb::LocalMatchAgainstParserNgram);
+    query.set_ngram_token_size(2);
+    query.set_stopword_mode(tipb::LocalMatchAgainstStopwordModeDisabled);
+    auto * node = query.add_nodes();
+    node->set_occur(tipb::LocalMatchAgainstBooleanOccurMust);
+    node->set_term_type(tipb::LocalMatchAgainstBooleanTermPrefix);
+    node->set_text("a");
+    ASSERT_COLUMN_EQ(
+        createColumn<Float64>({0, 1, 1, 1, 1, 1}),
+        executeFunction(
+            "local_match_against_boolean",
+            {createConstColumn<String>(6, "+a*"),
+             createColumn<String>({"a,b", "a，b", "a🙃b", "a𞤀b", "a𝟙b", String("ab") + char(0xff) + "cd"}),
+             createConstColumn<String>(6, serializeLocalMatchAgainstBooleanQuery(query))},
+            nullptr,
+            true));
+
+    query.set_parser(tipb::LocalMatchAgainstParserStandard);
+    node->set_term_type(tipb::LocalMatchAgainstBooleanTermWord);
+    node->set_text("foo");
+    ASSERT_COLUMN_EQ(
+        createColumn<Float64>({1, 1, 1, 0}),
+        executeFunction(
+            "local_match_against_boolean",
+            {createConstColumn<String>(4, "+foo"),
+             createColumn<String>({"foo𞤀bar", "foo𝟙bar", "foo🙃bar", "foobar"}),
+             createConstColumn<String>(4, serializeLocalMatchAgainstBooleanQuery(query))},
+            nullptr,
+            true));
+}
+CATCH
+
+TEST_F(TestLocalMatchAgainst, MatchBooleanFilteredPhraseVerification)
+try
+{
+    for (const bool ngram : {false, true})
+        for (const bool stopwords : {false, true})
+        {
+            tipb::LocalMatchAgainstBooleanQuery query;
+            query.set_parser(ngram ? tipb::LocalMatchAgainstParserNgram : tipb::LocalMatchAgainstParserStandard);
+            query.set_ngram_token_size(2);
+            query.set_stopword_mode(
+                stopwords ? tipb::LocalMatchAgainstStopwordModeBuiltin : tipb::LocalMatchAgainstStopwordModeDisabled);
+            auto * node = query.add_nodes();
+            node->set_occur(tipb::LocalMatchAgainstBooleanOccurMust);
+            node->set_term_type(tipb::LocalMatchAgainstBooleanTermPhrase);
+            node->set_text("quick x fox");
+            ASSERT_COLUMN_EQ(
+                createColumn<Float64>({ngram ? 0.0 : 1.0, 0, 0}),
+                executeFunction(
+                    "local_match_against_boolean",
+                    {createConstColumn<String>(3, "+\"quick x fox\""),
+                     createColumn<String>({"quick x fox", "quick the fox", "quick xx fox"}),
+                     createConstColumn<String>(3, serializeLocalMatchAgainstBooleanQuery(query))},
+                    nullptr,
+                    true));
+            node->set_text("foo bar");
+            ASSERT_COLUMN_EQ(
+                createColumn<Float64>({1, 1, ngram ? 0.0 : 1.0, ngram ? 0.0 : 1.0, 0}),
+                executeFunction(
+                    "local_match_against_boolean",
+                    {createConstColumn<String>(5, "+\"foo bar\""),
+                     createColumn<String>({"foo bar", "foo,bar", "foo，bar", "foo🙃bar", "foobar"}),
+                     createConstColumn<String>(5, serializeLocalMatchAgainstBooleanQuery(query))},
+                    nullptr,
+                    true));
+        }
+
+    tipb::LocalMatchAgainstBooleanQuery query;
+    query.set_parser(tipb::LocalMatchAgainstParserNgram);
+    query.set_ngram_token_size(3);
+    query.set_stopword_mode(tipb::LocalMatchAgainstStopwordModeBuiltin);
+    auto * node = query.add_nodes();
+    node->set_occur(tipb::LocalMatchAgainstBooleanOccurMust);
+    node->set_term_type(tipb::LocalMatchAgainstBooleanTermPhrase);
+    for (const String & text : {String("quick the fox"), String("quick a fox")})
+    {
+        node->set_text(text);
+        ASSERT_COLUMN_EQ(
+            createColumn<Float64>({1, 1, 1}),
+            executeFunction(
+                "local_match_against_boolean",
+                {createConstColumn<String>(3, text),
+                 createColumn<String>({"quick fox", "quick x fox", "fox quick"}),
+                 createConstColumn<String>(3, serializeLocalMatchAgainstBooleanQuery(query))},
+                nullptr,
+                true));
+    }
+    for (const String & text : {String("foo a zoo"), String("foo zoo")})
+    {
+        node->set_text(text);
+        const Float64 expected = text == "foo zoo" ? 1.0 : 0.0;
+        ASSERT_COLUMN_EQ(
+            createColumn<Float64>({expected, expected, expected, 0}),
+            executeFunction(
+                "local_match_against_boolean",
+                {createConstColumn<String>(4, text),
+                 createColumn<String>({"foo zoo", "foo a zoo", "foo x zoo", "zoo foo"}),
+                 createConstColumn<String>(4, serializeLocalMatchAgainstBooleanQuery(query))},
+                nullptr,
+                true));
+    }
+}
+CATCH
+
+TEST_F(TestLocalMatchAgainst, MatchBooleanFilteredRequiredClause)
+try
+{
+    for (const bool ngram : {false, true})
+        for (const String & term : {String("the"), String("x")})
+        {
+            tipb::LocalMatchAgainstBooleanQuery query;
+            query.set_parser(ngram ? tipb::LocalMatchAgainstParserNgram : tipb::LocalMatchAgainstParserStandard);
+            query.set_ngram_token_size(3);
+            auto * required = query.add_nodes();
+            required->set_occur(tipb::LocalMatchAgainstBooleanOccurMust);
+            required->set_term_type(tipb::LocalMatchAgainstBooleanTermWord);
+            required->set_text(term);
+            auto * optional = query.add_nodes();
+            optional->set_occur(tipb::LocalMatchAgainstBooleanOccurShould);
+            optional->set_term_type(tipb::LocalMatchAgainstBooleanTermWord);
+            optional->set_text("quick");
+            const auto columns = ColumnsWithTypeAndName{
+                createConstColumn<String>(3, "+" + term + " quick"),
+                createColumn<Nullable<String>>({"the x quick", String(4096, 'x'), {}}),
+                createConstColumn<String>(3, serializeLocalMatchAgainstBooleanQuery(query))};
+            ASSERT_COLUMN_EQ(
+                createColumn<Nullable<Float64>>({0, 0, 0}),
+                executeFunction("local_match_against_boolean", columns, nullptr, true));
+
+            // NULL AGAINST is an empty search even for an impossible query.
+            auto null_search = columns;
+            null_search[0] = createConstColumn<Nullable<String>>(3, {});
+            ASSERT_COLUMN_EQ(
+                createColumn<Nullable<Float64>>({0, 0, 0}),
+                executeFunction("local_match_against_boolean", null_search, nullptr, true));
+
+            // Envelope validation must still reject an unknown version.
+            query.set_version(999);
+            EXPECT_THROW(
+                executeFunction(
+                    "local_match_against_boolean",
+                    {columns[0],
+                     columns[1],
+                     createConstColumn<String>(3, serializeLocalMatchAgainstBooleanQuery(query))},
+                    nullptr,
+                    true),
+                Exception);
+        }
 }
 CATCH
 
@@ -122,8 +436,7 @@ try
         executeFunction(
             "local_match_against_boolean",
             {createConstColumn<String>(4, "+\"quick the fox\""),
-             createColumn<String>(
-                 {"quick the fox", "quick fox", "quick slow the fox", "quick the fox quick the fox"}),
+             createColumn<String>({"quick the fox", "quick fox", "quick slow the fox", "quick the fox quick the fox"}),
              createConstColumn<String>(4, metadata)},
             nullptr,
             true));
@@ -268,7 +581,7 @@ TEST_F(TestLocalMatchAgainst, MatchBooleanRejectsInvalidProtocol)
 try
 {
     tipb::LocalMatchAgainstBooleanQuery boolean_query;
-    boolean_query.set_version(2);
+    boolean_query.set_version(1); // Version 1 must not be silently reinterpreted as version 2.
     boolean_query.set_parser(tipb::LocalMatchAgainstParser::LocalMatchAgainstParserStandard);
     boolean_query.set_stopword_mode(tipb::LocalMatchAgainstStopwordMode::LocalMatchAgainstStopwordModeBuiltin);
     boolean_query.set_stopword_collation("utf8mb4_bin");
@@ -287,7 +600,7 @@ try
             true),
         Exception);
 
-    boolean_query.set_version(1);
+    boolean_query.set_version(2);
     boolean_query.set_parser(tipb::LocalMatchAgainstParser::LocalMatchAgainstParserInvalid);
     ASSERT_THROW(
         executeFunction(
@@ -564,7 +877,11 @@ try
     const auto short_metadata = createConstColumn<String>(4, make_metadata(2, "c"));
     ASSERT_COLUMN_EQ(
         createColumn<Float64>({1, 1, 1, 1}),
-        executeFunction("local_match_against_boolean", {short_query, documents, short_metadata}, utf8mb4_general_ci, true));
+        executeFunction(
+            "local_match_against_boolean",
+            {short_query, documents, short_metadata},
+            utf8mb4_general_ci,
+            true));
 }
 CATCH
 
@@ -583,10 +900,10 @@ try
         node->set_text(term);
         return serializeLocalMatchAgainstBooleanQuery(boolean_query);
     };
-    const auto word_metadata = createConstColumn<String>(
-        3, make_metadata(tipb::LocalMatchAgainstBooleanTermWord, "cafe"));
-    const auto prefix_metadata = createConstColumn<String>(
-        3, make_metadata(tipb::LocalMatchAgainstBooleanTermPrefix, "caf"));
+    const auto word_metadata
+        = createConstColumn<String>(3, make_metadata(tipb::LocalMatchAgainstBooleanTermWord, "cafe"));
+    const auto prefix_metadata
+        = createConstColumn<String>(3, make_metadata(tipb::LocalMatchAgainstBooleanTermPrefix, "caf"));
 
     const auto utf8mb4_bin = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_BIN);
     ASSERT_COLUMN_EQ(
@@ -602,7 +919,11 @@ try
         executeFunction("local_match_against_boolean", {query, documents, word_metadata}, utf8mb4_0900_bin, true));
     ASSERT_COLUMN_EQ(
         createColumn<Float64>({0, 1, 1}),
-        executeFunction("local_match_against_boolean", {prefix_query, documents, prefix_metadata}, utf8mb4_0900_bin, true));
+        executeFunction(
+            "local_match_against_boolean",
+            {prefix_query, documents, prefix_metadata},
+            utf8mb4_0900_bin,
+            true));
 
     const auto utf8mb4_general_ci = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI);
     ASSERT_COLUMN_EQ(
@@ -610,7 +931,11 @@ try
         executeFunction("local_match_against_boolean", {query, documents, word_metadata}, utf8mb4_general_ci, true));
     ASSERT_COLUMN_EQ(
         createColumn<Float64>({1, 1, 1}),
-        executeFunction("local_match_against_boolean", {prefix_query, documents, prefix_metadata}, utf8mb4_general_ci, true));
+        executeFunction(
+            "local_match_against_boolean",
+            {prefix_query, documents, prefix_metadata},
+            utf8mb4_general_ci,
+            true));
 
     const auto utf8mb4_unicode_ci = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_UNICODE_CI);
     ASSERT_COLUMN_EQ(
@@ -618,7 +943,11 @@ try
         executeFunction("local_match_against_boolean", {query, documents, word_metadata}, utf8mb4_unicode_ci, true));
     ASSERT_COLUMN_EQ(
         createColumn<Float64>({1, 1, 1}),
-        executeFunction("local_match_against_boolean", {prefix_query, documents, prefix_metadata}, utf8mb4_unicode_ci, true));
+        executeFunction(
+            "local_match_against_boolean",
+            {prefix_query, documents, prefix_metadata},
+            utf8mb4_unicode_ci,
+            true));
 
     const auto utf8mb4_0900_ai_ci = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_0900_AI_CI);
     ASSERT_COLUMN_EQ(
@@ -626,7 +955,11 @@ try
         executeFunction("local_match_against_boolean", {query, documents, word_metadata}, utf8mb4_0900_ai_ci, true));
     ASSERT_COLUMN_EQ(
         createColumn<Float64>({1, 1, 1}),
-        executeFunction("local_match_against_boolean", {prefix_query, documents, prefix_metadata}, utf8mb4_0900_ai_ci, true));
+        executeFunction(
+            "local_match_against_boolean",
+            {prefix_query, documents, prefix_metadata},
+            utf8mb4_0900_ai_ci,
+            true));
 }
 CATCH
 
@@ -635,9 +968,10 @@ try
 {
     const auto collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_BIN);
     const auto documents = createColumn<String>({"foo only", "bar only", "foo bar", "baz foo", "baz bar", "baz qux"});
-    for (const auto occur : {tipb::LocalMatchAgainstBooleanOccurShould,
-                            tipb::LocalMatchAgainstBooleanOccurMust,
-                            tipb::LocalMatchAgainstBooleanOccurMustNot})
+    for (const auto occur :
+         {tipb::LocalMatchAgainstBooleanOccurShould,
+          tipb::LocalMatchAgainstBooleanOccurMust,
+          tipb::LocalMatchAgainstBooleanOccurMustNot})
     {
         tipb::LocalMatchAgainstBooleanQuery query;
         auto * node = query.add_nodes();
@@ -653,9 +987,8 @@ try
         }
         const auto expected = occur == tipb::LocalMatchAgainstBooleanOccurShould
             ? createColumn<Float64>({1, 1, 1, 1, 1, 0})
-            : occur == tipb::LocalMatchAgainstBooleanOccurMust
-            ? createColumn<Float64>({0, 0, 1, 0, 0, 0})
-            : createColumn<Float64>({0, 0, 0, 0, 0, 1});
+            : occur == tipb::LocalMatchAgainstBooleanOccurMust ? createColumn<Float64>({0, 0, 1, 0, 0, 0})
+                                                               : createColumn<Float64>({0, 0, 0, 0, 0, 1});
         const auto metadata = createConstColumn<String>(6, serializeLocalMatchAgainstBooleanQuery(query));
         ASSERT_COLUMN_EQ(
             expected,
@@ -689,7 +1022,15 @@ try
 {
     const auto collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_BIN);
     const auto documents = createColumn<String>(
-        {"foo🙃bar", "foo👁bar", "foo bar", "foobar", "foo𞤀bar", "foo𝟙bar", "foo\U0002EBF0bar", "foo\xff" "bar"});
+        {"foo🙃bar",
+         "foo👁bar",
+         "foo bar",
+         "foobar",
+         "foo𞤀bar",
+         "foo𝟙bar",
+         "foo\U0002EBF0bar",
+         "foo\xff"
+         "bar"});
     for (const auto size : {0U, 2U, 3U})
     {
         tipb::LocalMatchAgainstBooleanQuery query;
@@ -701,7 +1042,7 @@ try
         node->set_term_type(tipb::LocalMatchAgainstBooleanTermWord);
         node->set_text(size == 0 ? "foo" : "foob");
         ASSERT_COLUMN_EQ(
-            size == 0 ? createColumn<Float64>({1, 1, 1, 0, 0, 0, 1, 1})
+            size == 0 ? createColumn<Float64>({1, 1, 1, 0, 1, 1, 1, 1})
                       : createColumn<Float64>({0, 0, 0, 1, 0, 0, 0, 0}),
             executeFunction(
                 "local_match_against_boolean",
@@ -710,9 +1051,10 @@ try
                  createConstColumn<String>(8, serializeLocalMatchAgainstBooleanQuery(query))},
                 collator,
                 true));
-        node->set_text("𞤀bar");
+        // TiDB's version-2 NGRAM Boolean lexer emits "bar" for this search.
+        node->set_text(size == 0 ? "𞤀bar" : "bar");
         ASSERT_COLUMN_EQ(
-            size == 0 ? createColumn<Float64>({0, 1, 0}) : createColumn<Float64>({1, 1, 0}),
+            createColumn<Float64>({1, 1, 1}),
             executeFunction(
                 "local_match_against_boolean",
                 {createConstColumn<String>(3, "+𞤀bar"),

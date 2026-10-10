@@ -30,6 +30,7 @@
 #include <tipb/executor.pb.h>
 
 #include <algorithm>
+#include <limits>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -51,11 +52,14 @@ constexpr size_t default_min_token_size = 3;
 constexpr size_t default_max_token_size = 84;
 constexpr size_t default_ngram_token_size = 2;
 // This is the Local MATCH semantic protocol version, not the TiDB/TiFlash
-// product version. Version 1 fixes the Boolean AST interpretation, analyzer
+// product version. Version 2 fixes the Boolean AST interpretation, analyzer
 // behavior, and built-in stopword set. TiFlash must support a version before
 // TiDB emits it; unknown versions are rejected, and existing versions must
 // never be reinterpreted with changed semantics.
-constexpr UInt32 local_match_against_protocol_version = 1;
+// Version 2 returns zero for NULL searches and uses MySQL's multibyte NGRAM
+// document scanner. STANDARD and the NGRAM Boolean lexer use BMP word
+// characters; filtered phrases also verify the unfiltered document stream.
+constexpr UInt32 local_match_against_protocol_version = 2;
 
 struct FullTextToken
 {
@@ -130,6 +134,7 @@ struct BooleanClause
     bool prefix = false;
     std::vector<String> terms;
     std::vector<size_t> offsets;
+    std::unique_ptr<BooleanClause> verification;
     std::vector<std::unique_ptr<TiDB::ITiDBCollator::IPattern>> prefix_matchers;
 };
 
@@ -145,6 +150,7 @@ struct CompiledBooleanQuery
     size_t must_clause_count = 0;
     bool has_must_not = false;
     bool matches_nothing = false;
+    bool needs_verification = false;
 };
 
 void lowercaseTokenInPlace(String & token)
@@ -162,7 +168,7 @@ void lowercaseTokenInPlace(String & token)
 
 bool isFullTextToken(UInt32 code_point)
 {
-    return LocalMatchAgainst::isTokenChar(code_point);
+    return code_point <= 0xFFFF && LocalMatchAgainst::isTokenChar(code_point);
 }
 
 std::pair<UInt32, size_t> decodeCodePoint(std::string_view text, size_t offset)
@@ -177,14 +183,19 @@ void tokenizeTextInto(
     std::string_view text,
     FullTextColumn & result,
     const TiDB::TiDBCollatorPtr & collator = nullptr,
-    bool preserve_case = false)
+    bool preserve_case = false,
+    bool ngram_document = false)
 {
     result.clear();
     size_t position = 0;
     for (size_t i = 0; i < text.size();)
     {
         const auto [code_point, length] = decodeCodePoint(text, i);
-        if (!isFullTextToken(code_point))
+        // MySQL ngram_parse retains any valid multibyte character but stops
+        // at malformed UTF-8. ASCII non-word characters still split runs.
+        if (ngram_document && length == 1 && code_point >= 0x80)
+            break;
+        if (!(ngram_document && length > 1) && !isFullTextToken(code_point))
         {
             i += length;
             continue;
@@ -195,7 +206,9 @@ void tokenizeTextInto(
         while (i < text.size())
         {
             const auto [code_point, length] = decodeCodePoint(text, i);
-            if (!isFullTextToken(code_point))
+            if (ngram_document && length == 1 && code_point >= 0x80)
+                break;
+            if (!(ngram_document && length > 1) && !isFullTextToken(code_point))
                 break;
             ++code_points;
             i += length;
@@ -343,7 +356,7 @@ void analyzeNgramTextInto(
         return;
 
     const bool preserve_case = enable_stopword && static_cast<bool>(stopword_collator);
-    tokenizeTextInto(text, scratch.raw_tokens, collator, preserve_case);
+    tokenizeTextInto(text, scratch.raw_tokens, collator, preserve_case, true);
     size_t next_position_base = 0;
     auto & char_boundaries = scratch.char_boundaries;
     for (auto & token : scratch.raw_tokens)
@@ -360,10 +373,10 @@ void analyzeNgramTextInto(
         }
 
         const size_t char_count = token.code_points;
-        const size_t base_position = std::max(token.position, next_position_base);
+        const size_t base_position = next_position_base;
         if (char_count < ngram_token_size)
         {
-            next_position_base = std::max(next_position_base, token.position + 1);
+            // A short document run emits no grams and contributes no position.
             continue;
         }
 
@@ -457,11 +470,10 @@ struct ClauseMatchState
     std::vector<UInt8> matched_terms;
     size_t remaining_terms = 0;
     bool matched = false;
+    bool phrase_verification_failed = false;
 };
 
-void initializeClauseMatchStates(
-    const std::vector<BooleanClause> & clauses,
-    std::vector<ClauseMatchState> & states)
+void initializeClauseMatchStates(const std::vector<BooleanClause> & clauses, std::vector<ClauseMatchState> & states)
 {
     states.resize(clauses.size());
     for (size_t i = 0; i < clauses.size(); ++i)
@@ -514,11 +526,9 @@ void analyzeColumnInto(
     bool enable_stopword = true)
 {
     if (use_ngram)
-        analyzeNgramTextInto(
-            document, output, scratch, ngram_token_size, collator, stopword_collator, enable_stopword);
+        analyzeNgramTextInto(document, output, scratch, ngram_token_size, collator, stopword_collator, enable_stopword);
     else
-        analyzeTextInto(
-            document, output, collator, stopword_collator, min_token_size, max_token_size, enable_stopword);
+        analyzeTextInto(document, output, collator, stopword_collator, min_token_size, max_token_size, enable_stopword);
 }
 
 void resetClauseMatchStates(std::vector<ClauseMatchState> & states)
@@ -547,6 +557,7 @@ enum class ColumnMatchResult
 ColumnMatchResult updateBooleanMatchStatesForColumn(
     const CompiledBooleanQuery & query,
     const FullTextColumn & column,
+    const FullTextColumn & unfiltered_column,
     const TiDB::TiDBCollatorPtr & collator,
     std::vector<ClauseMatchState> & states,
     BooleanMatchProgress & progress)
@@ -554,6 +565,12 @@ ColumnMatchResult updateBooleanMatchStatesForColumn(
     const auto & clauses = query.clauses;
     if (query.matches_nothing || clauses.empty())
         return ColumnMatchResult::Continue;
+
+    // Raw phrase verification searches the entire column, so a failed result
+    // needs no recheck at later anchors. Unlike positive clause matches, this
+    // negative cache belongs only to this column, not other MATCH columns.
+    for (auto & state : states)
+        state.phrase_verification_failed = false;
 
     const auto markClauseMatched = [&](size_t clause_index) {
         states[clause_index].matched = true;
@@ -585,13 +602,21 @@ ColumnMatchResult updateBooleanMatchStatesForColumn(
         {
             const auto & clause = clauses[clause_index];
             auto & state = states[clause_index];
-            if (state.matched || clause.terms.empty())
+            if (state.matched || state.phrase_verification_failed || clause.terms.empty())
                 continue;
 
             if (clause.phrase)
             {
                 if (matchesPhraseEndingAt(clause, column, token, collator))
                 {
+                    if (clause.verification
+                        && !std::any_of(unfiltered_column.begin(), unfiltered_column.end(), [&](const auto & end) {
+                               return matchesPhraseEndingAt(*clause.verification, unfiltered_column, end, collator);
+                           }))
+                    {
+                        state.phrase_verification_failed = true;
+                        continue;
+                    }
                     const auto result = markClauseMatched(clause_index);
                     if (result != ColumnMatchResult::Continue)
                         return result;
@@ -622,9 +647,7 @@ ColumnMatchResult updateBooleanMatchStatesForColumn(
     return ColumnMatchResult::Continue;
 }
 
-bool evaluateBooleanMatchResult(
-    const CompiledBooleanQuery & query,
-    const std::vector<ClauseMatchState> & states)
+bool evaluateBooleanMatchResult(const CompiledBooleanQuery & query, const std::vector<ClauseMatchState> & states)
 {
     if (query.matches_nothing || query.clauses.empty())
         return false;
@@ -680,6 +703,7 @@ CompiledBooleanQuery compileBooleanQuery(
     for (const auto & node : query.nodes())
     {
         BooleanClause clause;
+        size_t first_query_position = 0;
         switch (node.occur())
         {
         case tipb::LocalMatchAgainstBooleanOccur::LocalMatchAgainstBooleanOccurMust:
@@ -705,6 +729,7 @@ CompiledBooleanQuery compileBooleanQuery(
             {
                 clause.phrase = true;
                 const size_t first_position = terms.empty() ? 0 : terms.front().position;
+                first_query_position = first_position;
                 for (const auto & token : terms)
                 {
                     clause.terms.push_back(token.text);
@@ -733,6 +758,7 @@ CompiledBooleanQuery compileBooleanQuery(
                     // "caf*" ("ca", "af" at token size 2) never match.
                     clause.phrase = true;
                     const size_t first_position = terms.front().position;
+                    first_query_position = first_position;
                     for (const auto & token : terms)
                     {
                         clause.terms.push_back(token.text);
@@ -786,7 +812,30 @@ CompiledBooleanQuery compileBooleanQuery(
         {
             clause.phrase = true;
             const auto terms = analyze_query(node.text());
+            if (use_ngram)
+            {
+                const auto words = tokenizeText(node.text(), collator);
+                bool seen_indexed_word = false;
+                if (std::any_of(words.begin(), words.end(), [&](const auto & word) {
+                        if (word.code_points >= ngram_token_size)
+                        {
+                            seen_indexed_word = seen_indexed_word || !analyze_query(word.text).empty();
+                            return false;
+                        }
+                        if (!enable_stopword || seen_indexed_word)
+                            return true;
+                        std::vector<size_t> boundaries{0};
+                        for (size_t offset = 0; offset < word.text.size();)
+                        {
+                            offset += decodeCodePoint(word.text, offset).second;
+                            boundaries.push_back(offset);
+                        }
+                        return !containsNgramStopword(word.text, boundaries, 0, word.code_points, stopword_collator);
+                    }))
+                    break; // A short query unigram cannot occur in the document's fixed-size ngrams.
+            }
             const size_t first_position = terms.empty() ? 0 : terms.front().position;
+            first_query_position = first_position;
             for (const auto & token : terms)
             {
                 clause.terms.push_back(token.text);
@@ -797,6 +846,32 @@ CompiledBooleanQuery compileBooleanQuery(
         default:
             compiled.matches_nothing = true;
             return compiled;
+        }
+
+        if (clause.phrase && !clause.terms.empty())
+        {
+            auto raw_terms = use_ngram
+                ? analyzeNgramText(node.text(), ngram_token_size, collator, nullptr, false)
+                : analyzeText(node.text(), collator, nullptr, 0, std::numeric_limits<size_t>::max(), false);
+            // InnoDB discards leading filtered tokens, but retains every
+            // following word in the original phrase used for verification.
+            raw_terms.filterInPlace([&](const auto & token) { return token.position >= first_query_position; });
+            if (raw_terms.size() != clause.terms.size())
+            {
+                // InnoDB verifies phrases against the original document, not
+                // just the index tokens: removing "the" must not turn it into
+                // an arbitrary positional gap. Ordinary terms/prefixes do not
+                // pay for this additional document stream.
+                clause.verification = std::make_unique<BooleanClause>();
+                clause.verification->phrase = true;
+                const size_t first = raw_terms.front().position;
+                for (const auto & term : raw_terms)
+                {
+                    clause.verification->terms.push_back(term.text);
+                    clause.verification->offsets.push_back(term.position - first);
+                }
+                compiled.needs_verification = true;
+            }
         }
 
         if (clause.prefix && collator)
@@ -813,7 +888,18 @@ CompiledBooleanQuery compileBooleanQuery(
     for (const auto & clause : compiled.clauses)
     {
         if (clause.modifier == BooleanClause::Modifier::Must)
+        {
+            // An analyzer-filtered required clause cannot match any document.
+            // Do this after compiling ALL nodes so malformed later nodes
+            // retain their existing no-match handling, rather than being
+            // hidden by an earlier block-level shortcut.
+            if (clause.terms.empty())
+            {
+                compiled.matches_nothing = true;
+                return compiled;
+            }
             ++compiled.must_clause_count;
+        }
         else if (clause.modifier == BooleanClause::Modifier::MustNot)
             compiled.has_must_not = true;
     }
@@ -828,9 +914,7 @@ CompiledBooleanQuery compileBooleanQuery(
     return compiled;
 }
 
-Float64 matchBooleanScore(
-    const CompiledBooleanQuery & query,
-    const std::vector<ClauseMatchState> & states)
+Float64 matchBooleanScore(const CompiledBooleanQuery & query, const std::vector<ClauseMatchState> & states)
 {
     // The protocol path is the no-score MATCH ... AGAINST BOOLEAN MODE
     // predicate introduced by #70484/#70485. TiDB's local evaluator returns
@@ -845,8 +929,7 @@ public:
 
     bool isNull(size_t row) const
     {
-        return nullable_column != nullptr
-            && nullable_column->getNullMapData()[nullable_is_constant ? 0 : row] != 0;
+        return nullable_column != nullptr && nullable_column->getNullMapData()[nullable_is_constant ? 0 : row] != 0;
     }
 
     std::string_view getString(size_t row) const
@@ -953,13 +1036,19 @@ public:
         auto & output_data = output->getData();
         const bool nullable = block.getByPosition(result).type->isNullable();
         auto null_map = nullable ? ColumnUInt8::create(rows, 0) : nullptr;
-        auto * null_map_data = null_map ? &null_map->getData() : nullptr;
 
         const FullTextColumnAccessor query_accessor(*query_column);
+        tipb::LocalMatchAgainstBooleanQuery protocol_boolean_query;
+        if (arguments.size() <= 2
+            || !decodeLocalMatchAgainstBooleanQuery(
+                *block.getByPosition(arguments.back()).column,
+                protocol_boolean_query))
+            throw Exception(
+                "local_match_against_boolean requires valid Boolean query metadata",
+                ErrorCodes::ILLEGAL_COLUMN);
         if (query_accessor.isNull(0))
         {
-            if (null_map_data != nullptr)
-                std::fill(null_map_data->begin(), null_map_data->end(), 1);
+            // InnoDB interprets NULL AGAINST as an empty search: non-NULL zero.
             ColumnPtr result_column;
             if (null_map)
                 result_column = ColumnNullable::create(std::move(output), std::move(null_map));
@@ -969,14 +1058,6 @@ public:
             return;
         }
         size_t document_argument_end = arguments.size() - 1;
-        tipb::LocalMatchAgainstBooleanQuery protocol_boolean_query;
-        if (arguments.size() <= 2
-            || !decodeLocalMatchAgainstBooleanQuery(
-                *block.getByPosition(arguments.back()).column,
-                protocol_boolean_query))
-            throw Exception(
-                "local_match_against_boolean requires valid Boolean query metadata",
-                ErrorCodes::ILLEGAL_COLUMN);
         const bool use_ngram
             = protocol_boolean_query.parser() == tipb::LocalMatchAgainstParser::LocalMatchAgainstParserNgram;
         const size_t ngram_token_size = !use_ngram || protocol_boolean_query.ngram_token_size() == 0
@@ -988,8 +1069,7 @@ public:
             = has_standard_config ? protocol_boolean_query.innodb_ft_min_token_size() : default_min_token_size;
         const size_t max_token_size
             = has_standard_config ? protocol_boolean_query.innodb_ft_max_token_size() : default_max_token_size;
-        const bool enable_stopword
-            = protocol_boolean_query.stopword_mode()
+        const bool enable_stopword = protocol_boolean_query.stopword_mode()
             == tipb::LocalMatchAgainstStopwordMode::LocalMatchAgainstStopwordModeBuiltin;
         const auto stopword_collator
             = enable_stopword ? TiDB::ITiDBCollator::getCollator(protocol_boolean_query.stopword_collation()) : nullptr;
@@ -1023,6 +1103,7 @@ public:
         std::vector<ClauseMatchState> clause_states;
         initializeClauseMatchStates(compiled_query.clauses, clause_states);
         FullTextColumn analyzed_column;
+        FullTextColumn unfiltered_column;
         AnalyzerScratch analyzer_scratch;
 
         for (size_t row = 0; row < rows; ++row)
@@ -1052,9 +1133,25 @@ public:
                     min_token_size,
                     max_token_size,
                     enable_stopword);
-                const auto match_result
-                    = updateBooleanMatchStatesForColumn(
-                        compiled_query, analyzed_column, collator, clause_states, match_progress);
+                if (compiled_query.needs_verification)
+                    analyzeColumnInto(
+                        document_column.getString(row),
+                        unfiltered_column,
+                        analyzer_scratch,
+                        use_ngram,
+                        ngram_token_size,
+                        collator,
+                        nullptr,
+                        0,
+                        std::numeric_limits<size_t>::max(),
+                        false);
+                const auto match_result = updateBooleanMatchStatesForColumn(
+                    compiled_query,
+                    analyzed_column,
+                    unfiltered_column,
+                    collator,
+                    clause_states,
+                    match_progress);
                 if (match_result == ColumnMatchResult::Rejected)
                 {
                     result_known = true;
