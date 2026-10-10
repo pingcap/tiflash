@@ -715,6 +715,67 @@ try
 }
 CATCH
 
+TEST_F(TestLocalMatchAgainst, AnalyzerDefaultsAndResultFinalization)
+try
+{
+    struct ConfigCase
+    {
+        UInt32 min_size;
+        UInt32 max_size;
+        InferredDataVector<Float64> expected;
+    };
+    for (const auto & config :
+         {ConfigCase{0, 0, {1, 0, 0, 0}}, ConfigCase{0, 4, {0, 1, 0, 0}}, ConfigCase{5, 4, {0, 0, 0, 0}}})
+    {
+        SCOPED_TRACE(fmt::format("min={} max={}", config.min_size, config.max_size));
+        tipb::LocalMatchAgainstBooleanQuery query;
+        query.set_innodb_ft_min_token_size(config.min_size);
+        query.set_innodb_ft_max_token_size(config.max_size);
+        query.set_stopword_mode(tipb::LocalMatchAgainstStopwordModeDisabled);
+        for (const auto * term : {"quick", "a"})
+        {
+            auto * node = query.add_nodes();
+            node->set_occur(tipb::LocalMatchAgainstBooleanOccurShould);
+            node->set_term_type(tipb::LocalMatchAgainstBooleanTermWord);
+            node->set_text(term);
+        }
+        const auto metadata = createConstColumn<String>(4, serializeLocalMatchAgainstBooleanQuery(query));
+        ASSERT_COLUMN_EQ(
+            createColumn<Float64>(config.expected),
+            executeFunction(
+                "local_match_against_boolean",
+                {createConstColumn<String>(4, "quick a"), createColumn<String>({"quick", "a", "", "none"}), metadata},
+                nullptr,
+                true));
+        InferredDataVector<Nullable<Float64>> nullable_expected;
+        for (auto value : config.expected)
+            nullable_expected.emplace_back(value);
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<Float64>>(nullable_expected),
+            executeFunction(
+                "local_match_against_boolean",
+                {createConstColumn<String>(4, "quick a"),
+                 createColumn<Nullable<String>>({"quick", "a", {}, ""}),
+                 metadata},
+                nullptr,
+                true));
+        // NULL search must still bypass analyzer setup and return non-NULL
+        // zeros, even when that setup would reject the stopword collation.
+        query.set_stopword_mode(tipb::LocalMatchAgainstStopwordModeBuiltin);
+        query.set_stopword_collation("unsupported_stopword_collation");
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<Float64>>({0, 0, 0, 0}),
+            executeFunction(
+                "local_match_against_boolean",
+                {createConstColumn<Nullable<String>>(4, {}),
+                 createColumn<String>({"quick", "a", "", "none"}),
+                 createConstColumn<String>(4, serializeLocalMatchAgainstBooleanQuery(query))},
+                nullptr,
+                true));
+    }
+}
+CATCH
+
 TEST_F(TestLocalMatchAgainst, MatchBooleanNgramProtocolQuery)
 try
 {

@@ -169,6 +169,46 @@ struct CompiledBooleanQuery
     bool needs_verification = false;
 };
 
+// Normalize the already validated wire configuration once per block. Keep
+// the tokenizer implementations and their filtered/unfiltered rules intact.
+struct LocalMatchAnalyzerConfig
+{
+    bool use_ngram;
+    size_t ngram_token_size;
+    size_t min_token_size;
+    size_t max_token_size;
+    bool enable_stopword;
+
+    explicit LocalMatchAnalyzerConfig(const tipb::LocalMatchAgainstBooleanQuery & query)
+        : use_ngram(query.parser() == tipb::LocalMatchAgainstParserNgram)
+        , ngram_token_size(
+              !use_ngram || query.ngram_token_size() == 0 ? default_ngram_token_size : query.ngram_token_size())
+        , min_token_size(
+              query.innodb_ft_min_token_size() != 0 || query.innodb_ft_max_token_size() != 0
+                  ? query.innodb_ft_min_token_size()
+                  : default_min_token_size)
+        , max_token_size(
+              query.innodb_ft_min_token_size() != 0 || query.innodb_ft_max_token_size() != 0
+                  ? query.innodb_ft_max_token_size()
+                  : default_max_token_size)
+        , enable_stopword(query.stopword_mode() == tipb::LocalMatchAgainstStopwordModeBuiltin)
+    {}
+};
+
+// Query tokens own their text. This cold-path helper only collects the same
+// terms and source-relative offsets; document views never enter it.
+size_t collectClauseTerms(BooleanClause & clause, const FullTextColumn & tokens)
+{
+    const size_t first_position = tokens.empty() ? 0 : tokens.front().position;
+    for (const auto & token : tokens)
+    {
+        clause.terms.push_back(token.text);
+        if (clause.phrase)
+            clause.offsets.push_back(token.position - first_position);
+    }
+    return first_position;
+}
+
 void lowercaseTokenInPlace(String & token)
 {
     const bool is_ascii = std::all_of(token.begin(), token.end(), [](unsigned char c) { return c < 0x80; });
@@ -802,23 +842,26 @@ bool evaluateBooleanMatchResult(const CompiledBooleanQuery & query, const std::v
 
 CompiledBooleanQuery compileBooleanQuery(
     const tipb::LocalMatchAgainstBooleanQuery & query,
-    bool use_ngram,
-    size_t ngram_token_size,
-    size_t min_token_size,
-    size_t max_token_size,
-    bool enable_stopword,
+    const LocalMatchAnalyzerConfig & config,
     const TiDB::TiDBCollatorPtr & collator = nullptr,
     const BuiltinStopwordLookup * stopwords = nullptr)
 {
     CompiledBooleanQuery compiled;
-    if (!use_ngram && (max_token_size == 0 || min_token_size > max_token_size))
+    if (!config.use_ngram && (config.max_token_size == 0 || config.min_token_size > config.max_token_size))
     {
         compiled.matches_nothing = true;
         return compiled;
     }
     auto analyze_query = [&](std::string_view text) {
-        return use_ngram ? analyzeNgramText(text, ngram_token_size, collator, stopwords, enable_stopword)
-                         : analyzeText(text, collator, stopwords, min_token_size, max_token_size, enable_stopword);
+        return config.use_ngram
+            ? analyzeNgramText(text, config.ngram_token_size, collator, stopwords, config.enable_stopword)
+            : analyzeText(
+                  text,
+                  collator,
+                  stopwords,
+                  config.min_token_size,
+                  config.max_token_size,
+                  config.enable_stopword);
     };
     for (const auto & node : query.nodes())
     {
@@ -845,30 +888,16 @@ CompiledBooleanQuery compileBooleanQuery(
         case tipb::LocalMatchAgainstBooleanTermType::LocalMatchAgainstBooleanTermWord:
         {
             const auto terms = analyze_query(node.text());
-            if (use_ngram)
-            {
-                clause.phrase = true;
-                const size_t first_position = terms.empty() ? 0 : terms.front().position;
-                first_query_position = first_position;
-                for (const auto & token : terms)
-                {
-                    clause.terms.push_back(token.text);
-                    clause.offsets.push_back(token.position - first_position);
-                }
-            }
-            else
-            {
-                for (const auto & token : terms)
-                    clause.terms.push_back(token.text);
-            }
+            clause.phrase = config.use_ngram;
+            first_query_position = collectClauseTerms(clause, terms);
             break;
         }
         case tipb::LocalMatchAgainstBooleanTermType::LocalMatchAgainstBooleanTermPrefix:
         {
-            const auto terms = use_ngram
-                ? analyzeNgramText(node.text(), ngram_token_size, collator, stopwords, enable_stopword)
+            const auto terms = config.use_ngram
+                ? analyzeNgramText(node.text(), config.ngram_token_size, collator, stopwords, config.enable_stopword)
                 : tokenizeText(node.text(), collator);
-            if (use_ngram)
+            if (config.use_ngram)
             {
                 if (!terms.empty())
                 {
@@ -877,13 +906,7 @@ CompiledBooleanQuery compileBooleanQuery(
                     // only one analyzed term here makes prefixes such as
                     // "caf*" ("ca", "af" at token size 2) never match.
                     clause.phrase = true;
-                    const size_t first_position = terms.front().position;
-                    first_query_position = first_position;
-                    for (const auto & token : terms)
-                    {
-                        clause.terms.push_back(token.text);
-                        clause.offsets.push_back(token.position - first_position);
-                    }
+                    first_query_position = collectClauseTerms(clause, terms);
                     break;
                 }
 
@@ -896,7 +919,7 @@ CompiledBooleanQuery compileBooleanQuery(
                     const auto code_points = UTF8::countCodePoints(
                         reinterpret_cast<const UInt8 *>(source_terms.front().text.data()),
                         source_terms.front().text.size());
-                    if (code_points < ngram_token_size)
+                    if (code_points < config.ngram_token_size)
                     {
                         clause.prefix = true;
                         clause.terms.push_back(source_terms.front().text);
@@ -919,7 +942,7 @@ CompiledBooleanQuery compileBooleanQuery(
             const auto code_points = UTF8::countCodePoints(
                 reinterpret_cast<const UInt8 *>(terms.front().text.data()),
                 terms.front().text.size());
-            if (code_points > max_token_size)
+            if (code_points > config.max_token_size)
             {
                 if (clause.modifier == BooleanClause::Modifier::Must)
                     compiled.clauses.push_back(std::move(clause));
@@ -932,17 +955,17 @@ CompiledBooleanQuery compileBooleanQuery(
         {
             clause.phrase = true;
             const auto terms = analyze_query(node.text());
-            if (use_ngram)
+            if (config.use_ngram)
             {
                 const auto words = tokenizeText(node.text(), collator);
                 bool seen_indexed_word = false;
                 if (std::any_of(words.begin(), words.end(), [&](const auto & word) {
-                        if (word.code_points >= ngram_token_size)
+                        if (word.code_points >= config.ngram_token_size)
                         {
                             seen_indexed_word = seen_indexed_word || !analyze_query(word.text).empty();
                             return false;
                         }
-                        if (!enable_stopword || seen_indexed_word)
+                        if (!config.enable_stopword || seen_indexed_word)
                             return true;
                         std::vector<size_t> boundaries{0};
                         for (size_t offset = 0; offset < word.text.size();)
@@ -954,13 +977,7 @@ CompiledBooleanQuery compileBooleanQuery(
                     }))
                     break; // A short query unigram cannot occur in the document's fixed-size ngrams.
             }
-            const size_t first_position = terms.empty() ? 0 : terms.front().position;
-            first_query_position = first_position;
-            for (const auto & token : terms)
-            {
-                clause.terms.push_back(token.text);
-                clause.offsets.push_back(token.position - first_position);
-            }
+            first_query_position = collectClauseTerms(clause, terms);
             break;
         }
         default:
@@ -970,8 +987,8 @@ CompiledBooleanQuery compileBooleanQuery(
 
         if (clause.phrase && !clause.terms.empty())
         {
-            auto raw_terms = use_ngram
-                ? analyzeNgramText(node.text(), ngram_token_size, collator, nullptr, false)
+            auto raw_terms = config.use_ngram
+                ? analyzeNgramText(node.text(), config.ngram_token_size, collator, nullptr, false)
                 : analyzeText(node.text(), collator, nullptr, 0, std::numeric_limits<size_t>::max(), false);
             // InnoDB discards leading filtered tokens, but retains every
             // following word in the original phrase used for verification.
@@ -984,12 +1001,7 @@ CompiledBooleanQuery compileBooleanQuery(
                 // pay for this additional document stream.
                 clause.verification = std::make_unique<BooleanClause>();
                 clause.verification->phrase = true;
-                const size_t first = raw_terms.front().position;
-                for (const auto & term : raw_terms)
-                {
-                    clause.verification->terms.push_back(term.text);
-                    clause.verification->offsets.push_back(term.position - first);
-                }
+                collectClauseTerms(*clause.verification, raw_terms);
                 compiled.needs_verification = true;
             }
         }
@@ -1156,6 +1168,12 @@ public:
         auto & output_data = output->getData();
         const bool nullable = block.getByPosition(result).type->isNullable();
         auto null_map = nullable ? ColumnUInt8::create(rows, 0) : nullptr;
+        const auto finish_result = [&] {
+            ColumnPtr result_column = std::move(output);
+            if (null_map)
+                result_column = ColumnNullable::create(std::move(result_column), std::move(null_map));
+            block.getByPosition(result).column = std::move(result_column);
+        };
 
         const FullTextColumnAccessor query_accessor(*query_column);
         tipb::LocalMatchAgainstBooleanQuery protocol_boolean_query;
@@ -1169,28 +1187,19 @@ public:
         if (query_accessor.isNull(0))
         {
             // InnoDB interprets NULL AGAINST as an empty search: non-NULL zero.
-            ColumnPtr result_column;
-            if (null_map)
-                result_column = ColumnNullable::create(std::move(output), std::move(null_map));
-            else
-                result_column = std::move(output);
-            block.getByPosition(result).column = std::move(result_column);
+            finish_result();
             return;
         }
-        size_t document_argument_end = arguments.size() - 1;
-        const bool use_ngram
-            = protocol_boolean_query.parser() == tipb::LocalMatchAgainstParser::LocalMatchAgainstParserNgram;
-        const size_t ngram_token_size = !use_ngram || protocol_boolean_query.ngram_token_size() == 0
-            ? default_ngram_token_size
-            : protocol_boolean_query.ngram_token_size();
-        const bool has_standard_config = protocol_boolean_query.innodb_ft_min_token_size() != 0
-            || protocol_boolean_query.innodb_ft_max_token_size() != 0;
-        const size_t min_token_size
-            = has_standard_config ? protocol_boolean_query.innodb_ft_min_token_size() : default_min_token_size;
-        const size_t max_token_size
-            = has_standard_config ? protocol_boolean_query.innodb_ft_max_token_size() : default_max_token_size;
-        const bool enable_stopword = protocol_boolean_query.stopword_mode()
-            == tipb::LocalMatchAgainstStopwordMode::LocalMatchAgainstStopwordModeBuiltin;
+        const size_t document_argument_end = arguments.size() - 1;
+        const LocalMatchAnalyzerConfig config(protocol_boolean_query);
+        // Keep scalar values in the row hot path. Passing the config by
+        // reference changes Release code generation, notably with stopwords
+        // disabled; the config object belongs to query compilation only.
+        const bool use_ngram = config.use_ngram;
+        const size_t ngram_token_size = config.ngram_token_size;
+        const size_t min_token_size = config.min_token_size;
+        const size_t max_token_size = config.max_token_size;
+        const bool enable_stopword = config.enable_stopword;
         const auto stopword_collator
             = enable_stopword ? TiDB::ITiDBCollator::getCollator(protocol_boolean_query.stopword_collation()) : nullptr;
         if (enable_stopword && !stopword_collator)
@@ -1201,23 +1210,11 @@ public:
         if (enable_stopword)
             stopword_lookup.emplace(stopword_collator);
         const auto * stopwords = stopword_lookup ? &*stopword_lookup : nullptr;
-        const CompiledBooleanQuery compiled_query = compileBooleanQuery(
-            protocol_boolean_query,
-            use_ngram,
-            ngram_token_size,
-            min_token_size,
-            max_token_size,
-            enable_stopword,
-            collator,
-            stopwords);
+        const CompiledBooleanQuery compiled_query
+            = compileBooleanQuery(protocol_boolean_query, config, collator, stopwords);
         if (compiled_query.matches_nothing)
         {
-            ColumnPtr result_column;
-            if (null_map)
-                result_column = ColumnNullable::create(std::move(output), std::move(null_map));
-            else
-                result_column = std::move(output);
-            block.getByPosition(result).column = std::move(result_column);
+            finish_result();
             return;
         }
         std::vector<FullTextColumnAccessor> document_columns;
@@ -1290,12 +1287,7 @@ public:
             }
             output_data[row] = result_known ? (row_matches ? 1 : 0) : matchBooleanScore(compiled_query, clause_states);
         }
-        ColumnPtr result_column;
-        if (null_map)
-            result_column = ColumnNullable::create(std::move(output), std::move(null_map));
-        else
-            result_column = std::move(output);
-        block.getByPosition(result).column = std::move(result_column);
+        finish_result();
     }
 
 private:
