@@ -1363,10 +1363,21 @@ tipb::FieldType columnInfoToFieldType(const ColumnInfo & ci)
     ret.set_decimal(ci.decimal);
     if (!ci.collate.isEmpty())
     {
-        auto collator_name = ci.collate.convert<String>();
-        TiDBCollatorPtr collator = ITiDBCollator::getCollator(collator_name);
-        RUNTIME_CHECK_MSG(collator, "cannot find collator: {}", collator_name);
-        ret.set_collate(collator->getCollatorId());
+        if (ci.collate.isInteger())
+        {
+            // Table-scan ColumnInfo comes directly from tipb and carries the
+            // signed collation ID used by TiDB's new-collation protocol.
+            // Preserve it for expression field types instead of treating it
+            // as a collation name.
+            ret.set_collate(ci.collate.convert<Int32>());
+        }
+        else
+        {
+            auto collator_name = ci.collate.convert<String>();
+            TiDBCollatorPtr collator = ITiDBCollator::getCollator(collator_name);
+            RUNTIME_CHECK_MSG(collator, "cannot find collator: {}", collator_name);
+            ret.set_collate(collator->getCollatorId());
+        }
     }
     for (const auto & elem : ci.elems)
     {

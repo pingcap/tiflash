@@ -513,12 +513,21 @@ String DAGExpressionAnalyzerHelper::buildDefaultFunction(
     const tipb::Expr & expr,
     const ExpressionActionsPtr & actions)
 {
-    const String & func_name = getFunctionName(expr);
+    String func_name = getFunctionName(expr);
     Names argument_names;
     for (const auto & child : expr.children())
     {
         String name = analyzer->getActions(child, actions);
         argument_names.push_back(name);
+    }
+    if (expr.sig() == tipb::ScalarFuncSig::LocalMatchAgainstBoolean)
+    {
+        // Local MATCH metadata is carried in the generic scalar-function metadata slot
+        // and must not be confused with SQL arguments. The runtime function
+        // interface uses a private variant with a required final constant.
+        func_name = "local_match_against_boolean";
+        const auto metadata_expr = constructStringLiteralTiExpr(expr.val());
+        argument_names.push_back(analyzer->getActions(metadata_expr, actions));
     }
     return analyzer->applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
 }
