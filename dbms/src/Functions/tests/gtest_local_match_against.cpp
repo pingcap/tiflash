@@ -31,6 +31,11 @@ class TestLocalMatchAgainst : public DB::tests::FunctionTest
 
 namespace
 {
+constexpr std::array<std::string_view, 35> builtin_stopwords{
+    "a",    "about", "an",  "are",  "as",   "at",    "be",  "by",   "com",  "de",  "en",   "for",
+    "from", "how",   "i",   "in",   "is",   "it",    "la",  "of",   "on",   "or",  "that", "the",
+    "this", "to",    "was", "what", "when", "where", "who", "will", "with", "und", "www"};
+
 // Count token comparisons rather than wall time, so a repeated full-column
 // verification regression is deterministic even on a loaded CI host.
 class CountingMatchCollator final : public TiDB::ITiDBCollator
@@ -1026,10 +1031,7 @@ try
 {
     // Independent reference: retain the old compare-based stopword rule,
     // including NGRAM's substring and source-code-point-length restriction.
-    constexpr std::array<std::string_view, 35> stopwords{
-        "a",    "about", "an",  "are",  "as",   "at",    "be",  "by",   "com",  "de",  "en",   "for",
-        "from", "how",   "i",   "in",   "is",   "it",    "la",  "of",   "on",   "or",  "that", "the",
-        "this", "to",    "was", "what", "when", "where", "who", "will", "with", "und", "www"};
+    const auto & stopwords = builtin_stopwords;
     std::vector<String> candidates;
     for (const auto word : stopwords)
         candidates.emplace_back(word);
@@ -1130,6 +1132,160 @@ try
                             true));
             }
     }
+}
+CATCH
+
+TEST_F(TestLocalMatchAgainst, NgramSlidingStopwordWindows)
+try
+{
+    InferredDataVector<Nullable<String>> documents{
+        "",
+        "z",
+        "zzaz",
+        "zzazzzzzzzzzzz",
+        "zthe",
+        "zzthezz",
+        "zzthezzzzzzzzzz",
+        "zaboutzz",
+        "zaboutzaboutzzzzzz",
+        "zzazzizzz",
+        "za zzzzzzzzzzz",
+        "zzz!zzz",
+        "zThezz",
+        "zTHEzz",
+        "zthézz",
+        "ztĥezz",
+        "zｗｉｔｈzz",
+        "zｗｗｗzz",
+        "zázz",
+        "zＡzz",
+        "zßzz",
+        "z\u0301azz",
+        "z🙃a🙃zz",
+        "z数据azzz",
+        "ZTHEZZ",
+        String("za\0zzzzzzzzzz", 13),
+        String("zthe\xffzzzzzzzzzz"),
+        String("\xffzzzzzzzzzz"),
+        "zzazzazzzzzzzzzzzzz",
+        "zaboutzzzzzzzzzz",
+        "z",
+        {},
+        "zzzzzzzzzzzz"};
+    // Deterministic mixed runs, ending candidates and repeated rows. The
+    // reference below never uses the optimized lookup or sliding state.
+    UInt32 seed = 70485;
+    const std::array<String, 8> pieces{"z", "a", "i", "the", "about", "thé", "🙃", "!"};
+    for (size_t row = 0; row < 24; ++row)
+    {
+        String text;
+        for (size_t i = 0; i < 12; ++i)
+        {
+            seed = seed * 1664525 + 1013904223;
+            text += pieces[(seed >> 16) % pieces.size()];
+        }
+        documents.emplace_back(std::move(text));
+    }
+
+    for (const auto stopword_collation :
+         {"binary",
+          "ascii_bin",
+          "latin1_bin",
+          "utf8_bin",
+          "utf8mb4_bin",
+          "utf8mb4_0900_bin",
+          "utf8_general_ci",
+          "utf8mb4_general_ci",
+          "utf8_unicode_ci",
+          "utf8mb4_unicode_ci",
+          "utf8mb4_0900_ai_ci"})
+        for (const auto match_collation : {"utf8mb4_bin", "utf8mb4_general_ci"})
+            for (size_t size = 1; size <= 10; ++size)
+            {
+                SCOPED_TRACE(fmt::format("stopwords={} match={} size={}", stopword_collation, match_collation, size));
+                const auto stopword_collator = TiDB::ITiDBCollator::getCollator(stopword_collation);
+                const auto match_collator = TiDB::ITiDBCollator::getCollator(match_collation);
+                auto prefix = match_collator->pattern();
+                prefix->compile("z%", '\\');
+                InferredDataVector<Nullable<Float64>> expected;
+                for (const auto & document : documents)
+                {
+                    bool retained = false;
+                    if (document)
+                    {
+                        const String & text = *document;
+                        size_t run_start = 0;
+                        std::vector<size_t> boundaries{0};
+                        auto check_run = [&] {
+                            for (size_t start = 0; start + size < boundaries.size() && !retained; ++start)
+                            {
+                                bool filtered = false;
+                                for (size_t begin = start; begin < start + size && !filtered; ++begin)
+                                    for (size_t end = begin + 1; end <= start + size && !filtered; ++end)
+                                    {
+                                        const auto candidate = std::string_view(text).substr(
+                                            run_start + boundaries[begin],
+                                            boundaries[end] - boundaries[begin]);
+                                        filtered = std::any_of(
+                                            builtin_stopwords.begin(),
+                                            builtin_stopwords.end(),
+                                            [&](auto word) {
+                                                return word.size() == end - begin
+                                                    && stopword_collator->compare(
+                                                           candidate.data(),
+                                                           candidate.size(),
+                                                           word.data(),
+                                                           word.size())
+                                                    == 0;
+                                            });
+                                    }
+                                const auto gram = std::string_view(text).substr(
+                                    run_start + boundaries[start],
+                                    boundaries[start + size] - boundaries[start]);
+                                retained = !filtered && prefix->match(gram.data(), gram.size());
+                            }
+                        };
+                        for (size_t offset = 0; offset < text.size();)
+                        {
+                            const auto byte = static_cast<unsigned char>(text[offset]);
+                            const auto decoded = UTF8::utf8Decode(text.data() + offset, text.size() - offset);
+                            if (decoded.second == 0 || decoded.first == UTF8::UTF8_Error
+                                || decoded.second > text.size() - offset || (byte >= 0x80 && decoded.second == 1))
+                                break;
+                            if (byte < 0x80 && !LocalMatchAgainst::isTokenChar(byte))
+                            {
+                                check_run();
+                                run_start = ++offset;
+                                boundaries.assign(1, 0);
+                            }
+                            else
+                            {
+                                offset += decoded.second;
+                                boundaries.push_back(offset - run_start);
+                            }
+                        }
+                        check_run();
+                    }
+                    expected.emplace_back(retained ? 1.0 : 0.0);
+                }
+                tipb::LocalMatchAgainstBooleanQuery query;
+                query.set_parser(tipb::LocalMatchAgainstParserNgram);
+                query.set_ngram_token_size(size);
+                query.set_stopword_collation(stopword_collation);
+                auto * node = query.add_nodes();
+                node->set_occur(tipb::LocalMatchAgainstBooleanOccurMust);
+                node->set_term_type(tipb::LocalMatchAgainstBooleanTermPrefix);
+                node->set_text("z");
+                ASSERT_COLUMN_EQ(
+                    createColumn<Nullable<Float64>>(expected),
+                    executeFunction(
+                        "local_match_against_boolean",
+                        {createConstColumn<String>(documents.size(), "+z*"),
+                         createColumn<Nullable<String>>(documents),
+                         createConstColumn<String>(documents.size(), serializeLocalMatchAgainstBooleanQuery(query))},
+                        match_collator,
+                        true));
+            }
 }
 CATCH
 

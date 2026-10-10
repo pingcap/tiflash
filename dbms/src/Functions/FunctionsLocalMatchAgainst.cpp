@@ -27,6 +27,7 @@
 #include <Functions/LocalMatchAgainstTokenChars.h>
 #include <Poco/UTF8String.h>
 #include <TiDB/Collation/Collator.h>
+#include <common/defines.h>
 #include <tipb/executor.pb.h>
 
 #include <algorithm>
@@ -86,7 +87,9 @@ public:
 
     void reserve(size_t size) { tokens.reserve(size); }
 
-    void append(std::string_view text, size_t position, size_t code_points, bool borrow = false)
+    // This is per-token work. Keep it inline even when the surrounding
+    // analyzer grows: outlining it penalizes the unfiltered/OFF stream too.
+    ALWAYS_INLINE void append(std::string_view text, size_t position, size_t code_points, bool borrow = false)
     {
         if (used == tokens.size())
             tokens.emplace_back();
@@ -311,6 +314,19 @@ bool isDefaultStopword(std::string_view token, const BuiltinStopwordLookup * sto
     return stopwords ? stopwords->contains(token) : defaultStopwords().contains(Poco::UTF8::toLower(String(token)));
 }
 
+size_t maxBuiltinStopwordLength()
+{
+    // The supported built-in list is ASCII: byte and code-point lengths are
+    // identical. Do not examine lengths which cannot match any stopword.
+    static const size_t max_length = [] {
+        size_t result = 0;
+        for (const auto & word : defaultStopwords())
+            result = std::max(result, word.size());
+        return result;
+    }();
+    return max_length;
+}
+
 bool containsNgramStopword(
     std::string_view token,
     const std::vector<size_t> & char_boundaries,
@@ -384,6 +400,7 @@ void analyzeNgramTextInto(
         return;
 
     const bool preserve_case = enable_stopword && stopwords;
+    const size_t max_stopword_length = enable_stopword ? std::min(ngram_token_size, maxBuiltinStopwordLength()) : 0;
     size_t next_position_base = 0;
     auto & char_boundaries = scratch.char_boundaries;
     for (size_t offset = 0; offset < text.size();)
@@ -438,20 +455,64 @@ void analyzeNgramTextInto(
             }
         }
 
-        for (size_t start = 0; start + ngram_token_size <= char_count; ++start)
-        {
+        const auto append_gram = [&](size_t start) ALWAYS_INLINE {
             const size_t begin = char_boundaries[start];
             const size_t end = char_boundaries[start + ngram_token_size];
-            if (!enable_stopword || !containsNgramStopword(run, char_boundaries, start, ngram_token_size, stopwords))
+            result.append(
+                run.substr(begin, end - begin),
+                base_position + start,
+                ngram_token_size,
+                borrow_document && collator);
+            if (!collator && preserve_case)
+                lowercaseTokenInPlace(result[result.size() - 1].text);
+        };
+
+        // Keep the unfiltered stream and stopwords-OFF path free of per-gram
+        // stopword branches and sliding-state dependencies.
+        if (!enable_stopword)
+        {
+            for (size_t start = 0; start + ngram_token_size <= char_count; ++start)
+                append_gram(start);
+            next_position_base = base_position + char_count - ngram_token_size + 1;
+            continue;
+        }
+
+        // Advance candidate endings once per run, instead of enumerating all
+        // substrings again for every overlapping gram. Keep one past the
+        // greatest start of a matched stopword ending at/before the gram end.
+        // The gram [start, end) is filtered iff that value is greater than
+        // start: such a stopword lies wholly inside the current gram. Once
+        // start advances beyond it, it expires without a queue or cache.
+        size_t stopword_end = 0;
+        size_t filtered_until_start = 0;
+        for (size_t start = 0; start + ngram_token_size <= char_count; ++start)
+        {
+            while (stopword_end < start + ngram_token_size)
             {
-                result.append(
-                    run.substr(begin, end - begin),
-                    base_position + start,
-                    ngram_token_size,
-                    borrow_document && collator);
-                if (!collator && preserve_case)
-                    lowercaseTokenInPlace(result[result.size() - 1].text);
+                ++stopword_end;
+                const size_t max_length = std::min(stopword_end, max_stopword_length);
+                for (size_t length = 1; length <= max_length; ++length)
+                {
+                    const size_t candidate_start = stopword_end - length;
+                    // Longer candidates at this ending have earlier starts
+                    // and cannot improve a start already known to match.
+                    if (candidate_start < filtered_until_start)
+                        break;
+                    const auto candidate = run.substr(
+                        char_boundaries[candidate_start],
+                        char_boundaries[stopword_end] - char_boundaries[candidate_start]);
+                    const bool matched = stopwords
+                        ? stopwords->contains(candidate, length)
+                        : defaultStopwords().contains(Poco::UTF8::toLower(String(candidate)));
+                    if (matched)
+                    {
+                        filtered_until_start = candidate_start + 1;
+                        break;
+                    }
+                }
             }
+            if (filtered_until_start <= start)
+                append_gram(start);
         }
         next_position_base = base_position + char_count - ngram_token_size + 1;
     }
