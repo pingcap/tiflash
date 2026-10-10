@@ -12,12 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/UTF8Helpers.h>
 #include <Functions/LocalMatchAgainstTokenChars.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Collation/Collator.h>
 #include <gtest/gtest.h>
 #include <tipb/executor.pb.h>
+
+#include <algorithm>
+#include <array>
 
 namespace DB::tests
 {
@@ -1014,6 +1018,248 @@ try
              createConstColumn<String>(2, serializeLocalMatchAgainstBooleanQuery(query))},
             collator,
             true));
+}
+CATCH
+
+TEST_F(TestLocalMatchAgainst, BuiltinStopwordLookupMatchesComparisons)
+try
+{
+    // Independent reference: retain the old compare-based stopword rule,
+    // including NGRAM's substring and source-code-point-length restriction.
+    constexpr std::array<std::string_view, 35> stopwords{
+        "a",    "about", "an",  "are",  "as",   "at",    "be",  "by",   "com",  "de",  "en",   "for",
+        "from", "how",   "i",   "in",   "is",   "it",    "la",  "of",   "on",   "or",  "that", "the",
+        "this", "to",    "was", "what", "when", "where", "who", "will", "with", "und", "www"};
+    std::vector<String> candidates;
+    for (const auto word : stopwords)
+        candidates.emplace_back(word);
+    for (const String & word :
+         {"ABOUT", "The", "THE", "WWW", "WITH", "ábout", "thé", "tĥe", "ｗｉｔｈ", "ｗｗｗ", "aß",    "ß",
+          "xá",    "áx",  "xＡ", "Ａx", "xáy",  "aaa",   "AAA", "xy",  "xyz",      "foo",    "数据库"})
+        candidates.push_back(word);
+    for (const auto collation :
+         {"binary",
+          "ascii_bin",
+          "latin1_bin",
+          "utf8_bin",
+          "utf8mb4_bin",
+          "utf8mb4_0900_bin",
+          "utf8_general_ci",
+          "utf8mb4_general_ci",
+          "utf8_unicode_ci",
+          "utf8mb4_unicode_ci",
+          "utf8mb4_0900_ai_ci"})
+    {
+        const auto stopword_collator = TiDB::ITiDBCollator::getCollator(collation);
+        ASSERT_NE(stopword_collator, nullptr);
+        // Check the key-equality premise directly, including padding and
+        // combining marks which the STANDARD tokenizer may split away.
+        String key_buffer;
+        auto key_copy = [&](const String & text) {
+            const auto key = stopword_collator->sortKeyFastPath(text.data(), text.size(), key_buffer);
+            return String(key.data, key.size);
+        };
+        for (const auto word : stopwords)
+        {
+            const String source(word);
+            const auto source_key = key_copy(source);
+            for (const auto & candidate : candidates)
+                for (const String & suffix : {"", " ", "  ", "\u0301"})
+                {
+                    const String text = candidate + suffix;
+                    EXPECT_EQ(
+                        source_key == key_copy(text),
+                        stopword_collator->compare(source.data(), source.size(), text.data(), text.size()) == 0)
+                        << collation << " source=" << source << " candidate=" << text;
+                }
+        }
+        auto equals_stopword = [&](std::string_view token, size_t length, bool restrict_length) {
+            return std::any_of(stopwords.begin(), stopwords.end(), [&](const auto word) {
+                return (!restrict_length || length == word.size())
+                    && stopword_collator->compare(token.data(), token.size(), word.data(), word.size()) == 0;
+            });
+        };
+        for (const auto size : {0U, 1U, 2U, 3U})
+            for (const auto & candidate : candidates)
+            {
+                SCOPED_TRACE(fmt::format("stopword_collation={} size={} candidate={}", collation, size, candidate));
+                std::vector<size_t> boundaries{0};
+                for (size_t offset = 0; offset < candidate.size();)
+                {
+                    offset += UTF8::utf8Decode(candidate.data() + offset, candidate.size() - offset).second;
+                    boundaries.push_back(offset);
+                }
+                bool retained = size == 0 && !equals_stopword(candidate, boundaries.size() - 1, false);
+                if (size != 0)
+                    for (size_t start = 0; start + size < boundaries.size(); ++start)
+                    {
+                        bool filtered = false;
+                        for (size_t begin = start; begin < start + size; ++begin)
+                            for (size_t end = begin + 1; end <= start + size; ++end)
+                                filtered = filtered
+                                    || equals_stopword(
+                                               std::string_view(candidate).substr(
+                                                   boundaries[begin],
+                                                   boundaries[end] - boundaries[begin]),
+                                               end - begin,
+                                               true);
+                        retained = retained || !filtered;
+                    }
+                tipb::LocalMatchAgainstBooleanQuery query;
+                query.set_parser(
+                    size == 0 ? tipb::LocalMatchAgainstParserStandard : tipb::LocalMatchAgainstParserNgram);
+                query.set_ngram_token_size(size);
+                query.set_innodb_ft_min_token_size(1);
+                query.set_innodb_ft_max_token_size(84);
+                query.set_stopword_collation(collation);
+                auto * node = query.add_nodes();
+                node->set_occur(tipb::LocalMatchAgainstBooleanOccurMust);
+                node->set_term_type(tipb::LocalMatchAgainstBooleanTermWord);
+                node->set_text(candidate);
+                // Repeated rows exercise key-buffer reuse. Column and server
+                // collations are deliberately independent.
+                for (const auto match_collation : {"utf8mb4_bin", "utf8mb4_general_ci"})
+                    ASSERT_COLUMN_EQ(
+                        createColumn<Float64>({retained ? 1.0 : 0.0, retained ? 1.0 : 0.0}),
+                        executeFunction(
+                            "local_match_against_boolean",
+                            {createConstColumn<String>(2, candidate),
+                             createColumn<String>({candidate, candidate}),
+                             createConstColumn<String>(2, serializeLocalMatchAgainstBooleanQuery(query))},
+                            TiDB::ITiDBCollator::getCollator(match_collation),
+                            true));
+            }
+    }
+}
+CATCH
+
+TEST_F(TestLocalMatchAgainst, MatchBooleanASCIIAndMalformedUTF8)
+try
+{
+    const auto collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_BIN);
+    const auto documents = createColumn<String>(
+        {"bar",
+         "foo bar",
+         "foobar",
+         "bar!",
+         String("bar\0foo", 7),
+         "bar\xff"
+         "foo",
+         "foo\xff"
+         "bar",
+         "foo中bar",
+         ""});
+    for (const auto size : {0U, 2U, 3U})
+    {
+        tipb::LocalMatchAgainstBooleanQuery query;
+        query.set_parser(size == 0 ? tipb::LocalMatchAgainstParserStandard : tipb::LocalMatchAgainstParserNgram);
+        query.set_ngram_token_size(size);
+        query.set_stopword_mode(tipb::LocalMatchAgainstStopwordModeDisabled);
+        auto * node = query.add_nodes();
+        node->set_occur(tipb::LocalMatchAgainstBooleanOccurMust);
+        node->set_term_type(tipb::LocalMatchAgainstBooleanTermWord);
+        node->set_text("bar");
+        ASSERT_COLUMN_EQ(
+            size == 0 ? createColumn<Float64>({1, 1, 0, 1, 1, 1, 1, 0, 0})
+                      : createColumn<Float64>({1, 1, 1, 1, 1, 1, 0, 1, 0}),
+            executeFunction(
+                "local_match_against_boolean",
+                {createConstColumn<String>(9, "+bar"),
+                 documents,
+                 createConstColumn<String>(9, serializeLocalMatchAgainstBooleanQuery(query))},
+                collator,
+                true));
+    }
+}
+CATCH
+
+TEST_F(TestLocalMatchAgainst, DocumentViewsPreserveFilteredPhrase)
+try
+{
+    String miss;
+    for (size_t i = 0; i < 4096; ++i)
+        miss += "foo xyz zoo ";
+    for (const bool ngram : {false, true})
+        for (const bool stopwords : {false, true})
+            for (const auto collation : {"utf8mb4_bin", "utf8mb4_general_ci"})
+            {
+                SCOPED_TRACE(fmt::format("ngram={} stopwords={} collation={}", ngram, stopwords, collation));
+                tipb::LocalMatchAgainstBooleanQuery query;
+                query.set_parser(ngram ? tipb::LocalMatchAgainstParserNgram : tipb::LocalMatchAgainstParserStandard);
+                query.set_ngram_token_size(3);
+                query.set_stopword_mode(
+                    stopwords ? tipb::LocalMatchAgainstStopwordModeBuiltin
+                              : tipb::LocalMatchAgainstStopwordModeDisabled);
+                auto * phrase = query.add_nodes();
+                phrase->set_occur(tipb::LocalMatchAgainstBooleanOccurMust);
+                phrase->set_term_type(tipb::LocalMatchAgainstBooleanTermPhrase);
+                phrase->set_text("foo the zoo");
+                auto * excluded = query.add_nodes();
+                excluded->set_occur(tipb::LocalMatchAgainstBooleanOccurMustNot);
+                excluded->set_term_type(tipb::LocalMatchAgainstBooleanTermWord);
+                excluded->set_text("blocked");
+                ASSERT_COLUMN_EQ(
+                    createColumn<Nullable<Float64>>({1, 1, 1, 0, 0}),
+                    executeFunction(
+                        "local_match_against_boolean",
+                        {createConstColumn<String>(5, "+\"foo the zoo\" -blocked"),
+                         createColumn<Nullable<String>>({miss, "foo the zoo", {}, "", miss}),
+                         createColumn<Nullable<String>>(
+                             {"foo the zoo", miss, "foo the zoo", "foo the zoo blocked", miss}),
+                         createConstColumn<String>(5, serializeLocalMatchAgainstBooleanQuery(query))},
+                        TiDB::ITiDBCollator::getCollator(collation),
+                        true));
+            }
+}
+CATCH
+
+TEST_F(TestLocalMatchAgainst, NgramDocumentViewsAndPositions)
+try
+{
+    // Overlapping grams in separate runs still have consecutive positions;
+    // short runs contribute none. Exercise vector growth, scratch reuse and
+    // successive large/small/NULL documents without borrowing scratch memory.
+    for (const auto size : {1U, 2U, 3U, 4U, 5U, 6U, 7U, 8U, 9U, 10U})
+        for (const bool chinese : {false, true})
+            for (const auto collation : {"", "utf8mb4_bin", "utf8mb4_general_ci"})
+            {
+                SCOPED_TRACE(fmt::format("size={} chinese={} collation={}", size, chinese, collation));
+                const String alphabet = chinese ? "甲乙丙丁戊己庚辛壬癸子丑" : "ABCDEFGHIJKL";
+                const size_t width = chinese ? 3 : 1;
+                const String query_text = alphabet.substr(0, (size + 1) * width);
+                const String first = query_text.substr(0, size * width);
+                const String last = query_text.substr(width);
+                const String short_run(size - 1, 'z');
+                const String padding(4096, 'z');
+                const auto documents = createColumn<Nullable<String>>(
+                    {padding + " " + query_text,
+                     query_text,
+                     first + "!" + last,
+                     first + "!" + String(size, 'z') + "!" + last,
+                     first + "!" + short_run + "!" + last,
+                     query_text + "\xff" + padding,
+                     first + "\xff" + last,
+                     {},
+                     "",
+                     query_text + "!" + padding});
+                tipb::LocalMatchAgainstBooleanQuery query;
+                query.set_parser(tipb::LocalMatchAgainstParserNgram);
+                query.set_ngram_token_size(size);
+                query.set_stopword_mode(tipb::LocalMatchAgainstStopwordModeDisabled);
+                auto * node = query.add_nodes();
+                node->set_occur(tipb::LocalMatchAgainstBooleanOccurMust);
+                node->set_term_type(tipb::LocalMatchAgainstBooleanTermWord);
+                node->set_text(query_text);
+                ASSERT_COLUMN_EQ(
+                    createColumn<Nullable<Float64>>({1, 1, 1, 0, 1, 1, 0, 0, 0, 1}),
+                    executeFunction(
+                        "local_match_against_boolean",
+                        {createConstColumn<String>(10, query_text),
+                         documents,
+                         createConstColumn<String>(10, serializeLocalMatchAgainstBooleanQuery(query))},
+                        String(collation).empty() ? nullptr : TiDB::ITiDBCollator::getCollator(collation),
+                        true));
+            }
 }
 CATCH
 

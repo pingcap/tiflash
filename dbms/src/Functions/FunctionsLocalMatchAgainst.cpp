@@ -32,6 +32,7 @@
 #include <algorithm>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -63,9 +64,15 @@ constexpr UInt32 local_match_against_protocol_version = 2;
 
 struct FullTextToken
 {
+    // Query terms and the no-collator lowercase path own their spelling.
+    // Document views refer only to the current input column, which outlives
+    // both analyzed streams and matching. Never retain them across blocks.
     String text;
+    std::string_view source;
     size_t position = 0;
     size_t code_points = 0;
+
+    std::string_view value() const { return source.data() ? source : std::string_view(text); }
 };
 
 class FullTextColumn
@@ -79,12 +86,18 @@ public:
 
     void reserve(size_t size) { tokens.reserve(size); }
 
-    void append(std::string_view text, size_t position, size_t code_points)
+    void append(std::string_view text, size_t position, size_t code_points, bool borrow = false)
     {
         if (used == tokens.size())
             tokens.emplace_back();
         auto & token = tokens[used++];
-        token.text.assign(text.data(), text.size());
+        if (borrow)
+            token.source = text;
+        else
+        {
+            token.source = {};
+            token.text.assign(text.data(), text.size());
+        }
         token.position = position;
         token.code_points = code_points;
     }
@@ -140,8 +153,8 @@ struct BooleanClause
 
 struct AnalyzerScratch
 {
-    FullTextColumn raw_tokens;
     std::vector<size_t> char_boundaries;
+    String lowercase_run;
 };
 
 struct CompiledBooleanQuery
@@ -173,65 +186,62 @@ bool isFullTextToken(UInt32 code_point)
 
 std::pair<UInt32, size_t> decodeCodePoint(std::string_view text, size_t offset)
 {
+    // Most document bytes are ASCII. Keep the multibyte/invalid-byte
+    // semantics below, but avoid calling the generic decoder for ASCII.
+    const auto byte = static_cast<unsigned char>(text[offset]);
+    if (byte < 0x80)
+        return {byte, 1};
     const auto decoded = UTF8::utf8Decode(text.data() + offset, text.size() - offset);
     if (decoded.second == 0 || decoded.first == UTF8::UTF8_Error || decoded.second > text.size() - offset)
         return {0xFFFD, 1}; // Go's utf8.DecodeRuneInString also consumes one invalid byte as RuneError.
     return {decoded.first, decoded.second};
 }
 
-void tokenizeTextInto(
-    std::string_view text,
-    FullTextColumn & result,
-    const TiDB::TiDBCollatorPtr & collator = nullptr,
-    bool preserve_case = false,
-    bool ngram_document = false)
+template <typename Consumer>
+void scanStandardTokens(std::string_view text, Consumer && consume)
 {
-    result.clear();
     size_t position = 0;
     for (size_t i = 0; i < text.size();)
     {
         const auto [code_point, length] = decodeCodePoint(text, i);
-        // MySQL ngram_parse retains any valid multibyte character but stops
-        // at malformed UTF-8. ASCII non-word characters still split runs.
-        if (ngram_document && length == 1 && code_point >= 0x80)
-            break;
-        if (!(ngram_document && length > 1) && !isFullTextToken(code_point))
+        if (!isFullTextToken(code_point))
         {
             i += length;
             continue;
         }
 
         const size_t token_start = i;
-        size_t code_points = 0;
+        // The first character has already been decoded and classified.
+        size_t code_points = 1;
+        i += length;
         while (i < text.size())
         {
             const auto [code_point, length] = decodeCodePoint(text, i);
-            if (ngram_document && length == 1 && code_point >= 0x80)
-                break;
-            if (!(ngram_document && length > 1) && !isFullTextToken(code_point))
+            if (!isFullTextToken(code_point))
                 break;
             ++code_points;
             i += length;
         }
 
-        // If a collation is present, retain the source spelling and let the
-        // collator decide case and accent equivalence during matching. This
-        // is important for binary collations, where lower-casing would make
-        // a case-sensitive MATCH unexpectedly case-insensitive. Keep the
-        // legacy lower-case behavior for callers without collation metadata.
-        result.append(text.substr(token_start, i - token_start), position++, code_points);
-        if (!collator && !preserve_case)
-            lowercaseTokenInPlace(result[result.size() - 1].text);
+        // Positions include source tokens subsequently removed by filtering.
+        consume(text.substr(token_start, i - token_start), position++, code_points);
     }
 }
 
-FullTextColumn tokenizeText(
-    std::string_view text,
-    const TiDB::TiDBCollatorPtr & collator = nullptr,
-    bool preserve_case = false)
+void tokenizeTextInto(std::string_view text, FullTextColumn & result, const TiDB::TiDBCollatorPtr & collator = nullptr)
+{
+    result.clear();
+    scanStandardTokens(text, [&](std::string_view token, size_t position, size_t code_points) {
+        result.append(token, position, code_points);
+        if (!collator)
+            lowercaseTokenInPlace(result[result.size() - 1].text);
+    });
+}
+
+FullTextColumn tokenizeText(std::string_view text, const TiDB::TiDBCollatorPtr & collator = nullptr)
 {
     FullTextColumn result;
-    tokenizeTextInto(text, result, collator, preserve_case);
+    tokenizeTextInto(text, result, collator);
     return result;
 }
 
@@ -244,32 +254,61 @@ const std::unordered_set<String> & defaultStopwords()
     return stopwords;
 }
 
-const std::unordered_map<size_t, std::vector<String>> & defaultStopwordsByLength()
+// Owned collation keys are compiled once per executeImpl, then reused by
+// query analysis and every document in the block. The scratch key is local
+// to that execution, never shared across concurrent calls. Use the stopword
+// (server) collation, not the MATCH column collation.
+class BuiltinStopwordLookup
 {
-    static const auto stopwords_by_length = [] {
-        std::unordered_map<size_t, std::vector<String>> result;
+public:
+    explicit BuiltinStopwordLookup(TiDB::TiDBCollatorPtr collator_)
+        : collator(collator_)
+    {
         for (const auto & stopword : defaultStopwords())
         {
-            const size_t length
-                = UTF8::countCodePoints(reinterpret_cast<const UInt8 *>(stopword.data()), stopword.size());
-            result[length].push_back(stopword);
+            const auto key = collator->sortKeyFastPath(stopword.data(), stopword.size(), key_buffer);
+            // sortKeyFastPath may reference its input or key_buffer; copy it.
+            String owned_key(key.data, key.size);
+            keys.insert(owned_key);
+            // The built-in list is ASCII. Preserve NGRAM's code-point length
+            // buckets even for collations with expansions/ignorable weights.
+            keys_by_length[stopword.size()].insert(std::move(owned_key));
         }
-        return result;
-    }();
-    return stopwords_by_length;
-}
+    }
 
-bool isDefaultStopword(std::string_view token, const TiDB::TiDBCollatorPtr & stopword_collator)
+    bool contains(std::string_view token) const { return contains(token, keys); }
+
+    bool contains(std::string_view token, size_t code_points) const
+    {
+        const auto bucket = keys_by_length.find(code_points);
+        return bucket != keys_by_length.end() && contains(token, bucket->second);
+    }
+
+private:
+    struct KeyHash
+    {
+        using is_transparent = void;
+        size_t operator()(std::string_view key) const { return std::hash<std::string_view>{}(key); }
+    };
+    using Keys = std::unordered_set<String, KeyHash, std::equal_to<>>;
+
+    bool contains(std::string_view token, const Keys & lookup) const
+    {
+        // sortKey (rather than sortKeyNoTrim) preserves PAD SPACE/NO PAD
+        // equality, as well as the collator's case/accent semantics.
+        const auto key = collator->sortKeyFastPath(token.data(), token.size(), key_buffer);
+        return lookup.contains(std::string_view(key.data, key.size));
+    }
+
+    TiDB::TiDBCollatorPtr collator;
+    Keys keys;
+    std::unordered_map<size_t, Keys> keys_by_length;
+    mutable String key_buffer;
+};
+
+bool isDefaultStopword(std::string_view token, const BuiltinStopwordLookup * stopwords)
 {
-    const auto & stopwords = defaultStopwords();
-    if (!stopword_collator)
-        return stopwords.contains(Poco::UTF8::toLower(String(token)));
-    // MySQL compares stopwords using collation_server. This is independent of
-    // the MATCH column collation and may be case-sensitive (for example
-    // utf8mb4_bin).
-    return std::any_of(stopwords.begin(), stopwords.end(), [&](const String & stopword) {
-        return stopword_collator->compare(token.data(), token.size(), stopword.data(), stopword.size()) == 0;
-    });
+    return stopwords ? stopwords->contains(token) : defaultStopwords().contains(Poco::UTF8::toLower(String(token)));
 }
 
 bool containsNgramStopword(
@@ -277,29 +316,18 @@ bool containsNgramStopword(
     const std::vector<size_t> & char_boundaries,
     size_t ngram_start,
     size_t ngram_token_size,
-    const TiDB::TiDBCollatorPtr & stopword_collator)
+    const BuiltinStopwordLookup * stopwords)
 {
     const size_t ngram_end = ngram_start + ngram_token_size;
-    const auto & stopwords = defaultStopwords();
-    const auto & stopwords_by_length = defaultStopwordsByLength();
     for (size_t start = ngram_start; start < ngram_end; ++start)
     {
         for (size_t end = start + 1; end <= ngram_end; ++end)
         {
             const auto candidate = token.substr(char_boundaries[start], char_boundaries[end] - char_boundaries[start]);
-            if (!stopword_collator && stopwords.contains(Poco::UTF8::toLower(String(candidate))))
+            if (!stopwords && defaultStopwords().contains(Poco::UTF8::toLower(String(candidate))))
                 return true;
-            if (stopword_collator)
-            {
-                const auto found = stopwords_by_length.find(end - start);
-                if (found != stopwords_by_length.end()
-                    && std::any_of(found->second.begin(), found->second.end(), [&](const String & stopword) {
-                           return stopword_collator
-                                      ->compare(candidate.data(), candidate.size(), stopword.data(), stopword.size())
-                               == 0;
-                       }))
-                    return true;
-            }
+            if (stopwords && stopwords->contains(candidate, end - start))
+                return true;
         }
     }
     return false;
@@ -309,36 +337,35 @@ void analyzeTextInto(
     std::string_view text,
     FullTextColumn & result,
     const TiDB::TiDBCollatorPtr & collator = nullptr,
-    const TiDB::TiDBCollatorPtr & stopword_collator = nullptr,
+    const BuiltinStopwordLookup * stopwords = nullptr,
     size_t min_token_size = default_min_token_size,
     size_t max_token_size = default_max_token_size,
-    bool enable_stopword = true)
+    bool enable_stopword = true,
+    bool borrow_document = false)
 {
-    const bool preserve_case = enable_stopword && static_cast<bool>(stopword_collator);
-    tokenizeTextInto(text, result, collator, preserve_case);
-    result.filterInPlace([&](const FullTextToken & token) {
-        return token.code_points >= min_token_size && token.code_points <= max_token_size
-            && (!enable_stopword || !isDefaultStopword(token.text, stopword_collator));
+    result.clear();
+    scanStandardTokens(text, [&](std::string_view token, size_t position, size_t code_points) {
+        // Filter before materializing. Stopwords use the source spelling and
+        // server collation, independently of the MATCH column collation.
+        if (code_points < min_token_size || code_points > max_token_size
+            || (enable_stopword && isDefaultStopword(token, stopwords)))
+            return;
+        result.append(token, position, code_points, borrow_document && collator);
+        if (!collator)
+            lowercaseTokenInPlace(result[result.size() - 1].text);
     });
-    // When stopwords are compared with collation_server, tokenization must
-    // retain source case until filtering is complete. MATCH without an
-    // explicit column collation still uses the existing case-insensitive
-    // behavior afterwards.
-    if (!collator && preserve_case)
-        for (auto & token : result)
-            lowercaseTokenInPlace(token.text);
 }
 
 FullTextColumn analyzeText(
     std::string_view text,
     const TiDB::TiDBCollatorPtr & collator = nullptr,
-    const TiDB::TiDBCollatorPtr & stopword_collator = nullptr,
+    const BuiltinStopwordLookup * stopwords = nullptr,
     size_t min_token_size = default_min_token_size,
     size_t max_token_size = default_max_token_size,
     bool enable_stopword = true)
 {
     FullTextColumn result;
-    analyzeTextInto(text, result, collator, stopword_collator, min_token_size, max_token_size, enable_stopword);
+    analyzeTextInto(text, result, collator, stopwords, min_token_size, max_token_size, enable_stopword);
     return result;
 }
 
@@ -348,31 +375,45 @@ void analyzeNgramTextInto(
     AnalyzerScratch & scratch,
     size_t ngram_token_size,
     const TiDB::TiDBCollatorPtr & collator = nullptr,
-    const TiDB::TiDBCollatorPtr & stopword_collator = nullptr,
-    bool enable_stopword = true)
+    const BuiltinStopwordLookup * stopwords = nullptr,
+    bool enable_stopword = true,
+    bool borrow_document = false)
 {
     result.clear();
     if (ngram_token_size == 0)
         return;
 
-    const bool preserve_case = enable_stopword && static_cast<bool>(stopword_collator);
-    tokenizeTextInto(text, scratch.raw_tokens, collator, preserve_case, true);
+    const bool preserve_case = enable_stopword && stopwords;
     size_t next_position_base = 0;
     auto & char_boundaries = scratch.char_boundaries;
-    for (auto & token : scratch.raw_tokens)
+    for (size_t offset = 0; offset < text.size();)
     {
-        char_boundaries.clear();
-        char_boundaries.reserve(token.code_points + 1);
-        char_boundaries.push_back(0);
-        for (size_t offset = 0; offset < token.text.size();)
+        const auto [first_code_point, first_length] = decodeCodePoint(text, offset);
+        // Stop the document on malformed UTF-8, retain all valid multibyte
+        // characters, and split runs on ASCII nonwords, as MySQL does.
+        if (first_length == 1 && first_code_point >= 0x80)
+            break;
+        if (first_length == 1 && !isFullTextToken(first_code_point))
         {
-            const auto [code_point, length] = decodeCodePoint(token.text, offset);
-            (void)code_point;
+            offset += first_length;
+            continue;
+        }
+        const size_t run_start = offset;
+        char_boundaries.clear();
+        char_boundaries.push_back(0);
+        offset += first_length;
+        char_boundaries.push_back(offset - run_start);
+        while (offset < text.size())
+        {
+            const auto [code_point, length] = decodeCodePoint(text, offset);
+            if (length == 1 && (code_point >= 0x80 || !isFullTextToken(code_point)))
+                break;
             offset += length;
-            char_boundaries.push_back(offset);
+            char_boundaries.push_back(offset - run_start);
         }
 
-        const size_t char_count = token.code_points;
+        std::string_view run = text.substr(run_start, offset - run_start);
+        const size_t char_count = char_boundaries.size() - 1;
         const size_t base_position = next_position_base;
         if (char_count < ngram_token_size)
         {
@@ -380,17 +421,34 @@ void analyzeNgramTextInto(
             continue;
         }
 
+        if (!collator && !preserve_case)
+        {
+            // The no-collator path lowercases a whole run before splitting.
+            // Unicode case mapping can change byte widths, so only that path
+            // needs a copy and another boundary scan. Never borrow scratch.
+            scratch.lowercase_run.assign(run.data(), run.size());
+            lowercaseTokenInPlace(scratch.lowercase_run);
+            run = scratch.lowercase_run;
+            char_boundaries.clear();
+            char_boundaries.push_back(0);
+            for (size_t i = 0; i < run.size();)
+            {
+                i += decodeCodePoint(run, i).second;
+                char_boundaries.push_back(i);
+            }
+        }
+
         for (size_t start = 0; start + ngram_token_size <= char_count; ++start)
         {
             const size_t begin = char_boundaries[start];
             const size_t end = char_boundaries[start + ngram_token_size];
-            if (!enable_stopword
-                || !containsNgramStopword(token.text, char_boundaries, start, ngram_token_size, stopword_collator))
+            if (!enable_stopword || !containsNgramStopword(run, char_boundaries, start, ngram_token_size, stopwords))
             {
                 result.append(
-                    std::string_view(token.text).substr(begin, end - begin),
+                    run.substr(begin, end - begin),
                     base_position + start,
-                    ngram_token_size);
+                    ngram_token_size,
+                    borrow_document && collator);
                 if (!collator && preserve_case)
                     lowercaseTokenInPlace(result[result.size() - 1].text);
             }
@@ -403,12 +461,12 @@ FullTextColumn analyzeNgramText(
     std::string_view text,
     size_t ngram_token_size,
     const TiDB::TiDBCollatorPtr & collator = nullptr,
-    const TiDB::TiDBCollatorPtr & stopword_collator = nullptr,
+    const BuiltinStopwordLookup * stopwords = nullptr,
     bool enable_stopword = true)
 {
     FullTextColumn result;
     AnalyzerScratch scratch;
-    analyzeNgramTextInto(text, result, scratch, ngram_token_size, collator, stopword_collator, enable_stopword);
+    analyzeNgramTextInto(text, result, scratch, ngram_token_size, collator, stopwords, enable_stopword);
     return result;
 }
 
@@ -458,11 +516,12 @@ bool matchesTermAt(
     const FullTextToken & token,
     const TiDB::TiDBCollatorPtr & collator)
 {
+    const auto value = token.value();
     if (!clause.prefix)
-        return textEquals(token.text, clause.terms[term_index], collator);
+        return textEquals(value, clause.terms[term_index], collator);
     if (collator && term_index < clause.prefix_matchers.size())
-        return clause.prefix_matchers[term_index]->match(token.text.data(), token.text.size());
-    return textStartsWith(token.text, clause.terms[term_index], collator);
+        return clause.prefix_matchers[term_index]->match(value.data(), value.size());
+    return textStartsWith(value, clause.terms[term_index], collator);
 }
 
 struct ClauseMatchState
@@ -507,7 +566,8 @@ bool matchesPhraseEndingAt(
             column.end(),
             expected_position,
             [](const FullTextToken & token, size_t position) { return token.position < position; });
-        if (it == column.end() || it->position != expected_position || !textEquals(it->text, clause.terms[i], collator))
+        if (it == column.end() || it->position != expected_position
+            || !textEquals(it->value(), clause.terms[i], collator))
             return false;
     }
     return true;
@@ -520,15 +580,15 @@ void analyzeColumnInto(
     bool use_ngram,
     size_t ngram_token_size,
     const TiDB::TiDBCollatorPtr & collator = nullptr,
-    const TiDB::TiDBCollatorPtr & stopword_collator = nullptr,
+    const BuiltinStopwordLookup * stopwords = nullptr,
     size_t min_token_size = default_min_token_size,
     size_t max_token_size = default_max_token_size,
     bool enable_stopword = true)
 {
     if (use_ngram)
-        analyzeNgramTextInto(document, output, scratch, ngram_token_size, collator, stopword_collator, enable_stopword);
+        analyzeNgramTextInto(document, output, scratch, ngram_token_size, collator, stopwords, enable_stopword, true);
     else
-        analyzeTextInto(document, output, collator, stopword_collator, min_token_size, max_token_size, enable_stopword);
+        analyzeTextInto(document, output, collator, stopwords, min_token_size, max_token_size, enable_stopword, true);
 }
 
 void resetClauseMatchStates(std::vector<ClauseMatchState> & states)
@@ -687,7 +747,7 @@ CompiledBooleanQuery compileBooleanQuery(
     size_t max_token_size,
     bool enable_stopword,
     const TiDB::TiDBCollatorPtr & collator = nullptr,
-    const TiDB::TiDBCollatorPtr & stopword_collator = nullptr)
+    const BuiltinStopwordLookup * stopwords = nullptr)
 {
     CompiledBooleanQuery compiled;
     if (!use_ngram && (max_token_size == 0 || min_token_size > max_token_size))
@@ -696,9 +756,8 @@ CompiledBooleanQuery compileBooleanQuery(
         return compiled;
     }
     auto analyze_query = [&](std::string_view text) {
-        return use_ngram
-            ? analyzeNgramText(text, ngram_token_size, collator, stopword_collator, enable_stopword)
-            : analyzeText(text, collator, stopword_collator, min_token_size, max_token_size, enable_stopword);
+        return use_ngram ? analyzeNgramText(text, ngram_token_size, collator, stopwords, enable_stopword)
+                         : analyzeText(text, collator, stopwords, min_token_size, max_token_size, enable_stopword);
     };
     for (const auto & node : query.nodes())
     {
@@ -746,7 +805,7 @@ CompiledBooleanQuery compileBooleanQuery(
         case tipb::LocalMatchAgainstBooleanTermType::LocalMatchAgainstBooleanTermPrefix:
         {
             const auto terms = use_ngram
-                ? analyzeNgramText(node.text(), ngram_token_size, collator, stopword_collator, enable_stopword)
+                ? analyzeNgramText(node.text(), ngram_token_size, collator, stopwords, enable_stopword)
                 : tokenizeText(node.text(), collator);
             if (use_ngram)
             {
@@ -830,7 +889,7 @@ CompiledBooleanQuery compileBooleanQuery(
                             offset += decodeCodePoint(word.text, offset).second;
                             boundaries.push_back(offset);
                         }
-                        return !containsNgramStopword(word.text, boundaries, 0, word.code_points, stopword_collator);
+                        return !containsNgramStopword(word.text, boundaries, 0, word.code_points, stopwords);
                     }))
                     break; // A short query unigram cannot occur in the document's fixed-size ngrams.
             }
@@ -1077,6 +1136,10 @@ public:
             throw Exception(
                 "local_match_against_boolean requires a supported stopword collation when stopwords are enabled",
                 ErrorCodes::ILLEGAL_COLUMN);
+        std::optional<BuiltinStopwordLookup> stopword_lookup;
+        if (enable_stopword)
+            stopword_lookup.emplace(stopword_collator);
+        const auto * stopwords = stopword_lookup ? &*stopword_lookup : nullptr;
         const CompiledBooleanQuery compiled_query = compileBooleanQuery(
             protocol_boolean_query,
             use_ngram,
@@ -1085,7 +1148,7 @@ public:
             max_token_size,
             enable_stopword,
             collator,
-            stopword_collator);
+            stopwords);
         if (compiled_query.matches_nothing)
         {
             ColumnPtr result_column;
@@ -1129,7 +1192,7 @@ public:
                     use_ngram,
                     ngram_token_size,
                     collator,
-                    stopword_collator,
+                    stopwords,
                     min_token_size,
                     max_token_size,
                     enable_stopword);
