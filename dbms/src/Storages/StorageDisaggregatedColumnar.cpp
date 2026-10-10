@@ -1202,6 +1202,20 @@ void RNColumnarReadTask::replaceReaderWork(
 }
 
 #ifdef DBMS_PUBLIC_GTEST
+RNColumnarReadTaskPtr RNColumnarReadTask::buildForTest(
+    const Context & context,
+    const TiDBTableScan & table_scan,
+    const FilterConditions & filter_conditions,
+    String & normalized_table_scan,
+    String & normalized_filter_conditions)
+{
+    auto shared_context = buildColumnarReaderSharedContext(Logger::get(), context, 0, table_scan, filter_conditions);
+    normalized_table_scan = shared_context->table_scan_data;
+    normalized_filter_conditions = shared_context->filter_conditions_data;
+    // Provide an inert plan to satisfy task invariants without opening a reader.
+    return std::make_shared<RNColumnarReadTask>(std::vector<RNColumnarReaderPlan>{{}}, 1, std::move(shared_context));
+}
+
 void RNColumnarReadTask::replaceReaderWorkForTest(
     const RNColumnarReaderWorkPtr & reader_work,
     std::vector<RNColumnarReaderPlan> replanned_reader_plans)

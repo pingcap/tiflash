@@ -135,6 +135,13 @@ public:
     std::optional<RNColumnarReaderWorkPtr> tryAcquireReaderWork();
 
 #ifdef DBMS_PUBLIC_GTEST
+    static RNColumnarReadTaskPtr buildForTest(
+        const Context & context,
+        const TiDBTableScan & table_scan,
+        const FilterConditions & filter_conditions,
+        String & normalized_table_scan,
+        String & normalized_filter_conditions);
+
     void replaceReaderWorkForTest(
         const RNColumnarReaderWorkPtr & reader_work,
         std::vector<RNColumnarReaderPlan> replanned_reader_plans);
