@@ -25,6 +25,7 @@
 namespace DB::ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
+extern const int LOGICAL_ERROR;
 } // namespace DB::ErrorCodes
 
 namespace DB::DM
@@ -53,6 +54,10 @@ void DMFileMeta::initializeIndices()
     directory.list(sub_files);
     for (const auto & name : sub_files)
     {
+        // Skip trim min-max files. Their names also end with `.idx` (`*.trim.idx`),
+        // but the prefix is not a plain ColId and must not enter column_indices.
+        if (endsWith(name, details::TRIM_INDEX_FILE_SUFFIX))
+            continue;
         if (endsWith(name, details::INDEX_FILE_SUFFIX))
         {
             column_indices.insert(
@@ -405,6 +410,14 @@ UInt64 DMFileMeta::getFileSize(ColId col_id, const String & filename) const
 {
     auto itr = column_stats.find(col_id);
     RUNTIME_CHECK(itr != column_stats.end(), col_id);
+    // Trim index size is only available from MergedSubFileInfo, never from ColumnStat.
+    if (endsWith(filename, details::TRIM_INDEX_FILE_SUFFIX))
+    {
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "trim index size must be read from MergedSubFileInfo, filename={}",
+            filename);
+    }
     if (endsWith(filename, ".idx"))
     {
         return itr->second.index_bytes;

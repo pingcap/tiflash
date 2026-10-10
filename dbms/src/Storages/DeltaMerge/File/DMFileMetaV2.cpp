@@ -109,7 +109,7 @@ void DMFileMetaV2::parseColumnStat(std::string_view buffer)
         ColumnStat stat;
         stat.parseFromBuffer(rbuf);
         // Do not overwrite the ColumnStat if already exist, it may
-        // created by `ExteandColumnStat`
+        // created by `ExtendColumnStat`
         column_stats.emplace(stat.col_id, std::move(stat));
     }
 }
@@ -181,7 +181,7 @@ void DMFileMetaV2::finalize(
         writeSLPackStatToBuffer(tmp_buffer),
         writeSLPackPropertyToBuffer(tmp_buffer),
         writeExtendColumnStatToBuffer(tmp_buffer),
-        writeMergedSubFilePosotionsToBuffer(tmp_buffer),
+        writeMergedSubFilePositionsToBuffer(tmp_buffer),
     };
     writePODBinary(meta_block_handles, tmp_buffer);
     writeIntBinary(static_cast<UInt64>(meta_block_handles.size()), tmp_buffer);
@@ -255,7 +255,7 @@ DMFileMeta::BlockHandle DMFileMetaV2::writeExtendColumnStatToBuffer(WriteBuffer 
     return BlockHandle{BlockType::ExtendColumnStat, offset, buffer.count() - offset};
 }
 
-DMFileMeta::BlockHandle DMFileMetaV2::writeMergedSubFilePosotionsToBuffer(WriteBuffer & buffer)
+DMFileMeta::BlockHandle DMFileMetaV2::writeMergedSubFilePositionsToBuffer(WriteBuffer & buffer)
 {
     auto offset = buffer.count();
 
