@@ -856,12 +856,12 @@ CompiledBooleanQuery compileBooleanQuery(
         return config.use_ngram
             ? analyzeNgramText(text, config.ngram_token_size, collator, stopwords, config.enable_stopword)
             : analyzeText(
-                  text,
-                  collator,
-                  stopwords,
-                  config.min_token_size,
-                  config.max_token_size,
-                  config.enable_stopword);
+                text,
+                collator,
+                stopwords,
+                config.min_token_size,
+                config.max_token_size,
+                config.enable_stopword);
     };
     for (const auto & node : query.nodes())
     {

@@ -189,10 +189,11 @@ try
             const auto [actions, names] = buildLocalMatchDAGActions(*context, inputs, {expr});
             Block block(columns);
             actions->execute(block);
-            const auto expected = prefix ? (binary ? createColumn<Nullable<Float64>>({0, 1, 0, 1, 0, 1})
-                                                   : createColumn<Nullable<Float64>>({1, 1, 0, 1, 0, 0}))
-                                         : (binary ? createColumn<Nullable<Float64>>({0, 0, 0, 0, 0, 1})
-                                                   : createColumn<Nullable<Float64>>({1, 1, 0, 0, 0, 0}));
+            const auto expected = prefix
+                ? (binary ? createColumn<Nullable<Float64>>({0, 1, 0, 1, 0, 1})
+                          : createColumn<Nullable<Float64>>({1, 1, 0, 1, 0, 0}))
+                : (binary ? createColumn<Nullable<Float64>>({0, 0, 0, 0, 0, 1})
+                          : createColumn<Nullable<Float64>>({1, 1, 0, 0, 0, 0}));
             ASSERT_COLUMN_EQ(expected, block.getByName(names[0]));
         }
     }
@@ -280,19 +281,19 @@ try
         const auto first = ngram
             ? BlockCase{{createColumn<Nullable<String>>({"中文测试", "中文", "中文测试", "", {}}, "title"), createColumn<Nullable<String>>({{}, "测试", "mysql", "中文测试", {}}, "body")}, createColumn<Nullable<Float64>>({1, 0, 0, 1, 0})}
             : BlockCase{
-                  {createColumn<Nullable<String>>(
-                       {"QUICK the fox", "quick the fox", "quick", {}, "quick the fox"},
-                       "title"),
-                   createColumn<Nullable<String>>({{}, "mysql", "the fox", {}, "MYSQL"}, "body")},
-                  createColumn<Nullable<Float64>>({1, 0, 0, 0, 0})};
+                {createColumn<Nullable<String>>(
+                     {"QUICK the fox", "quick the fox", "quick", {}, "quick the fox"},
+                     "title"),
+                 createColumn<Nullable<String>>({{}, "mysql", "the fox", {}, "MYSQL"}, "body")},
+                createColumn<Nullable<Float64>>({1, 0, 0, 0, 0})};
         const auto second = ngram
             ? BlockCase{{createColumn<Nullable<String>>({"中文 test", {}, "中文测试", "中 文测试"}, "title"), createColumn<Nullable<String>>({"", {}, "", "中文测试"}, "body")}, createColumn<Nullable<Float64>>({0, 0, 1, 1})}
             : BlockCase{
-                  {createColumn<Nullable<String>>(
-                       {"slow the fox", "quick the fox", {}, "quick fox", "quick the fox"},
-                       "title"),
-                   createColumn<Nullable<String>>({"", {}, "quick the fox", "", {}}, "body")},
-                  createColumn<Nullable<Float64>>({0, 1, 1, 0, 1})};
+                {createColumn<Nullable<String>>(
+                     {"slow the fox", "quick the fox", {}, "quick fox", "quick the fox"},
+                     "title"),
+                 createColumn<Nullable<String>>({"", {}, "quick the fox", "", {}}, "body")},
+                createColumn<Nullable<Float64>>({0, 1, 1, 0, 1})};
         const BlockCase nulls{
             {createColumn<Nullable<String>>({{}, {}}, "title"), createColumn<Nullable<String>>({{}, {}}, "body")},
             createColumn<Nullable<Float64>>({0, 0})};
