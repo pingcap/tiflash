@@ -244,7 +244,7 @@ try
                        "id\":0,\"affected_options\":null}";
     ASSERT_NO_THROW(diff.deserialize(data));
 
-    const auto assert_mv_action = [](const Int8 action, const SchemaActionType expected_action) {
+    const auto assert_mv_action = [](const Int32 action, const SchemaActionType expected_action) {
         SchemaDiff mv_diff;
         const auto mv_data = fmt::format(
             "{{\"version\":40,\"type\":{},\"schema_id\":69,\"table_id\":71,\"old_table_id\":70,\"old_schema_id\":0,"
@@ -253,6 +253,13 @@ try
         ASSERT_NO_THROW(mv_diff.deserialize(mv_data));
         ASSERT_EQ(mv_diff.type, expected_action);
     };
+    assert_mv_action(85, SchemaActionType::ActionCreateMaterializedViewLog);
+    assert_mv_action(86, SchemaActionType::ActionCreateMaterializedView);
+    assert_mv_action(87, SchemaActionType::ActionDropMaterializedViewLog);
+    assert_mv_action(88, SchemaActionType::ActionDropMaterializedView);
+    assert_mv_action(89, SchemaActionType::ActionAlterMaterializedViewRefresh);
+    assert_mv_action(90, SchemaActionType::ActionAlterMaterializedViewLogPurge);
+    assert_mv_action(91, SchemaActionType::ActionAlterMaterializedViewAttributes);
     assert_mv_action(92, SchemaActionType::ActionMViewRefreshOutOfPlaceCutover);
     assert_mv_action(93, SchemaActionType::ActionCreateMaterializedViewShadow);
     assert_mv_action(94, SchemaActionType::ActionDropMaterializedViewShadow);
@@ -313,6 +320,69 @@ try
     ASSERT_TRUE(mustGetSyncedTable(old_mv_id)->isTombstone());
     ASSERT_FALSE(mustGetSyncedTable(shadow_id)->isTombstone());
     ASSERT_EQ(mustGetSyncedTable(shadow_id)->getTableInfo().name, mv_name);
+}
+CATCH
+
+TEST_F(SchemaSyncTest, CreateMaterializedViewRollbackSchemaDiffs)
+try
+{
+    auto pd_client = global_ctx.getTMTContext().getPDClient();
+
+    const String db_name = "mock_db";
+    MockTiDB::instance().newDataBase(db_name);
+
+    auto cols = ColumnsDescription({
+        {"col1", typeFromString("String")},
+        {"col2", typeFromString("Int64")},
+    });
+    auto [db_exists, db_id] = MockTiDB::instance().getDBIDByName(db_name);
+    ASSERT_TRUE(db_exists);
+
+    MockSchemaGetter getter;
+    DatabaseInfoCache databases;
+    TableIDMap table_id_map(Logger::get("SchemaSyncTest"));
+    SchemaBuilder<MockSchemaGetter, SchemaNameMapper> builder(getter, global_ctx, databases, table_id_map);
+
+    const std::vector<std::pair<String, SchemaActionType>> create_actions{
+        {"mv_rollback", SchemaActionType::ActionCreateMaterializedView},
+        {"mlog_rollback", SchemaActionType::ActionCreateMaterializedViewLog},
+    };
+    for (const auto & [table_name, create_action] : create_actions)
+    {
+        const auto table_id = MockTiDB::instance().newTable(db_name, table_name, cols, pd_client->getTS(), "");
+
+        SchemaDiff create_diff;
+        create_diff.type = create_action;
+        create_diff.schema_id = db_id;
+        create_diff.table_id = table_id;
+        builder.applyDiff(create_diff);
+
+        ASSERT_TRUE(table_id_map.tableIDInDatabaseIdMap(table_id));
+        ASSERT_TRUE(builder.applyTable(db_id, table_id, table_id, true));
+        ASSERT_FALSE(mustGetSyncedTable(table_id)->isTombstone());
+
+        // TiDB may reload MV metadata in phase 2 using table_id == old_table_id;
+        // this remains a create/update diff, not the rollback encoding.
+        SchemaDiff reload_diff;
+        reload_diff.type = create_action;
+        reload_diff.schema_id = db_id;
+        reload_diff.table_id = table_id;
+        reload_diff.old_table_id = table_id;
+        builder.applyDiff(reload_diff);
+        ASSERT_FALSE(mustGetSyncedTable(table_id)->isTombstone());
+
+        // Simulate TiDB removing the just-created metadata as part of DDL rollback.
+        MockTiDB::instance().dropTable(global_ctx, db_name, table_name, /*drop_regions=*/false);
+
+        SchemaDiff rollback_diff;
+        rollback_diff.type = create_action;
+        rollback_diff.schema_id = db_id;
+        rollback_diff.table_id = 0;
+        rollback_diff.old_table_id = table_id;
+        builder.applyDiff(rollback_diff);
+
+        ASSERT_TRUE(mustGetSyncedTable(table_id)->isTombstone()) << table_name;
+    }
 }
 CATCH
 
