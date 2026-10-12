@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <Columns/IColumn.h>
 #include <Core/Block.h>
 #include <Core/ColumnNumbers.h>
 #include <Core/Field.h>
@@ -107,6 +108,26 @@ public:
     {
         return prepare(block)->execute(block, arguments, result);
     }
+
+    /// Execute the function only on rows where mask[i] != 0. Rows where mask[i] == 0
+    /// are filled with the default value of the result type, and the result column
+    /// stored at `result` has mask.size() rows.
+    ///
+    /// The default implementation filters the argument columns, runs execute() on
+    /// the filtered block and expands the result back to full size: semantically
+    /// equivalent to eager execution, but it copies both arguments and result.
+    /// Functions whose per-row evaluation is expensive (e.g. regexp or JSON parsing
+    /// on long strings) can override this to skip masked-off rows without the
+    /// filter/expand copies.
+    ///
+    /// mask.size() is the authoritative row count; block.rows() must not be used
+    /// because the block may carry unrelated helper columns with a different row
+    /// count (e.g. match_helper_column in semi joins).
+    virtual void executeWithMask(
+        Block & block,
+        const ColumnNumbers & arguments,
+        size_t result,
+        const IColumn::Filter & mask) const;
 
     /** Should we evaluate this function while constant folding, if arguments are constants?
       * Usually this is true. Notable counterexample is function 'sleep'.
@@ -302,6 +323,15 @@ public:
     /// See IFunctionBase::canThrow.
     virtual bool canThrow() const { return false; }
 
+    /// See IFunctionBase::executeWithMask. The default implementation filters the
+    /// argument columns, executes through DefaultExecutable (so that the null and
+    /// constant default implementations still apply) and expands the result back.
+    virtual void executeWithMask(
+        Block & block,
+        const ColumnNumbers & arguments,
+        size_t result,
+        const IColumn::Filter & mask) const;
+
     using Monotonicity = IFunctionBase::Monotonicity;
     virtual Monotonicity getMonotonicityForRange(
         const IDataType & /*type*/,
@@ -397,6 +427,15 @@ public:
         return function->isSuitableForShortCircuitArgumentsExecution();
     }
     bool canThrow() const override { return function->canThrow(); }
+
+    void executeWithMask(
+        Block & block,
+        const ColumnNumbers & arguments,
+        size_t result,
+        const IColumn::Filter & mask) const override
+    {
+        return function->executeWithMask(block, arguments, result, mask);
+    }
 
     bool isInjective(const Block & sample_block) override { return function->isInjective(sample_block); }
 

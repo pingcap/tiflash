@@ -289,6 +289,33 @@ const ColumnFunction * checkAndGetShortCircuitArgument(const ColumnPtr & column)
     return function && function->isShortCircuitArgument() ? function : nullptr;
 }
 
+ColumnPtr ColumnFunction::tryReduceWithMask(const IColumn::Filter & mask) const
+{
+    for (const auto & captured : captured_columns)
+        if (checkAndGetShortCircuitArgument(captured.column))
+            return nullptr;
+
+    Block block(captured_columns);
+    block.insert({nullptr, function->getReturnType(), ""});
+
+    ColumnNumbers arguments(captured_columns.size());
+    for (size_t i = 0; i < arguments.size(); ++i)
+        arguments[i] = i;
+
+    function->executeWithMask(block, arguments, captured_columns.size(), mask);
+
+    /// Unlike the filter-then-reduce path, an executeWithMask override is trusted
+    /// to produce the result itself, so enforce the row-count contract here.
+    ColumnPtr result = block.getByPosition(captured_columns.size()).column;
+    RUNTIME_CHECK_MSG(
+        result != nullptr && result->size() == mask.size(),
+        "Masked execution of function {} produced {} rows instead of {}",
+        function->getName(),
+        result ? result->size() : 0,
+        mask.size());
+    return result;
+}
+
 void maskedExecute(ColumnWithTypeAndName & column, const IColumn::Filter & mask)
 {
     const auto * deferred = checkAndGetShortCircuitArgument(column.column);
@@ -305,6 +332,18 @@ void maskedExecute(ColumnWithTypeAndName & column, const IColumn::Filter & mask)
     if (selected == mask.size())
     {
         column.column = deferred->reduce().column;
+        return;
+    }
+
+    /// When no captured argument is deferred, let the function execute with the
+    /// mask directly (IFunctionBase::executeWithMask): functions that override it
+    /// skip masked-off rows without the filter/expand copies, and the default
+    /// implementation reproduces the filter/expand path below. When a captured
+    /// argument is itself deferred (nested short-circuit), keep filter-then-reduce
+    /// so that the mask reaches the innermost deferred nodes before evaluation.
+    if (auto masked_result = deferred->tryReduceWithMask(mask))
+    {
+        column.column = std::move(masked_result);
         return;
     }
 
