@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #include <Common/UTF8Helpers.h>
+#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/LocalMatchAgainstTokenChars.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -86,7 +88,280 @@ String serializeLocalMatchAgainstBooleanQuery(const tipb::LocalMatchAgainstBoole
         encoded_query.set_stopword_collation("utf8mb4_bin");
     return encoded_query.SerializeAsString();
 }
+
+tipb::LocalMatchAgainstBooleanQuery makeRequiredLocalMatchQuery(
+    const String & text,
+    tipb::LocalMatchAgainstBooleanTermType term_type = tipb::LocalMatchAgainstBooleanTermWord)
+{
+    tipb::LocalMatchAgainstBooleanQuery query;
+    query.set_innodb_ft_min_token_size(3);
+    query.set_innodb_ft_max_token_size(84);
+    auto * node = query.add_nodes();
+    node->set_occur(tipb::LocalMatchAgainstBooleanOccurMust);
+    node->set_term_type(term_type);
+    node->set_text(text);
+    return query;
+}
+
+// Construct the wire expression directly: metadata belongs to Expr.val, not
+// SQL children. ColumnRef offsets and signed collations use the real DAG path.
+tipb::Expr makeLocalMatchDAGExpr(
+    const String & search,
+    const tipb::LocalMatchAgainstBooleanQuery & query,
+    const NamesAndTypes & inputs,
+    Int32 collation,
+    bool null_search = false)
+{
+    tipb::Expr expr;
+    expr.set_tp(tipb::ExprType::ScalarFunc);
+    expr.set_sig(tipb::ScalarFuncSig::LocalMatchAgainstBoolean);
+    expr.set_val(serializeLocalMatchAgainstBooleanQuery(query));
+    auto * result_type = expr.mutable_field_type();
+    result_type->set_tp(TiDB::TypeDouble);
+    result_type->set_collate(-collation);
+    const bool nullable = null_search
+        || std::any_of(inputs.begin(), inputs.end(), [](const auto & input) { return input.type->isNullable(); });
+    result_type->set_flag(nullable ? 0 : TiDB::ColumnFlagNotNull);
+    auto search_expr = null_search ? constructNULLLiteralTiExpr() : constructStringLiteralTiExpr(search);
+    search_expr.mutable_field_type()->set_tp(TiDB::TypeString);
+    search_expr.mutable_field_type()->set_collate(-collation);
+    *expr.add_children() = std::move(search_expr);
+    for (size_t i = 0; i < inputs.size(); ++i)
+    {
+        auto column = constructInt64LiteralTiExpr(static_cast<Int64>(i));
+        column.set_tp(tipb::ExprType::ColumnRef);
+        column.mutable_field_type()->set_tp(TiDB::TypeString);
+        column.mutable_field_type()->set_flag(inputs[i].type->isNullable() ? 0 : TiDB::ColumnFlagNotNull);
+        column.mutable_field_type()->set_collate(-collation);
+        *expr.add_children() = std::move(column);
+    }
+    return expr;
+}
+
+std::pair<ExpressionActionsPtr, Names> buildLocalMatchDAGActions(
+    Context & context,
+    const NamesAndTypes & inputs,
+    const std::vector<tipb::Expr> & expressions)
+{
+    DAGExpressionAnalyzer analyzer(inputs, context);
+    ExpressionActionsChain chain;
+    auto & step = analyzer.initAndGetLastStep(chain);
+    Names results;
+    for (const auto & expr : expressions)
+    {
+        results.push_back(analyzer.getActions(expr, step.actions));
+        step.required_output.push_back(results.back());
+    }
+    chain.finalize();
+    return {step.actions, results};
+}
 } // namespace
+
+TEST_F(TestLocalMatchAgainst, MatchBooleanDAGCollationAndMultiColumn)
+try
+{
+    const ColumnsWithTypeAndName columns{
+        createColumn<Nullable<String>>({"CAFE", {}, "cafe", "cafeteria", {}, "cafe"}, "title"),
+        createColumn<Nullable<String>>({"", "café", "mysql", "", {}, "MYSQL"}, "body")};
+    const NamesAndTypes inputs{{"title", columns[0].type}, {"body", columns[1].type}};
+    for (const auto * collation :
+         {"utf8mb4_bin", "utf8mb4_0900_bin", "utf8mb4_general_ci", "utf8mb4_unicode_ci", "utf8mb4_0900_ai_ci"})
+    {
+        const auto collator = TiDB::ITiDBCollator::getCollator(collation);
+        ASSERT_NE(collator, nullptr);
+        const bool binary = std::string_view(collation).ends_with("_bin");
+        for (const bool prefix : {false, true})
+        {
+            SCOPED_TRACE(fmt::format("collation={} prefix={}", collation, prefix));
+            auto query = makeRequiredLocalMatchQuery(
+                prefix ? "caf" : "cafe",
+                prefix ? tipb::LocalMatchAgainstBooleanTermPrefix : tipb::LocalMatchAgainstBooleanTermWord);
+            auto * prohibited = query.add_nodes();
+            prohibited->set_occur(tipb::LocalMatchAgainstBooleanOccurMustNot);
+            prohibited->set_term_type(tipb::LocalMatchAgainstBooleanTermWord);
+            prohibited->set_text("mysql");
+            const auto expr = makeLocalMatchDAGExpr(
+                prefix ? "+caf* -mysql" : "+cafe -mysql",
+                query,
+                inputs,
+                collator->getCollatorId());
+            ASSERT_EQ(expr.children_size(), 3); // Query + two MATCH columns; no metadata SQL child.
+            const auto [actions, names] = buildLocalMatchDAGActions(*context, inputs, {expr});
+            Block block(columns);
+            actions->execute(block);
+            const auto expected = prefix ? (binary ? createColumn<Nullable<Float64>>({0, 1, 0, 1, 0, 1})
+                                                   : createColumn<Nullable<Float64>>({1, 1, 0, 1, 0, 0}))
+                                         : (binary ? createColumn<Nullable<Float64>>({0, 0, 0, 0, 0, 1})
+                                                   : createColumn<Nullable<Float64>>({1, 1, 0, 0, 0, 0}));
+            ASSERT_COLUMN_EQ(expected, block.getByName(names[0]));
+        }
+    }
+}
+CATCH
+
+TEST_F(TestLocalMatchAgainst, MatchBooleanDAGMetadataIsolation)
+try
+{
+    const auto documents
+        = createColumn<String>({"the", "the 中文", "中文", "中文词", "中文测试", "", "中 文", "foo", "thé"}, "body");
+    const NamesAndTypes inputs{{"body", documents.type}};
+    const auto binary = TiDB::ITiDBCollator::UTF8MB4_BIN;
+    std::vector<tipb::Expr> expressions;
+    ColumnsWithTypeAndName expected;
+    const auto append = [&](const String & search,
+                            const tipb::LocalMatchAgainstBooleanQuery & query,
+                            Int32 collation,
+                            const ColumnWithTypeAndName & result) {
+        expressions.push_back(makeLocalMatchDAGExpr(search, query, inputs, collation));
+        expected.push_back(result);
+    };
+    auto query = makeRequiredLocalMatchQuery("the");
+    append("+the", query, binary, createColumn<Float64>({0, 0, 0, 0, 0, 0, 0, 0, 0}));
+    query.set_stopword_mode(tipb::LocalMatchAgainstStopwordModeDisabled);
+    append("+the", query, binary, createColumn<Float64>({1, 1, 0, 0, 0, 0, 0, 0, 0}));
+
+    query = makeRequiredLocalMatchQuery("中文");
+    query.set_parser(tipb::LocalMatchAgainstParserNgram);
+    query.set_stopword_mode(tipb::LocalMatchAgainstStopwordModeDisabled);
+    query.set_ngram_token_size(2);
+    append("+中文", query, binary, createColumn<Float64>({0, 1, 1, 1, 1, 0, 0, 0, 0}));
+    query.set_ngram_token_size(3);
+    append("+中文", query, binary, createColumn<Float64>({0, 0, 0, 0, 0, 0, 0, 0, 0}));
+
+    query = makeRequiredLocalMatchQuery("foo");
+    append("+foo", query, binary, createColumn<Float64>({0, 0, 0, 0, 0, 0, 0, 1, 0}));
+    query.set_innodb_ft_min_token_size(4);
+    append("+foo", query, binary, createColumn<Float64>({0, 0, 0, 0, 0, 0, 0, 0, 0}));
+
+    query = makeRequiredLocalMatchQuery("thé");
+    query.set_stopword_collation("utf8mb4_bin");
+    append("+thé", query, TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI, createColumn<Float64>({0, 0, 0, 0, 0, 0, 0, 0, 1}));
+    query.set_stopword_collation("utf8mb4_general_ci");
+    append("+thé", query, TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI, createColumn<Float64>({0, 0, 0, 0, 0, 0, 0, 0, 0}));
+
+    const auto [actions, names] = buildLocalMatchDAGActions(*context, inputs, expressions);
+    ASSERT_EQ(names.size(), expected.size());
+    for (size_t i = 0; i < names.size(); i += 2)
+        ASSERT_NE(names[i], names[i + 1]) << "Different metadata must not alias the same action";
+    Block block({documents});
+    actions->execute(block);
+    for (size_t i = 0; i < names.size(); ++i)
+    {
+        SCOPED_TRACE(i);
+        ASSERT_COLUMN_EQ(expected[i], block.getByName(names[i]));
+    }
+}
+CATCH
+
+TEST_F(TestLocalMatchAgainst, MatchBooleanDAGReusesActionsAcrossBlocks)
+try
+{
+    struct BlockCase
+    {
+        ColumnsWithTypeAndName columns;
+        ColumnWithTypeAndName expected;
+    };
+    for (const bool ngram : {false, true})
+    {
+        SCOPED_TRACE(ngram);
+        auto query = makeRequiredLocalMatchQuery(
+            ngram ? "中文测试" : "quick the fox",
+            tipb::LocalMatchAgainstBooleanTermPhrase);
+        if (ngram)
+        {
+            query.set_parser(tipb::LocalMatchAgainstParserNgram);
+            query.set_ngram_token_size(2);
+            query.set_stopword_mode(tipb::LocalMatchAgainstStopwordModeDisabled);
+        }
+        auto * prohibited = query.add_nodes();
+        prohibited->set_occur(tipb::LocalMatchAgainstBooleanOccurMustNot);
+        prohibited->set_term_type(tipb::LocalMatchAgainstBooleanTermWord);
+        prohibited->set_text("mysql");
+        const auto first = ngram
+            ? BlockCase{{createColumn<Nullable<String>>({"中文测试", "中文", "中文测试", "", {}}, "title"), createColumn<Nullable<String>>({{}, "测试", "mysql", "中文测试", {}}, "body")}, createColumn<Nullable<Float64>>({1, 0, 0, 1, 0})}
+            : BlockCase{
+                  {createColumn<Nullable<String>>(
+                       {"QUICK the fox", "quick the fox", "quick", {}, "quick the fox"},
+                       "title"),
+                   createColumn<Nullable<String>>({{}, "mysql", "the fox", {}, "MYSQL"}, "body")},
+                  createColumn<Nullable<Float64>>({1, 0, 0, 0, 0})};
+        const auto second = ngram
+            ? BlockCase{{createColumn<Nullable<String>>({"中文 test", {}, "中文测试", "中 文测试"}, "title"), createColumn<Nullable<String>>({"", {}, "", "中文测试"}, "body")}, createColumn<Nullable<Float64>>({0, 0, 1, 1})}
+            : BlockCase{
+                  {createColumn<Nullable<String>>(
+                       {"slow the fox", "quick the fox", {}, "quick fox", "quick the fox"},
+                       "title"),
+                   createColumn<Nullable<String>>({"", {}, "quick the fox", "", {}}, "body")},
+                  createColumn<Nullable<Float64>>({0, 1, 1, 0, 1})};
+        const BlockCase nulls{
+            {createColumn<Nullable<String>>({{}, {}}, "title"), createColumn<Nullable<String>>({{}, {}}, "body")},
+            createColumn<Nullable<Float64>>({0, 0})};
+        const BlockCase empty{
+            {createColumn<Nullable<String>>({}, "title"), createColumn<Nullable<String>>({}, "body")},
+            createColumn<Nullable<Float64>>({})};
+        const NamesAndTypes inputs{{"title", first.columns[0].type}, {"body", first.columns[1].type}};
+        const auto expr = makeLocalMatchDAGExpr(
+            ngram ? "+\"中文测试\" -mysql" : "+\"quick the fox\" -mysql",
+            query,
+            inputs,
+            TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI);
+        const auto [actions, names] = buildLocalMatchDAGActions(*context, inputs, {expr});
+        // The same compiled actions/function sees changing row counts, empty
+        // input, and old input again. No previous result or NULL map may leak.
+        for (size_t pass = 0; pass < 2; ++pass)
+            for (const auto * batch : {&first, &second, &nulls, &empty, &first})
+            {
+                SCOPED_TRACE(fmt::format("pass={} rows={}", pass, batch->expected.column->size()));
+                Block block(batch->columns);
+                actions->execute(block);
+                ASSERT_COLUMN_EQ(batch->expected, block.getByName(names[0]));
+            }
+    }
+}
+CATCH
+
+TEST_F(TestLocalMatchAgainst, MatchBooleanDAGColumnWrappersAndEmptyBlocks)
+try
+{
+    struct ColumnCase
+    {
+        ColumnWithTypeAndName document;
+        ColumnWithTypeAndName expected;
+    };
+    const std::vector<ColumnCase> cases{
+        {createColumn<String>({"quick", "", "quick fox", "slow"}, "body"), createColumn<Float64>({1, 0, 1, 0})},
+        {createColumn<Nullable<String>>({"quick", {}, "", "slow"}, "body"),
+         createColumn<Nullable<Float64>>({1, 0, 0, 0})},
+        {createColumn<Nullable<String>>({{}, {}, {}, {}}, "body"), createColumn<Nullable<Float64>>({0, 0, 0, 0})},
+        {createConstColumn<String>(4, "quick", "body"), createColumn<Float64>({1, 1, 1, 1})},
+        {createConstColumn<Nullable<String>>(4, "quick", "body"), createColumn<Nullable<Float64>>({1, 1, 1, 1})},
+        {createConstColumn<Nullable<String>>(4, {}, "body"), createColumn<Nullable<Float64>>({0, 0, 0, 0})},
+        {createConstColumn<String>(4, "", "body"), createColumn<Float64>({0, 0, 0, 0})}};
+    const auto query = makeRequiredLocalMatchQuery("quick");
+    for (size_t i = 0; i < cases.size(); ++i)
+        for (const bool null_search : {false, true})
+        {
+            SCOPED_TRACE(fmt::format("case={} null_search={}", i, null_search));
+            const auto & column_case = cases[i];
+            const NamesAndTypes inputs{{"body", column_case.document.type}};
+            const auto expr
+                = makeLocalMatchDAGExpr("+quick", query, inputs, TiDB::ITiDBCollator::UTF8MB4_BIN, null_search);
+            const auto [actions, names] = buildLocalMatchDAGActions(*context, inputs, {expr});
+            const auto expected = null_search ? createColumn<Nullable<Float64>>({0, 0, 0, 0}) : column_case.expected;
+            for (const size_t rows : {4U, 0U, 4U})
+            {
+                SCOPED_TRACE(rows);
+                auto document = column_case.document;
+                document.column = document.column->cloneResized(rows);
+                auto expected_rows = expected;
+                expected_rows.column = expected_rows.column->cloneResized(rows);
+                Block block({document});
+                actions->execute(block);
+                ASSERT_COLUMN_EQ(expected_rows, block.getByName(names[0]));
+            }
+        }
+}
+CATCH
 
 TEST_F(TestLocalMatchAgainst, MatchBooleanMultiColumnNullable)
 try
