@@ -338,6 +338,15 @@ using FunctionDivideFloating = FunctionBinaryArithmetic<DivideFloatingImpl_t, Na
 using FunctionTiDBDivideFloating = FunctionBinaryArithmetic<TiDBDivideFloatingImpl_t, NameTiDBDivideFloating, false>;
 /// intDiv throws on division by zero, so its subtree is worth deferring under short-circuit
 /// evaluation (see IFunctionBase::canThrow).
+///
+/// Note: this kernel is never reached by TiDB-pushed queries. TiDB keeps integer
+/// division (`DIV`) to itself (ast.IntDiv is absent from scalarExprSupportedByFlash's
+/// whitelist, and the IntDivideInt/IntDivideDecimal sig mappings are commented out
+/// in DAGUtils.cpp), because MySQL returns NULL on division by zero while this
+/// kernel throws; `/` is pushed down as tidbDivide instead, which returns NULL on
+/// a zero divisor. The canThrow marking is kept for unit tests
+/// (gtest_short_circuit.cpp), which use intDiv as the simplest throwing function
+/// to exercise the short-circuit framework.
 class FunctionDivideIntegral final : public FunctionBinaryArithmetic<DivideIntegralImpl_t, NameDivideIntegral>
 {
 public:

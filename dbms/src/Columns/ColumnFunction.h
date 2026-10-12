@@ -76,6 +76,13 @@ public:
     ColumnWithTypeAndName reduce() const;
     bool isShortCircuitArgument() const { return is_short_circuit_argument; }
 
+    /// Execute the deferred function with `mask` via IFunctionBase::executeWithMask,
+    /// directly on the captured columns without filtering them first. Returns
+    /// nullptr when a captured argument is itself a deferred short-circuit column:
+    /// then the caller must keep the filter-then-reduce path so that the mask
+    /// reaches the innermost deferred nodes before they are evaluated.
+    ColumnPtr tryReduceWithMask(const IColumn::Filter & mask) const;
+
     Field operator[](size_t) const override
     {
         throw Exception("Cannot get value from " + getName(), ErrorCodes::NOT_IMPLEMENTED);
