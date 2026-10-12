@@ -1046,11 +1046,9 @@ CompiledBooleanQuery compileBooleanQuery(
     return compiled;
 }
 
-Float64 matchBooleanScore(const CompiledBooleanQuery & query, const std::vector<ClauseMatchState> & states)
+Float64 matchBooleanValue(const CompiledBooleanQuery & query, const std::vector<ClauseMatchState> & states)
 {
-    // The protocol path is the no-score MATCH ... AGAINST BOOLEAN MODE
-    // predicate introduced by #70484/#70485. TiDB's local evaluator returns
-    // a boolean 0/1 result, so do not expose term-frequency counts here.
+    // Local MATCH returns a Boolean 0/1 value, not a relevance score.
     return evaluateBooleanMatchResult(query, states) ? 1 : 0;
 }
 
@@ -1285,7 +1283,7 @@ public:
                     break;
                 }
             }
-            output_data[row] = result_known ? (row_matches ? 1 : 0) : matchBooleanScore(compiled_query, clause_states);
+            output_data[row] = result_known ? (row_matches ? 1 : 0) : matchBooleanValue(compiled_query, clause_states);
         }
         finish_result();
     }

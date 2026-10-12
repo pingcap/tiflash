@@ -404,7 +404,6 @@ if (ENABLE_TESTS)
     endif()
 
     add_check(bench_dbms)
-
 endif ()
 
 # dbms

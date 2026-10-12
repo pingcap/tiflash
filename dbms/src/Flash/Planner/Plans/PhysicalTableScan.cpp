@@ -14,11 +14,8 @@
 
 #include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
-#include <Flash/Coprocessor/DAGCodec.h>
-#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
-#include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/StorageDisaggregatedInterpreter.h>
@@ -116,7 +113,7 @@ void PhysicalTableScan::buildBlockInputStreamImpl(DAGPipeline & pipeline, Contex
         DAGStorageInterpreter storage_interpreter(context, tidb_table_scan, filter_conditions, max_streams);
         storage_interpreter.execute(pipeline);
     }
-    buildProjection(pipeline, context);
+    buildProjection(pipeline);
 }
 
 void PhysicalTableScan::buildPipeline(
@@ -139,7 +136,7 @@ void PhysicalTableScan::buildPipeline(
         DAGStorageInterpreter storage_interpreter(context, tidb_table_scan, filter_conditions, context.getMaxStreams());
         storage_interpreter.execute(exec_context, pipeline_exec_builder);
     }
-    buildProjection(exec_context, pipeline_exec_builder, context);
+    buildProjection(exec_context, pipeline_exec_builder);
 
     PhysicalPlanNode::buildPipeline(builder, context, exec_context);
 }
@@ -154,7 +151,7 @@ void PhysicalTableScan::buildPipelineExecGroupImpl(
     group_builder = std::move(pipeline_exec_builder);
 }
 
-void PhysicalTableScan::buildProjection(DAGPipeline & pipeline, Context & /*context*/)
+void PhysicalTableScan::buildProjection(DAGPipeline & pipeline)
 {
     const auto & schema_project_cols = buildTableScanProjectionCols(
         tidb_table_scan.getLogicalTableID(),
@@ -168,8 +165,7 @@ void PhysicalTableScan::buildProjection(DAGPipeline & pipeline, Context & /*cont
 
 void PhysicalTableScan::buildProjection(
     PipelineExecutorContext & exec_context,
-    PipelineExecGroupBuilder & group_builder,
-    Context & /*context*/)
+    PipelineExecGroupBuilder & group_builder)
 {
     auto header = group_builder.getCurrentHeader();
     const auto & schema_project_cols
@@ -194,11 +190,14 @@ const Block & PhysicalTableScan::getSampleBlock() const
 
 bool PhysicalTableScan::setFilterConditions(const String & filter_executor_id, const tipb::Selection & selection)
 {
-    if (!hasFilterConditions())
-        filter_conditions = FilterConditions::filterConditionsFrom(filter_executor_id, selection);
-    else
-        for (const auto & condition : selection.conditions())
-            *filter_conditions.conditions.Add() = condition;
+    /// Since there is at most one selection on the table scan, setFilterConditions() will only be called at most once.
+    /// So in this case hasFilterConditions() is always false.
+    if (unlikely(hasFilterConditions()))
+    {
+        return false;
+    }
+
+    filter_conditions = FilterConditions::filterConditionsFrom(filter_executor_id, selection);
     return true;
 }
 
