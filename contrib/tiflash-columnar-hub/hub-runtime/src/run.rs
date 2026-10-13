@@ -1480,7 +1480,16 @@ pub unsafe fn run_proxy(argc: c_int, argv: *const *const c_char, helper_ptr: *co
     let master_key = tokio::runtime::Runtime::new()
         .unwrap()
         .block_on(config.security.new_master_key())
-        .unwrap_or_else(|_| MasterKey::new(&[]));
+        .unwrap_or_else(|err| {
+            // cloud_encryption logs the error type but not its text, and the
+            // text is what tells a missing KMS grant from a wrong key.
+            error!(
+                "TiFlash Columnar Hub failed to decrypt the master key, using an empty key";
+                "vendor" => &config.security.master_key.vendor,
+                "err" => ?err,
+            );
+            MasterKey::new(&[])
+        });
     let txn_chunk_mgr = TxnChunkManager::new(
         vec![],
         dfs.clone(),
