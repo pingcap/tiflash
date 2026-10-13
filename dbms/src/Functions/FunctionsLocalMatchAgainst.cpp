@@ -1141,9 +1141,14 @@ public:
         if (arguments.size() < 3)
             throw Exception("local_match_against_boolean requires a query, at least one column, and metadata");
         bool nullable = false;
-        for (const auto & argument : arguments)
+        for (size_t i = 0; i < arguments.size(); ++i)
         {
-            if (!removeNullable(argument)->isString())
+            const auto & argument = arguments[i];
+            const auto nested_type = removeNullable(argument);
+            // An untyped SQL NULL search arrives as Nullable(Nothing).
+            // Documents and metadata still require string types.
+            const bool null_query = i == 0 && nested_type->getTypeId() == TypeIndex::Nothing;
+            if (!nested_type->isString() && !null_query)
                 throw Exception(
                     "Illegal type " + argument->getName() + " of argument of function " + getName(),
                     ErrorCodes::ILLEGAL_COLUMN);
@@ -1173,7 +1178,6 @@ public:
             block.getByPosition(result).column = std::move(result_column);
         };
 
-        const FullTextColumnAccessor query_accessor(*query_column);
         tipb::LocalMatchAgainstBooleanQuery protocol_boolean_query;
         if (arguments.size() <= 2
             || !decodeLocalMatchAgainstBooleanQuery(
@@ -1182,7 +1186,7 @@ public:
             throw Exception(
                 "local_match_against_boolean requires valid Boolean query metadata",
                 ErrorCodes::ILLEGAL_COLUMN);
-        if (query_accessor.isNull(0))
+        if (query_column->isNullAt(0))
         {
             // InnoDB interprets NULL AGAINST as an empty search: non-NULL zero.
             finish_result();

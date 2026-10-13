@@ -123,7 +123,6 @@ tipb::Expr makeLocalMatchDAGExpr(
         || std::any_of(inputs.begin(), inputs.end(), [](const auto & input) { return input.type->isNullable(); });
     result_type->set_flag(nullable ? 0 : TiDB::ColumnFlagNotNull);
     auto search_expr = null_search ? constructNULLLiteralTiExpr() : constructStringLiteralTiExpr(search);
-    search_expr.mutable_field_type()->set_tp(TiDB::TypeString);
     search_expr.mutable_field_type()->set_collate(-collation);
     *expr.add_children() = std::move(search_expr);
     for (size_t i = 0; i < inputs.size(); ++i)
@@ -347,6 +346,7 @@ try
             const NamesAndTypes inputs{{"body", column_case.document.type}};
             const auto expr
                 = makeLocalMatchDAGExpr("+quick", query, inputs, TiDB::ITiDBCollator::UTF8MB4_BIN, null_search);
+            ASSERT_EQ(expr.children(0).field_type().tp(), null_search ? TiDB::TypeNull : TiDB::TypeString);
             const auto [actions, names] = buildLocalMatchDAGActions(*context, inputs, {expr});
             const auto expected = null_search ? createColumn<Nullable<Float64>>({0, 0, 0, 0}) : column_case.expected;
             for (const size_t rows : {4U, 0U, 4U})
