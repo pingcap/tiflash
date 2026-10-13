@@ -126,16 +126,17 @@ public:
     /// Masked execution skips rows where the mask is 0, so neither the JSON document
     /// nor the per-row path expressions on masked-off rows are parsed; see
     /// IFunctionBase::executeWithMask.
-    void executeWithMask(
-        Block & block,
-        const ColumnNumbers & arguments,
-        size_t result,
-        const IColumn::Filter & mask) const override
+    void executeWithMask(Block & block, const ColumnNumbers & arguments, size_t result, const IColumn::Filter & mask)
+        const override
     {
         executeImplWithMask(block, arguments, result, &mask);
     }
 
-    void executeImplWithMask(Block & block, const ColumnNumbers & arguments, size_t result, const IColumn::Filter * mask) const
+    void executeImplWithMask(
+        Block & block,
+        const ColumnNumbers & arguments,
+        size_t result,
+        const IColumn::Filter * mask) const
     {
         size_t rows = block.rows();
         auto & res_col = block.getByPosition(result).column;
@@ -621,16 +622,17 @@ public:
     /// Masked execution skips rows where the mask is 0, so neither the JSON document
     /// nor the per-row path expressions on masked-off rows are parsed; see
     /// IFunctionBase::executeWithMask.
-    void executeWithMask(
-        Block & block,
-        const ColumnNumbers & arguments,
-        size_t result,
-        const IColumn::Filter & mask) const override
+    void executeWithMask(Block & block, const ColumnNumbers & arguments, size_t result, const IColumn::Filter & mask)
+        const override
     {
         executeImplWithMask(block, arguments, result, &mask);
     }
 
-    void executeImplWithMask(Block & block, const ColumnNumbers & arguments, size_t result, const IColumn::Filter * mask) const
+    void executeImplWithMask(
+        Block & block,
+        const ColumnNumbers & arguments,
+        size_t result,
+        const IColumn::Filter * mask) const
     {
         size_t rows = block.rows();
         auto & res_col = block.getByPosition(result).column;
@@ -728,13 +730,7 @@ public:
                     }
                     else
                     {
-                        res_col = doExecuteCommonForTwoArgs<false, false>(
-                            json_source,
-                            {},
-                            path_source,
-                            {},
-                            rows,
-                            mask);
+                        res_col = doExecuteCommonForTwoArgs<false, false>(json_source, {}, path_source, {}, rows, mask);
                     }
                 }
             }
@@ -1130,16 +1126,17 @@ public:
     }
 
     /// Masked execution skips rows where the mask is 0; see IFunctionBase::executeWithMask.
-    void executeWithMask(
-        Block & block,
-        const ColumnNumbers & arguments,
-        size_t result,
-        const IColumn::Filter & mask) const override
+    void executeWithMask(Block & block, const ColumnNumbers & arguments, size_t result, const IColumn::Filter & mask)
+        const override
     {
         executeImplWithMask(block, arguments, result, &mask);
     }
 
-    void executeImplWithMask(Block & block, const ColumnNumbers & arguments, size_t result, const IColumn::Filter * mask) const
+    void executeImplWithMask(
+        Block & block,
+        const ColumnNumbers & arguments,
+        size_t result,
+        const IColumn::Filter * mask) const
     {
         if (arguments.empty())
         {
@@ -1629,16 +1626,17 @@ public:
 
     /// Masked execution skips rows where the mask is 0, so an invalid JSON document
     /// on a masked-off row is not parsed at all; see IFunctionBase::executeWithMask.
-    void executeWithMask(
-        Block & block,
-        const ColumnNumbers & arguments,
-        size_t result,
-        const IColumn::Filter & mask) const override
+    void executeWithMask(Block & block, const ColumnNumbers & arguments, size_t result, const IColumn::Filter & mask)
+        const override
     {
         executeImplWithMask(block, arguments, result, &mask);
     }
 
-    void executeImplWithMask(Block & block, const ColumnNumbers & arguments, size_t result, const IColumn::Filter * mask) const
+    void executeImplWithMask(
+        Block & block,
+        const ColumnNumbers & arguments,
+        size_t result,
+        const IColumn::Filter * mask) const
     {
         const auto & from = block.getByPosition(arguments[0]);
         if (from.column->onlyNull())
@@ -2213,16 +2211,17 @@ public:
     /// Masked execution skips rows where the mask is 0, so neither the JSON document
     /// nor the per-row path expressions on masked-off rows are parsed; see
     /// IFunctionBase::executeWithMask.
-    void executeWithMask(
-        Block & block,
-        const ColumnNumbers & arguments,
-        size_t result,
-        const IColumn::Filter & mask) const override
+    void executeWithMask(Block & block, const ColumnNumbers & arguments, size_t result, const IColumn::Filter & mask)
+        const override
     {
         executeImplWithMask(block, arguments, result, &mask);
     }
 
-    void executeImplWithMask(Block & block, const ColumnNumbers & arguments, size_t result, const IColumn::Filter * mask) const
+    void executeImplWithMask(
+        Block & block,
+        const ColumnNumbers & arguments,
+        size_t result,
+        const IColumn::Filter * mask) const
     {
         const auto & json_col = block.getByPosition(arguments[0]).column;
         const auto & type_col = block.getByPosition(arguments[1]).column;
@@ -2337,15 +2336,8 @@ public:
             }
             else if (type_col->isColumnConst() && is_all_path_const)
             {
-                doExecuteForTypeAndPathConst<false>(
-                    json_source,
-                    {},
-                    type_source,
-                    path_sources,
-                    rows,
-                    data_to,
-                    vec_null_map,
-                    mask);
+                doExecuteForTypeAndPathConst<
+                    false>(json_source, {}, type_source, path_sources, rows, data_to, vec_null_map, mask);
             }
             else
             {
@@ -2880,16 +2872,17 @@ public:
     /// Masked execution skips rows where the mask is 0, so neither the JSON document
     /// nor the per-row path expressions on masked-off rows are parsed; see
     /// IFunctionBase::executeWithMask.
-    void executeWithMask(
-        Block & block,
-        const ColumnNumbers & arguments,
-        size_t result,
-        const IColumn::Filter & mask) const override
+    void executeWithMask(Block & block, const ColumnNumbers & arguments, size_t result, const IColumn::Filter & mask)
+        const override
     {
         executeImplWithMask(block, arguments, result, &mask);
     }
 
-    void executeImplWithMask(Block & block, const ColumnNumbers & arguments, size_t result, const IColumn::Filter * mask) const
+    void executeImplWithMask(
+        Block & block,
+        const ColumnNumbers & arguments,
+        size_t result,
+        const IColumn::Filter * mask) const
     {
         const auto & json_col = block.getByPosition(arguments[0]).column;
         const auto & path_col = block.getByPosition(arguments[1]).column;
@@ -2973,7 +2966,8 @@ public:
             }
             else if (path_col->isColumnConst())
             {
-                doExecuteForConstPath<false>(json_source, {}, path_source, rows, data_to, offsets_to, vec_null_map, mask);
+                doExecuteForConstPath<
+                    false>(json_source, {}, path_source, rows, data_to, offsets_to, vec_null_map, mask);
             }
             else
             {
