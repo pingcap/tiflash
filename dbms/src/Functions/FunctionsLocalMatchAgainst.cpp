@@ -73,7 +73,7 @@ struct FullTextToken
     size_t position = 0;
     size_t code_points = 0;
 
-    std::string_view value() const { return source.data() ? source : std::string_view(text); }
+    std::string_view value() const { return source.data() ? source : std::string_view{text}; }
 };
 
 class FullTextColumn
@@ -733,7 +733,7 @@ ColumnMatchResult updateBooleanMatchStatesForColumn(
     for (auto & state : states)
         state.phrase_verification_failed = false;
 
-    const auto markClauseMatched = [&](size_t clause_index) {
+    const auto mark_clause_matched = [&](size_t clause_index) {
         states[clause_index].matched = true;
         switch (clauses[clause_index].modifier)
         {
@@ -778,7 +778,7 @@ ColumnMatchResult updateBooleanMatchStatesForColumn(
                         state.phrase_verification_failed = true;
                         continue;
                     }
-                    const auto result = markClauseMatched(clause_index);
+                    const auto result = mark_clause_matched(clause_index);
                     if (result != ColumnMatchResult::Continue)
                         return result;
                 }
@@ -799,7 +799,7 @@ ColumnMatchResult updateBooleanMatchStatesForColumn(
                 : state.remaining_terms < clause.terms.size();
             if (state.matched)
             {
-                const auto result = markClauseMatched(clause_index);
+                const auto result = mark_clause_matched(clause_index);
                 if (result != ColumnMatchResult::Continue)
                     return result;
             }
@@ -1198,7 +1198,7 @@ public:
         const size_t min_token_size = config.min_token_size;
         const size_t max_token_size = config.max_token_size;
         const bool enable_stopword = config.enable_stopword;
-        const auto stopword_collator
+        const auto * const stopword_collator
             = enable_stopword ? TiDB::ITiDBCollator::getCollator(protocol_boolean_query.stopword_collation()) : nullptr;
         if (enable_stopword && !stopword_collator)
             throw Exception(
@@ -1289,7 +1289,7 @@ public:
     }
 
 private:
-    TiDB::TiDBCollatorPtr collator;
+    TiDB::TiDBCollatorPtr collator = nullptr;
 };
 } // namespace
 
