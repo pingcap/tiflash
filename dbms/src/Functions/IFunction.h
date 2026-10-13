@@ -428,11 +428,8 @@ public:
     }
     bool canThrow() const override { return function->canThrow(); }
 
-    void executeWithMask(
-        Block & block,
-        const ColumnNumbers & arguments,
-        size_t result,
-        const IColumn::Filter & mask) const override
+    void executeWithMask(Block & block, const ColumnNumbers & arguments, size_t result, const IColumn::Filter & mask)
+        const override
     {
         return function->executeWithMask(block, arguments, result, mask);
     }
