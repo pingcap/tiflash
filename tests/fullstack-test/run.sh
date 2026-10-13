@@ -35,7 +35,7 @@ ${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml down
 clean_data_log
 
 # run fullstack-tests
-${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml up -d
+start_cluster_with_tiflash cluster.yaml tiflash-dt.yaml
 wait_env
 
 echo "PD version:"
@@ -49,7 +49,7 @@ ${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /test
 ${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml down
 clean_data_log
 
-${COMPOSE} -f cluster.yaml -f tiflash-dt-sync-grpc.yaml up -d
+start_cluster_with_tiflash cluster.yaml tiflash-dt-sync-grpc.yaml
 wait_env
 ${COMPOSE} -f cluster.yaml -f tiflash-dt-sync-grpc.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test/mpp'
 ${COMPOSE} -f cluster.yaml -f tiflash-dt-sync-grpc.yaml down

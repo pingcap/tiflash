@@ -48,7 +48,9 @@ public:
         return i == 0 ? left : right;
     }
 
-    size_t childrenSize() const override { return 2; };
+    void setChild(size_t, PhysicalPlanNodePtr) override { throw Exception("Unsupport"); }
+
+    size_t childrenSize() const override { return 2; }
 
 protected:
     PhysicalPlanNodePtr left;
