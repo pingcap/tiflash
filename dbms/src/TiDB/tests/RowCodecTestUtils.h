@@ -123,6 +123,7 @@ ColumnInfo getColumnInfo(ColumnID id)
         column_info.setUnsignedFlag();
     if constexpr (!nullable)
         column_info.setNotNullFlag();
+    column_info.state = TiDB::SchemaState::StatePublic;
     return column_info;
 }
 
