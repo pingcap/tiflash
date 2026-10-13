@@ -22,6 +22,7 @@
 #include <gtest/gtest.h>
 
 #include <random>
+#include <thread>
 #include <vector>
 
 namespace DB::tests
@@ -160,6 +161,70 @@ TEST(KeyspaceCpuLimiterTest, MetricsAreRemovedAfterLastLimiter)
     EXPECT_EQ(metrics.active_tasks_throttled_total->Value(), 0);
     EXPECT_EQ(metrics.max_active_tasks->Value(), 0);
     registry.releaseKeyspaceCpuLimiterMetrics(keyspace_id);
+}
+
+TEST(KeyspaceCpuLimiterTest, ReleaseNotifiesOnlyAfterRejection)
+{
+    constexpr KeyspaceID keyspace_id = 999994;
+    KeyspaceCpuLimiter limiter(1);
+    const Task * task = nullptr;
+    const auto initial_change_id = limiter.getChangeId();
+
+    // Releasing without a rejected acquire must not notify idle threads.
+    ASSERT_TRUE(limiter.tryAcquire(keyspace_id));
+    limiter.bindOwner(keyspace_id, task);
+    limiter.release(task);
+    EXPECT_EQ(limiter.getChangeId(), initial_change_id);
+
+    ASSERT_TRUE(limiter.tryAcquire(keyspace_id));
+    limiter.bindOwner(keyspace_id, task);
+    ASSERT_FALSE(limiter.tryAcquire(keyspace_id));
+    limiter.release(task);
+    EXPECT_EQ(limiter.getChangeId(), initial_change_id + 1);
+
+    // A rejection must not make subsequent ordinary releases keep notifying.
+    ASSERT_TRUE(limiter.tryAcquire(keyspace_id));
+    limiter.bindOwner(keyspace_id, task);
+    limiter.release(task);
+    EXPECT_EQ(limiter.getChangeId(), initial_change_id + 1);
+}
+
+TEST(KeyspaceCpuLimiterTest, NotificationBeforeWaitIsNotLost)
+{
+    KeyspaceCpuLimiter limiter(1);
+    const auto previous_change_id = limiter.getChangeId();
+    limiter.wakeWaiters();
+
+    EXPECT_EQ(limiter.getChangeId(), previous_change_id + 1);
+    EXPECT_TRUE(limiter.waitForChange(previous_change_id, std::chrono::milliseconds(0)));
+    EXPECT_FALSE(limiter.waitForChange(limiter.getChangeId(), std::chrono::milliseconds(0)));
+}
+
+TEST(KeyspaceCpuLimiterTest, ReleaseWakesActiveLimitWaiterAfterCPUQuotaDepletion)
+{
+    constexpr KeyspaceID keyspace_id = 999993;
+    constexpr UInt64 cpu_quota_per_second_ns = 1'000'000;
+    KeyspaceCpuLimiter limiter(1, cpu_quota_per_second_ns);
+    const Task * task = nullptr;
+    ASSERT_TRUE(limiter.tryAcquire(keyspace_id));
+    limiter.bindOwner(keyspace_id, task);
+
+    const auto previous_change_id = limiter.getChangeId();
+    bool cpu_quota_rejected = false;
+    ASSERT_FALSE(limiter.tryAcquire(keyspace_id, &cpu_quota_rejected));
+    ASSERT_FALSE(cpu_quota_rejected);
+    ASSERT_EQ(limiter.getRefillWaitDuration(cpu_quota_rejected), std::chrono::milliseconds::max());
+
+    // A task in the other pool depletes the bucket and finishes without
+    // resubmission after this waiter has selected an unbounded wait.
+    ASSERT_TRUE(limiter.consumeCPUTime(task, 100 * cpu_quota_per_second_ns));
+    limiter.release(task);
+    ASSERT_TRUE(limiter.waitForChange(previous_change_id, std::chrono::milliseconds(0)));
+
+    // The notification lets the waiter observe CPU rejection and arm a timer.
+    ASSERT_FALSE(limiter.tryAcquire(keyspace_id, &cpu_quota_rejected));
+    ASSERT_TRUE(cpu_quota_rejected);
+    EXPECT_LT(limiter.getRefillWaitDuration(cpu_quota_rejected), std::chrono::milliseconds::max());
 }
 
 class SimpleTask : public Task
