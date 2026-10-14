@@ -25,15 +25,19 @@ namespace DB
 class IFunctionBase;
 using FunctionBasePtr = std::shared_ptr<IFunctionBase>;
 
-/** A column containing a lambda expression.
-  * Behaves like a constant-column. Contains an expression, but not input or output data.
+/** A column containing a lambda or deferred scalar expression and its captured arguments.
+  * A deferred scalar expression is evaluated only after its captures have been filtered.
   */
 class ColumnFunction final : public COWPtrHelper<IColumn, ColumnFunction>
 {
 private:
     friend class COWPtrHelper<IColumn, ColumnFunction>;
 
-    ColumnFunction(size_t size, FunctionBasePtr function, const ColumnsWithTypeAndName & columns_to_capture);
+    ColumnFunction(
+        size_t size,
+        FunctionBasePtr function,
+        const ColumnsWithTypeAndName & columns_to_capture,
+        bool is_short_circuit_argument = false);
 
 public:
     const char * getFamilyName() const override { return "Function"; }
@@ -70,6 +74,14 @@ public:
 
     void appendArguments(const ColumnsWithTypeAndName & columns);
     ColumnWithTypeAndName reduce() const;
+    bool isShortCircuitArgument() const { return is_short_circuit_argument; }
+
+    /// Execute the deferred function with `mask` via IFunctionBase::executeWithMask,
+    /// directly on the captured columns without filtering them first. Returns
+    /// nullptr when a captured argument is itself a deferred short-circuit column:
+    /// then the caller must keep the filter-then-reduce path so that the mask
+    /// reaches the innermost deferred nodes before they are evaluated.
+    ColumnPtr tryReduceWithMask(const IColumn::Filter & mask) const;
 
     Field operator[](size_t) const override
     {
@@ -283,8 +295,14 @@ private:
     size_t column_size;
     FunctionBasePtr function;
     ColumnsWithTypeAndName captured_columns;
+    bool is_short_circuit_argument;
 
     void appendArgument(const ColumnWithTypeAndName & column);
 };
+
+const ColumnFunction * checkAndGetShortCircuitArgument(const ColumnPtr & column);
+
+/// Adapted from ClickHouse Columns/MaskOperations.cpp: filter captures, reduce, then restore row positions.
+void maskedExecute(ColumnWithTypeAndName & column, const IColumn::Filter & mask);
 
 } // namespace DB

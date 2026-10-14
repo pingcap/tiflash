@@ -16,6 +16,7 @@
 
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnNullable.h>
+#include <Columns/countBytesInFilter.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -32,6 +33,7 @@ namespace ErrorCodes
 {
 extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 extern const int ILLEGAL_COLUMN;
+extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
 namespace
@@ -119,7 +121,87 @@ bool allArgumentsAreConstants(const Block & block, const ColumnNumbers & args)
     for (auto arg : args)
         if (!block.getByPosition(arg).column->isColumnConst())
             return false;
+
     return true;
+}
+
+/// Shared fallback of IFunctionBase::executeWithMask and IFunction::executeWithMask:
+/// filter the argument columns, execute `entry` on the filtered block and expand
+/// the result back to full size.
+template <typename ExecuteEntry>
+void executeWithMaskFallback(
+    const String & name,
+    Block & block,
+    const ColumnNumbers & arguments,
+    size_t result,
+    const IColumn::Filter & mask,
+    ExecuteEntry && entry)
+{
+    auto & result_column = block.getByPosition(result);
+    const size_t rows = mask.size();
+    const size_t selected = countBytesInFilter(mask);
+
+    if (selected == 0)
+    {
+        result_column.column = result_column.type->createColumnConstWithDefaultValue(rows);
+        return;
+    }
+
+    if (selected == rows)
+    {
+        entry(block, arguments, result);
+        return;
+    }
+
+    /// Partial mask: filter only the argument columns (the block may also carry
+    /// unrelated columns with a different row count, e.g. join helper columns),
+    /// execute on the filtered block, then expand the result back to full size.
+    Block filtered_block;
+    for (const auto pos : arguments)
+    {
+        const auto & argument = block.getByPosition(pos);
+        filtered_block.insert({argument.column->filter(mask, selected), argument.type, argument.name});
+    }
+    filtered_block.insert({nullptr, result_column.type, ""});
+
+    ColumnNumbers filtered_arguments(arguments.size());
+    for (size_t i = 0; i < arguments.size(); ++i)
+        filtered_arguments[i] = i;
+
+    entry(filtered_block, filtered_arguments, arguments.size());
+
+    ColumnPtr filtered_result = filtered_block.getByPosition(arguments.size()).column;
+    if (auto materialized = filtered_result->convertToFullColumnIfConst())
+        filtered_result = std::move(materialized);
+
+    if (filtered_result->size() != selected)
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Masked execution of function {} produced {} rows instead of {}",
+            name,
+            filtered_result->size(),
+            selected);
+
+    /// Expand the filtered result back: copy selected ranges from the filtered result
+    /// and fill masked-off ranges with default values.
+    auto expanded = filtered_result->cloneEmpty();
+    expanded->reserve(rows);
+    size_t source = 0;
+    for (size_t begin = 0; begin < rows;)
+    {
+        size_t end = begin + 1;
+        while (end < rows && (mask[end] != 0) == (mask[begin] != 0))
+            ++end;
+        if (mask[begin])
+        {
+            expanded->insertRangeFrom(*filtered_result, source, end - begin);
+            source += end - begin;
+        }
+        else
+            expanded->insertManyDefaults(end - begin);
+        begin = end;
+    }
+    result_column.column = std::move(expanded);
 }
 } // namespace
 
@@ -289,6 +371,41 @@ void IFunctionBuilder::getLambdaArgumentTypes(DataTypes & arguments [[maybe_unus
 {
     checkNumberOfArguments(arguments.size());
     return getLambdaArgumentTypesImpl(arguments);
+}
+
+void IFunctionBase::executeWithMask(
+    Block & block,
+    const ColumnNumbers & arguments,
+    size_t result,
+    const IColumn::Filter & mask) const
+{
+    executeWithMaskFallback(
+        getName(),
+        block,
+        arguments,
+        result,
+        mask,
+        [this](Block & b, const ColumnNumbers & a, size_t r) { execute(b, a, r); });
+}
+
+void IFunction::executeWithMask(
+    Block & block,
+    const ColumnNumbers & arguments,
+    size_t result,
+    const IColumn::Filter & mask) const
+{
+    /// Route execution through DefaultExecutable so that the null and constant
+    /// default implementations apply, exactly like DefaultFunctionBase::execute
+    /// does. The shared_ptr is non-owning: the executable is stack-local and
+    /// never outlives this call.
+    DefaultExecutable executable(std::shared_ptr<IFunction>(const_cast<IFunction *>(this), [](IFunction *) {}));
+    executeWithMaskFallback(
+        getName(),
+        block,
+        arguments,
+        result,
+        mask,
+        [&executable](Block & b, const ColumnNumbers & a, size_t r) { executable.execute(b, a, r); });
 }
 
 } // namespace DB
