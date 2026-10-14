@@ -46,6 +46,7 @@
 #include <optional>
 #include <string_view>
 #include <unordered_set>
+#include <vector>
 #pragma GCC diagnostic pop
 
 namespace DB
@@ -266,6 +267,8 @@ private:
     double duration_read_sec = 0;
     UInt64 batch_size = 10240;
     UInt64 total_bytes = 0;
+    /// Updated after each decoded String column and reused for the next block.
+    std::vector<double> avg_value_size_hints;
 };
 
 class RNColumnarSourceOp : public SourceOp
