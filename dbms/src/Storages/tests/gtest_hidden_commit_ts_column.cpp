@@ -236,12 +236,12 @@ try
             EXPECT_EQ(getStorageColumnIDForColumnarRead(MutSup::extra_commit_ts_col_id), version.id);
             EXPECT_EQ(getStorageColumnIDForColumnarRead(42), 42);
 
-            // ffi_read_version serializes a null map followed by UInt64 values.
+            // ffi_read_version serializes one UInt8 null-map entry per row, followed by UInt64 values.
             // Visible versions are never null, but their null-map bytes remain.
             const std::vector<UInt64> timestamps{1, 123456789, 456789012};
             WriteBufferFromOwnString output;
             for (size_t i = 0; i < timestamps.size(); ++i)
-                writeBinary(static_cast<UInt32>(0), output);
+                writeBinary(static_cast<UInt8>(0), output);
             for (auto ts : timestamps)
                 writeBinary(ts, output);
             const auto bytes = output.releaseStr();
@@ -279,16 +279,13 @@ try
 }
 CATCH
 
-TEST_F(HiddenCommitTSColumnTest, ColumnarFilterRemappingUsesStorageProjectionBeforeCast)
+TEST_F(HiddenCommitTSColumnTest, ColumnarFilterRemappingPreservesScanNamesAfterCast)
 try
 {
     for (UInt32 flags :
          {static_cast<UInt32>(0), static_cast<UInt32>(TiDB::ColumnFlagNotNull | TiDB::ColumnFlagUnsigned)})
     {
         SCOPED_TRACE(flags);
-        TiDB::ColumnInfo business;
-        business.id = 10;
-        business.tp = TiDB::TypeLongLong;
         TiDB::ColumnInfo commit_ts;
         commit_ts.id = MutSup::extra_commit_ts_col_id;
         commit_ts.tp = TiDB::TypeLongLong;
@@ -317,11 +314,11 @@ try
         Block filter_header = early_block.cloneEmpty();
         cast->execute(filter_header);
         ASSERT_EQ(filter_header.getByName(name).column_id, 0);
-        EXPECT_THROW(remapColumnarFilterConditions(filters, {business, commit_ts}, filter_header), DB::Exception);
+        const auto remapped_after_cast = remapColumnarFilterConditions(filters, 2, filter_header);
+        EXPECT_EQ(decodeDAGInt64(remapped_after_cast[0].val()), 0);
 
-        // The production path maps offsets using the uncast projection, then
-        // evaluates those offsets against the cast columns in the same order.
-        const auto remapped = remapColumnarFilterConditions(filters, {business, commit_ts}, early_block);
+        // Both projections retain the original scan names, independent of column IDs.
+        const auto remapped = remapColumnarFilterConditions(filters, 2, early_block);
         EXPECT_EQ(decodeDAGInt64(remapped[0].val()), 0);
         auto [before_where, filter_name, project] = analyzer.buildPushDownFilter(remapped, true);
         Block evaluation_block = early_block;
@@ -335,6 +332,59 @@ try
         EXPECT_EQ(early_block.getByName(name).column_id, MutSup::version_col_id);
         EXPECT_EQ(early_block.getByName(name).type->getName(), "Nullable(UInt64)");
     }
+}
+CATCH
+
+TEST_F(HiddenCommitTSColumnTest, ColumnarFilterRemappingOffsetsAndInvalidReferences)
+try
+{
+    // IDs deliberately carry no useful identity. Names retain the original scan offsets,
+    // while the early projection omits offset 0 and reverses offsets 1 and 2.
+    Block early_block{
+        toVec<UInt64>(genNameForExchangeReceiver(2), {22}),
+        toVec<UInt64>(genNameForExchangeReceiver(1), {11}),
+    };
+    const auto make_ref = [](Int64 offset) {
+        tipb::Expr expr;
+        expr.set_tp(tipb::ExprType::ColumnRef);
+        WriteBufferFromOwnString buffer;
+        encodeDAGInt64(offset, buffer);
+        expr.set_val(buffer.releaseStr());
+        return expr;
+    };
+    google::protobuf::RepeatedPtrField<tipb::Expr> filters;
+    auto * root = filters.Add();
+    root->set_tp(tipb::ExprType::ScalarFunc);
+    root->set_sig(tipb::ScalarFuncSig::LogicalAnd);
+    *root->add_children() = make_ref(1);
+    auto * nested = root->add_children();
+    nested->set_tp(tipb::ExprType::ScalarFunc);
+    nested->set_sig(tipb::ScalarFuncSig::LogicalOr);
+    *nested->add_children() = make_ref(2);
+    *nested->add_children() = make_ref(1);
+
+    const auto remapped = remapColumnarFilterConditions(filters, 3, early_block);
+    EXPECT_EQ(decodeDAGInt64(remapped[0].children(0).val()), 1);
+    EXPECT_EQ(decodeDAGInt64(remapped[0].children(1).children(0).val()), 0);
+    EXPECT_EQ(decodeDAGInt64(remapped[0].children(1).children(1).val()), 1);
+    EXPECT_EQ(decodeDAGInt64(filters[0].children(1).children(0).val()), 2);
+
+    for (Int64 offset : {-1, 0, 3})
+    {
+        SCOPED_TRACE(offset);
+        google::protobuf::RepeatedPtrField<tipb::Expr> invalid_filters;
+        *invalid_filters.Add() = make_ref(offset);
+        EXPECT_THROW(remapColumnarFilterConditions(invalid_filters, 3, early_block), DB::Exception);
+    }
+
+    // Distinct storage IDs must not hide duplicate projection names.
+    Block duplicate_names{
+        toVec<UInt64>(genNameForExchangeReceiver(1), {11}),
+        toVec<UInt64>(genNameForExchangeReceiver(1), {22}),
+    };
+    duplicate_names.getByPosition(0).column_id = 10;
+    duplicate_names.getByPosition(1).column_id = 20;
+    EXPECT_THROW(remapColumnarFilterConditions(filters, 3, duplicate_names), DB::Exception);
 }
 CATCH
 

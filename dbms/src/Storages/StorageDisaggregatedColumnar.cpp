@@ -935,7 +935,7 @@ google::protobuf::RepeatedPtrField<tipb::Expr> RNColumnarReadTask::getLateMateri
 {
     return remapColumnarFilterConditions(
         shared_reader_context->exact_filter_conditions,
-        shared_reader_context->scan_columns,
+        shared_reader_context->scan_columns.size(),
         early_block);
 }
 

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TiFlashException.h>
 #include <DataStreams/GeneratedColumnPlaceholderBlockInputStream.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -34,18 +35,26 @@ namespace
 {
 void remapColumnRefsForLateMaterialization(
     tipb::Expr & expr,
-    const std::vector<TiDB::ColumnInfo> & scan_columns,
-    const std::unordered_map<ColumnID, size_t> & early_column_indexes)
+    size_t scan_column_count,
+    const std::unordered_map<String, size_t> & early_column_indexes)
 {
     if (expr.tp() == tipb::ExprType::ColumnRef)
     {
-        const auto column_id = getStorageColumnIDForColumnarRead(getColumnIDForColumnExpr(expr, scan_columns));
-        const auto it = early_column_indexes.find(column_id);
+        const auto scan_offset = decodeDAGInt64(expr.val());
+        if (scan_offset < 0 || scan_offset >= static_cast<Int64>(scan_column_count))
+            throw TiFlashException(
+                Errors::Coprocessor::BadRequest,
+                "Column index out of bound, expr: {}, size of input columns: {}",
+                expr.DebugString(),
+                scan_column_count);
+        const auto column_name = genNameForExchangeReceiver(static_cast<Int32>(scan_offset));
+        const auto it = early_column_indexes.find(column_name);
         if (it == early_column_indexes.end())
             throw Exception(
                 ErrorCodes::LOGICAL_ERROR,
-                "Late-materialization predicate column {} is absent from the early projection",
-                column_id);
+                "Late-materialization predicate column {} at scan offset {} is absent from the early projection",
+                column_name,
+                scan_offset);
 
         WriteBufferFromOwnString buffer;
         encodeDAGInt64(static_cast<Int64>(it->second), buffer);
@@ -53,7 +62,7 @@ void remapColumnRefsForLateMaterialization(
     }
 
     for (int i = 0; i < expr.children_size(); ++i)
-        remapColumnRefsForLateMaterialization(*expr.mutable_children(i), scan_columns, early_column_indexes);
+        remapColumnRefsForLateMaterialization(*expr.mutable_children(i), scan_column_count, early_column_indexes);
 }
 
 DataTypePtr getPkType(const TiDB::ColumnInfo & column_info)
@@ -186,18 +195,18 @@ std::tuple<DM::ColumnDefinesPtr, int, std::vector<std::tuple<UInt64, String, Dat
 
 google::protobuf::RepeatedPtrField<tipb::Expr> remapColumnarFilterConditions(
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filter_conditions,
-    const TiDB::ColumnInfos & scan_columns,
+    size_t scan_column_count,
     const Block & early_block)
 {
-    std::unordered_map<ColumnID, size_t> early_column_indexes;
+    std::unordered_map<String, size_t> early_column_indexes;
     early_column_indexes.reserve(early_block.columns());
     for (size_t index = 0; index < early_block.columns(); ++index)
     {
-        const auto [it, inserted] = early_column_indexes.emplace(early_block.getByPosition(index).column_id, index);
+        const auto [it, inserted] = early_column_indexes.emplace(early_block.getByPosition(index).name, index);
         if (!inserted)
             throw Exception(
                 ErrorCodes::LOGICAL_ERROR,
-                "Late-materialization early projection contains duplicate column ID {} at indexes {} and {}",
+                "Late-materialization early projection contains duplicate column name {} at indexes {} and {}",
                 it->first,
                 it->second,
                 index);
@@ -205,7 +214,7 @@ google::protobuf::RepeatedPtrField<tipb::Expr> remapColumnarFilterConditions(
 
     auto conditions = filter_conditions;
     for (int i = 0; i < conditions.size(); ++i)
-        remapColumnRefsForLateMaterialization(*conditions.Mutable(i), scan_columns, early_column_indexes);
+        remapColumnRefsForLateMaterialization(*conditions.Mutable(i), scan_column_count, early_column_indexes);
     return conditions;
 }
 
