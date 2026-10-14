@@ -162,8 +162,8 @@ void IOPriorityQueue::updateStatistics(const TaskPtr & task, ExecTaskStatus exec
     {
         // A cancelled task can be returned from cancel_task_queue without ever
         // acquiring a reservation; release() is owner-aware and therefore a no-op.
+        // Limiter waiters are notified by release().
         keyspace_cpu_limiter->release(task.get());
-        notifyWaiters();
     }
 }
 
@@ -266,13 +266,13 @@ void IOPriorityQueue::notifyOneWaiter()
 {
     cv.notify_one();
     if (keyspace_cpu_limiter)
-        keyspace_cpu_limiter->notifyAll();
+        keyspace_cpu_limiter->wakeWaiters();
 }
 
 void IOPriorityQueue::notifyWaiters()
 {
     cv.notify_all();
     if (keyspace_cpu_limiter)
-        keyspace_cpu_limiter->notifyAll();
+        keyspace_cpu_limiter->wakeWaiters();
 }
 } // namespace DB
