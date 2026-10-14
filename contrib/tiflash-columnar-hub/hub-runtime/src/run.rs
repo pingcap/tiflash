@@ -32,7 +32,7 @@ use clap::{App, Arg};
 use cloud_encryption::MasterKey;
 use grpcio::EnvBuilder;
 use kvengine::{
-    dfs::{DFSConfig, Dfs, InMemFs, S3Fs},
+    dfs::{AzureFs, DFSConfig, Dfs, InMemFs, S3Fs},
     ia::util::IaConfig,
     table::{
         columnar::ColumnarFileCacheConfig,
@@ -280,48 +280,98 @@ fn load_config(path: Option<&OsStr>) -> ConfigFile {
     })
 }
 
+/// Which DFS client `build_dfs()` constructs.
+#[derive(Debug, PartialEq, Eq)]
+enum DfsBackendKind {
+    InMemory,
+    Azure,
+    Builtin,
+    EnvOverriddenS3,
+    ConfiguredS3,
+}
+
+/// Picks the hub's DFS client. Kept apart from `build_dfs()` so the choice can
+/// be tested without building a client, which for every remote backend means
+/// a network call.
+///
+/// Azure is decided by `backend` alone, ahead of the S3 checks. `AzureFs` reads
+/// `dfs.azure.*` and never looks at the `s3_*` fields, so on Azure they carry
+/// no meaning: an empty `s3_bucket` would select the builtin backend, and a
+/// filled one, which is what a deployment that writes `DFS_S3_BUCKET` on every
+/// cloud produces, would build an `S3Fs` signing with AWS credentials. Case is
+/// ignored, as `kvengine::dfs::new_dfs_from_config()` ignores it.
+fn select_dfs_backend(dfs_conf: &DFSConfig, env_s3_bucket: &str) -> DfsBackendKind {
+    if dfs_conf.s3_endpoint == "memory" {
+        DfsBackendKind::InMemory
+    } else if dfs_conf.backend.eq_ignore_ascii_case("azure") {
+        DfsBackendKind::Azure
+    } else if dfs_conf.s3_endpoint == "local"
+        || (dfs_conf.s3_bucket.is_empty()
+            && dfs_conf.s3_endpoint.is_empty()
+            && env_s3_bucket.is_empty())
+    {
+        DfsBackendKind::Builtin
+    } else if dfs_conf.s3_bucket.is_empty()
+        && dfs_conf.s3_endpoint.is_empty()
+        && !env_s3_bucket.is_empty()
+    {
+        DfsBackendKind::EnvOverriddenS3
+    } else {
+        DfsBackendKind::ConfiguredS3
+    }
+}
+
 fn build_dfs(config: &ConfigFile, pd_client: Arc<dyn PdClient>) -> Arc<dyn Dfs> {
     let dfs_conf = &config.dfs;
     let dfs_s3_bucket = std::env::var("DFS_S3_BUCKET").unwrap_or_default();
 
-    if dfs_conf.s3_endpoint == "memory" {
-        info!("TiFlash Columnar Hub uses in-memory DFS backend");
-        Arc::new(InMemFs::new())
-    } else if dfs_conf.s3_endpoint == "local"
-        || (dfs_conf.s3_bucket.is_empty()
-            && dfs_conf.s3_endpoint.is_empty()
-            && dfs_s3_bucket.is_empty())
-    {
-        info!("TiFlash Columnar Hub uses builtin DFS backend");
-        Arc::new(BuiltinDfs::new(pd_client))
-    } else if dfs_conf.s3_bucket.is_empty()
-        && dfs_conf.s3_endpoint.is_empty()
-        && !dfs_s3_bucket.is_empty()
-    {
-        let mut conf = dfs_conf.clone();
-        conf.prefix = std::env::var("DFS_PREFIX").unwrap_or_default();
-        conf.s3_endpoint = std::env::var("DFS_S3_ENDPOINT").unwrap_or_default();
-        conf.s3_key_id = std::env::var("DFS_S3_KEY_ID").unwrap_or_default();
-        conf.s3_secret_key = std::env::var("DFS_S3_SECRET_KEY").unwrap_or_default();
-        conf.s3_region = std::env::var("DFS_S3_REGION").unwrap_or_default();
-        conf.s3_bucket = dfs_s3_bucket;
-        info!(
-            "TiFlash Columnar Hub uses env-overridden S3 DFS backend";
-            "endpoint" => &conf.s3_endpoint,
-            "bucket" => &conf.s3_bucket,
-            "prefix" => &conf.prefix,
-        );
-        Arc::new(S3Fs::new_from_config(as_read_only_dfs_config(conf)))
-    } else {
-        info!(
-            "TiFlash Columnar Hub uses configured S3 DFS backend";
-            "endpoint" => &dfs_conf.s3_endpoint,
-            "bucket" => &dfs_conf.s3_bucket,
-            "prefix" => &dfs_conf.prefix,
-        );
-        Arc::new(S3Fs::new_from_config(as_read_only_dfs_config(
-            dfs_conf.clone(),
-        )))
+    match select_dfs_backend(dfs_conf, &dfs_s3_bucket) {
+        DfsBackendKind::InMemory => {
+            info!("TiFlash Columnar Hub uses in-memory DFS backend");
+            Arc::new(InMemFs::new())
+        }
+        DfsBackendKind::Azure => {
+            info!(
+                "TiFlash Columnar Hub uses configured Azure DFS backend";
+                "account" => &dfs_conf.azure.account_name,
+                "container" => &dfs_conf.azure.container,
+                "prefix" => &dfs_conf.prefix,
+            );
+            Arc::new(AzureFs::new_from_config(as_read_only_dfs_config(
+                dfs_conf.clone(),
+            )))
+        }
+        DfsBackendKind::Builtin => {
+            info!("TiFlash Columnar Hub uses builtin DFS backend");
+            Arc::new(BuiltinDfs::new(pd_client))
+        }
+        DfsBackendKind::EnvOverriddenS3 => {
+            let mut conf = dfs_conf.clone();
+            conf.prefix = std::env::var("DFS_PREFIX").unwrap_or_default();
+            conf.s3_endpoint = std::env::var("DFS_S3_ENDPOINT").unwrap_or_default();
+            conf.s3_key_id = std::env::var("DFS_S3_KEY_ID").unwrap_or_default();
+            conf.s3_secret_key = std::env::var("DFS_S3_SECRET_KEY").unwrap_or_default();
+            conf.s3_region = std::env::var("DFS_S3_REGION").unwrap_or_default();
+            conf.s3_bucket = dfs_s3_bucket;
+            info!(
+                "TiFlash Columnar Hub uses env-overridden S3 DFS backend";
+                "endpoint" => &conf.s3_endpoint,
+                "bucket" => &conf.s3_bucket,
+                "prefix" => &conf.prefix,
+            );
+            Arc::new(S3Fs::new_from_config(as_read_only_dfs_config(conf)))
+        }
+        DfsBackendKind::ConfiguredS3 => {
+            info!(
+                "TiFlash Columnar Hub uses configured S3 DFS backend";
+                "endpoint" => &dfs_conf.s3_endpoint,
+                "bucket" => &dfs_conf.s3_bucket,
+                "prefix" => &dfs_conf.prefix,
+            );
+            Arc::new(S3Fs::new_from_config(as_read_only_dfs_config(
+                dfs_conf.clone(),
+            )))
+        }
     }
 }
 
@@ -338,6 +388,8 @@ fn build_dfs(config: &ConfigFile, pd_client: Arc<dyn PdClient>) -> Arc<dyn Dfs> 
 /// `read_only` and `max_read_throughput` are pinned to the values `S3Fs::new()`
 /// hardcoded so this change stays limited to credentials. Whether a configured
 /// `dfs.max-read-throughput` should apply to the hub is a separate decision.
+/// `AzureFs` enforces `read_only` the same way and has no read throughput
+/// limit at all.
 fn as_read_only_dfs_config(mut conf: DFSConfig) -> DFSConfig {
     conf.read_only = true;
     conf.max_read_throughput = ReadableSize(0);
@@ -1428,7 +1480,16 @@ pub unsafe fn run_proxy(argc: c_int, argv: *const *const c_char, helper_ptr: *co
     let master_key = tokio::runtime::Runtime::new()
         .unwrap()
         .block_on(config.security.new_master_key())
-        .unwrap_or_else(|_| MasterKey::new(&[]));
+        .unwrap_or_else(|err| {
+            // cloud_encryption logs the error type but not its text, and the
+            // text is what tells a missing KMS grant from a wrong key.
+            error!(
+                "TiFlash Columnar Hub failed to decrypt the master key, using an empty key";
+                "vendor" => &config.security.master_key.vendor,
+                "err" => ?err,
+            );
+            MasterKey::new(&[])
+        });
     let txn_chunk_mgr = TxnChunkManager::new(
         vec![],
         dfs.clone(),
@@ -1926,5 +1987,68 @@ log-rotation-size = "1024MiB"
         assert_eq!(stats.get_interval().get_start_timestamp(), 456);
 
         let _ = fs::remove_dir_all(temp_dir);
+    }
+
+    fn dfs_conf(backend: &str, endpoint: &str, bucket: &str) -> DFSConfig {
+        DFSConfig {
+            backend: backend.to_owned(),
+            s3_endpoint: endpoint.to_owned(),
+            s3_bucket: bucket.to_owned(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_select_dfs_backend_azure_ignores_s3_bucket() {
+        // What an Azure deployment renders: DFS_S3_BUCKET is written on every
+        // cloud, and override_from_env() has copied it into s3_bucket.
+        let conf = dfs_conf("azure", "", "serverless");
+        assert_eq!(
+            select_dfs_backend(&conf, "serverless"),
+            DfsBackendKind::Azure
+        );
+    }
+
+    #[test]
+    fn test_select_dfs_backend_azure_without_s3_bucket_is_not_builtin() {
+        let conf = dfs_conf("azure", "", "");
+        assert_eq!(select_dfs_backend(&conf, ""), DfsBackendKind::Azure);
+    }
+
+    #[test]
+    fn test_select_dfs_backend_azure_ignores_case() {
+        // kvengine::dfs::new_dfs_from_config() lowercases backend before matching.
+        let conf = dfs_conf("Azure", "", "serverless");
+        assert_eq!(select_dfs_backend(&conf, ""), DfsBackendKind::Azure);
+    }
+
+    #[test]
+    fn test_select_dfs_backend_memory_wins_over_backend() {
+        let conf = dfs_conf("azure", "memory", "");
+        assert_eq!(select_dfs_backend(&conf, ""), DfsBackendKind::InMemory);
+    }
+
+    #[test]
+    fn test_select_dfs_backend_s3_choices_unchanged() {
+        assert_eq!(
+            select_dfs_backend(&dfs_conf("s3", "", ""), ""),
+            DfsBackendKind::Builtin
+        );
+        assert_eq!(
+            select_dfs_backend(&dfs_conf("s3", "local", "b"), "b"),
+            DfsBackendKind::Builtin
+        );
+        assert_eq!(
+            select_dfs_backend(&dfs_conf("s3", "", ""), "b"),
+            DfsBackendKind::EnvOverriddenS3
+        );
+        assert_eq!(
+            select_dfs_backend(&dfs_conf("s3", "", "b"), "b"),
+            DfsBackendKind::ConfiguredS3
+        );
+        assert_eq!(
+            select_dfs_backend(&dfs_conf("s3", "https://storage.googleapis.com", "b"), ""),
+            DfsBackendKind::ConfiguredS3
+        );
     }
 }
