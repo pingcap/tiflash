@@ -19,11 +19,13 @@
 #include <Common/MyTime.h>
 #include <Common/RedactHelpers.h>
 #include <Common/Stopwatch.h>
+#include <Common/TiFlashException.h>
 #include <Core/NamesAndTypes.h>
 #include <DataStreams/AddExtraTableIDColumnTransformAction.h>
 #include <DataStreams/FilterTransformAction.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/IDataType.h>
 #include <Flash/Coprocessor/CodecUtils.h>
 #include <Flash/Coprocessor/ColumnarScanContext.h>
@@ -72,6 +74,81 @@ namespace ErrorCodes
 {
 extern const int COLUMNAR_SNAPSHOT_ERROR;
 } // namespace ErrorCodes
+
+// Columnar keeps MVCC versions outside its business-column schema.
+ColumnID getStorageColumnIDForColumnarRead(ColumnID column_id)
+{
+    return column_id == MutSup::extra_commit_ts_col_id ? MutSup::version_col_id : column_id;
+}
+
+tipb::Executor genTableScanForColumnarRead(const TiDBTableScan & table_scan)
+{
+    auto executor = *table_scan.getTableScanPB();
+    auto * columns = table_scan.isPartitionTableScan() ? executor.mutable_partition_table_scan()->mutable_columns()
+                                                       : executor.mutable_tbl_scan()->mutable_columns();
+    // ColumnRef offsets stay unchanged; only the IDs used by storage filters change.
+    for (auto & column : *columns)
+        column.set_column_id(getStorageColumnIDForColumnarRead(column.column_id()));
+    return executor;
+}
+
+tipb::TableInfo genTableInfoForColumnarRead(const TiDBTableScan & table_scan)
+{
+    tipb::TableInfo table_info;
+    bool needs_version = false;
+    bool has_handle = false;
+    const auto & columns = table_scan.isPartitionTableScan()
+        ? table_scan.getTableScanPB()->partition_table_scan().columns()
+        : table_scan.getTableScanPB()->tbl_scan().columns();
+    for (int i = 0; i < columns.size(); ++i)
+    {
+        const auto & column = columns[i];
+        if (table_scan.getColumns()[i].hasGeneratedColumnFlag() || column.column_id() == MutSup::extra_table_id_col_id)
+            continue;
+        if (column.column_id() == MutSup::extra_commit_ts_col_id)
+        {
+            needs_version = true;
+            continue;
+        }
+        *table_info.add_columns() = column;
+        has_handle |= column.column_id() == MutSup::extra_handle_id || column.pk_handle();
+    }
+    if (needs_version && !has_handle)
+    {
+        // CSE pack clean reads synthesize dummy handles AND versions when neither
+        // is requested. Request the handle to require real MVCC buffers. CSE uses
+        // the stored handle schema (including common handles) for this system ID;
+        // this dependency is not added to the TiFlash output columns.
+        auto * handle = table_info.add_columns();
+        handle->set_column_id(MutSup::extra_handle_id);
+        handle->set_tp(TiDB::TypeLongLong);
+        handle->set_flag(TiDB::ColumnFlagNotNull);
+    }
+    return table_info;
+}
+
+std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedReadThroughColumnar(
+    const TiDBTableScan & table_scan)
+{
+    auto [column_defines, extra_table_id_index, generated_column_infos]
+        = genColumnDefinesForDisaggregatedRead(table_scan);
+    for (auto & column : *column_defines)
+    {
+        if (column.id == MutSup::version_col_id)
+        {
+            // CSE's version buffer is nullable: the null map represents tombstones.
+            // MVCC removes them, but the FFI wire format still includes the null map.
+            column.type = makeNullable(MutSup::getVersionColumnType());
+        }
+        else
+        {
+            const auto & converted_type = CodecUtils::convertDataType(*column.type);
+            if (&converted_type != column.type.get())
+                column.type = DataTypeFactory::instance().getOrSet(converted_type.getName());
+        }
+    }
+    return {std::move(column_defines), extra_table_id_index};
+}
 
 struct RNColumnarReaderSharedContext
 {
@@ -205,6 +282,38 @@ void checkRustStrWithView(const RustStrWithView & value, const char * function_n
 {
     if (value.buff.data == nullptr && value.buff.len == 0 && value.inner.ptr == nullptr && value.inner.type == 0)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "{} returned a default RustStrWithView", function_name);
+}
+
+void remapColumnRefsForLateMaterialization(
+    tipb::Expr & expr,
+    size_t scan_column_count,
+    const std::unordered_map<String, size_t> & early_column_indexes)
+{
+    if (expr.tp() == tipb::ExprType::ColumnRef)
+    {
+        const auto scan_offset = decodeDAGInt64(expr.val());
+        if (scan_offset < 0 || scan_offset >= static_cast<Int64>(scan_column_count))
+            throw TiFlashException(
+                Errors::Coprocessor::BadRequest,
+                "Column index out of bound, expr: {}, size of input columns: {}",
+                expr.DebugString(),
+                scan_column_count);
+        const auto column_name = genNameForExchangeReceiver(static_cast<Int32>(scan_offset));
+        const auto it = early_column_indexes.find(column_name);
+        if (it == early_column_indexes.end())
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Late-materialization predicate column {} at scan offset {} is absent from the early projection",
+                column_name,
+                scan_offset);
+
+        WriteBufferFromOwnString buffer;
+        encodeDAGInt64(static_cast<Int64>(it->second), buffer);
+        expr.set_val(buffer.releaseStr());
+    }
+
+    for (int i = 0; i < expr.children_size(); ++i)
+        remapColumnRefsForLateMaterialization(*expr.mutable_children(i), scan_column_count, early_column_indexes);
 }
 
 void normalizeTimestampCompareDateTimeLiteralToUTC(tipb::Expr & expr, const TimezoneInfo & timezone_info);
@@ -928,6 +1037,34 @@ TableID RNColumnarReadTask::getLogicalTableID() const
 const String & RNColumnarReadTask::getExecutorID() const
 {
     return shared_reader_context->executor_id;
+}
+
+// Map original scan offsets to early-projection offsets using names generated by
+// genNameForExchangeReceiver(scan_offset). The early projection must preserve these names;
+// storage column IDs (which may be changed by aliases or casts) are not used.
+google::protobuf::RepeatedPtrField<tipb::Expr> remapColumnarFilterConditions(
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & filter_conditions,
+    size_t scan_column_count,
+    const Block & early_block)
+{
+    std::unordered_map<String, size_t> early_column_indexes;
+    early_column_indexes.reserve(early_block.columns());
+    for (size_t index = 0; index < early_block.columns(); ++index)
+    {
+        const auto [it, inserted] = early_column_indexes.emplace(early_block.getByPosition(index).name, index);
+        if (!inserted)
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Late-materialization early projection contains duplicate column name {} at indexes {} and {}",
+                it->first,
+                it->second,
+                index);
+    }
+
+    auto conditions = filter_conditions;
+    for (int i = 0; i < conditions.size(); ++i)
+        remapColumnRefsForLateMaterialization(*conditions.Mutable(i), scan_column_count, early_column_indexes);
+    return conditions;
 }
 
 google::protobuf::RepeatedPtrField<tipb::Expr> RNColumnarReadTask::getLateMaterializationFilterConditions(
@@ -1808,7 +1945,7 @@ Block RNColumnarInputStream::readLateMaterializedBlock()
         for (const auto & column : filter_header)
             early_names_and_types.emplace_back(column.name, column.type);
         DAGExpressionAnalyzer lm_analyzer(std::move(early_names_and_types), context);
-        auto filter_conditions = task->getLateMaterializationFilterConditions(early_block);
+        auto filter_conditions = task->getLateMaterializationFilterConditions(filter_header);
         auto filter_actions = lm_analyzer.buildPushDownFilter(filter_conditions, true);
         late_materialization_filter_action = std::make_unique<FilterTransformAction>(
             filter_header,

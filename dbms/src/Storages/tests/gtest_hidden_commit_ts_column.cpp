@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/config.h>
 #include <DataStreams/BlocksListBlockInputStream.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
@@ -35,6 +36,22 @@
 #include <common/logger_useful.h>
 #include <gtest/gtest.h>
 #include <tipb/executor.pb.h>
+
+#if ENABLE_NEXT_GEN_COLUMNAR
+namespace DB
+{
+// Test the columnar implementation without exposing its helpers in a public header.
+ColumnID getStorageColumnIDForColumnarRead(ColumnID column_id);
+tipb::Executor genTableScanForColumnarRead(const TiDBTableScan & table_scan);
+tipb::TableInfo genTableInfoForColumnarRead(const TiDBTableScan & table_scan);
+std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedReadThroughColumnar(
+    const TiDBTableScan & table_scan);
+google::protobuf::RepeatedPtrField<tipb::Expr> remapColumnarFilterConditions(
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & filter_conditions,
+    size_t scan_column_count,
+    const Block & early_block);
+} // namespace DB
+#endif
 
 namespace DB::tests
 {
@@ -188,6 +205,7 @@ try
 }
 CATCH
 
+#if ENABLE_NEXT_GEN_COLUMNAR
 TEST_F(HiddenCommitTSColumnTest, ColumnarCommitTSRequestAndWireFormat)
 try
 {
@@ -429,6 +447,8 @@ try
     }
 }
 CATCH
+
+#endif
 
 TEST_F(HiddenCommitTSColumnTest, PushDownFilterAliasAndCast)
 try
