@@ -25,6 +25,11 @@
 #include <algorithm>
 #include <array>
 
+namespace DB::ErrorCodes
+{
+extern const int ILLEGAL_COLUMN;
+}
+
 namespace DB::tests
 {
 class TestLocalMatchAgainst : public DB::tests::FunctionTest
@@ -908,6 +913,78 @@ try
             nullptr,
             true),
         Exception);
+}
+CATCH
+
+TEST_F(TestLocalMatchAgainst, MatchBooleanRejectsInvalidNodeEnums)
+try
+{
+    enum class InvalidEnumEncoding
+    {
+        Missing,
+        Invalid,
+        Unknown,
+    };
+    for (const bool invalid_occur : {false, true})
+        for (const auto encoding :
+             {InvalidEnumEncoding::Missing, InvalidEnumEncoding::Invalid, InvalidEnumEncoding::Unknown})
+        {
+            auto query = makeRequiredLocalMatchQuery("quick");
+            query.set_version(2);
+            query.set_parser(tipb::LocalMatchAgainstParserStandard);
+            query.set_stopword_mode(tipb::LocalMatchAgainstStopwordModeDisabled);
+            // Put the malformed node after a valid one: all nodes must be checked.
+            auto * node = query.add_nodes();
+            node->set_occur(tipb::LocalMatchAgainstBooleanOccurMust);
+            node->set_term_type(tipb::LocalMatchAgainstBooleanTermWord);
+            node->set_text("fox");
+            if (invalid_occur)
+            {
+                node->clear_occur();
+                if (encoding == InvalidEnumEncoding::Invalid)
+                    node->set_occur(tipb::LocalMatchAgainstBooleanOccurInvalid);
+            }
+            else
+            {
+                node->clear_term_type();
+                if (encoding == InvalidEnumEncoding::Invalid)
+                    node->set_term_type(tipb::LocalMatchAgainstBooleanTermInvalid);
+            }
+            // Encode unknown values on the wire; generated enum setters may
+            // assert rather than allow an out-of-range value in debug builds.
+            if (encoding == InvalidEnumEncoding::Unknown)
+                ASSERT_TRUE(node->MergeFromString(invalid_occur ? "\x08\x7f" : "\x10\x7f"));
+
+            for (const bool empty_analyzer : {false, true})
+                for (const bool null_search : {false, true})
+                {
+                    SCOPED_TRACE(fmt::format(
+                        "invalid_occur={} encoding={} empty_analyzer={} null_search={}",
+                        invalid_occur,
+                        static_cast<int>(encoding),
+                        empty_analyzer,
+                        null_search));
+                    query.set_innodb_ft_max_token_size(empty_analyzer ? 0 : 84);
+                    auto search = createConstColumn<String>(1, "+quick");
+                    if (null_search)
+                        search = createOnlyNullColumnConst(1);
+                    try
+                    {
+                        executeFunction(
+                            "local_match_against_boolean",
+                            {search,
+                             createColumn<String>({"quick fox"}),
+                             createConstColumn<String>(1, query.SerializeAsString())},
+                            nullptr,
+                            true);
+                        FAIL() << "Invalid Local MATCH node metadata must be rejected";
+                    }
+                    catch (const Exception & error)
+                    {
+                        ASSERT_EQ(ErrorCodes::ILLEGAL_COLUMN, error.code());
+                    }
+                }
+        }
 }
 CATCH
 

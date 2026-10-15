@@ -879,8 +879,7 @@ CompiledBooleanQuery compileBooleanQuery(
             clause.modifier = BooleanClause::Modifier::Should;
             break;
         default:
-            compiled.matches_nothing = true;
-            return compiled;
+            throw Exception("Invalid Local MATCH Boolean node occurrence", ErrorCodes::ILLEGAL_COLUMN);
         }
 
         switch (node.term_type())
@@ -981,8 +980,7 @@ CompiledBooleanQuery compileBooleanQuery(
             break;
         }
         default:
-            compiled.matches_nothing = true;
-            return compiled;
+            throw Exception("Invalid Local MATCH Boolean node term type", ErrorCodes::ILLEGAL_COLUMN);
         }
 
         if (clause.phrase && !clause.terms.empty())
@@ -1116,6 +1114,19 @@ bool decodeLocalMatchAgainstBooleanQuery(const IColumn & column, tipb::LocalMatc
     if (query.stopword_mode() != tipb::LocalMatchAgainstStopwordMode::LocalMatchAgainstStopwordModeDisabled
         && query.stopword_mode() != tipb::LocalMatchAgainstStopwordMode::LocalMatchAgainstStopwordModeBuiltin)
         return false;
+    // Validate every node before NULL-search or analyzer no-match shortcuts.
+    // Missing/unknown proto2 enum values read as Invalid, not as valid clauses.
+    for (const auto & node : query.nodes())
+    {
+        if (node.occur() != tipb::LocalMatchAgainstBooleanOccurMust
+            && node.occur() != tipb::LocalMatchAgainstBooleanOccurMustNot
+            && node.occur() != tipb::LocalMatchAgainstBooleanOccurShould)
+            return false;
+        if (node.term_type() != tipb::LocalMatchAgainstBooleanTermWord
+            && node.term_type() != tipb::LocalMatchAgainstBooleanTermPrefix
+            && node.term_type() != tipb::LocalMatchAgainstBooleanTermPhrase)
+            return false;
+    }
     return true;
 }
 
