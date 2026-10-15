@@ -95,6 +95,9 @@ public:
             enable_join_v2 ? tipb::TIFLASH_HASH_TABLE_SIZE_KIND_BUILD_ROW_COUNT
                            : tipb::TIFLASH_HASH_TABLE_SIZE_KIND_DISTINCT_KEY_COUNT);
         ASSERT_GT(join_summary->tiflash_hash_table_stats().memory_bytes(), 0);
+        // 8 non-null probe rows match the single build-side entry which holds 8 build rows.
+        ASSERT_TRUE(join_summary->has_tiflash_join_stats());
+        ASSERT_EQ(join_summary->tiflash_join_stats().joined_rows(), 64);
     }
 
     void testHashTableStatsForMultipleJoins(bool enable_join_v2)
@@ -117,6 +120,7 @@ public:
             return true;
         });
         ASSERT_EQ(join_executor_ids.size(), 2);
+        std::vector<UInt64> joined_rows_per_join;
 
         DAGContext dag_context(*request, "test_execution_summary", concurrency);
         executeStreams(&dag_context);
@@ -145,7 +149,86 @@ public:
                 enable_join_v2 ? tipb::TIFLASH_HASH_TABLE_SIZE_KIND_BUILD_ROW_COUNT
                                : tipb::TIFLASH_HASH_TABLE_SIZE_KIND_DISTINCT_KEY_COUNT);
             ASSERT_GT(join_summary->tiflash_hash_table_stats().memory_bytes(), 0);
+            ASSERT_TRUE(join_summary->has_tiflash_join_stats());
+            joined_rows_per_join.push_back(join_summary->tiflash_join_stats().joined_rows());
         }
+        // The first join matches 8 probe rows against 8 build rows, the second join probes the
+        // 64 output rows of the first join against 8 build rows.
+        ASSERT_EQ(joined_rows_per_join.size(), 2);
+        std::sort(joined_rows_per_join.begin(), joined_rows_per_join.end());
+        ASSERT_EQ(joined_rows_per_join[0], 64);
+        ASSERT_EQ(joined_rows_per_join[1], 512);
+    }
+
+    void testSemiJoinHashTableStats(bool enable_join_v2)
+    {
+        context.context->getSettingsRef().enable_hash_join_v2 = enable_join_v2;
+        enablePipeline(enable_join_v2);
+
+        auto t1 = context.scan("test_db", "test_table");
+        auto t2 = context.scan("test_db", "test_table");
+        auto request = t1.join(t2, tipb::JoinType::TypeSemiJoin, {col("s1")}).build(context);
+        request->set_collect_execution_summaries(true);
+
+        DAGContext dag_context(*request, "test_execution_summary", concurrency);
+        executeStreams(&dag_context);
+        ExecutorStatisticsCollector statistics_collector("test_execution_summary", true);
+        statistics_collector.initialize(&dag_context);
+        statistics_collector.setLocalRUConsumption(
+            RUConsumption{.cpu_ru = 0.0, .cpu_time_ns = 0, .read_ru = 0.0, .read_bytes = 0});
+        const auto summaries = statistics_collector.genExecutionSummaryResponse().execution_summaries();
+
+        const tipb::ExecutorExecutionSummary * join_summary = nullptr;
+        for (const auto & summary : summaries)
+        {
+            if (summary.has_executor_id() && summary.executor_id() == "Join_2")
+            {
+                join_summary = &summary;
+                break;
+            }
+        }
+        ASSERT_NE(join_summary, nullptr);
+        ASSERT_TRUE(join_summary->has_tiflash_hash_table_stats());
+        // Semi join without other conditions stops at the first match of each probe row, so
+        // exactly one pair is enumerated for each of the 8 matched probe rows.
+        ASSERT_TRUE(join_summary->has_tiflash_join_stats());
+        ASSERT_EQ(join_summary->tiflash_join_stats().joined_rows(), 8);
+    }
+
+    void testZeroMatchJoinHashTableStats(bool enable_join_v2)
+    {
+        context.context->getSettingsRef().enable_hash_join_v2 = enable_join_v2;
+        enablePipeline(enable_join_v2);
+
+        auto request = context.scan("test_db", "test_table")
+                           .join(context.scan("test_db", "empty_table"), tipb::JoinType::TypeInnerJoin, {col("s1")})
+                           .build(context);
+        request->set_collect_execution_summaries(true);
+
+        DAGContext dag_context(*request, "test_execution_summary", concurrency);
+        executeStreams(&dag_context);
+        ExecutorStatisticsCollector statistics_collector("test_execution_summary", true);
+        statistics_collector.initialize(&dag_context);
+        statistics_collector.setLocalRUConsumption(
+            RUConsumption{.cpu_ru = 0.0, .cpu_time_ns = 0, .read_ru = 0.0, .read_bytes = 0});
+        const auto summaries = statistics_collector.genExecutionSummaryResponse().execution_summaries();
+
+        const tipb::ExecutorExecutionSummary * join_summary = nullptr;
+        for (const auto & summary : summaries)
+        {
+            if (summary.has_executor_id() && summary.executor_id() == "Join_2")
+            {
+                join_summary = &summary;
+                break;
+            }
+        }
+        ASSERT_NE(join_summary, nullptr);
+        ASSERT_TRUE(join_summary->has_tiflash_hash_table_stats());
+        ASSERT_EQ(join_summary->tiflash_hash_table_stats().size(), 0);
+        // A completed join always reports joined_rows, so "matched 0 rows" (present, 0) is
+        // distinguishable from executors that never set the field.
+        ASSERT_TRUE(join_summary->has_tiflash_join_stats());
+        ASSERT_EQ(join_summary->tiflash_join_stats().joined_rows(), 0);
     }
 
     void testHashAggTableStats(bool enable_pipeline, bool force_two_level)
@@ -199,6 +282,72 @@ public:
         // Ten build workers own independent maps, so the reported total is not the final merged NDV.
         ASSERT_GE(aggregation_summary->tiflash_hash_table_stats().size(), 3);
         ASSERT_GT(aggregation_summary->tiflash_hash_table_stats().memory_bytes(), 0);
+        // joined_rows is a join-only field; hash aggregation never reports it.
+        ASSERT_FALSE(aggregation_summary->has_tiflash_join_stats());
+    }
+
+    void testCrossJoinStats(bool enable_pipeline, size_t shallow_copy_cross_probe_threshold)
+    {
+        enablePipeline(enable_pipeline);
+        const auto old_threshold = context.context->getSettingsRef().shallow_copy_cross_probe_threshold;
+        context.context->setSetting(
+            "shallow_copy_cross_probe_threshold",
+            Field(static_cast<UInt64>(shallow_copy_cross_probe_threshold)));
+
+        // Cross joins have no hash table but still report the candidate pairs enumerated by
+        // their probes. Empty join keys make the mock executor build a cross join.
+        const auto check_cross_join_stats
+            = [&](const std::shared_ptr<tipb::DAGRequest> & request, UInt64 expect_joined_rows) {
+                  request->set_collect_execution_summaries(true);
+
+                  DAGContext dag_context(*request, "test_execution_summary", concurrency);
+                  executeStreams(&dag_context);
+                  ExecutorStatisticsCollector statistics_collector("test_execution_summary", true);
+                  statistics_collector.initialize(&dag_context);
+                  statistics_collector.setLocalRUConsumption(
+                      RUConsumption{.cpu_ru = 0.0, .cpu_time_ns = 0, .read_ru = 0.0, .read_bytes = 0});
+                  const auto summaries = statistics_collector.genExecutionSummaryResponse().execution_summaries();
+
+                  const tipb::ExecutorExecutionSummary * join_summary = nullptr;
+                  for (const auto & summary : summaries)
+                  {
+                      if (summary.has_executor_id() && summary.executor_id() == "Join_2")
+                      {
+                          join_summary = &summary;
+                          break;
+                      }
+                  }
+                  ASSERT_NE(join_summary, nullptr);
+                  ASSERT_FALSE(join_summary->has_tiflash_hash_table_stats());
+                  ASSERT_TRUE(join_summary->has_tiflash_join_stats());
+                  ASSERT_EQ(join_summary->tiflash_join_stats().joined_rows(), expect_joined_rows);
+              };
+
+        {
+            // Cross inner join: every probe row is paired with all 12 build rows.
+            auto request = context.scan("test_db", "test_table")
+                               .join(context.scan("test_db", "test_table"), tipb::JoinType::TypeInnerJoin, {})
+                               .build(context);
+            check_cross_join_stats(request, 144);
+        }
+        {
+            // Cross semi join (Any strictness) stops at the first match of each probe row, so
+            // exactly one pair is enumerated per probe row.
+            auto request = context.scan("test_db", "test_table")
+                               .join(context.scan("test_db", "test_table"), tipb::JoinType::TypeSemiJoin, {})
+                               .build(context);
+            check_cross_join_stats(request, 12);
+        }
+        {
+            // A cross join whose build side is empty enumerates no pair, but still reports the
+            // present-but-zero count once its probe finishes.
+            auto request = context.scan("test_db", "test_table")
+                               .join(context.scan("test_db", "empty_table"), tipb::JoinType::TypeInnerJoin, {})
+                               .build(context);
+            check_cross_join_stats(request, 0);
+        }
+
+        context.context->setSetting("shallow_copy_cross_probe_threshold", Field(static_cast<UInt64>(old_threshold)));
     }
 
 #define WRAP_FOR_EXCUTION_SUMMARY_TEST_BEGIN                                      \
@@ -312,12 +461,41 @@ try
 }
 CATCH
 
+TEST_F(ExecutionSummaryTestRunner, semiJoinHashTableStats)
+try
+{
+    testSemiJoinHashTableStats(false);
+    testSemiJoinHashTableStats(true);
+}
+CATCH
+
+TEST_F(ExecutionSummaryTestRunner, zeroMatchJoinHashTableStats)
+try
+{
+    testZeroMatchJoinHashTableStats(false);
+    testZeroMatchJoinHashTableStats(true);
+}
+CATCH
+
 TEST_F(ExecutionSummaryTestRunner, hashAggTableStats)
 try
 {
     testHashAggTableStats(false, false);
     testHashAggTableStats(true, false);
     testHashAggTableStats(true, true);
+}
+CATCH
+
+TEST_F(ExecutionSummaryTestRunner, crossJoinStats)
+try
+{
+    for (auto enable_pipeline : {false, true})
+    {
+        // The first threshold forces the shallow copy cross probe mode, the second one keeps
+        // the deep copy mode.
+        testCrossJoinStats(enable_pipeline, 1);
+        testCrossJoinStats(enable_pipeline, 1024);
+    }
 }
 CATCH
 

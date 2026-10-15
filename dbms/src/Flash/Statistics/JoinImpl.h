@@ -46,6 +46,7 @@ private:
     bool is_spill_enabled = false;
     bool is_spilled = false;
     std::optional<HashTableStats> hash_table_stats;
+    std::optional<UInt64> joined_rows;
 
     BaseRuntimeStatistics join_build_base;
 

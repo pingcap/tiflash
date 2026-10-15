@@ -18,6 +18,8 @@
 #include <Core/Block.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 
+#include <atomic>
+
 namespace DB
 {
 enum class CrossProbeMode
@@ -125,6 +127,11 @@ struct ProbeProcessInfo
 
     /// for null-aware join
     std::unique_ptr<NullAwareJoinProbeProcessData> null_aware_join_data;
+
+    /// Points to the Join-owned accumulator of hash-table matched row pairs. Set by Join::joinBlock
+    /// before probing each block; probe implementations count matched pairs locally per call and
+    /// flush into it once per call with relaxed ordering. Cross joins leave it null.
+    std::atomic<UInt64> * joined_rows_counter = nullptr;
 
     // for semi join family
     std::unique_ptr<void, std::function<void(void *)>> semi_join_family_helper = nullptr; /// type erasure

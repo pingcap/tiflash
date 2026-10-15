@@ -343,7 +343,8 @@ void NASemiJoinHelper<KIND, STRICTNESS, Maps>::probeHashTable(
         key_sizes,
         collators,
         left_side_info,
-        right_side_info);
+        right_side_info,
+        probe_process_info.joined_rows_counter);
 
     RUNTIME_ASSERT(
         join_result.size() == probe_rows,

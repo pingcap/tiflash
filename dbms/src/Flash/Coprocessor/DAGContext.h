@@ -74,6 +74,10 @@ struct JoinProfileInfo
     bool is_spilled = false;
     /// Empty only for a cross join, which does not have a hash table.
     std::optional<HashTableStats> hash_table_stats;
+    /// Total number of row pairs enumerated by this join's probes before other conditions are
+    /// applied. Unlike the hash table stats above, it is not tied to any hash table, so cross
+    /// joins report it too. Present once the probe finishes (0 means the join matched nothing).
+    std::optional<UInt64> joined_rows;
 
     void setHashTableStats(const HashTableStats & stats)
     {
@@ -90,10 +94,26 @@ struct JoinProfileInfo
             hash_table_stats->merge(stats);
     }
 
+    /// Unlike the size/memory fields which are finalized at build finish, joined rows are only
+    /// known when each probe stream finishes, so they are accumulated here after the build stage
+    /// has already published its own stats. Each Join (including every restore join) reports the
+    /// pairs enumerated by its own probe streams exactly once.
+    void addJoinedRows(UInt64 rows)
+    {
+        std::lock_guard lock(hash_table_stats_mutex);
+        joined_rows = joined_rows.value_or(0) + rows;
+    }
+
     std::optional<HashTableStats> getHashTableStats() const
     {
         std::lock_guard lock(hash_table_stats_mutex);
         return hash_table_stats;
+    }
+
+    std::optional<UInt64> getJoinedRows() const
+    {
+        std::lock_guard lock(hash_table_stats_mutex);
+        return joined_rows;
     }
 
 private:
