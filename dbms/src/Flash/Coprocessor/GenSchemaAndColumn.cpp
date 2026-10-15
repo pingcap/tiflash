@@ -101,7 +101,8 @@ NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan, const StringRef
 }
 
 std::tuple<DM::ColumnDefinesPtr, int, std::vector<std::tuple<UInt64, String, DataTypePtr>>> genColumnDefinesForDisaggregatedRead(
-    const TiDBTableScan & table_scan)
+    const TiDBTableScan & table_scan,
+    bool support_commit_ts)
 {
     auto column_defines = std::make_shared<DM::ColumnDefines>();
     int extra_table_id_index = MutSup::invalid_col_id;
@@ -136,6 +137,8 @@ std::tuple<DM::ColumnDefinesPtr, int, std::vector<std::tuple<UInt64, String, Dat
             break;
         }
         case MutSup::extra_commit_ts_col_id:
+            if (!support_commit_ts)
+                throw Exception("Not supported in disaggregated read now");
             // Read the MVCC version using its storage ID and type. The computing
             // layer casts it to the type requested by TiDB after the scan.
             column_defines->emplace_back(MutSup::version_col_id, output_name, MutSup::getVersionColumnType());

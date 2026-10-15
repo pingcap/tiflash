@@ -131,13 +131,12 @@ std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedReadThroug
     const TiDBTableScan & table_scan)
 {
     auto [column_defines, extra_table_id_index, generated_column_infos]
-        = genColumnDefinesForDisaggregatedRead(table_scan);
+        = genColumnDefinesForDisaggregatedRead(table_scan, /*support_commit_ts=*/true);
     for (auto & column : *column_defines)
     {
         if (column.id == MutSup::version_col_id)
         {
             // CSE's version buffer is nullable: the null map represents tombstones.
-            // MVCC removes them, but the FFI wire format still includes the null map.
             column.type = makeNullable(MutSup::getVersionColumnType());
         }
         else
@@ -1087,7 +1086,11 @@ std::unordered_set<ColumnID> RNColumnarReadTask::getExactFilterColumnIDs() const
 std::unordered_set<ColumnID> RNColumnarReadTask::getLateMaterializationEarlyColumnIDs() const
 {
     auto column_ids = getExactFilterColumnIDs();
+
+    // CSE's early projection uses storage IDs: replace the logical commit-ts ID
+    // with version_col_id, which is always included below for MVCC filtering.
     column_ids.erase(MutSup::extra_commit_ts_col_id);
+
     column_ids.insert(MutSup::extra_handle_id);
     column_ids.insert(MutSup::version_col_id);
     for (const auto & column : shared_reader_context->scan_columns)

@@ -75,7 +75,7 @@ protected:
     ContextPtr ctx = TiFlashTestEnv::getContext();
 };
 
-TEST_F(HiddenCommitTSColumnTest, DisaggregatedReadCommitTS)
+TEST_F(HiddenCommitTSColumnTest, DisaggregatedReadCommitTSRequiresOptIn)
 try
 {
     for (bool partition_scan : {false, true})
@@ -107,8 +107,10 @@ try
 
             DAGContext dag_context(1024);
             TiDBTableScan table_scan(&executor, "table_scan", dag_context);
+            // Ordinary next-gen reads must keep rejecting the hidden commit-ts column.
+            EXPECT_THROW(genColumnDefinesForDisaggregatedRead(table_scan), DB::Exception);
             auto [column_defines, extra_table_id_index, generated_columns]
-                = genColumnDefinesForDisaggregatedRead(table_scan);
+                = genColumnDefinesForDisaggregatedRead(table_scan, /*support_commit_ts=*/true);
             ASSERT_EQ(column_defines->size(), 2);
             EXPECT_EQ(extra_table_id_index, 2);
             EXPECT_TRUE(generated_columns.empty());
