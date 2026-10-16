@@ -1653,7 +1653,7 @@ Block doNASemiJoinOrSemiJoin(
     {
         if (is_cancelled())
             return {};
-        helper->doJoin();
+        helper->doJoin(probe_process_info);
         // because pipeline model is enabled by default, current_task_timer should be not null in most senarios
         if likely (current_task_timer != nullptr)
         {

@@ -1891,9 +1891,9 @@ probeBlockNullAwareSemiInternal(
             {
                 /// Else the other condition must be checked for these matched right row(s).
                 auto map_it = &static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
-                /// All strictness walks the matched rows to evaluate other conditions; report the
-                /// total pairs under the matched entry.
-                joined_rows_in_call += map_it->list_length;
+                /// All strictness checks other conditions for these matched right row(s) later, in
+                /// paced and short-circuited rounds driven by NASemiJoinHelper::doJoin(); the pairs
+                /// actually enumerated are counted there, not the full entry length here.
                 res.emplace_back(i, NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS, static_cast<const void *>(map_it));
                 res_list.emplace_back(&res.back());
             }
@@ -2120,9 +2120,9 @@ probeBlockSemiInternal(
             else
             {
                 auto map_it = &static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
-                /// All strictness walks the matched rows to evaluate other conditions; report the
-                /// total pairs under the matched entry.
-                joined_rows_in_call += map_it->list_length;
+                /// All strictness checks other conditions for these matched right row(s) later, in
+                /// paced and short-circuited rounds driven by SemiJoinHelper::doJoin(); the pairs
+                /// actually enumerated are counted there, not the full entry length here.
                 res.emplace_back(i, static_cast<const void *>(map_it));
                 res_list.emplace_back(&res.back());
             }

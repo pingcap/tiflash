@@ -458,7 +458,10 @@ bool HashJoin::finishOneProbe(size_t stream_index)
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_mpp_hash_probe);
         // The last finishing worker sees all other workers' counts through the fetch_sub chain, so
-        // the sum is complete. Cross joins have no hash table and never report hash table stats.
+        // the sum is complete. Cross join does not use JoinV2 today; the guard is defensive: the
+        // cross probe path has no key-comparison loop, so wd.joined_rows would stay zero and
+        // publishing the sum would report a misleading present-0 instead of leaving the
+        // statistic absent.
         if (method != HashJoinKeyMethod::Cross)
         {
             size_t total_joined_rows = 0;

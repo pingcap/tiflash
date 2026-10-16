@@ -402,7 +402,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Maps>::probeHashTable(
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
-void NASemiJoinHelper<KIND, STRICTNESS, Maps>::doJoin()
+void NASemiJoinHelper<KIND, STRICTNESS, Maps>::doJoin([[maybe_unused]] ProbeProcessInfo & probe_process_info)
 {
     switch (current_check_step)
     {
@@ -411,7 +411,15 @@ void NASemiJoinHelper<KIND, STRICTNESS, Maps>::doJoin()
         // if STRICTNESS is Any, we add this check only to avoid static_assert fail
         if constexpr (STRICTNESS == All)
         {
-            runStep<NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS>();
+            const size_t joined_rows_in_round = runStep<NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS>();
+            /// Count the pairs actually enumerated this round: other conditions are evaluated on
+            /// the materialized rows, and a satisfied condition finishes the probe row early (the
+            /// paced walk short-circuits), so count the materialized rows instead of the full
+            /// matched entry length.
+            if (joined_rows_in_round != 0 && probe_process_info.joined_rows_counter != nullptr)
+                probe_process_info.joined_rows_counter->fetch_add(
+                    joined_rows_in_round,
+                    std::memory_order_relaxed);
             if (undetermined_result_list.empty())
             {
                 // go to next step
@@ -483,14 +491,14 @@ void NASemiJoinHelper<KIND, STRICTNESS, Maps>::prepareForRunStep()
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
 template <NASemiJoinStep STEP>
-void NASemiJoinHelper<KIND, STRICTNESS, Maps>::runStep()
+size_t NASemiJoinHelper<KIND, STRICTNESS, Maps>::runStep()
 {
     static_assert(
         STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS || STEP == NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS
         || STEP == NASemiJoinStep::NULL_KEY_CHECK_NULL_ROWS);
 
     if (undetermined_result_list.empty())
-        return;
+        return 0;
 
     std::vector<size_t> offsets;
     size_t block_columns = res_block.columns();
@@ -545,6 +553,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Maps>::runStep()
     exec_block = res_block.cloneWithColumns(std::move(columns));
 
     runAndCheckExprResult<STEP>(exec_block, offsets);
+    return current_offset;
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>

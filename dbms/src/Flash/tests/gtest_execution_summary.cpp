@@ -231,6 +231,151 @@ public:
         ASSERT_EQ(join_summary->tiflash_join_stats().joined_rows(), 0);
     }
 
+    void testSemiJoinWithOtherConditionStats(bool enable_join_v2)
+    {
+        context.context->getSettingsRef().enable_hash_join_v2 = enable_join_v2;
+        enablePipeline(enable_join_v2);
+
+        context.addMockTable(
+            {"test_db", "semi_join_left"},
+            {{"k", TiDB::TP::TypeLong}, {"lv", TiDB::TP::TypeLong}},
+            {toNullableVec<Int32>("k", {1, 2}), toNullableVec<Int32>("lv", {50, 50})});
+
+        const auto check_semi_join_stats
+            = [&](const std::vector<std::optional<Int32>> & rv_values, UInt64 expect_joined_rows) {
+            // All build rows share the join key 1, so the probe row with k = 1 matches a single
+            // entry holding rv_values.size() build rows, which the other condition `rv < lv`
+            // checks in paced and short-circuited rounds. The probe row with k = 2 matches
+            // nothing and must not contribute to joined_rows.
+            context.addMockTable(
+                {"test_db", "semi_join_right"},
+                {{"k", TiDB::TP::TypeLong}, {"rv", TiDB::TP::TypeLong}},
+                {toNullableVec<Int32>("k", std::vector<std::optional<Int32>>(rv_values.size(), 1)),
+                 toNullableVec<Int32>("rv", rv_values)});
+
+            auto request = context.scan("test_db", "semi_join_left")
+                               .join(
+                                   context.scan("test_db", "semi_join_right"),
+                                   tipb::JoinType::TypeSemiJoin,
+                                   {col("k")},
+                                   {},
+                                   {},
+                                   {lt(col("rv"), col("lv"))},
+                                   {},
+                                   0)
+                               .build(context);
+            request->set_collect_execution_summaries(true);
+
+            DAGContext dag_context(*request, "test_execution_summary", concurrency);
+            executeStreams(&dag_context);
+            ExecutorStatisticsCollector statistics_collector("test_execution_summary", true);
+            statistics_collector.initialize(&dag_context);
+            statistics_collector.setLocalRUConsumption(
+                RUConsumption{.cpu_ru = 0.0, .cpu_time_ns = 0, .read_ru = 0.0, .read_bytes = 0});
+            const auto summaries = statistics_collector.genExecutionSummaryResponse().execution_summaries();
+
+            const tipb::ExecutorExecutionSummary * join_summary = nullptr;
+            for (const auto & summary : summaries)
+            {
+                if (summary.has_executor_id() && summary.executor_id() == "Join_2")
+                {
+                    join_summary = &summary;
+                    break;
+                }
+            }
+            ASSERT_NE(join_summary, nullptr);
+            ASSERT_TRUE(join_summary->has_tiflash_join_stats());
+            ASSERT_EQ(join_summary->tiflash_join_stats().joined_rows(), expect_joined_rows);
+        };
+
+        {
+            // The other condition is satisfied by the second build row, so the paced walk
+            // finishes the probe row within its first round and the remaining build rows under
+            // the entry are never enumerated: only the materialized rows are counted, not the
+            // full entry length (8) that the probe row matches. JoinV1 materializes in rounds
+            // of 2 (SemiJoinResult::pace), JoinV2 in rounds of 4 (SemiJoinProbe INITIAL_PACE).
+            check_semi_join_stats({100, 1, 2, 3, 4, 5, 6, 7}, enable_join_v2 ? 4 : 2);
+        }
+        {
+            // The other condition is never satisfied, so every build row under the entry is
+            // enumerated and counted.
+            check_semi_join_stats({100, 101, 102, 103, 104, 105, 106, 107}, 8);
+        }
+    }
+
+    void testNullAwareAntiSemiJoinWithOtherConditionStats()
+    {
+        // Null-aware semi joins are only implemented by JoinV1.
+        context.context->getSettingsRef().enable_hash_join_v2 = false;
+        enablePipeline(true);
+
+        context.addMockTable(
+            {"test_db", "semi_join_left"},
+            {{"k", TiDB::TP::TypeLong}, {"lv", TiDB::TP::TypeLong}},
+            {toNullableVec<Int32>("k", {1, 2}), toNullableVec<Int32>("lv", {50, 50})});
+
+        const auto check_na_anti_semi_join_stats
+            = [&](const std::vector<std::optional<Int32>> & rv_values, UInt64 expect_joined_rows) {
+            // All build rows share the join key 1, so the probe row with k = 1 matches a single
+            // entry holding rv_values.size() build rows, which the other condition `rv < lv`
+            // checks in paced and short-circuited rounds. The probe row with k = 2 matches
+            // nothing and must not contribute to joined_rows.
+            context.addMockTable(
+                {"test_db", "semi_join_right"},
+                {{"k", TiDB::TP::TypeLong}, {"rv", TiDB::TP::TypeLong}},
+                {toNullableVec<Int32>("k", std::vector<std::optional<Int32>>(rv_values.size(), 1)),
+                 toNullableVec<Int32>("rv", rv_values)});
+
+            auto request = context.scan("test_db", "semi_join_left")
+                               .join(
+                                   context.scan("test_db", "semi_join_right"),
+                                   tipb::JoinType::TypeAntiSemiJoin,
+                                   {col("k")},
+                                   {},
+                                   {},
+                                   {lt(col("rv"), col("lv"))},
+                                   {},
+                                   0,
+                                   /*is_null_aware_semi_join=*/true)
+                               .build(context);
+            request->set_collect_execution_summaries(true);
+
+            DAGContext dag_context(*request, "test_execution_summary", concurrency);
+            executeStreams(&dag_context);
+            ExecutorStatisticsCollector statistics_collector("test_execution_summary", true);
+            statistics_collector.initialize(&dag_context);
+            statistics_collector.setLocalRUConsumption(
+                RUConsumption{.cpu_ru = 0.0, .cpu_time_ns = 0, .read_ru = 0.0, .read_bytes = 0});
+            const auto summaries = statistics_collector.genExecutionSummaryResponse().execution_summaries();
+
+            const tipb::ExecutorExecutionSummary * join_summary = nullptr;
+            for (const auto & summary : summaries)
+            {
+                if (summary.has_executor_id() && summary.executor_id() == "Join_2")
+                {
+                    join_summary = &summary;
+                    break;
+                }
+            }
+            ASSERT_NE(join_summary, nullptr);
+            ASSERT_TRUE(join_summary->has_tiflash_join_stats());
+            ASSERT_EQ(join_summary->tiflash_join_stats().joined_rows(), expect_joined_rows);
+        };
+
+        {
+            // The other condition is satisfied by the second build row, so the paced walk
+            // finishes the probe row within its first round (NASemiJoinResult::pace is 2) and
+            // the remaining build rows under the entry are never enumerated: only the
+            // materialized rows are counted, not the full entry length (8).
+            check_na_anti_semi_join_stats({100, 1, 2, 3, 4, 5, 6, 7}, 2);
+        }
+        {
+            // The other condition is never satisfied, so every build row under the entry is
+            // enumerated and counted.
+            check_na_anti_semi_join_stats({100, 101, 102, 103, 104, 105, 106, 107}, 8);
+        }
+    }
+
     void testHashAggTableStats(bool enable_pipeline, bool force_two_level)
     {
         enablePipeline(enable_pipeline);
@@ -474,6 +619,21 @@ try
 {
     testZeroMatchJoinHashTableStats(false);
     testZeroMatchJoinHashTableStats(true);
+}
+CATCH
+
+TEST_F(ExecutionSummaryTestRunner, semiJoinWithOtherConditionStats)
+try
+{
+    testSemiJoinWithOtherConditionStats(false);
+    testSemiJoinWithOtherConditionStats(true);
+}
+CATCH
+
+TEST_F(ExecutionSummaryTestRunner, nullAwareAntiSemiJoinWithOtherConditionStats)
+try
+{
+    testNullAwareAntiSemiJoinWithOtherConditionStats();
 }
 CATCH
 

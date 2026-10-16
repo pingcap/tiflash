@@ -184,7 +184,7 @@ public:
         const ProbeProcessInfo & probe_process_info,
         const NameSet & probe_output_name_set,
         const Block & right_sample_block);
-    void doJoin();
+    void doJoin(ProbeProcessInfo & probe_process_info);
     bool isJoinDone() const
     {
         return is_probe_hash_table_done && undetermined_result_list.empty()
@@ -195,8 +195,10 @@ public:
     Block genJoinResult(const NameSet & output_column_names_set);
 
 private:
+    /// Run one paced round for the given step and return the number of build rows materialized
+    /// this round (candidate pairs actually enumerated).
     template <NASemiJoinStep STEP>
-    void runStep();
+    size_t runStep();
     template <NASemiJoinStep STEP>
     void prepareForRunStep();
     void runStepAllBlocks();
