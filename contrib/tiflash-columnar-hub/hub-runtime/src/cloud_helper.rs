@@ -17,12 +17,12 @@ use std::{
     fs,
     ops::Deref,
     path::{Path, PathBuf},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Mutex, Weak,
-    },
+    sync::{Arc, Mutex, Weak},
     time::{Duration, UNIX_EPOCH},
 };
+
+#[cfg(test)]
+use std::sync::atomic::Ordering;
 
 use api_version::{api_v2::KEYSPACE_PREFIX_LEN, ApiV2};
 use bytes::Bytes;
@@ -1093,7 +1093,7 @@ impl SharedSnapAccessCache {
 
 #[derive(Clone)]
 pub struct SharedSnapAccessCacheCore {
-    groups: Arc<DashMap<u64, Arc<SharedSnapAccessGroup>>>,
+    groups: Arc<DashMap<u64, SharedSnapAccessGroup>>,
 }
 
 impl SharedSnapAccessCacheCore {
@@ -1103,117 +1103,84 @@ impl SharedSnapAccessCacheCore {
         }
     }
 
-    pub fn get(&self, key: &SharedSnapAccessKey) -> Option<Weak<kvengine::SnapAccessCore>> {
-        let group = self.groups.get(&key.start_ts).map(|entry| entry.clone())?;
-        let _state_guard = group.state_lock.lock().unwrap();
-        if group.is_terminal() {
-            return None;
-        }
-        group.entries.get(key).map(|entry| entry.clone())
-    }
-
-    pub fn insert(&self, key: SharedSnapAccessKey, entry: Weak<kvengine::SnapAccessCore>) {
-        let Some(group) = self.groups.get(&key.start_ts).map(|entry| entry.clone()) else {
-            return;
-        };
-        let _state_guard = group.state_lock.lock().unwrap();
-        if group.is_terminal() {
-            return;
-        }
-        group.entries.insert(key, entry);
-    }
-
-    pub fn get_loader(&self, key: &SharedSnapAccessKey) -> Option<Arc<tokio::sync::Mutex<()>>> {
-        let group = match self.groups.entry(key.start_ts) {
-            dashmap::mapref::entry::Entry::Occupied(entry) => entry.get().clone(),
-            dashmap::mapref::entry::Entry::Vacant(entry) => {
-                entry.insert(Arc::new(SharedSnapAccessGroup::new())).clone()
-            }
-        };
-        let _state_guard = group.state_lock.lock().unwrap();
-        if group.is_terminal() {
-            return None;
-        }
-        let loader = group
-            .loaders
+    fn get_or_insert(&self, key: &SharedSnapAccessKey) -> Arc<SharedSnapAccessEntry> {
+        // Keep the group map locked until the entry is acquired so eviction and
+        // lookup have a single ordering. No map guard is held across an await.
+        let mut group = self
+            .groups
+            .entry(key.start_ts)
+            .or_insert_with(SharedSnapAccessGroup::new);
+        group
+            .entries
             .entry(key.clone())
-            .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
-            .clone();
-        Some(loader)
-    }
-
-    pub fn remove_loader(&self, key: &SharedSnapAccessKey) -> bool {
-        let Some(group) = self.groups.get(&key.start_ts).map(|entry| entry.clone()) else {
-            return false;
-        };
-        let _state_guard = group.state_lock.lock().unwrap();
-        let removed = group.loaders.remove(key).is_some();
-        drop(_state_guard);
-        self.try_remove_empty_group(key.start_ts, &group);
-        removed
-    }
-
-    pub fn remove_entry(&self, key: &SharedSnapAccessKey) -> bool {
-        let Some(group) = self.groups.get(&key.start_ts).map(|entry| entry.clone()) else {
-            return false;
-        };
-        let _state_guard = group.state_lock.lock().unwrap();
-        let removed = group.entries.remove(key).is_some();
-        drop(_state_guard);
-        self.try_remove_empty_group(key.start_ts, &group);
-        removed
+            .or_insert_with(|| Arc::new(SharedSnapAccessEntry::new()))
+            .clone()
     }
 
     pub fn remove_by_start_ts(&self, start_ts: u64) -> (usize, usize) {
-        let Some(group) = self.groups.get(&start_ts).map(|entry| entry.clone()) else {
+        // Eviction releases cache ownership; it does not cancel readers. In-flight
+        // requests retain their entries, while later requests create a new group.
+        // Old loaders only update their own entries and cannot repopulate it.
+        let Some((_, group)) = self.groups.remove(&start_ts) else {
             return (0, 0);
         };
-        let _state_guard = group.state_lock.lock().unwrap();
-        group.mark_terminal();
         let removed_entries = group.entries.len();
-        let in_flight_loaders = group.loaders.len();
-        group.entries.clear();
-        drop(_state_guard);
-        self.try_remove_empty_group(start_ts, &group);
+        let in_flight_loaders = group
+            .entries
+            .values()
+            .filter(|entry| entry.loader.lock().unwrap().strong_count() > 0)
+            .count();
         (removed_entries, in_flight_loaders)
-    }
-
-    fn try_remove_empty_group(&self, start_ts: u64, group: &Arc<SharedSnapAccessGroup>) {
-        let _state_guard = group.state_lock.lock().unwrap();
-        if group.entries.is_empty() && group.loaders.is_empty() {
-            if let Some(entry) = self.groups.get(&start_ts) {
-                if Arc::ptr_eq(entry.value(), group) {
-                    drop(entry);
-                    let _ = self.groups.remove(&start_ts);
-                }
-            }
-        }
     }
 }
 
 pub struct SharedSnapAccessGroup {
-    entries: DashMap<SharedSnapAccessKey, Weak<kvengine::SnapAccessCore>>,
-    loaders: DashMap<SharedSnapAccessKey, Arc<tokio::sync::Mutex<()>>>,
-    terminal: AtomicBool,
-    state_lock: Mutex<()>,
+    entries: HashMap<SharedSnapAccessKey, Arc<SharedSnapAccessEntry>>,
 }
 
 impl SharedSnapAccessGroup {
     pub fn new() -> Self {
         Self {
-            entries: DashMap::new(),
-            loaders: DashMap::new(),
-            terminal: AtomicBool::new(false),
-            state_lock: Mutex::new(()),
+            entries: HashMap::new(),
+        }
+    }
+}
+
+struct SharedSnapAccessEntry {
+    snap: Mutex<Weak<kvengine::SnapAccessCore>>,
+    loader: Mutex<Weak<tokio::sync::Mutex<()>>>,
+}
+
+impl SharedSnapAccessEntry {
+    fn new() -> Self {
+        Self {
+            snap: Mutex::new(Weak::new()),
+            loader: Mutex::new(Weak::new()),
         }
     }
 
-    fn is_terminal(&self) -> bool {
-        self.terminal.load(Ordering::Acquire)
+    fn get(&self) -> Option<SnapAccess> {
+        self.snap
+            .lock()
+            .unwrap()
+            .upgrade()
+            .map(|core| SnapAccess { core })
     }
 
-    fn mark_terminal(&self) {
-        self.terminal.store(true, Ordering::Release);
+    fn insert(&self, snap: &SnapAccess) {
+        *self.snap.lock().unwrap() = Arc::downgrade(&snap.core);
+    }
+
+    fn get_loader(&self) -> Arc<tokio::sync::Mutex<()>> {
+        let mut weak_loader = self.loader.lock().unwrap();
+        if let Some(loader) = weak_loader.upgrade() {
+            return loader;
+        }
+        // Keep the same mutex while any loader or waiter owns it. Removing a
+        // loader by key after a load could otherwise split waiters over two locks.
+        let loader = Arc::new(tokio::sync::Mutex::new(()));
+        *weak_loader = Arc::downgrade(&loader);
+        loader
     }
 }
 
@@ -1245,23 +1212,6 @@ impl SharedSnapAccessKey {
             prepare_all,
         }
     }
-}
-
-fn upgrade_shared_snap_access(
-    cache: &SharedSnapAccessCache,
-    key: &SharedSnapAccessKey,
-) -> Option<SnapAccess> {
-    let core = match cache.get(key) {
-        Some(core) => match core.upgrade() {
-            Some(core) => core,
-            None => {
-                cache.remove_entry(key);
-                return None;
-            }
-        },
-        None => return None,
-    };
-    Some(SnapAccess { core })
 }
 
 async fn get_or_request_shared_snapshot(
@@ -1301,7 +1251,8 @@ async fn get_or_request_shared_snapshot(
         prepare_all,
     );
 
-    if let Some(snap) = upgrade_shared_snap_access(&shared_snap_access_cache, &key) {
+    let entry = shared_snap_access_cache.get_or_insert(&key);
+    if let Some(snap) = entry.get() {
         info!(
             "reuse shared snapaccess directly, shard_id: {}, shard_ver: {}, start_ts: {}, start_table_id: {}, end_table_id: {}",
             shard_id, shard_ver, start_ts, start_table_id, end_table_id
@@ -1310,12 +1261,10 @@ async fn get_or_request_shared_snapshot(
         return Ok(snap);
     }
 
-    let Some(loader) = shared_snap_access_cache.get_loader(&key) else {
-        return Err(format!("shared snapaccess evicted, start_ts: {}", start_ts).into());
-    };
+    let loader = entry.get_loader();
     let _guard = loader.lock().await;
 
-    if let Some(snap) = upgrade_shared_snap_access(&shared_snap_access_cache, &key) {
+    if let Some(snap) = entry.get() {
         info!(
             "reuse shared snapaccess after wait, shard_id: {}, shard_ver: {}, start_ts: {}, start_table_id: {}, end_table_id: {}",
             shard_id, shard_ver, start_ts, start_table_id, end_table_id
@@ -1355,9 +1304,8 @@ async fn get_or_request_shared_snapshot(
     .await;
 
     if let Ok(ref snap_access) = snap {
-        shared_snap_access_cache.insert(key.clone(), Arc::downgrade(&snap_access.core));
+        entry.insert(snap_access);
     }
-    shared_snap_access_cache.remove_loader(&key);
     snap
 }
 
@@ -1550,35 +1498,148 @@ mod tests {
         SchemaFile::open(file).unwrap()
     }
 
-    #[test]
-    fn shared_snap_access_eviction_is_sticky_for_in_flight_loader() {
+    fn new_test_snap_access() -> SnapAccess {
+        let (start, end) = ApiV2::get_txn_keyspace_range(1);
+        let shard = kvengine::Shard::new(
+            1,
+            &kvenginepb::Properties::default(),
+            1,
+            kvengine::ShardRange::new(&start, &end),
+            KEYSPACE_PREFIX_LEN,
+            Arc::new(kvengine::Options::default()),
+            &MasterKey::new(&[1; 32]),
+            Arc::new(cloud_encryption::EncryptionKeyManager::new()),
+        );
+        SnapAccess::new(&shard)
+    }
+
+    #[tokio::test]
+    async fn shared_snap_access_eviction_allows_new_loads_and_isolates_old_loaders() {
         let cache = SharedSnapAccessCache::new();
         let key = SharedSnapAccessKey::new(1, 2, 3, 4, 5, false);
+        let old_entry = cache.get_or_insert(&key);
+        let loader = old_entry.get_loader();
+        let guard = loader.lock().await;
+        let mut waiter = Box::pin(Arc::clone(&loader).lock_owned());
+        assert!(futures::poll!(&mut waiter).is_pending());
 
-        let loader = cache
-            .get_loader(&key)
-            .expect("active group should create loader");
-        cache.insert(key.clone(), Weak::new());
-        assert!(cache
-            .groups
-            .get(&key.start_ts)
-            .is_some_and(|group| group.entries.contains_key(&key)));
+        assert_eq!(cache.remove_by_start_ts(key.start_ts), (1, 1));
+        assert!(cache.groups.is_empty());
+        let new_entry = cache.get_or_insert(&key);
+        assert!(!Arc::ptr_eq(&old_entry, &new_entry));
+        let new_loader = new_entry.get_loader();
+        let _new_guard = new_loader.try_lock().unwrap();
+        let new_snap = new_test_snap_access();
+        new_entry.insert(&new_snap);
 
-        let (removed_entries, in_flight_loaders) = cache.remove_by_start_ts(key.start_ts);
-        assert_eq!(removed_entries, 1);
-        assert_eq!(in_flight_loaders, 1);
-        assert!(cache.get(&key).is_none());
-        assert!(cache.get_loader(&key).is_none());
-
-        cache.insert(key.clone(), Weak::new());
-        assert!(cache
-            .groups
-            .get(&key.start_ts)
-            .is_some_and(|group| group.entries.is_empty()));
-
+        // The old load completes after eviction and after the new load. Its
+        // waiters can still reuse the result without overwriting the new group.
+        let old_snap = new_test_snap_access();
+        old_entry.insert(&old_snap);
+        drop(guard);
+        let _waiter_guard = waiter.await;
+        assert!(Arc::ptr_eq(&old_entry.get().unwrap().core, &old_snap.core));
         drop(loader);
-        assert!(cache.remove_loader(&key));
-        assert!(cache.groups.get(&key.start_ts).is_none());
+        drop(old_entry);
+        let current_entry = cache.get_or_insert(&key);
+        assert!(Arc::ptr_eq(&current_entry, &new_entry));
+        assert!(Arc::ptr_eq(
+            &current_entry.get().unwrap().core,
+            &new_snap.core
+        ));
+
+        assert_eq!(cache.remove_by_start_ts(key.start_ts), (1, 1));
+        new_entry.insert(&new_snap);
+        assert!(cache.groups.is_empty());
+    }
+
+    #[tokio::test]
+    async fn shared_snap_access_waiters_keep_the_same_loader_after_a_load_finishes() {
+        let cache = SharedSnapAccessCache::new();
+        let key = SharedSnapAccessKey::new(1, 2, 3, 4, 5, false);
+        let entry = cache.get_or_insert(&key);
+        let loader = entry.get_loader();
+        let first_guard = Arc::clone(&loader).lock_owned().await;
+        let mut waiter = Box::pin(Arc::clone(&loader).lock_owned());
+        assert!(futures::poll!(&mut waiter).is_pending());
+        let weak_loader = Arc::downgrade(&loader);
+
+        // Model a failed load (or a result dropped before the waiter runs).
+        // A new request must queue behind that waiter, using the same mutex.
+        drop(first_guard);
+        drop(loader);
+        let newcomer = cache.get_or_insert(&key).get_loader();
+        assert!(Arc::ptr_eq(&newcomer, &weak_loader.upgrade().unwrap()));
+        assert!(newcomer.try_lock().is_err());
+        let waiter_guard = waiter.await;
+        assert!(newcomer.try_lock().is_err());
+        drop(waiter_guard);
+        assert!(newcomer.try_lock().is_ok());
+    }
+
+    #[test]
+    fn shared_snap_access_concurrent_loaders_cannot_repopulate_an_evicted_group() {
+        let cache = SharedSnapAccessCache::new();
+        let key = SharedSnapAccessKey::new(1, 2, 3, 4, 5, false);
+        let barrier = std::sync::Barrier::new(17);
+        let old_snap = new_test_snap_access();
+        let new_snap = new_test_snap_access();
+        std::thread::scope(|scope| {
+            for _ in 0..16 {
+                scope.spawn(|| {
+                    let entry = cache.get_or_insert(&key);
+                    let _loader = entry.get_loader();
+                    barrier.wait();
+                    barrier.wait();
+                    entry.insert(&old_snap);
+                });
+            }
+            // All workers have acquired the old entry before eviction. Let them
+            // finish only after a request has populated the replacement group.
+            barrier.wait();
+            assert_eq!(cache.remove_by_start_ts(key.start_ts), (1, 1));
+            cache.get_or_insert(&key).insert(&new_snap);
+            barrier.wait();
+        });
+        assert!(Arc::ptr_eq(
+            &cache.get_or_insert(&key).get().unwrap().core,
+            &new_snap.core
+        ));
+        assert_eq!(cache.remove_by_start_ts(key.start_ts), (1, 0));
+        assert!(cache.groups.is_empty());
+    }
+
+    #[test]
+    fn shared_snap_access_cache_does_not_pin_snapshots() {
+        let cache = SharedSnapAccessCache::new();
+        let key = SharedSnapAccessKey::new(1, 2, 3, 4, 5, false);
+        let entry = cache.get_or_insert(&key);
+        let snap = new_test_snap_access();
+        let weak_snap = Arc::downgrade(&snap.core);
+        entry.insert(&snap);
+        assert!(Arc::ptr_eq(&entry.get().unwrap().core, &snap.core));
+        drop(snap);
+        assert!(weak_snap.upgrade().is_none());
+        assert!(entry.get().is_none());
+        assert_eq!(cache.remove_by_start_ts(key.start_ts), (1, 0));
+        assert_eq!(cache.remove_by_start_ts(key.start_ts), (0, 0));
+    }
+
+    #[tokio::test]
+    async fn shared_snap_access_cancelled_loader_can_be_replaced() {
+        let cache = SharedSnapAccessCache::new();
+        let key = SharedSnapAccessKey::new(1, 2, 3, 4, 5, false);
+        let entry = cache.get_or_insert(&key);
+        let loader = entry.get_loader();
+        let weak_loader = Arc::downgrade(&loader);
+        let guard = loader.lock_owned().await;
+        // Dropping the future that owns the guard must not leave a loader alive.
+        drop(guard);
+        assert!(weak_loader.upgrade().is_none());
+        let replacement = cache.get_or_insert(&key).get_loader();
+        assert!(replacement.try_lock().is_ok());
+        drop(replacement);
+        assert_eq!(cache.remove_by_start_ts(key.start_ts), (1, 0));
     }
 
     #[test]
