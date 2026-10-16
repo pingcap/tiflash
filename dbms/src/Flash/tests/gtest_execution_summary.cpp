@@ -242,7 +242,7 @@ public:
             {toNullableVec<Int32>("k", {1, 2}), toNullableVec<Int32>("lv", {50, 50})});
 
         const auto check_semi_join_stats
-            = [&](const std::vector<std::optional<Int32>> & rv_values, UInt64 expect_joined_rows) {
+            = [&](const std::vector<std::optional<Int64>> & rv_values, UInt64 expect_joined_rows) {
             // All build rows share the join key 1, so the probe row with k = 1 matches a single
             // entry holding rv_values.size() build rows, which the other condition `rv < lv`
             // checks in paced and short-circuited rounds. The probe row with k = 2 matches
@@ -250,7 +250,7 @@ public:
             context.addMockTable(
                 {"test_db", "semi_join_right"},
                 {{"k", TiDB::TP::TypeLong}, {"rv", TiDB::TP::TypeLong}},
-                {toNullableVec<Int32>("k", std::vector<std::optional<Int32>>(rv_values.size(), 1)),
+                {toNullableVec<Int32>("k", std::vector<std::optional<Int64>>(rv_values.size(), 1)),
                  toNullableVec<Int32>("rv", rv_values)});
 
             auto request = context.scan("test_db", "semi_join_left")
@@ -315,7 +315,7 @@ public:
             {toNullableVec<Int32>("k", {1, 2}), toNullableVec<Int32>("lv", {50, 50})});
 
         const auto check_na_anti_semi_join_stats
-            = [&](const std::vector<std::optional<Int32>> & rv_values, UInt64 expect_joined_rows) {
+            = [&](const std::vector<std::optional<Int64>> & rv_values, UInt64 expect_joined_rows) {
             // All build rows share the join key 1, so the probe row with k = 1 matches a single
             // entry holding rv_values.size() build rows, which the other condition `rv < lv`
             // checks in paced and short-circuited rounds. The probe row with k = 2 matches
@@ -323,7 +323,7 @@ public:
             context.addMockTable(
                 {"test_db", "semi_join_right"},
                 {{"k", TiDB::TP::TypeLong}, {"rv", TiDB::TP::TypeLong}},
-                {toNullableVec<Int32>("k", std::vector<std::optional<Int32>>(rv_values.size(), 1)),
+                {toNullableVec<Int32>("k", std::vector<std::optional<Int64>>(rv_values.size(), 1)),
                  toNullableVec<Int32>("rv", rv_values)});
 
             auto request = context.scan("test_db", "semi_join_left")
