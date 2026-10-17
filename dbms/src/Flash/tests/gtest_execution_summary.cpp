@@ -243,50 +243,50 @@ public:
 
         const auto check_semi_join_stats
             = [&](const std::vector<std::optional<Int64>> & rv_values, UInt64 expect_joined_rows) {
-            // All build rows share the join key 1, so the probe row with k = 1 matches a single
-            // entry holding rv_values.size() build rows, which the other condition `rv < lv`
-            // checks in paced and short-circuited rounds. The probe row with k = 2 matches
-            // nothing and must not contribute to joined_rows.
-            context.addMockTable(
-                {"test_db", "semi_join_right"},
-                {{"k", TiDB::TP::TypeLong}, {"rv", TiDB::TP::TypeLong}},
-                {toNullableVec<Int32>("k", std::vector<std::optional<Int64>>(rv_values.size(), 1)),
-                 toNullableVec<Int32>("rv", rv_values)});
+                  // All build rows share the join key 1, so the probe row with k = 1 matches a single
+                  // entry holding rv_values.size() build rows, which the other condition `rv < lv`
+                  // checks in paced and short-circuited rounds. The probe row with k = 2 matches
+                  // nothing and must not contribute to joined_rows.
+                  context.addMockTable(
+                      {"test_db", "semi_join_right"},
+                      {{"k", TiDB::TP::TypeLong}, {"rv", TiDB::TP::TypeLong}},
+                      {toNullableVec<Int32>("k", std::vector<std::optional<Int64>>(rv_values.size(), 1)),
+                       toNullableVec<Int32>("rv", rv_values)});
 
-            auto request = context.scan("test_db", "semi_join_left")
-                               .join(
-                                   context.scan("test_db", "semi_join_right"),
-                                   tipb::JoinType::TypeSemiJoin,
-                                   {col("k")},
-                                   {},
-                                   {},
-                                   {lt(col("rv"), col("lv"))},
-                                   {},
-                                   0)
-                               .build(context);
-            request->set_collect_execution_summaries(true);
+                  auto request = context.scan("test_db", "semi_join_left")
+                                     .join(
+                                         context.scan("test_db", "semi_join_right"),
+                                         tipb::JoinType::TypeSemiJoin,
+                                         {col("k")},
+                                         {},
+                                         {},
+                                         {lt(col("rv"), col("lv"))},
+                                         {},
+                                         0)
+                                     .build(context);
+                  request->set_collect_execution_summaries(true);
 
-            DAGContext dag_context(*request, "test_execution_summary", concurrency);
-            executeStreams(&dag_context);
-            ExecutorStatisticsCollector statistics_collector("test_execution_summary", true);
-            statistics_collector.initialize(&dag_context);
-            statistics_collector.setLocalRUConsumption(
-                RUConsumption{.cpu_ru = 0.0, .cpu_time_ns = 0, .read_ru = 0.0, .read_bytes = 0});
-            const auto summaries = statistics_collector.genExecutionSummaryResponse().execution_summaries();
+                  DAGContext dag_context(*request, "test_execution_summary", concurrency);
+                  executeStreams(&dag_context);
+                  ExecutorStatisticsCollector statistics_collector("test_execution_summary", true);
+                  statistics_collector.initialize(&dag_context);
+                  statistics_collector.setLocalRUConsumption(
+                      RUConsumption{.cpu_ru = 0.0, .cpu_time_ns = 0, .read_ru = 0.0, .read_bytes = 0});
+                  const auto summaries = statistics_collector.genExecutionSummaryResponse().execution_summaries();
 
-            const tipb::ExecutorExecutionSummary * join_summary = nullptr;
-            for (const auto & summary : summaries)
-            {
-                if (summary.has_executor_id() && summary.executor_id() == "Join_2")
-                {
-                    join_summary = &summary;
-                    break;
-                }
-            }
-            ASSERT_NE(join_summary, nullptr);
-            ASSERT_TRUE(join_summary->has_tiflash_join_stats());
-            ASSERT_EQ(join_summary->tiflash_join_stats().joined_rows(), expect_joined_rows);
-        };
+                  const tipb::ExecutorExecutionSummary * join_summary = nullptr;
+                  for (const auto & summary : summaries)
+                  {
+                      if (summary.has_executor_id() && summary.executor_id() == "Join_2")
+                      {
+                          join_summary = &summary;
+                          break;
+                      }
+                  }
+                  ASSERT_NE(join_summary, nullptr);
+                  ASSERT_TRUE(join_summary->has_tiflash_join_stats());
+                  ASSERT_EQ(join_summary->tiflash_join_stats().joined_rows(), expect_joined_rows);
+              };
 
         {
             // The other condition is satisfied by the second build row, so the paced walk
@@ -316,51 +316,51 @@ public:
 
         const auto check_na_anti_semi_join_stats
             = [&](const std::vector<std::optional<Int64>> & rv_values, UInt64 expect_joined_rows) {
-            // All build rows share the join key 1, so the probe row with k = 1 matches a single
-            // entry holding rv_values.size() build rows, which the other condition `rv < lv`
-            // checks in paced and short-circuited rounds. The probe row with k = 2 matches
-            // nothing and must not contribute to joined_rows.
-            context.addMockTable(
-                {"test_db", "semi_join_right"},
-                {{"k", TiDB::TP::TypeLong}, {"rv", TiDB::TP::TypeLong}},
-                {toNullableVec<Int32>("k", std::vector<std::optional<Int64>>(rv_values.size(), 1)),
-                 toNullableVec<Int32>("rv", rv_values)});
+                  // All build rows share the join key 1, so the probe row with k = 1 matches a single
+                  // entry holding rv_values.size() build rows, which the other condition `rv < lv`
+                  // checks in paced and short-circuited rounds. The probe row with k = 2 matches
+                  // nothing and must not contribute to joined_rows.
+                  context.addMockTable(
+                      {"test_db", "semi_join_right"},
+                      {{"k", TiDB::TP::TypeLong}, {"rv", TiDB::TP::TypeLong}},
+                      {toNullableVec<Int32>("k", std::vector<std::optional<Int64>>(rv_values.size(), 1)),
+                       toNullableVec<Int32>("rv", rv_values)});
 
-            auto request = context.scan("test_db", "semi_join_left")
-                               .join(
-                                   context.scan("test_db", "semi_join_right"),
-                                   tipb::JoinType::TypeAntiSemiJoin,
-                                   {col("k")},
-                                   {},
-                                   {},
-                                   {lt(col("rv"), col("lv"))},
-                                   {},
-                                   0,
-                                   /*is_null_aware_semi_join=*/true)
-                               .build(context);
-            request->set_collect_execution_summaries(true);
+                  auto request = context.scan("test_db", "semi_join_left")
+                                     .join(
+                                         context.scan("test_db", "semi_join_right"),
+                                         tipb::JoinType::TypeAntiSemiJoin,
+                                         {col("k")},
+                                         {},
+                                         {},
+                                         {lt(col("rv"), col("lv"))},
+                                         {},
+                                         0,
+                                         /*is_null_aware_semi_join=*/true)
+                                     .build(context);
+                  request->set_collect_execution_summaries(true);
 
-            DAGContext dag_context(*request, "test_execution_summary", concurrency);
-            executeStreams(&dag_context);
-            ExecutorStatisticsCollector statistics_collector("test_execution_summary", true);
-            statistics_collector.initialize(&dag_context);
-            statistics_collector.setLocalRUConsumption(
-                RUConsumption{.cpu_ru = 0.0, .cpu_time_ns = 0, .read_ru = 0.0, .read_bytes = 0});
-            const auto summaries = statistics_collector.genExecutionSummaryResponse().execution_summaries();
+                  DAGContext dag_context(*request, "test_execution_summary", concurrency);
+                  executeStreams(&dag_context);
+                  ExecutorStatisticsCollector statistics_collector("test_execution_summary", true);
+                  statistics_collector.initialize(&dag_context);
+                  statistics_collector.setLocalRUConsumption(
+                      RUConsumption{.cpu_ru = 0.0, .cpu_time_ns = 0, .read_ru = 0.0, .read_bytes = 0});
+                  const auto summaries = statistics_collector.genExecutionSummaryResponse().execution_summaries();
 
-            const tipb::ExecutorExecutionSummary * join_summary = nullptr;
-            for (const auto & summary : summaries)
-            {
-                if (summary.has_executor_id() && summary.executor_id() == "Join_2")
-                {
-                    join_summary = &summary;
-                    break;
-                }
-            }
-            ASSERT_NE(join_summary, nullptr);
-            ASSERT_TRUE(join_summary->has_tiflash_join_stats());
-            ASSERT_EQ(join_summary->tiflash_join_stats().joined_rows(), expect_joined_rows);
-        };
+                  const tipb::ExecutorExecutionSummary * join_summary = nullptr;
+                  for (const auto & summary : summaries)
+                  {
+                      if (summary.has_executor_id() && summary.executor_id() == "Join_2")
+                      {
+                          join_summary = &summary;
+                          break;
+                      }
+                  }
+                  ASSERT_NE(join_summary, nullptr);
+                  ASSERT_TRUE(join_summary->has_tiflash_join_stats());
+                  ASSERT_EQ(join_summary->tiflash_join_stats().joined_rows(), expect_joined_rows);
+              };
 
         {
             // The other condition is satisfied by the second build row, so the paced walk

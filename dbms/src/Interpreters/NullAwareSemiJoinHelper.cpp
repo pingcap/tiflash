@@ -417,9 +417,7 @@ void NASemiJoinHelper<KIND, STRICTNESS, Maps>::doJoin([[maybe_unused]] ProbeProc
             /// paced walk short-circuits), so count the materialized rows instead of the full
             /// matched entry length.
             if (joined_rows_in_round != 0 && probe_process_info.joined_rows_counter != nullptr)
-                probe_process_info.joined_rows_counter->fetch_add(
-                    joined_rows_in_round,
-                    std::memory_order_relaxed);
+                probe_process_info.joined_rows_counter->fetch_add(joined_rows_in_round, std::memory_order_relaxed);
             if (undetermined_result_list.empty())
             {
                 // go to next step
