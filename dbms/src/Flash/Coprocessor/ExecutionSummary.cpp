@@ -74,6 +74,8 @@ void ExecutionSummary::merge(const ExecutionSummary & other)
         else
             hash_table_stats->merge(*other.hash_table_stats);
     }
+    if (other.joined_rows)
+        joined_rows = joined_rows.value_or(0) + *other.joined_rows;
     ru_consumption = mergeRUConsumption(ru_consumption, other.ru_consumption);
     scan_context->merge(*other.scan_context);
     if (other.columnar_scan_context)
@@ -108,6 +110,8 @@ void ExecutionSummary::merge(const tipb::ExecutorExecutionSummary & other)
         else
             hash_table_stats->merge(other_hash_table_stats);
     }
+    if (other.has_tiflash_join_stats() && other.tiflash_join_stats().has_joined_rows())
+        joined_rows = joined_rows.value_or(0) + other.tiflash_join_stats().joined_rows();
     ru_consumption = mergeRUConsumption(ru_consumption, parseRUConsumption(other));
     if (other.has_tiflash_scan_context())
         scan_context->merge(other.tiflash_scan_context());
@@ -149,6 +153,8 @@ void ExecutionSummary::init(const tipb::ExecutorExecutionSummary & other)
     inter_zone_receive_bytes = other.tiflash_network_summary().inter_zone_receive_bytes();
     if (other.has_tiflash_hash_table_stats())
         hash_table_stats = toHashTableStats(other.tiflash_hash_table_stats());
+    if (other.has_tiflash_join_stats() && other.tiflash_join_stats().has_joined_rows())
+        joined_rows = other.tiflash_join_stats().joined_rows();
     ru_consumption = parseRUConsumption(other);
     if (other.has_tiflash_scan_context())
         scan_context->deserialize(other.tiflash_scan_context());

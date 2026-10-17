@@ -145,7 +145,7 @@ public:
         const ProbeProcessInfo & probe_process_info,
         const NameSet & probe_output_name_set,
         const Block & right_sample_block);
-    void doJoin();
+    void doJoin(ProbeProcessInfo & probe_process_info);
 
     bool isJoinDone() const { return is_probe_hash_table_done && undetermined_result_list.empty(); }
     bool isProbeHashTableDone() const { return is_probe_hash_table_done; }
