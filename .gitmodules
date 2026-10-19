@@ -24,7 +24,8 @@
 	url = https://github.com/pingcap/boost-extra.git
 [submodule "contrib/kvproto"]
 	path = contrib/kvproto
-	url = https://github.com/pingcap/kvproto.git
+	url = https://github.com/glorv/kvproto.git
+	branch = tici-reader-freshness
 [submodule "contrib/tipb"]
 	path = contrib/tipb
 	url = https://github.com/pingcap/tipb.git
