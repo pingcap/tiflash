@@ -39,24 +39,39 @@ namespace DB
 void StorageTantivyIterpreter::execute(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder)
 {
     storage->splitRemoteReadAndLocalRead();
-    // local_read
-    storage->read(exec_context, group_builder, Names(), SelectQueryInfo(), context, 0, max_streams);
-
-    // remote_read
     const auto & executor_id = tici_scan.getTiCIScan()->executor_id();
     auto remote_shard_infos = storage->getRemoteShardInfos();
-    const auto total_shards = tici_scan.getShardInfos().shard_info_list.size();
-    const auto remote_shards = remote_shard_infos.size();
-    const auto local_shards = total_shards >= remote_shards ? (total_shards - remote_shards) : 0;
-    LOG_INFO(
-        log,
-        "tici split shards: executor_id={} total={} local={} remote={} local_concurrency={} start_ts={}",
-        executor_id,
-        total_shards,
-        local_shards,
-        remote_shards,
-        group_builder.concurrency(),
-        context.getSettingsRef().read_tso);
+    const auto & admission_failures = storage->getAdmissionFailures();
+    bool epoch_mismatch = false;
+    for (const auto & failure : admission_failures)
+    {
+        const auto & result = failure.admission;
+        epoch_mismatch |= result.code == ::ShardAdmissionCode::EpochMismatch;
+        LOG_INFO(
+            log,
+            "tici shard admission rejected: executor_id={} shard_id={} code={} expected_epoch={} observed_epoch={} "
+            "required_resolved_ts={} reader_applied_resolved_ts={} meta_persisted_resolved_ts={} retry_after_ms={}",
+            executor_id,
+            result.shard_id,
+            static_cast<unsigned int>(result.code),
+            result.expected_epoch,
+            result.observed_epoch,
+            result.required_resolved_ts,
+            result.reader_applied_resolved_ts,
+            result.meta_persisted_resolved_ts,
+            result.retry_after_ms);
+    }
+    // TiDB currently invalidates retry_shards but does not resubmit them.
+    // Abort the whole request before building readers until that retry path
+    // can preserve the request's freshness requirement.
+    if (!admission_failures.empty())
+    {
+        throw RegionException(
+            {},
+            epoch_mismatch ? RegionException::RegionReadStatus::EPOCH_NOT_MATCH
+                           : RegionException::RegionReadStatus::NOT_FOUND,
+            "tici shard admission rejected");
+    }
     if (!remote_shard_infos.empty())
     {
         if (context.getDAGContext()->isCop())
@@ -66,6 +81,25 @@ void StorageTantivyIterpreter::execute(PipelineExecutorContext & exec_context, P
             remote_shard_infos.begin(),
             remote_shard_infos.end());
     }
+
+    // local_read
+    storage->read(exec_context, group_builder, Names(), SelectQueryInfo(), context, 0, max_streams);
+
+    // remote_read
+    const auto total_shards = tici_scan.getShardInfos().shard_info_list.size();
+    const auto remote_shards = remote_shard_infos.size();
+    const auto blocked_shards = admission_failures.size();
+    const auto local_shards = total_shards - remote_shards - blocked_shards;
+    LOG_INFO(
+        log,
+        "tici split shards: executor_id={} total={} local={} remote={} retry={} local_concurrency={} start_ts={}",
+        executor_id,
+        total_shards,
+        local_shards,
+        remote_shards,
+        blocked_shards,
+        group_builder.concurrency(),
+        context.getSettingsRef().read_tso);
 
     auto remote_request = buildRemoteRequests(remote_shard_infos);
     if (!remote_request.empty())
@@ -91,13 +125,14 @@ std::vector<RemoteRequest> StorageTantivyIterpreter::buildRemoteRequests(ShardIn
     {
         return remote_requests;
     }
-    remote_requests.push_back(RemoteRequest::build(
-        remote_shard_infos,
-        *context.getDAGContext(),
-        tici_scan,
-        context.getDAGContext()->getConnectionID(),
-        context.getDAGContext()->getConnectionAlias(),
-        log));
+    remote_requests.push_back(
+        RemoteRequest::build(
+            remote_shard_infos,
+            *context.getDAGContext(),
+            tici_scan,
+            context.getDAGContext()->getConnectionID(),
+            context.getDAGContext()->getConnectionAlias(),
+            log));
     return remote_requests;
 }
 

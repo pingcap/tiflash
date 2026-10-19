@@ -34,6 +34,10 @@ struct ShardInfo
 {
     UInt64 shard_id;
     UInt64 shard_epoch;
+    // PR 7 fills these from the request protocol. Zero values keep old tasks
+    // on the presence-only path during a rolling upgrade.
+    UInt64 required_resolved_ts = 0;
+    UInt8 freshness_mode = 0;
     using KeyRanges = google::protobuf::RepeatedPtrField<coprocessor::KeyRange>;
     KeyRanges key_ranges;
 
