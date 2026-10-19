@@ -12,11 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Coprocessor/ShardInfo.h>
 #include <Storages/Tantivy/TiCIAdmission.h>
 #include <gtest/gtest.h>
 
 namespace DB::tests
 {
+
+TEST(TiCIAdmission, ParsesFreshnessFromShardRequest)
+{
+    coprocessor::ShardInfo request;
+    request.set_shard_id(1);
+    request.set_shard_epoch(2);
+    request.set_required_resolved_ts(100);
+    request.set_freshness_mode(coprocessor::BOUNDED_STALE);
+    request.set_max_wait_ms(50);
+    const ShardInfo shard(request);
+    EXPECT_EQ(shard.required_resolved_ts, 100);
+    EXPECT_EQ(shard.freshness_mode, static_cast<UInt8>(coprocessor::BOUNDED_STALE));
+    EXPECT_EQ(shard.max_wait_ms, 50);
+}
 
 TEST(TiCIAdmission, NeverRoutesFreshnessFailureToLocalOrRemoteRead)
 {

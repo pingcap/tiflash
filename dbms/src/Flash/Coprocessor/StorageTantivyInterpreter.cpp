@@ -36,6 +36,28 @@
 namespace DB
 {
 
+namespace
+{
+coprocessor::ShardRetryReason toShardRetryReason(::ShardAdmissionCode code)
+{
+    switch (code)
+    {
+    case ::ShardAdmissionCode::Missing:
+        return coprocessor::SHARD_RETRY_MISSING;
+    case ::ShardAdmissionCode::EpochMismatch:
+        return coprocessor::SHARD_RETRY_EPOCH_MISMATCH;
+    case ::ShardAdmissionCode::ReaderBehind:
+        return coprocessor::SHARD_RETRY_READER_BEHIND;
+    case ::ShardAdmissionCode::ControlPlaneUnavailable:
+        return coprocessor::SHARD_RETRY_CONTROL_PLANE_UNAVAILABLE;
+    case ::ShardAdmissionCode::Ready:
+        // StorageTantivy maps an inconsistent READY to ReaderBehind.
+        return coprocessor::SHARD_RETRY_READER_BEHIND;
+    }
+    return coprocessor::SHARD_RETRY_REASON_UNSPECIFIED;
+}
+} // namespace
+
 void StorageTantivyIterpreter::execute(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder)
 {
     storage->splitRemoteReadAndLocalRead();
@@ -61,9 +83,31 @@ void StorageTantivyIterpreter::execute(PipelineExecutorContext & exec_context, P
             result.meta_persisted_resolved_ts,
             result.retry_after_ms);
     }
-    // TiDB currently invalidates retry_shards but does not resubmit them.
-    // Abort the whole request before building readers until that retry path
-    // can preserve the request's freshness requirement.
+    if (context.getDAGContext()->isBatchCop() && (!admission_failures.empty() || !remote_shard_infos.empty()))
+    {
+        std::vector<coprocessor::ShardRetryInfo> feedback;
+        feedback.reserve(admission_failures.size() + remote_shard_infos.size());
+        for (const auto & failure : admission_failures)
+        {
+            const auto & result = failure.admission;
+            coprocessor::ShardRetryInfo info;
+            info.set_shard_id(result.shard_id);
+            info.set_reason(toShardRetryReason(result.code));
+            info.set_retry_after_ms(result.retry_after_ms);
+            info.set_observed_epoch(result.observed_epoch);
+            info.set_reader_applied_resolved_ts(result.reader_applied_resolved_ts);
+            info.set_meta_persisted_resolved_ts(result.meta_persisted_resolved_ts);
+            feedback.push_back(std::move(info));
+        }
+        for (const auto & shard : remote_shard_infos)
+        {
+            coprocessor::ShardRetryInfo info;
+            info.set_shard_id(shard.shard_id);
+            info.set_reason(coprocessor::SHARD_RETRY_MISSING);
+            feedback.push_back(std::move(info));
+        }
+        throw TiCIShardRetryException(std::move(feedback));
+    }
     if (!admission_failures.empty())
     {
         throw RegionException(

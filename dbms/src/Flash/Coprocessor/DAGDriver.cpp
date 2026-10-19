@@ -21,6 +21,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/ShardInfo.h>
 #include <Flash/Coprocessor/StreamWriter.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Coprocessor/UnaryDAGResponseWriter.h>
@@ -308,6 +309,10 @@ catch (const RegionException & e)
     throw;
 }
 catch (const LockException & e)
+{
+    throw;
+}
+catch (const TiCIShardRetryException & e)
 {
     throw;
 }
