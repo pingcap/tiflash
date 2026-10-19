@@ -44,8 +44,13 @@ TEST(TiCIAdmission, NeverRoutesFreshnessFailureToLocalOrRemoteRead)
 
 TEST(TiCIAdmission, LegacyMissMayUseRemoteRead)
 {
-    ShardFreshnessRequirement requirement{.shard_id = 1, .expected_epoch = 2, .mode = ShardFreshnessMode::Legacy};
-    ShardAdmissionResult result{.code = ShardAdmissionCode::Ready, .shard_id = 1, .expected_epoch = 2};
+    const auto requirement = makeTiCIShardRequirement(1, 2, 100, ShardFreshnessMode::Legacy);
+    EXPECT_EQ(requirement.expected_epoch, 0);
+    EXPECT_EQ(requirement.required_resolved_ts, 0);
+    const auto strict = makeTiCIShardRequirement(1, 2, 100, ShardFreshnessMode::StrictWatermark);
+    EXPECT_EQ(strict.expected_epoch, 2);
+    EXPECT_EQ(strict.required_resolved_ts, 100);
+    ShardAdmissionResult result{.code = ShardAdmissionCode::Ready, .shard_id = 1, .expected_epoch = 0};
     EXPECT_EQ(routeTiCIShard(requirement, result), TiCIAdmissionRoute::Local);
     result.code = ShardAdmissionCode::Missing;
     EXPECT_EQ(routeTiCIShard(requirement, result), TiCIAdmissionRoute::Remote);

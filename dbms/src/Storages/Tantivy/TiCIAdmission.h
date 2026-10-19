@@ -26,6 +26,22 @@ enum class TiCIAdmissionRoute
     Retry,
 };
 
+inline ShardFreshnessRequirement makeTiCIShardRequirement(
+    std::uint64_t shard_id,
+    std::uint64_t shard_epoch,
+    std::uint64_t required_resolved_ts,
+    ShardFreshnessMode mode)
+{
+    // TiCI ignores epoch and watermark in legacy mode and echoes zero.
+    const bool legacy = mode == ShardFreshnessMode::Legacy;
+    return ShardFreshnessRequirement{
+        .shard_id = shard_id,
+        .expected_epoch = legacy ? 0 : shard_epoch,
+        .required_resolved_ts = legacy ? 0 : required_resolved_ts,
+        .mode = mode,
+    };
+}
+
 inline TiCIAdmissionRoute routeTiCIShard(
     const ShardFreshnessRequirement & requirement,
     const ShardAdmissionResult & result)

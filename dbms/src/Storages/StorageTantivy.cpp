@@ -154,13 +154,12 @@ void StorageTantivy::splitRemoteReadAndLocalRead()
             "unknown TiCI freshness mode {} for shard {}",
             shard_info.freshness_mode,
             shard_info.shard_id);
-        requirements.push_back(
-            ::ShardFreshnessRequirement{
-                .shard_id = shard_info.shard_id,
-                .expected_epoch = shard_info.shard_epoch,
-                .required_resolved_ts = shard_info.required_resolved_ts,
-                .mode = static_cast<::ShardFreshnessMode>(shard_info.freshness_mode),
-            });
+        const auto mode = static_cast<::ShardFreshnessMode>(shard_info.freshness_mode);
+        requirements.push_back(makeTiCIShardRequirement(
+            shard_info.shard_id,
+            shard_info.shard_epoch,
+            shard_info.required_resolved_ts,
+            mode));
     }
 
     ::rust::Vec<::ShardAdmissionResult> results;
