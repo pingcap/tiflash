@@ -1080,11 +1080,8 @@ public:
     /// Rows where mask == 0 keep the identity value (see executeShortCircuit);
     /// maskedExecute only calls this when its consumer's first argument is
     /// saturated there, so those rows never influence the consumer's result.
-    void executeWithMask(
-        Block & block,
-        const ColumnNumbers & arguments,
-        size_t result,
-        const IColumn::Filter & mask) const override
+    void executeWithMask(Block & block, const ColumnNumbers & arguments, size_t result, const IColumn::Filter & mask)
+        const override
     {
         if constexpr (Impl::isSaturable)
             executeShortCircuit(block, arguments, result, &mask);
