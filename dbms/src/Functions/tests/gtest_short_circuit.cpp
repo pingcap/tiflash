@@ -316,6 +316,35 @@ TEST_F(ShortCircuit, NestedLogicalFunctionsAndAliases)
     ASSERT_COLUMN_EQ(createColumn<UInt8>({0, 1, 1, 0}), input.getByName("result"));
 }
 
+TEST_F(ShortCircuit, DeeplyNestedLogicalFunctions)
+{
+    // outer OR (middle AND (inner OR intDiv(6, denominator)))
+    // Three levels of mixed nesting: the deferred argument of the outer `or` is
+    // an `and` subtree whose deferred argument is an `or` subtree. The external
+    // mask is composed with each level's guard row-wise (no filter/expand
+    // copies in between), and every division-by-zero row must be protected by
+    // whichever guard saturates first.
+    Block input({
+        createColumn<Int64>({0, 0, 2, 5, 3, 0, 4, 0}, "denominator"),
+        createColumn<UInt8>({1, 0, 0, 0, 0, 0, 0, 0}, "outer_guard"),
+        createColumn<UInt8>({1, 0, 1, 1, 1, 0, 1, 1}, "middle_guard"),
+        createColumn<UInt8>({1, 1, 1, 0, 1, 1, 0, 1}, "inner_guard"),
+        createConstColumn<Int64>(8, 6, "six"),
+    });
+    ExpressionActions actions(input.getColumnsWithTypeAndName());
+    add(actions, "intDiv", {"six", "denominator"}, "division");
+    add(actions, "or", {"inner_guard", "division"}, "inner_or");
+    add(actions, "and", {"middle_guard", "inner_or"}, "middle_and");
+    add(actions, "or", {"outer_guard", "middle_and"}, "result");
+    actions.finalize({"result"});
+    // intDiv, the inner or and the middle and are lazy; the top-level or is eager.
+    ASSERT_EQ(lazyCount(actions), 3);
+    actions.execute(input);
+    // Row 0 is protected by outer saturation, rows 1/5 by middle saturation,
+    // row 7 by inner saturation; row 3 really evaluates 6 DIV 5.
+    ASSERT_COLUMN_EQ(createColumn<UInt8>({1, 0, 1, 1, 1, 0, 1, 1}), input.getByName("result"));
+}
+
 TEST_F(ShortCircuit, TypeErrorsRemainStrict)
 {
     Block input({createColumn<String>({"text"}, "text"), createConstColumn<Int64>(1, 0, "zero")});

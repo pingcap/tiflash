@@ -109,9 +109,18 @@ public:
         return prepare(block)->execute(block, arguments, result);
     }
 
-    /// Execute the function only on rows where mask[i] != 0. Rows where mask[i] == 0
-    /// are filled with the default value of the result type, and the result column
-    /// stored at `result` has mask.size() rows.
+    /// Execute the function only on rows where mask[i] != 0, and the result
+    /// column stored at `result` has mask.size() rows.
+    ///
+    /// What lands on rows where mask[i] == 0 depends on the implementation:
+    /// the default implementation (and most overrides) fills the default value
+    /// of the result type. Short-circuit logical functions fill the identity
+    /// value of their operation instead (e.g. `true` for and, `false` for or):
+    /// that is sound because maskedExecute consumes a deferred argument only
+    /// when the consumer's first argument is already saturated on the masked
+    /// rows, so the consumer's result never depends on those values. Overriding
+    /// functions must keep the masked-off rows safe-to-ignore in this sense,
+    /// and must keep the masked-on rows exact.
     ///
     /// The default implementation filters the argument columns, runs execute() on
     /// the filtered block and expands the result back to full size: semantically

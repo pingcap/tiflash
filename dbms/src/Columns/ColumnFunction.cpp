@@ -291,9 +291,25 @@ const ColumnFunction * checkAndGetShortCircuitArgument(const ColumnPtr & column)
 
 ColumnPtr ColumnFunction::tryReduceWithMask(const IColumn::Filter & mask) const
 {
+    bool has_deferred_argument = false;
     for (const auto & captured : captured_columns)
         if (checkAndGetShortCircuitArgument(captured.column))
-            return nullptr;
+        {
+            has_deferred_argument = true;
+            break;
+        }
+
+    /// A deferred argument nested in the captures can only be consumed through
+    /// executeWithMask when the function takes over the external mask itself:
+    /// short-circuit functions (and/or) do, by running their short-circuit loop
+    /// from the external mask and combining it with their own guard columns
+    /// row-wise, so the mask still reaches the innermost deferred nodes without
+    /// any filter/expand copies. Any other function's executeWithMask assumes
+    /// plain data columns, so keep rejecting it here: the caller then falls
+    /// back to filter-then-reduce, which physically passes the mask down
+    /// through the nested ColumnFunction before it is evaluated.
+    if (has_deferred_argument && !function->isShortCircuit())
+        return nullptr;
 
     Block block(captured_columns);
     block.insert({nullptr, function->getReturnType(), ""});
@@ -335,12 +351,15 @@ void maskedExecute(ColumnWithTypeAndName & column, const IColumn::Filter & mask)
         return;
     }
 
-    /// When no captured argument is deferred, let the function execute with the
-    /// mask directly (IFunctionBase::executeWithMask): functions that override it
-    /// skip masked-off rows without the filter/expand copies, and the default
-    /// implementation reproduces the filter/expand path below. When a captured
-    /// argument is itself deferred (nested short-circuit), keep filter-then-reduce
-    /// so that the mask reaches the innermost deferred nodes before evaluation.
+    /// Let the function execute with the mask directly (IFunctionBase::
+    /// executeWithMask): functions that override it skip masked-off rows
+    /// without the filter/expand copies, and the default implementation
+    /// reproduces the filter/expand path below. Deferred arguments nested in
+    /// the captures are consumable this way only for short-circuit functions
+    /// (they take over the external mask in their own short-circuit loop);
+    /// for anything else tryReduceWithMask rejects and we fall back to
+    /// filter-then-reduce, which physically passes the mask down through the
+    /// nested ColumnFunction before it is evaluated.
     if (auto masked_result = deferred->tryReduceWithMask(mask))
     {
         column.column = std::move(masked_result);

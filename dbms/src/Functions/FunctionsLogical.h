@@ -996,7 +996,19 @@ public:
         }
     }
 
-    void executeShortCircuit(Block & block, const ColumnNumbers & arguments, size_t result) const
+    /// `initial_mask` (optional) narrows the rows this function really has to
+    /// evaluate. Rows masked off there keep the identity value (e.g. `true` for
+    /// and) instead of a real evaluation, which is sound only when the
+    /// consumer's first argument is already saturated on those rows, so its
+    /// result does not depend on this column - exactly the invariant under
+    /// which maskedExecute consumes a deferred argument. The mask is only ever
+    /// narrowed below: a saturated accumulated result stays saturated, so a row
+    /// never comes back once masked off.
+    void executeShortCircuit(
+        Block & block,
+        const ColumnNumbers & arguments,
+        size_t result,
+        const IColumn::Filter * initial_mask = nullptr) const
     {
         const size_t rows = block.getByPosition(arguments.front()).column->size();
         const bool nullable = block.getByPosition(result).type->isNullable();
@@ -1005,6 +1017,8 @@ public:
         auto & data = values->getData();
         auto & null_map = nulls->getData();
         IColumn::Filter mask(rows, 1);
+        if (initial_mask)
+            mask.assign(*initial_mask);
 
         for (auto position : arguments)
         {
@@ -1057,6 +1071,25 @@ public:
 
         block.getByPosition(result).column
             = nullable ? ColumnNullable::create(std::move(values), std::move(nulls)) : ColumnPtr(std::move(values));
+    }
+
+    /// Short-circuit functions take over the external mask themselves: run the
+    /// short-circuit loop with `mask` as the initial mask, so the mask is
+    /// combined with this function's own guard columns row-wise and still
+    /// reaches the innermost deferred arguments without filter/expand copies.
+    /// Rows where mask == 0 keep the identity value (see executeShortCircuit);
+    /// maskedExecute only calls this when its consumer's first argument is
+    /// saturated there, so those rows never influence the consumer's result.
+    void executeWithMask(
+        Block & block,
+        const ColumnNumbers & arguments,
+        size_t result,
+        const IColumn::Filter & mask) const override
+    {
+        if constexpr (Impl::isSaturable)
+            executeShortCircuit(block, arguments, result, &mask);
+        else
+            IFunction::executeWithMask(block, arguments, result, mask);
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override

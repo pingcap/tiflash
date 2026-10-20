@@ -78,9 +78,14 @@ public:
 
     /// Execute the deferred function with `mask` via IFunctionBase::executeWithMask,
     /// directly on the captured columns without filtering them first. Returns
-    /// nullptr when a captured argument is itself a deferred short-circuit column:
-    /// then the caller must keep the filter-then-reduce path so that the mask
-    /// reaches the innermost deferred nodes before they are evaluated.
+    /// nullptr only when a captured argument is itself a deferred short-circuit
+    /// column AND the function cannot take over the external mask (i.e. it is
+    /// not a short-circuit function): then the caller must keep the
+    /// filter-then-reduce path so that the mask reaches the innermost deferred
+    /// nodes before they are evaluated. Short-circuit functions (and/or) with
+    /// nested deferred arguments are consumable here: they run their
+    /// short-circuit loop from the external mask and combine it with their own
+    /// guard columns row-wise.
     ColumnPtr tryReduceWithMask(const IColumn::Filter & mask) const;
 
     Field operator[](size_t) const override
