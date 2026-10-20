@@ -113,6 +113,9 @@ struct alignas(CPU_CACHE_LINE_SIZE) JoinProbeWorkerData
     size_t replicate_time = 0;
     size_t other_condition_time = 0;
     size_t collision = 0;
+    /// Matched (probe row, build row) pairs enumerated by this worker; summed into the join
+    /// profile by the last finishing probe worker.
+    size_t joined_rows = 0;
 };
 
 class JoinProbeHelperUtil

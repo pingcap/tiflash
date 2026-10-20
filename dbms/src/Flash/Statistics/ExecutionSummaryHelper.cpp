@@ -42,6 +42,11 @@ void fillTiExecutionSummary(
                 : tipb::TIFLASH_HASH_TABLE_SIZE_KIND_BUILD_ROW_COUNT);
         hash_table_stats->set_memory_bytes(current.hash_table_stats->memory_bytes);
     }
+    // Every join kind (cross joins included) reports joined_rows once its probe finishes (0
+    // means it matched nothing) while other executors never set it, so consumers can tell
+    // joins apart by field presence instead of the value.
+    if (current.joined_rows)
+        execution_summary->mutable_tiflash_join_stats()->set_joined_rows(*current.joined_rows);
     if (current.columnar_scan_context)
         execution_summary->mutable_columnar_scan_context()->CopyFrom(current.columnar_scan_context->serialize());
     else

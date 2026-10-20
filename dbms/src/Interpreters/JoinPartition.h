@@ -221,7 +221,8 @@ public:
         const Sizes & key_sizes,
         const TiDB::TiDBCollators & collators,
         const NALeftSideInfo & left_side_info,
-        const NARightSideInfo & right_side_info);
+        const NARightSideInfo & right_side_info,
+        std::atomic<UInt64> * joined_rows_counter);
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
     static std::pair<PaddedPODArray<SemiJoinResult<KIND, STRICTNESS>>, std::list<SemiJoinResult<KIND, STRICTNESS> *>> probeBlockSemi(

@@ -17,6 +17,12 @@ mysql> create table test.t(c1 varchar(100), c2 varchar(100));
 mysql> insert into test.t values('ABC', 'DEF');
 mysql> alter table test.t set tiflash replica 1;
 func> wait_table test t
+
+# NextGen rejects add index with local sort when SEM is enabled (global sort is
+# the only supported path there), so the generated index cannot be created in
+# the next-gen environment. Skip the rest of this test for next-gen runs.
+#SKIP_FOR_NEXT_GEN
+
 mysql> alter table test.t add index idx2((lower(c2)));
 
 mysql> select /*+ nth_plan(1) */ * from test.t where lower(test.t.c2) = 'def';

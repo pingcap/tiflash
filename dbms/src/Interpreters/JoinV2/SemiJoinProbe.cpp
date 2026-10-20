@@ -261,6 +261,9 @@ SemiJoinProbeHelper::probeFillColumns(JoinProbeContext & ctx, JoinProbeWorkerDat
     RUNTIME_CHECK(probe_list->slotCapacity() == ctx.rows);
     size_t current_offset = 0;
     size_t collision = 0;
+    /// Each build row in the pointer-table chain is compared exactly once (paced walks resume via
+    /// probe_row.build_row_ptr), so every successful comparison is one matched pair.
+    size_t joined_rows = 0;
     size_t key_offset = sizeof(RowPtr);
     if constexpr (KeyGetterType::joinKeyCompareHashFirst())
     {
@@ -272,6 +275,7 @@ SemiJoinProbeHelper::probeFillColumns(JoinProbeContext & ctx, JoinProbeWorkerDat
         fillNullMapWithZero<false>(added_columns);
 
         wd.collision += collision;
+        wd.joined_rows += joined_rows;
     });
 
     auto iter_end = probe_list->end();
@@ -288,6 +292,7 @@ SemiJoinProbeHelper::probeFillColumns(JoinProbeContext & ctx, JoinProbeWorkerDat
             bool key_is_equal = joinKeyIsEqual(key_getter, probe_row.key, key2, probe_row.hash, ptr);
             collision += !key_is_equal;
             current_offset += key_is_equal;
+            joined_rows += key_is_equal;
             if (key_is_equal)
             {
                 wd.selective_offsets.push_back(idx);
@@ -359,6 +364,7 @@ SemiJoinProbeHelper::probeFillColumns(JoinProbeContext & ctx, JoinProbeWorkerDat
             bool key_is_equal = joinKeyIsEqual(key_getter, key, key2, hash, ptr);
             collision += !key_is_equal;
             current_offset += key_is_equal;
+            joined_rows += key_is_equal;
             if (key_is_equal)
             {
                 wd.selective_offsets.push_back(idx);
@@ -461,6 +467,9 @@ void NO_INLINE SemiJoinProbeHelper::probeFillColumnsPrefetch(
     size_t k = ctx.prefetch_iter;
     size_t current_offset = 0;
     size_t collision = 0;
+    /// Each build row in the pointer-table chain is compared exactly once (prefetch states walk
+    /// one chain node per step), so every successful comparison is one matched pair.
+    size_t joined_rows = 0;
     constexpr size_t key_offset
         = sizeof(RowPtr) + (KeyGetterType::joinKeyCompareHashFirst() ? sizeof(HashValueType) : 0);
 
@@ -483,6 +492,7 @@ void NO_INLINE SemiJoinProbeHelper::probeFillColumnsPrefetch(
             state->is_matched |= key_is_equal;
             current_offset += key_is_equal;
             state->remaining_pace -= key_is_equal;
+            joined_rows += key_is_equal;
             bool remaining_pace_is_zero = false;
             if (key_is_equal)
             {
@@ -656,6 +666,7 @@ void NO_INLINE SemiJoinProbeHelper::probeFillColumnsPrefetch(
     ctx.prefetch_active_states = active_states;
     ctx.prefetch_iter = k;
     wd.collision += collision;
+    wd.joined_rows += joined_rows;
 }
 
 template <typename KeyGetter, ASTTableJoin::Kind kind>

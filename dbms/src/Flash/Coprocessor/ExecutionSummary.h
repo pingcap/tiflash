@@ -45,6 +45,9 @@ struct ExecutionSummary
     /// This summary belongs to one physical executor, identified by executor_id in the protobuf.
     /// Therefore each hash-table operator gets an independent value; merge only combines fragments of the same operator.
     std::optional<HashTableStats> hash_table_stats;
+    /// Row pairs enumerated by a join's probes before other conditions are applied; only join
+    /// executors report it, cross joins included. Absent when the probe never completes.
+    std::optional<UInt64> joined_rows;
     resource_manager::Consumption ru_consumption{};
 
     DM::ScanContextPtr scan_context;

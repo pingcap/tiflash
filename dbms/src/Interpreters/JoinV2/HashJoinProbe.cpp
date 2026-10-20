@@ -664,6 +664,9 @@ void JoinProbeHelper::probeFillColumns(JoinProbeContext & ctx, JoinProbeWorkerDa
     RowPtr ptr = ctx.current_build_row_ptr;
     bool is_matched = ctx.current_row_is_matched;
     size_t collision = 0;
+    /// Each build row in the pointer-table chain is compared exactly once (resumed states keep
+    /// the mid-chain position), so every successful comparison is one matched pair.
+    size_t joined_rows = 0;
     constexpr size_t key_offset
         = sizeof(RowPtr) + (KeyGetterType::joinKeyCompareHashFirst() ? sizeof(HashValueType) : 0);
 
@@ -725,6 +728,7 @@ void JoinProbeHelper::probeFillColumns(JoinProbeContext & ctx, JoinProbeWorkerDa
             collision += !key_is_equal;
             if (key_is_equal)
             {
+                ++joined_rows;
                 if constexpr (Adder::need_not_matched)
                     is_matched = true;
 
@@ -775,6 +779,7 @@ void JoinProbeHelper::probeFillColumns(JoinProbeContext & ctx, JoinProbeWorkerDa
     ctx.current_build_row_ptr = ptr;
     ctx.current_row_is_matched = is_matched;
     wd.collision += collision;
+    wd.joined_rows += joined_rows;
 
 #undef NOT_MATCHED
 }
@@ -843,6 +848,9 @@ void JoinProbeHelper::probeFillColumnsPrefetch(
     if constexpr (has_other_condition)
         RUNTIME_CHECK(current_offset == 0);
     size_t collision = 0;
+    /// Each build row in the pointer-table chain is compared exactly once (prefetch states walk
+    /// one chain node per step), so every successful comparison is one matched pair.
+    size_t joined_rows = 0;
     constexpr size_t key_offset
         = sizeof(RowPtr) + (KeyGetterType::joinKeyCompareHashFirst() ? sizeof(HashValueType) : 0);
 
@@ -874,6 +882,7 @@ void JoinProbeHelper::probeFillColumnsPrefetch(
                 state->is_matched |= key_is_equal;
             if (key_is_equal)
             {
+                ++joined_rows;
                 if constexpr (Adder::need_matched)
                 {
                     bool is_end = Adder::addMatched(
@@ -1005,6 +1014,7 @@ void JoinProbeHelper::probeFillColumnsPrefetch(
     ctx.prefetch_active_states = active_states;
     ctx.prefetch_iter = k;
     wd.collision += collision;
+    wd.joined_rows += joined_rows;
 
 #undef NOT_MATCHED
 }
