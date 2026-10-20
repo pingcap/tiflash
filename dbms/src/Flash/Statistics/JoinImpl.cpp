@@ -48,6 +48,7 @@ void JoinStatistics::collectExtraRuntimeDetail()
         is_spill_enabled = join_execute_info.join_profile_info->is_spill_enabled;
         is_spilled = join_execute_info.join_profile_info->is_spilled;
         hash_table_stats = join_execute_info.join_profile_info->getHashTableStats();
+        joined_rows = join_execute_info.join_profile_info->getJoinedRows();
         switch (dag_context.getExecutionMode())
         {
         case ExecutionMode::None:
@@ -71,6 +72,8 @@ void JoinStatistics::fillExtraExecutionSummary(ExecutionSummary & summary) const
 {
     if (hash_table_stats)
         summary.hash_table_stats = hash_table_stats;
+    if (joined_rows)
+        summary.joined_rows = joined_rows;
 }
 
 JoinStatistics::JoinStatistics(const tipb::Executor * executor, DAGContext & dag_context_)

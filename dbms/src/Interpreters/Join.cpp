@@ -1653,7 +1653,7 @@ Block doNASemiJoinOrSemiJoin(
     {
         if (is_cancelled())
             return {};
-        helper->doJoin();
+        helper->doJoin(probe_process_info);
         // because pipeline model is enabled by default, current_task_timer should be not null in most senarios
         if likely (current_task_timer != nullptr)
         {
@@ -2051,6 +2051,9 @@ void Join::finalizeProfileInfo()
     // TODO: Aggregate restore join profile fields, such as peak build memory usage, when exposing
     // them in execution summaries.
     finalizeHashTableStats();
+    // Every join kind (cross joins included) reports the pairs enumerated by its own probe
+    // streams exactly once; each restore join contributes the partitions it re-probes.
+    profile_info->addJoinedRows(joined_rows.load(std::memory_order_relaxed));
 }
 
 void Join::finalizeHashTableStats()
@@ -2224,14 +2227,22 @@ Block Join::joinBlock(ProbeProcessInfo & probe_process_info) const
     Block block{};
 
     using enum ASTTableJoin::Kind;
+    /// Bind the accumulator on every call so a reused ProbeProcessInfo always counts into
+    /// the Join that is actually probing (e.g. main join and its restore joins).
+    probe_process_info.joined_rows_counter = &joined_rows;
     if (isCrossJoin(kind))
+    {
         block = joinBlockCross(probe_process_info);
-    else if (isNullAwareSemiFamily(kind))
-        block = joinBlockNullAwareSemi(probe_process_info);
-    else if (isSemiFamily(kind) || isLeftOuterSemiFamily(kind))
-        block = joinBlockSemi(probe_process_info);
+    }
     else
-        block = joinBlockHash(probe_process_info);
+    {
+        if (isNullAwareSemiFamily(kind))
+            block = joinBlockNullAwareSemi(probe_process_info);
+        else if (isSemiFamily(kind) || isLeftOuterSemiFamily(kind))
+            block = joinBlockSemi(probe_process_info);
+        else
+            block = joinBlockHash(probe_process_info);
+    }
 
     // if cancelled, just return empty block
     if (!block)

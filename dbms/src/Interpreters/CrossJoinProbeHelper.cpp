@@ -442,6 +442,7 @@ Block crossProbeBlockDeepCopyRightBlockImpl(ProbeProcessInfo & probe_process_inf
     auto * filter_ptr = probe_process_info.filter.get();
     auto * offset_ptr = probe_process_info.offsets_to_replicate.get();
 
+    UInt64 joined_rows_in_call = 0;
     for (; current_row < block_rows; ++current_row)
     {
         if constexpr (has_row_filter_map)
@@ -479,6 +480,14 @@ Block crossProbeBlockDeepCopyRightBlockImpl(ProbeProcessInfo & probe_process_inf
                 offset_ptr,
                 probe_process_info.cross_join_data->right_rows_to_be_added_when_matched,
                 probe_process_info.max_block_size);
+            if (!block_full)
+            {
+                /// Count the candidate pairs of this probe row before other conditions are
+                /// applied: all right rows for All strictness, the single first-match pair for
+                /// Any strictness (right_rows_to_be_added_when_matched is already capped to 1
+                /// there, which also matches the first-match counting of hash semi/anti joins).
+                joined_rows_in_call += probe_process_info.cross_join_data->right_rows_to_be_added_when_matched;
+            }
         }
         else
         {
@@ -498,6 +507,8 @@ Block crossProbeBlockDeepCopyRightBlockImpl(ProbeProcessInfo & probe_process_inf
             break;
     }
     probe_process_info.updateEndRow<false>(current_row);
+    if (joined_rows_in_call != 0 && probe_process_info.joined_rows_counter)
+        probe_process_info.joined_rows_counter->fetch_add(joined_rows_in_call, std::memory_order_relaxed);
     return probe_process_info.cross_join_data->result_block_schema.cloneWithColumns(std::move(dst_columns));
 }
 
@@ -633,6 +644,11 @@ std::pair<Block, bool> crossProbeBlockShallowCopyRightBlockImpl(
     (*probe_process_info.offsets_to_replicate)[0] = right_row;
     probe_process_info.cross_join_data->next_right_block_index++;
     probe_process_info.updateEndRow<true>(probe_process_info.start_row + 1);
+    /// Count the candidate pairs of this probe row against the current right block before other
+    /// conditions are applied. Shallow mode only serves All strictness (Any is capped to one
+    /// pair and stays in deep mode), so every call materializes all rows of the right block.
+    if (probe_process_info.joined_rows_counter)
+        probe_process_info.joined_rows_counter->fetch_add(right_row, std::memory_order_relaxed);
     return {block, true};
 }
 } // namespace

@@ -1543,6 +1543,9 @@ void NO_INLINE probeBlockImplTypeCase(
     const auto & build_hash_data = probe_process_info.hash_join_data->hash_data->getData();
     size_t i;
     bool block_full = false;
+    /// Matched (probe row, build row) pairs found by this call; flushed into the Join-owned
+    /// accumulator once below to avoid per-row atomic operations.
+    UInt64 joined_rows_in_call = 0;
     for (i = probe_process_info.start_row; i < rows; ++i)
     {
         if (has_row_filter_map && (*row_filter_map)[i])
@@ -1626,6 +1629,7 @@ void NO_INLINE probeBlockImplTypeCase(
             auto it = internal_map.find(key, hash_value);
             if (it != internal_map.end())
             {
+                const auto & matched_value = static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
                 if constexpr (row_flagged_map)
                 {
                     block_full = RowFlaggedHashMapAdder<Map>::addFound(
@@ -1637,11 +1641,18 @@ void NO_INLINE probeBlockImplTypeCase(
                         offsets_to_replicate.get(),
                         right_indexes,
                         probe_process_info);
+                    /// addFound returns true without inserting anything when the block is full and
+                    /// the probe row will be retried, so only count after a successful insert.
+                    if (!block_full)
+                        joined_rows_in_call += matched_value.list_length;
                 }
                 else if constexpr (KIND == ASTTableJoin::Kind::RightSemi || KIND == ASTTableJoin::Kind::RightAnti)
                 {
                     /// For RightSemi/RightAnti without other conditions, just flag the hash entry is enough
                     it->getMapped().setUsed();
+                    /// No rows are inserted for this probe row, but every build row under the matched
+                    /// entry is still a matched pair of it.
+                    joined_rows_in_call += matched_value.list_length;
                 }
                 else
                 {
@@ -1658,6 +1669,9 @@ void NO_INLINE probeBlockImplTypeCase(
                         offsets_to_replicate.get(),
                         right_indexes,
                         probe_process_info);
+                    /// Same as above: only count after a successful insert.
+                    if (!block_full)
+                        joined_rows_in_call += matched_value.list_length;
                 }
             }
             else
@@ -1700,6 +1714,9 @@ void NO_INLINE probeBlockImplTypeCase(
             break;
         }
     }
+
+    if (joined_rows_in_call != 0 && probe_process_info.joined_rows_counter)
+        probe_process_info.joined_rows_counter->fetch_add(joined_rows_in_call, std::memory_order_relaxed);
 
     probe_process_info.updateEndRow<false>(i);
 }
@@ -1765,7 +1782,8 @@ probeBlockNullAwareSemiInternal(
     const Sizes & key_sizes,
     const TiDB::TiDBCollators & collators,
     const NALeftSideInfo & left_side_info,
-    const NARightSideInfo & right_side_info)
+    const NARightSideInfo & right_side_info,
+    std::atomic<UInt64> * joined_rows_counter)
 {
     static_assert(
         KIND == ASTTableJoin::Kind::NullAware_Anti || KIND == ASTTableJoin::Kind::NullAware_LeftOuterAnti
@@ -1778,6 +1796,10 @@ probeBlockNullAwareSemiInternal(
 
     Arena pool;
     size_t segment_size = join_partitions.size();
+
+    /// Matched (probe row, build row) pairs found by this call; flushed into the Join-owned
+    /// accumulator once below to avoid per-row atomic operations.
+    UInt64 joined_rows_in_call = 0;
 
     PaddedPODArray<NASemiJoinResult<KIND, STRICTNESS>> res;
     res.reserve(rows);
@@ -1861,11 +1883,17 @@ probeBlockNullAwareSemiInternal(
                 /// E.g. (1,2) in ((1,2),(1,3),(null,3))
                 res.emplace_back(i, NASemiJoinStep::DONE, nullptr);
                 res.back().template setResult<SemiJoinResultType::TRUE_VALUE>();
+                /// Any null-aware semi stops at the first match, so exactly one pair is enumerated
+                /// for each matched probe row.
+                joined_rows_in_call += 1;
             }
             else
             {
                 /// Else the other condition must be checked for these matched right row(s).
                 auto map_it = &static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
+                /// All strictness checks other conditions for these matched right row(s) later, in
+                /// paced and short-circuited rounds driven by NASemiJoinHelper::doJoin(); the pairs
+                /// actually enumerated are counted there, not the full entry length here.
                 res.emplace_back(i, NASemiJoinStep::NOT_NULL_KEY_CHECK_MATCHED_ROWS, static_cast<const void *>(map_it));
                 res_list.emplace_back(&res.back());
             }
@@ -1901,6 +1929,8 @@ probeBlockNullAwareSemiInternal(
         res.emplace_back(i, NASemiJoinStep::NOT_NULL_KEY_CHECK_NULL_ROWS, nullptr);
         res_list.push_back(&res.back());
     }
+    if (joined_rows_in_call != 0 && joined_rows_counter)
+        joined_rows_counter->fetch_add(joined_rows_in_call, std::memory_order_relaxed);
     return std::make_pair(std::move(res), std::move(res_list));
 }
 
@@ -1912,7 +1942,8 @@ std::pair<PaddedPODArray<NASemiJoinResult<KIND, STRICTNESS>>, std::list<NASemiJo
     const Sizes & key_sizes,
     const TiDB::TiDBCollators & collators,
     const NALeftSideInfo & left_side_info,
-    const NARightSideInfo & right_side_info)
+    const NARightSideInfo & right_side_info,
+    std::atomic<UInt64> * joined_rows_counter)
 {
 #define CALL(has_key_null_map, has_row_filter_map)                                                                  \
     return probeBlockNullAwareSemiInternal<KIND, STRICTNESS, KeyGetter, Map, has_key_null_map, has_row_filter_map>( \
@@ -1922,7 +1953,8 @@ std::pair<PaddedPODArray<NASemiJoinResult<KIND, STRICTNESS>>, std::list<NASemiJo
         key_sizes,                                                                                                  \
         collators,                                                                                                  \
         left_side_info,                                                                                             \
-        right_side_info);
+        right_side_info,                                                                                            \
+        joined_rows_counter);
 
     if (left_side_info.key_null_map)
     {
@@ -1990,6 +2022,9 @@ probeBlockSemiInternal(
     sort_key_containers.resize(probe_process_info.hash_join_data->key_columns.size());
     Arena pool;
     bool need_virtual_dispatch_for_probe_block = join_build_info.needVirtualDispatchForProbeBlock();
+    /// Matched (probe row, build row) pairs found by this call; flushed into the Join-owned
+    /// accumulator once below to avoid per-row atomic operations.
+    UInt64 joined_rows_in_call = 0;
     if (need_virtual_dispatch_for_probe_block)
     {
         RUNTIME_ASSERT(!(join_build_info.restore_round > 0 && join_build_info.enable_fine_grained_shuffle));
@@ -2078,10 +2113,16 @@ probeBlockSemiInternal(
             if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
             {
                 res.emplace_back(true);
+                /// Any semi/anti stops at the first match, so exactly one pair is enumerated for
+                /// each matched probe row.
+                joined_rows_in_call += 1;
             }
             else
             {
                 auto map_it = &static_cast<const typename Map::mapped_type::Base_t &>(it->getMapped());
+                /// All strictness checks other conditions for these matched right row(s) later, in
+                /// paced and short-circuited rounds driven by SemiJoinHelper::doJoin(); the pairs
+                /// actually enumerated are counted there, not the full entry length here.
                 res.emplace_back(i, static_cast<const void *>(map_it));
                 res_list.emplace_back(&res.back());
             }
@@ -2103,6 +2144,8 @@ probeBlockSemiInternal(
     {
         RUNTIME_CHECK_MSG(res_list.empty(), "SemiJoinResult list must be empty if strictness is any");
     }
+    if (joined_rows_in_call != 0 && probe_process_info.joined_rows_counter)
+        probe_process_info.joined_rows_counter->fetch_add(joined_rows_in_call, std::memory_order_relaxed);
     return std::make_pair(std::move(res), std::move(res_list));
 }
 
@@ -2262,7 +2305,8 @@ std::pair<PaddedPODArray<NASemiJoinResult<KIND, STRICTNESS>>, std::list<NASemiJo
         const Sizes & key_sizes,
         const TiDB::TiDBCollators & collators,
         const NALeftSideInfo & left_side_info,
-        const NARightSideInfo & right_side_info)
+        const NARightSideInfo & right_side_info,
+        std::atomic<UInt64> * joined_rows_counter)
 {
     auto method = join_partitions[0]->join_map_method;
     switch (method)
@@ -2280,7 +2324,8 @@ std::pair<PaddedPODArray<NASemiJoinResult<KIND, STRICTNESS>>, std::list<NASemiJo
             key_sizes,                                                                           \
             collators,                                                                           \
             left_side_info,                                                                      \
-            right_side_info);
+            right_side_info,                                                                     \
+            joined_rows_counter);
         APPLY_FOR_JOIN_VARIANTS(M)
 #undef M
 
@@ -2299,7 +2344,8 @@ std::pair<PaddedPODArray<NASemiJoinResult<KIND, STRICTNESS>>, std::list<NASemiJo
             const Sizes & key_sizes,                                                                                \
             const TiDB::TiDBCollators & collators,                                                                  \
             const NALeftSideInfo & left_side_info,                                                                  \
-            const NARightSideInfo & right_side_info);
+            const NARightSideInfo & right_side_info,                                                                \
+            std::atomic<UInt64> * joined_rows_counter);
 
 APPLY_FOR_NULL_AWARE_SEMI_JOIN(M)
 #undef M
