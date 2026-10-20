@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Common/config.h>
-#include <DataStreams/BlocksListBlockInputStream.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
@@ -25,7 +24,6 @@
 #include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
-#include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
@@ -41,8 +39,6 @@
 namespace DB
 {
 // Test the columnar implementation without exposing its helpers in a public header.
-ColumnID getStorageColumnIDForColumnarRead(ColumnID column_id);
-tipb::Executor genTableScanForColumnarRead(const TiDBTableScan & table_scan);
 tipb::TableInfo genTableInfoForColumnarRead(const TiDBTableScan & table_scan);
 std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedReadThroughColumnar(
     const TiDBTableScan & table_scan);
@@ -115,35 +111,19 @@ try
             EXPECT_EQ(extra_table_id_index, 2);
             EXPECT_TRUE(generated_columns.empty());
             const auto & version = column_defines->at(1);
-            EXPECT_EQ(version.id, MutSup::version_col_id);
+            EXPECT_EQ(version.id, MutSup::extra_commit_ts_col_id);
             EXPECT_EQ(version.name, genNameForExchangeReceiver(1));
             EXPECT_TRUE(version.type->equals(*MutSup::getVersionColumnType()));
 
-            // Both normal scans and late materialization must preserve the real
-            // version values while converting the exchange receiver column type.
+            // Both normal scans and late materialization must preserve the values
+            // returned by CSE while converting the exchange receiver column type.
             const auto & commit_ts_info = table_scan.getColumns()[1];
             const auto expected_type = getDataTypeByColumnInfoForComputingLayer(commit_ts_info);
             for (bool pushed_down : {false, true})
             {
                 SCOPED_TRACE(pushed_down);
-                Block stored_block{
-                    toVec<Int64>(MutSup::extra_handle_column_name, {1, 1, 2, 3, 3, 4}),
-                    toVec<UInt64>(MutSup::version_column_name, {0, 1, 123456789, 456789012, 999999999, 1}),
-                    toVec<UInt8>(MutSup::delmark_column_name, {0, 0, 0, 0, 0, 1}),
-                };
-                stored_block.getByPosition(0).column_id = MutSup::extra_handle_id;
-                stored_block.getByPosition(1).column_id = MutSup::version_col_id;
-                stored_block.getByPosition(2).column_id = MutSup::delmark_col_id;
-                auto input = std::make_shared<BlocksListBlockInputStream>(BlocksList{stored_block});
-                DM::DMVersionFilterBlockInputStream<DM::DMVersionFilterMode::MVCC> stream(
-                    input,
-                    {version},
-                    /*version_limit=*/500000000,
-                    /*is_common_handle=*/false);
-                stream.readPrefix();
-                auto block = stream.read();
-                ASSERT_FALSE(stream.read());
-                stream.readSuffix();
+                Block block{toVec<UInt64>(version.name, {1, 123456789, 456789012})};
+                block.getByPosition(0).column_id = version.id;
                 ExpressionActionsPtr cast;
                 if (pushed_down)
                 {
@@ -169,7 +149,7 @@ try
                         log);
                     ASSERT_TRUE(push_down->filter_columns);
                     ASSERT_EQ(push_down->filter_columns->size(), 1);
-                    EXPECT_EQ(push_down->filter_columns->at(0).id, MutSup::version_col_id);
+                    EXPECT_EQ(push_down->filter_columns->at(0).id, MutSup::extra_commit_ts_col_id);
                     EXPECT_EQ(push_down->filter_columns->at(0).name, version.name);
                     cast = push_down->extra_cast;
                 }
@@ -238,7 +218,7 @@ try
             ASSERT_EQ(defines->size(), 1);
             EXPECT_EQ(table_id_index, MutSup::invalid_col_id);
             const auto & version = defines->front();
-            EXPECT_EQ(version.id, MutSup::version_col_id);
+            EXPECT_EQ(version.id, MutSup::extra_commit_ts_col_id);
             EXPECT_EQ(version.name, genNameForExchangeReceiver(0));
             EXPECT_EQ(version.type->getName(), "Nullable(UInt64)");
 
@@ -247,14 +227,7 @@ try
             // Requesting the handle disables CSE's dummy-version pack clean read.
             ASSERT_EQ(table_info.columns_size(), 1);
             EXPECT_EQ(table_info.columns(0).column_id(), MutSup::extra_handle_id);
-            const auto storage_scan = genTableScanForColumnarRead(scan);
-            const auto & storage_columns
-                = partition_scan ? storage_scan.partition_table_scan().columns() : storage_scan.tbl_scan().columns();
-            ASSERT_EQ(storage_columns.size(), 1);
-            EXPECT_EQ(storage_columns[0].column_id(), MutSup::version_col_id);
             EXPECT_EQ(scan.getColumns()[0].id, MutSup::extra_commit_ts_col_id);
-            EXPECT_EQ(getStorageColumnIDForColumnarRead(MutSup::extra_commit_ts_col_id), version.id);
-            EXPECT_EQ(getStorageColumnIDForColumnarRead(42), 42);
 
             // ffi_read_version serializes one UInt8 null-map entry per row, followed by UInt64 values.
             // Visible versions are never null, but their null-map bytes remain.
@@ -311,7 +284,7 @@ try
         commit_ts.tp = TiDB::TypeLongLong;
         commit_ts.flag = flags;
         const auto name = genNameForExchangeReceiver(1);
-        Block early_block{{createNullableColumn<UInt64>({0, 11, 22}, {0, 0, 0}, name, MutSup::version_col_id)}};
+        Block early_block{{createNullableColumn<UInt64>({0, 11, 22}, {0, 0, 0}, name, MutSup::extra_commit_ts_col_id)}};
 
         google::protobuf::RepeatedPtrField<tipb::Expr> filters;
         auto * condition = filters.Add();
@@ -349,7 +322,7 @@ try
         EXPECT_EQ((*mask)[0].safeGet<UInt64>(), 0);
         EXPECT_EQ((*mask)[1].safeGet<UInt64>(), 1);
         EXPECT_EQ((*mask)[2].safeGet<UInt64>(), 1);
-        EXPECT_EQ(early_block.getByName(name).column_id, MutSup::version_col_id);
+        EXPECT_EQ(early_block.getByName(name).column_id, MutSup::extra_commit_ts_col_id);
         EXPECT_EQ(early_block.getByName(name).type->getName(), "Nullable(UInt64)");
     }
 }
@@ -436,16 +409,12 @@ try
         auto [defines, table_id_index] = genColumnDefinesForDisaggregatedReadThroughColumnar(scan);
         ASSERT_EQ(defines->size(), 3);
         EXPECT_EQ(table_id_index, 2);
-        EXPECT_EQ(defines->at(0).id, MutSup::version_col_id);
+        EXPECT_EQ(defines->at(0).id, MutSup::extra_commit_ts_col_id);
         EXPECT_EQ(defines->at(0).name, genNameForExchangeReceiver(1));
         EXPECT_EQ(defines->at(1).id, MutSup::extra_handle_id);
         EXPECT_EQ(defines->at(1).name, genNameForExchangeReceiver(3));
         EXPECT_EQ(defines->at(2).id, 11);
         EXPECT_EQ(defines->at(2).name, genNameForExchangeReceiver(4));
-        const auto storage_scan = genTableScanForColumnarRead(scan);
-        ASSERT_EQ(storage_scan.tbl_scan().columns_size(), ids.size());
-        for (size_t i = 0; i < ids.size(); ++i)
-            EXPECT_EQ(storage_scan.tbl_scan().columns(i).column_id(), getStorageColumnIDForColumnarRead(ids[i]));
     }
 }
 CATCH

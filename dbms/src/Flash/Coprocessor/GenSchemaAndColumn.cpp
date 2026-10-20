@@ -139,9 +139,9 @@ std::tuple<DM::ColumnDefinesPtr, int, std::vector<std::tuple<UInt64, String, Dat
         case MutSup::extra_commit_ts_col_id:
             if (!support_commit_ts)
                 throw Exception("Not supported in disaggregated read now");
-            // Read the MVCC version using its storage ID and type. The computing
-            // layer casts it to the type requested by TiDB after the scan.
-            column_defines->emplace_back(MutSup::version_col_id, output_name, MutSup::getVersionColumnType());
+            // CSE resolves the logical commit-ts ID to its internal MVCC version.
+            // The computing layer casts the storage type to the type requested by TiDB after the scan.
+            column_defines->emplace_back(column_info.id, output_name, MutSup::getVersionColumnType());
             break;
         default:
             column_defines->emplace_back(DM::ColumnDefine{

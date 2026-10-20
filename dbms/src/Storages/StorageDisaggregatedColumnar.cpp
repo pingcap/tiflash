@@ -75,23 +75,6 @@ namespace ErrorCodes
 extern const int COLUMNAR_SNAPSHOT_ERROR;
 } // namespace ErrorCodes
 
-// Columnar keeps MVCC versions outside its business-column schema.
-ColumnID getStorageColumnIDForColumnarRead(ColumnID column_id)
-{
-    return column_id == MutSup::extra_commit_ts_col_id ? MutSup::version_col_id : column_id;
-}
-
-tipb::Executor genTableScanForColumnarRead(const TiDBTableScan & table_scan)
-{
-    auto executor = *table_scan.getTableScanPB();
-    auto * columns = table_scan.isPartitionTableScan() ? executor.mutable_partition_table_scan()->mutable_columns()
-                                                       : executor.mutable_tbl_scan()->mutable_columns();
-    // ColumnRef offsets stay unchanged; only the IDs used by storage filters change.
-    for (auto & column : *columns)
-        column.set_column_id(getStorageColumnIDForColumnarRead(column.column_id()));
-    return executor;
-}
-
 tipb::TableInfo genTableInfoForColumnarRead(const TiDBTableScan & table_scan)
 {
     tipb::TableInfo table_info;
@@ -134,7 +117,7 @@ std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedReadThroug
         = genColumnDefinesForDisaggregatedRead(table_scan, /*support_commit_ts=*/true);
     for (auto & column : *column_defines)
     {
-        if (column.id == MutSup::version_col_id)
+        if (column.id == MutSup::extra_commit_ts_col_id)
         {
             // CSE's version buffer is nullable: the null map represents tombstones.
             column.type = makeNullable(MutSup::getVersionColumnType());
@@ -534,7 +517,7 @@ std::shared_ptr<RNColumnarReaderSharedContext> buildColumnarReaderSharedContext(
         = genColumnDefinesForDisaggregatedReadThroughColumnar(table_scan);
     shared_context->scan_columns = table_scan.getColumns();
 
-    auto table_scan_pb = genTableScanForColumnarRead(table_scan);
+    auto table_scan_pb = *table_scan.getTableScanPB();
     const auto & timezone_info = context.getTimezoneInfo();
     if (table_scan_pb.tp() == tipb::TypePartitionTableScan)
     {
@@ -1087,12 +1070,10 @@ std::unordered_set<ColumnID> RNColumnarReadTask::getLateMaterializationEarlyColu
 {
     auto column_ids = getExactFilterColumnIDs();
 
-    // CSE's early projection uses storage IDs: replace the logical commit-ts ID
-    // with version_col_id, which is always included below for MVCC filtering.
-    column_ids.erase(MutSup::extra_commit_ts_col_id);
-
+    // CSE resolves the logical commit-ts ID to its internal version column.
+    // Always request the handle and version required by MVCC filtering.
     column_ids.insert(MutSup::extra_handle_id);
-    column_ids.insert(MutSup::version_col_id);
+    column_ids.insert(MutSup::extra_commit_ts_col_id);
     for (const auto & column : shared_reader_context->scan_columns)
     {
         if (column.hasPriKeyFlag())
@@ -2162,7 +2143,7 @@ Block RNColumnarInputStream::readLegacyBlock(const TiFlashRaftProxyHelper * prox
             (void)w.elapsedSecondsFromLastTime();
             // MVCC versions live in a separate buffer, not in the business columns.
             const auto & interfaces = proxy_helper->cloud_storage_engine_interfaces;
-            RustStrWithView col_data = col_id == MutSup::version_col_id
+            RustStrWithView col_data = col_id == MutSup::extra_commit_ts_col_id
                 ? interfaces.fn_read_version(reader.value())
                 : interfaces.fn_read_column(reader.value(), col_id);
             duration_read_sec += w.elapsedSecondsFromLastTime();
