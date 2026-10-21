@@ -124,6 +124,8 @@ std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedReadThroug
         }
         else
         {
+            // Columnar only support the legacy string format for now, so convert the data type to legacy one.
+            // We can remove this when columnar supports the new string data type.
             const auto & converted_type = CodecUtils::convertDataType(*column.type);
             if (&converted_type != column.type.get())
                 column.type = DataTypeFactory::instance().getOrSet(converted_type.getName());
@@ -280,6 +282,9 @@ void remapColumnRefsForLateMaterialization(
                 "Column index out of bound, expr: {}, size of input columns: {}",
                 expr.DebugString(),
                 scan_column_count);
+        // The early block is an ExchangeReceiver-like projection. Use the same
+        // offset-based names as genColumnDefinesForDisaggregatedRead, so filters
+        // remain addressable after columns are reordered or omitted.
         const auto column_name = genNameForExchangeReceiver(static_cast<Int32>(scan_offset));
         const auto it = early_column_indexes.find(column_name);
         if (it == early_column_indexes.end())

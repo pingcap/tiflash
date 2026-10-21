@@ -224,14 +224,7 @@ ExpressionActionsPtr StorageDisaggregated::getExtraCastExpr(
     {
         if (col.hasGeneratedColumnFlag() || col.id == -1)
             continue;
-        // In columnar mode, _tidb_commit_ts is read from CSE's internal MVCC version
-        // buffer as Nullable(UInt64): its null map encodes deletion markers and is
-        // still present in the FFI payload after MVCC filtering. The resulting type
-        // may differ from the type requested by TiDB, so this column must also trigger
-        // the extra-cast check even when no timestamp/duration columns are requested.
-        // table_scan keeps the logical extra_commit_ts_col_id, not the storage version_col_id.
-        if ((need_timezone_cast && col.tp == TiDB::TypeTimestamp) || col.tp == TiDB::TypeTime
-            || col.id == MutSup::extra_commit_ts_col_id)
+        if ((need_timezone_cast && col.tp == TiDB::TypeTimestamp) || col.tp == TiDB::TypeTime)
         {
             has_cast_candidate = true;
             break;

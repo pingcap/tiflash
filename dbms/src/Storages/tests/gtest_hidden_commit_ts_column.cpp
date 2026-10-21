@@ -328,6 +328,47 @@ try
 }
 CATCH
 
+TEST_F(HiddenCommitTSColumnTest, ColumnarExchangeReceiverNamesAreConsistent)
+try
+{
+    tipb::Executor executor;
+    executor.set_tp(tipb::TypeTableScan);
+    auto * scan_pb = executor.mutable_tbl_scan();
+    scan_pb->set_table_id(100);
+    for (auto id : {10, 11})
+    {
+        auto * column = scan_pb->add_columns();
+        column->set_column_id(id);
+        column->set_tp(TiDB::TypeLongLong);
+        column->set_flag(TiDB::ColumnFlagNotNull);
+    }
+    DAGContext dag_context(1024);
+    TiDBTableScan scan(&executor, "scan", dag_context);
+    auto [defines, table_id_index] = genColumnDefinesForDisaggregatedReadThroughColumnar(scan);
+    ASSERT_EQ(table_id_index, MutSup::invalid_col_id);
+    ASSERT_EQ(defines->size(), 2);
+
+    // Build the early block with the names produced by the column-definition path
+    // (GenSchemaAndColumn.cpp), then resolve a predicate through the remapping path
+    // (StorageDisaggregatedColumnar.cpp). A mismatch between the two naming paths
+    // would make the predicate column unavailable.
+    Block early_block{
+        toVec<UInt64>(defines->at(1).name, {11}),
+        toVec<UInt64>(defines->at(0).name, {10}),
+    };
+    google::protobuf::RepeatedPtrField<tipb::Expr> filters;
+    auto * condition = filters.Add();
+    condition->set_tp(tipb::ExprType::ColumnRef);
+    WriteBufferFromOwnString buffer;
+    encodeDAGInt64(0, buffer);
+    condition->set_val(buffer.releaseStr());
+    const auto remapped = remapColumnarFilterConditions(filters, scan.getColumnSize(), early_block);
+    EXPECT_EQ(decodeDAGInt64(remapped[0].val()), 1);
+    EXPECT_EQ(defines->at(0).name, genNameForExchangeReceiver(0));
+    EXPECT_EQ(defines->at(1).name, genNameForExchangeReceiver(1));
+}
+CATCH
+
 TEST_F(HiddenCommitTSColumnTest, ColumnarFilterRemappingOffsetsAndInvalidReferences)
 try
 {
