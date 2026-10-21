@@ -1923,4 +1923,64 @@ try
     }
 }
 CATCH
+
+TEST_F(BlobStoreTest, ReadByFieldReadInfosContinuousFields)
+try
+{
+    const auto file_provider = DB::tests::TiFlashTestEnv::getDefaultFileProvider();
+    PageIdU64 page_id = 50;
+    size_t buff_size = 20;
+
+    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, BlobConfig{}, page_type_and_config);
+
+    std::vector<char> c_buff(buff_size);
+    for (size_t j = 0; j < buff_size; ++j)
+    {
+        c_buff[j] = static_cast<char>(j);
+    }
+
+    ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff.data(), buff_size);
+    PageFieldSizes field_sizes{1, 2, 4, 8, (buff_size - 1 - 2 - 4 - 8)};
+    WriteBatch wb;
+    wb.putPage(page_id, /* tag */ 0, buff, buff_size, field_sizes);
+    PageEntriesEdit edit = blob_store.write(std::move(wb));
+    const auto & records = edit.getRecords();
+    ASSERT_EQ(records.size(), 1);
+    auto entry = records[0].entry;
+
+    // Test 1: Continuous fields {0,1,2,3,4}
+    {
+        blob_store.resetFieldReadCallCount();
+        BlobStore::FieldReadInfos read_infos;
+        read_infos.emplace_back(
+            BlobStore::FieldReadInfo(buildV3Id(TEST_NAMESPACE_ID, page_id), entry, {0, 1, 2, 3, 4}));
+        auto page_map = blob_store.read(read_infos);
+        Page page = page_map.at(page_id);
+        ASSERT_EQ(page.fieldSize(), 5);
+        ASSERT_EQ(blob_store.getFieldReadCallCount(), 1);
+    }
+
+    // Test 2: Fields with hole {0,1,3,4}
+    {
+        blob_store.resetFieldReadCallCount();
+        BlobStore::FieldReadInfos read_infos;
+        read_infos.emplace_back(BlobStore::FieldReadInfo(buildV3Id(TEST_NAMESPACE_ID, page_id), entry, {0, 1, 3, 4}));
+        auto page_map = blob_store.read(read_infos);
+        Page page = page_map.at(page_id);
+        ASSERT_EQ(page.fieldSize(), 4);
+        ASSERT_EQ(blob_store.getFieldReadCallCount(), 2);
+    }
+
+    // Test 3: Scattered fields {0,2,4}
+    {
+        blob_store.resetFieldReadCallCount();
+        BlobStore::FieldReadInfos read_infos;
+        read_infos.emplace_back(BlobStore::FieldReadInfo(buildV3Id(TEST_NAMESPACE_ID, page_id), entry, {0, 2, 4}));
+        auto page_map = blob_store.read(read_infos);
+        Page page = page_map.at(page_id);
+        ASSERT_EQ(page.fieldSize(), 3);
+        ASSERT_EQ(blob_store.getFieldReadCallCount(), 3);
+    }
+}
+CATCH
 } // namespace DB::PS::V3::tests

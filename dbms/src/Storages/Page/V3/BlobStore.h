@@ -117,6 +117,12 @@ public:
     using FieldReadInfos = std::vector<FieldReadInfo>;
     PageMap read(FieldReadInfos & to_read, const ReadLimiterPtr & read_limiter = nullptr);
 
+#ifdef DBMS_PUBLIC_GTEST
+    void resetFieldReadCallCount() { field_read_call_count.store(0, std::memory_order_relaxed); }
+    size_t getFieldReadCallCount() { return field_read_call_count.load(std::memory_order_relaxed); }
+
+#endif
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
@@ -173,6 +179,10 @@ private:
 
     std::mutex mtx_blob_files;
     std::unordered_map<BlobFileId, BlobFilePtr> blob_files;
+
+#ifdef DBMS_PUBLIC_GTEST
+    std::atomic<size_t> field_read_call_count{0};
+#endif
 };
 namespace u128
 {
