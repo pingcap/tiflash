@@ -33,6 +33,7 @@
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/StorageTantivy.h>
 #include <Storages/Tantivy/TantivyInputStream.h>
+#include <Storages/Tantivy/TiCIAdmission.h>
 #include <common/defines.h>
 #include <common/logger_useful.h>
 #include <tici-search-lib/src/lib.rs.h>
@@ -144,36 +145,71 @@ void StorageTantivy::splitRemoteReadAndLocalRead()
     const auto & all = tici_scan.getShardInfos().shard_info_list;
     ShardInfoList local_shard_infos;
     ShardInfoList remote_shard_infos;
-    ::rust::Vec<::Shard> shards;
-    auto index_id = tici_scan.getIndexId();
+    std::vector<TiCIAdmissionFailure> blocked;
+    ::rust::Vec<::ShardFreshnessRequirement> requirements;
     for (const auto & shard_info : all)
     {
-        shards.push_back(::Shard{
-            .keyspace_id = tici_scan.getKeyspaceID(),
-            .index_id = index_id,
-            .shard_id = shard_info.shard_id,
-            .shard_epoch = shard_info.shard_epoch,
-        });
+        RUNTIME_CHECK_MSG(
+            shard_info.freshness_mode <= static_cast<UInt8>(::ShardFreshnessMode::BoundedStale),
+            "unknown TiCI freshness mode {} for shard {}",
+            shard_info.freshness_mode,
+            shard_info.shard_id);
+        const auto mode = static_cast<::ShardFreshnessMode>(shard_info.freshness_mode);
+        requirements.push_back(makeTiCIShardRequirement(
+            shard_info.shard_id,
+            shard_info.shard_epoch,
+            shard_info.required_resolved_ts,
+            mode));
     }
 
-    ::rust::Vec<bool> local_results;
-    local_shards_snapshot = check_shards_and_acquire_snapshot(shards, local_results);
+    ::rust::Vec<::ShardAdmissionResult> results;
+    local_shards_snapshot = acquire_shards_snapshot_v2(requirements, results);
     RUNTIME_CHECK(local_shards_snapshot.has_value());
-    RUNTIME_CHECK(local_results.size() == all.size());
+    RUNTIME_CHECK(results.size() == all.size());
     for (size_t i = 0; i < all.size(); ++i)
     {
-        const auto is_local = local_results[i];
-        if (is_local)
+        auto admission = results[i];
+        RUNTIME_CHECK_MSG(
+            admission.shard_id == all[i].shard_id,
+            "TiCI admission result shard {} does not match requested shard {}",
+            admission.shard_id,
+            all[i].shard_id);
+        RUNTIME_CHECK_MSG(
+            admission.expected_epoch == requirements[i].expected_epoch
+                && admission.required_resolved_ts == requirements[i].required_resolved_ts,
+            "TiCI admission result for shard {} does not match its requirement",
+            admission.shard_id);
+        const auto route = routeTiCIShard(requirements[i], admission);
+        if (route == TiCIAdmissionRoute::Local)
         {
+            LOG_DEBUG(
+                log,
+                "tici shard admitted: shard_id={} epoch={} manifest_seq={} required_resolved_ts={} "
+                "reader_applied_resolved_ts={} meta_persisted_resolved_ts={}",
+                admission.shard_id,
+                admission.observed_epoch,
+                admission.observed_manifest_seq,
+                admission.required_resolved_ts,
+                admission.reader_applied_resolved_ts,
+                admission.meta_persisted_resolved_ts);
             local_shard_infos.push_back(all[i]);
         }
-        else
+        else if (route == TiCIAdmissionRoute::Remote)
         {
             remote_shard_infos.push_back(all[i]);
         }
+        else
+        {
+            // Defend the request contract even if the FFI reports READY with
+            // an insufficient watermark.
+            if (admission.code == ::ShardAdmissionCode::Ready)
+                admission.code = ::ShardAdmissionCode::ReaderBehind;
+            blocked.push_back(TiCIAdmissionFailure{all[i], admission});
+        }
     }
-    remote_read = remote_shard_infos;
-    local_read = local_shard_infos;
+    remote_read = std::move(remote_shard_infos);
+    local_read = std::move(local_shard_infos);
+    admission_failures = std::move(blocked);
 }
 
 } // namespace DB

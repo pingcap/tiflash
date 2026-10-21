@@ -18,6 +18,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/RequestUtils.h>
+#include <Flash/Coprocessor/ShardInfo.h>
 #include <Flash/ServiceUtils.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
@@ -120,6 +121,16 @@ grpc::Status BatchCoprocessorHandler::execute()
                 "Coprocessor request type " + std::to_string(cop_request->tp()) + " is not implemented",
                 Errors::Coprocessor::Unimplemented);
         }
+        return grpc::Status::OK;
+    }
+    catch (const TiCIShardRetryException & e)
+    {
+        if (!cop_request->supports_shard_retry_infos())
+            return recordError(grpc::StatusCode::INTERNAL, e.what());
+        coprocessor::BatchResponse response;
+        for (const auto & feedback : e.getFeedback())
+            *response.add_shard_retry_infos() = feedback;
+        writer->Write(response);
         return grpc::Status::OK;
     }
     catch (const TiFlashException & e)

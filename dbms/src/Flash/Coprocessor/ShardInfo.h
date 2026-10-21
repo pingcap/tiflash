@@ -21,6 +21,9 @@
 #include <common/types.h>
 
 #include <cstddef>
+#include <exception>
+#include <utility>
+#include <vector>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <kvproto/mpp.pb.h>
@@ -34,12 +37,20 @@ struct ShardInfo
 {
     UInt64 shard_id;
     UInt64 shard_epoch;
+    // PR 7 fills these from the request protocol. Zero values keep old tasks
+    // on the presence-only path during a rolling upgrade.
+    UInt64 required_resolved_ts = 0;
+    UInt8 freshness_mode = 0;
+    UInt32 max_wait_ms = 0;
     using KeyRanges = google::protobuf::RepeatedPtrField<coprocessor::KeyRange>;
     KeyRanges key_ranges;
 
     explicit ShardInfo(const coprocessor::ShardInfo & info)
         : shard_id(info.shard_id())
         , shard_epoch(info.shard_epoch())
+        , required_resolved_ts(info.required_resolved_ts())
+        , freshness_mode(static_cast<UInt8>(info.freshness_mode()))
+        , max_wait_ms(info.max_wait_ms())
         , key_ranges(info.ranges())
     {}
 
@@ -65,6 +76,22 @@ struct ShardInfo
 
 using ShardInfoMap = std::unordered_map<UInt64, ShardInfo>;
 using ShardInfoList = std::vector<ShardInfo>;
+
+// BatchCop sends admission failures before reading any shard, so TiDB can
+// rebuild the entire task without accepting partial results.
+class TiCIShardRetryException : public std::exception
+{
+public:
+    explicit TiCIShardRetryException(std::vector<coprocessor::ShardRetryInfo> feedback_)
+        : feedback(std::move(feedback_))
+    {}
+
+    const char * what() const noexcept override { return "TiCI shard admission rejected"; }
+    const std::vector<coprocessor::ShardRetryInfo> & getFeedback() const { return feedback; }
+
+private:
+    std::vector<coprocessor::ShardRetryInfo> feedback;
+};
 
 class TableShardInfos
 {

@@ -36,27 +36,86 @@
 namespace DB
 {
 
+namespace
+{
+coprocessor::ShardRetryReason toShardRetryReason(::ShardAdmissionCode code)
+{
+    switch (code)
+    {
+    case ::ShardAdmissionCode::Missing:
+        return coprocessor::SHARD_RETRY_MISSING;
+    case ::ShardAdmissionCode::EpochMismatch:
+        return coprocessor::SHARD_RETRY_EPOCH_MISMATCH;
+    case ::ShardAdmissionCode::ReaderBehind:
+        return coprocessor::SHARD_RETRY_READER_BEHIND;
+    case ::ShardAdmissionCode::ControlPlaneUnavailable:
+        return coprocessor::SHARD_RETRY_CONTROL_PLANE_UNAVAILABLE;
+    case ::ShardAdmissionCode::Ready:
+        // StorageTantivy maps an inconsistent READY to ReaderBehind.
+        return coprocessor::SHARD_RETRY_READER_BEHIND;
+    }
+    return coprocessor::SHARD_RETRY_REASON_UNSPECIFIED;
+}
+} // namespace
+
 void StorageTantivyIterpreter::execute(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder)
 {
     storage->splitRemoteReadAndLocalRead();
-    // local_read
-    storage->read(exec_context, group_builder, Names(), SelectQueryInfo(), context, 0, max_streams);
-
-    // remote_read
     const auto & executor_id = tici_scan.getTiCIScan()->executor_id();
     auto remote_shard_infos = storage->getRemoteShardInfos();
-    const auto total_shards = tici_scan.getShardInfos().shard_info_list.size();
-    const auto remote_shards = remote_shard_infos.size();
-    const auto local_shards = total_shards >= remote_shards ? (total_shards - remote_shards) : 0;
-    LOG_INFO(
-        log,
-        "tici split shards: executor_id={} total={} local={} remote={} local_concurrency={} start_ts={}",
-        executor_id,
-        total_shards,
-        local_shards,
-        remote_shards,
-        group_builder.concurrency(),
-        context.getSettingsRef().read_tso);
+    const auto & admission_failures = storage->getAdmissionFailures();
+    bool epoch_mismatch = false;
+    for (const auto & failure : admission_failures)
+    {
+        const auto & result = failure.admission;
+        epoch_mismatch |= result.code == ::ShardAdmissionCode::EpochMismatch;
+        LOG_INFO(
+            log,
+            "tici shard admission rejected: executor_id={} shard_id={} code={} expected_epoch={} observed_epoch={} "
+            "required_resolved_ts={} reader_applied_resolved_ts={} meta_persisted_resolved_ts={} retry_after_ms={}",
+            executor_id,
+            result.shard_id,
+            static_cast<unsigned int>(result.code),
+            result.expected_epoch,
+            result.observed_epoch,
+            result.required_resolved_ts,
+            result.reader_applied_resolved_ts,
+            result.meta_persisted_resolved_ts,
+            result.retry_after_ms);
+    }
+    if (context.getDAGContext()->isBatchCop() && (!admission_failures.empty() || !remote_shard_infos.empty()))
+    {
+        std::vector<coprocessor::ShardRetryInfo> feedback;
+        feedback.reserve(admission_failures.size() + remote_shard_infos.size());
+        for (const auto & failure : admission_failures)
+        {
+            const auto & result = failure.admission;
+            coprocessor::ShardRetryInfo info;
+            info.set_shard_id(result.shard_id);
+            info.set_reason(toShardRetryReason(result.code));
+            info.set_retry_after_ms(result.retry_after_ms);
+            info.set_observed_epoch(result.observed_epoch);
+            info.set_reader_applied_resolved_ts(result.reader_applied_resolved_ts);
+            info.set_meta_persisted_resolved_ts(result.meta_persisted_resolved_ts);
+            feedback.push_back(std::move(info));
+        }
+        for (const auto & shard : remote_shard_infos)
+        {
+            coprocessor::ShardRetryInfo info;
+            info.set_shard_id(shard.shard_id);
+            info.set_reason(coprocessor::SHARD_RETRY_MISSING);
+            feedback.push_back(std::move(info));
+        }
+        throw TiCIShardRetryException(std::move(feedback));
+    }
+    if (!admission_failures.empty())
+    {
+        throw RegionException(
+            {},
+            epoch_mismatch ? RegionException::RegionReadStatus::EPOCH_NOT_MATCH
+                           : RegionException::RegionReadStatus::NOT_FOUND,
+            "tici shard admission rejected");
+    }
     if (!remote_shard_infos.empty())
     {
         if (context.getDAGContext()->isCop())
@@ -66,6 +125,25 @@ void StorageTantivyIterpreter::execute(PipelineExecutorContext & exec_context, P
             remote_shard_infos.begin(),
             remote_shard_infos.end());
     }
+
+    // local_read
+    storage->read(exec_context, group_builder, Names(), SelectQueryInfo(), context, 0, max_streams);
+
+    // remote_read
+    const auto total_shards = tici_scan.getShardInfos().shard_info_list.size();
+    const auto remote_shards = remote_shard_infos.size();
+    const auto blocked_shards = admission_failures.size();
+    const auto local_shards = total_shards - remote_shards - blocked_shards;
+    LOG_INFO(
+        log,
+        "tici split shards: executor_id={} total={} local={} remote={} retry={} local_concurrency={} start_ts={}",
+        executor_id,
+        total_shards,
+        local_shards,
+        remote_shards,
+        blocked_shards,
+        group_builder.concurrency(),
+        context.getSettingsRef().read_tso);
 
     auto remote_request = buildRemoteRequests(remote_shard_infos);
     if (!remote_request.empty())

@@ -33,6 +33,7 @@
 
 #include <cstdlib>
 #include <optional>
+#include <vector>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -44,6 +45,12 @@
 #include <Storages/SelectQueryInfo.h>
 namespace DB
 {
+struct TiCIAdmissionFailure
+{
+    ShardInfo shard_info;
+    ::ShardAdmissionResult admission;
+};
+
 class StorageTantivy : public IStorage
 {
 public:
@@ -77,6 +84,7 @@ public:
 
     void splitRemoteReadAndLocalRead();
     ShardInfoList getRemoteShardInfos() const { return remote_read; }
+    const std::vector<TiCIAdmissionFailure> & getAdmissionFailures() const { return admission_failures; }
 
 private:
     const TiCIScan tici_scan;
@@ -85,6 +93,7 @@ private:
 
     ShardInfoList remote_read;
     ShardInfoList local_read;
+    std::vector<TiCIAdmissionFailure> admission_failures;
     std::optional<rust::Box<ShardsSnapshot>> local_shards_snapshot;
 };
 } // namespace DB
