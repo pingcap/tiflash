@@ -169,14 +169,13 @@ std::vector<RemoteRequest> StorageTantivyIterpreter::buildRemoteRequests(ShardIn
     {
         return remote_requests;
     }
-    remote_requests.push_back(
-        RemoteRequest::build(
-            remote_shard_infos,
-            *context.getDAGContext(),
-            tici_scan,
-            context.getDAGContext()->getConnectionID(),
-            context.getDAGContext()->getConnectionAlias(),
-            log));
+    remote_requests.push_back(RemoteRequest::build(
+        remote_shard_infos,
+        *context.getDAGContext(),
+        tici_scan,
+        context.getDAGContext()->getConnectionID(),
+        context.getDAGContext()->getConnectionAlias(),
+        log));
     return remote_requests;
 }
 
