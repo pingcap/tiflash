@@ -203,6 +203,8 @@ add_subdirectory(usearch-cmake)
 
 add_subdirectory(simsimd-cmake)
 
+add_subdirectory(samefn-poc-cmake)
+
 if (ENABLE_TESTS AND NOT CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
     add_subdirectory(hdf5-cmake)
     add_subdirectory(highfive-cmake)
