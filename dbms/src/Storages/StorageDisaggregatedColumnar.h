@@ -46,6 +46,7 @@
 #include <optional>
 #include <string_view>
 #include <unordered_set>
+#include <vector>
 #pragma GCC diagnostic pop
 
 namespace DB
@@ -229,6 +230,8 @@ public:
     {
         // Keep header aligned with genNamesAndTypesForTableScan when TiDB requests _tidb_tid on partition scans.
         setHeader(action.getHeader());
+        // One slot per output column, shared by all columnar read paths.
+        avg_value_size_hints.resize(header.columns());
     }
 
     static BlockInputStreamPtr create(const Options & options)
@@ -236,11 +239,27 @@ public:
         return std::make_shared<RNColumnarInputStream>(options);
     }
 
+#ifdef DBMS_PUBLIC_GTEST
+    size_t avgValueSizeHintsSizeForTest() const { return avg_value_size_hints.size(); }
+    double getColumnAvgValueSizeHintForTest(size_t column_index, const DataTypePtr & type) const
+    {
+        return getColumnAvgValueSizeHint(column_index, type);
+    }
+    void updateColumnAvgValueSizeHintForTest(size_t column_index, const DataTypePtr & type, const IColumn & column)
+    {
+        updateColumnAvgValueSizeHint(column_index, type, column);
+    }
+#endif
+
 private:
     bool ensureReader();
     void initializeLateMaterialization();
     Block readLateMaterializedBlock();
     Block readLegacyBlock(const TiFlashRaftProxyHelper * proxy_helper);
+    /// Return the hint for a String column, or -1.0 for other types. A negative
+    /// hint is required by Decimal256 to select the columnar-specific encoding.
+    double getColumnAvgValueSizeHint(size_t column_index, const DataTypePtr & type) const;
+    void updateColumnAvgValueSizeHint(size_t column_index, const DataTypePtr & type, const IColumn & column);
     void mergeReaderStats();
     void releaseReader();
 
@@ -266,6 +285,8 @@ private:
     double duration_read_sec = 0;
     UInt64 batch_size = 10240;
     UInt64 total_bytes = 0;
+    /// Updated after each decoded String column and reused for the next block.
+    std::vector<double> avg_value_size_hints;
 };
 
 class RNColumnarSourceOp : public SourceOp

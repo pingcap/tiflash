@@ -24,6 +24,7 @@
 #include <DataStreams/FilterTransformAction.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/IDataType.h>
 #include <Flash/Coprocessor/CodecUtils.h>
 #include <Flash/Coprocessor/ColumnarScanContext.h>
@@ -1826,6 +1827,21 @@ Block RNColumnarInputStream::readImpl()
     return readImpl(filter_ignored, false);
 }
 
+double RNColumnarInputStream::getColumnAvgValueSizeHint(size_t column_index, const DataTypePtr & type) const
+{
+    const bool is_string = removeNullable(type)->getTypeId() == TypeIndex::String;
+    return is_string && avg_value_size_hints[column_index] > 0.0 ? avg_value_size_hints[column_index] : -1.0;
+}
+
+void RNColumnarInputStream::updateColumnAvgValueSizeHint(
+    size_t column_index,
+    const DataTypePtr & type,
+    const IColumn & column)
+{
+    if (removeNullable(type)->getTypeId() == TypeIndex::String)
+        IDataType::updateAvgValueSizeHint(column, avg_value_size_hints[column_index]);
+}
+
 Block RNColumnarInputStream::readLateMaterializedBlock()
 {
     Stopwatch w{CLOCK_MONOTONIC_COARSE};
@@ -1865,8 +1881,9 @@ Block RNColumnarInputStream::readLateMaterializedBlock()
     Block header = getHeader();
     const ColumnsWithTypeAndName & col_type_and_name = header.getColumnsWithTypeAndName();
     Block early_block;
-    for (const auto & column : col_type_and_name)
+    for (size_t i = 0; i < col_type_and_name.size(); ++i)
     {
+        const auto & column = col_type_and_name[i];
         if (column.column_id == MutSup::extra_table_id_col_id
             || early_column_ids.find(column.column_id) == early_column_ids.end())
             continue;
@@ -1882,9 +1899,10 @@ Block RNColumnarInputStream::readLateMaterializedBlock()
             *mutable_column,
             [&](const IDataType::SubstreamPath &) { return &buf; },
             rows,
-            -1.0,
+            getColumnAvgValueSizeHint(i, column.type),
             true,
             {});
+        updateColumnAvgValueSizeHint(i, column.type, *mutable_column);
         duration_deserialize_sec += w.elapsedSecondsFromLastTime();
         early_block.insert(
             ColumnWithTypeAndName{std::move(mutable_column), column.type, column.name, column.column_id});
@@ -2032,9 +2050,10 @@ Block RNColumnarInputStream::readLateMaterializedBlock()
             *columns[i],
             [&](const IDataType::SubstreamPath &) { return &buf; },
             selected_rows,
-            -1.0,
+            getColumnAvgValueSizeHint(i, column.type),
             true,
             {});
+        updateColumnAvgValueSizeHint(i, column.type, *columns[i]);
         duration_deserialize_sec += w.elapsedSecondsFromLastTime();
     }
     if (late_materialization_interfaces->fn_finish_materialized_block(reader.value(), batch_id) == 0)
@@ -2088,6 +2107,7 @@ Block RNColumnarInputStream::readLegacyBlock(const TiFlashRaftProxyHelper * prox
             col_type_and_name[i].type->getName());
         // Read column data from columnar
         Int64 col_id = col_type_and_name[i].column_id;
+        const double avg_value_size_hint = getColumnAvgValueSizeHint(i, col_type_and_name[i].type);
         if (col_id == MutSup::extra_handle_id)
         {
             (void)w.elapsedSecondsFromLastTime();
@@ -2101,9 +2121,10 @@ Block RNColumnarInputStream::readLegacyBlock(const TiFlashRaftProxyHelper * prox
                 col,
                 [&](const IDataType::SubstreamPath &) { return &buf; },
                 rows,
-                -1.0, // avg_value_size_hint set to -1 to indicate Decimal format from columnar
+                avg_value_size_hint, // Preserve -1.0 for Decimal256's columnar format.
                 true,
                 {});
+            updateColumnAvgValueSizeHint(i, col_type_and_name[i].type, col);
             duration_deserialize_sec += w.elapsedSecondsFromLastTime();
         }
         else if (col_id == MutSup::extra_table_id_col_id)
@@ -2124,9 +2145,10 @@ Block RNColumnarInputStream::readLegacyBlock(const TiFlashRaftProxyHelper * prox
                 col,
                 [&](const IDataType::SubstreamPath &) { return &buf; },
                 rows,
-                -1.0, // avg_value_size_hint set to -1 to indicate Decimal format from columnar
+                avg_value_size_hint, // Preserve -1.0 for Decimal256's columnar format.
                 true,
                 {});
+            updateColumnAvgValueSizeHint(i, col_type_and_name[i].type, col);
             duration_deserialize_sec += w.elapsedSecondsFromLastTime();
             LOG_DEBUG(log, "Read column data done, col size={}", col.size());
         }
