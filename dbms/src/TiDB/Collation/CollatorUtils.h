@@ -16,8 +16,36 @@
 
 #include <TiDB/Collation/CollatorCompare.h>
 
+#include <algorithm>
+
 namespace DB
 {
+
+/// Upper bound for the weights emitted by GeneralCI and UnicodeCI.
+inline size_t estimateSortKeyByteSize(const char * data, size_t size, size_t max_bytes_one_char)
+{
+    size_t num_char = 0;
+    size_t offset = 0;
+    // Skip ASCII blocks before walking multibyte sequences.
+    while (size - offset >= sizeof(uint64_t))
+    {
+        uint64_t word;
+        std::memcpy(&word, data + offset, sizeof(word));
+        if (word & 0x8080808080808080ULL)
+            break;
+        offset += sizeof(word);
+        num_char += sizeof(word);
+    }
+    while (offset < size)
+    {
+        // Keep byte advances aligned with decodeUtf8Char without decoding collation weights.
+        const auto first = static_cast<unsigned char>(data[offset]);
+        const size_t step = first < 0x80 ? 1 : first < 0xE0 ? 2 : first < 0xF0 ? 3 : 4;
+        offset += std::min(step, size - offset);
+        ++num_char;
+    }
+    return num_char * max_bytes_one_char;
+}
 
 // Loop columns and invoke callback for each pair.
 // Remove last zero byte.
