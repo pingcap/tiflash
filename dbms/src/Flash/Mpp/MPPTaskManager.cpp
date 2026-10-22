@@ -15,6 +15,7 @@
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/Stopwatch.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/EstablishCall.h>
@@ -88,6 +89,24 @@ MPPGatherTaskSetPtr MPPQuery::addMPPGatherTaskSet(const MPPGatherId & gather_id)
 
 void MPPTaskMonitor::waitAllMPPTasksFinish(const std::unique_ptr<Context> & context)
 {
+    const auto protection_window = std::chrono::seconds(context->getConfigRef().getUInt(
+        "flash.graceful_shutdown_probe_timeout",
+        MPPTaskShutdownGuard<>::DEFAULT_PROTECTION_WINDOW.count()));
+    const auto remaining_protection = shutdown_guard.getRemainingProtection(protection_window);
+    if (remaining_protection > std::chrono::steady_clock::duration::zero())
+    {
+        LOG_INFO(
+            log,
+            "Wait {}ms for the last successful MPP probe protection to expire before draining tasks",
+            std::chrono::duration_cast<std::chrono::milliseconds>(remaining_protection).count());
+        // Server has already set the task manager unavailable, so new probes cannot extend this wait.
+        // Keep the proxy and gRPC service running for tasks dispatched based on an earlier successful probe.
+        // Start the existing task-drain timeout afterwards, even if it is shorter than the protection window.
+        std::this_thread::sleep_for(remaining_protection);
+    }
+
+    SYNC_FOR("mpp_task_monitor_before_drain");
+
     // The maximum seconds TiFlash will wait for all current MPP tasks or disagg snapshots to finish before shutting down
     static constexpr const char * GRACEFUL_WAIT_SHUTDOWN_TIMEOUT = "flash.graceful_wait_shutdown_timeout";
     // The default value of flash.graceful_wait_shutdown_timeout
@@ -139,6 +158,7 @@ void MPPTaskMonitor::waitAllMPPTasksFinish(const std::unique_ptr<Context> & cont
         }
         if (elapsed_ms >= graceful_wait_shutdown_timeout_ms)
         {
+            SYNC_FOR("mpp_task_monitor_drain_timeout");
             LOG_WARNING(log, "Timed out waiting for all {} to finish after {}ms", wait_target, elapsed_ms);
             break;
         }
