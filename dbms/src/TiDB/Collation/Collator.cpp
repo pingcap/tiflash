@@ -51,8 +51,10 @@ constexpr uint8_t b2_mask = 0x1F;
 constexpr uint8_t b3_mask = 0x0F;
 constexpr uint8_t b4_mask = 0x07;
 constexpr uint8_t mb_mask = 0x3F;
-inline Rune decodeUtf8Char(const char * s, size_t & offset)
+inline Rune decodeUtf8Char(const char * s, size_t & offset, size_t length)
 {
+    if (unlikely(offset >= length))
+        throw DB::Exception("Encounter invalid character");
     uint8_t b0 = s[offset];
     if (b0 < 0x80)
     {
@@ -60,6 +62,9 @@ inline Rune decodeUtf8Char(const char * s, size_t & offset)
         offset += 1;
         return c;
     }
+    const size_t char_size = b0 < 0xE0 ? 2 : b0 < 0xF0 ? 3 : 4;
+    if (unlikely(length - offset < char_size))
+        throw DB::Exception("Encounter invalid character");
     if (b0 < 0xE0)
     {
         auto c = static_cast<Rune>(b0 & b2_mask) << 6 | static_cast<Rune>(s[1 + offset] & mb_mask);
@@ -93,14 +98,14 @@ void Pattern<Collator>::compile(const std::string & pattern, char escape)
     while (offset < pattern.length())
     {
         MatchType tp;
-        auto c = Collator::decodeChar(pattern.data(), offset);
+        auto c = Collator::decodeChar(pattern.data(), offset, pattern.length());
         if (c == escape)
         {
             tp = MatchType::Match;
             if (offset < pattern.length())
             {
                 // use next char to match
-                c = Collator::decodeChar(pattern.data(), offset);
+                c = Collator::decodeChar(pattern.data(), offset, pattern.length());
             }
             else
             {
@@ -220,7 +225,7 @@ bool Pattern<Collator>::match(const char * s, size_t length) const
             {
                 if (match_types[p_idx] == Match)
                 {
-                    if (Collator::regexEq(Collator::decodeChar(s, s_offset), pattern_weights[p_idx]))
+                    if (Collator::regexEq(Collator::decodeChar(s, s_offset, length), pattern_weights[p_idx]))
                     {
                         p_idx++;
                         // To compare the next
@@ -230,7 +235,7 @@ bool Pattern<Collator>::match(const char * s, size_t length) const
                 else if (match_types[p_idx] == One)
                 {
                     p_idx++;
-                    Collator::decodeChar(s, s_offset);
+                    Collator::decodeChar(s, s_offset, length);
                     continue;
                 }
                 else if (match_types[p_idx] == Any)
@@ -261,20 +266,24 @@ bool Pattern<Collator>::match(const char * s, size_t length) const
         // Backtrack
         if (p_idx_after_any > 0)
         {
-            Collator::decodeChar(s, s_offset = backtrack_s_offset);
+            if (backtrack_s_offset >= length)
+            {
+                return false;
+            }
+            Collator::decodeChar(s, s_offset = backtrack_s_offset, length);
             // Fast forward to the first match position
             if (match_types[p_idx_after_any] == Match)
             {
                 while (true)
                 {
-                    backtrack_s_offset = s_offset;
-                    if (Collator::regexEq(Collator::decodeChar(s, s_offset), pattern_weights[p_idx_after_any]))
-                    {
-                        break;
-                    }
                     if (s_offset >= length)
                     {
                         return false;
+                    }
+                    backtrack_s_offset = s_offset;
+                    if (Collator::regexEq(Collator::decodeChar(s, s_offset, length), pattern_weights[p_idx_after_any]))
+                    {
+                        break;
                     }
                 }
 
@@ -397,15 +406,20 @@ inline std::unique_ptr<ITiDBCollator::IPattern> BinCollator<T, padding>::pattern
 }
 
 template <typename T, bool padding>
-inline typename BinCollator<T, padding>::CharType BinCollator<T, padding>::decodeChar(const char * s, size_t & offset)
+inline typename BinCollator<T, padding>::CharType BinCollator<T, padding>::decodeChar(
+    const char * s,
+    size_t & offset,
+    size_t length)
 {
     if constexpr (std::is_same_v<T, char>)
     {
+        if (unlikely(offset >= length))
+            throw DB::Exception("Encounter invalid character");
         return s[offset++];
     }
     else
     {
-        return decodeUtf8Char(s, offset);
+        return decodeUtf8Char(s, offset, length);
     }
 }
 
@@ -417,8 +431,8 @@ int GeneralCICollator::compare(const char * s1, size_t length1, const char * s2,
     size_t offset1 = 0, offset2 = 0;
     while (offset1 < v1.length() && offset2 < v2.length())
     {
-        auto c1 = decodeChar(s1, offset1);
-        auto c2 = decodeChar(s2, offset2);
+        auto c1 = decodeChar(s1, offset1, v1.length());
+        auto c2 = decodeChar(s2, offset2, v2.length());
         auto sk1 = weight(c1);
         auto sk2 = weight(c2);
         auto cmp = sk1 - sk2;
@@ -459,7 +473,7 @@ StringRef GeneralCICollator::convertImpl(
 
     while (offset < v_length)
     {
-        auto c = decodeChar(s, offset);
+        auto c = decodeChar(s, offset, v_length);
         auto sk = weight(c);
         container[total_size++] = static_cast<char>(sk >> 8);
         container[total_size++] = static_cast<char>(sk);
@@ -471,9 +485,9 @@ StringRef GeneralCICollator::convertImpl(
     return StringRef(container.data(), total_size);
 }
 
-inline GeneralCICollator::CharType GeneralCICollator::decodeChar(const char * s, size_t & offset)
+inline GeneralCICollator::CharType GeneralCICollator::decodeChar(const char * s, size_t & offset, size_t length)
 {
-    return decodeUtf8Char(s, offset);
+    return decodeUtf8Char(s, offset, length);
 }
 
 namespace UnicodeCI
@@ -648,9 +662,10 @@ StringRef UCACICollator<T, padding>::convertImpl(
 template <typename T, bool padding>
 inline typename UCACICollator<T, padding>::CharType UCACICollator<T, padding>::decodeChar(
     const char * s,
-    size_t & offset)
+    size_t & offset,
+    size_t length)
 {
-    return decodeUtf8Char(s, offset);
+    return decodeUtf8Char(s, offset, length);
 }
 
 template <typename T, bool padding>
@@ -667,7 +682,7 @@ inline void UCACICollator<T, padding>::weight(
         {
             while (offset < length)
             {
-                auto r = decodeChar(s, offset);
+                auto r = decodeChar(s, offset, length);
                 if (!T::weight(first, second, r))
                 {
                     continue;
