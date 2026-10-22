@@ -844,6 +844,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "azure"
+version = "0.0.1"
+dependencies = [
+ "async-trait",
+ "azure_core",
+ "azure_identity",
+ "azure_storage",
+ "azure_storage_blobs",
+ "base64 0.13.1",
+ "bytes",
+ "chrono",
+ "cloud",
+ "futures 0.3.32",
+ "futures-util",
+ "hyper 0.14.26",
+ "hyper-tls",
+ "kvproto",
+ "oauth2",
+ "serde",
+ "serde_json",
+ "slog",
+ "slog-global",
+ "thiserror 1.0.69",
+ "tikv_util",
+ "tokio",
+ "url",
+ "workspace-hack",
+]
+
+[[package]]
 name = "azure_core"
 version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1481,6 +1511,7 @@ version = "0.1.0"
 dependencies = [
  "aliyun",
  "aws",
+ "azure",
  "base64 0.13.1",
  "bytes",
  "cloud",
