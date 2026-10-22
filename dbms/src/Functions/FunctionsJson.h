@@ -93,6 +93,9 @@ public:
     bool useDefaultImplementationForNulls() const override { return false; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
+    /// Throws on an invalid json path expression.
+    bool canThrow() const override { return true; }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if unlikely (arguments.size() < 2)
@@ -116,6 +119,24 @@ public:
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        executeImplWithMask(block, arguments, result, nullptr);
+    }
+
+    /// Masked execution skips rows where the mask is 0, so neither the JSON document
+    /// nor the per-row path expressions on masked-off rows are parsed; see
+    /// IFunctionBase::executeWithMask.
+    void executeWithMask(Block & block, const ColumnNumbers & arguments, size_t result, const IColumn::Filter & mask)
+        const override
+    {
+        executeImplWithMask(block, arguments, result, &mask);
+    }
+
+    void executeImplWithMask(
+        Block & block,
+        const ColumnNumbers & arguments,
+        size_t result,
+        const IColumn::Filter * mask) const
     {
         size_t rows = block.rows();
         auto & res_col = block.getByPosition(result).column;
@@ -165,22 +186,22 @@ public:
             const auto & null_map = column_nullable.getNullMapData();
             if (all_path_arguments_constants)
             {
-                res_col = doExecuteForConstPaths<true>(json_source, null_map, path_sources, rows);
+                res_col = doExecuteForConstPaths<true>(json_source, null_map, path_sources, rows, mask);
             }
             else
             {
-                res_col = doExecuteCommon<true>(json_source, null_map, path_sources, path_null_maps, rows);
+                res_col = doExecuteCommon<true>(json_source, null_map, path_sources, path_null_maps, rows, mask);
             }
         }
         else
         {
             if (all_path_arguments_constants)
             {
-                res_col = doExecuteForConstPaths<false>(json_source, {}, path_sources, rows);
+                res_col = doExecuteForConstPaths<false>(json_source, {}, path_sources, rows, mask);
             }
             else
             {
-                res_col = doExecuteCommon<false>(json_source, {}, path_sources, path_null_maps, rows);
+                res_col = doExecuteCommon<false>(json_source, {}, path_sources, path_null_maps, rows, mask);
             }
         }
     }
@@ -191,7 +212,8 @@ private:
         const std::unique_ptr<IStringSource> & json_source,
         const NullMap & null_map_json,
         const StringSources & path_sources,
-        size_t rows) const
+        size_t rows,
+        const IColumn::Filter * mask) const
     {
 #define FINISH_PER_ROW                      \
     writeChar(0, write_buffer);             \
@@ -211,6 +233,12 @@ private:
 
         for (size_t row = 0; row < rows; ++row)
         {
+            if (mask && !(*mask)[row])
+            {
+                FINISH_PER_ROW
+                null_map_to[row] = 1;
+                continue;
+            }
             if constexpr (is_json_nullable)
             {
                 if (null_map_json[row])
@@ -239,7 +267,8 @@ private:
         const NullMap & null_map_json,
         const StringSources & path_sources,
         const std::vector<const NullMap *> & path_null_maps,
-        size_t rows) const
+        size_t rows,
+        const IColumn::Filter * mask) const
     {
 #define FINISH_PER_ROW                            \
     writeChar(0, write_buffer);                   \
@@ -261,6 +290,12 @@ private:
 
         for (size_t row = 0; row < rows; ++row)
         {
+            if (mask && !(*mask)[row])
+            {
+                FINISH_PER_ROW
+                null_map_to[row] = 1;
+                continue;
+            }
             if constexpr (is_json_nullable)
             {
                 if (null_map_json[row])
@@ -338,6 +373,10 @@ public:
 
     void setNeedValidCheck(bool need_valid_check_) { need_valid_check = need_valid_check_; }
     bool useDefaultImplementationForConstants() const override { return true; }
+
+    /// Throws on an invalid json document when validation is enabled.
+    bool canThrow() const override { return true; }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if unlikely (!arguments[0]->isString())
@@ -347,6 +386,13 @@ public:
         return makeNullable(std::make_shared<DataTypeString>());
     }
 
+    /// Deliberately no executeWithMask override, unlike the other canThrow JSON
+    /// functions: this one does not override useDefaultImplementationForNulls()
+    /// (default true) and does not handle nullable or constant arguments itself,
+    /// so it depends on DefaultExecutable stripping them before executeImpl is
+    /// called. An override would bypass that adaptation and throw ILLEGAL_COLUMN
+    /// on a ColumnNullable/ColumnConst argument. The generic filter/expand
+    /// fallback in IFunction::executeWithMask keeps masked-off rows unparsed.
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnPtr column = block.getByPosition(arguments[0]).column;
@@ -545,6 +591,9 @@ public:
     bool useDefaultImplementationForNulls() const override { return false; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
+    /// The two-argument form throws on an invalid json path expression.
+    bool canThrow() const override { return true; }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (unlikely(arguments.size() != 1 && arguments.size() != 2))
@@ -567,6 +616,24 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
+        executeImplWithMask(block, arguments, result, nullptr);
+    }
+
+    /// Masked execution skips rows where the mask is 0, so neither the JSON document
+    /// nor the per-row path expressions on masked-off rows are parsed; see
+    /// IFunctionBase::executeWithMask.
+    void executeWithMask(Block & block, const ColumnNumbers & arguments, size_t result, const IColumn::Filter & mask)
+        const override
+    {
+        executeImplWithMask(block, arguments, result, &mask);
+    }
+
+    void executeImplWithMask(
+        Block & block,
+        const ColumnNumbers & arguments,
+        size_t result,
+        const IColumn::Filter * mask) const
+    {
         size_t rows = block.rows();
         auto & res_col = block.getByPosition(result).column;
         /// First check if Json object is only null.
@@ -584,11 +651,11 @@ public:
             if (json_column->isColumnNullable())
             {
                 const auto & json_column_nullable = static_cast<const ColumnNullable &>(*json_column);
-                res_col = doExecuteForOneArg<true>(json_source, json_column_nullable.getNullMapData(), rows);
+                res_col = doExecuteForOneArg<true>(json_source, json_column_nullable.getNullMapData(), rows, mask);
             }
             else
             {
-                res_col = doExecuteForOneArg<false>(json_source, {}, rows);
+                res_col = doExecuteForOneArg<false>(json_source, {}, rows, mask);
             }
         }
         else
@@ -611,7 +678,8 @@ public:
                         json_source,
                         json_column_nullable.getNullMapData(),
                         path_source,
-                        rows);
+                        rows,
+                        mask);
                 }
                 else
                 {
@@ -624,7 +692,8 @@ public:
                             json_column_nullable.getNullMapData(),
                             path_source,
                             path_column_nullable.getNullMapData(),
-                            rows);
+                            rows,
+                            mask);
                     }
                     else
                     {
@@ -633,7 +702,8 @@ public:
                             json_column_nullable.getNullMapData(),
                             path_source,
                             {},
-                            rows);
+                            rows,
+                            mask);
                     }
                 }
             }
@@ -642,7 +712,7 @@ public:
                 if (path_column->isColumnConst())
                 {
                     auto path_source = createDynamicStringSource(*nested_block.getByPosition(arguments[1]).column);
-                    res_col = doExecuteConstForTwoArgs<false>(json_source, {}, path_source, rows);
+                    res_col = doExecuteConstForTwoArgs<false>(json_source, {}, path_source, rows, mask);
                 }
                 else
                 {
@@ -655,11 +725,12 @@ public:
                             {},
                             path_source,
                             path_column_nullable.getNullMapData(),
-                            rows);
+                            rows,
+                            mask);
                     }
                     else
                     {
-                        res_col = doExecuteCommonForTwoArgs<false, false>(json_source, {}, path_source, {}, rows);
+                        res_col = doExecuteCommonForTwoArgs<false, false>(json_source, {}, path_source, {}, rows, mask);
                     }
                 }
             }
@@ -671,7 +742,8 @@ private:
     static MutableColumnPtr doExecuteForOneArg(
         const std::unique_ptr<IStringSource> & json_source,
         const NullMap & null_map_json,
-        size_t rows)
+        size_t rows,
+        const IColumn::Filter * mask)
     {
         auto col_to = ColumnUInt64::create(rows, 1);
         auto & data_to = col_to->getData();
@@ -683,6 +755,13 @@ private:
         ColumnUInt8::Container & null_map_to = col_null_map->getData();
         for (size_t row = 0; row < rows; ++row)
         {
+            if (mask && !(*mask)[row])
+            {
+                json_source->next();
+                if constexpr (is_nullable)
+                    null_map_to[row] = 1;
+                continue;
+            }
             if constexpr (is_nullable)
             {
                 if (null_map_json[row])
@@ -714,7 +793,8 @@ private:
         const NullMap & null_map_json,
         const std::unique_ptr<IStringSource> & path_source,
         const NullMap & null_map_path,
-        size_t rows)
+        size_t rows,
+        const IColumn::Filter * mask)
     {
 #define FINISH_PER_ROW   \
     json_source->next(); \
@@ -726,6 +806,12 @@ private:
         ColumnUInt8::Container & null_map_to = col_null_map->getData();
         for (size_t row = 0; row < rows; ++row)
         {
+            if (mask && !(*mask)[row])
+            {
+                FINISH_PER_ROW
+                null_map_to[row] = 1;
+                continue;
+            }
             if constexpr (is_json_nullable)
             {
                 if (null_map_json[row])
@@ -777,7 +863,8 @@ private:
         const std::unique_ptr<IStringSource> & json_source,
         const NullMap & null_map_json,
         const std::unique_ptr<IStringSource> & path_source,
-        size_t rows)
+        size_t rows,
+        const IColumn::Filter * mask)
     {
         std::vector<JsonPathExprRefContainerPtr> path_expr_container_vec;
         assert(path_source);
@@ -790,6 +877,12 @@ private:
         ColumnUInt8::Container & null_map_to = col_null_map->getData();
         for (size_t row = 0; row < rows; ++row)
         {
+            if (mask && !(*mask)[row])
+            {
+                json_source->next();
+                null_map_to[row] = 1;
+                continue;
+            }
             if constexpr (is_json_nullable)
             {
                 if (null_map_json[row])
@@ -995,6 +1088,10 @@ public:
 
     bool useDefaultImplementationForNulls() const override { return false; }
     bool useDefaultImplementationForConstants() const override { return true; }
+
+    /// Throws when a member name is NULL or too long.
+    bool canThrow() const override { return true; }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (unlikely(arguments.size() % 2 != 0))
@@ -1024,6 +1121,22 @@ public:
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        executeImplWithMask(block, arguments, result, nullptr);
+    }
+
+    /// Masked execution skips rows where the mask is 0; see IFunctionBase::executeWithMask.
+    void executeWithMask(Block & block, const ColumnNumbers & arguments, size_t result, const IColumn::Filter & mask)
+        const override
+    {
+        executeImplWithMask(block, arguments, result, &mask);
+    }
+
+    void executeImplWithMask(
+        Block & block,
+        const ColumnNumbers & arguments,
+        size_t result,
+        const IColumn::Filter * mask) const
     {
         if (arguments.empty())
         {
@@ -1076,9 +1189,9 @@ public:
         }
 
         if (is_input_nullable)
-            doExecuteImpl<true>(sources, rows, data_to, offsets_to, nullmaps);
+            doExecuteImpl<true>(sources, rows, data_to, offsets_to, nullmaps, mask);
         else
-            doExecuteImpl<false>(sources, rows, data_to, offsets_to, nullmaps);
+            doExecuteImpl<false>(sources, rows, data_to, offsets_to, nullmaps, mask);
 
         block.getByPosition(result).column = std::move(col_to);
     }
@@ -1090,7 +1203,8 @@ private:
         size_t rows,
         ColumnString::Chars_t & data_to,
         ColumnString::Offsets & offsets_to,
-        const std::vector<const NullMap *> & nullmaps)
+        const std::vector<const NullMap *> & nullmaps,
+        const IColumn::Filter * mask)
     {
         struct JsonObjectEntry
         {
@@ -1114,6 +1228,17 @@ private:
 
         for (size_t i = 0; i < rows; ++i)
         {
+            if (mask && !(*mask)[i])
+            {
+                writeChar(0, write_buffer);
+                offsets_to[i] = write_buffer.count();
+                for (const auto & source : sources)
+                {
+                    if (source)
+                        source->next();
+                }
+                continue;
+            }
             entries.clear();
             for (size_t col = 0; col < sources.size(); col += 2)
             {
@@ -1471,9 +1596,11 @@ public:
     bool useDefaultImplementationForNulls() const override { return false; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
+    /// Throws on an invalid json document.
+    bool canThrow() const override { return true; }
+
     void setInputTiDBFieldType(const tipb::FieldType & tidb_tp_) { input_tidb_tp = tidb_tp_; }
     void setOutputTiDBFieldType(const tipb::FieldType & tidb_tp_) { output_tidb_tp = tidb_tp_; }
-    void setIgnoreInvalidJson(bool value) { ignore_invalid_json = value; }
     void setCollator(const TiDB::TiDBCollatorPtr & collator_) override { collator = collator_; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
@@ -1493,6 +1620,23 @@ public:
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        executeImplWithMask(block, arguments, result, nullptr);
+    }
+
+    /// Masked execution skips rows where the mask is 0, so an invalid JSON document
+    /// on a masked-off row is not parsed at all; see IFunctionBase::executeWithMask.
+    void executeWithMask(Block & block, const ColumnNumbers & arguments, size_t result, const IColumn::Filter & mask)
+        const override
+    {
+        executeImplWithMask(block, arguments, result, &mask);
+    }
+
+    void executeImplWithMask(
+        Block & block,
+        const ColumnNumbers & arguments,
+        size_t result,
+        const IColumn::Filter * mask) const
     {
         const auto & from = block.getByPosition(arguments[0]);
         if (from.column->onlyNull())
@@ -1523,7 +1667,8 @@ public:
                     {},
                     TiDB::TypeVarchar,
                     -1,
-                    block.rows());
+                    block.rows(),
+                    mask);
             }
             else if (input_tidb_tp->tp() == TiDB::TypeString)
             {
@@ -1537,7 +1682,8 @@ public:
                         column_nullable.getNullMapData(),
                         input_tidb_tp->tp(),
                         input_tidb_tp->flen(),
-                        block.rows());
+                        block.rows(),
+                        mask);
                 }
                 else
                 {
@@ -1548,7 +1694,8 @@ public:
                         {},
                         input_tidb_tp->tp(),
                         input_tidb_tp->flen(),
-                        block.rows());
+                        block.rows(),
+                        mask);
                 }
             }
             else
@@ -1560,7 +1707,8 @@ public:
                     {},
                     input_tidb_tp->tp(),
                     input_tidb_tp->flen(),
-                    block.rows());
+                    block.rows(),
+                    mask);
             }
         }
         else if (unlikely(!output_tidb_tp.has_value()) || hasParseToJSONFlag(*output_tidb_tp))
@@ -1574,22 +1722,16 @@ public:
                     input_source,
                     column_nullable.getNullMapData(),
                     block.rows(),
-                    ignore_invalid_json);
+                    mask);
             }
             else
             {
-                doExecuteForParsingJson<false>(
-                    data_to,
-                    offsets_to,
-                    input_source,
-                    {},
-                    block.rows(),
-                    ignore_invalid_json);
+                doExecuteForParsingJson<false>(data_to, offsets_to, input_source, {}, block.rows(), mask);
             }
         }
         else
         {
-            doExecuteForOthers(data_to, offsets_to, input_source, block.rows());
+            doExecuteForOthers(data_to, offsets_to, input_source, block.rows(), mask);
         }
 
         if (from.column->isColumnNullable())
@@ -1612,7 +1754,8 @@ private:
         const NullMap & null_map_from,
         UInt8 from_type_code,
         Int32 flen,
-        size_t size)
+        size_t size,
+        const IColumn::Filter * mask)
     {
         size_t reserve_size = 0;
         if constexpr (is_binary_str)
@@ -1647,6 +1790,13 @@ private:
         ColumnString::Chars_t tmp_buf;
         for (size_t i = 0; i < size; ++i)
         {
+            if (mask && !(*mask)[i])
+            {
+                writeChar(0, write_buffer);
+                offsets_to[i] = write_buffer.count();
+                data_from->next();
+                continue;
+            }
             const auto & slice = data_from->getWhole();
             if constexpr (is_binary_str)
             {
@@ -1706,7 +1856,7 @@ private:
         const std::unique_ptr<IStringSource> & data_from,
         const NullMap & null_map_from,
         size_t size,
-        bool ignore_invalid_json)
+        const IColumn::Filter * mask)
     {
         // json_type + size of data_from.
         size_t reserve_size = size + data_from->getSizeForReserve();
@@ -1714,6 +1864,13 @@ private:
         simdjson::dom::parser parser;
         for (size_t i = 0; i < size; ++i)
         {
+            if (mask && !(*mask)[i])
+            {
+                writeChar(0, write_buffer);
+                offsets_to[i] = write_buffer.count();
+                data_from->next();
+                continue;
+            }
             if constexpr (is_nullable)
             {
                 if (null_map_from[i])
@@ -1727,32 +1884,16 @@ private:
 
             const auto & slice = data_from->getWhole();
             if (unlikely(slice.size == 0))
-            {
-                if (!ignore_invalid_json)
-                    throw Exception("Invalid JSON text: The document is empty.");
-                JsonBinary::appendNull(write_buffer);
-                writeChar(0, write_buffer);
-                offsets_to[i] = write_buffer.count();
-                data_from->next();
-                continue;
-            }
+                throw Exception("Invalid JSON text: The document is empty.", ErrorCodes::ILLEGAL_COLUMN);
 
             const auto & json_elem = parser.parse(slice.data, slice.size);
             if (unlikely(json_elem.error()))
-            {
-                if (!ignore_invalid_json || checkJsonValid(reinterpret_cast<const char *>(slice.data), slice.size))
-                {
-                    throw Exception(fmt::format(
+                throw Exception(
+                    fmt::format(
                         "Invalid JSON text: The document root must not be followed by other values, details: {}",
-                        simdjson::error_message(json_elem.error())));
-                }
-                // Keep vectorized evaluation alive until the matching JSON_VALID conjunct filters this row.
-                JsonBinary::appendNull(write_buffer);
-            }
-            else
-            {
-                JsonBinary::appendSIMDJsonElem(write_buffer, json_elem.value_unsafe());
-            }
+                        simdjson::error_message(json_elem.error())),
+                    ErrorCodes::ILLEGAL_COLUMN);
+            JsonBinary::appendSIMDJsonElem(write_buffer, json_elem.value_unsafe());
 
             writeChar(0, write_buffer);
             offsets_to[i] = write_buffer.count();
@@ -1764,13 +1905,21 @@ private:
         ColumnString::Chars_t & data_to,
         ColumnString::Offsets & offsets_to,
         const std::unique_ptr<IStringSource> & data_from,
-        size_t size)
+        size_t size,
+        const IColumn::Filter * mask)
     {
         // json_type + size of data_from
         size_t reserve_size = size + data_from->getSizeForReserve();
         JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, reserve_size);
         for (size_t i = 0; i < size; ++i)
         {
+            if (mask && !(*mask)[i])
+            {
+                writeChar(0, write_buffer);
+                offsets_to[i] = write_buffer.count();
+                data_from->next();
+                continue;
+            }
             const auto & slice = data_from->getWhole();
             JsonBinary::appendStringRef(write_buffer, StringRef{slice.data, slice.size});
             writeChar(0, write_buffer);
@@ -1783,7 +1932,6 @@ private:
     std::optional<tipb::FieldType> input_tidb_tp;
     std::optional<tipb::FieldType> output_tidb_tp;
     TiDB::TiDBCollatorPtr collator = nullptr;
-    bool ignore_invalid_json = false;
 };
 
 class FunctionCastTimeAsJson : public IFunction
@@ -2021,6 +2169,9 @@ public:
     bool useDefaultImplementationForNulls() const override { return false; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
+    /// Throws on an invalid json path expression.
+    bool canThrow() const override { return true; }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if unlikely (arguments.size() < 3)
@@ -2053,6 +2204,24 @@ public:
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        executeImplWithMask(block, arguments, result, nullptr);
+    }
+
+    /// Masked execution skips rows where the mask is 0, so neither the JSON document
+    /// nor the per-row path expressions on masked-off rows are parsed; see
+    /// IFunctionBase::executeWithMask.
+    void executeWithMask(Block & block, const ColumnNumbers & arguments, size_t result, const IColumn::Filter & mask)
+        const override
+    {
+        executeImplWithMask(block, arguments, result, &mask);
+    }
+
+    void executeImplWithMask(
+        Block & block,
+        const ColumnNumbers & arguments,
+        size_t result,
+        const IColumn::Filter * mask) const
     {
         const auto & json_col = block.getByPosition(arguments[0]).column;
         const auto & type_col = block.getByPosition(arguments[1]).column;
@@ -2118,7 +2287,8 @@ public:
                     path_null_maps,
                     rows,
                     data_to,
-                    vec_null_map);
+                    vec_null_map,
+                    mask);
             }
             else if (type_col->isColumnConst() && is_all_path_const)
             {
@@ -2129,7 +2299,8 @@ public:
                     path_sources,
                     rows,
                     data_to,
-                    vec_null_map);
+                    vec_null_map,
+                    mask);
             }
             else
             {
@@ -2142,7 +2313,8 @@ public:
                     path_null_maps,
                     rows,
                     data_to,
-                    vec_null_map);
+                    vec_null_map,
+                    mask);
             }
         }
         else
@@ -2159,18 +2331,13 @@ public:
                     path_null_maps,
                     rows,
                     data_to,
-                    vec_null_map);
+                    vec_null_map,
+                    mask);
             }
             else if (type_col->isColumnConst() && is_all_path_const)
             {
-                doExecuteForTypeAndPathConst<false>(
-                    json_source,
-                    {},
-                    type_source,
-                    path_sources,
-                    rows,
-                    data_to,
-                    vec_null_map);
+                doExecuteForTypeAndPathConst<
+                    false>(json_source, {}, type_source, path_sources, rows, data_to, vec_null_map, mask);
             }
             else
             {
@@ -2183,7 +2350,8 @@ public:
                     path_null_maps,
                     rows,
                     data_to,
-                    vec_null_map);
+                    vec_null_map,
+                    mask);
             }
         }
 
@@ -2204,7 +2372,8 @@ private:
         const std::vector<const NullMap *> & path_null_maps,
         size_t rows,
         ColumnUInt8::Container & data_to,
-        NullMap & null_map_to) const
+        NullMap & null_map_to,
+        const IColumn::Filter * mask) const
     {
 #define FINISH_PER_ROW                            \
     for (const auto & path_source : path_sources) \
@@ -2217,6 +2386,18 @@ private:
 
         for (size_t row = 0; row < rows; ++row)
         {
+            if (mask && !(*mask)[row])
+            {
+                FINISH_PER_ROW
+                /// null_map_to is empty when the result type is non-Nullable (see
+                /// executeImplWithMask above); writing to it would heap-overflow.
+                /// The masked-off row keeps the initialized data_to[row] value,
+                /// which is a placeholder that is never consumed by the
+                /// short-circuit caller (see maskedExecute).
+                if (!null_map_to.empty())
+                    null_map_to[row] = 1;
+                continue;
+            }
             if constexpr (is_json_nullable)
             {
                 if (null_map_json[row])
@@ -2289,7 +2470,8 @@ private:
         const StringSources & path_sources,
         size_t rows,
         ColumnUInt8::Container & data_to,
-        NullMap & null_map_to) const
+        NullMap & null_map_to,
+        const IColumn::Filter * mask) const
     {
         // build contains_type for type const col first.
         auto contains_type = getTypeVal(type_source->getWhole());
@@ -2321,7 +2503,8 @@ private:
                     path_expr_container_vecs,
                     rows,
                     data_to,
-                    null_map_to);
+                    null_map_to,
+                    mask);
             else
                 doExecuteForTypeAndPathConstImpl<is_json_nullable, false, true>(
                     json_source,
@@ -2329,7 +2512,8 @@ private:
                     path_expr_container_vecs,
                     rows,
                     data_to,
-                    null_map_to);
+                    null_map_to,
+                    mask);
         }
         else
         {
@@ -2340,7 +2524,8 @@ private:
                     path_expr_container_vecs,
                     rows,
                     data_to,
-                    null_map_to);
+                    null_map_to,
+                    mask);
             else
                 doExecuteForTypeAndPathConstImpl<is_json_nullable, false, false>(
                     json_source,
@@ -2348,7 +2533,8 @@ private:
                     path_expr_container_vecs,
                     rows,
                     data_to,
-                    null_map_to);
+                    null_map_to,
+                    mask);
         }
     }
 
@@ -2359,10 +2545,20 @@ private:
         const std::vector<std::vector<JsonPathExprRefContainerPtr>> & path_expr_container_vecs,
         size_t rows,
         ColumnUInt8::Container & data_to,
-        NullMap & null_map_to) const
+        NullMap & null_map_to,
+        const IColumn::Filter * mask) const
     {
         for (size_t row = 0; row < rows; ++row)
         {
+            /// Masked-off rows deliberately keep the initialized data_to/null_map_to
+            /// values instead of being reset to NULL: the result can be non-nullable
+            /// (then null_map_to is empty) and the values of masked-off rows are
+            /// never consumed by the short-circuit caller (see maskedExecute).
+            if (mask && !(*mask)[row])
+            {
+                json_source->next();
+                continue;
+            }
             if constexpr (is_json_nullable)
             {
                 if (null_map_json[row])
@@ -2649,6 +2845,9 @@ public:
     bool useDefaultImplementationForNulls() const override { return false; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
+    /// Throws on an invalid json path expression.
+    bool canThrow() const override { return true; }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (arguments[0]->onlyNull() || arguments[1]->onlyNull())
@@ -2666,6 +2865,24 @@ public:
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        executeImplWithMask(block, arguments, result, nullptr);
+    }
+
+    /// Masked execution skips rows where the mask is 0, so neither the JSON document
+    /// nor the per-row path expressions on masked-off rows are parsed; see
+    /// IFunctionBase::executeWithMask.
+    void executeWithMask(Block & block, const ColumnNumbers & arguments, size_t result, const IColumn::Filter & mask)
+        const override
+    {
+        executeImplWithMask(block, arguments, result, &mask);
+    }
+
+    void executeImplWithMask(
+        Block & block,
+        const ColumnNumbers & arguments,
+        size_t result,
+        const IColumn::Filter * mask) const
     {
         const auto & json_col = block.getByPosition(arguments[0]).column;
         const auto & path_col = block.getByPosition(arguments[1]).column;
@@ -2702,7 +2919,8 @@ public:
                     rows,
                     data_to,
                     offsets_to,
-                    vec_null_map);
+                    vec_null_map,
+                    mask);
             }
             else if (path_col->isColumnConst())
             {
@@ -2713,7 +2931,8 @@ public:
                     rows,
                     data_to,
                     offsets_to,
-                    vec_null_map);
+                    vec_null_map,
+                    mask);
             }
             else
             {
@@ -2725,7 +2944,8 @@ public:
                     rows,
                     data_to,
                     offsets_to,
-                    vec_null_map);
+                    vec_null_map,
+                    mask);
             }
         }
         else
@@ -2741,11 +2961,13 @@ public:
                     rows,
                     data_to,
                     offsets_to,
-                    vec_null_map);
+                    vec_null_map,
+                    mask);
             }
             else if (path_col->isColumnConst())
             {
-                doExecuteForConstPath<false>(json_source, {}, path_source, rows, data_to, offsets_to, vec_null_map);
+                doExecuteForConstPath<
+                    false>(json_source, {}, path_source, rows, data_to, offsets_to, vec_null_map, mask);
             }
             else
             {
@@ -2757,7 +2979,8 @@ public:
                     rows,
                     data_to,
                     offsets_to,
-                    vec_null_map);
+                    vec_null_map,
+                    mask);
             }
         }
 
@@ -2774,7 +2997,8 @@ private:
         size_t rows,
         ColumnString::Chars_t & data_to,
         ColumnString::Offsets & offsets_to,
-        NullMap & null_map_to)
+        NullMap & null_map_to,
+        const IColumn::Filter * mask)
     {
 #define SET_NULL_AND_CONTINUE             \
     null_map_to[i] = 1;                   \
@@ -2789,6 +3013,10 @@ private:
         JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, rows);
         for (size_t i = 0; i < rows; ++i)
         {
+            if (mask && !(*mask)[i])
+            {
+                SET_NULL_AND_CONTINUE
+            }
             if constexpr (is_json_nullable)
             {
                 if (null_map_json[i])
@@ -2841,7 +3069,8 @@ private:
         size_t rows,
         ColumnString::Chars_t & data_to,
         ColumnString::Offsets & offsets_to,
-        NullMap & null_map_to)
+        NullMap & null_map_to,
+        const IColumn::Filter * mask)
     {
         // build path expr for const path col first.
         const auto & path_val = path_source->getWhole();
@@ -2859,6 +3088,10 @@ private:
         JsonBinary::JsonBinaryWriteBuffer write_buffer(data_to, rows);
         for (size_t i = 0; i < rows; ++i)
         {
+            if (mask && !(*mask)[i])
+            {
+                SET_NULL_AND_CONTINUE
+            }
             if constexpr (is_json_nullable)
             {
                 if (null_map_json[i])
