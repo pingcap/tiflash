@@ -3654,9 +3654,9 @@ public:
             left = tmp_target_len - data_len;
             if constexpr (IsLeft)
             {
-                while (left > 0 && pad_len != 0)
+                while (left > 0 && padding_size > 1)
                 {
-                    pad_bytes = UTF8::seqLength(padding[per_pad_offset]);
+                    pad_bytes = std::min(UTF8::seqLength(padding[per_pad_offset]), padding_size - 1 - per_pad_offset);
                     copyResult(res, res_offset, padding, per_pad_offset, pad_bytes);
                     res_offset += pad_bytes;
                     per_pad_offset = (per_pad_offset + pad_bytes) % (padding_size - 1);
@@ -3671,9 +3671,9 @@ public:
                 copyResult(res, res_offset, data, 0, data_size - 1);
                 res_offset += data_size - 1;
 
-                while (left > 0 && pad_len != 0)
+                while (left > 0 && padding_size > 1)
                 {
-                    pad_bytes = UTF8::seqLength(padding[per_pad_offset]);
+                    pad_bytes = std::min(UTF8::seqLength(padding[per_pad_offset]), padding_size - 1 - per_pad_offset);
                     copyResult(res, res_offset, padding, per_pad_offset, pad_bytes);
                     res_offset += pad_bytes;
                     per_pad_offset = (per_pad_offset + pad_bytes) % (padding_size - 1);
@@ -3683,9 +3683,9 @@ public:
         }
         else
         {
-            while (left < tmp_target_len)
+            while (left < tmp_target_len && per_pad_offset < data_size - 1)
             {
-                pad_bytes = UTF8::seqLength(data[per_pad_offset]);
+                pad_bytes = std::min(UTF8::seqLength(data[per_pad_offset]), data_size - 1 - per_pad_offset);
 
                 copyResult(res, res_offset, data, per_pad_offset, pad_bytes);
                 res_offset += pad_bytes;
