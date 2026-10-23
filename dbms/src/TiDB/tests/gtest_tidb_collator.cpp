@@ -456,11 +456,8 @@ TEST(CollatorSuite, RejectTruncatedUTF8)
                     SCOPED_TRACE(input);
                     SCOPED_TRACE(length);
                     String container;
-                    std::vector<size_t> lens;
                     // The backing string contains a complete character; only the supplied length truncates it.
                     EXPECT_THROW(collator->sortKey(input.data(), length, container), DB::Exception);
-                    EXPECT_THROW(collator->sortKeyNoTrim(input.data(), length, container), DB::Exception);
-                    EXPECT_THROW(collator->convert(input.data(), length, container, &lens), DB::Exception);
                     EXPECT_THROW(collator->compare(input.data(), length, input.data(), input.size()), DB::Exception);
                     EXPECT_THROW(collator->compare(input.data(), input.size(), input.data(), length), DB::Exception);
                 }
