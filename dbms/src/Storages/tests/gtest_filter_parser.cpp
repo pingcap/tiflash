@@ -743,6 +743,35 @@ try
 }
 CATCH
 
+TEST_F(FilterParserTest, TimestampRuntimeFilterNull)
+try
+{
+    tipb::Expr target;
+    target.set_tp(tipb::ColumnRef);
+    target.mutable_field_type()->set_tp(TiDB::TypeTimestamp);
+    const DM::Attr attr{"ts", 4, std::make_shared<DataTypeMyDateTime>(6)};
+    const Field local_time(MyDateTime(2026, 11, 1, 2, 30, 0, 0).toPackedUInt());
+    const Field utc_time(MyDateTime(2026, 11, 1, 7, 30, 0, 0).toPackedUInt());
+    for (bool is_name_based : {true, false})
+    {
+        SCOPED_TRACE(is_name_based);
+        TimezoneInfo timezone;
+        if (is_name_based)
+            timezone.resetByTimezoneName("America/New_York");
+        else
+            timezone.resetByTimezoneOffset(-5 * 3600);
+
+        const std::set<Field> null_elements{Field()};
+        auto rs_operator = DM::FilterParser::parseRFInExpr(tipb::IN, target, attr, null_elements, timezone);
+        EXPECT_EQ(rs_operator->toDebugString(), DM::createIn(attr, {Field()})->toDebugString());
+
+        const std::set<Field> mixed_elements{Field(), local_time};
+        rs_operator = DM::FilterParser::parseRFInExpr(tipb::IN, target, attr, mixed_elements, timezone);
+        EXPECT_EQ(rs_operator->toDebugString(), DM::createIn(attr, {Field(), utc_time})->toDebugString());
+    }
+}
+CATCH
+
 // Test cases for unsupported column type
 TEST_F(FilterParserTest, UnsupportedColumnType)
 try

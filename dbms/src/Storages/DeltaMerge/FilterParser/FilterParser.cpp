@@ -98,6 +98,8 @@ ColumnID getColumnIDForColumnExpr(const tipb::Expr & expr, const TiDB::ColumnInf
 // convert literal value from timezone specified in cop request to UTC in-place
 inline void convertFieldWithTimezone(Field & value, const TimezoneInfo & timezone_info)
 {
+    if (value.isNull())
+        return;
     static const auto & time_zone_utc = DateLUT::instance("UTC");
     UInt64 from_time = value.get<UInt64>();
     UInt64 result_time = from_time;
@@ -419,7 +421,7 @@ RSOperatorPtr FilterParser::parseRFInExpr(
             values.reserve(setElements.size());
             for (auto element : setElements)
             {
-                if (timezone_info.is_name_based
+                if (!element.isNull() && timezone_info.is_name_based
                     && isLocalTimeInTimeZoneTransition(MyDateTime(element.get<UInt64>()), *timezone_info.timezone))
                     return createUnsupported("Timestamp runtime filter contains a timezone fold or gap");
                 // convert literal value from timezone specified in cop request to UTC
