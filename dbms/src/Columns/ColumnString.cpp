@@ -564,9 +564,12 @@ void ColumnString::countSerializeByteSizeImpl(
         if constexpr (need_decode_collator)
         {
             assert(sizeAt(i) > 0);
-            const auto num_char = UTF8::countCodePoints(&chars[offsetAt(i)], sizeAt(i) - 1);
+            const auto sort_key_size = estimateSortKeyByteSize(
+                reinterpret_cast<const char *>(&chars[offsetAt(i)]),
+                sizeAt(i) - 1,
+                max_bytes_one_char);
             // Add 1 for terminating zero.
-            byte_size[i] += sizeof(UInt32) + num_char * max_bytes_one_char + 1;
+            byte_size[i] += sizeof(UInt32) + sort_key_size + 1;
         }
         else
         {
@@ -667,9 +670,12 @@ void ColumnString::countSerializeByteSizeForColumnArrayImpl(
             for (size_t j = array_offsets[i - 1]; j < array_offsets[i]; ++j)
             {
                 assert(sizeAt(j) > 0);
-                const auto num_char = UTF8::countCodePoints(&chars[offsetAt(j)], sizeAt(j) - 1);
+                const auto sort_key_size = estimateSortKeyByteSize(
+                    reinterpret_cast<const char *>(&chars[offsetAt(j)]),
+                    sizeAt(j) - 1,
+                    max_bytes_one_char);
                 // Add 1 for terminating zero.
-                cur_row_bytes += num_char * max_bytes_one_char + 1;
+                cur_row_bytes += sort_key_size + 1;
             }
 
             byte_size[i] += sizeof(UInt32) * ele_count + cur_row_bytes;
