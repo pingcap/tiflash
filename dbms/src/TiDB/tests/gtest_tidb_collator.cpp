@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Functions/CollationStringSearch.h>
 #include <Functions/CollationStringSearchOptimized.h>
 #include <TiDB/Collation/Collator.h>
@@ -532,6 +533,105 @@ TEST(CollatorSuite, Utf8Mb40900AICICollator)
 TEST(CollatorSuite, Utf8Mb40900BinCollator)
 {
     testCollator<Utf8Mb40900BinCollator>();
+}
+
+TEST(CollatorSuite, RejectTruncatedUTF8)
+{
+    for (const auto collator_id : {
+             ITiDBCollator::UTF8_GENERAL_CI,
+             ITiDBCollator::UTF8MB4_GENERAL_CI,
+             ITiDBCollator::UTF8_UNICODE_CI,
+             ITiDBCollator::UTF8MB4_UNICODE_CI,
+             ITiDBCollator::UTF8MB4_0900_AI_CI,
+         })
+    {
+        SCOPED_TRACE(collator_id);
+        const auto collator = ITiDBCollator::getCollator(collator_id);
+        for (const String character : {"©", "中", "😃"})
+        {
+            for (const String prefix : {"", "prefix"})
+            {
+                const auto input = prefix + character;
+                for (size_t length = prefix.size() + 1; length < input.size(); ++length)
+                {
+                    SCOPED_TRACE(input);
+                    SCOPED_TRACE(length);
+                    String container;
+                    std::vector<size_t> lens;
+                    // The backing string contains a complete character; only the supplied length truncates it.
+                    EXPECT_THROW(collator->sortKey(input.data(), length, container), DB::Exception);
+                    EXPECT_THROW(collator->sortKeyNoTrim(input.data(), length, container), DB::Exception);
+                    EXPECT_THROW(collator->convert(input.data(), length, container, &lens), DB::Exception);
+                    EXPECT_THROW(collator->compare(input.data(), length, input.data(), input.size()), DB::Exception);
+                    EXPECT_THROW(collator->compare(input.data(), input.size(), input.data(), length), DB::Exception);
+                }
+            }
+        }
+    }
+}
+
+TEST(CollatorSuite, PatternRejectTruncatedUTF8)
+{
+    for (const auto collator_id : {
+             ITiDBCollator::UTF8_BIN,
+             ITiDBCollator::UTF8MB4_BIN,
+             ITiDBCollator::UTF8_GENERAL_CI,
+             ITiDBCollator::UTF8MB4_GENERAL_CI,
+             ITiDBCollator::UTF8_UNICODE_CI,
+             ITiDBCollator::UTF8MB4_UNICODE_CI,
+             ITiDBCollator::UTF8MB4_0900_AI_CI,
+         })
+    {
+        SCOPED_TRACE(collator_id);
+        const auto collator = ITiDBCollator::getCollator(collator_id);
+        for (const String character : {"©", "中", "😃"})
+        {
+            for (size_t length = 1; length < character.size(); ++length)
+            {
+                SCOPED_TRACE(character);
+                SCOPED_TRACE(length);
+                auto pattern = collator->pattern();
+                const auto truncated = character.substr(0, length);
+                EXPECT_THROW(pattern->compile(truncated, ESCAPE), DB::Exception);
+                EXPECT_THROW(pattern->compile(String(1, ESCAPE) + truncated, ESCAPE), DB::Exception);
+                for (const auto & text : {String("_"), character, "%" + character})
+                {
+                    pattern->compile(text, ESCAPE);
+                    EXPECT_THROW(pattern->match(character.data(), length), DB::Exception);
+                }
+            }
+        }
+    }
+}
+
+TEST(CollatorSuite, PatternBacktrackingRespectsLength)
+{
+    for (const auto collator_id : {
+             ITiDBCollator::BINARY,
+             ITiDBCollator::ASCII_BIN,
+             ITiDBCollator::UTF8_BIN,
+             ITiDBCollator::UTF8MB4_BIN,
+             ITiDBCollator::UTF8_GENERAL_CI,
+             ITiDBCollator::UTF8MB4_GENERAL_CI,
+             ITiDBCollator::UTF8_UNICODE_CI,
+             ITiDBCollator::UTF8MB4_UNICODE_CI,
+             ITiDBCollator::UTF8MB4_0900_AI_CI,
+             ITiDBCollator::UTF8MB4_0900_BIN,
+         })
+    {
+        SCOPED_TRACE(collator_id);
+        const auto collator = ITiDBCollator::getCollator(collator_id);
+        for (const String suffix : {"b", "中"})
+        {
+            auto pattern = collator->pattern();
+            pattern->compile("%" + suffix, ESCAPE);
+            const auto input = "a" + suffix;
+            // Backtracking must not find a match in bytes beyond the supplied length.
+            EXPECT_FALSE(pattern->match(input.data(), 1));
+            EXPECT_TRUE(pattern->match(input.data(), input.size()));
+            EXPECT_FALSE(pattern->match(input.data(), 0));
+        }
+    }
 }
 
 } // namespace DB::tests

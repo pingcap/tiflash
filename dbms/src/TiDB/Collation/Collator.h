@@ -249,7 +249,7 @@ private:
     using WeightType = T;
     using CharType = T;
 
-    static inline CharType decodeChar(const char * s, size_t & offset);
+    static inline CharType decodeChar(const char * s, size_t & offset, size_t length);
 
     static inline WeightType weight(CharType c) { return c; }
 
@@ -331,7 +331,7 @@ private:
     template <bool need_len, bool need_trim>
     StringRef convertImpl(const char * s, size_t length, std::string & container, std::vector<size_t> * lens) const;
 
-    static inline CharType decodeChar(const char * s, size_t & offset);
+    static inline CharType decodeChar(const char * s, size_t & offset, size_t length);
 
     static inline void writeResult(uint64_t & w, std::string & container, size_t & total_size)
     {
@@ -397,7 +397,7 @@ private:
     template <bool need_len, bool need_trim>
     StringRef convertImpl(const char * s, size_t length, std::string & container, std::vector<size_t> * lens) const;
 
-    static inline CharType decodeChar(const char * s, size_t & offset);
+    static inline CharType decodeChar(const char * s, size_t & offset, size_t length);
 
     static inline WeightType weight(CharType c)
     {

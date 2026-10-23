@@ -1052,6 +1052,78 @@ try
 }
 CATCH
 
+TEST_F(TestColumnSerializeDeserialize, TestColumnStringCollatorMalformedUTF8)
+try
+{
+    // Continuation bytes are skipped by countCodePoints, but decoded into sort-key weights by the collator.
+    const auto col_string
+        = createColumn<String>({"\x80\xBF", "\x80\xBF\x80\xBF", String(16, 'a') + "\x80\xBF", "中\x80\xBF", ""}).column;
+    for (const auto collator_id : {
+             TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI,
+             TiDB::ITiDBCollator::UTF8MB4_UNICODE_CI,
+             TiDB::ITiDBCollator::UTF8MB4_0900_AI_CI,
+         })
+    {
+        SCOPED_TRACE(collator_id);
+        const auto collator = TiDB::ITiDBCollator::getCollator(collator_id);
+        PaddedPODArray<size_t> byte_size;
+        byte_size.resize_fill_zero(col_string->size());
+        col_string->countSerializeByteSizeForCmp(byte_size, nullptr, collator);
+
+        String sort_key_container;
+        for (size_t i = 0; i < col_string->size(); ++i)
+        {
+            SCOPED_TRACE(i);
+            const auto value = col_string->getDataAt(i);
+            const auto sort_key = collator->sortKey(value.data, value.size, sort_key_container);
+            // Check the bound before allocating buffers for the serialization round trip.
+            ASSERT_GE(byte_size[i], sizeof(UInt32) + sort_key.size + 1);
+        }
+        testSerializeAndDeserializeForCmp(col_string, collator, &sort_key_container);
+    }
+}
+CATCH
+
+TEST_F(TestColumnSerializeDeserialize, TestColumnStringArrayCollatorMalformedUTF8)
+try
+{
+    const auto col_string
+        = createColumn<String>({"\x80\xBF", "\x80\xBF\x80\xBF", String(16, 'a') + "\x80\xBF", "中\x80\xBF", ""}).column;
+    const auto col_offsets = createColumn<IColumn::Offset>({1, 1, 3, 5}).column;
+    const auto col_array = ColumnArray::create(col_string, col_offsets);
+    for (const auto collator_id : {
+             TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI,
+             TiDB::ITiDBCollator::UTF8MB4_UNICODE_CI,
+             TiDB::ITiDBCollator::UTF8MB4_0900_AI_CI,
+         })
+    {
+        SCOPED_TRACE(collator_id);
+        const auto collator = TiDB::ITiDBCollator::getCollator(collator_id);
+        PaddedPODArray<size_t> byte_size;
+        byte_size.resize_fill_zero(col_array->size());
+        col_array->countSerializeByteSizeForCmp(byte_size, nullptr, collator);
+
+        String sort_key_container;
+        size_t begin = 0;
+        for (size_t i = 0; i < col_array->size(); ++i)
+        {
+            SCOPED_TRACE(i);
+            size_t actual_size = sizeof(UInt32);
+            const auto end = col_array->getOffsets()[i];
+            for (size_t j = begin; j < end; ++j)
+            {
+                const auto value = col_string->getDataAt(j);
+                const auto sort_key = collator->sortKey(value.data, value.size, sort_key_container);
+                actual_size += sizeof(UInt32) + sort_key.size + 1;
+            }
+            ASSERT_GE(byte_size[i], actual_size);
+            begin = end;
+        }
+        testSerializeAndDeserializeForCmp(col_array, collator, &sort_key_container);
+    }
+}
+CATCH
+
 TEST_F(TestColumnSerializeDeserialize, TestLargeColumnDecimal)
 try
 {
