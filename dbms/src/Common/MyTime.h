@@ -245,11 +245,14 @@ UInt64 calcSeconds(int year, int month, int day, int hour, int minute, int secon
 
 size_t maxFormattedDateTimeStringLength(const String & format);
 
-inline time_t getEpochSecond(const MyDateTime & my_time, const DateLUTImpl & time_zone)
-{
-    return time_zone
-        .makeDateTime(my_time.year, my_time.month, my_time.day, my_time.hour, my_time.minute, my_time.second);
-}
+// Match TiDB CoreTime.GoTime, including its choice of offset for repeated local times.
+// Nonexistent local times are rejected, unless the caller needs TiDB's
+// AdjustedGoTime behavior (UNIX_TIMESTAMP's integer signature).
+time_t getEpochSecond(const MyDateTime & my_time, const DateLUTImpl & time_zone, bool adjust_for_dst_gap = false);
+
+// A local comparison boundary in a clock fold/gap cannot safely be replaced by
+// a single UTC boundary for rough filtering.
+bool isLocalTimeInTimeZoneTransition(const MyDateTime & my_time, const DateLUTImpl & time_zone);
 
 bool isValidSeparator(char c, int previous_parts);
 

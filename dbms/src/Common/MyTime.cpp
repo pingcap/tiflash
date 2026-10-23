@@ -22,6 +22,7 @@
 #include <common/logger_useful.h>
 #include <fmt/core.h>
 
+#include <algorithm>
 #include <cctype>
 #include <initializer_list>
 #include <vector>
@@ -1487,6 +1488,53 @@ MyDateTime MyDateTime::getSystemDateTimeByTimezone(const TimezoneInfo & timezone
 inline bool isZeroDate(UInt64 time)
 {
     return time == 0;
+}
+
+time_t getEpochSecond(const MyDateTime & my_time, const DateLUTImpl & time_zone, bool adjust_for_dst_gap)
+{
+    static const auto & utc = DateLUT::instance("UTC");
+    const auto wall_time
+        = utc.makeDateTime(my_time.year, my_time.month, my_time.day, my_time.hour, my_time.minute, my_time.second);
+    if (&time_zone == &utc)
+        return wall_time;
+
+    // Go time.Date first looks up the offset using the wall fields as UTC,
+    // then looks it up again at the candidate instant if it crosses a zone
+    // boundary. An unconditional second lookup gives the same offset when
+    // the candidate stays within that zone interval.
+    const auto offset = time_zone.timezoneOffset(wall_time);
+    const auto epoch = wall_time - time_zone.timezoneOffset(wall_time - offset);
+    if (time_zone.toYear(epoch) != my_time.year || time_zone.toMonth(epoch) != my_time.month
+        || time_zone.toDayOfMonth(epoch) != my_time.day || static_cast<Int32>(time_zone.toHour(epoch)) != my_time.hour
+        || time_zone.toMinute(epoch) != my_time.minute || time_zone.toSecond(epoch) != my_time.second)
+    {
+        if (adjust_for_dst_gap && isLocalTimeInTimeZoneTransition(my_time, time_zone))
+        {
+            const auto & day = time_zone.getValues(time_zone.makeDayNum(my_time.year, my_time.month, my_time.day));
+            const auto transition = day.date + day.time_at_offset_change();
+            // TiDB AdjustedGoTime moves a nonexistent time to the nearest
+            // zone boundary, provided it is within four hours.
+            if (day.amount_of_offset_change() > 0 && std::abs(epoch - transition) <= 4 * 3600)
+                return transition;
+        }
+        throw Exception(
+            ErrorCodes::BAD_ARGUMENTS,
+            "Invalid local datetime {} in timezone {}",
+            my_time.toString(6),
+            time_zone.getTimeZone());
+    }
+    return epoch;
+}
+
+bool isLocalTimeInTimeZoneTransition(const MyDateTime & my_time, const DateLUTImpl & time_zone)
+{
+    if (isZeroDate(my_time.toPackedUInt()))
+        return false;
+    const auto & day = time_zone.getValues(time_zone.makeDayNum(my_time.year, my_time.month, my_time.day));
+    const Int32 before = day.time_at_offset_change();
+    const Int32 after = before + day.amount_of_offset_change();
+    const Int32 seconds = my_time.hour * 3600 + my_time.minute * 60 + my_time.second;
+    return seconds >= std::min(before, after) && seconds < std::max(before, after);
 }
 
 void convertTimeZoneImpl(

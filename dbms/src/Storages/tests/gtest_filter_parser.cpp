@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataTypes/DataTypeMyDateTime.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncCoprocessorUtils.h>
 #include <Debug/dbgQueryCompiler.h>
@@ -703,6 +704,42 @@ try
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), fmt::format("6: [{}, 18446744073709551615]", origin_time_stamp + 1));
     }
+    TimezoneInfo timezone;
+    timezone.resetByTimezoneName("America/New_York");
+    for (const auto & literal : {"2026-11-01 01:30:00", "2026-03-08 02:30:00"})
+    {
+        SCOPED_TRACE(literal);
+        auto rs_operator = generateRsOperator(
+            table_info_json,
+            fmt::format("select * from default.t_111 where col_timestamp > cast_string_datetime('{}')", literal),
+            timezone);
+        EXPECT_EQ(rs_operator->name(), "unsupported");
+    }
+}
+CATCH
+
+TEST_F(FilterParserTest, TimestampRuntimeFilterDSTTransition)
+try
+{
+    tipb::Expr target;
+    target.set_tp(tipb::ColumnRef);
+    target.mutable_field_type()->set_tp(TiDB::TypeTimestamp);
+    const DM::Attr attr{"ts", 4, std::make_shared<DataTypeMyDateTime>(6)};
+    TimezoneInfo timezone;
+    timezone.resetByTimezoneName("America/New_York");
+    for (const auto & local : {
+             MyDateTime(2026, 11, 1, 1, 30, 0, 0),
+             MyDateTime(2026, 3, 8, 2, 30, 0, 0),
+         })
+    {
+        const std::set<Field> elements{Field(local.toPackedUInt())};
+        EXPECT_EQ(DM::FilterParser::parseRFInExpr(tipb::IN, target, attr, elements, timezone)->name(), "unsupported");
+    }
+    const std::set<Field> elements{Field(MyDateTime(2026, 11, 1, 2, 30, 0, 0).toPackedUInt())};
+    EXPECT_EQ(DM::FilterParser::parseRFInExpr(tipb::IN, target, attr, elements, timezone)->name(), "in");
+    timezone.resetByTimezoneName("EST");
+    const std::set<Field> fixed_zone_elements{Field(MyDateTime(2026, 11, 1, 1, 30, 0, 0).toPackedUInt())};
+    EXPECT_EQ(DM::FilterParser::parseRFInExpr(tipb::IN, target, attr, fixed_zone_elements, timezone)->name(), "in");
 }
 CATCH
 

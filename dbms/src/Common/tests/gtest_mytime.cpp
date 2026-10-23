@@ -671,5 +671,97 @@ catch (Exception & e)
     GTEST_FAIL();
 }
 
+TEST_F(TestMyTime, ConvertTimeZoneDST)
+try
+{
+    const auto & utc = DateLUT::instance("UTC");
+    struct Case
+    {
+        String timezone;
+        MyDateTime local;
+        MyDateTime expected_utc;
+        bool transition;
+    };
+    // Expected choices come from TiDB CoreTime.GoTime (Go time.Date), which
+    // does not always choose the earlier occurrence of a repeated local time.
+    for (const auto & test : {
+             Case{"America/New_York", {2026, 11, 1, 1, 30, 0, 123456}, {2026, 11, 1, 5, 30, 0, 123456}, true},
+             Case{"Europe/Amsterdam", {2026, 10, 25, 2, 30, 0, 123456}, {2026, 10, 25, 1, 30, 0, 123456}, true},
+             Case{"Australia/Lord_Howe", {2026, 4, 5, 1, 45, 0, 123456}, {2026, 4, 4, 15, 15, 0, 123456}, true},
+             Case{"EST", {2026, 11, 1, 1, 30, 0, 0}, {2026, 11, 1, 6, 30, 0, 0}, false},
+             Case{"America/New_York", {2026, 3, 8, 1, 59, 59, 999999}, {2026, 3, 8, 6, 59, 59, 999999}, false},
+             Case{"America/New_York", {2026, 3, 8, 3, 0, 0, 0}, {2026, 3, 8, 7, 0, 0, 0}, false},
+         })
+    {
+        SCOPED_TRACE(test.timezone + " " + test.local.toString(6));
+        const auto & timezone = DateLUT::instance(test.timezone);
+        UInt64 converted = 0;
+        convertTimeZone(test.local.toPackedUInt(), converted, timezone, utc);
+        EXPECT_EQ(converted, test.expected_utc.toPackedUInt());
+        convertTimeZone(converted, converted, utc, timezone);
+        EXPECT_EQ(converted, test.local.toPackedUInt());
+        EXPECT_EQ(isLocalTimeInTimeZoneTransition(test.local, timezone), test.transition);
+    }
+
+    const auto & ny = DateLUT::instance("America/New_York");
+    for (const auto & local : {
+             MyDateTime(2026, 3, 8, 2, 0, 0, 0),
+             MyDateTime(2026, 3, 8, 2, 30, 0, 0),
+             MyDateTime(2026, 3, 8, 2, 59, 59, 999999),
+         })
+    {
+        UInt64 converted = 0;
+        // TiDB Time.ConvertTimeZone rejects nonexistent local datetimes.
+        EXPECT_THROW(convertTimeZone(local.toPackedUInt(), converted, ny, utc), Exception);
+        EXPECT_TRUE(isLocalTimeInTimeZoneTransition(local, ny));
+    }
+}
+CATCH
+
+TEST_F(TestMyTime, ConvertTimeZoneDateLine)
+try
+{
+    const auto & utc = DateLUT::instance("UTC");
+    struct Case
+    {
+        String timezone;
+        MyDateTime local;
+        MyDateTime expected_utc;
+        time_t expected_offset;
+    };
+    for (const auto & test : {
+             Case{"Pacific/Apia", {2011, 12, 29, 23, 59, 59, 123456}, {2011, 12, 30, 9, 59, 59, 123456}, -36000},
+             Case{"Pacific/Apia", {2011, 12, 31, 0, 0, 0, 123456}, {2011, 12, 30, 10, 0, 0, 123456}, 50400},
+             Case{"Pacific/Apia", {2026, 3, 2, 12, 0, 0, 123456}, {2026, 3, 1, 23, 0, 0, 123456}, 46800},
+             Case{"Pacific/Kwajalein", {1993, 8, 20, 23, 59, 59, 123456}, {1993, 8, 21, 11, 59, 59, 123456}, -43200},
+             Case{"Pacific/Kwajalein", {1993, 8, 22, 0, 0, 0, 123456}, {1993, 8, 21, 12, 0, 0, 123456}, 43200},
+             Case{"Pacific/Kwajalein", {2026, 3, 2, 12, 0, 0, 123456}, {2026, 3, 2, 0, 0, 0, 123456}, 43200},
+         })
+    {
+        SCOPED_TRACE(test.timezone + " " + test.local.toString(6));
+        const auto & timezone = DateLUT::instance(test.timezone);
+        const auto epoch = getEpochSecond(test.expected_utc, utc);
+        EXPECT_EQ(timezone.timezoneOffset(epoch), test.expected_offset);
+        EXPECT_EQ(getEpochSecond(test.local, timezone), epoch);
+        UInt64 converted = 0;
+        convertTimeZone(test.local.toPackedUInt(), converted, timezone, utc);
+        EXPECT_EQ(converted, test.expected_utc.toPackedUInt());
+        convertTimeZone(converted, converted, utc, timezone);
+        EXPECT_EQ(converted, test.local.toPackedUInt());
+    }
+
+    // The dates skipped by the 24-hour jumps are still invalid local times.
+    for (const auto & [timezone, local] : {
+             std::pair{"Pacific/Apia", MyDateTime(2011, 12, 30, 12, 0, 0, 0)},
+             std::pair{"Pacific/Kwajalein", MyDateTime(1993, 8, 21, 12, 0, 0, 0)},
+         })
+    {
+        SCOPED_TRACE(timezone);
+        UInt64 converted = 0;
+        EXPECT_THROW(convertTimeZone(local.toPackedUInt(), converted, DateLUT::instance(timezone), utc), Exception);
+    }
+}
+CATCH
+
 } // namespace tests
 } // namespace DB

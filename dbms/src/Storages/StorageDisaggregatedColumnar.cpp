@@ -231,7 +231,9 @@ void remapColumnRefsForLateMaterialization(
         remapColumnRefsForLateMaterialization(*expr.mutable_children(i), scan_columns, early_column_indexes);
 }
 
-void normalizeTimestampCompareDateTimeLiteralToUTC(tipb::Expr & expr, const TimezoneInfo & timezone_info);
+void normalizeTimestampFiltersToUTC(
+    google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
+    const TimezoneInfo & timezone_info);
 
 struct BucketSplitResult
 {
@@ -481,25 +483,23 @@ std::shared_ptr<RNColumnarReaderSharedContext> buildColumnarReaderSharedContext(
         table_scan_pb.tp() == tipb::TypePartitionTableScan
             ? table_scan_pb.partition_table_scan().pushed_down_filter_conditions()
             : table_scan_pb.tbl_scan().pushed_down_filter_conditions());
+    shared_context->has_pushed_down_filter_conditions = !table_scan.getPushedDownFilters().empty();
     const auto & timezone_info = context.getTimezoneInfo();
     if (table_scan_pb.tp() == tipb::TypePartitionTableScan)
     {
         auto * pushed_down_filters
             = table_scan_pb.mutable_partition_table_scan()->mutable_pushed_down_filter_conditions();
-        for (int i = 0; i < pushed_down_filters->size(); ++i)
-            normalizeTimestampCompareDateTimeLiteralToUTC(*pushed_down_filters->Mutable(i), timezone_info);
+        normalizeTimestampFiltersToUTC(*pushed_down_filters, timezone_info);
     }
     else
     {
         auto * pushed_down_filters = table_scan_pb.mutable_tbl_scan()->mutable_pushed_down_filter_conditions();
-        for (int i = 0; i < pushed_down_filters->size(); ++i)
-            normalizeTimestampCompareDateTimeLiteralToUTC(*pushed_down_filters->Mutable(i), timezone_info);
+        normalizeTimestampFiltersToUTC(*pushed_down_filters, timezone_info);
     }
     shared_context->table_scan_data = table_scan_pb.SerializeAsString();
 
     auto conditions = filter_conditions.conditions;
-    for (int i = 0; i < conditions.size(); ++i)
-        normalizeTimestampCompareDateTimeLiteralToUTC(*conditions.Mutable(i), timezone_info);
+    normalizeTimestampFiltersToUTC(conditions, timezone_info);
     for (const auto & condition : conditions)
     {
         auto data = condition.SerializeAsString();
@@ -507,11 +507,6 @@ std::shared_ptr<RNColumnarReaderSharedContext> buildColumnarReaderSharedContext(
         shared_context->filter_conditions_data.append(reinterpret_cast<const char *>(&len), sizeof(len));
         shared_context->filter_conditions_data.append(data.data(), data.size());
     }
-    const auto & pushed_down_filters = table_scan_pb.tp() == tipb::TypePartitionTableScan
-        ? table_scan_pb.partition_table_scan().pushed_down_filter_conditions()
-        : table_scan_pb.tbl_scan().pushed_down_filter_conditions();
-    shared_context->has_pushed_down_filter_conditions = !pushed_down_filters.empty();
-
     tipb::TableInfo table_info;
     bool is_partition_scan = table_scan.isPartitionTableScan();
     const auto & tidb_columns = table_scan.getColumns();
@@ -609,12 +604,14 @@ bool isColumnarFilterComparableExpr(tipb::ScalarFuncSig sig)
     }
 }
 
-void normalizeTimestampCompareDateTimeLiteralToUTC(tipb::Expr & expr, const TimezoneInfo & timezone_info)
+// False means this entire rough-filter predicate must be omitted. Its original
+// session-timezone expression is retained for exact evaluation in TiFlash.
+bool normalizeTimestampCompareDateTimeLiteralToUTC(tipb::Expr & expr, const TimezoneInfo & timezone_info)
 {
     if (timezone_info.is_utc_timezone)
-        return;
+        return true;
     if (!isFunctionExpr(expr))
-        return;
+        return true;
 
     // Only normalize for comparison expressions that columnar filter supports.
     // Keep recursion so nested comparisons under AND/OR/NOT still work.
@@ -648,10 +645,26 @@ void normalizeTimestampCompareDateTimeLiteralToUTC(tipb::Expr & expr, const Time
                 auto * child = expr.mutable_children(i);
                 if (!isLiteralExpr(*child) || !child->has_field_type())
                     continue;
-                if (child->tp() != tipb::ExprType::MysqlTime || child->field_type().tp() != TiDB::TypeDatetime)
+                if (child->tp() != tipb::ExprType::MysqlTime)
+                    continue;
+                const auto literal_type = child->field_type().tp();
+                if (literal_type != TiDB::TypeDatetime && literal_type != TiDB::TypeTimestamp)
                     continue;
 
                 UInt64 from_time = decodeLiteral(*child).get<UInt64>();
+                if (timezone_info.is_name_based)
+                {
+                    UInt64 local_time = from_time;
+                    if (literal_type == TiDB::TypeTimestamp)
+                        convertTimeZone(from_time, local_time, time_zone_utc, *timezone_info.timezone);
+                    // UTC -> local is not one-to-one during a fold, and gap
+                    // boundaries have no UTC inverse. One converted literal
+                    // cannot represent the session-timezone comparison.
+                    if (isLocalTimeInTimeZoneTransition(MyDateTime(local_time), *timezone_info.timezone))
+                        return false;
+                }
+                if (literal_type != TiDB::TypeDatetime)
+                    continue;
                 UInt64 result_time = from_time;
                 if (timezone_info.is_name_based)
                     convertTimeZone(from_time, result_time, *timezone_info.timezone, time_zone_utc);
@@ -663,7 +676,24 @@ void normalizeTimestampCompareDateTimeLiteralToUTC(tipb::Expr & expr, const Time
     }
 
     for (int i = 0; i < expr.children_size(); ++i)
-        normalizeTimestampCompareDateTimeLiteralToUTC(*expr.mutable_children(i), timezone_info);
+        if (!normalizeTimestampCompareDateTimeLiteralToUTC(*expr.mutable_children(i), timezone_info))
+            return false;
+    return true;
+}
+
+void normalizeTimestampFiltersToUTC(
+    google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
+    const TimezoneInfo & timezone_info)
+{
+    for (int i = 0; i < conditions.size();)
+    {
+        if (normalizeTimestampCompareDateTimeLiteralToUTC(*conditions.Mutable(i), timezone_info))
+            ++i;
+        else
+            // Top-level conditions are ANDed. Drop the whole predicate so
+            // nested OR/NOT expressions cannot discard matching rows.
+            conditions.DeleteSubrange(i, 1);
+    }
 }
 } // namespace
 

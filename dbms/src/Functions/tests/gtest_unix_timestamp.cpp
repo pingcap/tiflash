@@ -225,9 +225,8 @@ try
         /// Sunday, 3 April 2022, 00:00:00 clocks are turned backward 1 hour to
         /// Saturday, 2 April 2022, 23:00:00 local standard time instead.
         MyDateTime(2022, 4, 2, 22, 59, 59, 0).toPackedUInt(),
-        /// due to https://github.com/pingcap/tidb/issues/32251, TiDB will return 1648951200 for `2022-04-02 23:00:00` while TiFlash return 1648954800
+        /// Match TiDB's choice of the earlier occurrence in this timezone.
         MyDateTime(2022, 4, 2, 23, 0, 0, 0).toPackedUInt(),
-        /// due to https://github.com/pingcap/tidb/issues/32251, TiDB will return 1648954799 for `2022-04-02 23:59:59` while TiFlash return 1648958399
         MyDateTime(2022, 4, 2, 23, 59, 59, 0).toPackedUInt(),
         MyDateTime(2022, 4, 3, 0, 0, 0, 0).toPackedUInt(),
         /// When local standard time is about to reach
@@ -242,8 +241,8 @@ try
            2147483647ull,
            0,
            1648951199ull,
-           1648954800ull,
-           1648958399ull,
+           1648951200ull,
+           1648954799ull,
            1648958400ull,
            1630814399ull,
            1630814400ull};
@@ -253,8 +252,8 @@ try
            "2147483647",
            "0",
            "1648951199",
-           "1648954800",
-           "1648958399",
+           "1648951200",
+           "1648954799",
            "1648958400",
            "1630814399",
            "1630814400"};
@@ -299,6 +298,47 @@ try
     ASSERT_COLUMN_EQ(
         createColumn<Decimal64>(std::make_tuple(12, 0), date_time_decimal_result),
         executeFunction(func_name_dec, createColumn<MyDateTime>(date_time_data)));
+}
+CATCH
+
+TEST_F(TestUnixTimestamp, DST)
+try
+{
+    context->getTimezoneInfo().resetByTimezoneName("America/New_York");
+    const auto input = createColumn<MyDateTime>(
+        std::make_tuple(6),
+        {MyDateTime(2026, 11, 1, 1, 30, 0, 123456).toPackedUInt(),
+         MyDateTime(2026, 3, 8, 2, 30, 0, 123456).toPackedUInt()});
+    ASSERT_COLUMN_EQ(createColumn<UInt64>({1793511000, 1772953200}), executeFunction(func_name_int, input));
+    ASSERT_COLUMN_EQ(
+        createColumn<Decimal64>(std::make_tuple(18, 6), {"1793511000.123456", "0.000000"}),
+        executeFunction(func_name_dec, input));
+}
+CATCH
+
+TEST_F(TestUnixTimestamp, DateLineOffset)
+try
+{
+    struct Case
+    {
+        String timezone;
+        UInt64 expected_int;
+        String expected_decimal;
+    };
+    for (const auto & test : {
+             Case{"Pacific/Apia", 1772406000, "1772406000.123456"},
+             Case{"Pacific/Kwajalein", 1772409600, "1772409600.123456"},
+         })
+    {
+        SCOPED_TRACE(test.timezone);
+        context->getTimezoneInfo().resetByTimezoneName(test.timezone);
+        const auto input
+            = createColumn<MyDateTime>(std::make_tuple(6), {MyDateTime(2026, 3, 2, 12, 0, 0, 123456).toPackedUInt()});
+        ASSERT_COLUMN_EQ(createColumn<UInt64>({test.expected_int}), executeFunction(func_name_int, input));
+        ASSERT_COLUMN_EQ(
+            createColumn<Decimal64>(std::make_tuple(18, 6), {test.expected_decimal}),
+            executeFunction(func_name_dec, input));
+    }
 }
 CATCH
 } // namespace tests

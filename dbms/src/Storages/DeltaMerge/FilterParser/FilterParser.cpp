@@ -178,6 +178,14 @@ inline RSOperatorPtr parseTiCompareExpr( //
                         "Compare timestamp column with literal type is not supported, sig={} literal_type={}",
                         tipb::ScalarFuncSig_Name(expr.sig()),
                         literal_type));
+                if (!value.isNull() && timezone_info.is_name_based && !timezone_info.is_utc_timezone)
+                {
+                    UInt64 local_time = value.get<UInt64>();
+                    if (literal_type == TiDB::TypeTimestamp)
+                        convertTimeZone(local_time, local_time, DateLUT::instance("UTC"), *timezone_info.timezone);
+                    if (isLocalTimeInTimeZoneTransition(MyDateTime(local_time), *timezone_info.timezone))
+                        return createUnsupported("Timestamp comparison boundary is in a timezone fold or gap");
+                }
                 // convert literal value from timezone specified in cop request to UTC
                 if (literal_type == TiDB::TypeDatetime && !timezone_info.is_utc_timezone)
                     convertFieldWithTimezone(value, timezone_info);
@@ -409,11 +417,15 @@ RSOperatorPtr FilterParser::parseRFInExpr(
         {
             Fields values;
             values.reserve(setElements.size());
-            std::for_each(setElements.begin(), setElements.end(), [&](Field element) {
+            for (auto element : setElements)
+            {
+                if (timezone_info.is_name_based
+                    && isLocalTimeInTimeZoneTransition(MyDateTime(element.get<UInt64>()), *timezone_info.timezone))
+                    return createUnsupported("Timestamp runtime filter contains a timezone fold or gap");
                 // convert literal value from timezone specified in cop request to UTC
                 cop::convertFieldWithTimezone(element, timezone_info);
                 values.push_back(element);
-            });
+            }
             return createIn(attr, values);
         }
         else

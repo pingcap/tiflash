@@ -135,6 +135,9 @@ try
     for (const auto & test : {
              Case{"UTC", 0, {2026, 3, 2, 0, 0, 0, 1}},
              Case{"Asia/Singapore", 28800, {2026, 3, 1, 16, 0, 0, 1}},
+             Case{"America/New_York", -18000, {2026, 3, 2, 5, 0, 0, 1}},
+             Case{"Pacific/Apia", 46800, {2026, 3, 1, 11, 0, 0, 1}},
+             Case{"Pacific/Kwajalein", 43200, {2026, 3, 1, 12, 0, 0, 1}},
              Case{"", 28800, {2026, 3, 1, 16, 0, 0, 1}},
              Case{"", -19800, {2026, 3, 2, 5, 30, 0, 1}},
          })
@@ -236,6 +239,117 @@ try
                 next_batch.getByPosition(i).column = raw.getByPosition(i).column->cut(1, 2);
             checkFilter(*action, next_batch, {1, 1});
         }
+    }
+}
+CATCH
+
+TEST_F(ColumnarLateMaterializationTest, TimestampDSTFold)
+try
+{
+    context->getTimezoneInfo().resetByTimezoneName("America/New_York");
+    Block raw{withID(
+        createDateTimeColumn(
+            {MyDateTime(2026, 11, 1, 5, 15, 0, 0),
+             MyDateTime(2026, 11, 1, 5, 30, 0, 0),
+             MyDateTime(2026, 11, 1, 6, 15, 0, 0),
+             MyDateTime(2026, 11, 1, 6, 30, 0, 0),
+             {}},
+            6),
+        10,
+        "timestamp")};
+    for (bool timestamp_literal : {false, true})
+    {
+        auto literal = constructDateTimeLiteralTiExpr(
+            MyDateTime(2026, 11, 1, timestamp_literal ? 5 : 1, 30, 0, 0).toPackedUInt());
+        if (timestamp_literal)
+            literal.mutable_field_type()->set_tp(TiDB::TypeTimestamp);
+        struct Case
+        {
+            tipb::ScalarFuncSig sig;
+            std::vector<UInt8> expected;
+        };
+        for (const auto & test : {
+                 Case{tipb::EQTime, {0, 1, 0, 1, 0}},
+                 Case{tipb::LTTime, {1, 0, 1, 0, 0}},
+                 Case{tipb::InTime, {0, 1, 0, 1, 0}},
+             })
+        {
+            SCOPED_TRACE(
+                fmt::format("timestamp_literal={} sig={}", timestamp_literal, tipb::ScalarFuncSig_Name(test.sig)));
+            auto executor = tableScan({scanColumn(10, TiDB::TypeTimestamp)});
+            auto predicate = scalar(test.sig, {columnRef(0, TiDB::TypeTimestamp), literal});
+            *executor.mutable_tbl_scan()->add_pushed_down_filter_conditions() = predicate;
+            google::protobuf::RepeatedPtrField<tipb::Expr> selection;
+            *selection.Add() = predicate;
+            auto task = buildTask(executor, selection);
+            ASSERT_TRUE(task->isLateMaterializationFilterEligible());
+            tipb::Executor normalized;
+            ASSERT_TRUE(normalized.ParseFromString(normalized_scan));
+            EXPECT_TRUE(normalized.tbl_scan().pushed_down_filter_conditions().empty());
+            EXPECT_TRUE(normalized_selection.empty());
+            auto action = task->buildLateMaterializationFilterAction(raw.cloneEmpty());
+            checkFilter(*action, raw, test.expected);
+        }
+    }
+}
+CATCH
+
+TEST_F(ColumnarLateMaterializationTest, TimestampDSTGap)
+try
+{
+    context->getTimezoneInfo().resetByTimezoneName("America/New_York");
+    auto executor = tableScan({scanColumn(10, TiDB::TypeTimestamp)});
+    auto predicate = scalar(
+        tipb::GTTime,
+        {columnRef(0, TiDB::TypeTimestamp),
+         constructDateTimeLiteralTiExpr(MyDateTime(2026, 3, 8, 2, 30, 0, 0).toPackedUInt())});
+    *executor.mutable_tbl_scan()->add_pushed_down_filter_conditions() = predicate;
+    google::protobuf::RepeatedPtrField<tipb::Expr> selection;
+    *selection.Add() = predicate;
+    auto task = buildTask(executor, selection);
+    ASSERT_TRUE(task->isLateMaterializationFilterEligible());
+    tipb::Executor normalized;
+    ASSERT_TRUE(normalized.ParseFromString(normalized_scan));
+    EXPECT_TRUE(normalized.tbl_scan().pushed_down_filter_conditions().empty());
+    EXPECT_TRUE(normalized_selection.empty());
+    Block raw{withID(
+        createDateTimeColumn({MyDateTime(2026, 3, 8, 6, 59, 59, 0), MyDateTime(2026, 3, 8, 7, 0, 0, 0), {}}, 6),
+        10,
+        "timestamp")};
+    auto action = task->buildLateMaterializationFilterAction(raw.cloneEmpty());
+    checkFilter(*action, raw, {0, 1, 0});
+}
+CATCH
+
+TEST_F(ColumnarLateMaterializationTest, TimestampDSTNestedPredicates)
+try
+{
+    context->getTimezoneInfo().resetByTimezoneName("America/New_York");
+    const auto timestamp_predicate = scalar(
+        tipb::EQTime,
+        {columnRef(0, TiDB::TypeTimestamp),
+         constructDateTimeLiteralTiExpr(MyDateTime(2026, 11, 1, 1, 30, 0, 0).toPackedUInt())});
+    const auto integer_predicate
+        = scalar(tipb::EQInt, {columnRef(1, TiDB::TypeLongLong), constructInt64LiteralTiExpr(1)});
+    for (const auto & predicate : {
+             scalar(tipb::LogicalAnd, {timestamp_predicate, integer_predicate}),
+             scalar(tipb::LogicalOr, {timestamp_predicate, integer_predicate}),
+             scalar(tipb::UnaryNotInt, {timestamp_predicate}),
+         })
+    {
+        SCOPED_TRACE(tipb::ScalarFuncSig_Name(predicate.sig()));
+        auto executor = tableScan({scanColumn(10, TiDB::TypeTimestamp), scanColumn(20, TiDB::TypeLongLong)});
+        *executor.mutable_tbl_scan()->add_pushed_down_filter_conditions() = predicate;
+        google::protobuf::RepeatedPtrField<tipb::Expr> selection;
+        *selection.Add() = predicate;
+        *selection.Add() = integer_predicate;
+        auto task = buildTask(executor, selection);
+        ASSERT_TRUE(task->isLateMaterializationFilterEligible());
+        tipb::Executor normalized;
+        ASSERT_TRUE(normalized.ParseFromString(normalized_scan));
+        EXPECT_TRUE(normalized.tbl_scan().pushed_down_filter_conditions().empty());
+        ASSERT_EQ(normalized_selection.size(), sizeof(UInt32) + integer_predicate.ByteSizeLong());
+        EXPECT_EQ(normalized_selection.substr(sizeof(UInt32)), integer_predicate.SerializeAsString());
     }
 }
 CATCH
