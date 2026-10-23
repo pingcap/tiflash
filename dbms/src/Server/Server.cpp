@@ -1341,7 +1341,7 @@ try
 
         // Note: `waitAllMPPTasksFinish` must be called before stopping the proxy.
         // Otherwise, read index requests may fail, which can prevent TiFlash from shutting down gracefully.
-        LOG_INFO(log, "Set unavailable for MPPTask");
+        LOG_INFO(log, "Report unavailable to new MPP probes; protect earlier probes before draining tasks");
         tmt_context.getMPPTaskManager()->setUnavailable();
         tmt_context.getMPPTaskManager()->getMPPTaskMonitor()->waitAllMPPTasksFinish(global_context);
 

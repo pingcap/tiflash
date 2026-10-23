@@ -17,6 +17,7 @@
 #include <Core/QueryOperatorSpillContexts.h>
 #include <Flash/EstablishCall.h>
 #include <Flash/Mpp/MPPTask.h>
+#include <Flash/Mpp/MPPTaskShutdownGuard.h>
 #include <Flash/Mpp/MinTSOScheduler.h>
 #include <common/logger_useful.h>
 #include <grpcpp/alarm.h>
@@ -200,6 +201,7 @@ public:
     std::condition_variable cv;
     bool is_shutdown = false;
     const LoggerPtr log;
+    MPPTaskShutdownGuard<> shutdown_guard;
 
     // All created MPPTasks should be put into this variable.
     // Only when the MPPTask is completed destructed, the task can be removed from it.
@@ -222,8 +224,6 @@ class MPPTaskManager : private boost::noncopyable
     std::condition_variable cv;
 
     std::shared_ptr<MPPTaskMonitor> monitor;
-
-    std::atomic<bool> is_available{true};
 
 public:
     explicit MPPTaskManager(MPPTaskSchedulerPtr scheduler);
@@ -277,8 +277,9 @@ public:
 
     bool isTaskExists(const MPPTaskId & id);
 
-    void setUnavailable() { is_available = false; }
-    bool isAvailable() { return is_available; }
+    void setUnavailable() { monitor->shutdown_guard.setUnavailable(); }
+    // Record a successful IsAlive probe atomically with the availability check.
+    bool checkAvailable() { return monitor->shutdown_guard.checkAvailable(); }
 
 private:
     MPPQueryPtr addMPPQuery(

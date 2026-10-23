@@ -17,8 +17,12 @@
 #include <Interpreters/Context.h>
 #include <Server/RaftConfigParser.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <TestUtils/ConfigTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <fmt/format.h>
 #include <gtest/gtest.h>
+
+#include <future>
 
 namespace DB
 {
@@ -52,6 +56,40 @@ public:
     }
 
 protected:
+    void checkProbeProtectionBeforeDrain(UInt64 drain_timeout, bool finish_task)
+    {
+        using namespace std::chrono_literals;
+        // The existing drain timeout still comes from users config.
+        global_context->setConfig(loadConfigFromString("[flash]\ngraceful_wait_shutdown_timeout = 30\n"));
+        global_context->setUsersConfig(
+            loadConfigFromString(fmt::format("[flash]\ngraceful_wait_shutdown_timeout = {}\n", drain_timeout)));
+        const auto manager = global_context->getTMTContext().getMPPTaskManager();
+        const auto monitor = manager->getMPPTaskMonitor();
+        auto context = createContextForTest();
+        auto gather_id = MPPGatherId(1, MPPQueryId(1, 1, 1, 1, "", 1, ""));
+        mpp::TaskMeta meta;
+        fillTaskMeta(&meta, 1, gather_id);
+        const auto start = std::chrono::steady_clock::now();
+        ASSERT_TRUE(manager->checkAvailable());
+        manager->setUnavailable();
+        EXPECT_FALSE(manager->checkAvailable());
+        auto shutdown = std::async(std::launch::async, [&] { monitor->waitAllMPPTasksFinish(global_context); });
+        EXPECT_EQ(shutdown.wait_for(100ms), std::future_status::timeout);
+        // A task dispatched after SIGTERM is still accepted during the five-second probe protection.
+        auto task = MPPTask::newTaskForTest(meta, context);
+        const auto task_id = task->getId().toString();
+        EXPECT_TRUE(monitor->isInMonitor(task_id));
+        if (finish_task)
+        {
+            EXPECT_EQ(shutdown.wait_for(5100ms), std::future_status::timeout);
+            task.reset();
+        }
+        ASSERT_EQ(shutdown.wait_for(6s), std::future_status::ready);
+        shutdown.get();
+        EXPECT_GE(std::chrono::steady_clock::now() - start, 5s);
+        EXPECT_EQ(monitor->isInMonitor(task_id), !finish_task);
+    }
+
     std::unique_ptr<Context> global_context;
 };
 
@@ -165,6 +203,35 @@ try
     }
     ASSERT_TRUE(mpp_task_manager->isTaskExists(original_task->getId()));
     ASSERT_TRUE(mpp_task_manager->getMPPTaskMonitor()->isInMonitor(original_task->getId().toString()));
+}
+CATCH
+
+TEST_F(TestMPPTaskManager, NoProbeAndNoTasksSkipInitialWait)
+try
+{
+    using namespace std::chrono_literals;
+    const auto config = loadConfigFromString("[flash]\ngraceful_wait_shutdown_timeout = 10\n");
+    global_context->setConfig(config);
+    global_context->setUsersConfig(config);
+    const auto manager = global_context->getTMTContext().getMPPTaskManager();
+    manager->setUnavailable();
+    const auto start = std::chrono::steady_clock::now();
+    manager->getMPPTaskMonitor()->waitAllMPPTasksFinish(global_context);
+    EXPECT_LT(std::chrono::steady_clock::now() - start, 1s);
+}
+CATCH
+
+TEST_F(TestMPPTaskManager, ProbeProtectionPrecedesTaskDrainTimeout)
+try
+{
+    checkProbeProtectionBeforeDrain(0, false);
+}
+CATCH
+
+TEST_F(TestMPPTaskManager, ProtectedLateTaskFinishesDuringNormalDrain)
+try
+{
+    checkProbeProtectionBeforeDrain(10, true);
 }
 CATCH
 
