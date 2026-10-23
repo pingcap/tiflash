@@ -26,8 +26,6 @@ template <typename Clock = std::chrono::steady_clock>
 class MPPTaskShutdownGuard
 {
 public:
-    static constexpr std::chrono::seconds DEFAULT_PROTECTION_WINDOW{60};
-
     bool checkAvailable()
     {
         std::lock_guard lock(mu);
@@ -44,17 +42,17 @@ public:
     }
 
     // Once unavailable, failed probes cannot renew this window.
-    typename Clock::duration getRemainingProtection(
-        std::chrono::seconds protection_window = DEFAULT_PROTECTION_WINDOW) const
+    typename Clock::duration getRemainingProtection() const
     {
         std::lock_guard lock(mu);
         if (!last_probe_time)
             return Clock::duration::zero();
         const auto elapsed = Clock::now() - *last_probe_time;
-        return elapsed < protection_window ? protection_window - elapsed : Clock::duration::zero();
+        return elapsed < PROTECTION_WINDOW ? PROTECTION_WINDOW - elapsed : Clock::duration::zero();
     }
 
 private:
+    static constexpr std::chrono::seconds PROTECTION_WINDOW{5};
     mutable std::mutex mu;
     bool is_available = true;
     std::optional<typename Clock::time_point> last_probe_time;

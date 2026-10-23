@@ -92,10 +92,6 @@
 # auto_tune_sec = 5
 
 [flash]
-## Minimum time in seconds to keep serving tasks after the last successful MPP IsAlive probe during shutdown.
-## New probes report unavailable once shutdown starts. The task-drain timeout starts after this window expires.
-## Set to 0 to disable probe protection.
-# graceful_shutdown_probe_timeout = 60
 # service_addr = "0.0.0.0:3930"
 # compact_log_min_period = 120
 # overlap_threshold = 0.6
