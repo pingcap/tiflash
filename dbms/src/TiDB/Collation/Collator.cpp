@@ -81,48 +81,8 @@ class Pattern : public ITiDBCollator::IPattern
 public:
     void compile(const std::string & pattern, char escape) override
     {
-<<<<<<< HEAD
         chars.clear();
         match_types.clear();
-=======
-        MatchType tp;
-        auto c = Collator::decodeChar(pattern.data(), offset, pattern.length());
-        if (c == escape)
-        {
-            tp = MatchType::Match;
-            if (offset < pattern.length())
-            {
-                // use next char to match
-                c = Collator::decodeChar(pattern.data(), offset, pattern.length());
-            }
-            else
-            {
-                // use `escape` to match
-            }
-        }
-        else if (c == '_')
-        {
-            tp = MatchType::One;
-        }
-        else if (c == '%')
-        {
-            // Only keep one '%' for continuous '%'s
-            if (last_tp == MatchType::Any)
-            {
-                continue;
-            }
-            tp = MatchType::Any;
-        }
-        else
-        {
-            tp = MatchType::Match;
-        }
-        pattern_weights.push_back(c);
-        match_types.push_back(tp);
-        last_tp = tp;
-    }
-}
->>>>>>> 93d57a293f (fix serialize reserve error (#11135))
 
         chars.reserve(pattern.length() * sizeof(typename Collator::CharType));
         match_types.reserve(pattern.length() * sizeof(typename Pattern::MatchType));
@@ -131,109 +91,14 @@ public:
         while (offset < pattern.length())
         {
             MatchType tp;
-            auto c = Collator::decodeChar(pattern.data(), offset);
+            auto c = Collator::decodeChar(pattern.data(), offset, pattern.length());
             if (c == escape)
             {
                 tp = MatchType::Match;
                 if (offset < pattern.length())
                 {
-<<<<<<< HEAD
                     // use next char to match
-                    c = Collator::decodeChar(pattern.data(), offset);
-=======
-                    if (Collator::regexEq(Collator::decodeChar(s, s_offset, length), pattern_weights[p_idx]))
-                    {
-                        p_idx++;
-                        // To compare the next
-                        continue;
-                    }
-                }
-                else if (match_types[p_idx] == One)
-                {
-                    p_idx++;
-                    Collator::decodeChar(s, s_offset, length);
-                    continue;
-                }
-                else if (match_types[p_idx] == Any)
-                {
-                    // Last '%' can match all left characters
-                    if (p_idx == pattern_weights.size() - 1)
-                    {
-                        return true;
-                    }
-                    p_idx_after_any = ++p_idx;
-                    backtrack_s_offset = s_offset;
-                    continue;
-                }
-            }
-        }
-        else
-        {
-            // All characters in the pattern have been matched,
-            // we need to check if the rest of the string is empty.
-            if (s_offset >= length)
-            {
-                return true;
-            }
-            // Else there are still characters in the string to match,
-            // we need to backtrack below if there is '%' before.
-        }
-
-        // Backtrack
-        if (p_idx_after_any > 0)
-        {
-            if (backtrack_s_offset >= length)
-            {
-                return false;
-            }
-            Collator::decodeChar(s, s_offset = backtrack_s_offset, length);
-            // Fast forward to the first match position
-            if (match_types[p_idx_after_any] == Match)
-            {
-                while (true)
-                {
-                    if (s_offset >= length)
-                    {
-                        return false;
-                    }
-                    backtrack_s_offset = s_offset;
-                    if (Collator::regexEq(Collator::decodeChar(s, s_offset, length), pattern_weights[p_idx_after_any]))
-                    {
-                        break;
-                    }
-                }
-
-                p_idx = p_idx_after_any + 1;
-                continue;
-            }
-            p_idx = p_idx_after_any;
-            backtrack_s_offset = s_offset;
-            continue;
-        }
-        return false;
-    }
-    return true;
-}
-
-// Similar logical like match, but don't need to decodeChar
-template <typename Collator>
-int Pattern<Collator>::tryMatchAsciiCi(const char * s, size_t length) const
-{
-    size_t p_idx = 0;
-    size_t p_idx_after_any = 0;
-    size_t str_idx = 0;
-    size_t backtrack_idx = 0;
-
-    while (true)
-    {
-        if (p_idx < ascii_ci_pattern.size())
-        {
-            if (str_idx >= length)
-            {
-                if (match_types[p_idx] == Any && p_idx == ascii_ci_pattern.size() - 1)
-                {
-                    return 1;
->>>>>>> 93d57a293f (fix serialize reserve error (#11135))
+                    c = Collator::decodeChar(pattern.data(), offset, pattern.length());
                 }
                 else
                 {
@@ -269,7 +134,7 @@ int Pattern<Collator>::tryMatchAsciiCi(const char * s, size_t length) const
                 {
                 case Match:
                     if (s_offset < length
-                        && Collator::regexEq(Collator::decodeChar(s, tmp_s_offset = s_offset), chars[p_idx]))
+                        && Collator::regexEq(Collator::decodeChar(s, tmp_s_offset = s_offset, length), chars[p_idx]))
                     {
                         p_idx++;
                         s_offset = tmp_s_offset;
@@ -280,13 +145,16 @@ int Pattern<Collator>::tryMatchAsciiCi(const char * s, size_t length) const
                     if (s_offset < length)
                     {
                         p_idx++;
-                        Collator::decodeChar(s, s_offset);
+                        Collator::decodeChar(s, s_offset, length);
                         continue;
                     }
                     break;
                 case Any:
                     next_p_idx = p_idx;
-                    Collator::decodeChar(s, next_s_offset = s_offset);
+                    // '%' can match an empty suffix without decoding past the input.
+                    next_s_offset = 0;
+                    if (s_offset < length)
+                        Collator::decodeChar(s, next_s_offset = s_offset, length);
                     p_idx++;
                     continue;
                 }
@@ -351,15 +219,17 @@ private:
     using WeightType = T;
     using CharType = T;
 
-    static inline CharType decodeChar(const char * s, size_t & offset)
+    static inline CharType decodeChar(const char * s, size_t & offset, size_t length)
     {
         if constexpr (std::is_same_v<T, char>)
         {
+            if (unlikely(offset >= length))
+                throw DB::Exception("Encounter invalid character");
             return s[offset++];
         }
         else
         {
-            return decodeUtf8Char(s, offset);
+            return decodeUtf8Char(s, offset, length);
         }
     }
 
@@ -391,8 +261,8 @@ public:
         size_t offset1 = 0, offset2 = 0;
         while (offset1 < v1.length() && offset2 < v2.length())
         {
-            auto c1 = decodeChar(s1, offset1);
-            auto c2 = decodeChar(s2, offset2);
+            auto c1 = decodeChar(s1, offset1, v1.length());
+            auto c2 = decodeChar(s2, offset2, v2.length());
             auto sk1 = weight(c1);
             auto sk2 = weight(c2);
             auto cmp = sk1 - sk2;
@@ -400,49 +270,7 @@ public:
                 return DB::signum(cmp);
         }
 
-<<<<<<< HEAD
         return (offset1 < v1.length()) - (offset2 < v2.length());
-=======
-template <typename T, bool padding>
-inline std::unique_ptr<ITiDBCollator::IPattern> BinCollator<T, padding>::pattern() const
-{
-    return std::make_unique<Pattern<BinCollator<T, padding>>>();
-}
-
-template <typename T, bool padding>
-inline typename BinCollator<T, padding>::CharType BinCollator<T, padding>::decodeChar(
-    const char * s,
-    size_t & offset,
-    size_t length)
-{
-    if constexpr (std::is_same_v<T, char>)
-    {
-        if (unlikely(offset >= length))
-            throw DB::Exception("Encounter invalid character");
-        return s[offset++];
-    }
-    else
-    {
-        return decodeUtf8Char(s, offset, length);
-    }
-}
-
-int GeneralCICollator::compare(const char * s1, size_t length1, const char * s2, size_t length2) const
-{
-    auto v1 = rtrim(s1, length1);
-    auto v2 = rtrim(s2, length2);
-
-    size_t offset1 = 0, offset2 = 0;
-    while (offset1 < v1.length() && offset2 < v2.length())
-    {
-        auto c1 = decodeChar(s1, offset1, v1.length());
-        auto c2 = decodeChar(s2, offset2, v2.length());
-        auto sk1 = weight(c1);
-        auto sk2 = weight(c2);
-        auto cmp = sk1 - sk2;
-        if (cmp != 0)
-            return DB::signum(cmp);
->>>>>>> 93d57a293f (fix serialize reserve error (#11135))
     }
 
     StringRef convert(const char * s, size_t length, std::string & container, std::vector<size_t> * lens) const override
@@ -452,7 +280,6 @@ int GeneralCICollator::compare(const char * s1, size_t length1, const char * s2,
 
     StringRef sortKey(const char * s, size_t length, std::string & container) const override
     {
-<<<<<<< HEAD
         return convertImpl<false, true>(s, length, container, nullptr);
     }
 
@@ -476,12 +303,6 @@ int GeneralCICollator::compare(const char * s1, size_t length1, const char * s2,
         size_t offset = 0;
         size_t total_size = 0;
         size_t v_length = v.length();
-=======
-        auto c = decodeChar(s, offset, v_length);
-        auto sk = weight(c);
-        container[total_size++] = static_cast<char>(sk >> 8);
-        container[total_size++] = static_cast<char>(sk);
->>>>>>> 93d57a293f (fix serialize reserve error (#11135))
 
         if constexpr (need_len)
         {
@@ -492,7 +313,7 @@ int GeneralCICollator::compare(const char * s1, size_t length1, const char * s2,
 
         while (offset < v_length)
         {
-            auto c = decodeChar(s, offset);
+            auto c = decodeChar(s, offset, v_length);
             auto sk = weight(c);
             container[total_size++] = static_cast<char>(sk >> 8);
             container[total_size++] = static_cast<char>(sk);
@@ -506,7 +327,6 @@ int GeneralCICollator::compare(const char * s1, size_t length1, const char * s2,
 
     std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<GeneralCICollator>>(); }
 
-<<<<<<< HEAD
 private:
     const std::string name = "GeneralCI";
 
@@ -514,7 +334,10 @@ private:
     using WeightType = GeneralCI::WeightType;
     using CharType = Rune;
 
-    static inline CharType decodeChar(const char * s, size_t & offset) { return decodeUtf8Char(s, offset); }
+    static inline CharType decodeChar(const char * s, size_t & offset, size_t length)
+    {
+        return decodeUtf8Char(s, offset, length);
+    }
 
     static inline WeightType weight(CharType c)
     {
@@ -528,12 +351,6 @@ private:
 
     friend class Pattern<GeneralCICollator>;
 };
-=======
-inline GeneralCICollator::CharType GeneralCICollator::decodeChar(const char * s, size_t & offset, size_t length)
-{
-    return decodeUtf8Char(s, offset, length);
-}
->>>>>>> 93d57a293f (fix serialize reserve error (#11135))
 
 namespace UnicodeCI
 {
@@ -734,7 +551,10 @@ private:
 private:
     using CharType = Rune;
 
-    static inline CharType decodeChar(const char * s, size_t & offset) { return decodeUtf8Char(s, offset); }
+    static inline CharType decodeChar(const char * s, size_t & offset, size_t length)
+    {
+        return decodeUtf8Char(s, offset, length);
+    }
 
     static inline void writeResult(uint64_t & w, std::string & container, size_t & total_size)
     {
@@ -756,7 +576,7 @@ private:
             {
                 while (offset < length)
                 {
-                    auto r = decodeChar(s, offset);
+                    auto r = decodeChar(s, offset, length);
                     if (!T::weight(first, second, r))
                     {
                         continue;
@@ -785,35 +605,13 @@ private:
     friend class Pattern<UCACICollator>;
 };
 
-<<<<<<< HEAD
 class Unicode0400
 {
 public:
     static inline bool regexEq(Rune a, Rune b)
-=======
-template <typename T, bool padding>
-inline typename UCACICollator<T, padding>::CharType UCACICollator<T, padding>::decodeChar(
-    const char * s,
-    size_t & offset,
-    size_t length)
-{
-    return decodeUtf8Char(s, offset, length);
-}
-
-template <typename T, bool padding>
-inline void UCACICollator<T, padding>::weight(
-    uint64_t & first,
-    uint64_t & second,
-    size_t & offset,
-    size_t length,
-    const char * s)
-{
-    if (first == 0)
->>>>>>> 93d57a293f (fix serialize reserve error (#11135))
     {
         if (a > 0xFFFF || b > 0xFFFF)
         {
-<<<<<<< HEAD
             return a == b;
         }
 
@@ -851,17 +649,6 @@ inline void UCACICollator<T, padding>::weight(
             auto long_weight = weightLutLongMap(r);
             first = long_weight.first;
             second = long_weight.second;
-=======
-            while (offset < length)
-            {
-                auto r = decodeChar(s, offset, length);
-                if (!T::weight(first, second, r))
-                {
-                    continue;
-                }
-                break;
-            }
->>>>>>> 93d57a293f (fix serialize reserve error (#11135))
         }
         else
         {
