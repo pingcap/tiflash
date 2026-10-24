@@ -472,9 +472,11 @@ struct TiDBConvertToInteger
         {
             is_negative = true;
         }
+        /// Like TiDB, parse a 64-bit integer as UInt64 if it is not negative and as Int64 otherwise,
+        /// then convert it to the destination type.
         if (!is_negative)
         {
-            auto [value, err] = toUInt<T>(int_string);
+            auto [value, err] = toUInt<std::conditional_t<sizeof(T) == sizeof(UInt64), UInt64, T>>(int_string);
             if (err == OVERFLOW_ERR)
                 context.getDAGContext()->handleOverflowError("cast str as int");
             return static_cast<T>(value);
@@ -482,7 +484,7 @@ struct TiDBConvertToInteger
         else
         {
             /// TODO: append warning CastAsSignedOverflow if try to cast negative value to unsigned
-            auto [value, err] = toInt<T>(int_string);
+            auto [value, err] = toInt<std::conditional_t<sizeof(T) == sizeof(Int64), Int64, T>>(int_string);
             if (err == OVERFLOW_ERR)
                 context.getDAGContext()->handleOverflowError("cast str as int");
             return static_cast<T>(value);
