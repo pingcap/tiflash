@@ -17,7 +17,6 @@
 #include <Common/Logger.h>
 #include <Common/Timer.h>
 #include <Poco/Net/HTTPServer.h>
-#include <prometheus/exposer.h>
 #include <prometheus/gateway.h>
 
 namespace DB
@@ -54,7 +53,6 @@ private:
 
     int metrics_interval;
     std::shared_ptr<prometheus::Gateway> gateway;
-    std::shared_ptr<prometheus::Exposer> exposer;
 
     std::shared_ptr<Poco::Net::HTTPServer> server;
 };

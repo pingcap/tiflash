@@ -126,6 +126,10 @@ if (OS_LINUX)
                 DESTINATION ".")
     endif()
 
+    install (TARGETS tici_search_lib
+            COMPONENT tiflash-release
+            DESTINATION ".")
+
     if (ENABLE_CLARA AND USE_INTERNAL_LIBCLARA)
         install (TARGETS clara_shared
                 COMPONENT tiflash-release
@@ -156,6 +160,10 @@ elseif(APPLE)
             COMPONENT tiflash-release
             DESTINATION "."
             PRE_INCLUDE_REGEXES ".*proxy.*|.*clara.*")
+
+    install (TARGETS tici_search_lib
+            COMPONENT tiflash-release
+            DESTINATION ".")
 endif ()
 
 include(CMakePrintHelpers)
