@@ -1092,6 +1092,25 @@ try
     testNotOnlyNull<String, UInt64>("-9223372036854775808", static_cast<UInt64>(MIN_INT64));
 
     auto & dag_context = getDAGContext();
+    dag_context.clearWarnings();
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Int64>>({MAX_INT64, MIN_INT64, -1, MIN_INT64}),
+        executeFunction(
+            func_name,
+            {createColumn<Nullable<String>>(
+                 {"9223372036854775807", "9223372036854775808", "18446744073709551615", "-9223372036854775808"}),
+             createCastTypeConstColumn("Nullable(Int64)")}));
+    ASSERT_EQ(dag_context.getWarningCount(), 2);
+    dag_context.clearWarnings();
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<UInt64>>({MAX_UINT64, MAX_UINT64, static_cast<UInt64>(MIN_INT64)}),
+        executeFunction(
+            func_name,
+            {createColumn<Nullable<String>>({"18446744073709551615", "-1", "-9223372036854775808"}),
+             createCastTypeConstColumn("Nullable(UInt64)")}));
+    ASSERT_EQ(dag_context.getWarningCount(), 2);
+    dag_context.clearWarnings();
+
     UInt64 ori_flags = dag_context.getFlags();
     dag_context.addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
     testNotOnlyNull<String, Int64>("18446744073709551616", -1);
