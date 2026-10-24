@@ -307,7 +307,7 @@ std::vector<const tipb::Expr *> Set::createFromDAGExpr(
         }
         Field value = decodeLiteral(child);
 
-        if (child.field_type().tp() == TiDB::TypeTimestamp && !timezone_info.is_utc_timezone)
+        if (!value.isNull() && child.field_type().tp() == TiDB::TypeTimestamp && !timezone_info.is_utc_timezone)
         {
             static const auto & time_zone_utc = DateLUT::instance("UTC");
             UInt64 from_time = value.get<UInt64>();

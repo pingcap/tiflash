@@ -94,7 +94,9 @@ DateLUTImpl::DateLUTImpl(const std::string & time_zone_)
                   .post /* Second midnight appears after transition, so there was a piece of previous day after transition */
             : lookup.pre;
 
-        start_of_day = std::chrono::system_clock::to_time_t(start_of_day_time_point);
+        // Avoid converting to system_clock's native duration, which may be
+        // nanoseconds and overflow before the end of this table in 2283.
+        start_of_day = start_of_day_time_point.time_since_epoch().count();
 
         Values & values = lut[i];
         values.year = date.year();

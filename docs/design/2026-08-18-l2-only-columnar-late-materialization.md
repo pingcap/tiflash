@@ -2,7 +2,7 @@
 
 - Author(s): TBD
 - Status: Implemented (default off)
-- Last Updated: 2026-08-26
+- Last Updated: 2026-10-12
 - Discussion PR: TBD
 - Tracking Issue: TBD
 
@@ -173,9 +173,10 @@ When LM is enabled for one reader work, `RNColumnarInputStream` uses the
 optional two-phase extension instead. It reads and deserializes only the early
 header columns, evaluates a `FilterTransformAction`, passes its exact
 selection to CSE, obtains selected late columns, and then rebuilds the original
-header. The existing downstream filter remains in the pipeline and is applied
-again to the assembled block; LM uses the first evaluation only to avoid late
-column work, not to change filter ownership.
+header. The downstream extra-cast and filter stages remain in the pipeline.
+LM-result blocks are marked `DM::RSResult::All`, so the filter stage skips
+re-evaluating their predicates. Legacy-reader blocks still use normal
+downstream exact filtering.
 
 The relevant implementation is summarized below.
 
@@ -213,9 +214,8 @@ for an entire query. It requires all of the following:
 4. The exact condition set has a non-empty physical column dependency set, and
    the source header has at least one late column.
 5. The exact predicate does not reference the synthetic extra table-ID column
-   or a generated column. `TIME`, and `TIMESTAMP` outside UTC, are also
-   rejected because the local early-action representation has not been proven
-   equivalent for those cases.
+   or a generated column. `TIME` and non-UTC `TIMESTAMP` predicates are
+   supported through the local casts described in Exact Predicate Evaluation.
 6. `late_column_count / max(1, early_column_count - 2)` is strictly greater
    than `columnar_l2_late_materialization_min_late_to_early_ratio`. The two
    subtracted early columns are handle and version.
@@ -374,22 +374,39 @@ filter_conditions.conditions AND table_scan.getPushedDownFilters()
 
 `ColumnRef` operands in the copied expressions are remapped from the TableScan
 column index to the early-header index. The original protobuf expressions are
-not mutated. For each pending batch, TiFlash performs the following steps:
+not mutated. `buildColumnarReaderSharedContext` preserves these original
+conditions in `exact_filter_conditions`. Separate copies sent to CSE normalize
+supported comparisons between a `TIMESTAMP` column and a `DATETIME` literal
+from session timezone to UTC for rough filtering.
+
+`RNColumnarReadTask::buildLateMaterializationFilterAction` matches early columns
+to TableScan metadata by ColumnID and reuses `buildExtraCastsAfterTS`. Before
+exact filtering, it converts non-UTC `TIMESTAMP` values from UTC to the session
+timezone and changes `TIME` columns from `Int64` nanoseconds to `MyDuration`
+with the declared fractional-second precision. `DATETIME` values retain their
+original timezone-independent representation. A projection keeps the original
+early-column names after these casts, so the remapped conditions evaluate the
+same values as the normal downstream pipeline.
+
+For each pending batch, TiFlash performs the following steps:
 
 1. Deserialize the early physical columns into `early_block`.
-2. Copy it into `evaluation_block` and execute the cached filter action there.
+2. Copy it into `evaluation_block` and execute the extra casts followed by the
+   cached exact filter there.
 3. Send `All`, `None`, or the resulting `UInt8` filter to CSE with the batch ID.
 4. Apply that same selection to the unmodified early columns.
 5. Deserialize selected late columns and assemble the original full source
    header.
 
 The evaluation copy prevents predicate-only casts and temporary columns from
-changing the early columns used in final assembly. `action.fill` still adds the
-physical table ID, and the existing downstream filter is intentionally retained
-in both stream and pipeline paths. Therefore an LM-result block is filtered
-once for selection and again by the normal pipeline. The second application is
-the current compatibility guard; it must not be removed without an explicit
-semantic-equivalence and profiling change.
+changing the early columns used in final assembly. The assembled block retains
+UTC timestamps and `Int64` duration storage types; the downstream extra-cast
+stage converts these output values once. `action.fill` adds the physical table
+ID, and successful LM blocks are marked `DM::RSResult::All`. The existing
+downstream filter remains in both stream and pipeline paths, but
+`FilterTransformAction` uses this marker to skip predicate evaluation for
+already selected rows. Correctness therefore depends on the early action
+matching the normal pipeline's combined conditions and cast semantics.
 
 If a reader is ineligible before its first LM batch, `readImpl` uses the legacy
 full-block ABI. If the first exact-selection probe is too dense, TiFlash
@@ -726,7 +743,16 @@ non-overlap gate. The following broader cases remain required:
     FTS, vector projection, generated/extra-table-ID predicate, pack-clean,
     missing FFI, and internal concurrent mode.
 
-TiFlash unit and integration tests still need to cover:
+The existing
+[`gtest_columnar_late_materialization.cpp`](../../dbms/src/Storages/tests/gtest_columnar_late_materialization.cpp)
+tests cover UTC, named and fixed-offset timezones; normal and partition scans;
+original versus normalized predicates; `TIMESTAMP`/`DATETIME` comparisons;
+nullable, negative and greater-than-24-hour `TIME` values with precision 0/4/6;
+combined temporal predicates; reordered early columns; action reuse; and
+preservation of the original block values and types. These tests build the real
+exact-filter action without opening a CSE reader.
+
+Remaining unit and integration coverage includes:
 
 1. Early projection extraction and original-header reconstruction.
 2. Exact selection for AND, OR, NOT, NULL, casts, timestamp/timezone,
@@ -738,6 +764,9 @@ TiFlash unit and integration tests still need to cover:
 5. Full-read local filtering when an individual reader does not support LM,
    while the pipeline uses materialization-action filter ownership.
 6. Exception scope guards that discard a pending Rust batch.
+7. Nullable `TIMESTAMP` values and daylight-saving transitions, with real L2
+   reads comparing LM-on, LM-off and TiKV results. Verify LM activation through
+   logs or profile counters as well as result equality.
 
 ### Scenario Tests
 
@@ -786,8 +815,9 @@ regression for dense or eager-heavy batches.
 - Selective wide scans can skip complete L2 late-column packs.
 - Only selected late values cross FFI, including values from eager sources.
 - L0/L1/memtable I/O behavior remains unchanged.
-- LM evaluates an additional early-block selection before the normal downstream
-  filter, which adds CPU work but preserves existing final filter ownership.
+- LM performs exact selection before late-column materialization. Early-column
+  casts and selection handling add CPU work; the downstream filter skips
+  predicate evaluation for blocks marked `DM::RSResult::All`.
 - Rust retains a batch-owned eager late sidecar and L2 metadata until selection
   completes.
 
@@ -801,8 +831,9 @@ regression for dense or eager-heavy batches.
 3. **Memory growth:** eager source payloads and pending early data coexist until
    materialization; mixed-source batches can increase peak memory.
 4. **Expression drift:** remapped ColumnRefs or independently rebuilt actions
-   could change the selection. The normal downstream filter is retained as a
-   compatibility guard; equivalence tests are still required.
+   could change the selection. LM-result blocks skip downstream predicate
+   evaluation, so equivalence tests must verify the combined conditions,
+   temporal casts and preservation of original output values.
 5. **State-machine bugs:** cancellation, retry, or exception paths could leave a
    pending batch or stale FFI buffer alive.
 6. **Pack-plan bugs:** treating pack IDs as cross-column identities would return
