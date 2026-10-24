@@ -700,10 +700,11 @@ try
         EXPECT_EQ(converted, test.expected_utc.toPackedUInt());
         convertTimeZone(converted, converted, utc, timezone);
         EXPECT_EQ(converted, test.local.toPackedUInt());
-        EXPECT_EQ(isLocalTimeInTimeZoneTransition(test.local, timezone), test.transition);
+        EXPECT_EQ(isTimeZoneConversionSafeForRoughFilter(test.local, timezone), !test.transition);
     }
 
     const auto & ny = DateLUT::instance("America/New_York");
+    EXPECT_THROW(getEpochSecond(MyDateTime(2026, 2, 30, 12, 0, 0, 0), ny), Exception);
     for (const auto & local : {
              MyDateTime(2026, 3, 8, 2, 0, 0, 0),
              MyDateTime(2026, 3, 8, 2, 30, 0, 0),
@@ -712,8 +713,10 @@ try
     {
         UInt64 converted = 0;
         // TiDB Time.ConvertTimeZone rejects nonexistent local datetimes.
-        EXPECT_THROW(convertTimeZone(local.toPackedUInt(), converted, ny, utc), Exception);
-        EXPECT_TRUE(isLocalTimeInTimeZoneTransition(local, ny));
+        EXPECT_THROW(convertTimeZone(local.toPackedUInt(), converted, ny, utc, true), Exception);
+        EXPECT_NO_THROW(convertTimeZone(local.toPackedUInt(), converted, ny, utc, false));
+        EXPECT_EQ(converted, 0);
+        EXPECT_FALSE(isTimeZoneConversionSafeForRoughFilter(local, ny));
     }
 }
 CATCH
@@ -775,8 +778,62 @@ try
              })
         {
             SCOPED_TRACE(local.toString(6));
-            EXPECT_EQ(isLocalTimeInTimeZoneTransition(local, timezone), transition);
+            EXPECT_EQ(isTimeZoneConversionSafeForRoughFilter(local, timezone), !transition);
         }
+    }
+}
+CATCH
+
+TEST_F(TestMyTime, HistoricalTimeZoneRoughFilterSafety)
+try
+{
+    const auto & timezone = DateLUT::instance("Africa/Monrovia");
+    for (const auto & [local, epoch] : {
+             // The historical offset is -00:44:30, but DateLUT keeps UTC seconds.
+             std::pair{MyDateTime(1970, 7, 15, 11, 15, 0, 123456), 16891170},
+             // After the 1972 jump, cctz is unique but the rounded LUT still disagrees.
+             std::pair{MyDateTime(1972, 1, 7, 0, 45, 0, 123456), 63593100},
+         })
+    {
+        SCOPED_TRACE(local.toString(6));
+        EXPECT_EQ(getEpochSecond(local, timezone), epoch);
+        EXPECT_NE(convertUTC2TimeZone(epoch, local.micro_second, timezone).toPackedUInt(), local.toPackedUInt());
+        EXPECT_FALSE(isTimeZoneConversionSafeForRoughFilter(local, timezone));
+    }
+    EXPECT_TRUE(isTimeZoneConversionSafeForRoughFilter(MyDateTime(1972, 1, 8, 12, 0, 0, 123456), timezone));
+    EXPECT_TRUE(isTimeZoneConversionSafeForRoughFilter(MyDateTime(0), timezone));
+}
+CATCH
+
+TEST_F(TestMyTime, TimeZoneSupportedYearRange)
+try
+{
+    const auto & utc = DateLUT::instance("UTC");
+    const auto & singapore = DateLUT::instance("Asia/Singapore");
+    for (const auto & [local, expected] : {
+             std::pair{MyDateTime(2263, 1, 1, 12, 0, 0, 123456), 9246196800LL},
+             std::pair{MyDateTime(2283, 1, 1, 12, 0, 0, 123456), 9877348800LL},
+             std::pair{MyDateTime(2283, 11, 11, 23, 59, 59, 123456), 9904521599LL},
+         })
+    {
+        SCOPED_TRACE(local.toString(6));
+        EXPECT_EQ(getEpochSecond(local, singapore), expected);
+        EXPECT_EQ(convertUTC2TimeZone(expected, local.micro_second, singapore).toPackedUInt(), local.toPackedUInt());
+        EXPECT_TRUE(isTimeZoneConversionSafeForRoughFilter(local, singapore));
+        UInt64 converted = 0;
+        convertTimeZone(local.toPackedUInt(), converted, singapore, utc, true);
+        EXPECT_EQ(converted, convertUTC2TimeZone(expected, local.micro_second, utc).toPackedUInt());
+    }
+    // DATE_LUT_SIZE truncates the final year. Inversion remains exact, but
+    // rough filtering must fall back when the projection cannot represent it.
+    const MyDateTime beyond_table(2283, 12, 31, 12, 0, 0, 123456);
+    EXPECT_EQ(getEpochSecond(beyond_table, singapore), 9908798400LL);
+    EXPECT_FALSE(isTimeZoneConversionSafeForRoughFilter(beyond_table, singapore));
+    for (const auto * timezone : {&utc, &singapore})
+    {
+        EXPECT_TRUE(isTimeZoneConversionSafeForRoughFilter(MyDateTime(1925, 1, 2, 12, 0, 0, 0), *timezone));
+        for (const auto year : {1900, 1924, 2284, 9999})
+            EXPECT_FALSE(isTimeZoneConversionSafeForRoughFilter(MyDateTime(year, 1, 1, 12, 0, 0, 0), *timezone));
     }
 }
 CATCH
@@ -821,7 +878,9 @@ try
     {
         SCOPED_TRACE(timezone);
         UInt64 converted = 0;
-        EXPECT_THROW(convertTimeZone(local.toPackedUInt(), converted, DateLUT::instance(timezone), utc), Exception);
+        EXPECT_THROW(
+            convertTimeZone(local.toPackedUInt(), converted, DateLUT::instance(timezone), utc, true),
+            Exception);
     }
 }
 CATCH

@@ -185,8 +185,8 @@ inline RSOperatorPtr parseTiCompareExpr( //
                     UInt64 local_time = value.get<UInt64>();
                     if (literal_type == TiDB::TypeTimestamp)
                         convertTimeZone(local_time, local_time, DateLUT::instance("UTC"), *timezone_info.timezone);
-                    if (isLocalTimeInTimeZoneTransition(MyDateTime(local_time), *timezone_info.timezone))
-                        return createUnsupported("Timestamp comparison boundary is in a timezone fold or gap");
+                    if (!isTimeZoneConversionSafeForRoughFilter(MyDateTime(local_time), *timezone_info.timezone))
+                        return createUnsupported("Timestamp comparison boundary cannot be safely converted to UTC");
                 }
                 // convert literal value from timezone specified in cop request to UTC
                 if (literal_type == TiDB::TypeDatetime && !timezone_info.is_utc_timezone)
@@ -422,8 +422,10 @@ RSOperatorPtr FilterParser::parseRFInExpr(
             for (auto element : setElements)
             {
                 if (!element.isNull() && timezone_info.is_name_based
-                    && isLocalTimeInTimeZoneTransition(MyDateTime(element.get<UInt64>()), *timezone_info.timezone))
-                    return createUnsupported("Timestamp runtime filter contains a timezone fold or gap");
+                    && !isTimeZoneConversionSafeForRoughFilter(
+                        MyDateTime(element.get<UInt64>()),
+                        *timezone_info.timezone))
+                    return createUnsupported("Timestamp runtime filter cannot be safely converted to UTC");
                 // convert literal value from timezone specified in cop request to UTC
                 cop::convertFieldWithTimezone(element, timezone_info);
                 values.push_back(element);

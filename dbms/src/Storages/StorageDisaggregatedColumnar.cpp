@@ -657,10 +657,9 @@ bool normalizeTimestampCompareDateTimeLiteralToUTC(tipb::Expr & expr, const Time
                     UInt64 local_time = from_time;
                     if (literal_type == TiDB::TypeTimestamp)
                         convertTimeZone(from_time, local_time, time_zone_utc, *timezone_info.timezone);
-                    // UTC -> local is not one-to-one during a fold, and gap
-                    // boundaries have no UTC inverse. One converted literal
-                    // cannot represent the session-timezone comparison.
-                    if (isLocalTimeInTimeZoneTransition(MyDateTime(local_time), *timezone_info.timezone))
+                    // A single UTC boundary requires a unique inverse that
+                    // agrees with the exact predicate's DateLUT projection.
+                    if (!isTimeZoneConversionSafeForRoughFilter(MyDateTime(local_time), *timezone_info.timezone))
                         return false;
                 }
                 if (literal_type != TiDB::TypeDatetime)

@@ -235,6 +235,9 @@ MyDateTime convertUTC2TimeZone(time_t utc_ts, UInt32 micro_second, const DateLUT
 
 MyDateTime convertUTC2TimeZoneByOffset(time_t utc_ts, UInt32 micro_second, Int64 offset);
 
+// Reverse DateLUT's UTC-to-local projection for row-encoded timestamp output.
+UInt64 convertTimeZoneToUTCForOutput(UInt64 local_time, const DateLUTImpl & time_zone);
+
 std::pair<time_t, UInt32> roundTimeByFsp(time_t second, UInt64 nano_second, UInt8 fsp);
 
 int calcDayNum(int year, int month, int day);
@@ -250,10 +253,9 @@ size_t maxFormattedDateTimeStringLength(const String & format);
 // AdjustedGoTime behavior (UNIX_TIMESTAMP's integer signature).
 time_t getEpochSecond(const MyDateTime & my_time, const DateLUTImpl & time_zone, bool adjust_for_dst_gap = false);
 
-// A local comparison boundary in a clock fold/gap cannot safely be replaced by
-// a single UTC boundary for rough filtering. Includes DateLUT's rounded
-// transition intervals, since UTC-to-local projection still uses DateLUT.
-bool isLocalTimeInTimeZoneTransition(const MyDateTime & my_time, const DateLUTImpl & time_zone);
+// A local rough-filter boundary needs a unique UTC inverse compatible with
+// DateLUT's UTC-to-local projection, outside both precise and rounded fold/gap intervals.
+bool isTimeZoneConversionSafeForRoughFilter(const MyDateTime & my_time, const DateLUTImpl & time_zone);
 
 bool isValidSeparator(char c, int previous_parts);
 

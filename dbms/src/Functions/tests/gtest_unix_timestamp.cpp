@@ -14,9 +14,11 @@
 
 #include <Columns/ColumnConst.h>
 #include <Common/Exception.h>
+#include <Flash/Coprocessor/DefaultChunkCodec.h>
 #include <Functions/FunctionsDateTime.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TiDB/Decode/TypeMapping.h>
 
 #include <string>
 #include <vector>
@@ -347,6 +349,77 @@ try
                  "0.000000",
                  fmt::format("{}.000000", midnight + 60)}),
             executeFunction(func_name_dec, input));
+    }
+}
+CATCH
+
+TEST_F(TestUnixTimestamp, HistoricalSecondLevelOffset)
+try
+{
+    context->getTimezoneInfo().resetByTimezoneName("Africa/Monrovia");
+    const auto input
+        = createColumn<MyDateTime>(std::make_tuple(6), {MyDateTime(1970, 7, 15, 11, 15, 0, 123456).toPackedUInt()});
+    ASSERT_COLUMN_EQ(createColumn<UInt64>({16891170}), executeFunction(func_name_int, input));
+    ASSERT_COLUMN_EQ(
+        createColumn<Decimal64>(std::make_tuple(18, 6), {"16891170.123456"}),
+        executeFunction(func_name_dec, input));
+}
+CATCH
+
+TEST_F(TestUnixTimestamp, AdjustedGoTimeMicrosecondThreshold)
+try
+{
+    context->getTimezoneInfo().resetByTimezoneName("Antarctica/Vostok");
+    const auto input = createColumn<MyDateTime>(
+        std::make_tuple(6),
+        {MyDateTime(1994, 11, 1, 3, 59, 59, 999999).toPackedUInt(),
+         MyDateTime(1994, 11, 1, 4, 0, 0, 0).toPackedUInt(),
+         MyDateTime(1994, 11, 1, 4, 0, 0, 1).toPackedUInt(),
+         MyDateTime(1994, 11, 1, 4, 0, 1, 0).toPackedUInt()});
+    ASSERT_COLUMN_EQ(createColumn<UInt64>({783648000, 783648000, 0, 0}), executeFunction(func_name_int, input));
+    ASSERT_COLUMN_EQ(
+        createColumn<Decimal64>(std::make_tuple(18, 6), {"0.000000", "0.000000", "0.000000", "0.000000"}),
+        executeFunction(func_name_dec, input));
+}
+CATCH
+
+TEST_F(FunctionTest, TimeZoneRowOutputCompatibility)
+try
+{
+    struct Case
+    {
+        String timezone;
+        MyDateTime stored;
+        MyDateTime expected_output;
+    };
+    // TypeDefault cannot retain the original instant when DateLUT's forward
+    // projection loses information. Preserve its existing inverse and fold choice.
+    for (const auto & test : {
+             Case{"Africa/Monrovia", {1972, 1, 7, 0, 45, 0, 123456}, {1972, 1, 7, 0, 44, 30, 123456}},
+             Case{"America/New_York", {2026, 11, 1, 5, 30, 0, 123456}, {2026, 11, 1, 6, 30, 0, 123456}},
+             Case{"America/New_York", {2026, 11, 1, 6, 30, 0, 123456}, {2026, 11, 1, 6, 30, 0, 123456}},
+         })
+    {
+        SCOPED_TRACE(test.timezone + " " + test.stored.toString(6));
+        const auto zone = createConstColumn<String>(1, test.timezone);
+        const auto local = executeFunction(
+            "ConvertTimeZoneFromUTC",
+            {createColumn<MyDateTime>(std::make_tuple(6), {test.stored.toPackedUInt()}), zone},
+            nullptr,
+            true);
+        auto output = executeFunction("ConvertTimeZoneToUTC", {local, zone}, nullptr, true);
+        tipb::FieldType field_type;
+        field_type.set_tp(TiDB::TypeTimestamp);
+        field_type.set_decimal(6);
+        field_type.set_flag(TiDB::ColumnFlagNotNull);
+        const std::vector<tipb::FieldType> fields{field_type};
+        DefaultChunkCodec codec;
+        auto stream = codec.newCodecStream(fields);
+        Block block({output});
+        stream->encode(block, 0, 1);
+        const auto decoded = codec.decode(stream->getString(), {{"ts", TiDB::fieldTypeToColumnInfo(field_type)}});
+        ASSERT_EQ(decoded.rows(), 1);
+        EXPECT_EQ(decoded.getByPosition(0).column->getUInt(0), test.expected_output.toPackedUInt());
     }
 }
 CATCH

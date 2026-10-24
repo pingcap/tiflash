@@ -2459,7 +2459,7 @@ public:
                 if constexpr (convert_from_utc)
                     convertTimeZone(vec_from[i], result_time, time_zone_utc, time_zone_other);
                 else
-                    convertTimeZone(vec_from[i], result_time, time_zone_other, time_zone_utc);
+                    result_time = convertTimeZoneToUTCForOutput(vec_from[i], time_zone_other);
                 vec_to[i] = result_time;
             }
 

@@ -352,6 +352,57 @@ try
 }
 CATCH
 
+TEST_F(ColumnarLateMaterializationTest, TimestampHistoricalOffset)
+try
+{
+    context->getTimezoneInfo().resetByTimezoneName("Africa/Monrovia");
+    for (const auto & [stored, local] : {
+             std::pair{MyDateTime(1970, 7, 15, 12, 0, 0, 123456), MyDateTime(1970, 7, 15, 11, 15, 0, 123456)},
+             std::pair{MyDateTime(1972, 1, 7, 1, 0, 0, 123456), MyDateTime(1972, 1, 7, 0, 45, 0, 123456)},
+         })
+    {
+        SCOPED_TRACE(stored.toString(6));
+        Block raw{withID(createDateTimeColumn({stored, {}}, 6), 10, "timestamp")};
+        for (bool timestamp_literal : {false, true})
+        {
+            auto literal = constructDateTimeLiteralTiExpr((timestamp_literal ? stored : local).toPackedUInt());
+            if (timestamp_literal)
+                literal.mutable_field_type()->set_tp(TiDB::TypeTimestamp);
+            for (const auto sig : {tipb::EQTime, tipb::InTime})
+            {
+                for (bool partition : {false, true})
+                {
+                    SCOPED_TRACE(fmt::format(
+                        "timestamp_literal={} sig={} partition={}",
+                        timestamp_literal,
+                        tipb::ScalarFuncSig_Name(sig),
+                        partition));
+                    auto executor = tableScan({scanColumn(10, TiDB::TypeTimestamp)}, partition);
+                    auto predicate = scalar(sig, {columnRef(0, TiDB::TypeTimestamp), literal});
+                    auto * pushed = partition
+                        ? executor.mutable_partition_table_scan()->mutable_pushed_down_filter_conditions()
+                        : executor.mutable_tbl_scan()->mutable_pushed_down_filter_conditions();
+                    *pushed->Add() = predicate;
+                    google::protobuf::RepeatedPtrField<tipb::Expr> selection;
+                    *selection.Add() = predicate;
+                    auto task = buildTask(executor, selection);
+                    ASSERT_TRUE(task->isLateMaterializationFilterEligible());
+                    tipb::Executor normalized;
+                    ASSERT_TRUE(normalized.ParseFromString(normalized_scan));
+                    const auto & normalized_pushed = partition
+                        ? normalized.partition_table_scan().pushed_down_filter_conditions()
+                        : normalized.tbl_scan().pushed_down_filter_conditions();
+                    EXPECT_TRUE(normalized_pushed.empty());
+                    EXPECT_TRUE(normalized_selection.empty());
+                    auto action = task->buildLateMaterializationFilterAction(raw.cloneEmpty());
+                    checkFilter(*action, raw, {1, 0});
+                }
+            }
+        }
+    }
+}
+CATCH
+
 TEST_F(ColumnarLateMaterializationTest, TimestampDSTGap)
 try
 {

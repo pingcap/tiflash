@@ -19,10 +19,12 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/Set.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
@@ -715,6 +717,44 @@ try
             timezone);
         EXPECT_EQ(rs_operator->name(), "unsupported");
     }
+
+    timezone.resetByTimezoneName("Africa/Monrovia");
+    const DM::Attr attr{"col_timestamp", 4, std::make_shared<DataTypeMyDateTime>(6)};
+    for (const auto & [stored, local] : {
+             std::pair{MyDateTime(1970, 7, 15, 12, 0, 0, 123456), MyDateTime(1970, 7, 15, 11, 15, 0, 123456)},
+             std::pair{MyDateTime(1972, 1, 7, 1, 0, 0, 123456), MyDateTime(1972, 1, 7, 0, 45, 0, 123456)},
+         })
+    {
+        auto minmax = std::make_shared<DM::MinMaxIndex>(*attr.type);
+        // Single-row packs on both sides of the comparison boundary.
+        const auto & utc = DateLUT::instance("UTC");
+        const auto epoch
+            = utc.makeDateTime(stored.year, stored.month, stored.day, stored.hour, stored.minute, stored.second);
+        for (const auto delta : {-1, 0, 1})
+        {
+            const auto value = convertUTC2TimeZone(epoch + delta, stored.micro_second, utc);
+            auto column = attr.type->createColumn();
+            column->insert(Field(value.toPackedUInt()));
+            minmax->addPack(*column, nullptr);
+        }
+        DM::RSCheckParam param;
+        param.indexes.emplace(attr.col_id, DM::RSIndex(attr.type, minmax));
+        for (const auto * op : {"=", "!=", ">", ">=", "<", "<="})
+        {
+            SCOPED_TRACE(fmt::format("{} {}", op, local.toString(6)));
+            const auto rs_operator = generateRsOperator(
+                table_info_json,
+                fmt::format(
+                    "select * from default.t_111 where col_timestamp {} cast_string_datetime('{}')",
+                    op,
+                    local.toString(6)),
+                timezone);
+            EXPECT_EQ(rs_operator->name(), "unsupported");
+            EXPECT_EQ(
+                rs_operator->roughCheck(0, 3, param),
+                (DM::RSResults{DM::RSResult::Some, DM::RSResult::Some, DM::RSResult::Some}));
+        }
+    }
 }
 CATCH
 
@@ -737,6 +777,10 @@ try
     }
     const std::set<Field> elements{Field(MyDateTime(2026, 11, 1, 2, 30, 0, 0).toPackedUInt())};
     EXPECT_EQ(DM::FilterParser::parseRFInExpr(tipb::IN, target, attr, elements, timezone)->name(), "in");
+    const std::set<Field> mixed_elements{*elements.begin(), Field(MyDateTime(2026, 11, 1, 1, 30, 0, 0).toPackedUInt())};
+    const auto mixed = DM::FilterParser::parseRFInExpr(tipb::IN, target, attr, mixed_elements, timezone);
+    EXPECT_EQ(mixed->name(), "unsupported");
+    EXPECT_EQ(mixed->roughCheck(0, 2, {}), (DM::RSResults{DM::RSResult::Some, DM::RSResult::Some}));
     timezone.resetByTimezoneName("EST");
     const std::set<Field> fixed_zone_elements{Field(MyDateTime(2026, 11, 1, 1, 30, 0, 0).toPackedUInt())};
     EXPECT_EQ(DM::FilterParser::parseRFInExpr(tipb::IN, target, attr, fixed_zone_elements, timezone)->name(), "in");
@@ -787,6 +831,38 @@ try
 }
 CATCH
 
+TEST_F(FilterParserTest, TimestampRuntimeFilterHistoricalOffset)
+try
+{
+    TimezoneInfo timezone;
+    timezone.resetByTimezoneName("Africa/Monrovia");
+    tipb::Expr target;
+    target.set_tp(tipb::ColumnRef);
+    target.mutable_field_type()->set_tp(TiDB::TypeTimestamp);
+    const DM::Attr attr{"ts", 4, std::make_shared<DataTypeMyDateTime>(6)};
+    for (const auto & [stored, local] : {
+             std::pair{MyDateTime(1970, 7, 15, 12, 0, 0, 123456), MyDateTime(1970, 7, 15, 11, 15, 0, 123456)},
+             std::pair{MyDateTime(1972, 1, 7, 1, 0, 0, 123456), MyDateTime(1972, 1, 7, 0, 45, 0, 123456)},
+         })
+    {
+        SCOPED_TRACE(stored.toString(6));
+        UInt64 projected = 0;
+        convertTimeZone(stored.toPackedUInt(), projected, DateLUT::instance("UTC"), *timezone.timezone);
+        ASSERT_EQ(projected, local.toPackedUInt());
+        auto column = attr.type->createColumn();
+        column->insert(Field(stored.toPackedUInt()));
+        auto minmax = std::make_shared<DM::MinMaxIndex>(*attr.type);
+        minmax->addPack(*column, nullptr);
+        DM::RSCheckParam param;
+        param.indexes.emplace(attr.col_id, DM::RSIndex(attr.type, minmax));
+        const std::set<Field> elements{Field(local.toPackedUInt())};
+        auto rs_operator = DM::FilterParser::parseRFInExpr(tipb::IN, target, attr, elements, timezone);
+        EXPECT_EQ(rs_operator->name(), "unsupported");
+        EXPECT_EQ(rs_operator->roughCheck(0, 1, param), (DM::RSResults{DM::RSResult::Some}));
+    }
+}
+CATCH
+
 TEST_F(FilterParserTest, TimestampRuntimeFilterNull)
 try
 {
@@ -812,6 +888,44 @@ try
         const std::set<Field> mixed_elements{Field(), local_time};
         rs_operator = DM::FilterParser::parseRFInExpr(tipb::IN, target, attr, mixed_elements, timezone);
         EXPECT_EQ(rs_operator->toDebugString(), DM::createIn(attr, {Field(), utc_time})->toDebugString());
+    }
+}
+CATCH
+
+TEST_F(FilterParserTest, TimestampLiteralSetNull)
+try
+{
+    const auto type = std::make_shared<DataTypeMyDateTime>(6);
+    for (bool is_name_based : {true, false})
+    {
+        TimezoneInfo timezone;
+        if (is_name_based)
+            timezone.resetByTimezoneName("America/New_York");
+        else
+            timezone.resetByTimezoneOffset(-5 * 3600);
+        for (bool mixed : {false, true})
+        {
+            SCOPED_TRACE(fmt::format("name_based={} mixed={}", is_name_based, mixed));
+            tipb::Expr expr;
+            expr.add_children()->set_tp(tipb::ColumnRef);
+            auto * null_value = expr.add_children();
+            *null_value = constructNULLLiteralTiExpr();
+            null_value->mutable_field_type()->set_tp(TiDB::TypeTimestamp);
+            if (mixed)
+            {
+                auto * timestamp = expr.add_children();
+                *timestamp = constructDateTimeLiteralTiExpr(MyDateTime(2026, 11, 1, 7, 30, 0, 0).toPackedUInt());
+                timestamp->mutable_field_type()->set_tp(TiDB::TypeTimestamp);
+            }
+            Set set(SizeLimits{});
+            EXPECT_TRUE(set.createFromDAGExpr({type}, expr, true, timezone).empty());
+            EXPECT_TRUE(set.containsNullValue());
+            EXPECT_EQ(set.getTotalRowCount(), mixed ? 1 : 0);
+            if (mixed)
+                EXPECT_EQ(
+                    set.getSetElements(),
+                    (SetElements{{Field(MyDateTime(2026, 11, 1, 2, 30, 0, 0).toPackedUInt())}}));
+        }
     }
 }
 CATCH
