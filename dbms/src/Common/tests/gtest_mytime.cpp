@@ -718,6 +718,69 @@ try
 }
 CATCH
 
+TEST_F(TestMyTime, PreciseDSTTransitions)
+try
+{
+    for (const auto & [name, midnight] : {
+             std::pair{"America/St_Johns", 1268537400},
+             std::pair{"America/Goose_Bay", 1268539200},
+         })
+    {
+        SCOPED_TRACE(name);
+        const auto & timezone = DateLUT::instance(name);
+        // The clock jumps from 00:01 to 01:01, not from 00:00 to 01:00.
+        for (const auto & [local, seconds] : {
+                 std::pair{MyDateTime(2010, 3, 14, 0, 0, 0, 0), 0},
+                 std::pair{MyDateTime(2010, 3, 14, 0, 0, 30, 123456), 30},
+                 std::pair{MyDateTime(2010, 3, 14, 0, 0, 59, 999999), 59},
+                 std::pair{MyDateTime(2010, 3, 14, 1, 1, 0, 0), 60},
+             })
+        {
+            SCOPED_TRACE(local.toString(6));
+            EXPECT_EQ(getEpochSecond(local, timezone), midnight + seconds);
+            EXPECT_EQ(getEpochSecond(local, timezone, true), midnight + seconds);
+        }
+        for (const auto & local : {
+                 MyDateTime(2010, 3, 14, 0, 1, 0, 0),
+                 MyDateTime(2010, 3, 14, 1, 0, 59, 999999),
+             })
+        {
+            SCOPED_TRACE(local.toString(6));
+            EXPECT_THROW(getEpochSecond(local, timezone), Exception);
+            EXPECT_EQ(getEpochSecond(local, timezone, true), midnight + 60);
+        }
+    }
+}
+CATCH
+
+TEST_F(TestMyTime, ConservativeDSTTransitions)
+try
+{
+    for (const auto * name : {"America/St_Johns", "America/Goose_Bay"})
+    {
+        SCOPED_TRACE(name);
+        const auto & timezone = DateLUT::instance(name);
+        // Guard both the precise cctz interval and DateLUT's rounded interval.
+        for (const auto & [local, transition] : {
+                 std::pair{MyDateTime(2010, 3, 13, 23, 59, 59, 999999), false},
+                 std::pair{MyDateTime(2010, 3, 14, 0, 0, 0, 0), true},
+                 std::pair{MyDateTime(2010, 3, 14, 0, 0, 59, 999999), true},
+                 std::pair{MyDateTime(2010, 3, 14, 1, 0, 59, 999999), true},
+                 std::pair{MyDateTime(2010, 3, 14, 1, 1, 0, 0), false},
+                 std::pair{MyDateTime(2010, 11, 6, 22, 59, 59, 999999), false},
+                 std::pair{MyDateTime(2010, 11, 6, 23, 0, 0, 0), true},
+                 std::pair{MyDateTime(2010, 11, 6, 23, 0, 59, 999999), true},
+                 std::pair{MyDateTime(2010, 11, 7, 0, 0, 59, 999999), true},
+                 std::pair{MyDateTime(2010, 11, 7, 0, 1, 0, 0), false},
+             })
+        {
+            SCOPED_TRACE(local.toString(6));
+            EXPECT_EQ(isLocalTimeInTimeZoneTransition(local, timezone), transition);
+        }
+    }
+}
+CATCH
+
 TEST_F(TestMyTime, ConvertTimeZoneDateLine)
 try
 {

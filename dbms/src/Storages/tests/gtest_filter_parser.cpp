@@ -743,6 +743,50 @@ try
 }
 CATCH
 
+TEST_F(FilterParserTest, TimestampRuntimeFilterDateLUTCollision)
+try
+{
+    tipb::Expr target;
+    target.set_tp(tipb::ColumnRef);
+    target.mutable_field_type()->set_tp(TiDB::TypeTimestamp);
+    const DM::Attr attr{"ts", 4, std::make_shared<DataTypeMyDateTime>(6)};
+    const auto local = MyDateTime(2010, 11, 6, 23, 0, 30, 123456).toPackedUInt();
+    const auto & utc = DateLUT::instance("UTC");
+    struct Case
+    {
+        String timezone;
+        MyDateTime first;
+        MyDateTime second;
+    };
+    for (const auto & test : {
+             Case{"America/St_Johns", {2010, 11, 7, 1, 30, 30, 123456}, {2010, 11, 7, 2, 30, 30, 123456}},
+             Case{"America/Goose_Bay", {2010, 11, 7, 2, 0, 30, 123456}, {2010, 11, 7, 3, 0, 30, 123456}},
+         })
+    {
+        SCOPED_TRACE(test.timezone);
+        TimezoneInfo timezone;
+        timezone.resetByTimezoneName(test.timezone);
+        auto minmax = std::make_shared<DM::MinMaxIndex>(*attr.type);
+        // Each matching row is in its own pack, so pruning either pack loses a row.
+        for (const auto & value : {test.first, test.second})
+        {
+            UInt64 projected = 0;
+            convertTimeZone(value.toPackedUInt(), projected, utc, *timezone.timezone);
+            ASSERT_EQ(projected, local);
+            auto column = attr.type->createColumn();
+            column->insert(Field(value.toPackedUInt()));
+            minmax->addPack(*column, nullptr);
+        }
+        DM::RSCheckParam param;
+        param.indexes.emplace(attr.col_id, DM::RSIndex(attr.type, minmax));
+        const std::set<Field> elements{Field(local)};
+        auto rs_operator = DM::FilterParser::parseRFInExpr(tipb::IN, target, attr, elements, timezone);
+        EXPECT_EQ(rs_operator->name(), "unsupported");
+        EXPECT_EQ(rs_operator->roughCheck(0, 2, param), (DM::RSResults{DM::RSResult::Some, DM::RSResult::Some}));
+    }
+}
+CATCH
+
 TEST_F(FilterParserTest, TimestampRuntimeFilterNull)
 try
 {

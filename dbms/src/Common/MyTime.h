@@ -251,7 +251,8 @@ size_t maxFormattedDateTimeStringLength(const String & format);
 time_t getEpochSecond(const MyDateTime & my_time, const DateLUTImpl & time_zone, bool adjust_for_dst_gap = false);
 
 // A local comparison boundary in a clock fold/gap cannot safely be replaced by
-// a single UTC boundary for rough filtering.
+// a single UTC boundary for rough filtering. Includes DateLUT's rounded
+// transition intervals, since UTC-to-local projection still uses DateLUT.
 bool isLocalTimeInTimeZoneTransition(const MyDateTime & my_time, const DateLUTImpl & time_zone);
 
 bool isValidSeparator(char c, int previous_parts);

@@ -316,6 +316,41 @@ try
 }
 CATCH
 
+TEST_F(TestUnixTimestamp, PreciseDSTTransitions)
+try
+{
+    for (const auto & [name, midnight] : {
+             std::pair{"America/St_Johns", UInt64{1268537400}},
+             std::pair{"America/Goose_Bay", UInt64{1268539200}},
+         })
+    {
+        SCOPED_TRACE(name);
+        context->getTimezoneInfo().resetByTimezoneName(name);
+        const auto input = createColumn<MyDateTime>(
+            std::make_tuple(6),
+            {MyDateTime(2010, 3, 14, 0, 0, 0, 0).toPackedUInt(),
+             MyDateTime(2010, 3, 14, 0, 0, 30, 123456).toPackedUInt(),
+             MyDateTime(2010, 3, 14, 0, 0, 59, 999999).toPackedUInt(),
+             MyDateTime(2010, 3, 14, 0, 1, 0, 0).toPackedUInt(),
+             MyDateTime(2010, 3, 14, 1, 0, 59, 999999).toPackedUInt(),
+             MyDateTime(2010, 3, 14, 1, 1, 0, 0).toPackedUInt()});
+        ASSERT_COLUMN_EQ(
+            createColumn<UInt64>({midnight, midnight + 30, midnight + 59, midnight + 60, midnight + 60, midnight + 60}),
+            executeFunction(func_name_int, input));
+        ASSERT_COLUMN_EQ(
+            createColumn<Decimal64>(
+                std::make_tuple(18, 6),
+                {fmt::format("{}.000000", midnight),
+                 fmt::format("{}.123456", midnight + 30),
+                 fmt::format("{}.999999", midnight + 59),
+                 "0.000000",
+                 "0.000000",
+                 fmt::format("{}.000000", midnight + 60)}),
+            executeFunction(func_name_dec, input));
+    }
+}
+CATCH
+
 TEST_F(TestUnixTimestamp, DateLineOffset)
 try
 {
