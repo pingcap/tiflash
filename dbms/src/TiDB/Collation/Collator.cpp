@@ -42,8 +42,10 @@ constexpr uint8_t b2_mask = 0x1F;
 constexpr uint8_t b3_mask = 0x0F;
 constexpr uint8_t b4_mask = 0x07;
 constexpr uint8_t mb_mask = 0x3F;
-inline Rune decodeUtf8Char(const char * s, size_t & offset)
+inline Rune decodeUtf8Char(const char * s, size_t & offset, size_t length)
 {
+    if (unlikely(offset >= length))
+        throw DB::Exception("Encounter invalid character");
     uint8_t b0 = s[offset];
     if (b0 < 0x80)
     {
@@ -51,6 +53,9 @@ inline Rune decodeUtf8Char(const char * s, size_t & offset)
         offset += 1;
         return c;
     }
+    const size_t char_size = b0 < 0xE0 ? 2 : b0 < 0xF0 ? 3 : 4;
+    if (unlikely(length - offset < char_size))
+        throw DB::Exception("Encounter invalid character");
     if (b0 < 0xE0)
     {
         auto c = static_cast<Rune>(b0 & b2_mask) << 6 | static_cast<Rune>(s[1 + offset] & mb_mask);
@@ -86,14 +91,14 @@ public:
         while (offset < pattern.length())
         {
             MatchType tp;
-            auto c = Collator::decodeChar(pattern.data(), offset);
+            auto c = Collator::decodeChar(pattern.data(), offset, pattern.length());
             if (c == escape)
             {
                 tp = MatchType::Match;
                 if (offset < pattern.length())
                 {
                     // use next char to match
-                    c = Collator::decodeChar(pattern.data(), offset);
+                    c = Collator::decodeChar(pattern.data(), offset, pattern.length());
                 }
                 else
                 {
@@ -129,7 +134,7 @@ public:
                 {
                 case Match:
                     if (s_offset < length
-                        && Collator::regexEq(Collator::decodeChar(s, tmp_s_offset = s_offset), chars[p_idx]))
+                        && Collator::regexEq(Collator::decodeChar(s, tmp_s_offset = s_offset, length), chars[p_idx]))
                     {
                         p_idx++;
                         s_offset = tmp_s_offset;
@@ -140,13 +145,16 @@ public:
                     if (s_offset < length)
                     {
                         p_idx++;
-                        Collator::decodeChar(s, s_offset);
+                        Collator::decodeChar(s, s_offset, length);
                         continue;
                     }
                     break;
                 case Any:
                     next_p_idx = p_idx;
-                    Collator::decodeChar(s, next_s_offset = s_offset);
+                    // '%' can match an empty suffix without decoding past the input.
+                    next_s_offset = 0;
+                    if (s_offset < length)
+                        Collator::decodeChar(s, next_s_offset = s_offset, length);
                     p_idx++;
                     continue;
                 }
@@ -211,15 +219,17 @@ private:
     using WeightType = T;
     using CharType = T;
 
-    static inline CharType decodeChar(const char * s, size_t & offset)
+    static inline CharType decodeChar(const char * s, size_t & offset, size_t length)
     {
         if constexpr (std::is_same_v<T, char>)
         {
+            if (unlikely(offset >= length))
+                throw DB::Exception("Encounter invalid character");
             return s[offset++];
         }
         else
         {
-            return decodeUtf8Char(s, offset);
+            return decodeUtf8Char(s, offset, length);
         }
     }
 
@@ -251,8 +261,8 @@ public:
         size_t offset1 = 0, offset2 = 0;
         while (offset1 < v1.length() && offset2 < v2.length())
         {
-            auto c1 = decodeChar(s1, offset1);
-            auto c2 = decodeChar(s2, offset2);
+            auto c1 = decodeChar(s1, offset1, v1.length());
+            auto c2 = decodeChar(s2, offset2, v2.length());
             auto sk1 = weight(c1);
             auto sk2 = weight(c2);
             auto cmp = sk1 - sk2;
@@ -303,7 +313,7 @@ public:
 
         while (offset < v_length)
         {
-            auto c = decodeChar(s, offset);
+            auto c = decodeChar(s, offset, v_length);
             auto sk = weight(c);
             container[total_size++] = static_cast<char>(sk >> 8);
             container[total_size++] = static_cast<char>(sk);
@@ -324,7 +334,10 @@ private:
     using WeightType = GeneralCI::WeightType;
     using CharType = Rune;
 
-    static inline CharType decodeChar(const char * s, size_t & offset) { return decodeUtf8Char(s, offset); }
+    static inline CharType decodeChar(const char * s, size_t & offset, size_t length)
+    {
+        return decodeUtf8Char(s, offset, length);
+    }
 
     static inline WeightType weight(CharType c)
     {
@@ -538,7 +551,10 @@ private:
 private:
     using CharType = Rune;
 
-    static inline CharType decodeChar(const char * s, size_t & offset) { return decodeUtf8Char(s, offset); }
+    static inline CharType decodeChar(const char * s, size_t & offset, size_t length)
+    {
+        return decodeUtf8Char(s, offset, length);
+    }
 
     static inline void writeResult(uint64_t & w, std::string & container, size_t & total_size)
     {
@@ -560,7 +576,7 @@ private:
             {
                 while (offset < length)
                 {
-                    auto r = decodeChar(s, offset);
+                    auto r = decodeChar(s, offset, length);
                     if (!T::weight(first, second, r))
                     {
                         continue;
