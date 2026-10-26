@@ -88,19 +88,6 @@ MPPGatherTaskSetPtr MPPQuery::addMPPGatherTaskSet(const MPPGatherId & gather_id)
 
 void MPPTaskMonitor::waitAllMPPTasksFinish(const std::unique_ptr<Context> & context)
 {
-    const auto remaining_protection = shutdown_guard.getRemainingProtection();
-    if (remaining_protection > std::chrono::steady_clock::duration::zero())
-    {
-        LOG_INFO(
-            log,
-            "Wait {}ms for the last successful MPP probe protection to expire before draining tasks",
-            std::chrono::duration_cast<std::chrono::milliseconds>(remaining_protection).count());
-        // Server has already set the task manager unavailable, so new probes cannot extend this wait.
-        // Keep the proxy and gRPC service running for tasks dispatched based on an earlier successful probe.
-        // Start the existing task-drain timeout afterwards, even if it is shorter than the protection window.
-        std::this_thread::sleep_for(remaining_protection);
-    }
-
     // The maximum seconds TiFlash will wait for all current MPP tasks or disagg snapshots to finish before shutting down
     static constexpr const char * GRACEFUL_WAIT_SHUTDOWN_TIMEOUT = "flash.graceful_wait_shutdown_timeout";
     // The default value of flash.graceful_wait_shutdown_timeout
@@ -114,6 +101,19 @@ void MPPTaskMonitor::waitAllMPPTasksFinish(const std::unique_ptr<Context> & cont
 
     UInt64 graceful_wait_shutdown_timeout_ms = graceful_wait_shutdown_timeout * 1000;
     Stopwatch watch;
+    const auto remaining_protection = shutdown_guard.getRemainingProtection();
+    if (remaining_protection > std::chrono::steady_clock::duration::zero())
+    {
+        LOG_INFO(
+            log,
+            "Wait {}ms for the last successful MPP probe protection to expire before draining tasks",
+            std::chrono::duration_cast<std::chrono::milliseconds>(remaining_protection).count());
+        // Server has already set the task manager unavailable, so new probes cannot extend this wait.
+        // Keep the proxy and gRPC service running for tasks dispatched based on an earlier successful probe.
+        // Include this wait in the graceful shutdown timeout, as with the previous initial sleep.
+        std::this_thread::sleep_for(remaining_protection);
+    }
+
     bool all_tasks_finished = false;
     while (true)
     {

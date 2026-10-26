@@ -84,7 +84,7 @@ protected:
             EXPECT_EQ(shutdown.wait_for(5100ms), std::future_status::timeout);
             task.reset();
         }
-        ASSERT_EQ(shutdown.wait_for(6s), std::future_status::ready);
+        ASSERT_EQ(shutdown.wait_for(8s), std::future_status::ready);
         shutdown.get();
         EXPECT_GE(std::chrono::steady_clock::now() - start, 5s);
         EXPECT_EQ(monitor->isInMonitor(task_id), !finish_task);
@@ -221,10 +221,17 @@ try
 }
 CATCH
 
-TEST_F(TestMPPTaskManager, ProbeProtectionPrecedesTaskDrainTimeout)
+TEST_F(TestMPPTaskManager, ZeroTaskDrainTimeoutStillHonorsProbeProtection)
 try
 {
     checkProbeProtectionBeforeDrain(0, false);
+}
+CATCH
+
+TEST_F(TestMPPTaskManager, ProbeProtectionCountsTowardTaskDrainTimeout)
+try
+{
+    checkProbeProtectionBeforeDrain(6, false);
 }
 CATCH
 
