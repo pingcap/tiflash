@@ -18,7 +18,8 @@ file(GLOB_RECURSE _PROCESS_METRICS_SRCS "${_PROCESS_METRICS_SOURCE_DIR}/src/*.rs
 file(GLOB_RECURSE _PROCESS_METRICS_HEADERS "${_PROCESS_METRICS_SOURCE_DIR}/include/*.h")
 add_custom_command(OUTPUT ${_PROCESS_METRICS_LIBRARY}
         COMMENT "Building process_metrics"
-        COMMAND cargo build --release --target-dir ${CMAKE_CURRENT_BINARY_DIR}
+        COMMAND ${CMAKE_COMMAND} -E env CARGO_UNSTABLE_SPARSE_REGISTRY=true
+                cargo build --release --target-dir ${CMAKE_CURRENT_BINARY_DIR}
         VERBATIM
         WORKING_DIRECTORY ${_PROCESS_METRICS_SOURCE_DIR}
         DEPENDS "${_PROCESS_METRICS_SRCS}"
