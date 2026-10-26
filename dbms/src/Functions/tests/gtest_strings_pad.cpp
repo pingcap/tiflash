@@ -792,6 +792,58 @@ try
 }
 CATCH
 
+TEST_F(StringPad, TruncatedUTF8)
+try
+{
+    struct TestCase
+    {
+        String input;
+        Int64 length;
+        String padding;
+        String left_result;
+        String right_result;
+    };
+    std::vector<TestCase> cases;
+    for (const String truncated : {"\xC2", "\xE4", "\xE4\xB8", "\xF0", "\xF0\x9F", "\xF0\x9F\x98"})
+    {
+        const auto repeated = truncated + truncated + truncated;
+        cases.push_back({"x", 4, truncated, repeated + "x", "x" + repeated});
+        const auto mixed = "a" + truncated;
+        cases.push_back({"x", 5, mixed, mixed + mixed + "x", "x" + mixed + mixed});
+        // Truncating the input must not copy its terminating zero or bytes from the next row.
+        cases.push_back({mixed, 2, "x", mixed, mixed});
+        // The byte sequence can end before countCodePoints characters have been copied.
+        const auto overcounted = truncated + "a";
+        cases.push_back({overcounted, 2, "x", overcounted, overcounted});
+    }
+
+    for (const String function_name : {"lpadUTF8", "rpadUTF8"})
+    {
+        SCOPED_TRACE(function_name);
+        for (size_t i = 0; i < cases.size(); ++i)
+        {
+            SCOPED_TRACE(i);
+            const auto & test_case = cases[i];
+            const auto & expected = function_name == "lpadUTF8" ? test_case.left_result : test_case.right_result;
+            ASSERT_COLUMN_EQ(
+                createColumn<Nullable<String>>({expected, expected}),
+                executeFunction(
+                    function_name,
+                    createColumn<String>({test_case.input, test_case.input}),
+                    createColumn<Int64>({test_case.length, test_case.length}),
+                    createColumn<String>({test_case.padding, test_case.padding})));
+            ASSERT_COLUMN_EQ(
+                createConstColumn<Nullable<String>>(2, expected),
+                executeFunction(
+                    function_name,
+                    createConstColumn<String>(2, test_case.input),
+                    createConstColumn<Int64>(2, test_case.length),
+                    createConstColumn<String>(2, test_case.padding)));
+        }
+    }
+}
+CATCH
+
 TEST_F(StringPad, different_col_type)
 try
 {
