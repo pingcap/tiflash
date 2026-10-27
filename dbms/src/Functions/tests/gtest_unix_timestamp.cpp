@@ -18,6 +18,7 @@
 #include <Functions/FunctionsDateTime.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TestUtils/TimeZoneTestData.h>
 #include <TiDB/Decode/TypeMapping.h>
 
 #include <string>
@@ -306,7 +307,7 @@ CATCH
 TEST_F(TestUnixTimestamp, DST)
 try
 {
-    context->getTimezoneInfo().resetByTimezoneName("America/New_York");
+    context->getTimezoneInfo().resetByTimezoneName(timeZoneTestName("America/New_York"));
     const auto input = createColumn<MyDateTime>(
         std::make_tuple(6),
         {MyDateTime(2026, 11, 1, 1, 30, 0, 123456).toPackedUInt(),
@@ -327,7 +328,7 @@ try
          })
     {
         SCOPED_TRACE(name);
-        context->getTimezoneInfo().resetByTimezoneName(name);
+        context->getTimezoneInfo().resetByTimezoneName(timeZoneTestName(name));
         const auto input = createColumn<MyDateTime>(
             std::make_tuple(6),
             {MyDateTime(2010, 3, 14, 0, 0, 0, 0).toPackedUInt(),
@@ -356,7 +357,7 @@ CATCH
 TEST_F(TestUnixTimestamp, HistoricalSecondLevelOffset)
 try
 {
-    context->getTimezoneInfo().resetByTimezoneName("Africa/Monrovia");
+    context->getTimezoneInfo().resetByTimezoneName(timeZoneTestName("Africa/Monrovia"));
     const auto input
         = createColumn<MyDateTime>(std::make_tuple(6), {MyDateTime(1970, 7, 15, 11, 15, 0, 123456).toPackedUInt()});
     ASSERT_COLUMN_EQ(createColumn<UInt64>({16891170}), executeFunction(func_name_int, input));
@@ -369,7 +370,7 @@ CATCH
 TEST_F(TestUnixTimestamp, AdjustedGoTimeMicrosecondThreshold)
 try
 {
-    context->getTimezoneInfo().resetByTimezoneName("Antarctica/Vostok");
+    context->getTimezoneInfo().resetByTimezoneName(timeZoneTestName("Antarctica/Vostok"));
     const auto input = createColumn<MyDateTime>(
         std::make_tuple(6),
         {MyDateTime(1994, 11, 1, 3, 59, 59, 999999).toPackedUInt(),
@@ -401,7 +402,7 @@ try
          })
     {
         SCOPED_TRACE(test.timezone + " " + test.stored.toString(6));
-        const auto zone = createConstColumn<String>(1, test.timezone);
+        const auto zone = createConstColumn<String>(1, timeZoneTestName(test.timezone));
         const auto local = executeFunction(
             "ConvertTimeZoneFromUTC",
             {createColumn<MyDateTime>(std::make_tuple(6), {test.stored.toPackedUInt()}), zone},
@@ -439,7 +440,7 @@ try
          })
     {
         SCOPED_TRACE(test.timezone);
-        context->getTimezoneInfo().resetByTimezoneName(test.timezone);
+        context->getTimezoneInfo().resetByTimezoneName(timeZoneTestName(test.timezone));
         const auto input
             = createColumn<MyDateTime>(std::make_tuple(6), {MyDateTime(2026, 3, 2, 12, 0, 0, 123456).toPackedUInt()});
         ASSERT_COLUMN_EQ(createColumn<UInt64>({test.expected_int}), executeFunction(func_name_int, input));

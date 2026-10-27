@@ -17,6 +17,8 @@
 #include <DataTypes/DataTypeMyDateTime.h>
 #include <Functions/FunctionsTiDBConversion.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TestUtils/TimeZoneTestData.h>
+#include <cctz/time_zone.h>
 
 #include <iostream>
 #include <string>
@@ -671,10 +673,47 @@ catch (Exception & e)
     GTEST_FAIL();
 }
 
+TEST_F(TestMyTime, EpochSecondOrdinaryDates)
+try
+{
+    for (const auto * name : {"UTC", "Asia/Shanghai", "America/New_York", "Africa/Monrovia", "Pacific/Apia"})
+    {
+        SCOPED_TRACE(name);
+        const auto zone_name = timeZoneTestName(name);
+        const auto & timezone = DateLUT::instance(zone_name);
+        cctz::time_zone zone;
+        ASSERT_TRUE(cctz::load_time_zone(zone_name, &zone));
+        for (const auto year : {1925, 1970, 2026, 2282})
+            for (int month = 1; month <= 12; ++month)
+                for (const auto day : {1, 15, 28})
+                    for (const auto hour : {0, 12, 23})
+                    {
+                        const MyDateTime local(year, month, day, hour, 59, 59, 123456);
+                        SCOPED_TRACE(local.toString(6));
+                        const auto lookup = zone.lookup(cctz::civil_second(year, month, day, hour, 59, 59));
+                        ASSERT_EQ(lookup.kind, cctz::time_zone::civil_lookup::UNIQUE);
+                        EXPECT_EQ(getEpochSecond(local, timezone), lookup.pre.time_since_epoch().count());
+                        EXPECT_EQ(getEpochSecond(local, timezone, true), lookup.pre.time_since_epoch().count());
+                    }
+    }
+    const auto & timezone = DateLUT::instance(timeZoneTestName("America/New_York"));
+    for (const auto & invalid : {
+             MyDateTime(2026, 2, 29, 0, 0, 0, 0),
+             MyDateTime(2026, 4, 31, 0, 0, 0, 0),
+             MyDateTime(2026, 0, 1, 0, 0, 0, 0),
+             MyDateTime(2026, 1, 0, 0, 0, 0, 0),
+             MyDateTime(2026, 1, 1, 24, 0, 0, 0),
+             MyDateTime(2026, 1, 1, 0, 60, 0, 0),
+             MyDateTime(2026, 1, 1, 0, 0, 60, 0),
+         })
+        EXPECT_THROW(getEpochSecond(invalid, timezone), Exception) << invalid.toString(6);
+}
+CATCH
+
 TEST_F(TestMyTime, ConvertTimeZoneDST)
 try
 {
-    const auto & utc = DateLUT::instance("UTC");
+    const auto & utc = DateLUT::instance(timeZoneTestName("UTC"));
     struct Case
     {
         String timezone;
@@ -694,7 +733,7 @@ try
          })
     {
         SCOPED_TRACE(test.timezone + " " + test.local.toString(6));
-        const auto & timezone = DateLUT::instance(test.timezone);
+        const auto & timezone = DateLUT::instance(timeZoneTestName(test.timezone));
         UInt64 converted = 0;
         convertTimeZone(test.local.toPackedUInt(), converted, timezone, utc);
         EXPECT_EQ(converted, test.expected_utc.toPackedUInt());
@@ -703,7 +742,7 @@ try
         EXPECT_EQ(isTimeZoneConversionSafeForRoughFilter(test.local, timezone), !test.transition);
     }
 
-    const auto & ny = DateLUT::instance("America/New_York");
+    const auto & ny = DateLUT::instance(timeZoneTestName("America/New_York"));
     EXPECT_THROW(getEpochSecond(MyDateTime(2026, 2, 30, 12, 0, 0, 0), ny), Exception);
     for (const auto & local : {
              MyDateTime(2026, 3, 8, 2, 0, 0, 0),
@@ -730,7 +769,7 @@ try
          })
     {
         SCOPED_TRACE(name);
-        const auto & timezone = DateLUT::instance(name);
+        const auto & timezone = DateLUT::instance(timeZoneTestName(name));
         // The clock jumps from 00:01 to 01:01, not from 00:00 to 01:00.
         for (const auto & [local, seconds] : {
                  std::pair{MyDateTime(2010, 3, 14, 0, 0, 0, 0), 0},
@@ -762,7 +801,7 @@ try
     for (const auto * name : {"America/St_Johns", "America/Goose_Bay"})
     {
         SCOPED_TRACE(name);
-        const auto & timezone = DateLUT::instance(name);
+        const auto & timezone = DateLUT::instance(timeZoneTestName(name));
         // Guard both the precise cctz interval and DateLUT's rounded interval.
         for (const auto & [local, transition] : {
                  std::pair{MyDateTime(2010, 3, 13, 23, 59, 59, 999999), false},
@@ -787,7 +826,7 @@ CATCH
 TEST_F(TestMyTime, HistoricalTimeZoneRoughFilterSafety)
 try
 {
-    const auto & timezone = DateLUT::instance("Africa/Monrovia");
+    const auto & timezone = DateLUT::instance(timeZoneTestName("Africa/Monrovia"));
     for (const auto & [local, epoch] : {
              // The historical offset is -00:44:30, but DateLUT keeps UTC seconds.
              std::pair{MyDateTime(1970, 7, 15, 11, 15, 0, 123456), 16891170},
@@ -808,8 +847,8 @@ CATCH
 TEST_F(TestMyTime, TimeZoneSupportedYearRange)
 try
 {
-    const auto & utc = DateLUT::instance("UTC");
-    const auto & singapore = DateLUT::instance("Asia/Singapore");
+    const auto & utc = DateLUT::instance(timeZoneTestName("UTC"));
+    const auto & singapore = DateLUT::instance(timeZoneTestName("Asia/Singapore"));
     for (const auto & [local, expected] : {
              std::pair{MyDateTime(2263, 1, 1, 12, 0, 0, 123456), 9246196800LL},
              std::pair{MyDateTime(2283, 1, 1, 12, 0, 0, 123456), 9877348800LL},
@@ -841,7 +880,7 @@ CATCH
 TEST_F(TestMyTime, ConvertTimeZoneDateLine)
 try
 {
-    const auto & utc = DateLUT::instance("UTC");
+    const auto & utc = DateLUT::instance(timeZoneTestName("UTC"));
     struct Case
     {
         String timezone;
@@ -859,7 +898,7 @@ try
          })
     {
         SCOPED_TRACE(test.timezone + " " + test.local.toString(6));
-        const auto & timezone = DateLUT::instance(test.timezone);
+        const auto & timezone = DateLUT::instance(timeZoneTestName(test.timezone));
         const auto epoch = getEpochSecond(test.expected_utc, utc);
         EXPECT_EQ(timezone.timezoneOffset(epoch), test.expected_offset);
         EXPECT_EQ(getEpochSecond(test.local, timezone), epoch);
@@ -879,7 +918,7 @@ try
         SCOPED_TRACE(timezone);
         UInt64 converted = 0;
         EXPECT_THROW(
-            convertTimeZone(local.toPackedUInt(), converted, DateLUT::instance(timezone), utc, true),
+            convertTimeZone(local.toPackedUInt(), converted, DateLUT::instance(timeZoneTestName(timezone)), utc, true),
             Exception);
     }
 }

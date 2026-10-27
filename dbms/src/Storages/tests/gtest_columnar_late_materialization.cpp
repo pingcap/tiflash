@@ -23,6 +23,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/StorageDisaggregatedColumnar.h>
 #include <TestUtils/FunctionTestUtils.h>
+#include <TestUtils/TimeZoneTestData.h>
 #include <TiDB/Schema/TiDB.h>
 
 #include <cstring>
@@ -146,7 +147,7 @@ try
         if (test.name.empty())
             context->getTimezoneInfo().resetByTimezoneOffset(test.offset);
         else
-            context->getTimezoneInfo().resetByTimezoneName(test.name);
+            context->getTimezoneInfo().resetByTimezoneName(timeZoneTestName(test.name));
         for (bool partition : {false, true})
         {
             SCOPED_TRACE(partition);
@@ -246,7 +247,7 @@ CATCH
 TEST_F(ColumnarLateMaterializationTest, TimestampDSTFold)
 try
 {
-    context->getTimezoneInfo().resetByTimezoneName("America/New_York");
+    context->getTimezoneInfo().resetByTimezoneName(timeZoneTestName("America/New_York"));
     Block raw{withID(
         createDateTimeColumn(
             {MyDateTime(2026, 11, 1, 5, 15, 0, 0),
@@ -309,7 +310,7 @@ try
          })
     {
         SCOPED_TRACE(test.timezone);
-        context->getTimezoneInfo().resetByTimezoneName(test.timezone);
+        context->getTimezoneInfo().resetByTimezoneName(timeZoneTestName(test.timezone));
         Block raw{withID(createDateTimeColumn({test.first, test.second, {}}, 6), 10, "timestamp")};
         for (bool timestamp_literal : {false, true})
         {
@@ -355,7 +356,7 @@ CATCH
 TEST_F(ColumnarLateMaterializationTest, TimestampHistoricalOffset)
 try
 {
-    context->getTimezoneInfo().resetByTimezoneName("Africa/Monrovia");
+    context->getTimezoneInfo().resetByTimezoneName(timeZoneTestName("Africa/Monrovia"));
     for (const auto & [stored, local] : {
              std::pair{MyDateTime(1970, 7, 15, 12, 0, 0, 123456), MyDateTime(1970, 7, 15, 11, 15, 0, 123456)},
              std::pair{MyDateTime(1972, 1, 7, 1, 0, 0, 123456), MyDateTime(1972, 1, 7, 0, 45, 0, 123456)},
@@ -406,7 +407,7 @@ CATCH
 TEST_F(ColumnarLateMaterializationTest, TimestampDSTGap)
 try
 {
-    context->getTimezoneInfo().resetByTimezoneName("America/New_York");
+    context->getTimezoneInfo().resetByTimezoneName(timeZoneTestName("America/New_York"));
     auto executor = tableScan({scanColumn(10, TiDB::TypeTimestamp)});
     auto predicate = scalar(
         tipb::GTTime,
@@ -433,7 +434,7 @@ CATCH
 TEST_F(ColumnarLateMaterializationTest, TimestampDSTNestedPredicates)
 try
 {
-    context->getTimezoneInfo().resetByTimezoneName("America/New_York");
+    context->getTimezoneInfo().resetByTimezoneName(timeZoneTestName("America/New_York"));
     const auto timestamp_predicate = scalar(
         tipb::EQTime,
         {columnRef(0, TiDB::TypeTimestamp),

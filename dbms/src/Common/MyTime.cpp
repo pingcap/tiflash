@@ -1510,6 +1510,16 @@ static cctz::time_zone getCctzTimeZone(const DateLUTImpl & time_zone)
 
 time_t getEpochSecond(const MyDateTime & my_time, const DateLUTImpl & time_zone, bool adjust_for_dst_gap)
 {
+    time_t epoch_second;
+    if (time_zone.tryMakeDateTime(
+            my_time.year,
+            my_time.month,
+            my_time.day,
+            my_time.hour,
+            my_time.minute,
+            my_time.second,
+            epoch_second))
+        return epoch_second;
     static const auto & utc = DateLUT::instance("UTC");
     // UTC has no rounded offsets or transitions. Keep the LUT fast path in
     // its complete years (DATE_LUT_SIZE truncates DATE_LUT_MAX_YEAR).

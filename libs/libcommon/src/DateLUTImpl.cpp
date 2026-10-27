@@ -127,8 +127,14 @@ DateLUTImpl::DateLUTImpl(const std::string & time_zone_)
         /// If UTC offset was changed this day.
         /// Change in time zone without transition is possible, e.g. Moscow 1991 Sun, 31 Mar, 02:00 MSK to EEST
         cctz::time_zone::civil_transition transition{};
-        if (cctz_time_zone.next_transition(start_of_day_time_point - std::chrono::seconds(1), &transition)
-            && (cctz::civil_day(transition.from) == date || cctz::civil_day(transition.to) == date)
+        const bool has_transition
+            = cctz_time_zone.next_transition(start_of_day_time_point - std::chrono::seconds(1), &transition);
+        // Midnight must be unique, and the next transition must not touch any local
+        // time in this day. Check both sides to include folds into the previous day
+        // and full-day date-line jumps, even when the rounded LUT fields lose them.
+        unambiguous_days[i] = lookup.kind == cctz::time_zone::civil_lookup::UNIQUE
+            && (!has_transition || std::min(transition.from, transition.to) >= cctz::civil_second(date + 1));
+        if (has_transition && (cctz::civil_day(transition.from) == date || cctz::civil_day(transition.to) == date)
             && transition.from != transition.to)
         {
             values.time_at_offset_change_value

@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <bitset>
 #include <cassert>
 #include <ctime>
 #include <string>
@@ -208,6 +209,9 @@ private:
 
     /// Time zone name.
     std::string time_zone;
+
+    /// Exact cctz classification, independent of the rounded transition fields in Values.
+    std::bitset<DATE_LUT_SIZE> unambiguous_days;
 
     inline LUTIndex findIndex(time_t t) const
     {
@@ -951,6 +955,29 @@ public:
     inline time_t makeDate(Int16 year, UInt8 month, UInt8 day_of_month) const
     {
         return lut[makeLUTIndex(year, month, day_of_month)].date;
+    }
+
+    /// Convert valid local fields only when the entire day has a unique, constant UTC offset.
+    /// Transition days and dates outside the complete LUT years need an exact conversion.
+    inline bool tryMakeDateTime(
+        Int16 year,
+        UInt8 month,
+        UInt8 day,
+        UInt8 hour,
+        UInt8 minute,
+        UInt8 second,
+        time_t & result) const
+    {
+        if (unlikely(
+                year < DATE_LUT_MIN_YEAR || year >= DATE_LUT_MAX_YEAR || month < 1 || month > 12 || day < 1 || day > 31
+                || hour > 23 || minute > 59 || second > 59))
+            return false;
+        const auto index = makeLUTIndex(year, month, day);
+        const auto & values = lut[index];
+        if (unlikely(values.day_of_month != day || !unambiguous_days[index]))
+            return false;
+        result = values.date + hour * 3600 + minute * 60 + second;
+        return true;
     }
 
     /** Does not accept daylight saving time as argument: in case of ambiguity, it choose greater timestamp.
