@@ -896,6 +896,7 @@ async fn request_snapshot_from_leader(
                     txn_chunk_manager,
                     ia_ctx,
                     prepare_type,
+                    prepare_on_caller: false,
                     read_columnar: true,
                     columnar_meta_cache: columnar_meta_cache.clone(),
                     encryption_key_manager: Arc::new(cloud_encryption::EncryptionKeyManager::new()),
