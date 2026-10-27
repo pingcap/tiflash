@@ -351,7 +351,7 @@ private:
     FilesChangesTracker cert_files;
     std::set<String> allowed_common_names;
 
-    RedactMode redact_info_log = RedactMode::Disable;
+    RedactMode redact_info_log = RedactMode::Enable;
 
     bool has_tls_config = false;
     bool has_security = false;
