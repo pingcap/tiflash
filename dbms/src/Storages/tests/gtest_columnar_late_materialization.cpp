@@ -119,6 +119,30 @@ protected:
         EXPECT_EQ(raw.rows(), expected.size());
     }
 
+    void checkUnsafeTimestampFilter(
+        const tipb::Expr & predicate,
+        const Block & raw,
+        const std::vector<UInt8> & expected,
+        bool partition = false)
+    {
+        auto executor = tableScan({scanColumn(10, TiDB::TypeTimestamp)}, partition);
+        auto * pushed = partition ? executor.mutable_partition_table_scan()->mutable_pushed_down_filter_conditions()
+                                  : executor.mutable_tbl_scan()->mutable_pushed_down_filter_conditions();
+        *pushed->Add() = predicate;
+        google::protobuf::RepeatedPtrField<tipb::Expr> selection;
+        *selection.Add() = predicate;
+        auto task = buildTask(executor, selection);
+        ASSERT_TRUE(task->isLateMaterializationFilterEligible());
+        tipb::Executor normalized;
+        ASSERT_TRUE(normalized.ParseFromString(normalized_scan));
+        const auto & normalized_pushed = partition ? normalized.partition_table_scan().pushed_down_filter_conditions()
+                                                   : normalized.tbl_scan().pushed_down_filter_conditions();
+        EXPECT_TRUE(normalized_pushed.empty());
+        EXPECT_TRUE(normalized_selection.empty());
+        auto action = task->buildLateMaterializationFilterAction(raw.cloneEmpty());
+        checkFilter(*action, raw, expected);
+    }
+
     String normalized_scan;
     String normalized_selection;
 };
@@ -277,45 +301,57 @@ try
         {
             SCOPED_TRACE(
                 fmt::format("timestamp_literal={} sig={}", timestamp_literal, tipb::ScalarFuncSig_Name(test.sig)));
-            auto executor = tableScan({scanColumn(10, TiDB::TypeTimestamp)});
-            auto predicate = scalar(test.sig, {columnRef(0, TiDB::TypeTimestamp), literal});
-            *executor.mutable_tbl_scan()->add_pushed_down_filter_conditions() = predicate;
-            google::protobuf::RepeatedPtrField<tipb::Expr> selection;
-            *selection.Add() = predicate;
-            auto task = buildTask(executor, selection);
-            ASSERT_TRUE(task->isLateMaterializationFilterEligible());
-            tipb::Executor normalized;
-            ASSERT_TRUE(normalized.ParseFromString(normalized_scan));
-            EXPECT_TRUE(normalized.tbl_scan().pushed_down_filter_conditions().empty());
-            EXPECT_TRUE(normalized_selection.empty());
-            auto action = task->buildLateMaterializationFilterAction(raw.cloneEmpty());
-            checkFilter(*action, raw, test.expected);
+            checkUnsafeTimestampFilter(
+                scalar(test.sig, {columnRef(0, TiDB::TypeTimestamp), literal}),
+                raw,
+                test.expected);
         }
     }
 }
 CATCH
 
-TEST_F(ColumnarLateMaterializationTest, TimestampDateLUTCollision)
+TEST_F(ColumnarLateMaterializationTest, TimestampDateLUTProjection)
 try
 {
     struct Case
     {
         String timezone;
-        MyDateTime first;
-        MyDateTime second;
+        std::initializer_list<std::optional<MyDateTime>> stored;
+        MyDateTime local;
+        std::vector<UInt8> expected;
     };
     for (const auto & test : {
-             Case{"America/St_Johns", {2010, 11, 7, 1, 30, 30, 123456}, {2010, 11, 7, 2, 30, 30, 123456}},
-             Case{"America/Goose_Bay", {2010, 11, 7, 2, 0, 30, 123456}, {2010, 11, 7, 3, 0, 30, 123456}},
+             // Rounded transitions map two UTC values to the same local time.
+             Case{
+                 "America/St_Johns",
+                 {MyDateTime(2010, 11, 7, 1, 30, 30, 123456), MyDateTime(2010, 11, 7, 2, 30, 30, 123456), {}},
+                 {2010, 11, 6, 23, 0, 30, 123456},
+                 {1, 1, 0}},
+             Case{
+                 "America/Goose_Bay",
+                 {MyDateTime(2010, 11, 7, 2, 0, 30, 123456), MyDateTime(2010, 11, 7, 3, 0, 30, 123456), {}},
+                 {2010, 11, 6, 23, 0, 30, 123456},
+                 {1, 1, 0}},
+             // Historical second-level offsets also disagree with the exact cctz inverse.
+             Case{
+                 "Africa/Monrovia",
+                 {MyDateTime(1970, 7, 15, 12, 0, 0, 123456), {}},
+                 {1970, 7, 15, 11, 15, 0, 123456},
+                 {1, 0}},
+             Case{
+                 "Africa/Monrovia",
+                 {MyDateTime(1972, 1, 7, 1, 0, 0, 123456), {}},
+                 {1972, 1, 7, 0, 45, 0, 123456},
+                 {1, 0}},
          })
     {
-        SCOPED_TRACE(test.timezone);
+        SCOPED_TRACE(test.timezone + " " + test.local.toString(6));
         context->getTimezoneInfo().resetByTimezoneName(timeZoneTestName(test.timezone));
-        Block raw{withID(createDateTimeColumn({test.first, test.second, {}}, 6), 10, "timestamp")};
+        Block raw{withID(createDateTimeColumn(test.stored, 6), 10, "timestamp")};
         for (bool timestamp_literal : {false, true})
         {
             auto literal = constructDateTimeLiteralTiExpr(
-                (timestamp_literal ? test.first : MyDateTime(2010, 11, 6, 23, 0, 30, 123456)).toPackedUInt());
+                (timestamp_literal ? test.stored.begin()->value() : test.local).toPackedUInt());
             if (timestamp_literal)
                 literal.mutable_field_type()->set_tp(TiDB::TypeTimestamp);
             for (const auto sig : {tipb::EQTime, tipb::InTime})
@@ -327,76 +363,11 @@ try
                         timestamp_literal,
                         tipb::ScalarFuncSig_Name(sig),
                         partition));
-                    auto executor = tableScan({scanColumn(10, TiDB::TypeTimestamp)}, partition);
-                    auto predicate = scalar(sig, {columnRef(0, TiDB::TypeTimestamp), literal});
-                    auto * pushed = partition
-                        ? executor.mutable_partition_table_scan()->mutable_pushed_down_filter_conditions()
-                        : executor.mutable_tbl_scan()->mutable_pushed_down_filter_conditions();
-                    *pushed->Add() = predicate;
-                    google::protobuf::RepeatedPtrField<tipb::Expr> selection;
-                    *selection.Add() = predicate;
-                    auto task = buildTask(executor, selection);
-                    ASSERT_TRUE(task->isLateMaterializationFilterEligible());
-                    tipb::Executor normalized;
-                    ASSERT_TRUE(normalized.ParseFromString(normalized_scan));
-                    const auto & normalized_pushed = partition
-                        ? normalized.partition_table_scan().pushed_down_filter_conditions()
-                        : normalized.tbl_scan().pushed_down_filter_conditions();
-                    EXPECT_TRUE(normalized_pushed.empty());
-                    EXPECT_TRUE(normalized_selection.empty());
-                    auto action = task->buildLateMaterializationFilterAction(raw.cloneEmpty());
-                    checkFilter(*action, raw, {1, 1, 0});
-                }
-            }
-        }
-    }
-}
-CATCH
-
-TEST_F(ColumnarLateMaterializationTest, TimestampHistoricalOffset)
-try
-{
-    context->getTimezoneInfo().resetByTimezoneName(timeZoneTestName("Africa/Monrovia"));
-    for (const auto & [stored, local] : {
-             std::pair{MyDateTime(1970, 7, 15, 12, 0, 0, 123456), MyDateTime(1970, 7, 15, 11, 15, 0, 123456)},
-             std::pair{MyDateTime(1972, 1, 7, 1, 0, 0, 123456), MyDateTime(1972, 1, 7, 0, 45, 0, 123456)},
-         })
-    {
-        SCOPED_TRACE(stored.toString(6));
-        Block raw{withID(createDateTimeColumn({stored, {}}, 6), 10, "timestamp")};
-        for (bool timestamp_literal : {false, true})
-        {
-            auto literal = constructDateTimeLiteralTiExpr((timestamp_literal ? stored : local).toPackedUInt());
-            if (timestamp_literal)
-                literal.mutable_field_type()->set_tp(TiDB::TypeTimestamp);
-            for (const auto sig : {tipb::EQTime, tipb::InTime})
-            {
-                for (bool partition : {false, true})
-                {
-                    SCOPED_TRACE(fmt::format(
-                        "timestamp_literal={} sig={} partition={}",
-                        timestamp_literal,
-                        tipb::ScalarFuncSig_Name(sig),
-                        partition));
-                    auto executor = tableScan({scanColumn(10, TiDB::TypeTimestamp)}, partition);
-                    auto predicate = scalar(sig, {columnRef(0, TiDB::TypeTimestamp), literal});
-                    auto * pushed = partition
-                        ? executor.mutable_partition_table_scan()->mutable_pushed_down_filter_conditions()
-                        : executor.mutable_tbl_scan()->mutable_pushed_down_filter_conditions();
-                    *pushed->Add() = predicate;
-                    google::protobuf::RepeatedPtrField<tipb::Expr> selection;
-                    *selection.Add() = predicate;
-                    auto task = buildTask(executor, selection);
-                    ASSERT_TRUE(task->isLateMaterializationFilterEligible());
-                    tipb::Executor normalized;
-                    ASSERT_TRUE(normalized.ParseFromString(normalized_scan));
-                    const auto & normalized_pushed = partition
-                        ? normalized.partition_table_scan().pushed_down_filter_conditions()
-                        : normalized.tbl_scan().pushed_down_filter_conditions();
-                    EXPECT_TRUE(normalized_pushed.empty());
-                    EXPECT_TRUE(normalized_selection.empty());
-                    auto action = task->buildLateMaterializationFilterAction(raw.cloneEmpty());
-                    checkFilter(*action, raw, {1, 0});
+                    checkUnsafeTimestampFilter(
+                        scalar(sig, {columnRef(0, TiDB::TypeTimestamp), literal}),
+                        raw,
+                        test.expected,
+                        partition);
                 }
             }
         }
@@ -408,26 +379,15 @@ TEST_F(ColumnarLateMaterializationTest, TimestampDSTGap)
 try
 {
     context->getTimezoneInfo().resetByTimezoneName(timeZoneTestName("America/New_York"));
-    auto executor = tableScan({scanColumn(10, TiDB::TypeTimestamp)});
     auto predicate = scalar(
         tipb::GTTime,
         {columnRef(0, TiDB::TypeTimestamp),
          constructDateTimeLiteralTiExpr(MyDateTime(2026, 3, 8, 2, 30, 0, 0).toPackedUInt())});
-    *executor.mutable_tbl_scan()->add_pushed_down_filter_conditions() = predicate;
-    google::protobuf::RepeatedPtrField<tipb::Expr> selection;
-    *selection.Add() = predicate;
-    auto task = buildTask(executor, selection);
-    ASSERT_TRUE(task->isLateMaterializationFilterEligible());
-    tipb::Executor normalized;
-    ASSERT_TRUE(normalized.ParseFromString(normalized_scan));
-    EXPECT_TRUE(normalized.tbl_scan().pushed_down_filter_conditions().empty());
-    EXPECT_TRUE(normalized_selection.empty());
     Block raw{withID(
         createDateTimeColumn({MyDateTime(2026, 3, 8, 6, 59, 59, 0), MyDateTime(2026, 3, 8, 7, 0, 0, 0), {}}, 6),
         10,
         "timestamp")};
-    auto action = task->buildLateMaterializationFilterAction(raw.cloneEmpty());
-    checkFilter(*action, raw, {0, 1, 0});
+    checkUnsafeTimestampFilter(predicate, raw, {0, 1, 0});
 }
 CATCH
 
