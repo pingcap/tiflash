@@ -32,6 +32,7 @@ void registerFunctionBitAnd(FunctionFactory & factory);
 void registerFunctionBitOr(FunctionFactory & factory);
 void registerFunctionBitXor(FunctionFactory & factory);
 void registerFunctionBitNot(FunctionFactory & factory);
+void registerFunctionBitCount(FunctionFactory & factory);
 void registerFunctionBitShiftLeft(FunctionFactory & factory);
 void registerFunctionBitShiftRight(FunctionFactory & factory);
 void registerFunctionBitRotateLeft(FunctionFactory & factory);
@@ -64,6 +65,7 @@ void registerFunctionsArithmetic(FunctionFactory & factory)
     registerFunctionBitNot(factory);
     registerFunctionBitShiftLeft(factory);
     registerFunctionBitShiftRight(factory);
+    registerFunctionBitCount(factory);
     registerFunctionBitRotateLeft(factory);
     registerFunctionBitRotateRight(factory);
     registerFunctionLeast(factory);
