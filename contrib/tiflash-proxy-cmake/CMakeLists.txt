@@ -26,6 +26,7 @@ file(GLOB_RECURSE _TIFLASH_PROXY_SRCS "${_TIFLASH_PROXY_SOURCE_DIR}/*.rs")
 
 # Build in the build directory instead of the default source directory
 set(TIFLASH_RUST_ENV "CARGO_TARGET_DIR=${CMAKE_CURRENT_BINARY_DIR}" ${TIFLASH_RUST_ENV})
+set(TIFLASH_RUST_ENV CARGO_UNSTABLE_SPARSE_REGISTRY=true ${TIFLASH_RUST_ENV})
 
 # use `CFLAGS=-w CXXFLAGS=-w` to inhibit warning messages.
 if (TIFLASH_LLVM_TOOLCHAIN)
