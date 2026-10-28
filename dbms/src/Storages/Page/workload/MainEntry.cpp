@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <Storages/Page/workload/EmptyPages.h>
 #include <Storages/Page/workload/HeavyMemoryCostInGC.h>
 #include <Storages/Page/workload/HeavyRead.h>
 #include <Storages/Page/workload/HeavySkewWriteRead.h>
@@ -23,20 +24,23 @@
 #include <Storages/Page/workload/PageStorageInMemoryCapacity.h>
 #include <Storages/Page/workload/ThousandsOfOffset.h>
 
+#include <cstdlib>
+
 using namespace DB::PS::tests;
 
 int StressWorkload::mainEntry(int argc, char ** argv)
 {
     {
-        work_load_register<HeavyMemoryCostInGC>();
-        work_load_register<HeavyRead>();
-        work_load_register<HeavySkewWriteRead>();
-        work_load_register<HeavyWrite>();
-        work_load_register<HighValidBigFileGCWorkload>();
-        work_load_register<HoldSnapshotsLongTime>();
-        work_load_register<PageStorageInMemoryCapacity>();
-        work_load_register<NormalWorkload>();
-        work_load_register<ThousandsOfOffset>();
+        workload_register<HeavyMemoryCostInGC>();
+        workload_register<HeavyRead>();
+        workload_register<HeavySkewWriteRead>();
+        workload_register<HeavyWrite>();
+        workload_register<HighValidBigFileGCWorkload>();
+        workload_register<HoldSnapshotsLongTime>();
+        workload_register<PageStorageInMemoryCapacity>();
+        workload_register<NormalWorkload>();
+        workload_register<ThousandsOfOffset>();
+        workload_register<EmptyPages>();
     }
     try
     {
@@ -49,7 +53,8 @@ int StressWorkload::mainEntry(int argc, char ** argv)
 
         SCOPE_EXIT({ factory.stopWorkload(); });
 
-        return StressEnvStatus::getInstance().isSuccess();
+        Int32 code = StressEnvStatus::getInstance().statCode();
+        return code >= 0 ? EXIT_SUCCESS : code;
     }
     catch (...)
     {
