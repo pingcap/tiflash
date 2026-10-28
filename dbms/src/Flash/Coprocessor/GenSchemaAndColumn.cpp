@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <DataStreams/GeneratedColumnPlaceholderBlockInputStream.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/MutableSupport.h>
@@ -140,8 +141,13 @@ std::tuple<DM::ColumnDefinesPtr, int, std::vector<std::tuple<UInt64, String, Dat
             if (!for_columnar)
                 throw Exception("Not supported in disaggregated read now");
             // CSE resolves the logical commit-ts ID to its internal MVCC version.
-            // The computing layer casts the storage type to the type requested by TiDB after the scan.
-            column_defines->emplace_back(column_info.id, output_name, MutSup::getVersionColumnType());
+            // Its version buffer is nullable (the null map represents tombstones), so keep that
+            // nullability in the storage reader schema. The computing layer may cast this type to
+            // the type requested by TiDB after the scan.
+            column_defines->emplace_back(
+                column_info.id,
+                output_name,
+                makeNullable(MutSup::getVersionColumnType()));
             break;
         default:
             column_defines->emplace_back(DM::ColumnDefine{

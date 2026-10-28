@@ -113,7 +113,7 @@ try
             const auto & version = column_defines->at(1);
             EXPECT_EQ(version.id, MutSup::extra_commit_ts_col_id);
             EXPECT_EQ(version.name, genNameForExchangeReceiver(1));
-            EXPECT_TRUE(version.type->equals(*MutSup::getVersionColumnType()));
+            EXPECT_EQ(version.type->getName(), "Nullable(UInt64)");
 
             // Both normal scans and late materialization must preserve the values
             // returned by CSE while converting the exchange receiver column type.
@@ -122,8 +122,12 @@ try
             for (bool pushed_down : {false, true})
             {
                 SCOPED_TRACE(pushed_down);
-                Block block{toVec<UInt64>(version.name, {1, 123456789, 456789012})};
-                block.getByPosition(0).column_id = version.id;
+                Block block{
+                    createNullableColumn<UInt64>(
+                        {1, 123456789, 456789012},
+                        {0, 0, 0},
+                        version.name,
+                        version.id)};
                 ExpressionActionsPtr cast;
                 if (pushed_down)
                 {

@@ -117,12 +117,7 @@ std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedReadThroug
         = genColumnDefinesForDisaggregatedRead(table_scan, /*support_commit_ts=*/true);
     for (auto & column : *column_defines)
     {
-        if (column.id == MutSup::extra_commit_ts_col_id)
-        {
-            // CSE's version buffer is nullable: the null map represents tombstones.
-            column.type = makeNullable(MutSup::getVersionColumnType());
-        }
-        else
+        if (column.id != MutSup::extra_commit_ts_col_id)
         {
             // Columnar only support the legacy string format for now, so convert the data type to legacy one.
             // We can remove this when columnar supports the new string data type.
