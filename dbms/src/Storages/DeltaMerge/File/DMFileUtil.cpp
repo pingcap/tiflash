@@ -50,6 +50,10 @@ String colIndexFileName(const FileNameBase & file_name_base)
 {
     return file_name_base + details::INDEX_FILE_SUFFIX;
 }
+String colTrimIndexFileName(const FileNameBase & file_name_base)
+{
+    return file_name_base + details::TRIM_INDEX_FILE_SUFFIX;
+}
 String colMarkFileName(const FileNameBase & file_name_base)
 {
     return file_name_base + details::MARK_FILE_SUFFIX;

@@ -429,6 +429,38 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       "Bucketed histogram of rough set filter rate",                                                                                \
       Histogram,                                                                                                                    \
       F(type_dtfile_pack, {{"type", "dtfile_pack"}}, EqualWidthBuckets{0, 6, 20}))                                                  \
+    M(tiflash_storage_rough_set_pack_count,                                                                                         \
+      "Total number of packs before and after query rough set filtering",                                                           \
+      Counter,                                                                                                                      \
+      F(stage_query_input, {"stage", "query_input"}),                                                                               \
+      F(stage_query_filtered, {"stage", "query_filtered"}),                                                                         \
+      F(stage_query_remaining, {"stage", "query_remaining"}))                                                                       \
+    M(tiflash_storage_trim_minmax_select_count,                                                                                     \
+      "Total number of trim min-max selection results",                                                                             \
+      Counter,                                                                                                                      \
+      F(result_used, {"result", "used"}),                                                                                           \
+      F(result_fallback_disabled, {"result", "fallback_disabled"}),                                                                 \
+      F(result_fallback_non_meta_v2, {"result", "fallback_non_meta_v2"}),                                                           \
+      F(result_fallback_column_missing, {"result", "fallback_column_missing"}),                                                     \
+      F(result_fallback_no_meta, {"result", "fallback_no_meta"}),                                                                   \
+      F(result_fallback_unsupported_version, {"result", "fallback_unsupported_version"}),                                           \
+      F(result_fallback_metadata_mismatch, {"result", "fallback_metadata_mismatch"}),                                               \
+      F(result_fallback_index_missing, {"result", "fallback_index_missing"}),                                                       \
+      F(result_fallback_unsupported_expression, {"result", "fallback_unsupported_expression"}),                                     \
+      F(result_fallback_predicate_outside_range, {"result", "fallback_predicate_outside_range"}),                                   \
+      F(result_fallback_invalid_pack_marks, {"result", "fallback_invalid_pack_marks"}))                                             \
+    M(tiflash_storage_trim_minmax_rough_check_pack_count,                                                                           \
+      "Total number of packs by trim min-max rough check result",                                                                   \
+      Counter,                                                                                                                      \
+      F(result_none, {"result", "none"}),                                                                                           \
+      F(result_some, {"result", "some"}),                                                                                           \
+      F(result_all, {"result", "all"}),                                                                                             \
+      F(result_all_null, {"result", "all_null"}))                                                                                   \
+    M(tiflash_storage_trim_minmax_correction_pack_count,                                                                            \
+      "Total number of packs whose trim min-max rough check result is conservatively corrected",                                    \
+      Counter,                                                                                                                      \
+      F(type_none_to_some, {"type", "none_to_some"}),                                                                               \
+      F(type_all_to_some, {"type", "all_to_some"}))                                                                                 \
     M(tiflash_disaggregated_object_lock_request_count,                                                                              \
       "Total number of S3 object lock/delete request",                                                                              \
       Counter,                                                                                                                      \
