@@ -108,9 +108,11 @@ class CurlTiDBExecutor:
         request = UrlRequest(uri)
         request.get_method = lambda: method
         if request.get_method() == 'POST' or request.get_method() == 'PUT':
-            request.data = context[2]
+            request.data = context[2].encode()
         try:
             response = urlopen(request).read().strip()
+            if response:
+                response = response.decode('utf-8')
             return [response] if request.get_method() == 'GET' and response else None, None
         except HTTPError as e:
             return ['Error: {}. Uri: {}'.format(e, uri)], e
