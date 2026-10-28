@@ -19,9 +19,16 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Flash/Coprocessor/DAGCodec.h>
+#include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/FilterConditions.h>
+#include <Flash/Coprocessor/TiDBTableScan.h>
+#include <IO/Buffer/WriteBufferFromString.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/StorageDisaggregatedColumnar.h>
+#include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
@@ -126,6 +133,86 @@ TEST_F(RNColumnarInputStreamTest, NonStringColumnsKeepNegativeSentinel)
     ASSERT_GT(stream->getColumnAvgValueSizeHintForTest(2, columns[0].type), 0.0);
     EXPECT_DOUBLE_EQ(stream->getColumnAvgValueSizeHintForTest(2, columns[3].type), -1.0);
 }
+TEST_F(FunctionTest, ColumnarExactFilterRetainsUnsafeTimestamp)
+try
+{
+    context->getTimezoneInfo().resetByTimezoneName("America/New_York");
+    tipb::Expr timestamp;
+    timestamp.set_tp(tipb::ColumnRef);
+    timestamp.mutable_field_type()->set_tp(TiDB::TypeTimestamp);
+    WriteBufferFromOwnString buffer;
+    encodeDAGInt64(0, buffer);
+    timestamp.set_val(buffer.releaseStr());
+    tipb::Expr predicate;
+    predicate.set_tp(tipb::ScalarFunc);
+    predicate.set_sig(tipb::GTTime);
+    predicate.mutable_field_type()->set_tp(TiDB::TypeLongLong);
+    *predicate.add_children() = timestamp;
+    *predicate.add_children() = constructDateTimeLiteralTiExpr(MyDateTime(2026, 11, 1, 1, 30, 0, 0).toPackedUInt());
+    auto integer = predicate;
+    integer.set_sig(tipb::EQInt);
+    integer.mutable_children(0)->mutable_field_type()->set_tp(TiDB::TypeLongLong);
+    WriteBufferFromOwnString integer_buffer;
+    encodeDAGInt64(1, integer_buffer);
+    integer.mutable_children(0)->set_val(integer_buffer.releaseStr());
+    *integer.mutable_children(1) = constructInt64LiteralTiExpr(1);
+
+    for (bool partition : {false, true})
+    {
+        SCOPED_TRACE(partition);
+        tipb::Executor executor;
+        executor.set_tp(partition ? tipb::TypePartitionTableScan : tipb::TypeTableScan);
+        tipb::ColumnInfo ts_column;
+        ts_column.set_column_id(10);
+        ts_column.set_tp(TiDB::TypeTimestamp);
+        auto int_column = ts_column;
+        int_column.set_column_id(20);
+        int_column.set_tp(TiDB::TypeLongLong);
+        if (partition)
+        {
+            auto * scan = executor.mutable_partition_table_scan();
+            scan->set_table_id(42);
+            *scan->add_columns() = ts_column;
+            *scan->add_columns() = int_column;
+            *scan->add_pushed_down_filter_conditions() = integer;
+            *scan->add_pushed_down_filter_conditions() = predicate;
+        }
+        else
+        {
+            auto * scan = executor.mutable_tbl_scan();
+            scan->set_keep_order(false);
+            scan->set_table_id(42);
+            *scan->add_columns() = ts_column;
+            *scan->add_columns() = int_column;
+            *scan->add_pushed_down_filter_conditions() = integer;
+            *scan->add_pushed_down_filter_conditions() = predicate;
+        }
+        TiDBTableScan scan(&executor, "scan", *context->getDAGContext());
+        google::protobuf::RepeatedPtrField<tipb::Expr> selection;
+        *selection.Add() = predicate;
+        String normalized_scan;
+        String normalized_selection;
+        auto task = RNColumnarReadTask::buildForTest(
+            *context,
+            scan,
+            FilterConditions("selection", selection),
+            normalized_scan,
+            normalized_selection);
+        tipb::Executor normalized;
+        ASSERT_TRUE(normalized.ParseFromString(normalized_scan));
+        const auto & pushed = partition ? normalized.partition_table_scan().pushed_down_filter_conditions()
+                                        : normalized.tbl_scan().pushed_down_filter_conditions();
+        ASSERT_EQ(pushed.size(), 1);
+        EXPECT_EQ(pushed[0].SerializeAsString(), integer.SerializeAsString());
+        EXPECT_TRUE(normalized_selection.empty());
+        EXPECT_EQ(task->getExactFilterColumnIDs(), (std::unordered_set<ColumnID>{10, 20}));
+        String reason;
+        EXPECT_FALSE(task->isLateMaterializationFilterEligible(&reason));
+        EXPECT_EQ(reason, "unsupported_filter_column_type");
+    }
+}
+CATCH
+
 } // namespace DB::tests
 
 #endif

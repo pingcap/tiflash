@@ -98,6 +98,8 @@ ColumnID getColumnIDForColumnExpr(const tipb::Expr & expr, const TiDB::ColumnInf
 // convert literal value from timezone specified in cop request to UTC in-place
 inline void convertFieldWithTimezone(Field & value, const TimezoneInfo & timezone_info)
 {
+    if (value.isNull())
+        return;
     static const auto & time_zone_utc = DateLUT::instance("UTC");
     UInt64 from_time = value.get<UInt64>();
     UInt64 result_time = from_time;
@@ -178,6 +180,14 @@ inline RSOperatorPtr parseTiCompareExpr( //
                         "Compare timestamp column with literal type is not supported, sig={} literal_type={}",
                         tipb::ScalarFuncSig_Name(expr.sig()),
                         literal_type));
+                if (!value.isNull() && timezone_info.is_name_based && !timezone_info.is_utc_timezone)
+                {
+                    UInt64 local_time = value.get<UInt64>();
+                    if (literal_type == TiDB::TypeTimestamp)
+                        local_time = convertTimeZoneFromUTCForComputing(local_time, *timezone_info.timezone);
+                    if (!isTimeZoneConversionSafeForRoughFilter(MyDateTime(local_time), *timezone_info.timezone))
+                        return createUnsupported("Timestamp comparison boundary cannot be safely converted to UTC");
+                }
                 // convert literal value from timezone specified in cop request to UTC
                 if (literal_type == TiDB::TypeDatetime && !timezone_info.is_utc_timezone)
                     convertFieldWithTimezone(value, timezone_info);
@@ -409,11 +419,17 @@ RSOperatorPtr FilterParser::parseRFInExpr(
         {
             Fields values;
             values.reserve(setElements.size());
-            std::for_each(setElements.begin(), setElements.end(), [&](Field element) {
+            for (auto element : setElements)
+            {
+                if (!element.isNull() && timezone_info.is_name_based
+                    && !isTimeZoneConversionSafeForRoughFilter(
+                        MyDateTime(element.get<UInt64>()),
+                        *timezone_info.timezone))
+                    return createUnsupported("Timestamp runtime filter cannot be safely converted to UTC");
                 // convert literal value from timezone specified in cop request to UTC
                 cop::convertFieldWithTimezone(element, timezone_info);
                 values.push_back(element);
-            });
+            }
             return createIn(attr, values);
         }
         else
