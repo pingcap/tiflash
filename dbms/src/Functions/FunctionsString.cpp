@@ -1857,16 +1857,18 @@ public:
     {
         Integer val = column.getElement(index);
         if constexpr (
-            std::is_same_v<Integer, Int8> || std::is_same_v<Integer, Int16> || std::is_same_v<Integer, Int32>
-            || std::is_same_v<Integer, Int64>)
+            std::is_same_v<
+                Integer,
+                Int8> || std::is_same_v<Integer, Int16> || std::is_same_v<Integer, Int32> || std::is_same_v<Integer, Int64>)
         {
             return val < 0 ? 0 : val;
         }
         else
         {
             static_assert(
-                std::is_same_v<Integer, UInt8> || std::is_same_v<Integer, UInt16> || std::is_same_v<Integer, UInt32>
-                || std::is_same_v<Integer, UInt64>);
+                std::is_same_v<
+                    Integer,
+                    UInt8> || std::is_same_v<Integer, UInt16> || std::is_same_v<Integer, UInt32> || std::is_same_v<Integer, UInt64>);
             return val;
         }
     }
@@ -1900,8 +1902,9 @@ private:
     {
         Integer val = column.getElement(index);
         if constexpr (
-            std::is_same_v<Integer, Int8> || std::is_same_v<Integer, Int16> || std::is_same_v<Integer, Int32>
-            || std::is_same_v<Integer, Int64>)
+            std::is_same_v<
+                Integer,
+                Int8> || std::is_same_v<Integer, Int16> || std::is_same_v<Integer, Int32> || std::is_same_v<Integer, Int64>)
         {
             if (val < 0)
                 return {false, static_cast<size_t>(-val)};
@@ -1910,8 +1913,9 @@ private:
         else
         {
             static_assert(
-                std::is_same_v<Integer, UInt8> || std::is_same_v<Integer, UInt16> || std::is_same_v<Integer, UInt32>
-                || std::is_same_v<Integer, UInt64>);
+                std::is_same_v<
+                    Integer,
+                    UInt8> || std::is_same_v<Integer, UInt16> || std::is_same_v<Integer, UInt32> || std::is_same_v<Integer, UInt64>);
             return {true, val};
         }
     }
@@ -3653,9 +3657,9 @@ public:
             left = tmp_target_len - data_len;
             if constexpr (IsLeft)
             {
-                while (left > 0 && pad_len != 0)
+                while (left > 0 && padding_size > 1)
                 {
-                    pad_bytes = UTF8::seqLength(padding[per_pad_offset]);
+                    pad_bytes = std::min(UTF8::seqLength(padding[per_pad_offset]), padding_size - 1 - per_pad_offset);
                     copyResult(res, res_offset, padding, per_pad_offset, pad_bytes);
                     res_offset += pad_bytes;
                     per_pad_offset = (per_pad_offset + pad_bytes) % (padding_size - 1);
@@ -3670,9 +3674,9 @@ public:
                 copyResult(res, res_offset, data, 0, data_size - 1);
                 res_offset += data_size - 1;
 
-                while (left > 0 && pad_len != 0)
+                while (left > 0 && padding_size > 1)
                 {
-                    pad_bytes = UTF8::seqLength(padding[per_pad_offset]);
+                    pad_bytes = std::min(UTF8::seqLength(padding[per_pad_offset]), padding_size - 1 - per_pad_offset);
                     copyResult(res, res_offset, padding, per_pad_offset, pad_bytes);
                     res_offset += pad_bytes;
                     per_pad_offset = (per_pad_offset + pad_bytes) % (padding_size - 1);
@@ -3682,9 +3686,9 @@ public:
         }
         else
         {
-            while (left < tmp_target_len)
+            while (left < tmp_target_len && per_pad_offset < data_size - 1)
             {
-                pad_bytes = UTF8::seqLength(data[per_pad_offset]);
+                pad_bytes = std::min(UTF8::seqLength(data[per_pad_offset]), data_size - 1 - per_pad_offset);
 
                 copyResult(res, res_offset, data, per_pad_offset, pad_bytes);
                 res_offset += pad_bytes;
