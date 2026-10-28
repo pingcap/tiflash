@@ -227,6 +227,7 @@ target_link_libraries (dbms
     absl::synchronization
     tiflash_contrib::aws_s3
     tiflash_vector_search
+    tici_search_lib
 
     etcdpb
     tiflash_parsers
@@ -379,6 +380,10 @@ if (ENABLE_TESTS)
                 COMPONENT tiflash-gtest
                 DESTINATION ".")
     endif ()
+
+    install (TARGETS tici_search_lib
+            COMPONENT tiflash-gtest
+            DESTINATION ".")
 
     if (ENABLE_CLARA AND USE_INTERNAL_LIBCLARA)
         install (TARGETS clara_shared
