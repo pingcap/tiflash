@@ -30,6 +30,7 @@
 #include <Storages/StorageDisaggregatedColumnar.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TestUtils/TimeZoneTestData.h>
 #include <gtest/gtest.h>
 
 namespace DB::tests
@@ -136,7 +137,7 @@ TEST_F(RNColumnarInputStreamTest, NonStringColumnsKeepNegativeSentinel)
 TEST_F(FunctionTest, ColumnarExactFilterRetainsUnsafeTimestamp)
 try
 {
-    context->getTimezoneInfo().resetByTimezoneName("America/New_York");
+    context->getTimezoneInfo().resetByTimezoneName(getTestTimeZoneName("America/New_York"));
     tipb::Expr timestamp;
     timestamp.set_tp(tipb::ColumnRef);
     timestamp.mutable_field_type()->set_tp(TiDB::TypeTimestamp);

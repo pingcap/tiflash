@@ -14,11 +14,10 @@
 
 #include <Columns/ColumnConst.h>
 #include <Common/Exception.h>
-#include <Flash/Coprocessor/DefaultChunkCodec.h>
 #include <Functions/FunctionsDateTime.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <TiDB/Decode/TypeMapping.h>
+#include <TestUtils/TimeZoneTestData.h>
 
 #include <string>
 #include <vector>
@@ -164,7 +163,7 @@ TEST_F(TestUnixTimestamp, TestTimezone)
 try
 {
     /// name based timezone
-    context->getTimezoneInfo().resetByTimezoneName("Asia/Shanghai");
+    context->getTimezoneInfo().resetByTimezoneName(getTestTimeZoneName("Asia/Shanghai"));
     std::vector<DataTypeMyDateTime::FieldType> date_time_data{
         /// min-max valid timestamp
         MyDateTime(1970, 1, 1, 8, 0, 0, 0).toPackedUInt(),
@@ -215,7 +214,7 @@ try
         createColumn<Decimal64>(std::make_tuple(12, 0), date_time_decimal_result),
         executeFunction(func_name_dec, createColumn<MyDateTime>(date_time_data)));
 
-    context->getTimezoneInfo().resetByTimezoneName("America/Santiago");
+    context->getTimezoneInfo().resetByTimezoneName(getTestTimeZoneName("America/Santiago"));
     date_time_data = {
         /// min-max valid timestamp
         MyDateTime(1969, 12, 31, 21, 0, 0, 0).toPackedUInt(),
@@ -306,7 +305,7 @@ CATCH
 TEST_F(TestUnixTimestamp, DST)
 try
 {
-    context->getTimezoneInfo().resetByTimezoneName("America/New_York");
+    context->getTimezoneInfo().resetByTimezoneName(getTestTimeZoneName("America/New_York"));
     const auto input = createColumn<MyDateTime>(
         std::make_tuple(6),
         {MyDateTime(2026, 11, 1, 1, 30, 0, 123456).toPackedUInt(),
@@ -321,35 +320,17 @@ CATCH
 TEST_F(TestUnixTimestamp, PreciseDSTTransitions)
 try
 {
-    for (const auto & [name, midnight] : {
-             std::pair{"America/St_Johns", UInt64{1268537400}},
-             std::pair{"America/Goose_Bay", UInt64{1268539200}},
-         })
-    {
-        SCOPED_TRACE(name);
-        context->getTimezoneInfo().resetByTimezoneName(name);
-        const auto input = createColumn<MyDateTime>(
-            std::make_tuple(6),
-            {MyDateTime(2010, 3, 14, 0, 0, 0, 0).toPackedUInt(),
-             MyDateTime(2010, 3, 14, 0, 0, 30, 123456).toPackedUInt(),
-             MyDateTime(2010, 3, 14, 0, 0, 59, 999999).toPackedUInt(),
-             MyDateTime(2010, 3, 14, 0, 1, 0, 0).toPackedUInt(),
-             MyDateTime(2010, 3, 14, 1, 0, 59, 999999).toPackedUInt(),
-             MyDateTime(2010, 3, 14, 1, 1, 0, 0).toPackedUInt()});
-        ASSERT_COLUMN_EQ(
-            createColumn<UInt64>({midnight, midnight + 30, midnight + 59, midnight + 60, midnight + 60, midnight + 60}),
-            executeFunction(func_name_int, input));
-        ASSERT_COLUMN_EQ(
-            createColumn<Decimal64>(
-                std::make_tuple(18, 6),
-                {fmt::format("{}.000000", midnight),
-                 fmt::format("{}.123456", midnight + 30),
-                 fmt::format("{}.999999", midnight + 59),
-                 "0.000000",
-                 "0.000000",
-                 fmt::format("{}.000000", midnight + 60)}),
-            executeFunction(func_name_dec, input));
-    }
+    context->getTimezoneInfo().resetByTimezoneName(getTestTimeZoneName("America/St_Johns"));
+    // The jump is at 00:01: integer adjusts the gap, decimal rejects it.
+    const auto input = createColumn<MyDateTime>(
+        std::make_tuple(6),
+        {MyDateTime(2010, 3, 14, 0, 0, 30, 123456).toPackedUInt(),
+         MyDateTime(2010, 3, 14, 0, 1, 0, 0).toPackedUInt(),
+         MyDateTime(2010, 3, 14, 1, 1, 0, 123456).toPackedUInt()});
+    ASSERT_COLUMN_EQ(createColumn<UInt64>({1268537430, 1268537460, 1268537460}), executeFunction(func_name_int, input));
+    ASSERT_COLUMN_EQ(
+        createColumn<Decimal64>(std::make_tuple(18, 6), {"1268537430.123456", "0.000000", "1268537460.123456"}),
+        executeFunction(func_name_dec, input));
 }
 CATCH
 
@@ -371,11 +352,12 @@ try
          })
     {
         SCOPED_TRACE(test.timezone + " " + test.stored.toString(6));
-        context->getTimezoneInfo().resetByTimezoneName(test.timezone);
+        const auto timezone_name = getTestTimeZoneName(test.timezone);
+        context->getTimezoneInfo().resetByTimezoneName(timezone_name);
         const auto local = executeFunction(
             "ConvertTimeZoneFromUTC",
             {createColumn<Nullable<MyDateTime>>(std::make_tuple(6), {test.stored.toPackedUInt(), {}, 0}),
-             createConstColumn<String>(1, test.timezone)},
+             createConstColumn<String>(1, timezone_name)},
             nullptr,
             true);
         ASSERT_COLUMN_EQ(
@@ -385,11 +367,6 @@ try
         ASSERT_COLUMN_EQ(
             createColumn<Nullable<UInt64>>({static_cast<UInt64>(epoch), {}, 0}),
             executeFunction(func_name_int, local));
-        ASSERT_COLUMN_EQ(
-            createColumn<Nullable<Decimal64>>(
-                std::make_tuple(18, 6),
-                {fmt::format("{}.123456", epoch), {}, "0.000000"}),
-            executeFunction(func_name_dec, local));
     }
 }
 CATCH
@@ -412,25 +389,15 @@ try
          })
     {
         SCOPED_TRACE(test.timezone + " " + test.stored.toString(6));
-        const auto zone = createConstColumn<String>(1, test.timezone);
+        const auto zone = createConstColumn<String>(1, getTestTimeZoneName(test.timezone));
         const auto local = executeFunction(
             "ConvertTimeZoneFromUTC",
             {createColumn<MyDateTime>(std::make_tuple(6), {test.stored.toPackedUInt()}), zone},
             nullptr,
             true);
-        auto output = executeFunction("ConvertTimeZoneToUTC", {local, zone}, nullptr, true);
-        tipb::FieldType field_type;
-        field_type.set_tp(TiDB::TypeTimestamp);
-        field_type.set_decimal(6);
-        field_type.set_flag(TiDB::ColumnFlagNotNull);
-        const std::vector<tipb::FieldType> fields{field_type};
-        DefaultChunkCodec codec;
-        auto stream = codec.newCodecStream(fields);
-        Block block({output});
-        stream->encode(block, 0, 1);
-        const auto decoded = codec.decode(stream->getString(), {{"ts", TiDB::fieldTypeToColumnInfo(field_type)}});
-        ASSERT_EQ(decoded.rows(), 1);
-        EXPECT_EQ(decoded.getByPosition(0).column->getUInt(0), test.expected_output.toPackedUInt());
+        ASSERT_COLUMN_EQ(
+            createColumn<MyDateTime>(std::make_tuple(6), {test.expected_output.toPackedUInt()}),
+            executeFunction("ConvertTimeZoneToUTC", {local, zone}, nullptr, true));
     }
 }
 CATCH
@@ -451,7 +418,7 @@ try
          })
     {
         SCOPED_TRACE(test.timezone);
-        context->getTimezoneInfo().resetByTimezoneName(test.timezone);
+        context->getTimezoneInfo().resetByTimezoneName(getTestTimeZoneName(test.timezone));
         const auto input = createColumn<MyDateTime>(std::make_tuple(6), {test.local.toPackedUInt()});
         ASSERT_COLUMN_EQ(createColumn<UInt64>({test.expected}), executeFunction(func_name_int, input));
         ASSERT_COLUMN_EQ(

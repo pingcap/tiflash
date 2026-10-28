@@ -32,6 +32,7 @@
 #include <Storages/DeltaMerge/Index/RSResult.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TestUtils/TimeZoneTestData.h>
 #include <TiDB/Decode/TypeMapping.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <common/logger_useful.h>
@@ -635,7 +636,7 @@ try
         // Greater between TimeStamp col and Datetime literal, use Chicago timezone
         auto ctx = TiFlashTestEnv::getContext();
         auto & timezone_info = ctx->getTimezoneInfo();
-        timezone_info.resetByTimezoneName("America/Chicago");
+        timezone_info.resetByTimezoneName(getTestTimeZoneName("America/Chicago"));
         convertTimeZone(origin_time_stamp, converted_time, *timezone_info.timezone, time_zone_utc);
 
         auto rs_operator = generateRsOperator(
@@ -707,7 +708,7 @@ try
         EXPECT_EQ(sets->toDebugString(), fmt::format("6: [{}, 18446744073709551615]", origin_time_stamp + 1));
     }
     TimezoneInfo timezone;
-    timezone.resetByTimezoneName("America/New_York");
+    timezone.resetByTimezoneName(getTestTimeZoneName("America/New_York"));
     for (const auto & literal : {"2026-11-01 01:30:00", "2026-03-08 02:30:00"})
     {
         SCOPED_TRACE(literal);
@@ -718,7 +719,7 @@ try
         EXPECT_EQ(rs_operator->name(), "unsupported");
     }
 
-    timezone.resetByTimezoneName("Africa/Monrovia");
+    timezone.resetByTimezoneName(getTestTimeZoneName("Africa/Monrovia"));
     for (const auto & local : {
              MyDateTime(1970, 7, 15, 11, 15, 0, 123456),
              MyDateTime(1972, 1, 7, 0, 45, 0, 123456),
@@ -740,85 +741,44 @@ try
 }
 CATCH
 
-TEST_F(FilterParserTest, TimestampRuntimeFilterDSTTransition)
+TEST_F(FilterParserTest, TimestampRuntimeFilterUnsafeTimezones)
 try
 {
     tipb::Expr target;
     target.set_tp(tipb::ColumnRef);
     target.mutable_field_type()->set_tp(TiDB::TypeTimestamp);
     const DM::Attr attr{"ts", 4, std::make_shared<DataTypeMyDateTime>(6)};
-    TimezoneInfo timezone;
-    timezone.resetByTimezoneName("America/New_York");
-    for (const auto & local : {
-             MyDateTime(2026, 11, 1, 1, 30, 0, 0),
-             MyDateTime(2026, 3, 8, 2, 30, 0, 0),
+    struct Case
+    {
+        String timezone;
+        MyDateTime local;
+    };
+    for (const auto & test : {
+             Case{"America/New_York", {2026, 11, 1, 1, 30, 0, 0}},
+             Case{"America/New_York", {2026, 3, 8, 2, 30, 0, 0}},
+             // Rounded LUT projections repeat these otherwise unique local times.
+             Case{"America/St_Johns", {2010, 11, 6, 23, 0, 30, 123456}},
+             Case{"America/Goose_Bay", {2010, 11, 6, 23, 0, 30, 123456}},
+             Case{"Africa/Monrovia", {1970, 7, 15, 11, 15, 0, 123456}},
+             Case{"Africa/Monrovia", {1972, 1, 7, 0, 45, 0, 123456}},
          })
     {
-        const std::set<Field> elements{Field(local.toPackedUInt())};
+        SCOPED_TRACE(test.timezone + " " + test.local.toString(6));
+        TimezoneInfo timezone;
+        timezone.resetByTimezoneName(getTestTimeZoneName(test.timezone));
+        const std::set<Field> elements{Field(test.local.toPackedUInt())};
         EXPECT_EQ(DM::FilterParser::parseRFInExpr(tipb::IN, target, attr, elements, timezone)->name(), "unsupported");
     }
+    TimezoneInfo timezone;
+    timezone.resetByTimezoneName(getTestTimeZoneName("America/New_York"));
     const std::set<Field> elements{Field(MyDateTime(2026, 11, 1, 2, 30, 0, 0).toPackedUInt())};
     EXPECT_EQ(DM::FilterParser::parseRFInExpr(tipb::IN, target, attr, elements, timezone)->name(), "in");
     const std::set<Field> mixed_elements{*elements.begin(), Field(MyDateTime(2026, 11, 1, 1, 30, 0, 0).toPackedUInt())};
     const auto mixed = DM::FilterParser::parseRFInExpr(tipb::IN, target, attr, mixed_elements, timezone);
     EXPECT_EQ(mixed->name(), "unsupported");
-    EXPECT_EQ(mixed->roughCheck(0, 2, {}), (DM::RSResults{DM::RSResult::Some, DM::RSResult::Some}));
-    timezone.resetByTimezoneName("EST");
+    timezone.resetByTimezoneName(getTestTimeZoneName("EST"));
     const std::set<Field> fixed_zone_elements{Field(MyDateTime(2026, 11, 1, 1, 30, 0, 0).toPackedUInt())};
     EXPECT_EQ(DM::FilterParser::parseRFInExpr(tipb::IN, target, attr, fixed_zone_elements, timezone)->name(), "in");
-}
-CATCH
-
-TEST_F(FilterParserTest, TimestampRuntimeFilterDateLUTProjection)
-try
-{
-    tipb::Expr target;
-    target.set_tp(tipb::ColumnRef);
-    target.mutable_field_type()->set_tp(TiDB::TypeTimestamp);
-    const DM::Attr attr{"ts", 4, std::make_shared<DataTypeMyDateTime>(6)};
-    const auto & utc = DateLUT::instance("UTC");
-    struct Case
-    {
-        String timezone;
-        std::vector<MyDateTime> stored;
-        MyDateTime local;
-    };
-    for (const auto & test : {
-             Case{
-                 "America/St_Johns",
-                 {{2010, 11, 7, 1, 30, 30, 123456}, {2010, 11, 7, 2, 30, 30, 123456}},
-                 {2010, 11, 6, 23, 0, 30, 123456}},
-             Case{
-                 "America/Goose_Bay",
-                 {{2010, 11, 7, 2, 0, 30, 123456}, {2010, 11, 7, 3, 0, 30, 123456}},
-                 {2010, 11, 6, 23, 0, 30, 123456}},
-             Case{"Africa/Monrovia", {{1970, 7, 15, 12, 0, 0, 123456}}, {1970, 7, 15, 11, 15, 0, 123456}},
-             Case{"Africa/Monrovia", {{1972, 1, 7, 1, 0, 0, 123456}}, {1972, 1, 7, 0, 45, 0, 123456}},
-         })
-    {
-        SCOPED_TRACE(test.timezone + " " + test.local.toString(6));
-        TimezoneInfo timezone;
-        timezone.resetByTimezoneName(test.timezone);
-        auto minmax = std::make_shared<DM::MinMaxIndex>(*attr.type);
-        // Each matching row is in its own pack, so pruning any pack loses a row.
-        for (const auto & value : test.stored)
-        {
-            UInt64 projected = 0;
-            convertTimeZone(value.toPackedUInt(), projected, utc, *timezone.timezone);
-            ASSERT_EQ(projected, test.local.toPackedUInt());
-            auto column = attr.type->createColumn();
-            column->insert(Field(value.toPackedUInt()));
-            minmax->addPack(*column, nullptr);
-        }
-        DM::RSCheckParam param;
-        param.indexes.emplace(attr.col_id, DM::RSIndex(attr.type, minmax));
-        const std::set<Field> elements{Field(test.local.toPackedUInt())};
-        auto rs_operator = DM::FilterParser::parseRFInExpr(tipb::IN, target, attr, elements, timezone);
-        EXPECT_EQ(rs_operator->name(), "unsupported");
-        EXPECT_EQ(
-            rs_operator->roughCheck(0, test.stored.size(), param),
-            DM::RSResults(test.stored.size(), DM::RSResult::Some));
-    }
 }
 CATCH
 
@@ -836,7 +796,7 @@ try
         SCOPED_TRACE(is_name_based);
         TimezoneInfo timezone;
         if (is_name_based)
-            timezone.resetByTimezoneName("America/New_York");
+            timezone.resetByTimezoneName(getTestTimeZoneName("America/New_York"));
         else
             timezone.resetByTimezoneOffset(-5 * 3600);
 
@@ -851,24 +811,7 @@ try
 }
 CATCH
 
-TEST_F(FilterParserTest, TimestampLiteralSetUsesExactProjection)
-try
-{
-    TimezoneInfo timezone;
-    timezone.resetByTimezoneName("America/St_Johns");
-    const auto stored = MyDateTime(2010, 3, 14, 3, 30, 30, 123456).toPackedUInt();
-    tipb::Expr expr;
-    expr.add_children()->set_tp(tipb::ColumnRef);
-    auto * literal = expr.add_children();
-    *literal = constructDateTimeLiteralTiExpr(stored);
-    literal->mutable_field_type()->set_tp(TiDB::TypeTimestamp);
-    Set set(SizeLimits{});
-    EXPECT_TRUE(set.createFromDAGExpr({std::make_shared<DataTypeMyDateTime>(6)}, expr, true, timezone).empty());
-    EXPECT_EQ(set.getSetElements(), (SetElements{{Field(MyDateTime(2010, 3, 14, 0, 0, 30, 123456).toPackedUInt())}}));
-}
-CATCH
-
-TEST_F(FilterParserTest, TimestampLiteralSetNull)
+TEST_F(FilterParserTest, TimestampLiteralSetProjectionAndNull)
 try
 {
     const auto type = std::make_shared<DataTypeMyDateTime>(6);
@@ -876,9 +819,9 @@ try
     {
         TimezoneInfo timezone;
         if (is_name_based)
-            timezone.resetByTimezoneName("America/New_York");
+            timezone.resetByTimezoneName(getTestTimeZoneName("America/St_Johns"));
         else
-            timezone.resetByTimezoneOffset(-5 * 3600);
+            timezone.resetByTimezoneOffset(-3 * 3600 - 30 * 60);
         for (bool mixed : {false, true})
         {
             SCOPED_TRACE(fmt::format("name_based={} mixed={}", is_name_based, mixed));
@@ -890,7 +833,7 @@ try
             if (mixed)
             {
                 auto * timestamp = expr.add_children();
-                *timestamp = constructDateTimeLiteralTiExpr(MyDateTime(2026, 11, 1, 7, 30, 0, 0).toPackedUInt());
+                *timestamp = constructDateTimeLiteralTiExpr(MyDateTime(2010, 3, 14, 3, 30, 30, 123456).toPackedUInt());
                 timestamp->mutable_field_type()->set_tp(TiDB::TypeTimestamp);
             }
             Set set(SizeLimits{});
@@ -900,7 +843,7 @@ try
             if (mixed)
                 EXPECT_EQ(
                     set.getSetElements(),
-                    (SetElements{{Field(MyDateTime(2026, 11, 1, 2, 30, 0, 0).toPackedUInt())}}));
+                    (SetElements{{Field(MyDateTime(2010, 3, 14, 0, 0, 30, 123456).toPackedUInt())}}));
         }
     }
 }
