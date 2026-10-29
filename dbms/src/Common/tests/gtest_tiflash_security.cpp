@@ -181,6 +181,25 @@ TEST(TiFlashSecurityTest, RedactLogConfig)
     }
 }
 
+TEST(TiFlashSecurityTest, RedactLogConfigInitialization)
+{
+    const auto log = Logger::get();
+    for (const auto & [input, expect] : std::vector<std::pair<String, RedactMode>>{
+             {"", RedactMode::Enable},
+             {"[security]\ncert_allowed_cn = \"tidb\"", RedactMode::Enable},
+             {"[security]\nredact_info_log = true", RedactMode::Enable},
+             {"[security]\nredact_info_log = false", RedactMode::Disable},
+             {"[security]\nredact_info_log = \"marker\"", RedactMode::Marker},
+         })
+    {
+        SCOPED_TRACE(input);
+        auto config = loadConfigFromString(input);
+        TiFlashSecurityConfig security_config(log);
+        security_config.init(*config);
+        EXPECT_EQ(security_config.redactInfoLog(), expect);
+    }
+}
+
 TEST(TiFlashSecurityTest, Update)
 {
     String test =
