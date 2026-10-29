@@ -232,7 +232,9 @@ void remapColumnRefsForLateMaterialization(
         remapColumnRefsForLateMaterialization(*expr.mutable_children(i), scan_columns, early_column_indexes);
 }
 
-void normalizeTimestampCompareDateTimeLiteralToUTC(tipb::Expr & expr, const TimezoneInfo & timezone_info);
+void normalizeTimestampFiltersToUTC(
+    google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
+    const TimezoneInfo & timezone_info);
 
 struct BucketSplitResult
 {
@@ -475,25 +477,30 @@ std::shared_ptr<RNColumnarReaderSharedContext> buildColumnarReaderSharedContext(
     shared_context->scan_columns = table_scan.getColumns();
 
     auto table_scan_pb = *table_scan.getTableScanPB();
+    // Exact LM evaluation uses session-timezone expressions after extra casts.
+    // Keep these separate from the UTC-normalized conditions sent to columnar.
+    shared_context->exact_filter_conditions = filter_conditions.conditions;
+    shared_context->exact_filter_conditions.MergeFrom(
+        table_scan_pb.tp() == tipb::TypePartitionTableScan
+            ? table_scan_pb.partition_table_scan().pushed_down_filter_conditions()
+            : table_scan_pb.tbl_scan().pushed_down_filter_conditions());
+    shared_context->has_pushed_down_filter_conditions = !table_scan.getPushedDownFilters().empty();
     const auto & timezone_info = context.getTimezoneInfo();
     if (table_scan_pb.tp() == tipb::TypePartitionTableScan)
     {
         auto * pushed_down_filters
             = table_scan_pb.mutable_partition_table_scan()->mutable_pushed_down_filter_conditions();
-        for (int i = 0; i < pushed_down_filters->size(); ++i)
-            normalizeTimestampCompareDateTimeLiteralToUTC(*pushed_down_filters->Mutable(i), timezone_info);
+        normalizeTimestampFiltersToUTC(*pushed_down_filters, timezone_info);
     }
     else
     {
         auto * pushed_down_filters = table_scan_pb.mutable_tbl_scan()->mutable_pushed_down_filter_conditions();
-        for (int i = 0; i < pushed_down_filters->size(); ++i)
-            normalizeTimestampCompareDateTimeLiteralToUTC(*pushed_down_filters->Mutable(i), timezone_info);
+        normalizeTimestampFiltersToUTC(*pushed_down_filters, timezone_info);
     }
     shared_context->table_scan_data = table_scan_pb.SerializeAsString();
 
     auto conditions = filter_conditions.conditions;
-    for (int i = 0; i < conditions.size(); ++i)
-        normalizeTimestampCompareDateTimeLiteralToUTC(*conditions.Mutable(i), timezone_info);
+    normalizeTimestampFiltersToUTC(conditions, timezone_info);
     for (const auto & condition : conditions)
     {
         auto data = condition.SerializeAsString();
@@ -501,13 +508,6 @@ std::shared_ptr<RNColumnarReaderSharedContext> buildColumnarReaderSharedContext(
         shared_context->filter_conditions_data.append(reinterpret_cast<const char *>(&len), sizeof(len));
         shared_context->filter_conditions_data.append(data.data(), data.size());
     }
-    shared_context->exact_filter_conditions = conditions;
-    const auto & pushed_down_filters = table_scan_pb.tp() == tipb::TypePartitionTableScan
-        ? table_scan_pb.partition_table_scan().pushed_down_filter_conditions()
-        : table_scan_pb.tbl_scan().pushed_down_filter_conditions();
-    shared_context->has_pushed_down_filter_conditions = !pushed_down_filters.empty();
-    shared_context->exact_filter_conditions.MergeFrom(pushed_down_filters);
-
     tipb::TableInfo table_info;
     bool is_partition_scan = table_scan.isPartitionTableScan();
     const auto & tidb_columns = table_scan.getColumns();
@@ -605,12 +605,14 @@ bool isColumnarFilterComparableExpr(tipb::ScalarFuncSig sig)
     }
 }
 
-void normalizeTimestampCompareDateTimeLiteralToUTC(tipb::Expr & expr, const TimezoneInfo & timezone_info)
+// False means this entire rough-filter predicate must be omitted. Its original
+// session-timezone expression is retained for exact evaluation in TiFlash.
+bool normalizeTimestampCompareDateTimeLiteralToUTC(tipb::Expr & expr, const TimezoneInfo & timezone_info)
 {
     if (timezone_info.is_utc_timezone)
-        return;
+        return true;
     if (!isFunctionExpr(expr))
-        return;
+        return true;
 
     // Only normalize for comparison expressions that columnar filter supports.
     // Keep recursion so nested comparisons under AND/OR/NOT still work.
@@ -644,10 +646,25 @@ void normalizeTimestampCompareDateTimeLiteralToUTC(tipb::Expr & expr, const Time
                 auto * child = expr.mutable_children(i);
                 if (!isLiteralExpr(*child) || !child->has_field_type())
                     continue;
-                if (child->tp() != tipb::ExprType::MysqlTime || child->field_type().tp() != TiDB::TypeDatetime)
+                if (child->tp() != tipb::ExprType::MysqlTime)
+                    continue;
+                const auto literal_type = child->field_type().tp();
+                if (literal_type != TiDB::TypeDatetime && literal_type != TiDB::TypeTimestamp)
                     continue;
 
                 UInt64 from_time = decodeLiteral(*child).get<UInt64>();
+                if (timezone_info.is_name_based)
+                {
+                    UInt64 local_time = from_time;
+                    if (literal_type == TiDB::TypeTimestamp)
+                        convertTimeZone(from_time, local_time, time_zone_utc, *timezone_info.timezone);
+                    // A single UTC boundary requires a unique inverse that
+                    // agrees with the exact predicate's DateLUT projection.
+                    if (!isTimeZoneConversionSafeForRoughFilter(MyDateTime(local_time), *timezone_info.timezone))
+                        return false;
+                }
+                if (literal_type != TiDB::TypeDatetime)
+                    continue;
                 UInt64 result_time = from_time;
                 if (timezone_info.is_name_based)
                     convertTimeZone(from_time, result_time, *timezone_info.timezone, time_zone_utc);
@@ -659,7 +676,24 @@ void normalizeTimestampCompareDateTimeLiteralToUTC(tipb::Expr & expr, const Time
     }
 
     for (int i = 0; i < expr.children_size(); ++i)
-        normalizeTimestampCompareDateTimeLiteralToUTC(*expr.mutable_children(i), timezone_info);
+        if (!normalizeTimestampCompareDateTimeLiteralToUTC(*expr.mutable_children(i), timezone_info))
+            return false;
+    return true;
+}
+
+void normalizeTimestampFiltersToUTC(
+    google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
+    const TimezoneInfo & timezone_info)
+{
+    for (int i = 0; i < conditions.size();)
+    {
+        if (normalizeTimestampCompareDateTimeLiteralToUTC(*conditions.Mutable(i), timezone_info))
+            ++i;
+        else
+            // Top-level conditions are ANDed. Drop the whole predicate so
+            // nested OR/NOT expressions cannot discard matching rows.
+            conditions.DeleteSubrange(i, 1);
+    }
 }
 } // namespace
 
@@ -1055,6 +1089,50 @@ std::unordered_set<ColumnID> RNColumnarReadTask::getLateMaterializationEarlyColu
     return column_ids;
 }
 
+std::unique_ptr<FilterTransformAction> RNColumnarReadTask::buildLateMaterializationFilterAction(
+    const Block & header) const
+{
+    DAGExpressionAnalyzer analyzer(header, getContext());
+    ExpressionActionsChain chain;
+    auto & step = analyzer.initAndGetLastStep(chain);
+    const auto & actions = step.actions;
+
+    TiDB::ColumnInfos early_scan_columns(header.columns());
+    std::vector<UInt8> may_need_cast(header.columns(), 0);
+    for (size_t i = 0; i < header.columns(); ++i)
+    {
+        const auto column_id = header.getByPosition(i).column_id;
+        const auto scan_column = std::find_if(
+            shared_reader_context->scan_columns.begin(),
+            shared_reader_context->scan_columns.end(),
+            [column_id](const auto & candidate) { return candidate.id == column_id; });
+        if (scan_column != shared_reader_context->scan_columns.end())
+        {
+            early_scan_columns[i] = *scan_column;
+            may_need_cast[i] = 1;
+        }
+    }
+
+    // LM evaluates before the normal pipeline's extraCast. Use the same casts
+    // on this evaluation copy: UTC timestamp -> session timezone, Int64 -> MyDuration.
+    auto [has_cast, casted_columns] = analyzer.buildExtraCastsAfterTS(actions, may_need_cast, early_scan_columns);
+    if (has_cast)
+    {
+        NamesWithAliases projection;
+        for (size_t i = 0; i < header.columns(); ++i)
+            projection.emplace_back(casted_columns[i], header.getByPosition(i).name);
+        actions->add(ExpressionAction::project(projection));
+    }
+
+    const auto conditions = getLateMaterializationFilterConditions(header);
+    const auto filter_column = analyzer.buildFilterColumn(actions, conditions, true);
+    for (const auto & column : header)
+        step.required_output.push_back(column.name);
+    step.required_output.push_back(filter_column);
+    chain.finalize();
+    return std::make_unique<FilterTransformAction>(header, actions, filter_column);
+}
+
 bool RNColumnarReadTask::isLateMaterializationFilterEligible(String * reason) const
 {
     const auto setReason = [reason](const char * value) {
@@ -1115,21 +1193,6 @@ bool RNColumnarReadTask::isLateMaterializationFilterEligible(String * reason) co
                 getLogicalTableID());
             return false;
         }
-        const bool needs_timezone_cast
-            = !shared_reader_context->context->getTimezoneInfo().is_utc_timezone && column.tp == TiDB::TypeTimestamp;
-        if (needs_timezone_cast || column.tp == TiDB::TypeTime)
-        {
-            setReason("unsupported_filter_column_type");
-            LOG_DEBUG(
-                shared_reader_context->log,
-                "Columnar late materialization filter is ineligible: reason=unsupported_filter_column_type, "
-                "column_id={}, timezone_cast={}, executor_id={}, table_id={}",
-                column.id,
-                needs_timezone_cast,
-                getExecutorID(),
-                getLogicalTableID());
-            return false;
-        }
     }
     setReason("eligible");
     LOG_DEBUG(
@@ -1169,6 +1232,20 @@ void RNColumnarReadTask::replaceReaderWork(
 }
 
 #ifdef DBMS_PUBLIC_GTEST
+RNColumnarReadTaskPtr RNColumnarReadTask::buildForTest(
+    const Context & context,
+    const TiDBTableScan & table_scan,
+    const FilterConditions & filter_conditions,
+    String & normalized_table_scan,
+    String & normalized_filter_conditions)
+{
+    auto shared_context = buildColumnarReaderSharedContext(Logger::get(), context, 0, table_scan, filter_conditions);
+    normalized_table_scan = shared_context->table_scan_data;
+    normalized_filter_conditions = shared_context->filter_conditions_data;
+    // Provide an inert plan to satisfy task invariants without opening a reader.
+    return std::make_shared<RNColumnarReadTask>(std::vector<RNColumnarReaderPlan>{{}}, 1, std::move(shared_context));
+}
+
 void RNColumnarReadTask::replaceReaderWorkForTest(
     const RNColumnarReaderWorkPtr & reader_work,
     std::vector<RNColumnarReaderPlan> replanned_reader_plans)
@@ -1910,21 +1987,8 @@ Block RNColumnarInputStream::readLateMaterializedBlock()
 
     if (!late_materialization_filter_action)
     {
-        // The filter expression and action graph are invariant for one input
-        // stream. Building them for every 10K-row batch makes LM spend most of
-        // its time in planner setup instead of row filtering.
-        Block filter_header = early_block.cloneEmpty();
-        NamesAndTypes early_names_and_types;
-        early_names_and_types.reserve(filter_header.columns());
-        for (const auto & column : filter_header)
-            early_names_and_types.emplace_back(column.name, column.type);
-        DAGExpressionAnalyzer lm_analyzer(std::move(early_names_and_types), context);
-        auto filter_conditions = task->getLateMaterializationFilterConditions(filter_header);
-        auto filter_actions = lm_analyzer.buildPushDownFilter(filter_conditions, true);
-        late_materialization_filter_action = std::make_unique<FilterTransformAction>(
-            filter_header,
-            std::get<0>(filter_actions),
-            std::get<1>(filter_actions));
+        // The filter expression and action graph are invariant for one input stream.
+        late_materialization_filter_action = task->buildLateMaterializationFilterAction(early_block.cloneEmpty());
     }
     auto & filter_action = *late_materialization_filter_action;
     Block evaluation_block = early_block;

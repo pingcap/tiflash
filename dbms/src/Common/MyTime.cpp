@@ -18,11 +18,14 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/String.h>
+#include <cctz/time_zone.h>
 #include <common/StringRef.h>
 #include <common/logger_useful.h>
 #include <fmt/core.h>
 
+#include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <initializer_list>
 #include <vector>
 
@@ -1489,6 +1492,118 @@ inline bool isZeroDate(UInt64 time)
     return time == 0;
 }
 
+static cctz::time_zone getCctzTimeZone(const DateLUTImpl & time_zone)
+{
+    // A query normally uses one zone. Avoid cctz's global cache lock per row.
+    thread_local String cached_name;
+    thread_local cctz::time_zone cached_zone;
+    if (cached_name != time_zone.getTimeZone())
+    {
+        cctz::time_zone zone;
+        if (!cctz::load_time_zone(time_zone.getTimeZone(), &zone))
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Cannot load timezone {}", time_zone.getTimeZone());
+        cached_zone = zone;
+        cached_name = time_zone.getTimeZone();
+    }
+    return cached_zone;
+}
+
+time_t getEpochSecond(const MyDateTime & my_time, const DateLUTImpl & time_zone, bool adjust_for_dst_gap)
+{
+    time_t epoch_second;
+    if (time_zone.tryMakeDateTime(
+            my_time.year,
+            my_time.month,
+            my_time.day,
+            my_time.hour,
+            my_time.minute,
+            my_time.second,
+            epoch_second))
+        return epoch_second;
+    static const auto & utc = DateLUT::instance("UTC");
+    // UTC has no rounded offsets or transitions. Keep the LUT fast path in
+    // its complete years (DATE_LUT_SIZE truncates DATE_LUT_MAX_YEAR).
+    if (&time_zone == &utc && my_time.year >= DATE_LUT_MIN_YEAR && my_time.year < DATE_LUT_MAX_YEAR)
+        return utc.makeDateTime(my_time.year, my_time.month, my_time.day, my_time.hour, my_time.minute, my_time.second);
+    const auto civil
+        = cctz::civil_second(my_time.year, my_time.month, my_time.day, my_time.hour, my_time.minute, my_time.second);
+    const auto wall_time = civil - cctz::civil_second(1970, 1, 1);
+    if (&time_zone == &utc)
+        return wall_time;
+    // cctz normalizes invalid fields. Preserve GoTime's rejection of them.
+    if (civil.year() != my_time.year || civil.month() != my_time.month || civil.day() != my_time.day
+        || civil.hour() != my_time.hour || civil.minute() != my_time.minute || civil.second() != my_time.second)
+        throw Exception(
+            ErrorCodes::BAD_ARGUMENTS,
+            "Invalid local datetime {} in timezone {}",
+            my_time.toString(6),
+            time_zone.getTimeZone());
+
+    // DateLUT stores transitions at 900-second precision, so neither its
+    // offsets nor its local fields can classify exact gap/fold boundaries.
+    const auto zone = getCctzTimeZone(time_zone);
+    const auto lookup = zone.lookup(civil);
+    // Unique local times need no Go-specific choice of transition offset.
+    if (lookup.kind == cctz::time_zone::civil_lookup::UNIQUE)
+        return lookup.pre.time_since_epoch().count();
+    // Go time.Date first looks up the offset using the wall fields as UTC,
+    // then looks it up again at the candidate instant if it crosses a zone
+    // boundary. An unconditional second lookup gives the same offset when
+    // the candidate stays within that zone interval.
+    // system_clock commonly stores nanoseconds and overflows in 2262. Keep
+    // seconds throughout, including cctz's transition points.
+    const cctz::time_point<cctz::seconds> wall{cctz::seconds(wall_time)};
+    const auto offset = cctz::seconds(zone.lookup(wall).offset);
+    const auto epoch = wall - cctz::seconds(zone.lookup(wall - offset).offset);
+    if (lookup.kind == cctz::time_zone::civil_lookup::SKIPPED)
+    {
+        if (adjust_for_dst_gap)
+        {
+            // TiDB AdjustedGoTime moves a nonexistent time to the nearest
+            // zone boundary, provided it is within four hours.
+            const auto distance_us
+                = (epoch - lookup.trans).count() * 1000000 + static_cast<Int64>(my_time.micro_second);
+            if (std::abs(distance_us) <= 4LL * 3600 * 1000000)
+                return lookup.trans.time_since_epoch().count();
+        }
+        throw Exception(
+            ErrorCodes::BAD_ARGUMENTS,
+            "Invalid local datetime {} in timezone {}",
+            my_time.toString(6),
+            time_zone.getTimeZone());
+    }
+    return epoch.time_since_epoch().count();
+}
+
+bool isTimeZoneConversionSafeForRoughFilter(const MyDateTime & my_time, const DateLUTImpl & time_zone)
+{
+    if (isZeroDate(my_time.toPackedUInt()))
+        return true;
+    if (my_time.year < DATE_LUT_MIN_YEAR || my_time.year > DATE_LUT_MAX_YEAR)
+        return false;
+    const auto zone = getCctzTimeZone(time_zone);
+    const auto lookup = zone.lookup(
+        cctz::civil_second(my_time.year, my_time.month, my_time.day, my_time.hour, my_time.minute, my_time.second));
+    if (lookup.kind != cctz::time_zone::civil_lookup::UNIQUE)
+        return false;
+
+    // Even unique local times can have an incompatible inverse: DateLUT does
+    // not preserve second-level offsets or all historical transitions. Rough
+    // filtering must agree with the projection used by the exact predicate.
+    const auto epoch = lookup.pre.time_since_epoch().count();
+    if (convertUTC2TimeZone(epoch, my_time.micro_second, time_zone).toPackedUInt() != my_time.toPackedUInt())
+        return false;
+
+    // UTC-to-local projection still uses DateLUT's rounded transitions. Include
+    // its fold/gap interval too: e.g. St_Johns repeats 23:00 even though the
+    // precise fold starts at 23:01. A single UTC predicate would lose rows.
+    const auto & day = time_zone.getValues(time_zone.makeDayNum(my_time.year, my_time.month, my_time.day));
+    const Int32 before = day.time_at_offset_change();
+    const Int32 after = before + day.amount_of_offset_change();
+    const Int32 seconds = my_time.hour * 3600 + my_time.minute * 60 + my_time.second;
+    return seconds < std::min(before, after) || seconds >= std::max(before, after);
+}
+
 void convertTimeZoneImpl(
     UInt64 from_time,
     UInt64 & to_time,
@@ -1504,7 +1619,18 @@ void convertTimeZoneImpl(
         return;
     }
     MyDateTime from_my_time(from_time);
-    time_t from_epoch = getEpochSecond(from_my_time, time_zone_from);
+    time_t from_epoch;
+    try
+    {
+        from_epoch = getEpochSecond(from_my_time, time_zone_from);
+    }
+    catch (const Exception & e)
+    {
+        if (throw_exception || e.code() != ErrorCodes::BAD_ARGUMENTS)
+            throw;
+        to_time = 0;
+        return;
+    }
     time_t utc_epoch = from_epoch;
     time_t to_epoch = from_epoch;
     if (from_utc)
@@ -1555,6 +1681,20 @@ void convertTimeZoneByOffset(UInt64 from_time, UInt64 & to_time, bool from_utc, 
 {
     static const auto & time_zone_utc = DateLUT::instance("UTC");
     convertTimeZoneImpl(from_time, to_time, time_zone_utc, time_zone_utc, from_utc, offset, throw_exception);
+}
+
+UInt64 convertTimeZoneToUTCForOutput(UInt64 local_time, const DateLUTImpl & time_zone)
+{
+    if (isZeroDate(local_time))
+        return 0;
+    const MyDateTime local(local_time);
+    // TypeDefault output reverses the DateLUT projection used on input. Its
+    // rounded historical offsets and fold choice differ from TiDB GoTime.
+    const auto epoch
+        = time_zone.makeDateTime(local.year, local.month, local.day, local.hour, local.minute, local.second);
+    if (epoch <= 0)
+        return 0;
+    return convertUTC2TimeZone(epoch, local.micro_second, DateLUT::instance("UTC")).toPackedUInt();
 }
 
 MyDateTime convertUTC2TimeZone(time_t utc_ts, UInt32 micro_second, const DateLUTImpl & time_zone_to)

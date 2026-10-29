@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <bitset>
 #include <cassert>
 #include <ctime>
 #include <string>
@@ -208,6 +209,9 @@ private:
 
     /// Time zone name.
     std::string time_zone;
+
+    /// Exact cctz classification, independent of the rounded transition fields in Values.
+    std::bitset<DATE_LUT_SIZE> unambiguous_days;
 
     inline LUTIndex findIndex(time_t t) const
     {
@@ -435,21 +439,15 @@ public:
     {
         const LUTIndex index = findIndex(t);
 
-        /// Calculate daylight saving offset first.
-        /// Because the "amount_of_offset_change" in LUT entry only exists in the change day, it's costly to scan it from the very begin.
-        /// but we can figure out all the accumulated offsets from 1970-01-01 to that day just by get the whole difference between lut[].date,
-        /// and then, we can directly subtract multiple 86400s to get the real DST offsets for the leap seconds is not considered now.
-        time_t res = (lut[index].date - lut[daynum_offset_epoch].date) % 86400;
-
-        /// As so far to know, the maximal DST offset couldn't be more than 2 hours, so after the modulo operation the remainder
-        /// will sits between [-offset --> 0 --> offset] which respectively corresponds to moving clock forward or backward.
-        res = res > 43200 ? (86400 - res) : (0 - res);
+        /// The index counts local calendar days, while date is the UTC timestamp of local midnight.
+        /// Their difference preserves whole-day offset changes, such as Pacific/Apia's date-line jump.
+        time_t res = (static_cast<time_t>(index.toUnderType()) - daynum_offset_epoch) * 86400 - lut[index].date;
 
         /// Check if has a offset change during this day. Add the change when cross the line
         if (lut[index].amount_of_offset_change() != 0 && t >= lut[index].date + lut[index].time_at_offset_change())
             res += lut[index].amount_of_offset_change();
 
-        return res + offset_at_start_of_epoch;
+        return res;
     }
 
     inline unsigned toSecond(time_t t) const
@@ -957,6 +955,29 @@ public:
     inline time_t makeDate(Int16 year, UInt8 month, UInt8 day_of_month) const
     {
         return lut[makeLUTIndex(year, month, day_of_month)].date;
+    }
+
+    /// Convert valid local fields only when the entire day has a unique, constant UTC offset.
+    /// Transition days and dates outside the complete LUT years need an exact conversion.
+    inline bool tryMakeDateTime(
+        Int16 year,
+        UInt8 month,
+        UInt8 day,
+        UInt8 hour,
+        UInt8 minute,
+        UInt8 second,
+        time_t & result) const
+    {
+        if (unlikely(
+                year < DATE_LUT_MIN_YEAR || year >= DATE_LUT_MAX_YEAR || month < 1 || month > 12 || day < 1 || day > 31
+                || hour > 23 || minute > 59 || second > 59))
+            return false;
+        const auto index = makeLUTIndex(year, month, day);
+        const auto & values = lut[index];
+        if (unlikely(values.day_of_month != day || !unambiguous_days[index]))
+            return false;
+        result = values.date + hour * 3600 + minute * 60 + second;
+        return true;
     }
 
     /** Does not accept daylight saving time as argument: in case of ambiguity, it choose greater timestamp.
