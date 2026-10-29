@@ -16,6 +16,7 @@
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/Logger.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/config.h> // For ENABLE_CLARA
 #include <Common/formatReadable.h>
@@ -78,6 +79,8 @@ namespace DB
 namespace FailPoints
 {
 extern const char exception_during_write_to_storage[];
+extern const char exception_before_schema_store_update[];
+extern const char exception_before_schema_metadata_persist[];
 } // namespace FailPoints
 
 namespace ErrorCodes
@@ -1473,6 +1476,9 @@ void StorageDeltaMerge::alterSchemaChange(
     tidb_table_info = table_info;
     LOG_DEBUG(log, "Update table_info: {} => {}", tidb_table_info.serialize(), table_info.serialize());
 
+    SYNC_FOR("schema_watermark_before_store_update");
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_schema_store_update);
+
     {
         // In order to avoid concurrent issue between init store and DDL,
         // we must acquire the lock before schema changes is applied.
@@ -1498,6 +1504,7 @@ void StorageDeltaMerge::alterSchemaChange(
 
     // after update `new_columns` and store's table columns, we need to update create table statement,
     // so that we can restore table next time.
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_schema_metadata_persist);
     updateDeltaMergeTableCreateStatement(
         database_name,
         table_name,

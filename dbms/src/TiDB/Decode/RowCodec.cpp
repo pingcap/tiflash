@@ -153,6 +153,7 @@ TiKVValue::Base encodeNotNullColumn(const Field & field, const ColumnInfo & colu
 }
 } // namespace RowV2
 
+// Used only to generate RowV1 data for tests, benchmarks, and debug mocks.
 void encodeRowV1(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBuffer & ss)
 {
     size_t column_in_key = 0;
@@ -176,6 +177,9 @@ void encodeRowV1(const TiDB::TableInfo & table_info, const std::vector<Field> & 
         if (encoded_fields_idx == fields.size())
             break;
     }
+    // Match TiDB's empty-row encoding when all columns are stored in the key.
+    if (encoded_fields_idx == 0)
+        EncodeDatum(Field(), TiDB::CodecFlagNil, ss);
 }
 
 struct RowEncoderV2

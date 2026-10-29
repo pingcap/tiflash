@@ -275,7 +275,9 @@ std::pair<TableInfo, std::vector<Field>> getTableInfoAndFields(
     return std::make_pair(std::move(table_info), std::move(fields));
 }
 
-inline DecodingStorageSchemaSnapshotConstPtr getDecodingStorageSchemaSnapshot(const TableInfo & table_info)
+inline DecodingStorageSchemaSnapshotConstPtr getDecodingStorageSchemaSnapshot(
+    const TableInfo & table_info,
+    UInt64 schema_read_tso = 0)
 {
     ColumnDefines store_columns;
     if (table_info.is_common_handle)
@@ -317,7 +319,8 @@ inline DecodingStorageSchemaSnapshotConstPtr getDecodingStorageSchemaSnapshot(co
             table_info,
             *iter,
             /* decoding_schema_epoch_ */ 1,
-            true);
+            true,
+            schema_read_tso);
     }
     else
     {
@@ -326,7 +329,8 @@ inline DecodingStorageSchemaSnapshotConstPtr getDecodingStorageSchemaSnapshot(co
             table_info,
             store_columns[0],
             /* decoding_schema_epoch_ */ 1,
-            true);
+            true,
+            schema_read_tso);
     }
 }
 
