@@ -144,10 +144,7 @@ std::tuple<DM::ColumnDefinesPtr, int, std::vector<std::tuple<UInt64, String, Dat
             // Its version buffer is nullable (the null map represents tombstones), so keep that
             // nullability in the storage reader schema. The computing layer may cast this type to
             // the type requested by TiDB after the scan.
-            column_defines->emplace_back(
-                column_info.id,
-                output_name,
-                makeNullable(MutSup::getVersionColumnType()));
+            column_defines->emplace_back(column_info.id, output_name, makeNullable(MutSup::getVersionColumnType()));
             break;
         default:
             column_defines->emplace_back(DM::ColumnDefine{

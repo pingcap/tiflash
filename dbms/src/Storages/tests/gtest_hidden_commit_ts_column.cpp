@@ -123,11 +123,7 @@ try
             {
                 SCOPED_TRACE(pushed_down);
                 Block block{
-                    createNullableColumn<UInt64>(
-                        {1, 123456789, 456789012},
-                        {0, 0, 0},
-                        version.name,
-                        version.id)};
+                    createNullableColumn<UInt64>({1, 123456789, 456789012}, {0, 0, 0}, version.name, version.id)};
                 ExpressionActionsPtr cast;
                 if (pushed_down)
                 {
