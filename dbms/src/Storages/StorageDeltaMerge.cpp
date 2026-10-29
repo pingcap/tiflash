@@ -1257,7 +1257,8 @@ std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> StorageDeltaMerg
             tidb_table_info,
             store->getHandle(),
             decoding_schema_epoch++,
-            with_version_column);
+            with_version_column,
+            schema_read_tso);
         cache_blocks.clear();
         decoding_schema_changed = false;
     }
@@ -1449,8 +1450,17 @@ void StorageDeltaMerge::alterSchemaChange(
     TiDB::TableInfo & table_info,
     const String & database_name,
     const String & table_name,
-    const Context & context)
+    const Context & context,
+    UInt64 read_tso)
 {
+    // Compare under the existing AlterLock. A delayed older read can use the
+    // newer schema/read pair already published by another request.
+    if (read_tso != 0 && read_tso < schema_read_tso)
+        return;
+
+    // Clear the previous watermark before changing schema, so a failed update
+    // cannot pair the changed schema with the previous schema's read TSO.
+    schema_read_tso = 0;
     /// 1. update columnsDescription of ITableDeclaration
     /// 2. update table info
     /// 3. update store's columns
@@ -1497,6 +1507,9 @@ void StorageDeltaMerge::alterSchemaChange(
         table_info,
         getTombstone(),
         context);
+
+    // Only publish after both store changes and metadata persistence succeed.
+    schema_read_tso = read_tso;
 }
 
 String StorageDeltaMerge::getName() const

@@ -309,7 +309,8 @@ bool appendRowV2ToBlockImpl(
     const ColumnInfos & column_infos,
     ColumnID pk_handle_id,
     bool ignore_pk_if_absent,
-    bool force_decode);
+    bool force_decode,
+    ExtraColumnDecodeOptions extra_columns);
 
 bool appendRowV1ToBlock(
     const TiKVValue::Base & raw_value,
@@ -320,7 +321,8 @@ bool appendRowV1ToBlock(
     const ColumnInfos & column_infos,
     ColumnID pk_handle_id,
     bool ignore_pk_if_absent,
-    bool force_decode);
+    bool force_decode,
+    ExtraColumnDecodeOptions extra_columns);
 // pre-declar block end
 
 bool appendRowToBlock(
@@ -330,7 +332,8 @@ bool appendRowToBlock(
     Block & block,
     size_t block_column_pos,
     const DecodingStorageSchemaSnapshotConstPtr & schema_snapshot,
-    bool force_decode)
+    bool force_decode,
+    ExtraColumnDecodeOptions extra_columns)
 {
     const ColumnInfos & column_infos = schema_snapshot->column_infos;
     // when pk is handle, we need skip pk column when decoding value
@@ -362,7 +365,8 @@ bool appendRowToBlock(
                    column_infos,
                    pk_handle_id,
                    ignore_pk_if_absent,
-                   force_decode)
+                   force_decode,
+                   extra_columns)
                       : appendRowV2ToBlockImpl<false>(
                           raw_value,
                           column_ids_iter,
@@ -372,7 +376,8 @@ bool appendRowToBlock(
                           column_infos,
                           pk_handle_id,
                           ignore_pk_if_absent,
-                          force_decode);
+                          force_decode,
+                          extra_columns);
     }
     default:
         return appendRowV1ToBlock(
@@ -384,7 +389,8 @@ bool appendRowToBlock(
             column_infos,
             pk_handle_id,
             ignore_pk_if_absent,
-            force_decode);
+            force_decode,
+            extra_columns);
     }
 }
 
@@ -462,7 +468,8 @@ bool appendRowV2ToBlockImpl(
     const ColumnInfos & column_infos,
     ColumnID pk_handle_id,
     bool ignore_pk_if_absent,
-    bool force_decode)
+    bool force_decode,
+    ExtraColumnDecodeOptions extra_columns)
 {
     size_t cursor = 2; // Skip the initial codec ver and row flag.
     size_t num_not_null_columns = decodeUInt<UInt16>(cursor, raw_value);
@@ -493,12 +500,6 @@ bool appendRowV2ToBlockImpl(
     // Merge ordered not null/null columns to keep order.
     while (idx_not_null < not_null_column_ids.size() || idx_null < null_column_ids.size())
     {
-        if (column_ids_iter == column_ids_iter_end)
-        {
-            // extra column
-            return force_decode;
-        }
-
         bool is_null;
         if (idx_not_null < not_null_column_ids.size() && idx_null < null_column_ids.size())
             is_null = not_null_column_ids[idx_not_null] > null_column_ids[idx_null];
@@ -506,14 +507,15 @@ bool appendRowV2ToBlockImpl(
             is_null = idx_null < null_column_ids.size();
 
         auto next_datum_column_id = is_null ? null_column_ids[idx_null] : not_null_column_ids[idx_not_null];
-        const auto next_column_id = column_ids_iter->first;
-        if (next_column_id > next_datum_column_id)
+        const bool columns_exhausted = column_ids_iter == column_ids_iter_end;
+        const auto next_column_id = columns_exhausted ? 0 : column_ids_iter->first;
+        if (columns_exhausted || next_column_id > next_datum_column_id)
         {
             // The next_column_id to read is bigger than the next_datum_column_id in encoded row.
             // It means this is the datum of extra column. May happen when reading after dropping
             // a column.
             // For `force_decode == false`, we should return false to let upper layer trigger schema sync.
-            if (!force_decode)
+            if (!force_decode && !extra_columns.skip(next_datum_column_id))
                 return false;
             // For `force_decode == true`, we just skip this extra column and continue to parse other datum.
             if (is_null)
@@ -638,7 +640,8 @@ bool appendRowV1ToBlock(
     const ColumnInfos & column_infos,
     ColumnID pk_handle_id,
     bool ignore_pk_if_absent,
-    bool force_decode)
+    bool force_decode,
+    ExtraColumnDecodeOptions extra_columns)
 {
     size_t cursor = 0;
     std::map<ColumnID, Field> decoded_fields;
@@ -658,17 +661,11 @@ bool appendRowV1ToBlock(
     auto decoded_field_iter = decoded_fields.begin();
     while (decoded_field_iter != decoded_fields.end())
     {
-        if (column_ids_iter == column_ids_iter_end)
-        {
-            // extra column
-            return force_decode;
-        }
-
         auto next_field_column_id = decoded_field_iter->first;
-        if (column_ids_iter->first > next_field_column_id)
+        if (column_ids_iter == column_ids_iter_end || column_ids_iter->first > next_field_column_id)
         {
             // extra column
-            if (!force_decode)
+            if (!force_decode && !extra_columns.skip(next_field_column_id))
                 return false;
             decoded_field_iter++;
         }

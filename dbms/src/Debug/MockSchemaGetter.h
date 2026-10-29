@@ -23,6 +23,8 @@ namespace DB
 {
 struct MockSchemaGetter
 {
+    static constexpr UInt64 read_tso = 0;
+
     static TiDB::DBInfoPtr getDatabase(DatabaseID db_id) { return MockTiDB::instance().getDBInfoByID(db_id); }
 
     static Int64 getVersion() { return MockTiDB::instance().getVersion(); }

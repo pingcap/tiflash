@@ -27,6 +27,29 @@ namespace DB
 class StorageDeltaMerge;
 class TMTContext;
 
+struct SchemaReadWatermarkDecision
+{
+    enum Result
+    {
+        // schema_read_tso == 0: no watermark is available, so extra-column skipping is disabled.
+        NoWatermark,
+        // At least one commit_ts exceeds a nonzero schema_read_tso;
+        // extra-column skipping is disabled for the whole batch.
+        BeyondWatermark,
+        // A nonzero schema_read_tso covers every commit_ts in the batch;
+        // unknown positive business-column IDs may be skipped.
+        Covered,
+    };
+    SchemaReadWatermarkDecision(UInt64 schema_read_tso, const RegionDataReadInfoList & data_list);
+
+    bool shouldSkipExtraColumns() const { return result == Covered; }
+    void recordMetrics() const;
+
+    Result result = NoWatermark;
+    // Not computed for NoWatermark; zero in that case.
+    UInt64 max_commit_ts = 0;
+};
+
 std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & region, bool lock_region);
 void RemoveRegionCommitCache(
     const RegionPtr & region,

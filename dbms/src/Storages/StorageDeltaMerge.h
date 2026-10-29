@@ -172,7 +172,8 @@ public:
         TiDB::TableInfo & table_info,
         const String & database_name,
         const String & table_name,
-        const Context & context) override;
+        const Context & context,
+        UInt64 read_tso) override;
 
     void setTableInfo(const TiDB::TableInfo & table_info_) override { tidb_table_info = table_info_; }
 
@@ -297,6 +298,7 @@ private:
     DecodingStorageSchemaSnapshotPtr decoding_schema_snapshot;
     // internal epoch for `decoding_schema_snapshot`
     Int64 decoding_schema_epoch = 1;
+    UInt64 schema_read_tso = 0;
 
     // avoid creating block every time when decoding row
     std::vector<BlockUPtr> cache_blocks;

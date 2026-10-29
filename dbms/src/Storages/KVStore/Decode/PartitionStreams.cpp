@@ -78,6 +78,45 @@ struct AtomicReadWriteCtx
     UInt64 write_part_cost = -1;
 };
 
+SchemaReadWatermarkDecision::SchemaReadWatermarkDecision(
+    UInt64 schema_read_tso,
+    const RegionDataReadInfoList & data_list)
+{
+    if (schema_read_tso == 0)
+        return;
+
+    for (const auto & item : data_list)
+    {
+        max_commit_ts = std::max(max_commit_ts, item.commit_ts);
+    }
+    // schema_read_tso is the read TSO of the complete schema applied for decoding.
+    // Under ordinary DDL, any column in a committed row must have been introduced
+    // into committed table metadata before that row's commit_ts.
+    // max_commit_ts <= schema_read_tso therefore proves every encoded column was
+    // introduced before schema_read_tso. If a column is absent from the complete
+    // schema read at schema_read_tso, it has already been removed and may be skipped.
+    // This is sufficient, not necessary: with commit_ts > schema_read_tso, an extra
+    // column may still be historical, but this timestamp comparison cannot prove
+    // it was introduced before schema_read_tso; retain the schema-sync fallback.
+    result = max_commit_ts <= schema_read_tso ? Covered : BeyondWatermark;
+}
+
+void SchemaReadWatermarkDecision::recordMetrics() const
+{
+    switch (result)
+    {
+    case NoWatermark:
+        GET_METRIC(tiflash_schema_watermark_decode_count, type_no_watermark).Increment();
+        break;
+    case BeyondWatermark:
+        GET_METRIC(tiflash_schema_watermark_decode_count, type_beyond_watermark).Increment();
+        break;
+    case Covered:
+        GET_METRIC(tiflash_schema_watermark_decode_count, type_covered).Increment();
+        break;
+    }
+}
+
 static void inline writeCommittedBlockDataIntoStorage(
     AtomicReadWriteCtx & rw_ctx,
     TableStructureLockHolder & lock,
@@ -160,9 +199,41 @@ static inline bool atomicReadWrite(
             = storage->getSchemaSnapshotAndBlockForDecoding(lock, true, should_handle_version_col);
         block_decoding_schema_epoch = decoding_schema_snapshot->decoding_schema_epoch;
 
+        bool skip_extra_columns = false;
+        UInt64 max_commit_ts = 0;
+        // Only committed rows have commit_ts to compare against the schema read watermark.
+        // Use if constexpr to exclude the decision constructor call when instantiating
+        // this function for RegionUncommittedDataList.
+        if constexpr (std::is_same_v<ReadList, RegionDataReadInfoList>)
+        {
+            if (!force_decode)
+            {
+                const SchemaReadWatermarkDecision decision(decoding_schema_snapshot->schema_read_tso, data_list_read);
+                max_commit_ts = decision.max_commit_ts;
+                skip_extra_columns = decision.shouldSkipExtraColumns();
+                decision.recordMetrics();
+            }
+        }
         auto reader = RegionBlockReader(decoding_schema_snapshot);
-        if (!reader.read(*block_ptr, data_list_read, force_decode))
+        if (!reader.read(*block_ptr, data_list_read, force_decode, skip_extra_columns))
             return false;
+        if (reader.firstSkippedColumnID() != 0)
+        {
+            GET_METRIC(tiflash_schema_watermark_decode_count, type_skipped_extra_columns).Increment();
+            // Log the first batch and then one out of every 128 batches globally.
+            static std::atomic<UInt64> skipped_batches{0};
+            if (skipped_batches.fetch_add(1, std::memory_order_relaxed) % 128 == 0)
+                LOG_INFO(
+                    rw_ctx.log,
+                    "Skip historical extra column, table_id={} region_id={} schema_epoch={} read_tso={} "
+                    "max_commit_ts={} unknown_column_id={}",
+                    rw_ctx.table_id,
+                    region->id(),
+                    block_decoding_schema_epoch,
+                    decoding_schema_snapshot->schema_read_tso,
+                    max_commit_ts,
+                    reader.firstSkippedColumnID());
+        }
         rw_ctx.region_decode_cost = watch.elapsedMilliseconds();
         GET_METRIC(tiflash_raft_write_data_to_storage_duration_seconds, type_decode)
             .Observe(rw_ctx.region_decode_cost / 1000.0);
