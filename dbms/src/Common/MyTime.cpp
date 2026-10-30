@@ -18,6 +18,7 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/String.h>
+#include <cctz/time_zone.h>
 #include <common/StringRef.h>
 #include <common/logger_useful.h>
 #include <fmt/core.h>
@@ -1555,6 +1556,108 @@ void convertTimeZoneByOffset(UInt64 from_time, UInt64 & to_time, bool from_utc, 
 {
     static const auto & time_zone_utc = DateLUT::instance("UTC");
     convertTimeZoneImpl(from_time, to_time, time_zone_utc, time_zone_utc, from_utc, offset, throw_exception);
+}
+
+extern "C" UInt8 projectTimestampRange(
+    const char * timezone_name_data,
+    UInt64 timezone_name_size,
+    Int64 timezone_offset,
+    UInt64 min,
+    UInt64 max,
+    UInt64 * session_min_ptr,
+    UInt64 * session_max_ptr) noexcept
+{
+    try
+    {
+        if (!session_min_ptr || !session_max_ptr || (!timezone_name_data && timezone_name_size != 0))
+            return 0;
+        const String timezone_name
+            = timezone_name_size == 0 ? String{} : String(timezone_name_data, timezone_name_size);
+        auto & session_min = *session_min_ptr;
+        auto & session_max = *session_max_ptr;
+        const MyDateTime lo(min);
+        const MyDateTime hi(max);
+        const auto civil = [](const MyDateTime & t) {
+            return cctz::civil_second(t.year, t.month, t.day, t.hour, t.minute, t.second);
+        };
+        const auto valid = [&](const MyDateTime & t) {
+            const auto c = civil(t);
+            return c.year() == t.year && c.month() == t.month && c.day() == t.day && c.hour() == t.hour
+                && c.minute() == t.minute && c.second() == t.second && t.micro_second <= 999999;
+        };
+        if (!valid(lo) || !valid(hi) || lo.toPackedUInt() != min || hi.toPackedUInt() != max || min > max)
+            return false;
+        const auto begin = cctz::convert(civil(lo), cctz::utc_time_zone());
+        const auto end = cctz::convert(civil(hi), cctz::utc_time_zone());
+        if (begin.time_since_epoch().count() <= 0 || end.time_since_epoch().count() > 2147483647)
+            return false;
+        cctz::time_zone zone;
+        if (timezone_name.empty())
+        {
+            if (timezone_offset <= -86400 || timezone_offset >= 86400)
+                return false;
+            zone = cctz::fixed_time_zone(std::chrono::seconds(timezone_offset));
+        }
+        else if (!cctz::load_time_zone(timezone_name, &zone))
+            return false;
+        const auto local_min = zone.lookup(begin);
+        const auto local_max = zone.lookup(end);
+        cctz::time_zone::civil_transition transition;
+        if (zone.lookup(local_min.cs).kind != cctz::time_zone::civil_lookup::UNIQUE
+            || zone.lookup(local_max.cs).kind != cctz::time_zone::civil_lookup::UNIQUE
+            || (zone.next_transition(begin - std::chrono::seconds(1), &transition)
+                && cctz::convert(transition.to, zone) <= end))
+            return false;
+        const auto & utc = DateLUT::instance("UTC");
+        // Prove the actual UTC LUT once, not by its name. Reuse that proof for
+        // wide UTC/fixed-offset packs without a day walk on every comparison.
+        // Function-local static initialization is shared safely by all readers.
+        static const bool exact_utc = [&utc] {
+            constexpr Int64 last = 2147483647;
+            constexpr Int64 span = 31 * 86400;
+            for (Int64 first = 1; first <= last; first += span)
+                if (!utc.isExactOffsetRange(first, std::min(first + span - 1, last), 0))
+                    return false;
+            return true;
+        }();
+        const auto exact_utc_range = [&](time_t first, time_t last) {
+            return first > 0 && first <= last && last <= 2147483647
+                && (exact_utc || utc.isExactOffsetRange(first, last, 0));
+        };
+        if (!exact_utc_range(begin.time_since_epoch().count(), end.time_since_epoch().count()))
+            return false;
+        if (!timezone_name.empty())
+        {
+            const auto & lut = DateLUT::instance(timezone_name);
+            if (!(exact_utc && &lut == &utc)
+                && !lut.isExactOffsetRange(
+                    begin.time_since_epoch().count(),
+                    end.time_since_epoch().count(),
+                    local_min.offset))
+                return false;
+            convertTimeZone(min, session_min, utc, lut);
+            convertTimeZone(max, session_max, utc, lut);
+        }
+        else
+        {
+            // Fixed offsets read the UTC LUT at shifted seconds as well.
+            if (!exact_utc_range(
+                    begin.time_since_epoch().count() + timezone_offset,
+                    end.time_since_epoch().count() + timezone_offset))
+                return false;
+            convertTimeZoneByOffset(min, session_min, true, timezone_offset);
+            convertTimeZoneByOffset(max, session_max, true, timezone_offset);
+        }
+        const auto pack = [](const cctz::civil_second & t, UInt32 micro) {
+            return MyDateTime(t.year(), t.month(), t.day(), t.hour(), t.minute(), t.second(), micro).toPackedUInt();
+        };
+        return session_min == pack(local_min.cs, lo.micro_second) && session_max == pack(local_max.cs, hi.micro_second);
+    }
+    catch (...)
+    {
+        // This is an optional pruning proof and is called across a C ABI.
+        return false;
+    }
 }
 
 MyDateTime convertUTC2TimeZone(time_t utc_ts, UInt32 micro_second, const DateLUTImpl & time_zone_to)

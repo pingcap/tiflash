@@ -671,5 +671,116 @@ catch (Exception & e)
     GTEST_FAIL();
 }
 
+TEST_F(TestMyTime, TimestampProjectionProof)
+{
+    const auto packed = [](const String & text) {
+        return parseMyDateTime(text, 6).safeGet<UInt64>();
+    };
+    const auto lo = packed("2024-07-01 00:00:00.123456");
+    const auto hi = packed("2024-07-02 23:59:59.999999");
+    for (const auto & [name, offset] : std::vector<std::pair<String, Int64>>{
+             {"Asia/Shanghai", 0},
+             {"America/New_York", 0},
+             {"America/Mexico_City", 0},
+             {"Australia/Lord_Howe", 0},
+             {"", -3600},
+             {"", 0},
+             {"", 3600},
+             {"", 30}})
+    {
+        SCOPED_TRACE(name + " offset=" + std::to_string(offset));
+        UInt64 lower = 0;
+        UInt64 upper = 0;
+        ASSERT_EQ(projectTimestampRange(name.data(), name.size(), offset, lo, hi, &lower, &upper), 1);
+        const auto row_value = [&](UInt64 value) {
+            if (name.empty())
+                convertTimeZoneByOffset(value, value, true, offset);
+            else
+                convertTimeZone(value, value, DateLUT::instance("UTC"), DateLUT::instance(name));
+            return value;
+        };
+        EXPECT_EQ(lower, row_value(lo));
+        EXPECT_EQ(upper, row_value(hi));
+        const auto midnight = row_value(packed("2024-07-02 00:00:00.123456"));
+        EXPECT_GE(midnight, lower);
+        EXPECT_LE(midnight, upper);
+    }
+    for (const auto & text : {"1970-01-01 00:00:01", "2038-01-19 03:14:07.999999"})
+    {
+        UInt64 lower = 0;
+        UInt64 upper = 0;
+        const auto value = packed(text);
+        ASSERT_EQ(projectTimestampRange("Asia/Shanghai", 13, 0, value, value, &lower, &upper), 1);
+        EXPECT_EQ(lower, upper);
+    }
+}
+
+TEST_F(TestMyTime, TimestampProjectionPreservesWideUtcAndFixedOffsetRanges)
+{
+    const auto lo = parseMyDateTime("2024-01-01 00:00:00.123456", 6).safeGet<UInt64>();
+    for (const auto & [name, offset] : std::vector<std::pair<String, Int64>>{{"UTC", 0}, {"", 0}, {"", 28800}})
+    {
+        for (const Int64 days : {31, 32, 365})
+        {
+            const auto hi = addSeconds(lo, days * 86400 - 1);
+            UInt64 lower = 0;
+            UInt64 upper = 0;
+            ASSERT_EQ(projectTimestampRange(name.data(), name.size(), offset, lo, hi, &lower, &upper), 1)
+                << name << " " << offset << " " << days;
+            UInt64 actual = 0;
+            convertTimeZoneByOffset(lo, actual, true, offset);
+            EXPECT_EQ(actual, lower);
+            convertTimeZoneByOffset(hi, actual, true, offset);
+            EXPECT_EQ(actual, upper);
+            convertTimeZoneByOffset(addSeconds(lo, days * 43200), actual, true, offset);
+            EXPECT_GE(actual, lower);
+            EXPECT_LE(actual, upper);
+        }
+    }
+    UInt64 lower = 0;
+    UInt64 upper = 0;
+    const auto first = parseMyDateTime("1970-01-01 00:00:01", 6).safeGet<UInt64>();
+    const auto last = parseMyDateTime("2038-01-19 03:14:07.999999", 6).safeGet<UInt64>();
+    EXPECT_EQ(projectTimestampRange("UTC", 3, 0, first, last, &lower, &upper), 1);
+    EXPECT_EQ(lower, first);
+    EXPECT_EQ(upper, last);
+}
+
+TEST_F(TestMyTime, TimestampProjectionRejectsUnprovedRanges)
+{
+    const auto packed = [](const String & text) {
+        return parseMyDateTime(text, 6).safeGet<UInt64>();
+    };
+    for (const auto & [name, lo, hi] : std::vector<std::tuple<String, String, String>>{
+             {"America/New_York", "2021-11-07 05:30:00", "2021-11-07 05:30:00"},
+             {"America/New_York", "2021-11-07 06:30:00", "2021-11-07 06:30:00"},
+             {"America/New_York", "2021-03-14 06:59:59", "2021-03-14 07:00:00"},
+             {"America/New_York", "2021-01-01 00:00:00", "2022-01-01 00:00:00"},
+             {"Africa/Monrovia", "1971-01-01 12:00:00", "1971-01-01 12:00:00"},
+             {"Africa/Monrovia", "1972-01-07 00:44:30", "1972-01-07 00:44:30"},
+             {"Asia/Shanghai", "2024-01-01 00:00:00", "2024-03-01 00:00:00"},
+             {"Asia/Shanghai", "1970-01-01 00:00:00", "1970-01-01 00:00:00"},
+             {"Asia/Shanghai", "2038-01-19 03:14:08", "2038-01-19 03:14:08"},
+             {"invalid/timezone", "2024-01-01 00:00:00", "2024-01-01 00:00:00"}})
+    {
+        UInt64 lower = 0;
+        UInt64 upper = 0;
+        EXPECT_EQ(projectTimestampRange(name.data(), name.size(), 0, packed(lo), packed(hi), &lower, &upper), 0)
+            << name << " " << lo;
+    }
+    UInt64 lower = 0;
+    UInt64 upper = 0;
+    const auto value = packed("2024-07-01 00:00:00");
+    for (const auto invalid : {UInt64{0}, UInt64{1}, UInt64{0xffffffffffffffff}})
+        EXPECT_EQ(projectTimestampRange(nullptr, 0, 0, invalid, value, &lower, &upper), 0);
+    EXPECT_EQ(projectTimestampRange(nullptr, 0, 86400, value, value, &lower, &upper), 0);
+    const auto epoch = packed("1970-01-01 00:00:01");
+    EXPECT_EQ(projectTimestampRange(nullptr, 0, -3600, epoch, epoch, &lower, &upper), 0);
+    const auto limit = packed("2038-01-19 03:14:07");
+    EXPECT_EQ(projectTimestampRange(nullptr, 0, 3600, limit, limit, &lower, &upper), 0);
+    EXPECT_EQ(projectTimestampRange(nullptr, 0, 0, value + 1, value, &lower, &upper), 0);
+    EXPECT_EQ(projectTimestampRange(nullptr, 0, 0, value, value, nullptr, &upper), 0);
+}
+
 } // namespace tests
 } // namespace DB
