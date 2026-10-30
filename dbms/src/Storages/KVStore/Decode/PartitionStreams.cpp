@@ -225,8 +225,9 @@ static inline bool atomicReadWrite(
             if (skipped_batches.fetch_add(1, std::memory_order_relaxed) % 128 == 0)
                 LOG_INFO(
                     rw_ctx.log,
-                    "Skip historical extra column, table_id={} region_id={} schema_epoch={} read_tso={} "
+                    "Skip historical extra column, keyspace={} table_id={} region_id={} schema_epoch={} read_tso={} "
                     "max_commit_ts={} unknown_column_id={}",
+                    rw_ctx.keyspace_id,
                     rw_ctx.table_id,
                     region->id(),
                     block_decoding_schema_epoch,
