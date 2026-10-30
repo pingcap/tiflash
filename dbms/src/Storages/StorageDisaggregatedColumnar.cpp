@@ -298,8 +298,6 @@ void remapColumnRefsForLateMaterialization(
         remapColumnRefsForLateMaterialization(*expr.mutable_children(i), scan_column_count, early_column_indexes);
 }
 
-void normalizeTimestampCompareDateTimeLiteralToUTC(tipb::Expr & expr, const TimezoneInfo & timezone_info);
-
 struct BucketSplitResult
 {
     bool has_bucket_split = false;
@@ -518,25 +516,9 @@ std::shared_ptr<RNColumnarReaderSharedContext> buildColumnarReaderSharedContext(
     shared_context->scan_columns = table_scan.getColumns();
 
     auto table_scan_pb = *table_scan.getTableScanPB();
-    const auto & timezone_info = context.getTimezoneInfo();
-    if (table_scan_pb.tp() == tipb::TypePartitionTableScan)
-    {
-        auto * pushed_down_filters
-            = table_scan_pb.mutable_partition_table_scan()->mutable_pushed_down_filter_conditions();
-        for (int i = 0; i < pushed_down_filters->size(); ++i)
-            normalizeTimestampCompareDateTimeLiteralToUTC(*pushed_down_filters->Mutable(i), timezone_info);
-    }
-    else
-    {
-        auto * pushed_down_filters = table_scan_pb.mutable_tbl_scan()->mutable_pushed_down_filter_conditions();
-        for (int i = 0; i < pushed_down_filters->size(); ++i)
-            normalizeTimestampCompareDateTimeLiteralToUTC(*pushed_down_filters->Mutable(i), timezone_info);
-    }
     shared_context->table_scan_data = table_scan_pb.SerializeAsString();
 
     auto conditions = filter_conditions.conditions;
-    for (int i = 0; i < conditions.size(); ++i)
-        normalizeTimestampCompareDateTimeLiteralToUTC(*conditions.Mutable(i), timezone_info);
     for (const auto & condition : conditions)
     {
         auto data = condition.SerializeAsString();
@@ -558,122 +540,6 @@ std::shared_ptr<RNColumnarReaderSharedContext> buildColumnarReaderSharedContext(
     return shared_context;
 }
 
-bool isColumnarFilterComparableExpr(tipb::ScalarFuncSig sig)
-{
-    // Keep this aligned with kvengine columnar filter supported signatures:
-    // `components/kvengine/src/table/columnar/filter.rs`.
-    switch (sig)
-    {
-    case tipb::ScalarFuncSig::LTInt:
-    case tipb::ScalarFuncSig::LTReal:
-    case tipb::ScalarFuncSig::LTString:
-    case tipb::ScalarFuncSig::LTDecimal:
-    case tipb::ScalarFuncSig::LTTime:
-    case tipb::ScalarFuncSig::LTDuration:
-    case tipb::ScalarFuncSig::LTJson:
-    case tipb::ScalarFuncSig::LEInt:
-    case tipb::ScalarFuncSig::LEReal:
-    case tipb::ScalarFuncSig::LEString:
-    case tipb::ScalarFuncSig::LEDecimal:
-    case tipb::ScalarFuncSig::LETime:
-    case tipb::ScalarFuncSig::LEDuration:
-    case tipb::ScalarFuncSig::LEJson:
-    case tipb::ScalarFuncSig::GTInt:
-    case tipb::ScalarFuncSig::GTReal:
-    case tipb::ScalarFuncSig::GTString:
-    case tipb::ScalarFuncSig::GTDecimal:
-    case tipb::ScalarFuncSig::GTTime:
-    case tipb::ScalarFuncSig::GTDuration:
-    case tipb::ScalarFuncSig::GTJson:
-    case tipb::ScalarFuncSig::GEInt:
-    case tipb::ScalarFuncSig::GEReal:
-    case tipb::ScalarFuncSig::GEString:
-    case tipb::ScalarFuncSig::GEDecimal:
-    case tipb::ScalarFuncSig::GETime:
-    case tipb::ScalarFuncSig::GEDuration:
-    case tipb::ScalarFuncSig::GEJson:
-    case tipb::ScalarFuncSig::EQInt:
-    case tipb::ScalarFuncSig::EQReal:
-    case tipb::ScalarFuncSig::EQString:
-    case tipb::ScalarFuncSig::EQDecimal:
-    case tipb::ScalarFuncSig::EQTime:
-    case tipb::ScalarFuncSig::EQDuration:
-    case tipb::ScalarFuncSig::EQJson:
-    case tipb::ScalarFuncSig::NEInt:
-    case tipb::ScalarFuncSig::NEReal:
-    case tipb::ScalarFuncSig::NEString:
-    case tipb::ScalarFuncSig::NEDecimal:
-    case tipb::ScalarFuncSig::NETime:
-    case tipb::ScalarFuncSig::NEDuration:
-    case tipb::ScalarFuncSig::NEJson:
-    case tipb::ScalarFuncSig::InInt:
-    case tipb::ScalarFuncSig::InReal:
-    case tipb::ScalarFuncSig::InString:
-    case tipb::ScalarFuncSig::InDecimal:
-    case tipb::ScalarFuncSig::InTime:
-    case tipb::ScalarFuncSig::InDuration:
-        return true;
-    default:
-        return false;
-    }
-}
-
-void normalizeTimestampCompareDateTimeLiteralToUTC(tipb::Expr & expr, const TimezoneInfo & timezone_info)
-{
-    if (timezone_info.is_utc_timezone)
-        return;
-    if (!isFunctionExpr(expr))
-        return;
-
-    // Only normalize for comparison expressions that columnar filter supports.
-    // Keep recursion so nested comparisons under AND/OR/NOT still work.
-    if (isScalarFunctionExpr(expr) && isColumnarFilterComparableExpr(expr.sig()))
-    {
-        bool has_timestamp_column = false;
-        bool only_column_or_literal = true;
-        size_t column_ref_count = 0;
-        for (const auto & child : expr.children())
-        {
-            if (isColumnExpr(child))
-            {
-                ++column_ref_count;
-                has_timestamp_column = has_timestamp_column
-                    || (child.has_field_type() && child.field_type().tp() == TiDB::TypeTimestamp);
-            }
-            else if (!isLiteralExpr(child))
-            {
-                only_column_or_literal = false;
-            }
-        }
-
-        // Columnar filter parser only supports simple column-literal expressions.
-        // If a timestamp column is compared with a datetime literal, normalize the
-        // datetime literal from session timezone to UTC before passing to columnar.
-        if (has_timestamp_column && only_column_or_literal && column_ref_count == 1)
-        {
-            static const auto & time_zone_utc = DateLUT::instance("UTC");
-            for (int i = 0; i < expr.children_size(); ++i)
-            {
-                auto * child = expr.mutable_children(i);
-                if (!isLiteralExpr(*child) || !child->has_field_type())
-                    continue;
-                if (child->tp() != tipb::ExprType::MysqlTime || child->field_type().tp() != TiDB::TypeDatetime)
-                    continue;
-
-                UInt64 from_time = decodeLiteral(*child).get<UInt64>();
-                UInt64 result_time = from_time;
-                if (timezone_info.is_name_based)
-                    convertTimeZone(from_time, result_time, *timezone_info.timezone, time_zone_utc);
-                else if (timezone_info.timezone_offset != 0)
-                    convertTimeZoneByOffset(from_time, result_time, false, timezone_info.timezone_offset);
-                child->set_val(constructDateTimeLiteralTiExpr(result_time).val());
-            }
-        }
-    }
-
-    for (int i = 0; i < expr.children_size(); ++i)
-        normalizeTimestampCompareDateTimeLiteralToUTC(*expr.mutable_children(i), timezone_info);
-}
 } // namespace
 
 void StorageDisaggregated::filterConditionsWithPushedDownFilters(
@@ -839,6 +705,15 @@ ColumnarReaderPtr createColumnarReader(
     auto * cluster = global_ctx.getTMTContext().getKVCluster();
     const TiFlashRaftProxyHelper * proxy_helper = global_ctx.getSharedContextDisagg()->getColumnarProxyHelper();
     RUNTIME_CHECK_MSG(proxy_helper != nullptr, "columnar proxy helper is not initialized");
+    // Pass session timezone separately; rough-filter literals keep their TiDB domain.
+    tipb::DAGRequest timezone_request;
+    const auto & timezone_info = context.getTimezoneInfo();
+    if (timezone_info.is_name_based)
+        timezone_request.set_time_zone_name(timezone_info.timezone_name);
+    else
+        timezone_request.set_time_zone_offset(timezone_info.timezone_offset);
+    const auto timezone_data = timezone_request.SerializeAsString();
+    auto timezone_view = BaseBuffView{timezone_data.data(), timezone_data.size()};
     ColumnarReaderPtr columnar_reader = proxy_helper->cloud_storage_engine_interfaces.fn_get_columnar_reader(
         reader_plan.region_id,
         reader_plan.region_ver,
@@ -849,6 +724,7 @@ ColumnarReaderPtr createColumnarReader(
         std::move(filter_conditions_view),
         std::move(ann_query_info_view),
         std::move(fts_query_info_view),
+        timezone_view,
         proxy_helper->proxy_ptr);
     bool reader_returned = false;
     SCOPE_EXIT({

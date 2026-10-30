@@ -29,6 +29,7 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 #include <Storages/DeltaMerge/Index/RoughCheck.h>
+#include <cctz/time_zone.h>
 namespace DB::DM
 {
 
@@ -227,6 +228,80 @@ std::pair<StringRef, StringRef> MinMaxIndex::getStringMinMax(size_t pack_index) 
 std::pair<UInt64, UInt64> MinMaxIndex::getUInt64MinMax(size_t pack_index) const
 {
     return {minmaxes->get64(pack_index * 2), minmaxes->get64(pack_index * 2 + 1)};
+}
+
+MinMaxIndexPtr MinMaxIndex::withTimezone(
+    size_t start_pack,
+    size_t pack_count,
+    const TimezoneInfo & timezone,
+    std::vector<UInt8> & converted) const
+{
+    auto column = minmaxes->cut(start_pack * 2, pack_count * 2)->assumeMutable();
+    auto * nullable = typeid_cast<ColumnNullable *>(column.get());
+    auto & data = static_cast<ColumnUInt64 &>(nullable ? nullable->getNestedColumn() : *column).getData();
+    cctz::time_zone zone = cctz::fixed_time_zone(std::chrono::seconds(timezone.timezone_offset));
+    const bool zone_loaded = timezone.is_name_based
+        ? cctz::load_time_zone(timezone.timezone_name, &zone)
+        : timezone.timezone_offset > -86400 && timezone.timezone_offset < 86400;
+    PaddedPODArray<UInt8> nulls;
+    PaddedPODArray<UInt8> values;
+    converted.assign(pack_count, false);
+    for (size_t i = 0; i < pack_count; ++i)
+    {
+        nulls.push_back(has_null_marks[start_pack + i]);
+        values.push_back(has_value_marks[start_pack + i]);
+        if (!zone_loaded || !values.back() || (nullable && nullable->isNullAt(i * 2)))
+            continue;
+        const MyDateTime min(data[i * 2]);
+        const MyDateTime max(data[i * 2 + 1]);
+        // Invalid/zero dates and values outside TiDB's TIMESTAMP range cannot
+        // establish a safe bound. cctz normalizes civil dates, so check the round trip.
+        const cctz::civil_second lo(min.year, min.month, min.day, min.hour, min.minute, min.second);
+        const cctz::civil_second hi(max.year, max.month, max.day, max.hour, max.minute, max.second);
+        const auto valid = [](const MyDateTime & t, const cctz::civil_second & civil) {
+            return civil.year() == t.year && civil.month() == t.month && civil.day() == t.day && civil.hour() == t.hour
+                && civil.minute() == t.minute && civil.second() == t.second && t.micro_second <= 999999;
+        };
+        const auto utc = cctz::utc_time_zone();
+        const auto begin = cctz::convert(lo, utc);
+        const auto end = cctz::convert(hi, utc);
+        if (!valid(min, lo) || !valid(max, hi) || data[i * 2] > data[i * 2 + 1] || begin.time_since_epoch().count() <= 0
+            || end.time_since_epoch().count() > 2147483647)
+            continue;
+        const auto local_min = zone.lookup(begin).cs;
+        const auto local_max = zone.lookup(end).cs;
+        cctz::time_zone::civil_transition transition;
+        if (zone.lookup(local_min).kind != cctz::time_zone::civil_lookup::UNIQUE
+            || zone.lookup(local_max).kind != cctz::time_zone::civil_lookup::UNIQUE
+            || (zone.next_transition(begin - std::chrono::seconds(1), &transition)
+                && cctz::convert(transition.to, zone) <= end))
+            continue;
+        const auto pack = [](const cctz::civil_second & t, UInt32 micro) {
+            return MyDateTime(t.year(), t.month(), t.day(), t.hour(), t.minute(), t.second(), micro).toPackedUInt();
+        };
+        const auto session_min = pack(local_min, min.micro_second);
+        const auto session_max = pack(local_max, max.micro_second);
+        UInt64 row_min;
+        UInt64 row_max;
+        if (timezone.is_name_based)
+        {
+            convertTimeZone(data[i * 2], row_min, DateLUT::instance("UTC"), *timezone.timezone);
+            convertTimeZone(data[i * 2 + 1], row_max, DateLUT::instance("UTC"), *timezone.timezone);
+        }
+        else
+        {
+            convertTimeZoneByOffset(data[i * 2], row_min, true, timezone.timezone_offset);
+            convertTimeZoneByOffset(data[i * 2 + 1], row_max, true, timezone.timezone_offset);
+        }
+        // DateLUT approximates some historical offsets. Do not prune when the
+        // row conversion and the exact timezone bounds disagree.
+        if (row_min != session_min || row_max != session_max)
+            continue;
+        data[i * 2] = session_min;
+        data[i * 2 + 1] = session_max;
+        converted[i] = true;
+    }
+    return std::make_shared<MinMaxIndex>(std::move(nulls), std::move(values), std::move(column));
 }
 
 template <typename T>
