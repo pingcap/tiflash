@@ -16,6 +16,7 @@
 #include <Common/RedactHelpers.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/types.h>
+#include <pingcap/RedactHelpers.h>
 
 #include <sstream>
 
@@ -31,6 +32,7 @@ TEST(RedactLogTest, Basic)
 
     Redact::setRedactLog(RedactMode::Disable);
     EXPECT_EQ(Redact::keyToDebugString(test_key, key_sz), "010AFF");
+    EXPECT_EQ(pingcap::Redact::keyToDebugString(test_key, key_sz), "010AFF");
     EXPECT_EQ(Redact::keyToHexString(test_key, key_sz), "010AFF");
     EXPECT_EQ(Redact::handleToDebugString(test_handle), "10009");
     std::stringstream ss;
@@ -39,6 +41,7 @@ TEST(RedactLogTest, Basic)
 
     Redact::setRedactLog(RedactMode::Marker);
     EXPECT_EQ(Redact::keyToDebugString(test_key, key_sz), "‹010AFF›");
+    EXPECT_EQ(pingcap::Redact::keyToDebugString(test_key, key_sz), "‹010AFF›");
     EXPECT_EQ(Redact::keyToHexString(test_key, key_sz), "010AFF");
     EXPECT_EQ(Redact::handleToDebugString(test_handle), "‹10009›");
     ss.str("");
@@ -47,6 +50,7 @@ TEST(RedactLogTest, Basic)
 
     Redact::setRedactLog(RedactMode::Enable);
     EXPECT_EQ(Redact::keyToDebugString(test_key, key_sz), "?");
+    EXPECT_EQ(pingcap::Redact::keyToDebugString(test_key, key_sz), "?");
     EXPECT_EQ(Redact::keyToHexString(test_key, key_sz), "010AFF"); // Unaffected by readact-log status
     EXPECT_EQ(Redact::handleToDebugString(test_handle), "?");
     ss.str("");
