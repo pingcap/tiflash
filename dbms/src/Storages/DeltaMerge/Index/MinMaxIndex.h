@@ -21,6 +21,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/IDataType.h>
+#include <Interpreters/TimezoneInfo.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
 
 namespace DB::DM
@@ -66,6 +67,13 @@ public:
     std::pair<StringRef, StringRef> getStringMinMax(size_t pack_index) const;
 
     std::pair<UInt64, UInt64> getUInt64MinMax(size_t pack_index) const;
+
+    // Convert only a temporary index; the persisted UTC index stays unchanged.
+    MinMaxIndexPtr withTimezone(
+        size_t start_pack,
+        size_t pack_count,
+        const TimezoneInfo & timezone,
+        std::vector<UInt8> & converted) const;
 
     template <typename Op>
     RSResults checkCmp(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type);

@@ -604,14 +604,11 @@ try
     ReadBufferFromMemory read_buffer(datetime.c_str(), datetime.size());
     UInt64 origin_time_stamp;
     ASSERT_TRUE(tryReadMyDateTimeText(origin_time_stamp, 6, read_buffer));
-    const auto & time_zone_utc = DateLUT::instance("UTC");
-    UInt64 converted_time = origin_time_stamp;
 
     {
         // Greater between TimeStamp col and Datetime literal, use local timezone
         auto ctx = TiFlashTestEnv::getContext();
         auto & timezone_info = ctx->getTimezoneInfo();
-        convertTimeZone(origin_time_stamp, converted_time, *timezone_info.timezone, time_zone_utc);
 
         auto rs_operator = generateRsOperator(
             table_info_json,
@@ -622,10 +619,19 @@ try
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 4);
         EXPECT_EQ(
             rs_operator->toDebugString(),
-            fmt::format(R"json({{"op":"greater","col":"col_timestamp","value":"{}"}})json", converted_time));
+            fmt::format(R"json({{"op":"greater","col":"col_timestamp","value":"{}"}})json", origin_time_stamp)
+                + (timezone_info.is_utc_timezone
+                       ? ""
+                       : fmt::format(
+                           " [session_timezone={}]",
+                           timezone_info.is_name_based ? timezone_info.timezone_name
+                                                       : std::to_string(timezone_info.timezone_offset))));
         auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
-        EXPECT_EQ(sets->toDebugString(), fmt::format("4: [{}, 18446744073709551615]", converted_time + 1));
+        EXPECT_EQ(
+            sets->toDebugString(),
+            timezone_info.is_utc_timezone ? fmt::format("4: [{}, 18446744073709551615]", origin_time_stamp + 1)
+                                          : "Unsupported");
     }
 
     {
@@ -633,7 +639,6 @@ try
         auto ctx = TiFlashTestEnv::getContext();
         auto & timezone_info = ctx->getTimezoneInfo();
         timezone_info.resetByTimezoneName("America/Chicago");
-        convertTimeZone(origin_time_stamp, converted_time, *timezone_info.timezone, time_zone_utc);
 
         auto rs_operator = generateRsOperator(
             table_info_json,
@@ -644,10 +649,19 @@ try
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 4);
         EXPECT_EQ(
             rs_operator->toDebugString(),
-            fmt::format(R"json({{"op":"greater","col":"col_timestamp","value":"{}"}})json", converted_time));
+            fmt::format(R"json({{"op":"greater","col":"col_timestamp","value":"{}"}})json", origin_time_stamp)
+                + (timezone_info.is_utc_timezone
+                       ? ""
+                       : fmt::format(
+                           " [session_timezone={}]",
+                           timezone_info.is_name_based ? timezone_info.timezone_name
+                                                       : std::to_string(timezone_info.timezone_offset))));
         auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
-        EXPECT_EQ(sets->toDebugString(), fmt::format("4: [{}, 18446744073709551615]", converted_time + 1));
+        EXPECT_EQ(
+            sets->toDebugString(),
+            timezone_info.is_utc_timezone ? fmt::format("4: [{}, 18446744073709551615]", origin_time_stamp + 1)
+                                          : "Unsupported");
     }
 
     {
@@ -655,7 +669,6 @@ try
         auto ctx = TiFlashTestEnv::getContext();
         auto & timezone_info = ctx->getTimezoneInfo();
         timezone_info.resetByTimezoneOffset(28800);
-        convertTimeZoneByOffset(origin_time_stamp, converted_time, false, timezone_info.timezone_offset);
 
         auto rs_operator = generateRsOperator(
             table_info_json,
@@ -666,10 +679,19 @@ try
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 4);
         EXPECT_EQ(
             rs_operator->toDebugString(),
-            fmt::format(R"json({{"op":"greater","col":"col_timestamp","value":"{}"}})json", converted_time));
+            fmt::format(R"json({{"op":"greater","col":"col_timestamp","value":"{}"}})json", origin_time_stamp)
+                + (timezone_info.is_utc_timezone
+                       ? ""
+                       : fmt::format(
+                           " [session_timezone={}]",
+                           timezone_info.is_name_based ? timezone_info.timezone_name
+                                                       : std::to_string(timezone_info.timezone_offset))));
         auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
-        EXPECT_EQ(sets->toDebugString(), fmt::format("4: [{}, 18446744073709551615]", converted_time + 1));
+        EXPECT_EQ(
+            sets->toDebugString(),
+            timezone_info.is_utc_timezone ? fmt::format("4: [{}, 18446744073709551615]", origin_time_stamp + 1)
+                                          : "Unsupported");
     }
 
     {

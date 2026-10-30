@@ -444,7 +444,8 @@ pub mod root {
                     arg7: root::DB::BaseBuffView,
                     arg8: root::DB::BaseBuffView,
                     arg9: root::DB::BaseBuffView,
-                    arg10: root::DB::RaftStoreProxyPtr,
+                    arg10: root::DB::BaseBuffView,
+                    arg11: root::DB::RaftStoreProxyPtr,
                 ) -> root::DB::ColumnarReaderPtr,
             >,
             pub fn_read_block: ::std::option::Option<
@@ -949,7 +950,7 @@ pub mod root {
                 arg3: root::DB::RawVoidPtr,
             ) -> u32;
         }
-        pub const RAFT_STORE_PROXY_VERSION: u64 = 5429784359048998305;
+        pub const RAFT_STORE_PROXY_VERSION: u64 = 2104692946939262041;
         pub const RAFT_STORE_PROXY_MAGIC_NUMBER: u32 = 324508639;
     }
 }

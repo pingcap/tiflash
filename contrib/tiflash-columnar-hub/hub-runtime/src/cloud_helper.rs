@@ -527,6 +527,7 @@ impl CloudHelper {
         filter_conditions: Vec<tipb::Expr>,
         ann_query_info: tipb::AnnQueryInfo,
         fts_query_info: tipb::FtsQueryInfo,
+        timezone: tipb::DagRequest,
     ) -> Result<CloudColumnarReaders, Error> {
         let dfs = self.dfs.clone();
         let pd_client = self.pd_client.clone();
@@ -542,7 +543,7 @@ impl CloudHelper {
             filter_conditions,
             tables.len()
         );
-        let scan_ctx = TableScanCtx::new(table_scan, filter_conditions);
+        let scan_ctx = TableScanCtx::new(table_scan, filter_conditions).with_timezone(&timezone);
         let (tx, rx) = tikv_util::mpsc::bounded(1);
         let start = Instant::now_coarse();
         let vector_index_cache = self.vector_index_cache.clone();

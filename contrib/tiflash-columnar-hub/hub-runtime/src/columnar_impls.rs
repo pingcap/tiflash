@@ -131,6 +131,7 @@ pub unsafe extern "C" fn ffi_make_columnar_reader(
     filter_conditions: BaseBuffView,
     ann_query_info: BaseBuffView,
     fts_query_info: BaseBuffView,
+    timezone: BaseBuffView,
     hub_ptr: RaftStoreProxyPtr,
 ) -> ColumnarReaderPtr {
     let mut cols_pb = tipb::TableInfo::default();
@@ -210,6 +211,7 @@ pub unsafe extern "C" fn ffi_make_columnar_reader(
         .merge_from_bytes(fts_query_info.to_slice())
         .unwrap();
 
+    let timezone_pb = parse_from_bytes::<tipb::DagRequest>(timezone.to_slice()).unwrap();
     let hub = hub_ptr.as_ref();
     match hub.cloud_helper.make_columnar_reader(
         shard_id,
@@ -221,6 +223,7 @@ pub unsafe extern "C" fn ffi_make_columnar_reader(
         filter_conditions_pb,
         ann_query_info_pb,
         fts_query_info_pb,
+        timezone_pb,
     ) {
         Ok(reader) => (Box::into_raw(Box::new(reader)) as RawVoidPtr).into(),
         Err(err) => err.into(),

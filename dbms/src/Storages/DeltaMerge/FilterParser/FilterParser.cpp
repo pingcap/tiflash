@@ -17,6 +17,7 @@
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/Filter/SessionTimezone.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <TiDB/Schema/TiDB.h>
 #include <common/logger_useful.h>
@@ -178,9 +179,31 @@ inline RSOperatorPtr parseTiCompareExpr( //
                         "Compare timestamp column with literal type is not supported, sig={} literal_type={}",
                         tipb::ScalarFuncSig_Name(expr.sig()),
                         literal_type));
-                // convert literal value from timezone specified in cop request to UTC
-                if (literal_type == TiDB::TypeDatetime && !timezone_info.is_utc_timezone)
-                    convertFieldWithTimezone(value, timezone_info);
+                // DATETIME literals already use session wall time. TIMESTAMP
+                // literals carry UTC and must use the column's session domain.
+                if (literal_type == TiDB::TypeTimestamp && !timezone_info.is_utc_timezone && !value.isNull())
+                {
+                    UInt64 session_value = value.get<UInt64>();
+                    const auto year = MyDateTime(session_value).year;
+                    if (session_value != 0 && (year < 1970 || year > 2038))
+                        return createUnsupported("TIMESTAMP literal is outside the supported UTC range");
+                    try
+                    {
+                        if (timezone_info.is_name_based)
+                            convertTimeZone(
+                                session_value,
+                                session_value,
+                                DateLUT::instance("UTC"),
+                                *timezone_info.timezone);
+                        else
+                            convertTimeZoneByOffset(session_value, session_value, true, timezone_info.timezone_offset);
+                    }
+                    catch (const Exception &)
+                    {
+                        return createUnsupported("TIMESTAMP literal cannot be projected to session timezone");
+                    }
+                    value = Field(session_value);
+                }
             }
             values.push_back(value);
         }
@@ -208,39 +231,44 @@ inline RSOperatorPtr parseTiCompareExpr( //
     if (column_expr_child_idx != 0 && filter_type == FilterParser::RSFilterType::In)
         return createUnsupported("the first child of In expression must be ColumnRef");
 
+    const auto wrap_timezone = [&](RSOperatorPtr op) -> RSOperatorPtr {
+        if (is_timestamp_column && !timezone_info.is_utc_timezone)
+            return std::make_shared<SessionTimezone>(std::move(op), attr, timezone_info);
+        return op;
+    };
     bool inverse_cmp = column_expr_child_idx == 1;
     switch (filter_type)
     {
     case FilterParser::RSFilterType::Equal:
-        return createEqual(attr, values[0]);
+        return wrap_timezone(createEqual(attr, values[0]));
     case FilterParser::RSFilterType::NullEqual:
         if (values[0].isNull())
             return createIsNull(attr);
-        return createNullEqual(attr, values[0]);
+        return wrap_timezone(createNullEqual(attr, values[0]));
     case FilterParser::RSFilterType::NotEqual:
-        return createNotEqual(attr, values[0]);
+        return wrap_timezone(createNotEqual(attr, values[0]));
     case FilterParser::RSFilterType::Greater:
         if (inverse_cmp)
-            return createLess(attr, values[0]);
+            return wrap_timezone(createLess(attr, values[0]));
         else
-            return createGreater(attr, values[0]);
+            return wrap_timezone(createGreater(attr, values[0]));
     case FilterParser::RSFilterType::GreaterEqual:
         if (inverse_cmp)
-            return createLessEqual(attr, values[0]);
+            return wrap_timezone(createLessEqual(attr, values[0]));
         else
-            return createGreaterEqual(attr, values[0]);
+            return wrap_timezone(createGreaterEqual(attr, values[0]));
     case FilterParser::RSFilterType::Less:
         if (inverse_cmp)
-            return createGreater(attr, values[0]);
+            return wrap_timezone(createGreater(attr, values[0]));
         else
-            return createLess(attr, values[0]);
+            return wrap_timezone(createLess(attr, values[0]));
     case FilterParser::RSFilterType::LessEqual:
         if (inverse_cmp)
-            return createGreaterEqual(attr, values[0]);
+            return wrap_timezone(createGreaterEqual(attr, values[0]));
         else
-            return createLessEqual(attr, values[0]);
+            return wrap_timezone(createLessEqual(attr, values[0]));
     case FilterParser::RSFilterType::In:
-        return createIn(attr, values);
+        return wrap_timezone(createIn(attr, values));
     default:
         return createUnsupported(fmt::format("Unknown compare type: {}", tipb::ExprType_Name(expr.tp())));
     }
