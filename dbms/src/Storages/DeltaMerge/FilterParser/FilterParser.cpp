@@ -96,19 +96,6 @@ ColumnID getColumnIDForColumnExpr(const tipb::Expr & expr, const TiDB::ColumnInf
     return scan_column_infos[column_index].id;
 }
 
-// convert literal value from timezone specified in cop request to UTC in-place
-inline void convertFieldWithTimezone(Field & value, const TimezoneInfo & timezone_info)
-{
-    static const auto & time_zone_utc = DateLUT::instance("UTC");
-    UInt64 from_time = value.get<UInt64>();
-    UInt64 result_time = from_time;
-    if (timezone_info.is_name_based)
-        convertTimeZone(from_time, result_time, *timezone_info.timezone, time_zone_utc);
-    else if (timezone_info.timezone_offset != 0)
-        convertTimeZoneByOffset(from_time, result_time, false, timezone_info.timezone_offset);
-    value = Field(result_time);
-}
-
 inline RSOperatorPtr parseTiCompareExpr( //
     const tipb::Expr & expr,
     const FilterParser::RSFilterType filter_type,
@@ -433,22 +420,15 @@ RSOperatorPtr FilterParser::parseRFInExpr(
                 target_attr.has_value() ? fmt::format("not column expr, tp={}", tipb::ExprType_Name(target_expr.tp()))
                                         : "not found"));
         const auto & attr = *target_attr;
+        Fields values(setElements.begin(), setElements.end());
+        auto op = createIn(attr, values);
         if (target_expr.field_type().tp() == TiDB::TypeTimestamp && !timezone_info.is_utc_timezone)
         {
-            Fields values;
-            values.reserve(setElements.size());
-            std::for_each(setElements.begin(), setElements.end(), [&](Field element) {
-                // convert literal value from timezone specified in cop request to UTC
-                cop::convertFieldWithTimezone(element, timezone_info);
-                values.push_back(element);
-            });
-            return createIn(attr, values);
+            // Runtime values already use session time, which can map to two UTC
+            // instants during a DST fold. Project pack bounds instead of values.
+            return std::make_shared<SessionTimezone>(std::move(op), attr, timezone_info);
         }
-        else
-        {
-            Fields values(setElements.begin(), setElements.end());
-            return createIn(attr, values);
-        }
+        return op;
     }
     case tipb::MIN_MAX:
     case tipb::BLOOM_FILTER:

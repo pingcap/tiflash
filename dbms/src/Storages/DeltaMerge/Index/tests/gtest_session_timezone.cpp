@@ -137,4 +137,68 @@ TEST(SessionTimezoneTest, ParserProjectsTimestampLiteralsToSessionTime)
     literal->mutable_field_type()->set_tp(TiDB::TypeTimestamp);
     EXPECT_TRUE(check()[0].isUse());
 }
+
+TEST(SessionTimezoneTest, RuntimeInRetainsBothFoldOccurrences)
+{
+    const Attr attr{"ts", 1, std::make_shared<DataTypeNullable>(std::make_shared<DataTypeMyDateTime>(6))};
+    auto index = std::make_shared<MinMaxIndex>(*attr.type);
+    for (const auto & utc : {"2026-11-01 04:30:00", "2026-11-01 05:30:00", "2026-11-01 06:30:00"})
+    {
+        auto column = attr.type->createColumn();
+        column->insert(Field(packed(utc)));
+        index->addPack(*column, nullptr);
+    }
+    auto nulls = attr.type->createColumn();
+    nulls->insert(Field());
+    index->addPack(*nulls, nullptr);
+    const RSCheckParam param{.indexes = {{attr.col_id, RSIndex(attr.type, index)}}};
+    tipb::Expr target;
+    target.set_tp(tipb::ExprType::ColumnRef);
+    target.mutable_field_type()->set_tp(TiDB::TypeTimestamp);
+    TimezoneInfo tz;
+    tz.resetByTimezoneName("America/New_York");
+    std::set<Field> values{Field(packed("2026-11-01 01:30:00"))};
+    for (const bool include_null : {false, true})
+    {
+        SCOPED_TRACE(include_null);
+        if (include_null)
+            values.insert(Field());
+        auto op = FilterParser::parseRFInExpr(tipb::IN, target, attr, values, tz);
+        const auto result = op->roughCheck(0, 4, param);
+        EXPECT_FALSE(result[0].isUse());
+        // Both UTC occurrences match the same session value; neither may be pruned.
+        EXPECT_TRUE(result[1].isUse());
+        EXPECT_TRUE(result[2].isUse());
+        EXPECT_TRUE(result[3].isUse());
+        EXPECT_EQ(op->roughCheck(1, 2, param), (RSResults{result[1], result[2]}));
+        EXPECT_EQ(op->buildSets({})->toDebugString(), "Unsupported");
+    }
+}
+
+TEST(SessionTimezoneTest, RuntimeInPrunesSafeTimezoneBounds)
+{
+    const Attr attr{"ts", 1, std::make_shared<DataTypeMyDateTime>(6)};
+    const auto param
+        = packs(attr, {{"2026-11-02 12:00:00", "2026-11-02 12:00:00"}, {"2026-11-02 13:00:00", "2026-11-02 13:00:00"}});
+    tipb::Expr target;
+    target.set_tp(tipb::ExprType::ColumnRef);
+    target.mutable_field_type()->set_tp(TiDB::TypeTimestamp);
+    TimezoneInfo tz;
+    const auto check = [&](const String & session_value) {
+        auto op = FilterParser::parseRFInExpr(tipb::IN, target, attr, {Field(packed(session_value))}, tz);
+        const auto result = op->roughCheck(0, 2, param);
+        EXPECT_TRUE(result[0].isUse());
+        EXPECT_FALSE(result[1].isUse());
+    };
+    tz.resetByTimezoneName("America/New_York");
+    check("2026-11-02 07:00:00");
+    tz.resetByTimezoneOffset(8 * 3600);
+    check("2026-11-02 20:00:00");
+    tz.resetByTimezoneName("UTC");
+    check("2026-11-02 12:00:00");
+    // DATETIME values must not be shifted even in a non-UTC session.
+    target.mutable_field_type()->set_tp(TiDB::TypeDatetime);
+    tz.resetByTimezoneName("America/New_York");
+    check("2026-11-02 12:00:00");
+}
 } // namespace DB::DM::tests
