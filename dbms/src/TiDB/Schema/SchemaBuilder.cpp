@@ -518,7 +518,8 @@ void SchemaBuilder<Getter, NameMapper>::updateTiFlashReplicaNumOnStorage(
                     local_table_info,
                     name_mapper.mapDatabaseName(database_id, keyspace_id),
                     name_mapper.mapTableName(local_table_info),
-                    context);
+                    context,
+                    /*read_tso=*/0);
             }
             LOG_INFO(
                 log,
@@ -544,7 +545,8 @@ void SchemaBuilder<Getter, NameMapper>::updateTiFlashReplicaNumOnStorage(
             local_logical_storage_table_info,
             name_mapper.mapDatabaseName(database_id, keyspace_id),
             name_mapper.mapTableName(local_logical_storage_table_info),
-            context);
+            context,
+            /*read_tso=*/0);
     }
     LOG_INFO(
         log,
@@ -673,7 +675,8 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiffOnLogicalTable(
         updated_table_info,
         name_mapper.mapDatabaseName(database_id, keyspace_id),
         name_mapper.mapTableName(updated_table_info),
-        context);
+        context,
+        /*read_tso=*/0);
 
     GET_METRIC(tiflash_schema_internal_ddl_count, type_apply_partition).Increment();
     LOG_INFO(
@@ -986,7 +989,6 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateDatabaseByInfo(const TiDB::DB
     interpreter.setInternal(true);
     interpreter.setForceRestoreData(false);
     interpreter.execute();
-
     databases.addDatabaseInfo(db_info);
 
     LOG_INFO(log, "Create database {} end, database_id={}", name_mapper.debugDatabaseName(*db_info), db_info->id);
@@ -1761,7 +1763,8 @@ bool SchemaBuilder<Getter, NameMapper>::applyTable(
         *table_info,
         name_mapper.mapDatabaseName(database_id, keyspace_id),
         name_mapper.mapTableName(*table_info),
-        context);
+        context,
+        getter.read_tso);
 
     LOG_INFO(
         log,

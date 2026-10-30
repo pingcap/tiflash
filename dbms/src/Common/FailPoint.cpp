@@ -50,6 +50,8 @@ namespace DB
     M(exception_before_mpp_root_task_run)                         \
     M(exception_during_mpp_root_task_run)                         \
     M(exception_during_write_to_storage)                          \
+    M(exception_before_schema_store_update)                       \
+    M(exception_before_schema_metadata_persist)                   \
     M(force_set_sst_to_dtfile_block_size)                         \
     M(exception_before_page_file_write_sync)                      \
     M(force_set_segment_ingest_packs_fail)                        \

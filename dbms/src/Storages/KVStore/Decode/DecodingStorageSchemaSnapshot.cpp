@@ -24,11 +24,13 @@ DecodingStorageSchemaSnapshot::DecodingStorageSchemaSnapshot(
     const TiDB::TableInfo & table_info_,
     const DM::ColumnDefine & original_handle_,
     Int64 decoding_schema_epoch_,
-    bool with_version_column)
+    bool with_version_column,
+    UInt64 schema_read_tso_)
     : column_defines{std::move(column_defines_)}
     , pk_is_handle{table_info_.pk_is_handle}
     , is_common_handle{table_info_.is_common_handle}
     , decoding_schema_epoch{decoding_schema_epoch_}
+    , schema_read_tso{schema_read_tso_}
 {
     std::unordered_map<ColumnID, size_t> column_lut(table_info_.columns.size());
     // col id -> tidb pos, has no internal cols.

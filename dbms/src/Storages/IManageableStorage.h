@@ -115,12 +115,15 @@ public:
         const Context & context)
         = 0;
 
+    // read_tso is paired with the complete TableInfo read. Zero means no watermark
+    // is available, as with local or partial metadata updates.
     virtual void alterSchemaChange(
         const TableLockHolder &,
         TiDB::TableInfo & table_info,
         const String & database_name,
         const String & table_name,
-        const Context & context)
+        const Context & context,
+        UInt64 read_tso)
         = 0;
 
     /// Rename the table.

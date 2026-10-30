@@ -36,14 +36,17 @@ public:
     /// `RegionBlockReader::read` is the common routine used by both 'flush' and 'read' processes of Delta-Tree engine,
     /// which will use carefully adjusted 'force_decode' with appropriate error handling/retry to get what they want.
     template <typename ReadList>
-    bool read(Block & block, const ReadList & data_list, bool force_decode);
+    bool read(Block & block, const ReadList & data_list, bool force_decode, bool skip_extra_columns = false);
+
+    ColumnID firstSkippedColumnID() const { return first_skipped_column_id; }
 
 private:
     template <TMTPKType pk_type, typename ReadList>
-    bool readImpl(Block & block, const ReadList & data_list, bool force_decode);
+    bool readImpl(Block & block, const ReadList & data_list, bool force_decode, bool skip_extra_columns);
 
 private:
     DecodingStorageSchemaSnapshotConstPtr schema_snapshot;
+    ColumnID first_skipped_column_id = 0;
 };
 
 } // namespace DB
