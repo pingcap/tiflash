@@ -35,7 +35,9 @@ ColumnsWithTypeAndName getColumnWithTypeAndName(const NamesAndTypes & names_and_
 NamesAndTypes toNamesAndTypes(const DAGSchema & dag_schema);
 
 // The column defines, `extra table id index` and `generated columns info` for disaggregated read.
+// Only the columnar read path supports commit-ts columns and may opt in explicitly.
 std::tuple<DM::ColumnDefinesPtr, int, std::vector<std::tuple<UInt64, String, DataTypePtr>>> genColumnDefinesForDisaggregatedRead(
-    const TiDBTableScan & table_scan);
+    const TiDBTableScan & table_scan,
+    bool for_columnar = false);
 
 } // namespace DB
