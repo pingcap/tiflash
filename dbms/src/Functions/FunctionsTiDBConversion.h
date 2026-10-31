@@ -1828,6 +1828,40 @@ template <typename...>
 class FunctionTiDBCast final : public IFunctionBase
 {
 public:
+    bool isSuitableForShortCircuitArgumentsExecution() const override { return true; }
+
+    /// Deliberately not canThrow, with a flag-dependent caveat: value errors
+    /// (overflow/truncation/invalid datetime) go through DAGContext::
+    /// handleTruncateError / handleOverflowError / handleInvalidTime, which
+    /// warn and return boundary values or NULL only when the request flags
+    /// carry TRUNCATE_AS_WARNING / IGNORE_TRUNCATE; under strict DML flags
+    /// they throw instead. That throwing configuration is not reachable
+    /// today: TiDB pushes expressions to TiFlash only in SELECT contexts
+    /// (verified on TiDB v9.0 master - INSERT..SELECT / UPDATE / DELETE,
+    /// including their subqueries, keep expressions at the TiDB root layer
+    /// or push them to TiKV), and SELECT requests always carry
+    /// TRUNCATE_AS_WARNING even in strict sql_mode. One error path is not
+    /// flag-governed at all: casting an actual NULL to a non-nullable
+    /// target throws CANNOT_INSERT_NULL_IN_ORDINARY_COLUMN unconditionally.
+    /// A real NULL under a not-null target violates TiDB's nullability
+    /// contract and throws in eager execution as well, so it is not a
+    /// short-circuit regression; the short-circuit-specific way to reach it
+    /// would be a not-null cast directly wrapping a deferred throwing
+    /// producer, whose masked rows carry null placeholders - if such a
+    /// shape ever shows up in a pushed plan, add that condition to
+    /// canThrow. Type-level errors are thrown at plan time; casting to
+    /// JSON goes through cast_string_as_json, which is marked. Masked rows
+    /// of a deferred cast read null placeholders from the throwing subtree
+    /// below, and CAST(null) is NULL for the nullable targets those shapes
+    /// have (see the not-null caveat above). If TiDB ever pushes
+    /// DML-context expressions to TiFlash, add a canThrow override
+    /// mirroring the flag condition.
+    ///
+    /// Warnings on masked-off rows (the default executeWithMask evaluates
+    /// them) are accepted: TiDB itself does not keep warning parity with
+    /// MySQL, and TiFlash warnings are not reliably reported back to the
+    /// client anyway.
+
     using WrapperType
         = std::function<void(Block &, const ColumnNumbers &, size_t, bool, const tipb::FieldType &, const Context &)>;
 
