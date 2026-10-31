@@ -24,16 +24,21 @@ namespace DB
 {
 class IFunctionBase;
 using FunctionBasePtr = std::shared_ptr<IFunctionBase>;
+class Block;
 
-/** A column containing a lambda expression.
-  * Behaves like a constant-column. Contains an expression, but not input or output data.
+/** A column containing a lambda or deferred scalar expression and its captured arguments.
+  * A deferred scalar expression is evaluated only after its captures have been filtered.
   */
 class ColumnFunction final : public COWPtrHelper<IColumn, ColumnFunction>
 {
 private:
     friend class COWPtrHelper<IColumn, ColumnFunction>;
 
-    ColumnFunction(size_t size, FunctionBasePtr function, const ColumnsWithTypeAndName & columns_to_capture);
+    ColumnFunction(
+        size_t size,
+        FunctionBasePtr function,
+        const ColumnsWithTypeAndName & columns_to_capture,
+        bool is_short_circuit_argument = false);
 
 public:
     const char * getFamilyName() const override { return "Function"; }
@@ -70,6 +75,22 @@ public:
 
     void appendArguments(const ColumnsWithTypeAndName & columns);
     ColumnWithTypeAndName reduce() const;
+    bool isShortCircuitArgument() const { return is_short_circuit_argument; }
+
+    /// Execute the deferred function with `mask` via IFunctionBase::
+    /// executeWithMask, directly on the captured columns without filtering
+    /// them first. A deferred argument nested in the captures is consumed by
+    /// passing the same mask down through maskedExecute (recursing through
+    /// reduceWithMask), except for short-circuit functions (and/or), which
+    /// keep their deferred arguments and take over the external mask in their
+    /// own short-circuit loop. Whether masked-off rows are skipped or
+    /// evaluated is decided by each function's executeWithMask, not here.
+    ColumnPtr reduceWithMask(const IColumn::Filter & mask) const;
+
+    /// Shared tail of reduceWithMask: append the result slot to `block`
+    /// and run function->executeWithMask on it, checking the row-count
+    /// contract.
+    ColumnPtr executeMaskedIntoBlock(Block && block, const IColumn::Filter & mask) const;
 
     Field operator[](size_t) const override
     {
@@ -283,8 +304,16 @@ private:
     size_t column_size;
     FunctionBasePtr function;
     ColumnsWithTypeAndName captured_columns;
+    bool is_short_circuit_argument;
 
     void appendArgument(const ColumnWithTypeAndName & column);
 };
+
+const ColumnFunction * checkAndGetShortCircuitArgument(const ColumnPtr & column);
+
+/// Materialize a deferred (short-circuit argument) column in place for the
+/// rows selected by `mask`: the result is a full-size column whose masked-off
+/// rows hold values the consumer will never propagate.
+void maskedExecute(ColumnWithTypeAndName & column, const IColumn::Filter & mask);
 
 } // namespace DB

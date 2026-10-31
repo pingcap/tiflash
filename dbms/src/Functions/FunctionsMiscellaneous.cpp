@@ -279,6 +279,8 @@ public:
 class FunctionDumpColumnStructure : public IFunction
 {
 public:
+    bool isSuitableForShortCircuitArgumentsExecution() const override { return false; }
+
     static constexpr auto name = "dumpColumnStructure";
     static FunctionPtr create(const Context &) { return std::make_shared<FunctionDumpColumnStructure>(); }
 
