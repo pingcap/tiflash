@@ -19,4 +19,24 @@
 namespace DB
 {
 void registerFunctionsLocalMatchAgainst(FunctionFactory & factory);
-}
+
+// Internal test seam: no SQL setting, global state, or request-shared scratch.
+namespace LocalMatchAgainstTest
+{
+enum class Matcher
+{
+    Automatic,
+    Linear,
+    Indexed
+};
+struct Work
+{
+    size_t route_builds = 0;
+    size_t indexed_columns = 0;
+    size_t linear_columns = 0;
+    size_t key_lookups = 0;
+    size_t term_references = 0;
+};
+FunctionPtr create(Matcher matcher, Work & work, size_t budget = 4 * 1024 * 1024, UInt32 generation = 0);
+} // namespace LocalMatchAgainstTest
+} // namespace DB
