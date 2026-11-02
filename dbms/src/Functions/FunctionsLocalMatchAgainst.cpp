@@ -927,7 +927,7 @@ ColumnMatchResult updateExactMatchStatesForColumn(
     {
         if constexpr (count_work)
             ++work->key_lookups;
-        const auto it = route.dictionary.find(scratch.keys.key(token.value(), collator));
+        const auto * const it = route.dictionary.find(scratch.keys.key(token.value(), collator));
         if (!it)
             continue;
         const auto bucket_id = it->getMapped();
@@ -1261,7 +1261,7 @@ std::unique_ptr<ExactTermRoute> buildExactTermRoute(
         for (size_t term = 0; term < query.clauses[clause].terms.size(); ++term)
         {
             const auto key = keys.key(query.clauses[clause].terms[term], collator);
-            auto it = route->dictionary.find(key);
+            auto * it = route->dictionary.find(key);
             size_t bucket;
             if (it)
                 bucket = it->getMapped();
@@ -1378,7 +1378,7 @@ bool decodeLocalMatchAgainstBooleanQuery(const IColumn & column, tipb::LocalMatc
 class FunctionLocalMatchAgainstBoolean final : public IFunction
 {
 public:
-    FunctionLocalMatchAgainstBoolean(
+    explicit FunctionLocalMatchAgainstBoolean(
         LocalMatchAgainstTest::Matcher matcher_ = LocalMatchAgainstTest::Matcher::Automatic,
         LocalMatchAgainstTest::Work * work_ = nullptr,
         size_t budget_ = exact_route_budget,

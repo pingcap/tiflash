@@ -2027,7 +2027,7 @@ TEST_F(TestLocalMatchAgainst, ExactRouteDifferentialAndFallbacks)
           TiDB::ITiDBCollator::UTF8MB4_UNICODE_CI,
           TiDB::ITiDBCollator::UTF8MB4_0900_AI_CI})
     {
-        const auto collator = TiDB::ITiDBCollator::getCollator(id);
+        const auto * const collator = TiDB::ITiDBCollator::getCollator(id);
         for (size_t iteration = 0; iteration < 64; ++iteration)
         {
             auto query = exactQuery(0);
@@ -2083,7 +2083,7 @@ TEST_F(TestLocalMatchAgainst, ExactRouteDifferentialAndFallbacks)
             runMatcher(columns, collator, Matcher::Indexed, new_work, budget));
         EXPECT_EQ(0, new_work.indexed_columns);
     };
-    auto collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI);
+    const auto * collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI);
     check(query, collator, 1);
     check(query, nullptr, 4 * 1024 * 1024);
     CountingMatchCollator unsupported(false);
@@ -2099,7 +2099,7 @@ TEST_F(TestLocalMatchAgainst, ExactRouteDifferentialAndFallbacks)
 TEST_F(TestLocalMatchAgainst, ExactRouteEquivalentProhibitedAndColumnFallback)
 {
     using namespace LocalMatchAgainstTest;
-    const auto collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_UNICODE_CI);
+    const auto * const collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_UNICODE_CI);
     auto query = exactQuery(100, true);
     auto * node = query.add_nodes();
     node->set_occur(tipb::LocalMatchAgainstBooleanOccurMustNot);
@@ -2140,7 +2140,7 @@ TEST_F(TestLocalMatchAgainst, ExactRouteEquivalentProhibitedAndColumnFallback)
 TEST_F(TestLocalMatchAgainst, ExactRouteThresholdNullableAndReusedBlocks)
 {
     using namespace LocalMatchAgainstTest;
-    const auto collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI);
+    const auto * const collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI);
     String document;
     for (size_t i = 0; i < 100; ++i)
         document += "apple ";
@@ -2233,7 +2233,7 @@ TEST_F(TestLocalMatchAgainst, ExactRouteThresholdNullableAndReusedBlocks)
 TEST_F(TestLocalMatchAgainst, ExactRouteIndependentConcurrentExecutions)
 {
     using namespace LocalMatchAgainstTest;
-    const auto collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_UNICODE_CI);
+    const auto * const collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_UNICODE_CI);
     const auto query = exactQuery(100, true);
     String document;
     for (size_t i = 0; i < 100; ++i)
@@ -2262,7 +2262,7 @@ TEST(LocalMatchAgainstTokenChars, ExactRouteKeyEquality)
           TiDB::ITiDBCollator::UTF8MB4_BIN,
           TiDB::ITiDBCollator::UTF8MB4_0900_BIN})
     {
-        const auto collator = TiDB::ITiDBCollator::getCollator(id);
+        const auto * const collator = TiDB::ITiDBCollator::getCollator(id);
         std::unordered_map<String, String> representatives;
         std::vector<String> words{"café", "CAFE", "Straße", "strasse", "ﬁ", "fi", "ᅠ", "", "abc", "ＡＢＣ"};
         String buffer;
