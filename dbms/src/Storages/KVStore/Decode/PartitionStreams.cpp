@@ -158,6 +158,8 @@ static inline bool atomicReadWrite(
         //   after the schema is totally exceed the GC safepoint. And TiFlash know nothing about
         //   the schema. We can only throw away those committed rows.
         // In both cases, no exception will be thrown.
+        if (!force_decode)
+            GET_METRIC(tiflash_row_decode_reject_count, reason_storage_not_found).Increment();
         return force_decode;
     }
 
@@ -526,6 +528,8 @@ AtomicGetStorageSchema(RegionID region_id, KeyspaceID keyspace_id, TableID table
         {
             // If force_decode == false, then should sync schema and check again
             // Else force_decode == true, and storage instance still not exist, table must have just been GC-ed
+            if (!force_decode)
+                GET_METRIC(tiflash_row_decode_reject_count, reason_storage_not_found).Increment();
             return force_decode;
         }
         // Get a structure read lock. It will throw exception if the table has been dropped,

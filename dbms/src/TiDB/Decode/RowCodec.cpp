@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Columns/IColumn.h>
+#include <Common/TiFlashMetrics.h>
 #include <IO/Endian.h>
 #include <IO/Operators.h>
 #include <TiDB/Decode/Datum.h>
@@ -398,6 +399,19 @@ bool appendRowToBlock(
     }
 }
 
+// Count the first row-value rejection in each non-forced RegionBlockReader decode
+// attempt (Raft apply or snapshot/SST prehandle). The reader stops immediately,
+// so propagating false must not count again. Forced retries and extra columns
+// skipped under the schema watermark do not increment this counter.
+// RegionBlockReader counts PK-handle overflow and PartitionStreams counts missing
+// storage before decoding under the same metric. Snapshot prehandle also reports
+// rejections, so the total need not equal the raft_decode schema-sync counter.
+static bool rejectRowDecode(prometheus::Counter & counter)
+{
+    counter.Increment();
+    return false;
+}
+
 // When a column is missing in the encoded row, decide whether we can append a value
 // (NULL or origin default) to `block` or we must trigger schema sync.
 //
@@ -428,7 +442,7 @@ inline bool addDefaultValueToColumnIfPossible(
 
         // For non-clustered tables, a missing PK column implies schema mismatch.
         if (!force_decode)
-            return false;
+            return rejectRowDecode(GET_METRIC(tiflash_row_decode_reject_count, reason_missing_column));
         // fallthrough for best-effort fill when force_decode == true
     }
 
@@ -451,7 +465,7 @@ inline bool addDefaultValueToColumnIfPossible(
         if (column_info.hasNoDefaultValueFlag() //
             || column_info.state != TiDB::SchemaState::StatePublic //
             || !column_info.hasOriginDefaultValue())
-            return false;
+            return rejectRowDecode(GET_METRIC(tiflash_row_decode_reject_count, reason_missing_column));
     }
 
     // 3) Fill using origin default or NULL.
@@ -520,7 +534,7 @@ bool appendRowV2ToBlockImpl(
             // a column.
             // For `force_decode == false`, we should return false to let upper layer trigger schema sync.
             if (!force_decode && !extra_columns.skip(next_datum_column_id))
-                return false;
+                return rejectRowDecode(GET_METRIC(tiflash_row_decode_reject_count, reason_extra_column));
             // For `force_decode == true`, we just skip this extra column and continue to parse other datum.
             if (is_null)
                 idx_null++;
@@ -576,7 +590,8 @@ bool appendRowV2ToBlockImpl(
                     if (!force_decode)
                     {
                         // Detect `NULL` column value in a non-nullable column in the schema, let upper level try to sync the schema.
-                        return false;
+                        return rejectRowDecode(
+                            GET_METRIC(tiflash_row_decode_reject_count, reason_null_in_non_nullable));
                     }
                     else
                     {
@@ -601,7 +616,7 @@ bool appendRowV2ToBlockImpl(
                 size_t start = idx_not_null ? value_offsets[idx_not_null - 1] : 0;
                 size_t length = value_offsets[idx_not_null] - start;
                 if (!raw_column->decodeTiDBRowV2Datum(values_start_pos + start, raw_value, length, force_decode))
-                    return false;
+                    return rejectRowDecode(GET_METRIC(tiflash_row_decode_reject_count, reason_datum_rejected));
                 idx_not_null++;
             }
             column_ids_iter++;
@@ -670,7 +685,7 @@ bool appendRowV1ToBlock(
         {
             // extra column
             if (!force_decode && !extra_columns.skip(next_field_column_id))
-                return false;
+                return rejectRowDecode(GET_METRIC(tiflash_row_decode_reject_count, reason_extra_column));
             decoded_field_iter++;
         }
         else if (column_ids_iter->first < next_field_column_id)
@@ -715,14 +730,14 @@ bool appendRowV1ToBlock(
                         ErrorCodes::LOGICAL_ERROR);
                 }
 
-                return false;
+                return rejectRowDecode(GET_METRIC(tiflash_row_decode_reject_count, reason_datum_rejected));
             }
             if (datum.invalidNull(column_info))
             {
                 if (!force_decode)
                 {
                     // Detect `NULL` column value in a non-nullable column in the schema, let upper level try to sync the schema.
-                    return false;
+                    return rejectRowDecode(GET_METRIC(tiflash_row_decode_reject_count, reason_null_in_non_nullable));
                 }
                 else
                 {

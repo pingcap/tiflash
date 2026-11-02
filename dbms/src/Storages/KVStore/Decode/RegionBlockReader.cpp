@@ -14,6 +14,7 @@
 
 #include <Columns/ColumnsNumber.h>
 #include <Common/Exception.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/typeid_cast.h>
 #include <Core/Names.h>
 #include <Storages/ColumnsDescription.h>
@@ -316,6 +317,7 @@ bool RegionBlockReader::readImpl(Block & block, const ReadList & data_list, bool
                     {
                         if (!force_decode)
                         {
+                            GET_METRIC(tiflash_row_decode_reject_count, reason_pk_handle_overflow).Increment();
                             return false;
                         }
                         else
