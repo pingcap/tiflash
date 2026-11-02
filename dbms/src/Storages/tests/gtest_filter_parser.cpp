@@ -385,7 +385,9 @@ try
         EXPECT_TRUE(std::regex_search(rs_operator->toDebugString(), rx));
         auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
-        EXPECT_EQ(sets->toDebugString(), "2: {666}");
+        // Keep Unsupported so that negating this AND cannot discard matching rows.
+        EXPECT_EQ(sets->toDebugString(), "And[2: {666}, Unsupported]");
+        EXPECT_EQ(sets->invert()->type, DM::ColumnRangeType::Unsupported);
     }
 
     {
@@ -436,7 +438,10 @@ try
         EXPECT_TRUE(std::regex_search(rs_operator->toDebugString(), rx));
         auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
-        EXPECT_EQ(sets->toDebugString(), "2: {[-9223372036854775808, 665], [667, 9223372036854775807]}");
+        EXPECT_EQ(
+            sets->toDebugString(),
+            "And[2: {[-9223372036854775808, 665], [667, 9223372036854775807]}, Unsupported]");
+        EXPECT_EQ(sets->invert()->type, DM::ColumnRangeType::Unsupported);
     }
 
     {
@@ -521,7 +526,26 @@ try
             "\"col\":\"col_3\"}]}");
         auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
-        EXPECT_EQ(sets->toDebugString(), "2: {789}");
+        EXPECT_EQ(sets->toDebugString(), "And[2: {789}, Unsupported]");
+        EXPECT_EQ(sets->invert()->type, DM::ColumnRangeType::Unsupported);
+    }
+
+    // Exercise the parser-to-index path: NOT of a partially supported AND must keep every candidate.
+    for (const auto & query : {
+             "select * from default.t_111 where not (col_1 = 'test1' and col_2 = 666)",
+             "select * from default.t_111 where not (col_2 = 666 and col_1 = 'test1')",
+             "select * from default.t_111 where not ((col_1 = 'test1' and col_2 = 666) and col_3 = 789)",
+             "select * from default.t_111 where not (col_2 = 789 and col_3 is null)",
+         })
+    {
+        SCOPED_TRACE(query);
+        auto rs_operator = generateRsOperator(table_info_json, query);
+        auto sets = rs_operator->buildSets(used_indexes);
+        ASSERT_NE(sets, nullptr);
+        ASSERT_EQ(sets->type, DM::ColumnRangeType::Unsupported);
+        auto bitmap = sets->check({}, 3);
+        ASSERT_NE(bitmap, nullptr);
+        EXPECT_EQ(bitmap->toDebugString(), "111");
     }
 
     {
