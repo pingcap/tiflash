@@ -1186,7 +1186,7 @@ CompiledBooleanQuery compileBooleanQuery(
     return compiled;
 }
 
-size_t exactRouteTermCount(
+size_t eligibleExactRouteTermCount(
     const CompiledBooleanQuery & query,
     const LocalMatchAnalyzerConfig & config,
     const TiDB::TiDBCollatorPtr & collator,
@@ -1497,7 +1497,7 @@ public:
         document_columns.reserve(document_argument_end - 1);
         for (size_t arg = 1; arg < document_argument_end; ++arg)
             document_columns.emplace_back(*block.getByPosition(arguments[arg]).column);
-        const size_t route_terms = exactRouteTermCount(compiled_query, config, collator, matcher, budget);
+        const size_t route_terms = eligibleExactRouteTermCount(compiled_query, config, collator, matcher, budget);
         bool may_use_index = matcher == LocalMatchAgainstTest::Matcher::Indexed;
         if (route_terms && !may_use_index)
         {
