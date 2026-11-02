@@ -243,6 +243,13 @@ try
         auto bitmap = reader.load();
         ASSERT_EQ(bitmap->size(), 9);
         ASSERT_EQ(bitmap->toDebugString(), "000001111");
+
+        // Unsupported may be false even when col > 5, so NOT must retain those rows too.
+        auto negated_range = createNot(rs_operator)->buildSets(used_indexes);
+        InvertedIndexReaderFromDMFile negated_reader(negated_range, dm_file, dbContext().getLightLocalIndexCache());
+        auto negated_bitmap = negated_reader.load();
+        ASSERT_NE(negated_bitmap, nullptr);
+        ASSERT_EQ(negated_bitmap->toDebugString(), "111111111");
     }
     // test col > 3 or unsupported
     {
@@ -700,6 +707,21 @@ try
         }
         ASSERT_EQ(bitmap_filter.size(), 9);
         ASSERT_EQ(bitmap_filter.toDebugString(), "000001111");
+
+        auto negated_range = createNot(rs_operator)->buildSets(used_indexes);
+        BitmapFilter negated_bitmap(0, false);
+        for (const auto & tiny_file : tiny_files)
+        {
+            InvertedIndexReaderFromColumnFileTiny reader(
+                negated_range,
+                *tiny_file,
+                persisted_files_snap->getDataProvider(),
+                dbContext().getLightLocalIndexCache());
+            auto bitmap = reader.load();
+            ASSERT_NE(bitmap, nullptr);
+            negated_bitmap.append(*bitmap);
+        }
+        ASSERT_EQ(negated_bitmap.toDebugString(), "111111111");
     }
     // test col > 3 or unsupported
     {
