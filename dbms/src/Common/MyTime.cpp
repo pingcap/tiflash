@@ -1629,7 +1629,7 @@ extern "C" UInt8 projectTimestampRange(
         if (!timezone_name.empty())
         {
             const auto & lut = DateLUT::instance(timezone_name);
-            if (!(exact_utc && &lut == &utc)
+            if ((!exact_utc || &lut != &utc)
                 && !lut.isExactOffsetRange(
                     begin.time_since_epoch().count(),
                     end.time_since_epoch().count(),
