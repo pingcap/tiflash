@@ -47,7 +47,8 @@ struct DecodingStorageSchemaSnapshot
         const TiDB::TableInfo & table_info_,
         const DM::ColumnDefine & original_handle_,
         Int64 decoding_schema_epoch_,
-        bool with_version_column);
+        bool with_version_column,
+        UInt64 schema_read_tso_ = 0);
 
     DISALLOW_COPY(DecodingStorageSchemaSnapshot);
 
@@ -77,6 +78,7 @@ struct DecodingStorageSchemaSnapshot
     TMTPKType pk_type = TMTPKType::UNSPECIFIED;
     // an internal increasing version for `DecodingStorageSchemaSnapshot`, has no relation with the table schema version
     Int64 decoding_schema_epoch;
+    const UInt64 schema_read_tso;
 
 private:
     // `col_id_to_def_pos` is originally `sorted_column_id_with_pos`.
