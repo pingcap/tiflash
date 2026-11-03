@@ -99,16 +99,20 @@ inline size_t countCodePoints(const UInt8 * data, size_t size)
     return res;
 }
 
-// Convert utf8 position to byte position.
+// Convert a 1-based utf8 position to a 1-based byte position.
+// Count non-continuation octets, as countCodePoints() does, even for invalid UTF-8.
+// Return str_size + 1 if the position is beyond the input.
 // For Example:
 //   Taking string "ni好a" as an example.
 //   utf8 position of character 'a' in this string is 4 and byte position is 6.
-static inline Int64 utf8Pos2bytePos(const UInt8 * str, Int64 utf8_pos)
+static inline Int64 utf8Pos2bytePos(const UInt8 * str, size_t str_size, Int64 utf8_pos)
 {
-    Int64 byte_index = 0;
-    while (--utf8_pos > 0)
-        byte_index += seqLength(str[byte_index]);
-    return byte_index + 1;
+    for (size_t byte_index = 0; byte_index < str_size; ++byte_index)
+    {
+        if (!isContinuationOctet(str[byte_index]) && --utf8_pos == 0)
+            return byte_index + 1;
+    }
+    return str_size + 1;
 }
 
 static inline Int64 bytePos2Utf8Pos(const UInt8 * str, Int64 byte_pos)
