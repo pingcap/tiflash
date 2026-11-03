@@ -42,6 +42,19 @@ class TestLocalMatchAgainst : public DB::tests::FunctionTest
 
 namespace
 {
+constexpr std::array<int32_t, 11> exact_route_collations{
+    TiDB::ITiDBCollator::UTF8_GENERAL_CI,
+    TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI,
+    TiDB::ITiDBCollator::UTF8_UNICODE_CI,
+    TiDB::ITiDBCollator::UTF8MB4_UNICODE_CI,
+    TiDB::ITiDBCollator::UTF8MB4_0900_AI_CI,
+    TiDB::ITiDBCollator::UTF8MB4_BIN,
+    TiDB::ITiDBCollator::UTF8_BIN,
+    TiDB::ITiDBCollator::UTF8MB4_0900_BIN,
+    TiDB::ITiDBCollator::BINARY,
+    TiDB::ITiDBCollator::LATIN1_BIN,
+    TiDB::ITiDBCollator::ASCII_BIN};
+
 constexpr std::array<std::string_view, 35> builtin_stopwords{
     "a",    "about", "an",  "are",  "as",   "at",    "be",  "by",   "com",  "de",  "en",   "for",
     "from", "how",   "i",   "in",   "is",   "it",    "la",  "of",   "on",   "or",  "that", "the",
@@ -2255,13 +2268,9 @@ TEST_F(TestLocalMatchAgainst, ExactRouteIndependentConcurrentExecutions)
 TEST(LocalMatchAgainstTokenChars, ExactRouteKeyEquality)
 {
     std::mt19937 random(20261030);
-    for (const auto id :
-         {TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI,
-          TiDB::ITiDBCollator::UTF8MB4_UNICODE_CI,
-          TiDB::ITiDBCollator::UTF8MB4_0900_AI_CI,
-          TiDB::ITiDBCollator::UTF8MB4_BIN,
-          TiDB::ITiDBCollator::UTF8MB4_0900_BIN})
+    for (const auto id : exact_route_collations)
     {
+        SCOPED_TRACE(id);
         const auto * const collator = TiDB::ITiDBCollator::getCollator(id);
         std::unordered_map<String, String> representatives;
         std::vector<String> words{"café", "CAFE", "Straße", "strasse", "ﬁ", "fi", "ᅠ", "", "abc", "ＡＢＣ"};
@@ -2311,6 +2320,133 @@ TEST(LocalMatchAgainstTokenChars, ExactRouteKeyEquality)
                 owned == String(key.data, key.size));
         }
     }
+}
+
+TEST(LocalMatchAgainstTokenChars, ExactRouteKeyEqualitySpecialCases)
+{
+    // Include raw collation boundaries as well as valid STANDARD tokens:
+    // trailing spaces, embedded NUL, UCA expansions, zero weights and accents.
+    // The two calls deliberately reuse one buffer; retain the returned size
+    // and copy each key before a later call can overwrite its storage.
+    const std::vector<String> words{
+        "",
+        " ",
+        "  ",
+        "abc",
+        "ABC",
+        "abc ",
+        "abc  ",
+        "abc\t",
+        "cafe",
+        "CAFÉ",
+        "café",
+        "cafe\u0301",
+        "Straße",
+        "strasse",
+        "ﬁ",
+        "fi",
+        "ﬃ",
+        "ffi",
+        "æ",
+        "ae",
+        "\uFDFA",
+        "\uFDFB",
+        "جل جلاله",
+        "㌖",
+        "キロメートル",
+        "x㌖y",
+        "xキロメートルy",
+        "㌖\u034F",
+        "\u034F",
+        "\u00AD",
+        "\u200D",
+        "\u1160",
+        "\uFE0F",
+        "a\u034Fb",
+        "ab",
+        "a\u00ADb",
+        "a\u200Db",
+        "a\u1160b",
+        "a\uFE0Fb",
+        "中文",
+        "ＡＢＣ",
+        "𠀀",
+        "😀",
+        String(1, '\0'),
+        String("abc\0", 4),
+        String("abc\0 ", 5),
+        String("a\0b", 3),
+        String(512, 'a'),
+        "a"};
+    for (const auto id : exact_route_collations)
+    {
+        const auto * const collator = TiDB::ITiDBCollator::getCollator(id);
+        ASSERT_NE(collator, nullptr);
+        String buffer;
+        const auto key = [&](const String & word) {
+            const auto result = collator->sortKeyFastPath(word.data(), word.size(), buffer);
+            return String(result.data, result.size);
+        };
+        for (size_t i = 0; i < words.size(); ++i)
+            for (size_t j = 0; j < words.size(); ++j)
+            {
+                SCOPED_TRACE(fmt::format("collation={} left={} right={}", id, i, j));
+                const auto left = key(words[i]);
+                const auto right = key(words[j]);
+                ASSERT_EQ(
+                    collator->compare(words[i].data(), words[i].size(), words[j].data(), words[j].size()) == 0,
+                    left == right);
+            }
+
+        // Explicit expected semantics prevent a shared trimming error from
+        // making the compare/key differential pass unnoticed.
+        const bool padded = id != TiDB::ITiDBCollator::BINARY && id != TiDB::ITiDBCollator::UTF8MB4_0900_AI_CI
+            && id != TiDB::ITiDBCollator::UTF8MB4_0900_BIN;
+        SCOPED_TRACE(id);
+        EXPECT_EQ(padded, collator->compare("abc", 3, "abc ", 4) == 0);
+        const auto unpadded_key = key("abc");
+        EXPECT_EQ(padded, unpadded_key == key("abc "));
+    }
+}
+
+TEST_F(TestLocalMatchAgainst, ExactRouteMalformedUTF8AfterTokenization)
+{
+    using namespace LocalMatchAgainstTest;
+    const std::array<String, 9> malformed{
+        "\xff",
+        "\x80",
+        "\xc0\xaf",
+        "\xe0\x80\xaf",
+        "\xed\xa0\x80",
+        "\xf4\x90\x80\x80",
+        "\xc2",
+        "\xe4\xb8",
+        "\xf0\x9f"};
+    String padding;
+    for (size_t i = 0; i < 40; ++i)
+        padding += " padding";
+    for (const auto id : exact_route_collations)
+        for (size_t i = 0; i < malformed.size(); ++i)
+        {
+            SCOPED_TRACE(fmt::format("collation={} malformed={}", id, i));
+            const auto * const collator = TiDB::ITiDBCollator::getCollator(id);
+            auto query = exactQuery(100);
+            const auto broken = "foo" + malformed[i] + "bar";
+            for (auto & node : *query.mutable_nodes())
+                node.set_text(broken);
+            const ColumnsWithTypeAndName columns{
+                createConstColumn<String>(5, "query"),
+                createColumn<String>(
+                    {broken + padding, "foo bar" + padding, "foobar" + padding, "foo" + padding, padding}),
+                createConstColumn<String>(5, serializeLocalMatchAgainstBooleanQuery(query))};
+            Work linear, indexed, automatic;
+            const auto expected = runMatcher(columns, collator, Matcher::Linear, linear);
+            ASSERT_COLUMN_EQ(createColumn<Float64>({1, 1, 0, 0, 0}), expected);
+            ASSERT_COLUMN_EQ(expected, runMatcher(columns, collator, Matcher::Indexed, indexed));
+            ASSERT_COLUMN_EQ(expected, runMatcher(columns, collator, Matcher::Automatic, automatic));
+            EXPECT_EQ(5, indexed.indexed_columns);
+            EXPECT_EQ(5, automatic.indexed_columns);
+        }
 }
 
 } // namespace DB::tests
