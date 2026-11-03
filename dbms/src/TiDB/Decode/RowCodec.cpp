@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Columns/IColumn.h>
+#include <Common/TiFlashMetrics.h>
 #include <IO/Endian.h>
 #include <IO/Operators.h>
 #include <TiDB/Decode/Datum.h>
@@ -153,6 +154,7 @@ TiKVValue::Base encodeNotNullColumn(const Field & field, const ColumnInfo & colu
 }
 } // namespace RowV2
 
+// Used only to generate RowV1 data for tests, benchmarks, and debug mocks.
 void encodeRowV1(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBuffer & ss)
 {
     size_t column_in_key = 0;
@@ -176,6 +178,9 @@ void encodeRowV1(const TiDB::TableInfo & table_info, const std::vector<Field> & 
         if (encoded_fields_idx == fields.size())
             break;
     }
+    // Match TiDB's empty-row encoding when all columns are stored in the key.
+    if (encoded_fields_idx == 0)
+        EncodeDatum(Field(), TiDB::CodecFlagNil, ss);
 }
 
 struct RowEncoderV2
@@ -309,7 +314,8 @@ bool appendRowV2ToBlockImpl(
     const ColumnInfos & column_infos,
     ColumnID pk_handle_id,
     bool ignore_pk_if_absent,
-    bool force_decode);
+    bool force_decode,
+    ExtraColumnDecodeOptions extra_columns);
 
 bool appendRowV1ToBlock(
     const TiKVValue::Base & raw_value,
@@ -320,7 +326,8 @@ bool appendRowV1ToBlock(
     const ColumnInfos & column_infos,
     ColumnID pk_handle_id,
     bool ignore_pk_if_absent,
-    bool force_decode);
+    bool force_decode,
+    ExtraColumnDecodeOptions extra_columns);
 // pre-declar block end
 
 bool appendRowToBlock(
@@ -330,7 +337,8 @@ bool appendRowToBlock(
     Block & block,
     size_t block_column_pos,
     const DecodingStorageSchemaSnapshotConstPtr & schema_snapshot,
-    bool force_decode)
+    bool force_decode,
+    ExtraColumnDecodeOptions extra_columns)
 {
     const ColumnInfos & column_infos = schema_snapshot->column_infos;
     // when pk is handle, we need skip pk column when decoding value
@@ -362,7 +370,8 @@ bool appendRowToBlock(
                    column_infos,
                    pk_handle_id,
                    ignore_pk_if_absent,
-                   force_decode)
+                   force_decode,
+                   extra_columns)
                       : appendRowV2ToBlockImpl<false>(
                           raw_value,
                           column_ids_iter,
@@ -372,7 +381,8 @@ bool appendRowToBlock(
                           column_infos,
                           pk_handle_id,
                           ignore_pk_if_absent,
-                          force_decode);
+                          force_decode,
+                          extra_columns);
     }
     default:
         return appendRowV1ToBlock(
@@ -384,8 +394,22 @@ bool appendRowToBlock(
             column_infos,
             pk_handle_id,
             ignore_pk_if_absent,
-            force_decode);
+            force_decode,
+            extra_columns);
     }
+}
+
+// Count the first row-value rejection in each non-forced RegionBlockReader decode
+// attempt (Raft apply or snapshot/SST prehandle). The reader stops immediately,
+// so propagating false must not count again. Forced retries and extra columns
+// skipped under the schema watermark do not increment this counter.
+// RegionBlockReader counts PK-handle overflow and PartitionStreams counts missing
+// storage before decoding under the same metric. Snapshot prehandle also reports
+// rejections, so the total need not equal the raft_decode schema-sync counter.
+static bool rejectRowDecode(prometheus::Counter & counter)
+{
+    counter.Increment();
+    return false;
 }
 
 // When a column is missing in the encoded row, decide whether we can append a value
@@ -418,7 +442,7 @@ inline bool addDefaultValueToColumnIfPossible(
 
         // For non-clustered tables, a missing PK column implies schema mismatch.
         if (!force_decode)
-            return false;
+            return rejectRowDecode(GET_METRIC(tiflash_row_decode_reject_count, reason_missing_column));
         // fallthrough for best-effort fill when force_decode == true
     }
 
@@ -441,7 +465,7 @@ inline bool addDefaultValueToColumnIfPossible(
         if (column_info.hasNoDefaultValueFlag() //
             || column_info.state != TiDB::SchemaState::StatePublic //
             || !column_info.hasOriginDefaultValue())
-            return false;
+            return rejectRowDecode(GET_METRIC(tiflash_row_decode_reject_count, reason_missing_column));
     }
 
     // 3) Fill using origin default or NULL.
@@ -462,7 +486,8 @@ bool appendRowV2ToBlockImpl(
     const ColumnInfos & column_infos,
     ColumnID pk_handle_id,
     bool ignore_pk_if_absent,
-    bool force_decode)
+    bool force_decode,
+    ExtraColumnDecodeOptions extra_columns)
 {
     size_t cursor = 2; // Skip the initial codec ver and row flag.
     size_t num_not_null_columns = decodeUInt<UInt16>(cursor, raw_value);
@@ -493,12 +518,6 @@ bool appendRowV2ToBlockImpl(
     // Merge ordered not null/null columns to keep order.
     while (idx_not_null < not_null_column_ids.size() || idx_null < null_column_ids.size())
     {
-        if (column_ids_iter == column_ids_iter_end)
-        {
-            // extra column
-            return force_decode;
-        }
-
         bool is_null;
         if (idx_not_null < not_null_column_ids.size() && idx_null < null_column_ids.size())
             is_null = not_null_column_ids[idx_not_null] > null_column_ids[idx_null];
@@ -506,15 +525,16 @@ bool appendRowV2ToBlockImpl(
             is_null = idx_null < null_column_ids.size();
 
         auto next_datum_column_id = is_null ? null_column_ids[idx_null] : not_null_column_ids[idx_not_null];
-        const auto next_column_id = column_ids_iter->first;
-        if (next_column_id > next_datum_column_id)
+        const bool columns_exhausted = column_ids_iter == column_ids_iter_end;
+        const auto next_column_id = columns_exhausted ? 0 : column_ids_iter->first;
+        if (columns_exhausted || next_column_id > next_datum_column_id)
         {
             // The next_column_id to read is bigger than the next_datum_column_id in encoded row.
             // It means this is the datum of extra column. May happen when reading after dropping
             // a column.
             // For `force_decode == false`, we should return false to let upper layer trigger schema sync.
-            if (!force_decode)
-                return false;
+            if (!force_decode && !extra_columns.skip(next_datum_column_id))
+                return rejectRowDecode(GET_METRIC(tiflash_row_decode_reject_count, reason_extra_column));
             // For `force_decode == true`, we just skip this extra column and continue to parse other datum.
             if (is_null)
                 idx_null++;
@@ -570,7 +590,8 @@ bool appendRowV2ToBlockImpl(
                     if (!force_decode)
                     {
                         // Detect `NULL` column value in a non-nullable column in the schema, let upper level try to sync the schema.
-                        return false;
+                        return rejectRowDecode(
+                            GET_METRIC(tiflash_row_decode_reject_count, reason_null_in_non_nullable));
                     }
                     else
                     {
@@ -595,7 +616,7 @@ bool appendRowV2ToBlockImpl(
                 size_t start = idx_not_null ? value_offsets[idx_not_null - 1] : 0;
                 size_t length = value_offsets[idx_not_null] - start;
                 if (!raw_column->decodeTiDBRowV2Datum(values_start_pos + start, raw_value, length, force_decode))
-                    return false;
+                    return rejectRowDecode(GET_METRIC(tiflash_row_decode_reject_count, reason_datum_rejected));
                 idx_not_null++;
             }
             column_ids_iter++;
@@ -638,7 +659,8 @@ bool appendRowV1ToBlock(
     const ColumnInfos & column_infos,
     ColumnID pk_handle_id,
     bool ignore_pk_if_absent,
-    bool force_decode)
+    bool force_decode,
+    ExtraColumnDecodeOptions extra_columns)
 {
     size_t cursor = 0;
     std::map<ColumnID, Field> decoded_fields;
@@ -658,18 +680,12 @@ bool appendRowV1ToBlock(
     auto decoded_field_iter = decoded_fields.begin();
     while (decoded_field_iter != decoded_fields.end())
     {
-        if (column_ids_iter == column_ids_iter_end)
-        {
-            // extra column
-            return force_decode;
-        }
-
         auto next_field_column_id = decoded_field_iter->first;
-        if (column_ids_iter->first > next_field_column_id)
+        if (column_ids_iter == column_ids_iter_end || column_ids_iter->first > next_field_column_id)
         {
             // extra column
-            if (!force_decode)
-                return false;
+            if (!force_decode && !extra_columns.skip(next_field_column_id))
+                return rejectRowDecode(GET_METRIC(tiflash_row_decode_reject_count, reason_extra_column));
             decoded_field_iter++;
         }
         else if (column_ids_iter->first < next_field_column_id)
@@ -714,14 +730,14 @@ bool appendRowV1ToBlock(
                         ErrorCodes::LOGICAL_ERROR);
                 }
 
-                return false;
+                return rejectRowDecode(GET_METRIC(tiflash_row_decode_reject_count, reason_datum_rejected));
             }
             if (datum.invalidNull(column_info))
             {
                 if (!force_decode)
                 {
                     // Detect `NULL` column value in a non-nullable column in the schema, let upper level try to sync the schema.
-                    return false;
+                    return rejectRowDecode(GET_METRIC(tiflash_row_decode_reject_count, reason_null_in_non_nullable));
                 }
                 else
                 {

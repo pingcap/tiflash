@@ -21,6 +21,21 @@
 
 namespace DB
 {
+struct ExtraColumnDecodeOptions
+{
+    bool skip_extra_columns = false;
+    // Optional batch diagnostic. Only record the first skipped business column.
+    ColumnID * first_skipped_column_id = nullptr;
+
+    bool skip(ColumnID id) const
+    {
+        if (!skip_extra_columns || id <= 0)
+            return false;
+        if (first_skipped_column_id && *first_skipped_column_id == 0)
+            *first_skipped_column_id = id;
+        return true;
+    }
+};
 /// The following two encode functions are used for testing.
 void encodeRowV1(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBuffer & ss);
 void encodeRowV2(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBuffer & ss);
@@ -32,7 +47,8 @@ bool appendRowToBlock(
     Block & block,
     size_t block_column_pos,
     const DecodingStorageSchemaSnapshotConstPtr & schema_snapshot,
-    bool force_decode);
+    bool force_decode,
+    ExtraColumnDecodeOptions extra_columns = {});
 
 
 } // namespace DB
