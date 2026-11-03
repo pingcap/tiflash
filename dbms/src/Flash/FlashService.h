@@ -39,6 +39,11 @@ class Context;
 using ContextPtr = std::shared_ptr<Context>;
 using MockMPPServerInfo = tests::MockMPPServerInfo;
 
+/// Force `readonly = 1` and accept only a SELECT, or UNION ALL of SELECTs.
+/// `SELECT ... INTO OUTFILE` is rejected here. `SELECT ... SETTINGS` stays a SELECT;
+/// the readonly setting makes InterpreterSetQuery reject it when the query runs.
+void restrictTiFlashSystemTableQuery(Context & context, const std::string & sql);
+
 namespace Management
 {
 class ManualCompactManager;
