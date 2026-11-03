@@ -19,6 +19,6 @@ requires-python = ">=3.10"
 dependencies = [
     "attrs",
     "grafanalib==0.7.1",
-    "black==26.5.1",
+    "black==26.10.1",
     "isort==8.0.1",
 ]
