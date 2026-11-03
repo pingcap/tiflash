@@ -14,6 +14,7 @@
 
 #include <Common/hex.h>
 #include <Core/Field.h>
+#include <Debug/dbgTools.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
