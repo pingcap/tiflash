@@ -15,6 +15,10 @@
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <Common/UTF8Helpers.cpp>
+#include <algorithm>
+#include <memory>
+#include <string_view>
+#include <vector>
 
 namespace DB
 {
@@ -55,6 +59,58 @@ unsigned char * utf8_encode(unsigned char * s, long c)
 class TestUTF8Utility : public ::testing::Test
 {
 };
+
+TEST_F(TestUTF8Utility, TestPositionConversion)
+{
+    struct TestCase
+    {
+        std::string_view subject;
+        std::vector<Int64> byte_positions;
+    };
+    const std::vector<TestCase> test_cases{
+        {"", {}},
+        {"abc", {1, 2, 3}},
+        {std::string_view("a\0b", 3), {1, 2, 3}},
+        {"ni好a", {1, 2, 3, 6}},
+        {"\xC2\xA2\xE4\xB8\xAD\xF0\x9F\x98\x80x", {1, 3, 6, 10}},
+        {"\xE0\xC3\xC3", {1, 2, 3}},
+        {"\xE0\xC3", {1, 2}},
+        {"\xF0\xC3", {1, 2}},
+        {"\xE0"
+         "ab",
+         {1, 2, 3}},
+        {"\x80"
+         "ab",
+         {2, 3}},
+        {"\x80\xBF", {}},
+        {"\xC2\xA2\x80"
+         "a",
+         {1, 4}},
+        {"\xFF\xFE"
+         "a",
+         {1, 2, 3}},
+    };
+
+    for (const auto & test_case : test_cases)
+    {
+        SCOPED_TRACE(String(test_case.subject));
+        // Do not provide a terminating zero or padding: position conversion must respect the input size.
+        auto subject = std::make_unique<UInt8[]>(test_case.subject.size());
+        std::copy(test_case.subject.begin(), test_case.subject.end(), subject.get());
+        EXPECT_EQ(UTF8::countCodePoints(subject.get(), test_case.subject.size()), test_case.byte_positions.size());
+        for (size_t i = 0; i < test_case.byte_positions.size(); ++i)
+        {
+            const auto utf8_pos = static_cast<Int64>(i + 1);
+            EXPECT_EQ(
+                UTF8::utf8Pos2bytePos(subject.get(), test_case.subject.size(), utf8_pos),
+                test_case.byte_positions[i]);
+            EXPECT_EQ(UTF8::bytePos2Utf8Pos(subject.get(), test_case.byte_positions[i]), utf8_pos);
+        }
+        EXPECT_EQ(
+            UTF8::utf8Pos2bytePos(subject.get(), test_case.subject.size(), test_case.byte_positions.size() + 1),
+            test_case.subject.size() + 1);
+    }
+}
 
 TEST_F(TestUTF8Utility, TestDecode)
 try

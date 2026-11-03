@@ -736,7 +736,7 @@ Int64 OptimizedRegularExpressionImpl<thread_safe>::instr(
     if (unlikely(subject_size == 0))
         return processInstrEmptyStringExpr(subject, subject_size, pos, occur);
 
-    size_t byte_pos = DB::UTF8::utf8Pos2bytePos(reinterpret_cast<const UInt8 *>(subject), pos);
+    size_t byte_pos = DB::UTF8::utf8Pos2bytePos(reinterpret_cast<const UInt8 *>(subject), subject_size, pos);
     return instrImpl(subject, subject_size, byte_pos, occur, ret_op);
 }
 
@@ -754,7 +754,7 @@ std::optional<StringRef> OptimizedRegularExpressionImpl<thread_safe>::substr(
     if (unlikely(subject_size == 0))
         return processSubstrEmptyStringExpr(subject, subject_size, pos, occur);
 
-    size_t byte_pos = DB::UTF8::utf8Pos2bytePos(reinterpret_cast<const UInt8 *>(subject), pos);
+    size_t byte_pos = DB::UTF8::utf8Pos2bytePos(reinterpret_cast<const UInt8 *>(subject), subject_size, pos);
     return substrImpl(subject, subject_size, byte_pos, occur);
 }
 
@@ -773,7 +773,7 @@ void OptimizedRegularExpressionImpl<thread_safe>::replace(
     FunctionsRegexp::checkArgsReplace(utf8_total_len, subject_size, pos);
     FunctionsRegexp::makeReplaceOccurValid(occur);
 
-    size_t byte_pos = DB::UTF8::utf8Pos2bytePos(reinterpret_cast<const UInt8 *>(subject), pos);
+    size_t byte_pos = DB::UTF8::utf8Pos2bytePos(reinterpret_cast<const UInt8 *>(subject), subject_size, pos);
     replaceImpl(subject, subject_size, res_data, res_offset, byte_pos, occur, instructions);
 }
 
