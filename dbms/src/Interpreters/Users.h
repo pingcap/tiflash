@@ -32,9 +32,8 @@ namespace DB
 {
 /** User settings used by TiFlash.
   *
-  * ClickHouse-style password, client-network ACLs, and allow_databases gating were removed:
-  * TiFlash does not authenticate with users.xml passwords and does not restrict database
-  * access per user. Transport security uses TiFlashSecurityConfig (TLS/mTLS).
+  * ClickHouse-style password, client-network ACLs, and allow_databases gating were removed
+  * TiFlash transport security uses TiFlashSecurityConfig (TLS/mTLS).
   * User still carries profile / quota for settings and resource limits.
   */
 struct User
