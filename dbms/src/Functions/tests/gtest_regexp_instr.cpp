@@ -699,5 +699,37 @@ TEST_F(RegexpInstr, RegexpInstrTest)
             Exception);
     }
 }
+
+TEST_F(RegexpInstr, InvalidUTF8Position)
+{
+    const std::vector<String> subjects{
+        "\xE0\xC3\xC3",
+        "\xE0\xC3",
+        "\xE0\xC3\xC3"
+        "a",
+        "\xE0\xC3"
+        "a",
+    };
+    const std::vector<Int64> positions{3, 2, 4, 3};
+    const std::vector<Int64> results{0, 0, 4, 3};
+    for (size_t i = 0; i < subjects.size(); ++i)
+    {
+        SCOPED_TRACE(i);
+        ASSERT_COLUMN_EQ(
+            createConstColumn<Int64>(1, results[i]),
+            executeFunction(
+                "regexp_instr",
+                createConstColumn<String>(1, subjects[i]),
+                createConstColumn<String>(1, "a"),
+                createConstColumn<Int64>(1, positions[i])));
+    }
+    ASSERT_COLUMN_EQ(
+        createColumn<Int64>(results),
+        executeFunction(
+            "regexp_instr",
+            createColumn<String>(subjects),
+            createConstColumn<String>(subjects.size(), "a"),
+            createColumn<Int64>(positions)));
+}
 } // namespace tests
 } // namespace DB
