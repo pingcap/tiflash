@@ -96,4 +96,16 @@ TEST(CollectOutputFieldTypesTest, ExpandColumnIndexEncoding)
         EXPECT_THROW(collectOutputFieldTypes(request), DB::Exception);
     }
 }
+
+TEST(CollectOutputFieldTypesTest, ExpandGroupingExpressionType)
+{
+    auto request = makeExpandRequest(2, encodeColumnIndex(0));
+    auto * grouping_col = request.mutable_root_executor()
+                              ->mutable_expand()
+                              ->mutable_grouping_sets(0)
+                              ->mutable_grouping_exprs(0)
+                              ->mutable_grouping_expr(0);
+    grouping_col->set_tp(tipb::ExprType::Int64);
+    EXPECT_THROW(collectOutputFieldTypes(request), DB::Exception);
+}
 } // namespace DB::tests
