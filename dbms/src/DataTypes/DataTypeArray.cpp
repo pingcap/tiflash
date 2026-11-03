@@ -26,6 +26,8 @@
 #include <IO/WriteHelpers.h>
 #include <Parsers/IAST.h>
 
+#include <limits>
+
 
 namespace DB
 {
@@ -129,25 +131,57 @@ void serializeArraySizesPositionIndependent(const IColumn & column, WriteBuffer 
     }
 }
 
+/// Sizes are deltas. They are checked and accumulated before the column is modified:
+/// a wrapping add such as 2^63 + (2^63 + 4) would otherwise store offsets [2^63, 4],
+/// and the nested column would then be sized from the wrapped last offset.
 void deserializeArraySizesPositionIndependent(IColumn & column, ReadBuffer & istr, size_t limit)
 {
     ColumnArray & column_array = typeid_cast<ColumnArray &>(column);
     ColumnArray::Offsets & offset_values = column_array.getOffsets();
-    size_t initial_size = offset_values.size();
-    offset_values.resize(initial_size + limit);
+    const size_t initial_size = offset_values.size();
+    ColumnArray::Offset current_offset = initial_size == 0 ? 0 : offset_values[initial_size - 1];
 
-    size_t i = initial_size;
-    ColumnArray::Offset current_offset = initial_size ? offset_values[initial_size - 1] : 0;
-    while (i < initial_size + limit && !istr.eof())
+    ColumnArray::Offsets new_offsets;
+    size_t rows_read = 0;
+    while (rows_read < limit && !istr.eof())
     {
         ColumnArray::Offset current_size = 0;
         readIntBinary(current_size, istr);
+        const size_t row = initial_size + rows_read;
+        RUNTIME_CHECK_MSG(
+            current_offset <= std::numeric_limits<ColumnArray::Offset>::max() - current_size,
+            "Corrupt array data: array size {} at row {} overflows offset {}",
+            current_size,
+            row,
+            current_offset);
         current_offset += current_size;
-        offset_values[i] = current_offset;
-        ++i;
+        new_offsets.push_back(current_offset);
+        ++rows_read;
     }
 
-    offset_values.resize(i);
+    if (new_offsets.empty())
+        return;
+
+    offset_values.resize(initial_size + new_offsets.size());
+    for (size_t i = 0; i < new_offsets.size(); ++i)
+        offset_values[initial_size + i] = new_offsets[i];
+}
+
+/// Absolute offsets are stored as-is. They must be non-decreasing so every row's
+/// range is inside the nested column, which is sized from the last offset.
+void checkAbsoluteOffsetsMonotonic(const ColumnArray::Offsets & offset_values)
+{
+    ColumnArray::Offset previous = 0;
+    for (size_t i = 0; i < offset_values.size(); ++i)
+    {
+        RUNTIME_CHECK_MSG(
+            offset_values[i] >= previous,
+            "Corrupt array data: offset {} at row {} is smaller than previous offset {}",
+            offset_values[i],
+            i,
+            previous);
+        previous = offset_values[i];
+    }
 }
 } // namespace
 
@@ -228,59 +262,73 @@ void DataTypeArray::deserializeBinaryBulkWithMultipleStreams(
     SubstreamPath & path) const
 {
     ColumnArray & column_array = typeid_cast<ColumnArray &>(column);
-
-    path.emplace_back(Substream::ArraySizes);
-    if (auto * stream = getter(path))
-    {
-        // `position_independent_encoding == false` indicates that the `column_array.offsets`
-        // is serialized as is, which can provide better performance but only supports
-        // deserialization into an empty column. Conversely, when `position_independent_encoding == true`,
-        // the `column_array.offsets` is encoded into a format that supports deserializing
-        // and appending data into a column containing existing data.
-        // If you are unsure, set position_independent_encoding to true.
-        if (position_independent_encoding)
-            deserializeArraySizesPositionIndependent(column, *stream, limit);
-        else
-        {
-            RUNTIME_CHECK_MSG(
-                column_array.getOffsetsColumn().empty(),
-                "try to deserialize Array type to non-empty column without position independent encoding, type_name={}",
-                getName());
-            DataTypeNumber<ColumnArray::Offset>()
-                .deserializeBinaryBulk(column_array.getOffsetsColumn(), *stream, limit, 0);
-        }
-    }
-
-    path.back() = Substream::ArrayElements;
-
     ColumnArray::Offsets & offset_values = column_array.getOffsets();
     IColumn & nested_column = column_array.getData();
+    const size_t offsets_before = offset_values.size();
+    const size_t nested_before = nested_column.size();
 
-    /// Number of values corresponding with `offset_values` must be read.
-    const size_t last_offset = (offset_values.empty() ? 0 : offset_values.back());
-    if (last_offset < nested_column.size())
-        throw Exception(
-            ErrorCodes::LOGICAL_ERROR,
+    path.emplace_back(Substream::ArraySizes);
+    try
+    {
+        if (auto * stream = getter(path))
+        {
+            // `position_independent_encoding == false` indicates that the `column_array.offsets`
+            // is serialized as is, which can provide better performance but only supports
+            // deserialization into an empty column. Conversely, when `position_independent_encoding == true`,
+            // the `column_array.offsets` is encoded into a format that supports deserializing
+            // and appending data into a column containing existing data.
+            // If you are unsure, set position_independent_encoding to true.
+            if (position_independent_encoding)
+                deserializeArraySizesPositionIndependent(column, *stream, limit);
+            else
+            {
+                RUNTIME_CHECK_MSG(
+                    column_array.getOffsetsColumn().empty(),
+                    "try to deserialize Array type to non-empty column without position independent encoding, "
+                    "type_name={}",
+                    getName());
+                DataTypeNumber<ColumnArray::Offset>()
+                    .deserializeBinaryBulk(column_array.getOffsetsColumn(), *stream, limit, 0);
+                checkAbsoluteOffsetsMonotonic(offset_values);
+            }
+        }
+
+        path.back() = Substream::ArrayElements;
+
+        /// Number of values corresponding with `offset_values` must be read.
+        const size_t last_offset = (offset_values.empty() ? 0 : offset_values.back());
+        RUNTIME_CHECK_MSG(
+            last_offset >= nested_column.size(),
             "Nested column is longer than last offset, last_offset={} nest_column_size={}",
             last_offset,
             nested_column.size());
-    size_t nested_limit = last_offset - nested_column.size();
-    nested->deserializeBinaryBulkWithMultipleStreams(
-        nested_column,
-        getter,
-        nested_limit,
-        0,
-        position_independent_encoding,
-        path);
+        size_t nested_limit = last_offset - nested_column.size();
+        nested->deserializeBinaryBulkWithMultipleStreams(
+            nested_column,
+            getter,
+            nested_limit,
+            0,
+            position_independent_encoding,
+            path);
 
-    /// Check consistency between offsets and elements subcolumns.
-    /// But if elements column is empty - it's ok for columns of Nested types that was added by ALTER.
-    if (!nested_column.empty() && nested_column.size() != last_offset)
-        throw Exception(
-            ErrorCodes::CANNOT_READ_ALL_DATA,
-            "Cannot read all array values: read just {} of {}",
+        /// Offsets are end positions into the nested column. The last offset sizes that
+        /// column, so it has to match, including when no elements were read. An empty
+        /// elements column used to be accepted for Nested columns added by ALTER; those
+        /// offsets would still be passed to ColumnArray::getDataAt and index off the end.
+        RUNTIME_CHECK_MSG(
+            nested_column.size() == last_offset,
+            "Corrupt array data: read {} array elements, last offset is {}",
             nested_column.size(),
             last_offset);
+    }
+    catch (...)
+    {
+        if (offset_values.size() != offsets_before)
+            offset_values.resize(offsets_before);
+        if (nested_column.size() > nested_before)
+            nested_column.popBack(nested_column.size() - nested_before);
+        throw;
+    }
 }
 
 

@@ -152,15 +152,22 @@ StringRef ColumnArray::getDataAt(size_t n) const
       *  since it contains only the data laid in succession, but not the offsets.
       */
 
-    size_t array_size = sizeAt(n);
-    if (array_size == 0)
+    const size_t start = offsetAt(n);
+    const size_t end = getOffsets()[n];
+    const size_t nested_size = getData().size();
+    RUNTIME_CHECK_MSG(
+        end >= start && end <= nested_size,
+        "Array offsets are out of bounds at row {}, start={}, end={}, nested_size={}",
+        n,
+        start,
+        end,
+        nested_size);
+
+    if (end == start)
         return StringRef();
 
-    size_t offset_of_first_elem = offsetAt(n);
-    StringRef first = getData().getDataAtWithTerminatingZero(offset_of_first_elem);
-
-    size_t offset_of_last_elem = getOffsets()[n] - 1;
-    StringRef last = getData().getDataAtWithTerminatingZero(offset_of_last_elem);
+    StringRef first = getData().getDataAtWithTerminatingZero(start);
+    StringRef last = getData().getDataAtWithTerminatingZero(end - 1);
 
     return StringRef(first.data, last.data + last.size - first.data);
 }
