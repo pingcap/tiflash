@@ -65,10 +65,4 @@ UserPtr SecurityManager::getUser(const String & user_name) const
     throw Exception("Unknown user " + user_name, ErrorCodes::UNKNOWN_USER);
 }
 
-bool SecurityManager::hasAccessToDatabase(const std::string & user_name, const std::string & database_name) const
-{
-    auto user = getUser(user_name);
-    return user->databases.empty() || user->databases.count(database_name);
-}
-
 } // namespace DB

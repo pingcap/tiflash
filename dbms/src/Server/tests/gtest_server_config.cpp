@@ -150,9 +150,6 @@ dt_enable_rough_set_filter = false
             ASSERT_NO_THROW(quota_raw_ptr = &ctx.getQuota(););
             ASSERT_NE(quota_raw_ptr, nullptr);
 
-            // Won't block by database access right check
-            ASSERT_NO_THROW(ctx.checkDatabaseAccessRights("system"));
-            ASSERT_NO_THROW(ctx.checkDatabaseAccessRights("test"));
         }
     }
 }

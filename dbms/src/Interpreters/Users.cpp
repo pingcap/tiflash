@@ -36,26 +36,11 @@ User::User(const String & name_)
 User::User(const String & name_, const String & config_elem, Poco::Util::AbstractConfiguration & config)
     : name(name_)
 {
-    // password / password_sha256_hex / networks from legacy ClickHouse users config are ignored.
-    // TiFlash does not enforce those fields; see SecurityManager::authorizeAndGetUser.
+    // Legacy ClickHouse users keys (password*, networks, allow_databases) are ignored.
+    // TiFlash does not enforce password/network ACLs or per-user database access lists.
 
     profile = config.getString(config_elem + ".profile");
     quota = config.getString(config_elem + ".quota");
-
-    /// Fill list of allowed databases.
-    const auto config_sub_elem = config_elem + ".allow_databases";
-    if (config.has(config_sub_elem))
-    {
-        Poco::Util::AbstractConfiguration::Keys config_keys;
-        config.keys(config_sub_elem, config_keys);
-
-        databases.reserve(config_keys.size());
-        for (const auto & key : config_keys)
-        {
-            const auto database_name = config.getString(config_sub_elem + "." + key);
-            databases.insert(database_name);
-        }
-    }
 }
 
 

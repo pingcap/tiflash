@@ -29,12 +29,11 @@ class IPAddress;
 namespace DB
 {
 /** Duties of security manager in TiFlash:
-  * 1) Resolve named users from users config (profile, quota, allow_databases)
-  * 2) Grant access to databases via allow_databases
+  * Resolve named users from users config (profile, quota).
   *
-  * Password / client-IP authentication from ClickHouse was removed as unused for TiFlash.
-  * authorizeAndGetUser keeps the old signature for call-site compatibility but ignores
-  * password and address; see SecurityManager.
+  * Password / client-IP authentication and allow_databases gating from ClickHouse
+  * were removed as unused for TiFlash. authorizeAndGetUser keeps the old signature
+  * for call-site compatibility but ignores password and address; see SecurityManager.
   */
 class ISecurityManager
 {
@@ -52,9 +51,6 @@ public:
 
     /// Just find user
     virtual UserPtr getUser(const String & user_name) const = 0;
-
-    /// Check if the user has access to the database.
-    virtual bool hasAccessToDatabase(const String & user_name, const String & database_name) const = 0;
 
     virtual ~ISecurityManager() {}
 };

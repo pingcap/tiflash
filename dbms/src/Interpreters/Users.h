@@ -18,8 +18,6 @@
 
 #include <Core/Types.h>
 
-#include <unordered_set>
-
 
 namespace Poco
 {
@@ -34,10 +32,10 @@ namespace DB
 {
 /** User settings used by TiFlash.
   *
-  * ClickHouse-style password and client-network ACLs were removed: TiFlash does not
-  * authenticate with users.xml passwords. Transport security uses TiFlashSecurityConfig
-  * (TLS/mTLS). User still carries profile / quota / allow_databases for settings and
-  * coarse database access checks.
+  * ClickHouse-style password, client-network ACLs, and allow_databases gating were removed:
+  * TiFlash does not authenticate with users.xml passwords and does not restrict database
+  * access per user. Transport security uses TiFlashSecurityConfig (TLS/mTLS).
+  * User still carries profile / quota for settings and resource limits.
   */
 struct User
 {
@@ -45,10 +43,6 @@ struct User
 
     String profile;
     String quota;
-
-    /// List of allowed databases. Empty means all databases are allowed.
-    using DatabaseSet = std::unordered_set<std::string>;
-    DatabaseSet databases;
 
     User(const String & name_);
     User(const String & name_, const String & config_elem, Poco::Util::AbstractConfiguration & config);

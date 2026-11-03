@@ -23,8 +23,8 @@
 namespace DB
 {
 /** Default implementation of security manager used by native server application.
-  * Manages fixed set of users listed in users configuration (profile / quota / allow_databases).
-  * Does not enforce password or client-network ACLs (removed as unused for TiFlash).
+  * Manages fixed set of users listed in users configuration (profile / quota).
+  * Does not enforce password, client-network ACLs, or allow_databases (removed as unused for TiFlash).
   */
 class SecurityManager : public ISecurityManager
 {
@@ -39,8 +39,6 @@ public:
         const override;
 
     UserPtr getUser(const String & user_name) const override;
-
-    bool hasAccessToDatabase(const String & user_name, const String & database_name) const override;
 };
 
 } // namespace DB
