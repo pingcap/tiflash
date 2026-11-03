@@ -55,7 +55,7 @@ services:
       - "pd0"
     restart: on-failure
   tidb0:
-    image: ${TIDB_IMAGE:?TIDB_IMAGE must be set}-failpoint
+    image: ${TIDB_FAILPOINT_IMAGE:?TIDB_FAILPOINT_IMAGE must be set}
     security_opt:
       - seccomp:unconfined
     environment:
