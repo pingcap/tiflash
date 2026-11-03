@@ -16,7 +16,6 @@
 
 #include <Interpreters/Quota.h>
 #include <Interpreters/Users.h>
-#include <Poco/Util/AbstractConfiguration.h>
 
 
 namespace DB
@@ -32,16 +31,6 @@ User::User(const String & name_)
     , profile(User::DEFAULT_USER_NAME)
     , quota(QuotaForInterval::DEFAULT_QUOTA_NAME)
 {}
-
-User::User(const String & name_, const String & config_elem, Poco::Util::AbstractConfiguration & config)
-    : name(name_)
-{
-    // Legacy ClickHouse users keys (password*, networks, allow_databases) are ignored.
-    // TiFlash does not enforce password/network ACLs or per-user database access lists.
-
-    profile = config.getString(config_elem + ".profile");
-    quota = config.getString(config_elem + ".quota");
-}
 
 
 } // namespace DB

@@ -66,7 +66,7 @@ TEST_F(UsersConfigParserTest, ParseConfigs)
 try
 {
     Strings tests = {
-        // case for original user settings
+        // case for legacy users.* settings (ignored except profiles/quotas)
         R"(
 [users]
 [users.default]

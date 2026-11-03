@@ -23,8 +23,9 @@
 namespace DB
 {
 /** Default implementation of security manager used by native server application.
-  * Manages fixed set of users listed in users configuration (profile / quota).
-  * Does not enforce password, client-network ACLs, or allow_databases (removed as unused for TiFlash).
+  * Exposes only the built-in "default" user (profile / quota).
+  * Does not load users / users.* from config, and does not enforce password,
+  * client-network ACLs, or allow_databases (removed as unused for TiFlash).
   */
 class SecurityManager : public ISecurityManager
 {

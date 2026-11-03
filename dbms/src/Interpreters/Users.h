@@ -19,21 +19,13 @@
 #include <Core/Types.h>
 
 
-namespace Poco
-{
-namespace Util
-{
-class AbstractConfiguration;
-}
-} // namespace Poco
-
-
 namespace DB
 {
 /** User settings used by TiFlash.
   *
-  * ClickHouse-style password, client-network ACLs, and allow_databases gating were removed
-  * TiFlash transport security uses TiFlashSecurityConfig (TLS/mTLS).
+  * ClickHouse-style multi-user config (users / users.*), passwords, client-network
+  * ACLs, and allow_databases gating were removed: TiFlash only keeps a built-in
+  * "default" user. Transport security uses TiFlashSecurityConfig (TLS/mTLS).
   * User still carries profile / quota for settings and resource limits.
   */
 struct User
@@ -44,7 +36,6 @@ struct User
     String quota;
 
     User(const String & name_);
-    User(const String & name_, const String & config_elem, Poco::Util::AbstractConfiguration & config);
 
     constexpr static const char * DEFAULT_USER_NAME = "default";
     static const User & getDefaultUser();

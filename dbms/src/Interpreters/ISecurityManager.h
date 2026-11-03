@@ -18,10 +18,19 @@
 
 #include <Interpreters/Users.h>
 
+namespace Poco
+{
+namespace Util
+{
+class AbstractConfiguration;
+}
+} // namespace Poco
+
 namespace DB
 {
 /** Duties of security manager in TiFlash:
-  * Resolve named users from users config (profile, quota).
+  * Resolve the built-in "default" user (profile, quota). Legacy users / users.*
+  * entries in users config are not loaded.
   *
   * Password / client-IP authentication and allow_databases gating from ClickHouse
   * were removed as unused for TiFlash. Callers that still pass a password for
@@ -32,6 +41,7 @@ class ISecurityManager
 public:
     using UserPtr = std::shared_ptr<const User>;
 
+    /// Install / refresh known users. Config may still carry legacy users.*; ignored.
     virtual void loadFromConfig(Poco::Util::AbstractConfiguration & config) = 0;
 
     /// Look up a user by name (profile / quota); no auth checks.

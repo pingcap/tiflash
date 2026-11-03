@@ -640,7 +640,7 @@ void Context::setUsersConfig(const ConfigurationPtr & config)
 {
     auto lock = getLock();
     shared->users_config = config;
-    // parse "users.*"
+    // Install built-in "default" user (legacy users / users.* are ignored).
     shared->security_manager->loadFromConfig(*shared->users_config);
     // parse "quotas.*"
     shared->quotas.loadFromConfig(*shared->users_config);

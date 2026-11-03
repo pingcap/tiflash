@@ -16,8 +16,6 @@
 
 #include <Common/Exception.h>
 #include <Interpreters/SecurityManager.h>
-#include <Poco/Util/AbstractConfiguration.h>
-#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -28,23 +26,11 @@ extern const int UNKNOWN_USER;
 
 using UserPtr = SecurityManager::UserPtr;
 
-void SecurityManager::loadFromConfig(Poco::Util::AbstractConfiguration & config)
+void SecurityManager::loadFromConfig(Poco::Util::AbstractConfiguration & /*config*/)
 {
-    Container new_users;
-
-    Poco::Util::AbstractConfiguration::Keys config_keys;
-    config.keys("users", config_keys);
-
-    for (const std::string & key : config_keys)
-    {
-        auto user = std::make_shared<const User>(key, "users." + key, config);
-        new_users.emplace(key, std::move(user));
-    }
-    // Insert a "default" user if not defined
-    if (new_users.count(User::DEFAULT_USER_NAME) == 0)
-        new_users.emplace(User::DEFAULT_USER_NAME, std::make_shared<const User>(User::getDefaultUser()));
-
-    users = std::move(new_users);
+    // TiFlash only uses the built-in "default" user (profile / quota).
+    // Legacy users / users.* entries in users config are ignored.
+    users = {{User::DEFAULT_USER_NAME, std::make_shared<const User>(User::getDefaultUser())}};
 }
 
 UserPtr SecurityManager::getUser(const String & user_name) const
