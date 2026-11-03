@@ -28,6 +28,9 @@
 #include <Functions/IFunction.h>
 #include <common/preciseExp10.h>
 #include <fmt/core.h>
+#include <samefn.h>
+
+#include <concepts>
 
 namespace DB
 {
@@ -35,6 +38,10 @@ namespace ErrorCodes
 {
 extern const int ILLEGAL_COLUMN;
 }
+
+/// An Impl that computes a whole column in one call, `executeBatch(src, dst, n)`.
+template <typename Impl, typename T>
+concept MathImplWithBatch = requires(const T * src, Float64 * dst, size_t n) { Impl::executeBatch(src, dst, n); };
 
 template <typename Impl>
 class FunctionMathNullaryConstFloat64 : public IFunction
@@ -135,6 +142,11 @@ private:
 
                 block.getByPosition(result).column = ColumnNullable::create(std::move(dst), std::move(null_map));
             }
+            else if constexpr (MathImplWithBatch<Impl, FieldType>)
+            {
+                Impl::executeBatch(src_data.data(), dst_data.data(), src_size);
+                block.getByPosition(result).column = std::move(dst);
+            }
             else
             {
                 for (size_t i = 0; i < rows_size; i += Impl::rows_per_iteration)
@@ -212,6 +224,36 @@ struct UnaryFunctionPlain
 };
 
 #define UnaryFunctionVectorized UnaryFunctionPlain
+
+/// A function computed by samefn (samefn.h), shared with TiDB and TiKV so that it gives the same
+/// bits in every engine and on every CPU: `Function` for one row, `Batch` for a whole column.
+template <typename Name, Float64(Function)(Float64), void(Batch)(const Float64 *, Float64 *, size_t)>
+struct UnaryFunctionSamefn
+{
+    static constexpr auto name = Name::name;
+    static constexpr auto rows_per_iteration = 1;
+
+    template <typename T>
+    static void execute(const T * src, Float64 * dst)
+    {
+        dst[0] = Function(static_cast<Float64>(src[0]));
+    }
+
+    template <typename T>
+    static void executeBatch(const T * src, Float64 * dst, size_t n)
+    {
+        if constexpr (std::is_same_v<T, Float64>)
+        {
+            Batch(src, dst, n);
+        }
+        else
+        {
+            for (size_t i = 0; i < n; ++i)
+                dst[i] = static_cast<Float64>(src[i]);
+            Batch(dst, dst, n);
+        }
+    }
+};
 #define UnaryFunctionNullableVectorized UnaryFunctionNullablePlain
 
 template <typename Impl, bool Nullable = false>
@@ -770,7 +812,7 @@ using FunctionSqrt = FunctionMathUnaryFloat64Nullable<UnaryFunctionNullableVecto
 
 using FunctionCbrt = FunctionMathUnaryFloat64<UnaryFunctionVectorized<CbrtName, cbrt>>;
 
-using FunctionSin = FunctionMathUnaryFloat64<UnaryFunctionVectorized<SinName, sin>>;
+using FunctionSin = FunctionMathUnaryFloat64<UnaryFunctionSamefn<SinName, samefn_sin_v1, samefn_sin_batch_v1>>;
 using FunctionCos = FunctionMathUnaryFloat64<UnaryFunctionVectorized<CosName, cos>>;
 using FunctionTan = FunctionMathUnaryFloat64<UnaryFunctionVectorized<TanName, tan>>;
 using FunctionAsin = FunctionMathUnaryFloat64<UnaryFunctionVectorized<AsinName, asin>>;
