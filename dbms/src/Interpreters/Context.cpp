@@ -715,14 +715,16 @@ void Context::calculateUserSettings()
 
 void Context::setUser(
     const String & name,
-    const String & password,
+    const String & /*password*/,
     const Poco::Net::SocketAddress & address,
     const String & quota_key)
 {
     auto lock = getLock();
 
-    // password is accepted for API / protocol compatibility; auth ignores it.
-    auto user_props = shared->security_manager->authorizeAndGetUser(name, password, address.host());
+    // password / peer address are accepted for API / protocol compatibility;
+    // SecurityManager only resolves the named user (profile / quota).
+    // Transport auth is TiFlashSecurityConfig (TLS/mTLS).
+    auto user_props = shared->security_manager->getUser(name);
 
     client_info.current_user = name;
     client_info.current_address = address;

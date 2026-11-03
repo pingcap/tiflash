@@ -18,22 +18,14 @@
 
 #include <Interpreters/Users.h>
 
-namespace Poco
-{
-namespace Net
-{
-class IPAddress;
-}
-} // namespace Poco
-
 namespace DB
 {
 /** Duties of security manager in TiFlash:
   * Resolve named users from users config (profile, quota).
   *
   * Password / client-IP authentication and allow_databases gating from ClickHouse
-  * were removed as unused for TiFlash. authorizeAndGetUser keeps the old signature
-  * for call-site compatibility but ignores password and address; see SecurityManager.
+  * were removed as unused for TiFlash. Callers that still pass a password for
+  * protocol compatibility (Context::setUser) do not go through SecurityManager.
   */
 class ISecurityManager
 {
@@ -42,14 +34,7 @@ public:
 
     virtual void loadFromConfig(Poco::Util::AbstractConfiguration & config) = 0;
 
-    /// Resolve user; password and address are ignored (legacy ClickHouse auth removed).
-    virtual UserPtr authorizeAndGetUser(
-        const String & user_name,
-        const String & password,
-        const Poco::Net::IPAddress & address) const
-        = 0;
-
-    /// Just find user
+    /// Look up a user by name (profile / quota); no auth checks.
     virtual UserPtr getUser(const String & user_name) const = 0;
 
     virtual ~ISecurityManager() {}

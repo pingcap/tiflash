@@ -47,17 +47,6 @@ void SecurityManager::loadFromConfig(Poco::Util::AbstractConfiguration & config)
     users = std::move(new_users);
 }
 
-UserPtr SecurityManager::authorizeAndGetUser(
-    const String & user_name,
-    const String & /*password*/,
-    const Poco::Net::IPAddress & /*address*/) const
-{
-    // TiFlash does not enforce ClickHouse-style password or client-network ACLs.
-    // Password / networks config keys are ignored when loading users.
-    // Transport authentication is handled by TiFlashSecurityConfig (TLS/mTLS).
-    return getUser(user_name);
-}
-
 UserPtr SecurityManager::getUser(const String & user_name) const
 {
     if (auto it = users.find(user_name); likely(users.end() != it))

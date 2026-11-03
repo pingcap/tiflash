@@ -254,7 +254,7 @@ public:
     TiFlashSecurityConfigPtr getSecurityConfig();
 
     /// Must be called before getClientInfo.
-    /// `password` is kept for call-site / protocol compatibility; SecurityManager ignores it.
+    /// `password` is kept for call-site / protocol compatibility; not passed to SecurityManager.
     void setUser(
         const String & name,
         const String & password,
