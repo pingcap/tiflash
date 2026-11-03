@@ -129,9 +129,10 @@ bool collectForExpand(std::vector<tipb::FieldType> & out_field_types, const tipb
             for (const auto & grouping_col : grouping_exprs.grouping_expr())
             {
                 // assert that: grouping_col must be the column ref guaranteed by tidb.
+                RUNTIME_CHECK_MSG(grouping_col.val().size() == sizeof(Int64), "Invalid column index encoding");
                 auto column_index = decodeDAGInt64(grouping_col.val());
                 RUNTIME_CHECK_MSG(
-                    column_index >= 0 || column_index < static_cast<Int64>(out_child_fields.size()),
+                    column_index >= 0 && column_index < static_cast<Int64>(out_child_fields.size()),
                     "Column index out of bound");
                 out_child_fields[column_index].set_flag(
                     out_child_fields[column_index].flag() & (~TiDB::ColumnFlagNotNull));
