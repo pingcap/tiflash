@@ -96,4 +96,18 @@ inline RegionPtr makeRegion(RegionMeta && meta)
     return std::make_shared<Region>(std::move(meta), nullptr);
 }
 
+inline RegionPtr makeRegionForTable(
+    UInt64 region_id,
+    TableID table_id,
+    HandleID start,
+    HandleID end,
+    const TiFlashRaftProxyHelper * proxy_helper = nullptr)
+{
+    return makeRegion(
+        region_id,
+        RecordKVFormat::genKey(table_id, start).toString(),
+        RecordKVFormat::genKey(table_id, end).toString(),
+        proxy_helper);
+}
+
 } // namespace DB::RegionBench

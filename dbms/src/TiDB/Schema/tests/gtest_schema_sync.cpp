@@ -39,12 +39,9 @@
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/registerStorages.h>
 #include <TestUtils/TiFlashTestBasic.h>
-<<<<<<< HEAD
 #include <TestUtils/TiFlashTestEnv.h>
-=======
 #include <TiDB/Decode/RowCodec.h>
 #include <TiDB/Schema/SchemaBuilder.h>
->>>>>>> 30bfe9ee8d (Storages: skip historical extra columns using schema read watermark (#11168))
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <common/defines.h>
@@ -427,7 +424,7 @@ TEST_F(SchemaSyncTest, SchemaReadWatermarkApplyAfterSchemaFailure)
                         if (replace_column_id)
                         {
                             const auto row_handle
-                                = (*block.getByName(MutSup::extra_handle_column_name).column)[row].safeGet<Int64>();
+                                = (*block.getByName(EXTRA_HANDLE_COLUMN_NAME).column)[row].safeGet<Int64>();
                             EXPECT_EQ(
                                 (*block.getByName("col3").column)[row].safeGet<Int64>(),
                                 row_handle <= 2 ? 0 : 444);
@@ -829,11 +826,7 @@ TEST_F(SchemaWatermarkBoundaryTest, SnapshotConversionDoesNotUseApplyPermission)
         EXPECT_THROW(
             region->handleWriteRaftCmd({&key_view, &value_view, &type, &cf, 1}, 6, 1, global_ctx.getTMTContext()),
             DB::Exception);
-        region->insertFromSnap(
-            global_ctx.getTMTContext(),
-            "default",
-            RecordKVFormat::genKey(table_id, 1, 140),
-            TiKVValue::copyFrom(value->getStr()));
+        region->insert("default", RecordKVFormat::genKey(table_id, 1, 140), TiKVValue::copyFrom(value->getStr()));
         auto cached = ReadRegionCommitCache(region, true);
         ASSERT_TRUE(cached.has_value());
         ASSERT_EQ(cached->size(), 1);
@@ -1254,7 +1247,6 @@ TEST_F(SchemaWatermarkBoundaryTest, HistoricalMVCCFallbackPublishesLatestSchema)
     pingcap::kv::Cluster cluster;
     // Stop the default mock cluster's workers before replacing its RPC/PD
     // endpoints. This test uses synchronous RPCs only.
-    cluster.lock_resolver->stopBgResolve();
     cluster.rpc_client->stop();
     cluster.mpp_prober->stop();
     cluster.thread_pool->stop();

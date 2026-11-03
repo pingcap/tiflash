@@ -16,12 +16,8 @@
 #include <Common/setThreadName.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgTools.h>
-<<<<<<< HEAD
-=======
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/KVStore/Decode/RegionTable.h>
-#include <Storages/KVStore/MultiRaft/ApplySnapshot.h>
->>>>>>> 30bfe9ee8d (Storages: skip historical extra columns using schema read watermark (#11168))
 #include <Storages/KVStore/MultiRaft/RegionsRangeIndex.h>
 #include <Storages/KVStore/tests/kvstore_helper.h>
 #include <TiDB/Decode/RowCodec.h>
@@ -1562,7 +1558,7 @@ protected:
             const SSTView view{ColumnFamilyType::Write, BaseBuffView{region_id_str.data(), region_id_str.size()}};
             if (source == Source::Snapshot)
             {
-                auto region = makeRegionForTable(region_id, table_id, 0, 100, getKVS().getProxyHelper());
+                auto region = RegionBench::makeRegionForTable(region_id, table_id, 0, 100, getKVS().getProxyHelper());
                 RegionBench::handleApplySnapshot(
                     getKVS(),
                     region->cloneMetaRegion(),
@@ -1593,8 +1589,7 @@ protected:
         {
             WriteBufferFromOwnString row;
             encodeRowV2(write_info, {Int64(110 + handle), Int64(222)}, row);
-            region->insertFromSnap(
-                tmt,
+            region->insert(
                 "default",
                 RecordKVFormat::genKey(table_id, handle, base + 140),
                 TiKVValue(row.releaseStr()));
