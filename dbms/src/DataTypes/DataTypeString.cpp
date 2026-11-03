@@ -400,11 +400,22 @@ size_t strSizeToOffset(
         "String column offset {} exceeds char buffer size {} before decoding more data",
         base,
         chars_size);
+    // resize() allocates padding on both sides and rounds that byte count up to a power of
+    // two. A sum that merely fits in size_t can still wrap that request down to a short buffer.
+    const auto max_chars = ColumnString::Chars_t::maxReserveSize();
     RUNTIME_CHECK_MSG(
-        added <= static_cast<Offset>(std::numeric_limits<size_t>::max() - chars_size),
-        "Corrupt StringV2 data: char buffer size {} plus {} bytes overflows",
+        chars_size <= max_chars && added <= max_chars - chars_size,
+        "Corrupt StringV2 data: char buffer size {} plus {} bytes exceeds the allocatable limit {}",
         chars_size,
-        added);
+        added,
+        max_chars);
+    const auto max_rows = ColumnString::Offsets::maxReserveSize();
+    RUNTIME_CHECK_MSG(
+        initial_size <= max_rows && str_sizes.size() <= max_rows - initial_size,
+        "Corrupt StringV2 data: row count {} plus {} exceeds the allocatable limit {}",
+        initial_size,
+        str_sizes.size(),
+        max_rows);
 
     chars_offsets.resize(initial_size + str_sizes.size());
     auto chars_offsets_pos = chars_offsets.begin() + initial_size;
@@ -447,8 +458,10 @@ size_t deserializeOffsetsBinary(
 {
     if (limit == 0)
         return 0;
+    // The size array is allocated for `limit` elements before any bytes are read. Padding is
+    // included in that allocation, so `limit * sizeof(Offset)` fitting in size_t is not enough.
     RUNTIME_CHECK_MSG(
-        limit <= std::numeric_limits<size_t>::max() / sizeof(Offset),
+        limit <= PaddedPODArray<Offset>::maxAllocSize(),
         "Corrupt StringV2 data: row count {} is too large",
         limit);
 

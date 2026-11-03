@@ -240,6 +240,16 @@ try
     expect_rejected({1ULL << 63, (1ULL << 63) + 4}, String("abcd", 4), 2, ErrorCodes::LOGICAL_ERROR);
     // Appended to a column whose offset is already 1, this size overflows the running offset.
     expect_rejected({std::numeric_limits<UInt64>::max()}, {}, 1, ErrorCodes::LOGICAL_ERROR);
+    // One byte is already stored. 2^63 - 1 fits in size_t but the padded power-of-two allocation does not.
+    expect_rejected({(1ULL << 63) - 1}, {}, 1, ErrorCodes::LOGICAL_ERROR);
+    // One byte is already stored. UINT64_MAX - 1 passes a size_t sum check and wraps the real allocation to 128 bytes.
+    expect_rejected({std::numeric_limits<UInt64>::max() - 1}, {}, 1, ErrorCodes::LOGICAL_ERROR);
+    // `limit` is allocated up front. The largest multiple of sizeof(UInt64) still overflows once padding is added.
+    expect_rejected(
+        {1},
+        String(1, '\0'),
+        std::numeric_limits<size_t>::max() / sizeof(UInt64),
+        ErrorCodes::LOGICAL_ERROR);
     // The size is valid, but the character stream is shorter than that size.
     expect_rejected({4}, String(1, 'a'), 1, ErrorCodes::CANNOT_READ_ALL_DATA);
 
