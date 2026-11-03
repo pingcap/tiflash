@@ -15,27 +15,15 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <IO/Buffer/HexWriteBuffer.h>
-#include <IO/Buffer/WriteBufferFromString.h>
-#include <IO/WriteHelpers.h>
 #include <Interpreters/SecurityManager.h>
-#include <Poco/Net/IPAddress.h>
-#include <Poco/String.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <common/logger_useful.h>
-#include <openssl/sha.h>
 
 namespace DB
 {
 namespace ErrorCodes
 {
-extern const int DNS_ERROR;
-extern const int UNKNOWN_ADDRESS_PATTERN_TYPE;
 extern const int UNKNOWN_USER;
-extern const int REQUIRED_PASSWORD;
-extern const int WRONG_PASSWORD;
-extern const int IP_ADDRESS_NOT_ALLOWED;
-extern const int BAD_ARGUMENTS;
 } // namespace ErrorCodes
 
 using UserPtr = SecurityManager::UserPtr;
@@ -61,55 +49,13 @@ void SecurityManager::loadFromConfig(Poco::Util::AbstractConfiguration & config)
 
 UserPtr SecurityManager::authorizeAndGetUser(
     const String & user_name,
-    const String & password,
-    const Poco::Net::IPAddress & address) const
+    const String & /*password*/,
+    const Poco::Net::IPAddress & /*address*/) const
 {
-    auto user = getUser(user_name);
-
-    // A shortcut for TiFlash, bypass all checks by default
-    if (likely(user->password.empty()))
-        return user;
-
-    // These code path below for authentication is useless for TiFlash
-    if (!user->addresses.contains(address))
-        throw Exception(
-            "User " + user_name + " is not allowed to connect from address " + address.toString(),
-            ErrorCodes::IP_ADDRESS_NOT_ALLOWED);
-
-    auto on_wrong_password = [&]() {
-        if (password.empty())
-            throw Exception("Password required for user " + user_name, ErrorCodes::REQUIRED_PASSWORD);
-        else
-            throw Exception("Wrong password for user " + user_name, ErrorCodes::WRONG_PASSWORD);
-    };
-
-    if (!user->password_sha256_hex.empty())
-    {
-        unsigned char hash[32];
-
-        SHA256_CTX ctx;
-        SHA256_Init(&ctx);
-        SHA256_Update(&ctx, reinterpret_cast<const unsigned char *>(password.data()), password.size());
-        SHA256_Final(hash, &ctx);
-
-        String hash_hex;
-        {
-            WriteBufferFromString buf(hash_hex);
-            HexWriteBuffer hex_buf(buf);
-            hex_buf.write(reinterpret_cast<const char *>(hash), sizeof(hash));
-        }
-
-        Poco::toLowerInPlace(hash_hex);
-
-        if (hash_hex != user->password_sha256_hex)
-            on_wrong_password();
-    }
-    else if (password != user->password)
-    {
-        on_wrong_password();
-    }
-
-    return user;
+    // TiFlash does not enforce ClickHouse-style password or client-network ACLs.
+    // Password / networks config keys are ignored when loading users.
+    // Transport authentication is handled by TiFlashSecurityConfig (TLS/mTLS).
+    return getUser(user_name);
 }
 
 UserPtr SecurityManager::getUser(const String & user_name) const

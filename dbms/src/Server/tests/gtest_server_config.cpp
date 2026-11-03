@@ -138,7 +138,7 @@ dt_enable_rough_set_filter = false
             // Ensure "default" user can build connection
             Poco::Net::SocketAddress addr(t_addr);
 
-            // `setUser` will check user, password, address, update settings and quota for current user
+            // `setUser` resolves the user (password/network ACLs are not enforced), updates settings and quota
             ASSERT_NO_THROW(ctx.setUser("default", "", addr, ""));
             const auto & settings = ctx.getSettingsRef();
             if (i == 2)

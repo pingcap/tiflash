@@ -722,11 +722,11 @@ void Context::setUser(
 {
     auto lock = getLock();
 
+    // password is accepted for API / protocol compatibility; auth ignores it.
     auto user_props = shared->security_manager->authorizeAndGetUser(name, password, address.host());
 
     client_info.current_user = name;
     client_info.current_address = address;
-    client_info.current_password = password;
 
     if (!quota_key.empty())
         client_info.quota_key = quota_key;
