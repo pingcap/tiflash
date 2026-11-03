@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Logger.h>
 #include <Interpreters/Settings.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -79,7 +81,7 @@ void Settings::set(const String & name, const String & value)
     APPLY_FOR_SETTINGS(TRY_SET)
     else
     {
-        throw Exception("Unknown setting " + name, ErrorCodes::UNKNOWN_SETTING);
+        LOG_ERROR(Logger::get(), "Unknown setting, name={}", name);
     }
 
 #undef TRY_SET
