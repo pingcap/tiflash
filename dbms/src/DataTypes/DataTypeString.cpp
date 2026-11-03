@@ -17,6 +17,7 @@
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
+#include <Common/Exception.h>
 #include <Common/typeid_cast.h>
 #include <Core/Defines.h>
 #include <DataTypes/DataTypeFactory.h>
@@ -26,6 +27,7 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/FormatVersion.h>
 
+#include <limits>
 #include <magic_enum.hpp>
 
 #if __SSE2__
@@ -361,19 +363,56 @@ PaddedPODArray<Offset> offsetToStrSize(
     return str_sizes;
 }
 
-void strSizeToOffset(const PaddedPODArray<Offset> & str_sizes, ColumnString::Offsets & chars_offsets)
+/// `chars_size` is the current char buffer size. Sizes are applied only after they are
+/// proven to keep every offset inside the buffer that `deserializeCharsBinary` will allocate.
+size_t strSizeToOffset(
+    const PaddedPODArray<Offset> & str_sizes,
+    ColumnString::Offsets & chars_offsets,
+    size_t chars_size)
 {
-    assert(!str_sizes.empty());
+    // offsets[-1] is the left padding and is defined as 0.
     assert(chars_offsets[-1] == 0);
+    if (str_sizes.empty())
+        return 0;
+
     const auto initial_size = chars_offsets.size();
+    const Offset base = initial_size == 0 ? 0 : chars_offsets.back();
+    Offset running = base;
+    for (size_t i = 0; i < str_sizes.size(); ++i)
+    {
+        const Offset sz = str_sizes[i];
+        const auto row = initial_size + i;
+        // Each size includes the terminating zero. Zero makes sizeAt() - 1 wrap to
+        // SIZE_MAX, and a wrapping sum allocates a short char buffer with offsets past its end.
+        RUNTIME_CHECK_MSG(sz >= 1, "Corrupt StringV2 data: string size at row {} is {}, expected at least 1", row, sz);
+        RUNTIME_CHECK_MSG(
+            running <= std::numeric_limits<Offset>::max() - sz,
+            "Corrupt StringV2 data: string size {} at row {} overflows char offset {}",
+            sz,
+            row,
+            running);
+        running += sz;
+    }
+
+    const Offset added = running - base;
+    RUNTIME_CHECK_MSG(
+        base <= chars_size,
+        "String column offset {} exceeds char buffer size {} before decoding more data",
+        base,
+        chars_size);
+    RUNTIME_CHECK_MSG(
+        added <= static_cast<Offset>(std::numeric_limits<size_t>::max() - chars_size),
+        "Corrupt StringV2 data: char buffer size {} plus {} bytes overflows",
+        chars_size,
+        added);
+
     chars_offsets.resize(initial_size + str_sizes.size());
     auto chars_offsets_pos = chars_offsets.begin() + initial_size;
     // Cannot be vectorize by compiler because chars_offsets[i] depends on chars_offsets[i-1]
     // #pragma clang loop vectorize(enable)
     for (ssize_t i = 0; i < static_cast<ssize_t>(str_sizes.size()); ++i)
-    {
         chars_offsets_pos[i] = str_sizes[i] + chars_offsets_pos[i - 1];
-    }
+    return static_cast<size_t>(added);
 }
 
 std::pair<size_t, size_t> serializeOffsetsBinary(
@@ -400,13 +439,31 @@ void serializeCharsBinary(const ColumnString::Chars_t & chars, WriteBuffer & ost
     ostr.write(reinterpret_cast<const char *>(&chars[begin]), end - begin);
 }
 
-size_t deserializeOffsetsBinary(ColumnString::Offsets & chars_offsets, ReadBuffer & istr, size_t limit)
+size_t deserializeOffsetsBinary(
+    ColumnString::Offsets & chars_offsets,
+    size_t chars_size,
+    ReadBuffer & istr,
+    size_t limit)
 {
+    if (limit == 0)
+        return 0;
+    RUNTIME_CHECK_MSG(
+        limit <= std::numeric_limits<size_t>::max() / sizeof(Offset),
+        "Corrupt StringV2 data: row count {} is too large",
+        limit);
+
+    const auto bytes_to_read = sizeof(Offset) * limit;
     PaddedPODArray<Offset> str_sizes(limit);
-    const auto size = istr.readBig(reinterpret_cast<char *>(str_sizes.data()), sizeof(Offset) * limit);
-    str_sizes.resize(size / sizeof(Offset));
-    strSizeToOffset(str_sizes, chars_offsets);
-    return std::accumulate(str_sizes.begin(), str_sizes.end(), 0uz);
+    const auto bytes_read = istr.readBig(reinterpret_cast<char *>(str_sizes.data()), bytes_to_read);
+    // `limit` is an upper bound. A final batch may end before that many rows, which is how
+    // callers such as DataTypeStringTest.Concat read the tail. A torn trailing size is not.
+    RUNTIME_CHECK_MSG(
+        bytes_read % sizeof(Offset) == 0,
+        "Corrupt StringV2 data: string size stream length {} is not a multiple of {}",
+        bytes_read,
+        sizeof(Offset));
+    str_sizes.resize(bytes_read / sizeof(Offset));
+    return strSizeToOffset(str_sizes, chars_offsets, chars_size);
 }
 
 void deserializeCharsBinary(ColumnString::Chars_t & chars, ReadBuffer & istr, size_t bytes)
@@ -439,8 +496,19 @@ void deserializeBinaryBulkV2(IColumn & column, ReadBuffer & offsets_stream, Read
     auto & column_string = typeid_cast<ColumnString &>(column);
     auto & chars = column_string.getChars();
     auto & offsets = column_string.getOffsets();
-    auto bytes = deserializeOffsetsBinary(offsets, offsets_stream, limit);
-    deserializeCharsBinary(chars, chars_stream, bytes);
+    const auto initial_offsets_size = offsets.size();
+    const auto initial_chars_size = chars.size();
+    try
+    {
+        const auto bytes = deserializeOffsetsBinary(offsets, initial_chars_size, offsets_stream, limit);
+        deserializeCharsBinary(chars, chars_stream, bytes);
+    }
+    catch (...)
+    {
+        offsets.resize(initial_offsets_size);
+        chars.resize(initial_chars_size);
+        throw;
+    }
 }
 
 DataTypeString::SerdesFormat getDefaultByStorageFormat(StorageFormatVersion current)
