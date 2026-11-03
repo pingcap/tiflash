@@ -328,6 +328,20 @@ protected:
 public:
     using value_type = T;
 
+    /// `PODArray(n)` allocates `n * sizeof(T) + padding` bytes with no further rounding.
+    static constexpr size_t maxAllocSize()
+    {
+        return (static_cast<size_t>(-1) - (Base::pad_left + Base::pad_right)) / sizeof(T);
+    }
+
+    /// `resize`/`reserve` round that padded byte count up to a power of two. The rounding
+    /// yields 0 once the high bit is set, so the largest safe byte count is 2^(bitwidth-1).
+    static constexpr size_t maxReserveSize()
+    {
+        constexpr size_t max_bytes = size_t{1} << (sizeof(size_t) * 8 - 1);
+        return (max_bytes - (Base::pad_left + Base::pad_right)) / sizeof(T);
+    }
+
     /// You can not just use `typedef`, because there is ambiguity for the constructors and `assign` functions.
     struct iterator : public boost::iterator_adaptor<iterator, T *>
     {
