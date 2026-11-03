@@ -149,7 +149,6 @@ dt_enable_rough_set_filter = false
             QuotaForIntervals * quota_raw_ptr = nullptr;
             ASSERT_NO_THROW(quota_raw_ptr = &ctx.getQuota(););
             ASSERT_NE(quota_raw_ptr, nullptr);
-
         }
     }
 }
