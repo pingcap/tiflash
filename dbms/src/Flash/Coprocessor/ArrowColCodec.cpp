@@ -39,6 +39,7 @@ using TiDB::ColumnInfo;
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
+extern const int INCORRECT_DATA;
 extern const int UNKNOWN_EXCEPTION;
 extern const int NOT_IMPLEMENTED;
 } // namespace ErrorCodes
@@ -709,6 +710,10 @@ const char * arrowDecimalColToFlashCol(
         pos += 1;
         UInt8 digits_frac = toLittleEndian(*(reinterpret_cast<const UInt8 *>(pos)));
         pos += 1;
+        const auto word_count = (digits_int + DIGITS_PER_WORD - 1) / DIGITS_PER_WORD
+            + (digits_frac + DIGITS_PER_WORD - 1) / DIGITS_PER_WORD;
+        if (word_count > MAX_WORD_BUF_LEN)
+            throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk decimal digits exceed its word buffer");
         //UInt8 result_frac = toLittleEndian(*(reinterpret_cast<const UInt8 *>(pos)));
         pos += 1;
         UInt8 negative = toLittleEndian(*(reinterpret_cast<const UInt8 *>(pos)));

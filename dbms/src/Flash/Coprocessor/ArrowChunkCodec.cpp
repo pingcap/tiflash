@@ -12,13 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/ArrowColCodec.h>
-#include <IO/copyData.h>
+#include <IO/Buffer/ReadBufferFromString.h>
+#include <IO/ReadHelpers.h>
 #include <TiDB/Decode/TypeMapping.h>
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int INCORRECT_DATA;
+}
+
+namespace
+{
+template <typename T>
+T readArrowValue(ReadBuffer & input)
+{
+    T value;
+    readIntBinary(value, input);
+    return toLittleEndian(value);
+}
+} // namespace
+
 class ArrowChunkCodecStream : public ChunkCodecStream
 {
 public:
@@ -47,45 +65,86 @@ void ArrowChunkCodecStream::encode(const Block & block, size_t start, size_t end
 
 Block ArrowChunkCodec::decode(const String & row_data, const DAGSchema & schema)
 {
-    const char * start = row_data.c_str();
-    const char * pos = start;
-    int column_index = 0;
+    if (row_data.empty())
+        return {};
+
+    ReadBufferFromString input(row_data);
     ColumnsWithTypeAndName columns;
-    while (pos < start + row_data.size())
+    UInt32 expected_rows = 0;
+    while (!input.eof())
     {
-        UInt32 length = toLittleEndian(*(reinterpret_cast<const UInt32 *>(pos)));
-        pos += 4;
-        UInt32 null_count = toLittleEndian(*(reinterpret_cast<const UInt32 *>(pos)));
-        pos += 4;
+        const size_t column_index = columns.size();
+        if (column_index >= schema.size())
+            throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk has more columns than its schema");
+
+        const UInt32 length = readArrowValue<UInt32>(input);
+        const UInt32 null_count = readArrowValue<UInt32>(input);
+        if (null_count > length)
+            throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk null count exceeds its row count");
+        if (columns.empty())
+            expected_rows = length;
+        else if (length != expected_rows)
+            throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk columns have different row counts");
+
         std::vector<UInt8> null_bitmap;
         const auto & field = schema[column_index];
         const auto & name = field.first;
-        auto data_type = getDataTypeByColumnInfoForComputingLayer(field.second);
         if (null_count > 0)
         {
-            auto bit_map_length = (length + 7) / 8;
-            for (UInt32 i = 0; i < bit_map_length; i++)
-            {
-                null_bitmap.push_back(*pos);
-                pos++;
-            }
+            const size_t bitmap_size = (static_cast<UInt64>(length) + 7) / 8;
+            if (bitmap_size > input.available())
+                throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk null bitmap is truncated");
+            null_bitmap.resize(bitmap_size);
+            input.readStrict(reinterpret_cast<char *>(null_bitmap.data()), bitmap_size);
         }
-        Int8 field_length = getFieldLengthForArrowEncode(field.second.tp);
+        const auto field_length = getFieldLengthForArrowEncode(field.second.tp);
         std::vector<UInt64> offsets;
+        size_t data_size = 0;
         if (field_length == VAR_SIZE)
         {
-            for (UInt32 i = 0; i <= length; i++)
+            const UInt64 offset_count = static_cast<UInt64>(length) + 1;
+            if (offset_count > input.available() / sizeof(UInt64))
+                throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk offsets are truncated");
+            offsets.reserve(offset_count);
+            for (UInt64 i = 0; i < offset_count; ++i)
             {
-                offsets.push_back(toLittleEndian(*(reinterpret_cast<const UInt64 *>(pos))));
-                pos += 8;
+                const auto offset = readArrowValue<UInt64>(input);
+                if ((i == 0 && offset != 0) || (i > 0 && offset < offsets.back()))
+                    throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk offsets are invalid");
+                offsets.push_back(offset);
+            }
+            if (offsets.back() > input.available())
+                throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk column data is truncated");
+            data_size = offsets.back();
+
+            if (field.second.tp == TiDB::TypeEnum)
+            {
+                for (size_t i = 0; i < length; ++i)
+                {
+                    const bool is_null = null_count > 0 && !(null_bitmap[i / 8] & (1 << (i % 8)));
+                    if (!is_null && offsets[i + 1] - offsets[i] < sizeof(UInt64))
+                        throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk enum value is truncated");
+                }
             }
         }
+        else
+        {
+            if (length > input.available() / field_length)
+                throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk column data is truncated");
+            data_size = static_cast<size_t>(length) * field_length;
+        }
+
+        auto data_type = getDataTypeByColumnInfoForComputingLayer(field.second);
         ColumnWithTypeAndName col(data_type, name);
         col.column->assumeMutable()->reserve(length);
-        pos = arrowColToFlashCol(pos, field_length, null_count, null_bitmap, offsets, col, field.second, length);
+        arrowColToFlashCol(input.position(), field_length, null_count, null_bitmap, offsets, col, field.second, length);
+        if (col.column->size() != length)
+            throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk decoded column has an unexpected row count");
+        input.position() += data_size;
         columns.emplace_back(std::move(col));
-        column_index++;
     }
+    if (columns.size() != schema.size())
+        throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk has fewer columns than its schema");
     return Block(columns);
 }
 
