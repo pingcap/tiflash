@@ -620,6 +620,8 @@ const char * arrowEnumColToFlashCol(
     {
         if (checkNull(i, null_count, null_bitmap, col))
             continue;
+        if (unlikely(offsets[i + 1] - offsets[i] < sizeof(UInt64)))
+            throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk enum value is truncated");
         const auto enum_value
             = static_cast<Int64>(toLittleEndian(*(reinterpret_cast<const UInt32 *>(pos + offsets[i]))));
         col.column->assumeMutable()->insert(Field(enum_value));
