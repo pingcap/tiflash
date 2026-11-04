@@ -27,6 +27,10 @@ namespace DB::DM
 
 IntegerSetPtr IntegerSet::createValueSet(const DataTypePtr & type, const Fields & values)
 {
+    // Non-stored scan columns are recorded with a null Attr.type.
+    if (!type)
+        return nullptr;
+
     auto type_id = removeNullable(type)->getTypeId();
     switch (type_id)
     {
@@ -77,6 +81,10 @@ IntegerSetPtr IntegerSet::createLessRangeSet(const DataTypePtr & type, const Fie
             return std::make_shared<RangeSet<T>>(std::numeric_limits<T>::min(), max_value - not_included);
     };
 
+    // Non-stored scan columns are recorded with a null Attr.type.
+    if (!type)
+        return nullptr;
+
     auto type_id = removeNullable(type)->getTypeId();
     switch (type_id)
     {
@@ -126,6 +134,10 @@ IntegerSetPtr IntegerSet::createGreaterRangeSet(const DataTypePtr & type, const 
         else
             return std::make_shared<RangeSet<T>>(min_value + not_included, std::numeric_limits<T>::max());
     };
+
+    // Non-stored scan columns are recorded with a null Attr.type.
+    if (!type)
+        return nullptr;
 
     auto type_id = removeNullable(type)->getTypeId();
     switch (type_id)

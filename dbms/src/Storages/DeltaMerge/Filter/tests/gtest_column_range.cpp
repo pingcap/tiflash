@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Storages/DeltaMerge/Filter/ColumnRange.h>
+#include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
@@ -87,5 +88,36 @@ TEST(ColumnRangeMergeTest, RejectsDifferentColumnsSharingIndexId)
     expectColumnMismatch([&] {
         return OrColumnRange::create({valueRange(1, index_id, "Int64"), valueRange(2, index_id, "Int64")});
     });
+}
+
+// Creating an inverted index on a hidden column is not supported today, and inverted
+// indexes themselves are not a publicly supported feature. This test covers the
+// null-type path only as defensive code.
+TEST(ColumnRangeMergeTest, NullColumnTypeDoesNotBuildIntegerSet)
+{
+    const Field value(static_cast<Int64>(1));
+    ASSERT_EQ(IntegerSet::createValueSet(nullptr, {value}), nullptr);
+    ASSERT_EQ(IntegerSet::createLessRangeSet(nullptr, value, /*not_included=*/true), nullptr);
+    ASSERT_EQ(IntegerSet::createGreaterRangeSet(nullptr, value, /*not_included=*/true), nullptr);
+
+    const ColumnID stored_column_id = 10;
+    const IndexID index_id = 1;
+    Attr stored{.col_name = "a", .col_id = stored_column_id, .type = DB::tests::typeFromString("Int64")};
+    Attr missing{.col_name = "", .col_id = -3, .type = nullptr};
+
+    google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> used_indexes;
+    auto * inverted = used_indexes.Add();
+    inverted->set_index_type(tipb::ColumnarIndexType::TypeInverted);
+    inverted->mutable_inverted_query_info()->set_index_id(index_id);
+    inverted->mutable_inverted_query_info()->set_column_id(stored_column_id);
+
+    auto missing_range = createEqual(missing, value)->buildSets(used_indexes);
+    ASSERT_EQ(missing_range->type, ColumnRangeType::Unsupported);
+
+    auto merged = createAnd({createEqual(stored, value), createEqual(missing, value)})->buildSets(used_indexes);
+    const auto * single = dynamic_cast<const SingleColumnRange *>(merged.get());
+    ASSERT_NE(single, nullptr);
+    ASSERT_EQ(single->column_id, stored_column_id);
+    ASSERT_EQ(single->index_id, index_id);
 }
 } // namespace DB::DM::tests
