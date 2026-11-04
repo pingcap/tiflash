@@ -116,16 +116,6 @@ Block ArrowChunkCodec::decode(const String & row_data, const DAGSchema & schema)
             if (unlikely(offsets.back() > input.available()))
                 throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk column data is truncated");
             data_size = offsets.back();
-
-            if (field.second.tp == TiDB::TypeEnum)
-            {
-                for (size_t i = 0; i < length; ++i)
-                {
-                    const bool is_null = null_count > 0 && !(null_bitmap[i / 8] & (1 << (i % 8)));
-                    if (unlikely(!is_null && offsets[i + 1] - offsets[i] < sizeof(UInt64)))
-                        throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk enum value is truncated");
-                }
-            }
         }
         else
         {
