@@ -44,7 +44,8 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int CANNOT_MPROTECT;
-}
+extern const int TOO_LARGE_ARRAY_SIZE;
+} // namespace ErrorCodes
 
 inline constexpr size_t integerRoundUp(size_t value, size_t dividend)
 {
@@ -121,12 +122,42 @@ protected:
     /// The amount of memory occupied by the num_elements of the elements.
     static size_t byte_size(size_t num_elements) { return num_elements * ELEMENT_SIZE; }
 
-    /// Minimum amount of memory to allocate for num_elements, including padding.
-    static size_t minimum_memory_for_elements(size_t num_elements)
+    [[noreturn]] static void throwTooLarge(size_t num_elements)
     {
-        auto res = byte_size(num_elements) + pad_right + pad_left;
-        return res;
+        throw Exception(
+            ErrorCodes::TOO_LARGE_ARRAY_SIZE,
+            "Array of {} elements of {} bytes is too large to allocate",
+            num_elements,
+            ELEMENT_SIZE);
     }
+
+    /// Bytes to allocate for num_elements, including padding.
+    /// reserve() rounds that size up to a power of two. The product, the padding sum, or that
+    /// rounding can wrap size_t and yield a tiny allocation for an enormous element count.
+    static size_t memoryForElements(size_t num_elements, bool round_up)
+    {
+        constexpr size_t padding = pad_right + pad_left;
+        static_assert(padding >= pad_right && padding >= pad_left);
+
+        if (unlikely(num_elements > std::numeric_limits<size_t>::max() / ELEMENT_SIZE))
+            throwTooLarge(num_elements);
+
+        const size_t elements_bytes = num_elements * ELEMENT_SIZE;
+        if (unlikely(elements_bytes > std::numeric_limits<size_t>::max() - padding))
+            throwTooLarge(num_elements);
+
+        const size_t bytes = elements_bytes + padding;
+        if (!round_up)
+            return bytes;
+
+        const size_t rounded = roundUpToPowerOfTwoOrZero(bytes);
+        if (unlikely(rounded < bytes))
+            throwTooLarge(num_elements);
+        return rounded;
+    }
+
+    /// Minimum amount of memory to allocate for num_elements, including padding.
+    static size_t minimum_memory_for_elements(size_t num_elements) { return memoryForElements(num_elements, false); }
 
     void alloc_for_num_elements(size_t num_elements)
     {
@@ -137,7 +168,7 @@ protected:
         //in push_back or emplace_back will do the reserveForNextSize to alloc extra memory.
         //Thus, we don't need do roundUpToPowerOfTwoOrZero here, and it can cut down extra memory usage,
         //and will not have bad affact on performance.
-        alloc(minimum_memory_for_elements(num_elements));
+        alloc(memoryForElements(num_elements, false));
     }
 
     template <typename... TAllocatorParams>
@@ -251,9 +282,7 @@ public:
     void reserve(size_t n, TAllocatorParams &&... allocator_params)
     {
         if (n > capacity())
-            realloc(
-                roundUpToPowerOfTwoOrZero(minimum_memory_for_elements(n)),
-                std::forward<TAllocatorParams>(allocator_params)...);
+            realloc(memoryForElements(n, true), std::forward<TAllocatorParams>(allocator_params)...);
     }
 
     template <typename... TAllocatorParams>

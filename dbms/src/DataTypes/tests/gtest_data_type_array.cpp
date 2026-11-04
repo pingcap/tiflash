@@ -32,6 +32,11 @@
 #include <limits>
 #include <vector>
 
+namespace DB::ErrorCodes
+{
+extern const int TOO_LARGE_ARRAY_SIZE;
+}
+
 namespace DB::tests
 {
 namespace
@@ -144,6 +149,29 @@ void deserializeSplit(
         position_independent_encoding,
         {});
 }
+
+/// Records a bulk read instead of copying. An overflowing element count must be rejected before any read.
+class RejectingReadBuffer : public ReadBuffer
+{
+public:
+    RejectingReadBuffer()
+        : ReadBuffer(&storage, 1, 0)
+    {}
+
+    size_t readBig(char * /*to*/, size_t n) override
+    {
+        requested = n;
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "element bytes were requested before the element count was validated, bytes={}",
+            n);
+    }
+
+    size_t requested = 0;
+
+private:
+    inline static char storage = 0;
+};
 
 void deserializeSingleStream(
     const IDataType & type,
@@ -508,6 +536,52 @@ try
     ASSERT_EQ(strings.getOffsets().back(), original_bytes);
     ASSERT_EQ(strings.getChars().size(), original_bytes);
     EXPECT_EQ(strings.getDataAt(0).toStringView(), original);
+}
+CATCH
+
+TEST(DataTypeArrayTest, RejectsElementCountThatOverflowsAllocation)
+try
+{
+    const DataTypeArray type(std::make_shared<DataTypeFloat32>());
+    // Float32 is 4 bytes and PaddedPODArray adds 80 bytes of alignment padding.
+    // 2^62 - 1 occupies 2^64 - 4 bytes, so the padding wraps the allocation to 128.
+    // 2^62 - 20 makes that padded size wrap to 0.
+    // 2^61 - 19 keeps the padded size above 2^63, so power-of-two rounding wraps to 0.
+    const UInt64 counts[] = {(1ULL << 62) - 1, (1ULL << 62) - 20, (1ULL << 61) - 19};
+
+    for (const bool position_independent : {true, false})
+    {
+        for (const UInt64 count : counts)
+        {
+            auto column = type.createColumn();
+            ReadBufferFromString sizes_in(podBytes<UInt64>({count}));
+            RejectingReadBuffer elements_in;
+            try
+            {
+                IDataType::SubstreamPath path;
+                type.deserializeBinaryBulkWithMultipleStreams(
+                    *column,
+                    [&](const IDataType::SubstreamPath & stream_path) -> ReadBuffer * {
+                        if (IDataType::isArraySizes(stream_path))
+                            return &sizes_in;
+                        return &elements_in;
+                    },
+                    1,
+                    0,
+                    position_independent,
+                    path);
+                ADD_FAILURE() << "element count " << count
+                              << " was accepted, position_independent=" << position_independent;
+            }
+            catch (const Exception & e)
+            {
+                EXPECT_EQ(e.code(), ErrorCodes::TOO_LARGE_ARRAY_SIZE) << e.displayText();
+                EXPECT_EQ(elements_in.requested, 0) << e.displayText();
+                ASSERT_TRUE(column->empty());
+                ASSERT_TRUE(asArray(*column).getData().empty());
+            }
+        }
+    }
 }
 CATCH
 
