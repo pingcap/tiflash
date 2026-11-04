@@ -41,6 +41,20 @@ void Redact::setRedactLog(RedactMode v)
     Redact::REDACT_LOG.store(v, std::memory_order_relaxed);
 }
 
+std::string Redact::stringToDebugString(std::string_view raw)
+{
+    const auto v = Redact::REDACT_LOG.load(std::memory_order_relaxed);
+    switch (v)
+    {
+    case RedactMode::Enable:
+        return "?";
+    case RedactMode::Disable:
+        return std::string(raw);
+    case RedactMode::Marker:
+        return toMarkerString(std::string(raw));
+    }
+}
+
 std::string Redact::toMarkerString(const std::string & raw, bool ignore_escape)
 {
     // A shortcut for those caller ensure the `raw` must not contain any char that
