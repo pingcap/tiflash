@@ -74,16 +74,16 @@ Block ArrowChunkCodec::decode(const String & row_data, const DAGSchema & schema)
     while (!input.eof())
     {
         const size_t column_index = columns.size();
-        if (column_index >= schema.size())
+        if (unlikely(column_index >= schema.size()))
             throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk has more columns than its schema");
 
         const UInt32 length = readArrowValue<UInt32>(input);
         const UInt32 null_count = readArrowValue<UInt32>(input);
-        if (null_count > length)
+        if (unlikely(null_count > length))
             throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk null count exceeds its row count");
         if (columns.empty())
             expected_rows = length;
-        else if (length != expected_rows)
+        else if (unlikely(length != expected_rows))
             throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk columns have different row counts");
 
         std::vector<UInt8> null_bitmap;
@@ -92,7 +92,7 @@ Block ArrowChunkCodec::decode(const String & row_data, const DAGSchema & schema)
         if (null_count > 0)
         {
             const size_t bitmap_size = (static_cast<UInt64>(length) + 7) / 8;
-            if (bitmap_size > input.available())
+            if (unlikely(bitmap_size > input.available()))
                 throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk null bitmap is truncated");
             null_bitmap.resize(bitmap_size);
             input.readStrict(reinterpret_cast<char *>(null_bitmap.data()), bitmap_size);
@@ -103,17 +103,17 @@ Block ArrowChunkCodec::decode(const String & row_data, const DAGSchema & schema)
         if (field_length == VAR_SIZE)
         {
             const UInt64 offset_count = static_cast<UInt64>(length) + 1;
-            if (offset_count > input.available() / sizeof(UInt64))
+            if (unlikely(offset_count > input.available() / sizeof(UInt64)))
                 throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk offsets are truncated");
             offsets.reserve(offset_count);
             for (UInt64 i = 0; i < offset_count; ++i)
             {
                 const auto offset = readArrowValue<UInt64>(input);
-                if ((i == 0 && offset != 0) || (i > 0 && offset < offsets.back()))
+                if (unlikely((i == 0 && offset != 0) || (i > 0 && offset < offsets.back())))
                     throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk offsets are invalid");
                 offsets.push_back(offset);
             }
-            if (offsets.back() > input.available())
+            if (unlikely(offsets.back() > input.available()))
                 throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk column data is truncated");
             data_size = offsets.back();
 
@@ -122,14 +122,14 @@ Block ArrowChunkCodec::decode(const String & row_data, const DAGSchema & schema)
                 for (size_t i = 0; i < length; ++i)
                 {
                     const bool is_null = null_count > 0 && !(null_bitmap[i / 8] & (1 << (i % 8)));
-                    if (!is_null && offsets[i + 1] - offsets[i] < sizeof(UInt64))
+                    if (unlikely(!is_null && offsets[i + 1] - offsets[i] < sizeof(UInt64)))
                         throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk enum value is truncated");
                 }
             }
         }
         else
         {
-            if (length > input.available() / field_length)
+            if (unlikely(length > input.available() / field_length))
                 throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk column data is truncated");
             data_size = static_cast<size_t>(length) * field_length;
         }
@@ -138,12 +138,12 @@ Block ArrowChunkCodec::decode(const String & row_data, const DAGSchema & schema)
         ColumnWithTypeAndName col(data_type, name);
         col.column->assumeMutable()->reserve(length);
         arrowColToFlashCol(input.position(), field_length, null_count, null_bitmap, offsets, col, field.second, length);
-        if (col.column->size() != length)
+        if (unlikely(col.column->size() != length))
             throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk decoded column has an unexpected row count");
         input.position() += data_size;
         columns.emplace_back(std::move(col));
     }
-    if (columns.size() != schema.size())
+    if (unlikely(columns.size() != schema.size()))
         throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk has fewer columns than its schema");
     return Block(columns);
 }
