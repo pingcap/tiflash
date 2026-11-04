@@ -15,6 +15,7 @@
 // limitations under the License.
 
 #include <Columns/ColumnArray.h>
+#include <Columns/ColumnString.h>
 #include <Common/Exception.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeArray.h>
@@ -27,6 +28,7 @@
 #include <Parsers/IAST.h>
 
 #include <limits>
+#include <vector>
 
 
 namespace DB
@@ -183,6 +185,65 @@ void checkAbsoluteOffsetsMonotonic(const ColumnArray::Offsets & offset_values)
         previous = offset_values[i];
     }
 }
+
+/// A failed bulk read can leave Tuple and Nullable subcolumns at different lengths.
+/// Save each leaf's length so rollback does not assume the parent column is consistent.
+class NestedColumnCheckpoint
+{
+public:
+    explicit NestedColumnCheckpoint(IColumn & column_)
+        : column(column_)
+        , size_before(column.size())
+        , string_column(typeid_cast<ColumnString *>(&column))
+        , chars_before(string_column ? string_column->getChars().size() : 0)
+    {
+        column.forEachSubcolumn([&](ColumnPtr & subcolumn) { subcolumns.emplace_back(subcolumn->assumeMutableRef()); });
+    }
+
+    void checkSize(size_t expected) const
+    {
+        RUNTIME_CHECK_MSG(
+            column.size() == expected,
+            "Corrupt array data: read {} array elements for {}, last offset is {}",
+            column.size(),
+            column.getFamilyName(),
+            expected);
+
+        // An Array checks its own elements during deserialization. Its offsets and elements
+        // have different lengths, unlike the components of Tuple and Nullable.
+        if (!typeid_cast<const ColumnArray *>(&column))
+        {
+            for (const auto & subcolumn : subcolumns)
+                subcolumn.checkSize(expected);
+        }
+    }
+
+    void restore()
+    {
+        if (!subcolumns.empty())
+        {
+            for (auto & subcolumn : subcolumns)
+                subcolumn.restore();
+        }
+        else if (string_column)
+        {
+            // String decoding may append offsets before the corresponding chars are read.
+            string_column->getOffsets().resize_assume_reserved(size_before);
+            string_column->getChars().resize_assume_reserved(chars_before);
+        }
+        else if (const size_t current_size = column.size(); current_size > size_before)
+        {
+            column.popBack(current_size - size_before);
+        }
+    }
+
+private:
+    IColumn & column;
+    const size_t size_before;
+    ColumnString * const string_column;
+    const size_t chars_before;
+    std::vector<NestedColumnCheckpoint> subcolumns;
+};
 } // namespace
 
 
@@ -265,7 +326,7 @@ void DataTypeArray::deserializeBinaryBulkWithMultipleStreams(
     ColumnArray::Offsets & offset_values = column_array.getOffsets();
     IColumn & nested_column = column_array.getData();
     const size_t offsets_before = offset_values.size();
-    const size_t nested_before = nested_column.size();
+    NestedColumnCheckpoint nested_checkpoint(nested_column);
 
     path.emplace_back(Substream::ArraySizes);
     try
@@ -315,18 +376,13 @@ void DataTypeArray::deserializeBinaryBulkWithMultipleStreams(
         /// column, so it has to match, including when no elements were read. An empty
         /// elements column used to be accepted for Nested columns added by ALTER; those
         /// offsets would still be passed to ColumnArray::getDataAt and index off the end.
-        RUNTIME_CHECK_MSG(
-            nested_column.size() == last_offset,
-            "Corrupt array data: read {} array elements, last offset is {}",
-            nested_column.size(),
-            last_offset);
+        nested_checkpoint.checkSize(last_offset);
     }
     catch (...)
     {
         if (offset_values.size() != offsets_before)
             offset_values.resize(offsets_before);
-        if (nested_column.size() > nested_before)
-            nested_column.popBack(nested_column.size() - nested_before);
+        nested_checkpoint.restore();
         throw;
     }
 }
