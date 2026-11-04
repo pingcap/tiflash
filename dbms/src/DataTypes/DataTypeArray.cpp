@@ -151,8 +151,7 @@ void deserializeArraySizesPositionIndependent(ColumnArray::Offsets & offsets, Re
     }
 }
 
-/// Absolute offsets are stored as-is. They must be non-decreasing so every row's
-/// range is inside the nested column, which is sized from the last offset.
+/// Absolute offsets are stored as-is and must be non-decreasing.
 void checkAbsoluteOffsetsMonotonic(const ColumnArray::Offsets & offset_values)
 {
     ColumnArray::Offset previous = 0;
@@ -309,8 +308,9 @@ void DataTypeArray::deserializeBinaryBulkWithMultipleStreams(
         position_independent_encoding,
         path);
 
-    /// Every offset must lie within the nested column, even when no elements were read.
-    checkNestedColumnSize(nested_column, last_offset);
+    /// Empty elements are allowed for Nested columns added by ALTER.
+    if (!nested_column.empty())
+        checkNestedColumnSize(nested_column, last_offset);
 }
 
 
