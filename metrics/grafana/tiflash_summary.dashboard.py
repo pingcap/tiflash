@@ -1214,6 +1214,55 @@ def DDL() -> RowPanel:
             ),
         ]
     )
+    decode_panels = [
+        graph_panel(
+            title="Schema Watermark Decode OPS",
+            description=(
+                "Non-forced committed decode batches per second by schema read watermark decision: "
+                "no_watermark (no schema read TSO), beyond_watermark (newer commit TSO), "
+                "and covered (all commit TSOs covered by the watermark). "
+                "skipped_extra_columns counts successfully decoded batches that skipped historical "
+                "extra columns; it is a subset of covered, not a column count."
+            ),
+            targets=[
+                target(
+                    expr=expr_sum_rate(
+                        "tiflash_schema_watermark_decode_count",
+                        by_labels=["type"],
+                    ),
+                    legend_format="{{type}}",
+                    additional_groupby=True,
+                ),
+            ],
+            yaxes=yaxes(left_format="ops", left_label="batches/s", left_min="0"),
+            legend=graph_legend(hide_zero=False),
+        ),
+        graph_panel(
+            title="Row Decode Reject OPS",
+            description=(
+                "Non-forced decode rejections per second by reason: extra_column, missing_column, "
+                "null_in_non_nullable, datum_rejected, pk_handle_overflow, and storage_not_found. "
+                "Includes storage lookup failures and repeated decode attempts; "
+                "these are schema-sync fallback events, not necessarily failed writes."
+            ),
+            targets=[
+                target(
+                    expr=expr_sum_rate(
+                        "tiflash_row_decode_reject_count",
+                        by_labels=["reason"],
+                    ),
+                    legend_format="{{reason}}",
+                    additional_groupby=True,
+                ),
+            ],
+            yaxes=yaxes(left_format="ops", left_label="rejections/s", left_min="0"),
+            legend=graph_legend(hide_zero=False),
+        ),
+    ]
+    # Reserve new IDs above the existing panels to keep dashboard links stable.
+    for panel, panel_id in zip(decode_panels, [255, 256]):
+        panel.id = panel_id
+        layout.row([panel])
     return layout.row_panel
 
 
