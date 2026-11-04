@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
+#include <Common/RedactHelpers.h>
 #include <Common/TiFlashMetrics.h>
 #include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
@@ -692,12 +693,21 @@ HttpRequestRes HandleHttpRequestRemoteCacheEvict(
     }
 
     auto log = Logger::get("HandleHttpRequestRemoteCacheEvict");
-    LOG_INFO(log, "handling remote cache evict request, path={} api_name={} query={}", path, api_name, query);
+    LOG_INFO(
+        log,
+        "handling remote cache evict request, path={} api_name={} query={}",
+        Redact::stringToDebugString(path),
+        api_name,
+        Redact::stringToDebugString(query));
     RemoteCacheEvictRequest req = parseEvictRequest(path, api_name, query);
     if (!req.err_msg.empty())
     {
         auto body = fmt::format(R"json({{"message":"{}"}})json", req.err_msg);
-        LOG_INFO(log, "invalid remote cache evict request, req={}", req);
+        // The parse error includes the request path and must follow log redaction too.
+        LOG_INFO(
+            log,
+            "invalid remote cache evict request, req={}",
+            Redact::stringToDebugString(fmt::format("{}", req)));
         return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, std::move(body));
     }
 
