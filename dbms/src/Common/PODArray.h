@@ -135,24 +135,12 @@ protected:
     /// rounding can wrap size_t and yield a tiny allocation for an enormous element count.
     static size_t memoryForElements(size_t num_elements, bool round_up)
     {
-        constexpr size_t padding = pad_right + pad_left;
-        static_assert(padding >= pad_right && padding >= pad_left);
-
-        if (unlikely(num_elements > std::numeric_limits<size_t>::max() / ELEMENT_SIZE))
+        const size_t max_elements = round_up ? maxReserveSize() : maxAllocSize();
+        if (unlikely(num_elements > max_elements))
             throwTooLarge(num_elements);
 
-        const size_t elements_bytes = num_elements * ELEMENT_SIZE;
-        if (unlikely(elements_bytes > std::numeric_limits<size_t>::max() - padding))
-            throwTooLarge(num_elements);
-
-        const size_t bytes = elements_bytes + padding;
-        if (!round_up)
-            return bytes;
-
-        const size_t rounded = roundUpToPowerOfTwoOrZero(bytes);
-        if (unlikely(rounded < bytes))
-            throwTooLarge(num_elements);
-        return rounded;
+        const size_t bytes = byte_size(num_elements) + pad_right + pad_left;
+        return round_up ? roundUpToPowerOfTwoOrZero(bytes) : bytes;
     }
 
     /// Minimum amount of memory to allocate for num_elements, including padding.
@@ -268,6 +256,24 @@ protected:
 #endif
 
 public:
+    /// `PODArray(n)` allocates `n * ELEMENT_SIZE + padding` bytes with no further rounding.
+    static constexpr size_t maxAllocSize()
+    {
+        constexpr size_t padding = pad_left + pad_right;
+        static_assert(padding >= pad_left && padding >= pad_right);
+        return (std::numeric_limits<size_t>::max() - padding) / ELEMENT_SIZE;
+    }
+
+    /// `resize`/`reserve` round that padded byte count up to a power of two. The rounding
+    /// yields 0 once the high bit is set, so the largest safe byte count is 2^(bitwidth-1).
+    static constexpr size_t maxReserveSize()
+    {
+        constexpr size_t max_bytes = size_t{1} << (sizeof(size_t) * 8 - 1);
+        constexpr size_t padding = pad_left + pad_right;
+        static_assert(padding <= max_bytes);
+        return (max_bytes - padding) / ELEMENT_SIZE;
+    }
+
     bool empty() const { return c_end == c_start; }
     size_t size() const { return (c_end - c_start) / ELEMENT_SIZE; }
     size_t capacity() const { return (c_end_of_storage - c_start) / ELEMENT_SIZE; }
