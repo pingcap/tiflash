@@ -133,40 +133,24 @@ void serializeArraySizesPositionIndependent(const IColumn & column, WriteBuffer 
     }
 }
 
-/// Sizes are deltas. They are checked and accumulated before the column is modified:
-/// a wrapping add such as 2^63 + (2^63 + 4) would otherwise store offsets [2^63, 4],
-/// and the nested column would then be sized from the wrapped last offset.
-void deserializeArraySizesPositionIndependent(IColumn & column, ReadBuffer & istr, size_t limit)
+/// Sizes are deltas. Check each sum before appending; the caller restores the offsets on failure.
+void deserializeArraySizesPositionIndependent(ColumnArray::Offsets & offsets, ReadBuffer & istr, size_t limit)
 {
-    ColumnArray & column_array = typeid_cast<ColumnArray &>(column);
-    ColumnArray::Offsets & offset_values = column_array.getOffsets();
-    const size_t initial_size = offset_values.size();
-    ColumnArray::Offset current_offset = initial_size == 0 ? 0 : offset_values[initial_size - 1];
+    ColumnArray::Offset current_offset = offsets.empty() ? 0 : offsets.back();
 
-    ColumnArray::Offsets new_offsets;
-    size_t rows_read = 0;
-    while (rows_read < limit && !istr.eof())
+    for (size_t rows_read = 0; rows_read < limit && !istr.eof(); ++rows_read)
     {
         ColumnArray::Offset current_size = 0;
         readIntBinary(current_size, istr);
-        const size_t row = initial_size + rows_read;
         RUNTIME_CHECK_MSG(
             current_offset <= std::numeric_limits<ColumnArray::Offset>::max() - current_size,
             "Corrupt array data: array size {} at row {} overflows offset {}",
             current_size,
-            row,
+            offsets.size(),
             current_offset);
         current_offset += current_size;
-        new_offsets.push_back(current_offset);
-        ++rows_read;
+        offsets.push_back(current_offset);
     }
-
-    if (new_offsets.empty())
-        return;
-
-    offset_values.resize(initial_size + new_offsets.size());
-    for (size_t i = 0; i < new_offsets.size(); ++i)
-        offset_values[initial_size + i] = new_offsets[i];
 }
 
 /// Absolute offsets are stored as-is. They must be non-decreasing so every row's
@@ -340,7 +324,7 @@ void DataTypeArray::deserializeBinaryBulkWithMultipleStreams(
             // and appending data into a column containing existing data.
             // If you are unsure, set position_independent_encoding to true.
             if (position_independent_encoding)
-                deserializeArraySizesPositionIndependent(column, *stream, limit);
+                deserializeArraySizesPositionIndependent(offset_values, *stream, limit);
             else
             {
                 RUNTIME_CHECK_MSG(
