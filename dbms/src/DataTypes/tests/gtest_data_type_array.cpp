@@ -14,11 +14,13 @@
 
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnNullable.h>
+#include <Columns/ColumnString.h>
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnsNumber.h>
 #include <Common/Exception.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <IO/Buffer/ReadBufferFromString.h>
@@ -440,15 +442,22 @@ try
         std::make_shared<DataTypeFloat32>(),
         std::make_shared<DataTypeArray>(std::make_shared<DataTypeFloat32>())}));
     auto column = type.createColumn();
-    const String bytes = podBytes<UInt64>({1}) + podBytes<Float32>({7.0F}) + podBytes<UInt64>({1});
-    EXPECT_THROW(deserializeSingleStream(type, *column, bytes, 1, true), Exception);
+    const String valid
+        = podBytes<UInt64>({1}) + podBytes<Float32>({7.0F}) + podBytes<UInt64>({2}) + podBytes<Float32>({11.0F, 13.0F});
+    deserializeSingleStream(type, *column, valid, 1, true);
+
+    const String truncated
+        = podBytes<UInt64>({1}) + podBytes<Float32>({8.0F}) + podBytes<UInt64>({2}) + podBytes<Float32>({17.0F});
+    EXPECT_THROW(deserializeSingleStream(type, *column, truncated, 1, true), Exception);
 
     const auto & array = asArray(*column);
     const auto & tuple = typeid_cast<const ColumnTuple &>(array.getData());
-    EXPECT_TRUE(array.empty());
-    for (const auto & child : tuple.getColumns())
-        EXPECT_TRUE(child->empty());
-    EXPECT_TRUE(asArray(*tuple.getColumns()[1]).getData().empty());
+    ASSERT_EQ(array.size(), 1);
+    EXPECT_EQ(array.getOffsets().back(), 1);
+    const auto & first = typeid_cast<const ColumnFloat32 &>(*tuple.getColumns()[0]).getData();
+    ASSERT_EQ(first.size(), 1);
+    EXPECT_EQ(first[0], 7.0F);
+    assertArrayEqual(*tuple.getColumns()[1], *makeFloat32Array({{11.0F, 13.0F}}));
 }
 CATCH
 
@@ -458,14 +467,47 @@ try
     const DataTypeArray type(std::make_shared<DataTypeTuple>(
         DataTypes{std::make_shared<DataTypeFloat32>(), std::make_shared<DataTypeFloat32>()}));
     auto column = type.createColumn();
-    const String bytes = podBytes<UInt64>({1}) + podBytes<Float32>({7.0F});
-    EXPECT_THROW(deserializeSingleStream(type, *column, bytes, 1, true), Exception);
+    const String valid = podBytes<UInt64>({1}) + podBytes<Float32>({7.0F, 11.0F});
+    deserializeSingleStream(type, *column, valid, 1, true);
+
+    const String truncated = podBytes<UInt64>({1}) + podBytes<Float32>({8.0F});
+    EXPECT_THROW(deserializeSingleStream(type, *column, truncated, 1, true), Exception);
 
     const auto & array = asArray(*column);
     const auto & tuple = typeid_cast<const ColumnTuple &>(array.getData());
-    EXPECT_TRUE(array.empty());
-    for (const auto & child : tuple.getColumns())
-        EXPECT_TRUE(child->empty());
+    ASSERT_EQ(array.size(), 1);
+    EXPECT_EQ(array.getOffsets().back(), 1);
+    const auto & first = typeid_cast<const ColumnFloat32 &>(*tuple.getColumns()[0]).getData();
+    const auto & second = typeid_cast<const ColumnFloat32 &>(*tuple.getColumns()[1]).getData();
+    ASSERT_EQ(first.size(), 1);
+    ASSERT_EQ(second.size(), 1);
+    EXPECT_EQ(first[0], 7.0F);
+    EXPECT_EQ(second[0], 11.0F);
+}
+CATCH
+
+TEST(DataTypeArrayTest, RollbackPreservesStringElementsOnShortRead)
+try
+{
+    const DataTypeArray type(std::make_shared<DataTypeString>(DataTypeString::SerdesFormat::SeparateSizeAndChars));
+    auto column = type.createColumn();
+    const String original = "keep";
+    const auto original_bytes = original.size() + 1;
+    const String valid = podBytes<UInt64>({1}) + podBytes<ColumnString::Offset>({original_bytes}) + original + '\0';
+    deserializeSingleStream(type, *column, valid, 1, true);
+
+    // The decoder appends the string offset and grows the chars buffer before the short read throws.
+    const String truncated = podBytes<UInt64>({1}) + podBytes<ColumnString::Offset>({4}) + "new";
+    EXPECT_THROW(deserializeSingleStream(type, *column, truncated, 1, true), Exception);
+
+    const auto & array = asArray(*column);
+    const auto & strings = typeid_cast<const ColumnString &>(array.getData());
+    ASSERT_EQ(array.size(), 1);
+    EXPECT_EQ(array.getOffsets().back(), 1);
+    ASSERT_EQ(strings.getOffsets().size(), 1);
+    ASSERT_EQ(strings.getOffsets().back(), original_bytes);
+    ASSERT_EQ(strings.getChars().size(), original_bytes);
+    EXPECT_EQ(strings.getDataAt(0).toStringView(), original);
 }
 CATCH
 
