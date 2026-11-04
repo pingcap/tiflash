@@ -13,9 +13,13 @@
 // limitations under the License.
 
 #include <Columns/ColumnArray.h>
+#include <Columns/ColumnNullable.h>
+#include <Columns/ColumnTuple.h>
 #include <Columns/ColumnsNumber.h>
 #include <Common/Exception.h>
 #include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <IO/Buffer/ReadBufferFromString.h>
 #include <IO/Buffer/WriteBufferFromString.h>
@@ -79,10 +83,10 @@ void assertArrayEqual(const IColumn & actual_column, const IColumn & expected_co
         ASSERT_EQ(ref.size, length * sizeof(Float32));
         if (length != 0)
         {
-            ASSERT_EQ(0, std::memcmp(ref.data, actual_nested.data() + previous, ref.size));
+            ASSERT_EQ(0, std::memcmp(ref.data, expected_nested.data() + previous, ref.size));
             ASSERT_EQ(
                 VectorFloat32Ref(ref).toString(),
-                VectorFloat32Ref(actual_nested.data() + previous, length).toString());
+                VectorFloat32Ref(expected_nested.data() + previous, length).toString());
         }
         previous = actual.getOffsets()[i];
     }
@@ -380,6 +384,88 @@ try
         EXPECT_NE(e.displayText().find("last offset is"), std::string::npos) << e.displayText();
     }
     assertArrayEqual(*column, *makeFloat32Array({{1.0F}}));
+}
+CATCH
+
+TEST(DataTypeArrayTest, RollbackPreservesNullableElementsOnShortRead)
+try
+{
+    const DataTypeArray type(std::make_shared<DataTypeNullable>(std::make_shared<DataTypeFloat32>()));
+    auto column = type.createColumn();
+    deserializeSingleStream(
+        type,
+        *column,
+        podBytes<UInt64>({1}) + String(1, '\0') + podBytes<Float32>({7.0F}),
+        1,
+        true);
+
+    const String sizes = podBytes<UInt64>({2});
+    const String null_map(1, '\0');
+    const String elements;
+    ReadBufferFromString sizes_in(sizes);
+    ReadBufferFromString null_map_in(null_map);
+    ReadBufferFromString elements_in(elements);
+    IDataType::SubstreamPath path;
+    EXPECT_THROW(
+        type.deserializeBinaryBulkWithMultipleStreams(
+            *column,
+            [&](const IDataType::SubstreamPath & stream_path) -> ReadBuffer * {
+                if (IDataType::isArraySizes(stream_path))
+                    return &sizes_in;
+                if (IDataType::isNullMap(stream_path))
+                    return &null_map_in;
+                return &elements_in;
+            },
+            1,
+            0,
+            true,
+            path),
+        Exception);
+
+    const auto & array = asArray(*column);
+    const auto & nullable = typeid_cast<const ColumnNullable &>(array.getData());
+    ASSERT_EQ(array.size(), 1);
+    EXPECT_EQ(array.getOffsets().back(), 1);
+    ASSERT_EQ(nullable.getNullMapColumn().size(), 1);
+    ASSERT_EQ(nullable.getNestedColumn().size(), 1);
+    EXPECT_FALSE(nullable.isNullAt(0));
+    EXPECT_EQ(typeid_cast<const ColumnFloat32 &>(nullable.getNestedColumn()).getData()[0], 7.0F);
+}
+CATCH
+
+TEST(DataTypeArrayTest, RollbackPreservesTupleElementsOnNestedArrayFailure)
+try
+{
+    const DataTypeArray type(std::make_shared<DataTypeTuple>(DataTypes{
+        std::make_shared<DataTypeFloat32>(),
+        std::make_shared<DataTypeArray>(std::make_shared<DataTypeFloat32>())}));
+    auto column = type.createColumn();
+    const String bytes = podBytes<UInt64>({1}) + podBytes<Float32>({7.0F}) + podBytes<UInt64>({1});
+    EXPECT_THROW(deserializeSingleStream(type, *column, bytes, 1, true), Exception);
+
+    const auto & array = asArray(*column);
+    const auto & tuple = typeid_cast<const ColumnTuple &>(array.getData());
+    EXPECT_TRUE(array.empty());
+    for (const auto & child : tuple.getColumns())
+        EXPECT_TRUE(child->empty());
+    EXPECT_TRUE(asArray(*tuple.getColumns()[1]).getData().empty());
+}
+CATCH
+
+TEST(DataTypeArrayTest, RejectsShortTupleComponent)
+try
+{
+    const DataTypeArray type(std::make_shared<DataTypeTuple>(
+        DataTypes{std::make_shared<DataTypeFloat32>(), std::make_shared<DataTypeFloat32>()}));
+    auto column = type.createColumn();
+    const String bytes = podBytes<UInt64>({1}) + podBytes<Float32>({7.0F});
+    EXPECT_THROW(deserializeSingleStream(type, *column, bytes, 1, true), Exception);
+
+    const auto & array = asArray(*column);
+    const auto & tuple = typeid_cast<const ColumnTuple &>(array.getData());
+    EXPECT_TRUE(array.empty());
+    for (const auto & child : tuple.getColumns())
+        EXPECT_TRUE(child->empty());
 }
 CATCH
 
