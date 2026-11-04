@@ -12,10 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Storages/DeltaMerge/Filter/ColumnRange.h>
+
+namespace DB::ErrorCodes
+{
+extern const int BAD_ARGUMENTS;
+}
 
 namespace DB::DM
 {
+namespace
+{
+// IntegerSet's element type T comes from the local ColumnDefine of this column_id.
+// Both sides of a merge share that column_id, so they have the same T and
+// intersectWith/unionWith's dynamic_pointer_cast does not return null.
+void ensureSameColumn(IndexID index_id, ColumnID existing_column_id, ColumnID incoming_column_id)
+{
+    if (existing_column_id != incoming_column_id)
+    {
+        throw Exception(
+            ErrorCodes::BAD_ARGUMENTS,
+            "Cannot merge inverted index ranges on index_id {} for different columns {} and {}",
+            index_id,
+            existing_column_id,
+            incoming_column_id);
+    }
+}
+} // namespace
+
 
 const ColumnRangePtr UnsupportedColumnRange::Instance = std::make_shared<UnsupportedColumnRange>();
 
@@ -50,7 +75,10 @@ ColumnRangePtr AndColumnRange::tryOptimize()
         if (auto single_child = std::dynamic_pointer_cast<SingleColumnRange>(child); single_child)
         {
             if (auto it = merged_sets.find(single_child->index_id); it != merged_sets.end())
-                it->second = {single_child->column_id, it->second.second->intersectWith(single_child->set)};
+            {
+                ensureSameColumn(single_child->index_id, it->second.first, single_child->column_id);
+                it->second.second = it->second.second->intersectWith(single_child->set);
+            }
             else
                 merged_sets[single_child->index_id] = {single_child->column_id, single_child->set};
         }
@@ -126,7 +154,10 @@ ColumnRangePtr OrColumnRange::tryOptimize()
         if (auto single_child = std::dynamic_pointer_cast<SingleColumnRange>(child); single_child)
         {
             if (auto it = merged_sets.find(single_child->index_id); it != merged_sets.end())
-                it->second = {single_child->column_id, it->second.second->unionWith(single_child->set)};
+            {
+                ensureSameColumn(single_child->index_id, it->second.first, single_child->column_id);
+                it->second.second = it->second.second->unionWith(single_child->set);
+            }
             else
                 merged_sets[single_child->index_id] = {single_child->column_id, single_child->set};
         }
