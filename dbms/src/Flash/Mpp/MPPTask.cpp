@@ -246,9 +246,14 @@ void MPPTask::run()
 
 void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
 {
+    const auto & exchange_sender = dag_context->dag_request.rootExecutor().exchange_sender();
+    if (exchange_sender.encoded_task_meta_size() == 0)
+        throw TiFlashException(
+            Errors::Coprocessor::BadRequest,
+            "ExchangeSender must contain at least one encoded task meta");
+
     auto tunnel_set_local = std::make_shared<MPPTunnelSet>(log->identifier());
     std::chrono::seconds timeout(task_request.timeout());
-    const auto & exchange_sender = dag_context->dag_request.rootExecutor().exchange_sender();
     size_t tunnel_queue_memory_bound = getAverageThreshold(
         context->getSettingsRef().max_buffered_bytes_in_executor,
         exchange_sender.encoded_task_meta_size());
