@@ -254,6 +254,7 @@ public:
     TiFlashSecurityConfigPtr getSecurityConfig();
 
     /// Must be called before getClientInfo.
+    /// `password` is kept for call-site / protocol compatibility; not passed to SecurityManager.
     void setUser(
         const String & name,
         const String & password,
@@ -277,18 +278,10 @@ public:
     bool isDatabaseExist(const String & database_name) const;
     void assertTableExists(const String & database_name, const String & table_name) const;
 
-    /** The parameter check_database_access_rights exists to not check the permissions of the database again,
-      * when assertTableDoesntExist or assertDatabaseExists is called inside another function that already
-      * made this check.
-      */
-    void assertTableDoesntExist(
-        const String & database_name,
-        const String & table_name,
-        bool check_database_access_rights = true) const;
-    void assertDatabaseExists(const String & database_name, bool check_database_access_rights = true) const;
+    void assertTableDoesntExist(const String & database_name, const String & table_name) const;
+    void assertDatabaseExists(const String & database_name) const;
 
     void assertDatabaseDoesntExist(const String & database_name) const;
-    void checkDatabaseAccessRights(const std::string & database_name) const;
 
     StoragePtr getTable(const String & database_name, const String & table_name) const;
     StoragePtr tryGetTable(const String & database_name, const String & table_name) const;
@@ -545,12 +538,6 @@ public:
     const std::unordered_set<uint64_t> * getStoreIdBlockList() const;
 
 private:
-    /** Check if the current client has access to the specified database.
-      * If access is denied, throw an exception.
-      * NOTE: This method should always be called when the `shared->mutex` mutex is acquired.
-      */
-    void checkDatabaseAccessRightsImpl(const std::string & database_name) const;
-
     StoragePtr getTableImpl(const String & database_name, const String & table_name, Exception * exception) const;
 
     SessionKey getSessionKey(const String & session_id) const;

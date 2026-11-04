@@ -66,7 +66,7 @@ TEST_F(UsersConfigParserTest, ParseConfigs)
 try
 {
     Strings tests = {
-        // case for original user settings
+        // case for legacy users.* settings (ignored except profiles/quotas)
         R"(
 [users]
 [users.default]
@@ -138,7 +138,7 @@ dt_enable_rough_set_filter = false
             // Ensure "default" user can build connection
             Poco::Net::SocketAddress addr(t_addr);
 
-            // `setUser` will check user, password, address, update settings and quota for current user
+            // `setUser` resolves the user (password/network ACLs are not enforced), updates settings and quota
             ASSERT_NO_THROW(ctx.setUser("default", "", addr, ""));
             const auto & settings = ctx.getSettingsRef();
             if (i == 2)
@@ -149,10 +149,6 @@ dt_enable_rough_set_filter = false
             QuotaForIntervals * quota_raw_ptr = nullptr;
             ASSERT_NO_THROW(quota_raw_ptr = &ctx.getQuota(););
             ASSERT_NE(quota_raw_ptr, nullptr);
-
-            // Won't block by database access right check
-            ASSERT_NO_THROW(ctx.checkDatabaseAccessRights("system"));
-            ASSERT_NO_THROW(ctx.checkDatabaseAccessRights("test"));
         }
     }
 }

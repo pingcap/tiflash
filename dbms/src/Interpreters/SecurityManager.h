@@ -23,7 +23,9 @@
 namespace DB
 {
 /** Default implementation of security manager used by native server application.
-  * Manages fixed set of users listed in 'Users' configuration file.
+  * Exposes only the built-in "default" user (profile / quota).
+  * Does not load users / users.* from config, and does not enforce password,
+  * client-network ACLs, or allow_databases (removed as unused for TiFlash).
   */
 class SecurityManager : public ISecurityManager
 {
@@ -34,12 +36,7 @@ private:
 public:
     void loadFromConfig(Poco::Util::AbstractConfiguration & config) override;
 
-    UserPtr authorizeAndGetUser(const String & user_name, const String & password, const Poco::Net::IPAddress & address)
-        const override;
-
     UserPtr getUser(const String & user_name) const override;
-
-    bool hasAccessToDatabase(const String & user_name, const String & database_name) const override;
 };
 
 } // namespace DB
