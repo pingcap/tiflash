@@ -347,7 +347,36 @@ try
 }
 CATCH
 
-TEST(DataTypeArrayTest, RejectsEmptyElementsWithNonZeroOffset)
+TEST(DataTypeArrayTest, AllowsEmptyElementsForNestedAlter)
+try
+{
+    const DataTypeArray type(std::make_shared<DataTypeFloat32>());
+    for (const bool position_independent : {true, false})
+    {
+        const String sizes = position_independent ? podBytes<UInt64>({1, 2}) : podBytes<UInt64>({1, 3});
+        for (const bool single_stream : {true, false})
+        {
+            auto column = type.createColumn();
+            if (single_stream)
+                deserializeSingleStream(type, *column, sizes, 2, position_independent);
+            else
+                deserializeSplit(type, *column, sizes, {}, 2, position_independent);
+
+            const auto & array = asArray(*column);
+            ASSERT_EQ(array.size(), 2);
+            EXPECT_EQ(array.getOffsets()[0], 1);
+            EXPECT_EQ(array.getOffsets()[1], 3);
+            EXPECT_TRUE(array.getData().empty());
+
+            // Preserve the ALTER representation, but reject row reads past the empty elements.
+            for (size_t row = 0; row < array.size(); ++row)
+                EXPECT_THROW(array.getDataAt(row), Exception);
+        }
+    }
+}
+CATCH
+
+TEST(DataTypeArrayTest, RejectsMissingElementsInNonEmptyNestedColumn)
 try
 {
     const DataTypeArray type(std::make_shared<DataTypeFloat32>());
@@ -359,17 +388,6 @@ try
         // Appending a size of 4 with no elements leaves the previous float in place, so the
         // nested column is non-empty and the length check reports a short read.
         deserializeSplit(type, *column, podBytes<UInt64>({4}), {}, 1, true);
-        ADD_FAILURE() << "array offsets without elements were accepted";
-    }
-    catch (const Exception & e)
-    {
-        EXPECT_EQ(e.code(), ErrorCodes::LOGICAL_ERROR) << e.displayText();
-        EXPECT_NE(e.displayText().find("last offset is"), std::string::npos) << e.displayText();
-    }
-    auto fresh = type.createColumn();
-    try
-    {
-        deserializeSingleStream(type, *fresh, podBytes<UInt64>({4}), 1, true);
         ADD_FAILURE() << "array offsets without elements were accepted";
     }
     catch (const Exception & e)
