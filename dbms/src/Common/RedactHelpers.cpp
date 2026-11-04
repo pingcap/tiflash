@@ -30,10 +30,13 @@ void Redact::setRedactLog(RedactMode v)
     {
     case RedactMode::Enable:
         pingcap::Redact::setRedactLog(pingcap::RedactMode::Enable);
+        break;
     case RedactMode::Disable:
         pingcap::Redact::setRedactLog(pingcap::RedactMode::Disable);
+        break;
     case RedactMode::Marker:
         pingcap::Redact::setRedactLog(pingcap::RedactMode::Marker);
+        break;
     }
     Redact::REDACT_LOG.store(v, std::memory_order_relaxed);
 }

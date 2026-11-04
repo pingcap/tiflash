@@ -23,6 +23,10 @@ errorlog = "/tmp/tiflash/log/tiflash_error.log"
 size = "1000M"
 level = "trace"
 
+[security]
+# Mock-region tests assert the raw key ranges returned by debug commands.
+redact_info_log = false
+
 [profiles]
 [profiles.default]
 enable_resource_control = 0
