@@ -31,6 +31,7 @@
 #include <cassert>
 #include <cstddef>
 #include <iostream>
+#include <limits>
 #include <memory>
 
 #ifndef NDEBUG
@@ -331,7 +332,7 @@ public:
     /// `PODArray(n)` allocates `n * sizeof(T) + padding` bytes with no further rounding.
     static constexpr size_t maxAllocSize()
     {
-        return (static_cast<size_t>(-1) - (Base::pad_left + Base::pad_right)) / sizeof(T);
+        return (std::numeric_limits<size_t>::max() - (Base::pad_left + Base::pad_right)) / sizeof(T);
     }
 
     /// `resize`/`reserve` round that padded byte count up to a power of two. The rounding
