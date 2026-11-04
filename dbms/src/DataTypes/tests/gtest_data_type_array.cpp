@@ -514,6 +514,31 @@ try
 }
 CATCH
 
+TEST(DataTypeArrayTest, RollbackPreservesCompletedNestedArrayOnLaterTupleFailure)
+try
+{
+    const DataTypeArray type(std::make_shared<DataTypeTuple>(DataTypes{
+        std::make_shared<DataTypeArray>(std::make_shared<DataTypeFloat32>()),
+        std::make_shared<DataTypeFloat32>()}));
+    auto column = type.createColumn();
+    const String valid = podBytes<UInt64>({1, 2}) + podBytes<Float32>({11.0F, 13.0F, 7.0F});
+    deserializeSingleStream(type, *column, valid, 1, true);
+
+    // The Array component completes, but the following Float32 component has no data.
+    const String truncated = podBytes<UInt64>({1, 1}) + podBytes<Float32>({17.0F});
+    EXPECT_THROW(deserializeSingleStream(type, *column, truncated, 1, true), Exception);
+
+    const auto & array = asArray(*column);
+    const auto & tuple = typeid_cast<const ColumnTuple &>(array.getData());
+    ASSERT_EQ(array.size(), 1);
+    EXPECT_EQ(array.getOffsets().back(), 1);
+    assertArrayEqual(*tuple.getColumns()[0], *makeFloat32Array({{11.0F, 13.0F}}));
+    const auto & second = typeid_cast<const ColumnFloat32 &>(*tuple.getColumns()[1]).getData();
+    ASSERT_EQ(second.size(), 1);
+    EXPECT_EQ(second[0], 7.0F);
+}
+CATCH
+
 TEST(DataTypeArrayTest, RollbackPreservesStringElementsOnShortRead)
 try
 {
@@ -544,17 +569,19 @@ try
 {
     const DataTypeArray type(std::make_shared<DataTypeFloat32>());
     // Float32 is 4 bytes and PaddedPODArray adds 80 bytes of alignment padding.
+    // 2^62 makes the element-byte multiplication wrap to 0.
     // 2^62 - 1 occupies 2^64 - 4 bytes, so the padding wraps the allocation to 128.
     // 2^62 - 20 makes that padded size wrap to 0.
     // 2^61 - 19 keeps the padded size above 2^63, so power-of-two rounding wraps to 0.
-    const UInt64 counts[] = {(1ULL << 62) - 1, (1ULL << 62) - 20, (1ULL << 61) - 19};
+    const UInt64 counts[] = {1ULL << 62, (1ULL << 62) - 1, (1ULL << 62) - 20, (1ULL << 61) - 19};
 
     for (const bool position_independent : {true, false})
     {
         for (const UInt64 count : counts)
         {
             auto column = type.createColumn();
-            ReadBufferFromString sizes_in(podBytes<UInt64>({count}));
+            const String count_bytes = podBytes<UInt64>({count});
+            ReadBufferFromString sizes_in(count_bytes);
             RejectingReadBuffer elements_in;
             try
             {
