@@ -20,8 +20,16 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int READONLY;
+}
+
 BlockIO InterpreterDBGInvokeQuery::execute()
 {
+    if (context.getSettingsRef().readonly)
+        throw Exception("Cannot execute DBGInvoke in readonly mode", ErrorCodes::READONLY);
+
     const ASTDBGInvokeQuery & ast = typeid_cast<const ASTDBGInvokeQuery &>(*query_ptr);
     BlockIO res;
     res.in = context.getDBGInvoker().invoke(context, ast.func.name, ast.func.args);
