@@ -198,6 +198,24 @@ TEST(ArrowChunkCodecTest, RejectsInvalidOffsets)
         EXPECT_THROW(ArrowChunkCodec().decode(data, schema), Exception);
 }
 
+TEST(ArrowChunkCodecTest, DecodesNullEnumValues)
+{
+    String data = makeHeader(3, 2);
+    data.push_back(2);
+    for (const UInt64 offset : {0, 0, 9, 9})
+        appendValue(data, offset);
+    appendValue(data, UInt64{1});
+    data += "a";
+
+    const auto block = ArrowChunkCodec().decode(data, makeSchema({TiDB::TypeEnum}, true));
+    ASSERT_EQ(block.rows(), 3);
+    const auto & column = block.getByPosition(0).column;
+    EXPECT_TRUE(column->isNullAt(0));
+    EXPECT_FALSE(column->isNullAt(1));
+    EXPECT_EQ((*column)[1].get<Int64>(), 1);
+    EXPECT_TRUE(column->isNullAt(2));
+}
+
 TEST(ArrowChunkCodecTest, RejectsTruncatedEnumValues)
 {
     const auto schema = makeSchema({TiDB::TypeEnum});
