@@ -77,8 +77,8 @@ Block ArrowChunkCodec::decode(const String & row_data, const DAGSchema & schema)
         if (unlikely(column_index >= schema.size()))
             throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk has more columns than its schema");
 
-        const UInt32 length = readArrowValue<UInt32>(input);
-        const UInt32 null_count = readArrowValue<UInt32>(input);
+        const auto length = readArrowValue<UInt32>(input);
+        const auto null_count = readArrowValue<UInt32>(input);
         if (unlikely(null_count > length))
             throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk null count exceeds its row count");
         if (columns.empty())
@@ -100,7 +100,7 @@ Block ArrowChunkCodec::decode(const String & row_data, const DAGSchema & schema)
         const auto field_length = getFieldLengthForArrowEncode(field.second.tp);
         std::vector<UInt64> offsets;
         size_t data_size = 0;
-        if (field_length == VAR_SIZE)
+        if (field_length == static_cast<UInt8>(VAR_SIZE))
         {
             const UInt64 offset_count = static_cast<UInt64>(length) + 1;
             if (unlikely(offset_count > input.available() / sizeof(UInt64)))
