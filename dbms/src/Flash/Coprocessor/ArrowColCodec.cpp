@@ -31,6 +31,9 @@
 #include <IO/copyData.h>
 #include <TiDB/Decode/TypeMapping.h>
 #include <TiDB/Schema/TiDB.h>
+#include <common/unaligned.h>
+
+#include <limits>
 
 namespace DB
 {
@@ -622,9 +625,10 @@ const char * arrowEnumColToFlashCol(
             continue;
         if (unlikely(offsets[i + 1] - offsets[i] < sizeof(UInt64)))
             throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk enum value is truncated");
-        const auto enum_value
-            = static_cast<Int64>(toLittleEndian(*(reinterpret_cast<const UInt32 *>(pos + offsets[i]))));
-        col.column->assumeMutable()->insert(Field(enum_value));
+        const auto enum_value = toLittleEndian(unalignedLoad<UInt64>(pos + offsets[i]));
+        if (unlikely(enum_value > static_cast<UInt64>(std::numeric_limits<Int16>::max())))
+            throw Exception(ErrorCodes::INCORRECT_DATA, "Arrow chunk enum value is out of range");
+        col.column->assumeMutable()->insert(Field(static_cast<Int64>(enum_value)));
     }
     return pos + offsets[length];
 }
