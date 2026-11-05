@@ -52,6 +52,23 @@ void PhysicalCTESink::buildPipelineExecGroupImpl(
         builder.setSinkOp(std::make_unique<CTESinkOp>(exec_context, log->identifier(), cte, id));
         id++;
     });
+
+    const Settings & settings = context.getSettingsRef();
+    SpillConfig spill_config(
+        context.getTemporaryPath(),
+        " ",
+        settings.max_cached_data_bytes_in_spiller,
+        settings.max_spilled_rows_per_file,
+        settings.max_spilled_bytes_per_file,
+        context.getFileProvider(),
+        settings.max_threads,
+        settings.max_block_size);
+
+    cte->initCTESpillContextAndPartitionConfig(
+        spill_config,
+        group_builder.getCurrentHeader(),
+        settings.max_bytes_before_cte_spill,
+        context);
 }
 
 void PhysicalCTESink::finalizeImpl(const Names & parent_require)
