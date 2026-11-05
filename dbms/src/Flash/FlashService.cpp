@@ -19,6 +19,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Common/VariantOp.h>
 #include <Common/getNumberOfCPUCores.h>
+#include <Common/typeid_cast.h>
 #include <Debug/MockStorage.h>
 #include <Flash/BatchCoprocessorHandler.h>
 #include <Flash/Coprocessor/DAGContext.h>
@@ -39,6 +40,11 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Interpreters/executeQuery.h>
+#include <Parsers/ASTSelectQuery.h>
+#include <Parsers/ASTSelectWithUnionQuery.h>
+#include <Parsers/ParserQuery.h>
+#include <Parsers/parseQuery.h>
+#include <Poco/Message.h>
 #include <Server/IServer.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
@@ -64,6 +70,8 @@ extern const int NOT_IMPLEMENTED;
 extern const int UNKNOWN_EXCEPTION;
 extern const int DISAGG_ESTABLISH_RETRYABLE_ERROR;
 extern const int TIMEOUT_EXCEEDED;
+extern const int READONLY;
+extern const int INTO_OUTFILE_NOT_ALLOWED;
 } // namespace ErrorCodes
 namespace FailPoints
 {
@@ -1194,6 +1202,34 @@ grpc::Status FlashService::GetDisaggConfig(
     return grpc::Status::OK;
 }
 
+void restrictTiFlashSystemTableQuery(Context & context, const String & sql)
+{
+    // Set before parsing so a later SELECT ... SETTINGS cannot clear readonly.
+    context.setSetting("readonly", "1");
+
+    ParserQuery parser(sql.data() + sql.size());
+    const ASTPtr ast = parseQuery(parser, sql, "from GetTiFlashSystemTable", context.getSettingsRef().max_query_size);
+
+    const auto * select = typeid_cast<const ASTSelectWithUnionQuery *>(ast.get());
+    if (!select)
+    {
+        if (typeid_cast<const ASTSelectQuery *>(ast.get()))
+            return;
+        throw Exception("GetTiFlashSystemTable only allows SELECT", ErrorCodes::READONLY);
+    }
+
+    if (select->out_file)
+        throw Exception("INTO OUTFILE is not allowed", ErrorCodes::INTO_OUTFILE_NOT_ALLOWED);
+
+    if (!select->list_of_selects)
+        throw Exception("GetTiFlashSystemTable only allows SELECT", ErrorCodes::READONLY);
+    for (const auto & child : select->list_of_selects->children)
+    {
+        if (!typeid_cast<const ASTSelectQuery *>(child.get()))
+            throw Exception("GetTiFlashSystemTable only allows SELECT", ErrorCodes::READONLY);
+    }
+}
+
 grpc::Status FlashService::GetTiFlashSystemTable(
     grpc::ServerContext * grpc_context,
     const kvrpcpb::TiFlashSystemTableRequest * request,
@@ -1210,6 +1246,7 @@ grpc::Status FlashService::GetTiFlashSystemTable(
         if (!status.ok())
             return status;
         ctx->setDefaultFormat("JSONCompact");
+        restrictTiFlashSystemTableQuery(*ctx, request->sql());
         ReadBufferFromString in_buf(request->sql());
         MemoryWriteBuffer out_buf;
         executeQuery(in_buf, out_buf, false, *ctx, nullptr);
