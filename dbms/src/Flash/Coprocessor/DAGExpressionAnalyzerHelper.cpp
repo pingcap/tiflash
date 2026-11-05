@@ -129,6 +129,11 @@ String DAGExpressionAnalyzerHelper::buildInFunction(
     const tipb::Expr & expr,
     const ExpressionActionsPtr & actions)
 {
+    if (expr.children().empty())
+    {
+        throw TiFlashException("IN function requires a left operand", Errors::Coprocessor::BadRequest);
+    }
+
     const String & func_name = getFunctionName(expr);
     Names argument_names;
     String key_name = analyzer->getActions(expr.children(0), actions);
