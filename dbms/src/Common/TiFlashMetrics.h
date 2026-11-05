@@ -172,6 +172,22 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_raft_decode, {"type", "raft_decode"}),                                                                                 \
       F(type_cop_read, {"type", "cop_read"}),                                                                                       \
       F(type_sync_table_schema, {"type", "sync_table_schema"}))                                                                     \
+    M(tiflash_schema_watermark_decode_count,                                                                                        \
+      "Committed batches evaluated for historical extra columns",                                                                   \
+      Counter,                                                                                                                      \
+      F(type_no_watermark, {"type", "no_watermark"}),                                                                               \
+      F(type_beyond_watermark, {"type", "beyond_watermark"}),                                                                       \
+      F(type_covered, {"type", "covered"}),                                                                                         \
+      F(type_skipped_extra_columns, {"type", "skipped_extra_columns"}))                                                             \
+    M(tiflash_row_decode_reject_count,                                                                                              \
+      "Non-forced decode rejections by reason, including storage lookup failures",                                                  \
+      Counter,                                                                                                                      \
+      F(reason_extra_column, {"reason", "extra_column"}),                                                                           \
+      F(reason_missing_column, {"reason", "missing_column"}),                                                                       \
+      F(reason_null_in_non_nullable, {"reason", "null_in_non_nullable"}),                                                           \
+      F(reason_datum_rejected, {"reason", "datum_rejected"}),                                                                       \
+      F(reason_pk_handle_overflow, {"reason", "pk_handle_overflow"}),                                                               \
+      F(reason_storage_not_found, {"reason", "storage_not_found"}))                                                                 \
     M(tiflash_schema_internal_ddl_count,                                                                                            \
       "Total number of each kinds of internal ddl operations",                                                                      \
       Counter,                                                                                                                      \
