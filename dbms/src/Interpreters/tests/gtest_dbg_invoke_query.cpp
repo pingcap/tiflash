@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Debug/TiFlashTestEnv.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterDBGInvokeQuery.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/parseQuery.h>
+#include <TestUtils/TiFlashTestEnv.h>
 #include <gtest/gtest.h>
 
 namespace DB::ErrorCodes

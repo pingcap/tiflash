@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Common/typeid_cast.h>
-#include <Debug/TiFlashTestEnv.h>
 #include <Flash/FlashService.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterSetQuery.h>
@@ -21,6 +20,7 @@
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/parseQuery.h>
+#include <TestUtils/TiFlashTestEnv.h>
 #include <gtest/gtest.h>
 
 namespace DB::ErrorCodes

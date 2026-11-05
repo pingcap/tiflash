@@ -40,14 +40,11 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Interpreters/executeQuery.h>
-<<<<<<< HEAD
-=======
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Poco/Message.h>
->>>>>>> f1a0749db6 (security: restrict GetTiFlashSystemTable to read-only SELECT (#11199))
 #include <Server/IServer.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
