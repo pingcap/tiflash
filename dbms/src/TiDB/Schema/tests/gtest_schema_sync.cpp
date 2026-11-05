@@ -1247,7 +1247,6 @@ TEST_F(SchemaWatermarkBoundaryTest, HistoricalMVCCFallbackPublishesLatestSchema)
     pingcap::kv::Cluster cluster;
     // Stop the default mock cluster's workers before replacing its RPC/PD
     // endpoints. This test uses synchronous RPCs only.
-    cluster.lock_resolver->stopBgResolve();
     cluster.rpc_client->stop();
     cluster.mpp_prober->stop();
     cluster.thread_pool->stop();
