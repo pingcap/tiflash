@@ -216,6 +216,50 @@ TEST(ArrowChunkCodecTest, DecodesNullEnumValues)
     EXPECT_TRUE(column->isNullAt(2));
 }
 
+TEST(ArrowChunkCodecTest, DecodesEnumBoundaryValues)
+{
+    constexpr auto max_enum_value = std::numeric_limits<Int16>::max();
+    auto schema = makeSchema({TiDB::TypeEnum});
+    schema[0].second.elems.emplace_back("max", max_enum_value);
+
+    String values;
+    appendValue(values, UInt64{0});
+    appendValue(values, UInt64{1});
+    values += "a";
+    appendValue(values, static_cast<UInt64>(max_enum_value));
+    values += "max";
+
+    const auto block = ArrowChunkCodec().decode(makeStringColumn(3, {0, 8, 17, 28}, values), schema);
+    ASSERT_EQ(block.rows(), 3);
+    const auto & column = block.getByPosition(0).column;
+    EXPECT_EQ(column->getInt(0), 0);
+    EXPECT_EQ(column->getInt(1), 1);
+    EXPECT_EQ(column->getInt(2), max_enum_value);
+}
+
+TEST(ArrowChunkCodecTest, RejectsEnumValuesWithNonzeroUpperBytes)
+{
+    String value;
+    appendValue(value, UInt64{0x0000000100000001});
+    EXPECT_THROW(
+        ArrowChunkCodec().decode(makeStringColumn(1, {0, sizeof(UInt64)}, value), makeSchema({TiDB::TypeEnum})),
+        Exception);
+}
+
+TEST(ArrowChunkCodecTest, RejectsOutOfRangeEnumValues)
+{
+    const auto schema = makeSchema({TiDB::TypeEnum});
+    for (const auto enum_value :
+         {static_cast<UInt64>(std::numeric_limits<Int16>::max()) + 1,
+          UInt64{65537},
+          std::numeric_limits<UInt64>::max()})
+    {
+        String value;
+        appendValue(value, enum_value);
+        EXPECT_THROW(ArrowChunkCodec().decode(makeStringColumn(1, {0, sizeof(UInt64)}, value), schema), Exception);
+    }
+}
+
 TEST(ArrowChunkCodecTest, RejectsTruncatedEnumValues)
 {
     const auto schema = makeSchema({TiDB::TypeEnum});
