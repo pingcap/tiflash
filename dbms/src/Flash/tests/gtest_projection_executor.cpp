@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TiFlashException.h>
+#include <Flash/Planner/PhysicalPlan.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
@@ -106,6 +108,58 @@ public:
     const String db_name{"test_db"};
     const String table_name{"projection_test_table"};
 };
+
+TEST_F(ProjectionExecutorTestRunner, RejectsFinalProjectionSchemaMismatch)
+{
+    for (bool cte_sink : {false, true})
+    {
+        SCOPED_TRACE(cte_sink);
+        auto request = context.scan(db_name, table_name)
+                           .project(MockColumnNameVec{col_names[4]})
+                           .exchangeSender(tipb::PassThrough)
+                           .build(context);
+        auto * root = request->mutable_root_executor();
+        auto * sender = root->mutable_exchange_sender();
+        const auto field_type = sender->all_field_types(0);
+        if (cte_sink)
+        {
+            tipb::Executor child;
+            child.Swap(sender->mutable_child());
+            root->clear_exchange_sender();
+            root->set_tp(tipb::ExecType::TypeCTESink);
+            auto * sink = root->mutable_cte_sink();
+            sink->set_cte_id(1);
+            *sink->add_field_types() = field_type;
+            *sink->add_field_types() = field_type;
+            sink->mutable_child()->Swap(&child);
+        }
+        else
+        {
+            *sender->add_all_field_types() = field_type;
+            request->clear_output_offsets();
+            request->add_output_offsets(1);
+        }
+
+        // Request-level validation accepts both plans despite their one-column children.
+        DAGContext dag_context(*request, "invalid_final_projection", 1);
+        ASSERT_EQ(dag_context.output_field_types.size(), cte_sink ? 1 : 2);
+        TiFlashTestEnv::setUpTestContext(
+            *context.context,
+            &dag_context,
+            context.mockStorage(),
+            TestType::EXECUTOR_TEST);
+        PhysicalPlan plan(*context.context, "invalid_final_projection");
+        try
+        {
+            plan.build(request.get());
+            FAIL() << "Expected a final projection schema mismatch to be rejected";
+        }
+        catch (const TiFlashException & e)
+        {
+            EXPECT_TRUE(e.getError().is(Errors::Coprocessor::BadRequest)) << e.standardText();
+        }
+    }
+}
 
 TEST_F(ProjectionExecutorTestRunner, Projection)
 try
