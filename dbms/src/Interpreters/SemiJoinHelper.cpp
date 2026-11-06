@@ -156,7 +156,7 @@ SemiJoinHelper<KIND, STRICTNESS, Maps>::SemiJoinHelper(
 }
 
 template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
-void SemiJoinHelper<KIND, STRICTNESS, Maps>::doJoin()
+void SemiJoinHelper<KIND, STRICTNESS, Maps>::doJoin([[maybe_unused]] ProbeProcessInfo & probe_process_info)
 {
     if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
     {
@@ -209,6 +209,13 @@ void SemiJoinHelper<KIND, STRICTNESS, Maps>::doJoin()
             if (current_offset >= max_block_size)
                 break;
         }
+
+        /// The pairs actually enumerated this round: other conditions are evaluated on the
+        /// materialized rows, and a satisfied condition finishes the probe row early (the paced
+        /// walk short-circuits), so count the materialized rows instead of the full matched
+        /// entry length.
+        if (current_offset != 0 && probe_process_info.joined_rows_counter != nullptr)
+            probe_process_info.joined_rows_counter->fetch_add(current_offset, std::memory_order_relaxed);
 
         /// Move the columns to exec_block.
         /// Note that this can remove the new columns that are added in the last loop

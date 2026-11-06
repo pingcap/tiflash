@@ -444,17 +444,31 @@ bool HashJoin::finishOneProbe(size_t stream_index)
     auto & wd = probe_workers_data[stream_index];
     LOG_DEBUG(
         log,
-        "{} probe handle {} rows, cost {}ms(hash_table {}ms + replicate {}ms + other condition {}ms), collision {}",
+        "{} probe handle {} rows, cost {}ms(hash_table {}ms + replicate {}ms + other condition {}ms), collision {}, "
+        "joined rows {}",
         stream_index,
         wd.probe_handle_rows,
         wd.probe_time / 1000000UL,
         wd.probe_hash_table_time / 1000000UL,
         wd.replicate_time / 1000000UL,
         wd.other_condition_time / 1000000UL,
-        wd.collision);
+        wd.collision,
+        wd.joined_rows);
     if (active_probe_worker.fetch_sub(1) == 1)
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_mpp_hash_probe);
+        // The last finishing worker sees all other workers' counts through the fetch_sub chain, so
+        // the sum is complete. Cross join does not use JoinV2 today; the guard is defensive: the
+        // cross probe path has no key-comparison loop, so wd.joined_rows would stay zero and
+        // publishing the sum would report a misleading present-0 instead of leaving the
+        // statistic absent.
+        if (method != HashJoinKeyMethod::Cross)
+        {
+            size_t total_joined_rows = 0;
+            for (const auto & probe_wd : probe_workers_data)
+                total_joined_rows += probe_wd.joined_rows;
+            profile_info->addJoinedRows(total_joined_rows);
+        }
         return true;
     }
     return false;
