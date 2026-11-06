@@ -82,7 +82,7 @@ public:
     std::shared_ptr<tipb::DAGRequest> buildDAGRequest(T param)
     {
         return context.scan(db_name, table_name).project(param).build(context);
-    };
+    }
 
     /// Prepare column data
     const ColumnWithNullableString col0{"col0-0", "col0-1", "", "col0-2", {}, "col0-3", ""};
