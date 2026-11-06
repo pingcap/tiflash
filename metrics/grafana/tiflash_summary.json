@@ -6533,11 +6533,11 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 16
+            "y": 20
           },
           "height": null,
           "hideTimeOverride": false,
-          "id": 255,
+          "id": 346,
           "interval": null,
           "isNew": true,
           "legend": {
@@ -6580,16 +6580,31 @@
           "targets": [
             {
               "datasource": "${DS_TEST-CLUSTER}",
-              "expr": "sum(rate(\n    tiflash_schema_watermark_decode_count\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$instance\",instance=~\"$tiflash_role\"}\n    [$__rate_interval]\n)) by (type, $additional_groupby) ",
+              "expr": "sum(rate(tiflash_schema_watermark_decode_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[$__rate_interval])) by (type)",
               "format": "time_series",
               "hide": false,
               "instant": false,
               "interval": "",
               "intervalFactor": 2,
-              "legendFormat": "{{type}} {{$additional_groupby}}",
+              "legendFormat": "{{type}}",
               "metric": "",
-              "query": "sum(rate(\n    tiflash_schema_watermark_decode_count\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$instance\",instance=~\"$tiflash_role\"}\n    [$__rate_interval]\n)) by (type, $additional_groupby) ",
-              "refId": "",
+              "query": "sum(rate(tiflash_schema_watermark_decode_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[$__rate_interval])) by (type)",
+              "refId": "A",
+              "step": 10,
+              "target": ""
+            },
+            {
+              "datasource": "${DS_TEST-CLUSTER}",
+              "expr": "sum(rate(tiflash_schema_watermark_decode_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[$__rate_interval])) by (type, instance)",
+              "format": "time_series",
+              "hide": true,
+              "instant": false,
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "{{type}}-{{instance}}",
+              "metric": "",
+              "query": "sum(rate(tiflash_schema_watermark_decode_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[$__rate_interval])) by (type, instance)",
+              "refId": "B",
               "step": 10,
               "target": ""
             }
@@ -6666,11 +6681,11 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 24
+            "y": 28
           },
           "height": null,
           "hideTimeOverride": false,
-          "id": 256,
+          "id": 347,
           "interval": null,
           "isNew": true,
           "legend": {
@@ -6713,16 +6728,31 @@
           "targets": [
             {
               "datasource": "${DS_TEST-CLUSTER}",
-              "expr": "sum(rate(\n    tiflash_row_decode_reject_count\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$instance\",instance=~\"$tiflash_role\"}\n    [$__rate_interval]\n)) by (reason, $additional_groupby) ",
+              "expr": "sum(rate(tiflash_row_decode_reject_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[$__rate_interval])) by (reason)",
               "format": "time_series",
               "hide": false,
               "instant": false,
               "interval": "",
               "intervalFactor": 2,
-              "legendFormat": "{{reason}} {{$additional_groupby}}",
+              "legendFormat": "{{reason}}",
               "metric": "",
-              "query": "sum(rate(\n    tiflash_row_decode_reject_count\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$instance\",instance=~\"$tiflash_role\"}\n    [$__rate_interval]\n)) by (reason, $additional_groupby) ",
-              "refId": "",
+              "query": "sum(rate(tiflash_row_decode_reject_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[$__rate_interval])) by (reason)",
+              "refId": "A",
+              "step": 10,
+              "target": ""
+            },
+            {
+              "datasource": "${DS_TEST-CLUSTER}",
+              "expr": "sum(rate(tiflash_row_decode_reject_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[$__rate_interval])) by (reason, instance)",
+              "format": "time_series",
+              "hide": true,
+              "instant": false,
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "{{reason}}-{{instance}}",
+              "metric": "",
+              "query": "sum(rate(tiflash_row_decode_reject_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[$__rate_interval])) by (reason, instance)",
+              "refId": "B",
               "step": 10,
               "target": ""
             }
