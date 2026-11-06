@@ -6596,7 +6596,7 @@ private:
         {
             const auto arg0 = arg0_vec[i];
 
-            if (col_arg0->isNullAt(i) || arg0 < 1 || static_cast<Int64>(arg0) >= static_cast<Int64>(narg))
+            if (col_arg0->isNullAt(i) || arg0 < 1 || static_cast<UInt64>(arg0) >= narg)
             {
                 res_null_map->getData()[i] = true;
                 res_chars.push_back(0);
