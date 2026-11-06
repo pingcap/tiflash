@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TiFlashException.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/ExecutorTestUtils.h>
 
@@ -86,6 +87,34 @@ public:
         executeAndAssertColumnsEqual(request, expect_columns);
     }
 };
+
+TEST_F(WindowExecutorTestRunner, RejectNonPartialSort)
+try
+{
+    auto request = context.scan("test_db", "test_table").sort({"order", false}, false).build(context);
+    auto * sort = request->mutable_root_executor()->mutable_sort();
+
+    WRAP_FOR_TEST_BEGIN
+    for (const auto has_partial_sort : {true, false})
+    {
+        if (has_partial_sort)
+            sort->set_ispartialsort(false);
+        else
+            sort->clear_ispartialsort();
+
+        try
+        {
+            executeStreams(request);
+            FAIL() << "Expected BadRequest for non-partial sort";
+        }
+        catch (const TiFlashException & e)
+        {
+            EXPECT_TRUE(e.getError().is(Errors::Coprocessor::BadRequest)) << e.standardText();
+        }
+    }
+    WRAP_FOR_TEST_END
+}
+CATCH
 
 TEST_F(WindowExecutorTestRunner, testWindowFunctionByPartitionAndOrder)
 try
