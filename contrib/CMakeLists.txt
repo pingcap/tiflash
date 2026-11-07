@@ -207,3 +207,5 @@ if (ENABLE_TESTS AND NOT CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
     add_subdirectory(hdf5-cmake)
     add_subdirectory(highfive-cmake)
 endif ()
+
+add_subdirectory(tici-search-lib)

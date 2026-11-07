@@ -24,6 +24,7 @@ Children getChildren(const tipb::Executor & executor)
     {
     case tipb::ExecType::TypeTableScan:
     case tipb::ExecType::TypePartitionTableScan:
+    case tipb::ExecType::TypeIndexScan:
         return {};
     case tipb::ExecType::TypeJoin:
         if (executor.join().children_size() != 2)
@@ -32,8 +33,6 @@ Children getChildren(const tipb::Executor & executor)
                 "Join executor must have exactly 2 children, got {}",
                 executor.join().children_size());
         return {&executor.join().children(0), &executor.join().children(1)};
-    case tipb::ExecType::TypeIndexScan:
-        throw TiFlashException("IndexScan is not supported", Errors::Coprocessor::Unimplemented);
     case tipb::ExecType::TypeSelection:
         return Children{&executor.selection().child()};
     case tipb::ExecType::TypeAggregation:
