@@ -243,6 +243,12 @@ struct SSTReaderInterfaces {
   RustStrWithViewVec (*fn_get_split_keys)(SSTReaderPtr, uint64_t splits_count);
 };
 
+// The callback must be thread safe and must not unwind. The name is borrowed
+// only for the call; Hub owns its backing for the reader's lifetime. Return 1
+// only when both packed output bounds are proved, otherwise return 0.
+using TimestampProjection = uint8_t (*)(const char *, uint64_t, int64_t, uint64_t, uint64_t,
+                                       uint64_t *, uint64_t *);
+
 struct CloudStorageEngineInterfaces {
   bool (*fn_get_keyspace_encryption)(RaftStoreProxyPtr, uint32_t);
   RawCppStringPtr (*fn_get_master_key)(RaftStoreProxyPtr);
@@ -254,7 +260,7 @@ struct CloudStorageEngineInterfaces {
                                               BaseBuffView, BaseBuffView,
                                               BaseBuffView, BaseBuffView,
                                               BaseBuffView, BaseBuffView,
-                                              RaftStoreProxyPtr);
+                                              BaseBuffView, TimestampProjection, RaftStoreProxyPtr);
   uint64_t (*fn_read_block)(ColumnarReaderPtr, uint64_t);
   RustStrWithView (*fn_read_handle)(ColumnarReaderPtr);
   RustStrWithView (*fn_read_version)(ColumnarReaderPtr);

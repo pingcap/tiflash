@@ -271,6 +271,29 @@ private:
 public:
     const std::string & getTimeZone() const { return time_zone; }
 
+    /// Prove that the actual row accessors implement t + offset on this range.
+    /// Check all entries findIndex can inspect, including the neighboring days.
+    /// A bounded day walk avoids both endpoint-only proofs and per-second scans.
+    bool isExactOffsetRange(time_t begin, time_t end, Int64 offset) const
+    {
+        if (begin <= 0 || end < begin || end > 2147483647 || offset <= -86400 || offset >= 86400 || offset % 60 != 0
+            || (offset_is_whole_number_of_hours_during_epoch && offset % 3600 != 0))
+            return false;
+        const Int64 first_day = begin / 86400 - 1;
+        const Int64 last_day = end / 86400 + 1;
+        if (last_day - first_day > 33)
+            return false;
+        for (Int64 day = first_day; day <= last_day; ++day)
+        {
+            const auto & entry = lut[day + daynum_offset_epoch];
+            if (entry.date != day * 86400 - offset || entry.amount_of_offset_change() != 0)
+                return false;
+        }
+        // On these ordinary days toHour/toMinute use t - midnight, and
+        // toSecond uses t % 60. Minute-aligned offsets make them agree exactly.
+        return true;
+    }
+
     // Methods only for unit-testing, it makes very little sense to use it from user code.
     auto getOffsetAtStartOfEpoch() const { return offset_at_start_of_epoch; }
     auto getTimeOffsetAtStartOfLUT() const { return offset_at_start_of_lut; }
