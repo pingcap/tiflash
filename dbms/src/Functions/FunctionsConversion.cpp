@@ -148,7 +148,10 @@ private:
     {
         try
         {
-            time_t epoch_second = getEpochSecond(MyDateTime(packed), *timezone_info.timezone);
+            time_t epoch_second = getEpochSecond(
+                MyDateTime(packed),
+                *timezone_info.timezone,
+                std::is_same_v<Name, NameTiDBUnixTimeStampInt>);
             if (!timezone_info.is_name_based)
                 epoch_second -= timezone_info.timezone_offset;
             if (epoch_second <= 0)

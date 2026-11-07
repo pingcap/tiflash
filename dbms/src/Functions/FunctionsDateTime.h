@@ -2451,15 +2451,14 @@ public:
             size_t size = vec_from.size();
             vec_to.resize(size);
 
-            static const auto & time_zone_utc = DateLUT::instance("UTC");
             const auto & time_zone_other = extractTimeZoneFromFunctionArguments(block, arguments, 1, 0);
             for (size_t i = 0; i < size; ++i)
             {
                 UInt64 result_time = 0;
                 if constexpr (convert_from_utc)
-                    convertTimeZone(vec_from[i], result_time, time_zone_utc, time_zone_other);
+                    result_time = convertTimeZoneFromUTCForComputing(vec_from[i], time_zone_other);
                 else
-                    convertTimeZone(vec_from[i], result_time, time_zone_other, time_zone_utc);
+                    result_time = convertTimeZoneToUTCForOutput(vec_from[i], time_zone_other);
                 vec_to[i] = result_time;
             }
 
