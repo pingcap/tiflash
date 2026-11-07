@@ -12,11 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Columns/ColumnDecimal.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnVector.h>
 #include <Columns/IColumn.h>
+#include <Common/Exception.h>
+#include <Common/assert_cast.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeFixedString.h>
 #include <DataTypes/DataTypeMyDate.h>
@@ -36,6 +40,15 @@ static constexpr size_t NONE_EXIST = std::numeric_limits<size_t>::max();
 
 namespace details
 {
+template <typename T>
+ALWAYS_INLINE const auto & minMaxColumnData(const IColumn & column)
+{
+    if constexpr (IsDecimal<T>)
+        return assert_cast<const ColumnDecimal<T> &>(column).getData();
+    else
+        return toColumnVectorData<T>(column);
+}
+
 // Calculate the min max value only for the **not deleted** values in the column.
 inline std::pair<size_t, size_t> minmax(
     const IColumn & column,
@@ -239,7 +252,7 @@ RSResults MinMaxIndex::checkNullableInImpl(
     const DataTypePtr & type)
 {
     RSResults results(pack_count, RSResult::SomeNull);
-    const auto & minmaxes_data = toColumnVectorData<T>(column_nullable.getNestedColumnPtr());
+    const auto & minmaxes_data = details::minMaxColumnData<T>(*column_nullable.getNestedColumnPtr());
     for (size_t i = start_pack; i < start_pack + pack_count; ++i)
     {
         if (details::minIsNull(null_map, i))
@@ -267,6 +280,11 @@ RSResults MinMaxIndex::checkNullableIn(
         return checkNullableInImpl<TYPE>(column_nullable, null_map, start_pack, pack_count, values, type);
     FOR_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
+#define DISPATCH_DECIMAL(FIELD_TYPE, DATA_TYPE)   \
+    if (typeid_cast<const DATA_TYPE *>(raw_type)) \
+        return checkNullableInImpl<FIELD_TYPE>(column_nullable, null_map, start_pack, pack_count, values, type);
+    FOR_DECIMAL_TYPES(DISPATCH_DECIMAL)
+#undef DISPATCH_DECIMAL
     if (typeid_cast<const DataTypeMyDateTime *>(raw_type) || typeid_cast<const DataTypeMyDate *>(raw_type))
     {
         // For DataTypeMyDateTime / DataTypeMyDate, simply compare them as comparing UInt64 is OK.
@@ -333,7 +351,7 @@ RSResults MinMaxIndex::checkInImpl(
     const DataTypePtr & type)
 {
     RSResults results(pack_count, RSResult::None);
-    const auto & minmaxes_data = toColumnVectorData<T>(minmaxes);
+    const auto & minmaxes_data = details::minMaxColumnData<T>(*minmaxes);
     for (size_t i = start_pack; i < start_pack + pack_count; ++i)
     {
         if (!has_value_marks[i])
@@ -362,6 +380,11 @@ RSResults MinMaxIndex::checkIn(
         return checkInImpl<TYPE>(start_pack, pack_count, values, type);
     FOR_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
+#define DISPATCH_DECIMAL(FIELD_TYPE, DATA_TYPE)   \
+    if (typeid_cast<const DATA_TYPE *>(raw_type)) \
+        return checkInImpl<FIELD_TYPE>(start_pack, pack_count, values, type);
+    FOR_DECIMAL_TYPES(DISPATCH_DECIMAL)
+#undef DISPATCH_DECIMAL
     if (typeid_cast<const DataTypeMyDateTime *>(raw_type) || typeid_cast<const DataTypeMyDate *>(raw_type))
     {
         // For DataTypeMyDateTime / DataTypeMyDate, simply compare them as comparing UInt64 is OK.
@@ -405,7 +428,7 @@ template <typename Op, typename T>
 RSResults MinMaxIndex::checkCmpImpl(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type)
 {
     RSResults results(pack_count, RSResult::None);
-    const auto & minmaxes_data = toColumnVectorData<T>(minmaxes);
+    const auto & minmaxes_data = details::minMaxColumnData<T>(*minmaxes);
     for (size_t i = start_pack; i < start_pack + pack_count; ++i)
     {
         if (!has_value_marks[i])
@@ -435,6 +458,11 @@ RSResults MinMaxIndex::checkCmp(size_t start_pack, size_t pack_count, const Fiel
         return checkCmpImpl<Op, TYPE>(start_pack, pack_count, value, type);
     FOR_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
+#define DISPATCH_DECIMAL(FIELD_TYPE, DATA_TYPE)   \
+    if (typeid_cast<const DATA_TYPE *>(raw_type)) \
+        return checkCmpImpl<Op, FIELD_TYPE>(start_pack, pack_count, value, type);
+    FOR_DECIMAL_TYPES(DISPATCH_DECIMAL)
+#undef DISPATCH_DECIMAL
     if (typeid_cast<const DataTypeMyDateTime *>(raw_type) || typeid_cast<const DataTypeMyDate *>(raw_type))
     {
         // For DataTypeMyDateTime / DataTypeMyDate, simply compare them as comparing UInt64 is OK.
@@ -506,7 +534,7 @@ RSResults MinMaxIndex::checkNullableNullEqualImpl(
 {
     /// Default to Some: conservative when min/max cannot prove a tighter bound.
     RSResults results(pack_count, RSResult::Some);
-    const auto & minmaxes_data = toColumnVectorData<T>(column_nullable.getNestedColumnPtr());
+    const auto & minmaxes_data = details::minMaxColumnData<T>(*column_nullable.getNestedColumnPtr());
     for (size_t i = start_pack; i < start_pack + pack_count; ++i)
     {
         /// Min slot is NULL on indexes built before v6.4.0. For a pure-NULL pack,
@@ -546,6 +574,11 @@ RSResults MinMaxIndex::checkNullableNullEqual(
         return checkNullableNullEqualImpl<TYPE>(column_nullable, null_map, start_pack, pack_count, value, type);
     FOR_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
+#define DISPATCH_DECIMAL(FIELD_TYPE, DATA_TYPE)   \
+    if (typeid_cast<const DATA_TYPE *>(raw_type)) \
+        return checkNullableNullEqualImpl<FIELD_TYPE>(column_nullable, null_map, start_pack, pack_count, value, type);
+    FOR_DECIMAL_TYPES(DISPATCH_DECIMAL)
+#undef DISPATCH_DECIMAL
     if (typeid_cast<const DataTypeMyDateTime *>(raw_type) || typeid_cast<const DataTypeMyDate *>(raw_type))
     {
         // For DataTypeMyDateTime / DataTypeMyDate, simply compare them as comparing UInt64 is OK.
@@ -638,7 +671,7 @@ RSResults MinMaxIndex::checkNullableCmpImpl(
     const DataTypePtr & type)
 {
     RSResults results(pack_count, RSResult::SomeNull);
-    const auto & minmaxes_data = toColumnVectorData<T>(column_nullable.getNestedColumnPtr());
+    const auto & minmaxes_data = details::minMaxColumnData<T>(*column_nullable.getNestedColumnPtr());
     for (size_t i = start_pack; i < start_pack + pack_count; ++i)
     {
         if (details::minIsNull(null_map, i))
@@ -667,6 +700,11 @@ RSResults MinMaxIndex::checkNullableCmp(
         return checkNullableCmpImpl<Op, TYPE>(column_nullable, null_map, start_pack, pack_count, value, type);
     FOR_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
+#define DISPATCH_DECIMAL(FIELD_TYPE, DATA_TYPE)   \
+    if (typeid_cast<const DATA_TYPE *>(raw_type)) \
+        return checkNullableCmpImpl<Op, FIELD_TYPE>(column_nullable, null_map, start_pack, pack_count, value, type);
+    FOR_DECIMAL_TYPES(DISPATCH_DECIMAL)
+#undef DISPATCH_DECIMAL
     if (typeid_cast<const DataTypeMyDateTime *>(raw_type) || typeid_cast<const DataTypeMyDate *>(raw_type))
     {
         // For DataTypeMyDateTime / DataTypeMyDate, simply compare them as comparing UInt64 is OK.
