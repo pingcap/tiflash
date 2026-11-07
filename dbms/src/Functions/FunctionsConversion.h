@@ -2651,6 +2651,25 @@ class FunctionCast final : public IFunctionBase
 {
 public:
     using WrapperType = std::function<void(Block &, const ColumnNumbers &, size_t)>;
+
+    bool isSuitableForShortCircuitArgumentsExecution() const override { return true; }
+
+    /// Deliberately not canThrow: the data-dependent throws are
+    /// CANNOT_PARSE_TEXT from parsing conversions (string -> number/date)
+    /// and the unconditional CANNOT_INSERT_NULL_IN_ORDINARY_COLUMN when an
+    /// actual NULL reaches a non-nullable target (see the matching comment
+    /// on FunctionTiDBCast: real NULLs there violate TiDB's nullability
+    /// contract and throw eagerly too; only a not-null wrapper directly
+    /// around a deferred throwing producer could turn masked null
+    /// placeholders into an error). This plain CAST is not in TiDB's pushed
+    /// function set; in pushed plans it only appears as the appendCast
+    /// wrapper around a function result, and a deferred producer's masked
+    /// rows are either null placeholders under a nullable target (the JSON
+    /// functions, and CAST(null) is NULL) or filter/expand defaults of a
+    /// function TiDB does not push (intDiv, whose numeric defaults never
+    /// fail parsing). If a data-dependent throw becomes reachable, add a
+    /// canThrow override.
+
     using MonotonicityForRange = std::function<Monotonicity(const IDataType &, const Field &, const Field &)>;
 
     FunctionCast(
