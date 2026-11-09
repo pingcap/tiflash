@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Flash/Coprocessor/CHBlockChunkCodecV1.h>
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <IO/Buffer/ReadBufferFromString.h>
@@ -22,7 +23,10 @@ namespace DB
 CHBlockChunkDecodeAndSquash::CHBlockChunkDecodeAndSquash(const Block & header, size_t rows_limit_)
     : codec(header)
     , rows_limit(rows_limit_)
-{}
+{
+    // Both decoding formats rely on the header to validate incoming schemas.
+    RUNTIME_CHECK_MSG(header.columns() > 0, "CH block squashing requires a non-empty header");
+}
 
 std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashV1(std::string_view sv)
 {
