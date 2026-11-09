@@ -33,6 +33,13 @@ public:
 
     String getName() const override { return "HashJoinProbeTransformOp"; }
 
+    std::function<void()> getStopCallback() const override
+    {
+        return [join = origin_join] {
+            join->stopProbePhase();
+        };
+    }
+
     bool shouldSkipSource() const override { return probe_transform->shouldSkipProbe(); }
 
 protected:

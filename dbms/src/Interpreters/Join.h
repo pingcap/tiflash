@@ -37,6 +37,7 @@
 #include <Interpreters/SettingsCommon.h>
 
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
@@ -132,12 +133,14 @@ private:
         const OneTimeNotifyFuturePtr & build_finished_future,
         const OneTimeNotifyFuturePtr & probe_finished_future);
     void addRestoreProbeQueue(const SharedQueuePtr & queue);
+    void addProbeInputStopCallback(std::function<void()> callback);
     void stop();
 
     std::atomic_bool stopped{false};
     std::mutex mutex;
     std::vector<OneTimeNotifyFuturePtr> wait_futures;
     std::vector<SharedQueuePtr> restore_probe_queues;
+    std::vector<std::function<void()>> probe_input_stop_callbacks;
 };
 using ProbeStopContextPtr = std::shared_ptr<ProbeStopContext>;
 
@@ -341,6 +344,10 @@ public:
     bool finishOneProbe(size_t stream_index);
     // Stop the shared probe phase without counting this stream as a normal input completion.
     void stopProbePhase();
+    void addProbeInputStopCallback(std::function<void()> callback)
+    {
+        probe_stop_context->addProbeInputStopCallback(std::move(callback));
+    }
     // Register a restore-probe queue. A queue registered after the probe phase has stopped is cancelled immediately.
     void addRestoreProbeQueue(const SharedQueuePtr & queue);
     void finalizeProbe();

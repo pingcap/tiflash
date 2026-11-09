@@ -189,6 +189,19 @@ void ProbeStopContext::addRestoreProbeQueue(const SharedQueuePtr & queue)
         queue->cancel();
 }
 
+void ProbeStopContext::addProbeInputStopCallback(std::function<void()> callback)
+{
+    {
+        std::lock_guard lock(mutex);
+        if (!stopped.load(std::memory_order_acquire))
+        {
+            probe_input_stop_callbacks.push_back(std::move(callback));
+            return;
+        }
+    }
+    callback();
+}
+
 void ProbeStopContext::stop()
 {
     if (stopped.exchange(true, std::memory_order_acq_rel))
@@ -196,10 +209,12 @@ void ProbeStopContext::stop()
 
     std::vector<OneTimeNotifyFuturePtr> futures_to_finish;
     std::vector<SharedQueuePtr> queues_to_cancel;
+    std::vector<std::function<void()>> inputs_to_stop;
     {
         std::lock_guard lock(mutex);
         futures_to_finish = std::move(wait_futures);
         queues_to_cancel = std::move(restore_probe_queues);
+        inputs_to_stop = std::move(probe_input_stop_callbacks);
     }
 
     // Stopping does not make a restore build complete. It only wakes waiters so they can observe the shared stop
@@ -208,6 +223,8 @@ void ProbeStopContext::stop()
         future->finish();
     for (const auto & queue : queues_to_cancel)
         queue->cancel();
+    for (const auto & stop_input : inputs_to_stop)
+        stop_input();
 }
 
 

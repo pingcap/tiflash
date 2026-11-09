@@ -44,6 +44,13 @@ public:
 
     String getName() const override { return "ExchangeReceiverSourceOp"; }
 
+    std::function<void()> getStopCallback() const override
+    {
+        return [receiver = exchange_receiver] {
+            receiver->stopReading();
+        };
+    }
+
     IOProfileInfoPtr getIOProfileInfo() const override { return io_profile_info; }
 
 protected:

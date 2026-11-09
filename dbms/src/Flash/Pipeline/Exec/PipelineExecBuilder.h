@@ -85,6 +85,9 @@ public:
 
     IOProfileInfos getCurIOProfileInfos() const;
 
+    /// Capture the inputs built so far, including producer groups connected by SharedQueue.
+    std::function<void()> getInputStopCallback() const;
+
 private:
     BuilderGroup & getCurGroup()
     {

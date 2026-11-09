@@ -15,20 +15,30 @@
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
+#include <Common/MemoryTrackerSetter.h>
+#include <DataStreams/LimitTransformAction.h>
 #include <DataTypes/DataTypeFixedString.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Debug/TiFlashTestEnv.h>
 #include <Flash/Executor/PipelineExecutorContext.h>
+#include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
+#include <Flash/Pipeline/Schedule/Tasks/Impls/SimplePipelineTask.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/registerFunctions.h>
 #include <Interpreters/Join.h>
+#include <Operators/ConcatSourceOp.h>
+#include <Operators/ExchangeReceiverSourceOp.h>
 #include <Operators/HashJoinProbeTransformOp.h>
 #include <Operators/HashProbeTransformExec.h>
+#include <Operators/LimitTransformOp.h>
 #include <Operators/SharedQueue.h>
+#include <TestUtils/ExecutorTestUtils.h>
 #include <gtest/gtest.h>
 
+#include <chrono>
+#include <ext/scope_guard.h>
 #include <mutex>
 #include <optional>
 
@@ -145,6 +155,11 @@ TEST(JoinProbeStopTest, PropagatesStopToRestoreJoin)
 
     Block block;
     ASSERT_EQ(restore_probe_queue->tryPop(block), MPMCQueueResult::CANCELLED);
+
+    // A restored join can register input after its parent has already stopped.
+    auto late_input = SharedQueue::buildInternal(1, 1, -1, 1);
+    restore_join->addProbeInputStopCallback([late_input] { late_input->cancel(); });
+    ASSERT_EQ(late_input->tryPop(block), MPMCQueueResult::CANCELLED);
 }
 
 TEST(JoinProbeStopTest, StopsProbeOperatorBeforeReadingOrStartingRestore)
@@ -620,7 +635,180 @@ void prepareAndFinalizeMixedJoin(const JoinPtr & join, const DataTypePtr & key_t
         mixed_build_value_name,
     });
 }
+
+class ProbeInputWaitTask : public Task
+{
+public:
+    explicit ProbeInputWaitTask(PipelineExecutorContext & exec_context)
+        : Task(exec_context, "probe_input_wait", ExecTaskStatus::WAIT_FOR_NOTIFY)
+    {}
+
+protected:
+    ExecTaskStatus executeImpl() override { return ExecTaskStatus::FINISHED; }
+    ExecTaskStatus notifyImpl() override { return ExecTaskStatus::RUNNING; }
+};
 } // namespace
+
+class JoinProbeInputStopTest : public ExecutorTest
+{
+};
+
+TEST_F(JoinProbeInputStopTest, LimitWakesInputReaderAndBackpressuredProducer)
+{
+    // Exercise both an already parked reader and registration racing with the stop. No failpoints are needed.
+    for (const bool register_after_stop : {false, true})
+    {
+        PipelineExecutorContext exec_context;
+        MemoryTrackerSetter memory_tracker_setter(true, nullptr);
+        TaskPtr active_task;
+        TaskPtr waiting_task;
+        TaskPtr producer_task;
+        Block result;
+        SCOPE_EXIT({
+            clearNotifyFuture();
+            exec_context.cancel();
+            active_task.reset();
+            waiting_task.reset();
+            producer_task.reset();
+            exec_context.wait();
+        });
+
+        auto join = makeOuterJoinTestJoin(ASTTableJoin::Kind::RightOuter);
+        auto input_header = makeOuterProbeSampleBlock();
+        join->initBuild(makeOuterBuildSampleBlock(), 1);
+        join->initProbe(input_header, 2);
+        join->finalize(Names{
+            outer_probe_key_name,
+            outer_probe_value_name,
+            outer_build_key_name,
+            outer_build_value_name,
+        });
+        join->setInitActiveBuildThreads();
+        auto nullable_int_type = makeNullable(std::make_shared<DataTypeInt32>());
+        auto int_type = std::make_shared<DataTypeInt32>();
+        join->insertFromBlock(
+            Block{
+                {makeNullableInt32Column({1}), nullable_int_type, outer_build_key_name},
+                {makeInt32Column({100}), int_type, outer_build_value_name},
+            },
+            0);
+        ASSERT_TRUE(join->finishOneBuild(0));
+        join->finalizeBuild();
+
+        auto [active_sink, active_source] = SharedQueue::build(exec_context, 1, 1, -1, 1);
+        auto [waiting_sink, waiting_source] = SharedQueue::build(exec_context, 1, 1, -1, 1);
+        auto [producer_sink, producer_source] = SharedQueue::build(exec_context, 1, 1, -1, 1);
+        PipelineExecGroupBuilder builders;
+        builders.addConcurrency(std::make_unique<SharedQueueSourceOp>(exec_context, "", input_header, producer_source));
+        builders.getCurBuilder(0).setSinkOp(std::make_unique<SharedQueueSinkOp>(exec_context, "", active_sink));
+        builders.addGroup();
+        for (const auto & source : {active_source, waiting_source})
+            builders.addConcurrency(std::make_unique<SharedQueueSourceOp>(exec_context, "", input_header, source));
+        join->addProbeInputStopCallback(builders.getInputStopCallback());
+        auto limit = std::make_shared<GlobalLimitTransformAction>(join->getOutputBlock(), 1);
+        size_t stream_index = 0;
+        builders.transform([&](auto & builder) {
+            builder.appendTransformOp(
+                std::make_unique<HashJoinProbeTransformOp>(exec_context, "", join, stream_index++, 1, input_header));
+            builder.appendTransformOp(std::make_unique<LimitTransformOp<GlobalLimitPtr>>(exec_context, "", limit));
+            builder.setSinkOp(std::make_unique<SetBlockSinkOp>(exec_context, "", result));
+        });
+        auto pipelines = builders.build(false);
+        producer_task = std::make_unique<SimplePipelineTask>(exec_context, "", std::move(pipelines[0]));
+        active_task = std::make_unique<SimplePipelineTask>(exec_context, "", std::move(pipelines[1]));
+        waiting_task = std::make_unique<SimplePipelineTask>(exec_context, "", std::move(pipelines[2]));
+
+        ASSERT_EQ(waiting_task->execute(), ExecTaskStatus::WAIT_FOR_NOTIFY);
+        auto * input_future = current_notify_future;
+        clearNotifyFuture();
+        ASSERT_NE(input_future, nullptr);
+        if (!register_after_stop)
+            input_future->registerTask(std::move(waiting_task));
+
+        ASSERT_EQ(
+            active_sink->tryPush(Block{
+                {makeNullableInt32Column({1, 1}), nullable_int_type, outer_probe_key_name},
+                {makeInt32Column({10, 20}), int_type, outer_probe_value_name},
+            }),
+            MPMCQueueResult::OK);
+        ASSERT_EQ(active_task->execute(), ExecTaskStatus::RUNNING);
+        ASSERT_EQ(result.rows(), 1);
+
+        // The active probe retains its second row. Fill its input queue and park a producer on that full queue.
+        Block more_input{
+            {makeNullableInt32Column({1}), nullable_int_type, outer_probe_key_name},
+            {makeInt32Column({30}), int_type, outer_probe_value_name},
+        };
+        ASSERT_EQ(active_sink->tryPush(Block(more_input)), MPMCQueueResult::OK);
+        ASSERT_EQ(producer_sink->tryPush(Block(more_input)), MPMCQueueResult::OK);
+        ASSERT_EQ(producer_task->execute(), ExecTaskStatus::WAIT_FOR_NOTIFY);
+        registerTaskToFuture(std::move(producer_task));
+
+        // LIMIT consumes the second joined row and finishes this task without reading either input again.
+        ASSERT_EQ(active_task->execute(), ExecTaskStatus::FINISHED);
+        active_task->finalize();
+        active_task.reset();
+        if (register_after_stop)
+            input_future->registerTask(std::move(waiting_task));
+
+        // Neither producer reports EOF or sends more data. Stop must release both tasks by itself.
+        exec_context.waitFor(std::chrono::seconds(10));
+        EXPECT_FALSE(exec_context.isCancelled());
+        EXPECT_TRUE(exec_context.toExecutionResult().is_success);
+        EXPECT_EQ(active_sink->tryPush(Block(more_input)), MPMCQueueResult::CANCELLED);
+        EXPECT_EQ(waiting_sink->tryPush(Block(more_input)), MPMCQueueResult::CANCELLED);
+        EXPECT_EQ(producer_sink->tryPush(Block(more_input)), MPMCQueueResult::CANCELLED);
+        EXPECT_EQ(result.rows(), 1);
+    }
+}
+
+TEST_F(JoinProbeInputStopTest, ExchangeInputStopsWithNormalEOF)
+{
+    for (const bool fine_grained : {false, true})
+    {
+        PipelineExecutorContext exec_context;
+        MemoryTrackerSetter memory_tracker_setter(true, nullptr);
+        SCOPE_EXIT({
+            clearNotifyFuture();
+            exec_context.cancel();
+            exec_context.wait();
+        });
+        tipb::ExchangeReceiver meta;
+        meta.add_field_types()->set_tp(TiDB::TP::TypeLong);
+        auto rpc_context = std::make_shared<GRPCReceiverContext>(meta, mpp::TaskMeta{}, nullptr, nullptr, false, false);
+        // Leave both inputs open with no RPC producers; only the probe stop can wake their readers.
+        Settings settings;
+        settings.recv_queue_size = 1;
+        auto receiver = std::make_shared<ExchangeReceiver>(rpc_context, 0, 2, "", "", fine_grained ? 2 : 0, settings);
+        auto join = makeTestJoin(std::make_shared<DataTypeInt32>(), {0});
+        PipelineExecGroupBuilder builders;
+        for (size_t i = 0; i < 2; ++i)
+            builders.addConcurrency(
+                std::make_unique<ExchangeReceiverSourceOp>(exec_context, "", receiver, fine_grained ? i : 0));
+        join->addProbeInputStopCallback(builders.getInputStopCallback());
+        // Keep at least one task alive until all waiters have been registered.
+        std::vector<TaskPtr> tasks;
+        for (size_t i = 0; i < 2; ++i)
+            tasks.push_back(std::make_unique<ProbeInputWaitTask>(exec_context));
+        for (size_t i = 0; i < 2; ++i)
+        {
+            Block block;
+            ASSERT_EQ(builders.getCurBuilder(i).source_op->read(block), OperatorStatus::WAIT_FOR_NOTIFY);
+            registerTaskToFuture(std::move(tasks[i]));
+        }
+
+        join->stopProbePhase();
+        exec_context.waitFor(std::chrono::seconds(10));
+        for (size_t i = 0; i < 2; ++i)
+        {
+            Block block;
+            EXPECT_EQ(builders.getCurBuilder(i).source_op->read(block), OperatorStatus::HAS_OUTPUT);
+            EXPECT_FALSE(block);
+        }
+        EXPECT_FALSE(exec_context.isCancelled());
+        EXPECT_TRUE(exec_context.toExecutionResult().is_success);
+    }
+}
 
 TEST(JoinNullEqTest, NullableNullEqKeyUsesNullablePackedJoinMapMethod)
 {

@@ -114,6 +114,8 @@ public:
 
     void cancel();
     void close();
+    /// Close unused pipeline input and wake its readers/writers without failing the query.
+    void stopReading();
 
     ReceiveStatus receive(size_t stream_id, ReceivedMessagePtr & recv_msg);
     ReceiveStatus tryReceive(size_t stream_id, ReceivedMessagePtr & recv_msg);
@@ -228,6 +230,7 @@ private:
     Int32 async_recv_version;
 
     std::atomic<Int64> data_size_in_queue;
+    std::atomic_bool stopped_reading{false};
 };
 
 class ExchangeReceiver : public ExchangeReceiverBase<GRPCReceiverContext>

@@ -152,4 +152,26 @@ IOProfileInfos PipelineExecGroupBuilder::getCurIOProfileInfos() const
         ret.push_back(builder.getCurIOProfileInfo());
     return ret;
 }
+
+std::function<void()> PipelineExecGroupBuilder::getInputStopCallback() const
+{
+    std::vector<std::function<void()>> callbacks;
+    auto add_callback = [&](const auto & op) {
+        if (auto callback = op->getStopCallback())
+            callbacks.push_back(std::move(callback));
+    };
+    for (const auto & group : groups)
+    {
+        for (const auto & builder : group)
+        {
+            add_callback(builder.source_op);
+            for (const auto & transform : builder.transform_ops)
+                add_callback(transform);
+        }
+    }
+    return [callbacks = std::move(callbacks)] {
+        for (const auto & callback : callbacks)
+            callback();
+    };
+}
 } // namespace DB
