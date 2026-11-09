@@ -90,7 +90,6 @@ extern const int TOO_MANY_COLUMNS;
 extern const int LOGICAL_ERROR;
 extern const int NOT_IMPLEMENTED;
 extern const int SCHEMA_VERSION_ERROR;
-extern const int SYNTAX_ERROR;
 extern const int UNKNOWN_EXCEPTION;
 } // namespace ErrorCodes
 
@@ -171,7 +170,7 @@ void InterpreterSelectQuery::init(const Names & required_result_column_names)
     }
     else
     {
-        /// Read from table. SELECT without a table is rejected below.
+        /// Read from table. Even without table expression (implicit SELECT ... FROM system.one).
         String database_name;
         String table_name;
 
@@ -251,15 +250,20 @@ void InterpreterSelectQuery::getDatabaseAndTableNames(String & database_name, St
     auto query_database = query.database();
     auto query_table = query.table();
 
-    // A SELECT must name a table. Unqualified names use the current database.
-    if (!query_table)
-        throw Exception("SELECT requires a table", ErrorCodes::SYNTAX_ERROR);
-
+    /** If the table is not specified - use the table `system.one`.
+     *  If the database is not specified - use the current database.
+     */
     if (query_database)
         database_name = typeid_cast<ASTIdentifier &>(*query_database).name;
-    table_name = typeid_cast<ASTIdentifier &>(*query_table).name;
+    if (query_table)
+        table_name = typeid_cast<ASTIdentifier &>(*query_table).name;
 
-    if (!query_database)
+    if (!query_table)
+    {
+        database_name = "system";
+        table_name = "one";
+    }
+    else if (!query_database)
     {
         if (context.tryGetTable("", table_name))
             database_name = "";

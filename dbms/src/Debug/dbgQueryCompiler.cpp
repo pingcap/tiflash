@@ -48,7 +48,6 @@ namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
 extern const int LOGICAL_ERROR;
-extern const int SYNTAX_ERROR;
 } // namespace ErrorCodes
 
 const ASTTablesInSelectQueryElement * getJoin(ASTSelectQuery & ast_query)
@@ -97,14 +96,19 @@ std::pair<ExecutorBinderPtr, bool> compileQueryBlock(
         String database_name, table_name;
         auto query_database = ast_query.database();
         auto query_table = ast_query.table();
-        if (!query_table)
-            throw Exception("SELECT requires a table", ErrorCodes::SYNTAX_ERROR);
-
         if (query_database)
             database_name = typeid_cast<ASTIdentifier &>(*query_database).name;
-        else
+        if (query_table)
+            table_name = typeid_cast<ASTIdentifier &>(*query_table).name;
+        if (!query_table)
+        {
+            database_name = "system";
+            table_name = "one";
+        }
+        else if (!query_database)
+        {
             database_name = context.getCurrentDatabase();
-        table_name = typeid_cast<ASTIdentifier &>(*query_table).name;
+        }
         table_alias = query_table->tryGetAlias();
         if (table_alias.empty())
             table_alias = table_name;

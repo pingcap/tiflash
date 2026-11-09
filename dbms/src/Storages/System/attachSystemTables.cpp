@@ -26,6 +26,7 @@
 #include <Storages/System/StorageSystemFunctions.h>
 #include <Storages/System/StorageSystemMetrics.h>
 #include <Storages/System/StorageSystemNumbers.h>
+#include <Storages/System/StorageSystemOne.h>
 #include <Storages/System/StorageSystemProcesses.h>
 #include <Storages/System/StorageSystemSettings.h>
 #include <Storages/System/StorageSystemTables.h>
@@ -36,6 +37,7 @@ namespace DB
 {
 void attachSystemTablesLocal(IDatabase & system_database)
 {
+    system_database.attachTable("one", StorageSystemOne::create("one"));
     system_database.attachTable("numbers", StorageSystemNumbers::create("numbers", false));
     system_database.attachTable("numbers_mt", StorageSystemNumbers::create("numbers_mt", true));
     system_database.attachTable("databases", StorageSystemDatabases::create("databases"));
