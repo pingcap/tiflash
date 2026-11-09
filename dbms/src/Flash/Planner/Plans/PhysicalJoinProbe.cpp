@@ -48,6 +48,8 @@ void PhysicalJoinProbe::buildPipelineExecGroupImpl(
     join_ptr->initProbe(input_header, group_builder.concurrency());
     size_t probe_index = 0;
     const auto & max_block_size = context.getSettingsRef().max_block_size;
+    // Capture only the upstream operators, before appending this join to avoid retaining itself.
+    join_ptr->addProbeInputStopCallback(group_builder.getInputStopCallback());
     group_builder.transform([&](auto & builder) {
         builder.appendTransformOp(std::make_unique<HashJoinProbeTransformOp>(
             exec_context,
