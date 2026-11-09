@@ -43,7 +43,8 @@ PipelineExecPtr PipelineExecBuilder::build(bool has_pipeline_breaker_wait_time)
         std::move(source_op),
         std::move(transform_ops),
         std::move(sink_op),
-        has_pipeline_breaker_wait_time);
+        has_pipeline_breaker_wait_time,
+        std::move(input_stops));
 }
 
 OperatorProfileInfoPtr PipelineExecBuilder::getCurProfileInfo() const
@@ -153,25 +154,12 @@ IOProfileInfos PipelineExecGroupBuilder::getCurIOProfileInfos() const
     return ret;
 }
 
-std::function<void()> PipelineExecGroupBuilder::getInputStopCallback() const
+TaskStopSourcePtr PipelineExecGroupBuilder::addInputStop()
 {
-    std::vector<std::function<void()>> callbacks;
-    auto add_callback = [&](const auto & op) {
-        if (auto callback = op->getStopCallback())
-            callbacks.push_back(std::move(callback));
-    };
-    for (const auto & group : groups)
-    {
-        for (const auto & builder : group)
-        {
-            add_callback(builder.source_op);
-            for (const auto & transform : builder.transform_ops)
-                add_callback(transform);
-        }
-    }
-    return [callbacks = std::move(callbacks)] {
-        for (const auto & callback : callbacks)
-            callback();
-    };
+    auto source = std::make_shared<TaskStopSource>();
+    for (size_t i = 0; i < groups.size(); ++i)
+        for (auto & builder : groups[i])
+            builder.input_stops.push_back({source, builder.transform_ops.size(), i + 1 < groups.size()});
+    return source;
 }
 } // namespace DB

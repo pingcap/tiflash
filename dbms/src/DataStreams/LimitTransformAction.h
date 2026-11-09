@@ -52,6 +52,7 @@ public:
 
     Block getHeader() const { return header; }
     size_t getLimit() const { return limit; }
+    bool isLimitReached() const { return pos.load(std::memory_order_acquire) >= limit; }
 
 private:
     const Block header;

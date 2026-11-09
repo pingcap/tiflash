@@ -14,12 +14,23 @@
 
 #pragma once
 
+#include <Flash/Pipeline/Schedule/Tasks/TaskWaiter.h>
 #include <Operators/Operator.h>
 
 #include <memory>
+#include <optional>
 
 namespace DB
 {
+struct PipelineInputStop
+{
+    TaskStopSourcePtr source;
+    // Transforms at or after this boundary, including the sink, must still deliver buffered output and EOF.
+    size_t first_required_transform = 0;
+    bool whole_pipeline = false;
+};
+using PipelineInputStops = std::vector<PipelineInputStop>;
+
 // The executor for push model operator.
 // A pipeline will generate multiple pipeline_execs.
 // data flow: source --> transform --> .. --> transform --> sink
@@ -30,7 +41,8 @@ public:
         SourceOpPtr && source_op_,
         TransformOps && transform_ops_,
         SinkOpPtr && sink_op_,
-        bool has_pipeline_breaker_wait_time_);
+        bool has_pipeline_breaker_wait_time_,
+        PipelineInputStops input_stops_ = {});
 
     void executePrefix();
     void executeSuffix();
@@ -43,6 +55,8 @@ public:
 
     void notify();
 
+    TaskStopSources getNotifyStopSources() const;
+
     void finalizeProfileInfo(UInt64 queuing_time, UInt64 pipeline_breaker_wait_time);
 
 private:
@@ -53,6 +67,11 @@ private:
     inline OperatorStatus awaitImpl();
 
     inline OperatorStatus fetchBlock(Block & block, size_t & start_transform_op_index);
+
+    bool isWholePipelineStopped() const;
+    bool isOperatorStopped(const Operator * op) const;
+    bool discardsOperator(const PipelineInputStop & stop, const Operator * op) const;
+    std::optional<size_t> getStoppedInputBoundary() const;
 
     ALWAYS_INLINE void fillAwaitable(Operator * op)
     {
@@ -79,6 +98,7 @@ private:
     SourceOpPtr source_op;
     TransformOps transform_ops;
     SinkOpPtr sink_op;
+    const PipelineInputStops input_stops;
     bool has_pipeline_breaker_wait_time = false;
     bool source_prefix_executed = false;
 
