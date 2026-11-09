@@ -14,8 +14,12 @@
 
 #include <Common/LooseBoundedMPMCQueue.h>
 #include <Common/MemoryTrackerSetter.h>
+#include <DataStreams/BlocksListBlockInputStream.h>
+#include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Pipeline/Schedule/Tasks/Impls/SimplePipelineTask.h>
+#include <Flash/Pipeline/Schedule/Tasks/Impls/StreamRestoreTask.h>
 #include <Flash/Pipeline/Schedule/Tasks/OneTimeNotifyFuture.h>
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
@@ -24,12 +28,15 @@
 #include <Operators/ExchangeReceiverSourceOp.h>
 #include <Operators/ExpressionTransformOp.h>
 #include <Operators/SharedQueue.h>
+#include <Parsers/ASTExpressionList.h>
+#include <Parsers/ASTOrderByElement.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
 #include <atomic>
 #include <chrono>
 #include <ext/scope_guard.h>
+#include <future>
 #include <thread>
 
 namespace DB::tests
@@ -133,6 +140,28 @@ public:
 
 private:
     OperatorStatus status;
+};
+
+class EarlyStopTransform : public TransformOp
+{
+public:
+    EarlyStopTransform(PipelineExecutorContext & context, std::promise<void> & stopped_, std::atomic_size_t & stops_)
+        : TransformOp(context, "")
+        , stopped(stopped_)
+        , stops(stops_)
+    {}
+    String getName() const override { return "EarlyStopTransform"; }
+    void transformHeaderImpl(Block &) override {}
+    OperatorStatus transformImpl(Block &) override { return OperatorStatus::HAS_OUTPUT; }
+    void onEarlyStop() override
+    {
+        if (stops.fetch_add(1) == 0)
+            stopped.set_value();
+    }
+
+private:
+    std::promise<void> & stopped;
+    std::atomic_size_t & stops;
 };
 
 class QueueFuture : public NotifyFuture
@@ -328,7 +357,7 @@ TEST_F(PipelineInputStopTest, LimitPreservesBackpressuredDownstreamOutput)
     });
     ASSERT_EQ(output_sink->tryPush(Block(input)), MPMCQueueResult::OK);
     ASSERT_EQ(task->execute(), ExecTaskStatus::WAIT_FOR_NOTIFY);
-    EXPECT_TRUE(task->getNotifyStopSources().empty());
+    EXPECT_FALSE(task->getNotifyStopSources().empty());
     registerTaskToFuture(std::move(task));
     Block output;
     ASSERT_EQ(output_source->tryPop(output), MPMCQueueResult::OK); // Remove the filler.
@@ -337,6 +366,170 @@ TEST_F(PipelineInputStopTest, LimitPreservesBackpressuredDownstreamOutput)
     EXPECT_EQ(output.rows(), 1);
     EXPECT_EQ(output_source->tryPop(output), MPMCQueueResult::FINISHED);
     EXPECT_FALSE(exec_context.isCancelled());
+}
+
+TEST_F(PipelineInputStopTest, StopsUpstreamOnceWhileDownstreamRemainsBlocked)
+{
+    MemoryTrackerSetter tracker(true, nullptr);
+    PipelineExecutorContext exec_context;
+    std::promise<void> stopped;
+    auto stopped_future = stopped.get_future();
+    std::atomic_size_t stops{0};
+    auto [output_sink, output_source] = SharedQueue::build(exec_context, 1, 1, -1, 1);
+    Block input({toNullableVec<Int64>("v", {1})});
+    auto request = context.scan("test", "input").limit(1).build(context);
+    auto builders = buildPlan(request, exec_context, 1, [&](auto & group, const auto & header) {
+        group.addConcurrency(std::make_unique<FiniteSource>(exec_context, header, 100));
+        group.getCurBuilder(0).appendTransformOp(std::make_unique<EarlyStopTransform>(exec_context, stopped, stops));
+    });
+    builders.getCurBuilder(0).setSinkOp(std::make_unique<SharedQueueSinkOp>(exec_context, "", output_sink));
+    auto pipelines = builders.build(false);
+    TaskPtr task = std::make_unique<SimplePipelineTask>(exec_context, "", std::move(pipelines[0]));
+    SCOPE_EXIT({
+        clearNotifyFuture();
+        exec_context.cancel();
+        finishTask(task);
+        exec_context.wait();
+    });
+    ASSERT_EQ(output_sink->tryPush(Block(input)), MPMCQueueResult::OK);
+    ASSERT_EQ(task->execute(), ExecTaskStatus::WAIT_FOR_NOTIFY);
+    registerTaskToFuture(std::move(task));
+    // Stop must reach the abandoned operator before output becomes writable.
+    ASSERT_EQ(stopped_future.wait_for(std::chrono::seconds(10)), std::future_status::ready);
+    EXPECT_EQ(stops.load(), 1);
+    Block output;
+    ASSERT_EQ(output_source->tryPop(output), MPMCQueueResult::OK);
+    exec_context.waitFor(std::chrono::seconds(10));
+    ASSERT_EQ(output_source->tryPop(output), MPMCQueueResult::OK);
+    EXPECT_EQ(output.rows(), 1);
+    EXPECT_EQ(output_source->tryPop(output), MPMCQueueResult::FINISHED);
+    EXPECT_EQ(stops.load(), 1);
+    EXPECT_FALSE(exec_context.isCancelled());
+}
+
+TEST_F(PipelineInputStopTest, RestoreProducerStopsWithoutCancellingItsQueue)
+{
+    for (int stop_at = 0; stop_at < 3; ++stop_at)
+    {
+        MemoryTrackerSetter tracker(true, nullptr);
+        PipelineExecutorContext exec_context;
+        auto stop = std::make_shared<TaskStopSource>();
+        auto [sink, source] = SharedQueue::build(exec_context, 1, 1, -1, 1);
+        Block input({toNullableVec<Int64>("v", {1})});
+        auto stream = std::make_shared<BlocksListBlockInputStream>(BlocksList{input, input});
+        ASSERT_EQ(sink->tryPush(Block(input)), MPMCQueueResult::OK);
+        if (stop_at == 0)
+            stop->stop();
+        TaskPtr task = std::make_unique<StreamRestoreTask>(exec_context, "", stream, sink, stop);
+        SCOPE_EXIT({
+            clearNotifyFuture();
+            exec_context.cancel();
+            finishTask(task);
+            exec_context.wait();
+        });
+        if (stop_at == 0)
+        {
+            ASSERT_EQ(task->executeIO(), ExecTaskStatus::FINISHED);
+            finishTask(task);
+        }
+        else
+        {
+            ASSERT_EQ(task->executeIO(), ExecTaskStatus::WAIT_FOR_NOTIFY);
+            if (stop_at == 1)
+                stop->stop();
+            registerTaskToFuture(std::move(task));
+            if (stop_at == 2)
+                stop->stop();
+        }
+        exec_context.waitFor(std::chrono::seconds(10));
+        EXPECT_FALSE(exec_context.isCancelled());
+        Block output;
+        ASSERT_EQ(source->tryPop(output), MPMCQueueResult::OK); // Only the original filler remains.
+        EXPECT_EQ(source->tryPop(output), MPMCQueueResult::FINISHED);
+    }
+}
+
+TEST_F(PipelineInputStopTest, ConstantTopNSharesLimitAcrossConcurrentInputs)
+{
+    for (UInt64 limit : {0, 1, 10})
+    {
+        MemoryTrackerSetter tracker(true, nullptr);
+        PipelineExecutorContext exec_context;
+        std::atomic_size_t rows{0};
+        ASTPtr collation;
+        auto order_by = std::make_shared<ASTOrderByElement>(-1, -1, false, collation);
+        order_by->children.push_back(lit(Field(UInt64(1))));
+        auto order_by_items = std::make_shared<ASTExpressionList>();
+        order_by_items->children.push_back(order_by);
+        auto request = context.scan("test", "input").topN(order_by_items, lit(Field(limit))).build(context);
+        auto builders = buildPlan(request, exec_context, 3, [&](auto & group, const auto & header) {
+            for (size_t i = 0; i < 3; ++i)
+                group.addConcurrency(std::make_unique<FiniteSource>(exec_context, header, 2));
+        });
+        auto tasks = makeTasks(builders, exec_context, rows);
+        SCOPE_EXIT({
+            exec_context.cancel();
+            for (auto & task : tasks)
+                finishTask(task);
+            exec_context.wait();
+        });
+        for (auto & task : tasks)
+            TaskScheduler::instance->submit(std::move(task));
+        exec_context.waitFor(std::chrono::seconds(10));
+        EXPECT_EQ(rows.load(), std::min<UInt64>(limit, 6));
+        EXPECT_FALSE(exec_context.isCancelled());
+    }
+}
+
+TEST_F(PipelineInputStopTest, LocalV2ProducerWaitsUntilReceiverQueueCloses)
+{
+    for (bool fine_grained : {false, true})
+    {
+        MemoryTrackerSetter tracker(true, nullptr);
+        PipelineExecutorContext exec_context;
+        std::atomic_size_t rows{0};
+        std::atomic_size_t wakes{0};
+        std::atomic<Int64> queue_bytes{0};
+        ReceivedMessageQueue queue(1, Logger::get(), &queue_bytes, fine_grained, fine_grained ? 2 : 0);
+        LocalRequestHandler handler([](bool, const String &) {}, []() {}, []() {}, "", &queue);
+        MemoryTrackerPtr memory_tracker;
+        auto sender = std::make_shared<LocalTunnelSenderV2<false>>(0, handler, Logger::get(), memory_tracker, "test");
+        auto packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
+        packet->packet.add_chunks("buffered packet");
+        if (fine_grained)
+            packet->packet.add_stream_ids(0);
+        auto request = context.scan("test", "input").limit(1).build(context);
+        auto builders = buildPlan(request, exec_context, 1, [&](auto & group, const auto & header) {
+            group.addConcurrency(std::make_unique<FiniteSource>(exec_context, header, 2));
+        });
+        auto tasks = makeTasks(builders, exec_context, rows);
+        SCOPE_EXIT({
+            clearNotifyFuture();
+            queue.finish();
+            sender->finish();
+            exec_context.cancel();
+            for (auto & task : tasks)
+                finishTask(task);
+            exec_context.wait();
+            ExchangeReceiverMetric::clearDataSizeMetric(queue_bytes);
+        });
+        ASSERT_TRUE(sender->forcePush(TrackedMppDataPacketPtr(packet)));
+        ASSERT_FALSE(sender->isWritable());
+        // This producer belongs to the upstream MPP task: it must not inherit the consumer's LIMIT stop.
+        setNotifyFuture(sender.get());
+        registerTaskToFuture(std::make_unique<WakeTask>(exec_context, std::make_shared<TaskStopSource>(), wakes));
+        ASSERT_EQ(tasks[0]->execute(), ExecTaskStatus::RUNNING);
+        ASSERT_EQ(tasks[0]->execute(), ExecTaskStatus::FINISHED);
+        finishTask(tasks[0]);
+        EXPECT_EQ(rows.load(), 1);
+        EXPECT_EQ(wakes.load(), 0);
+        // MPPTask closes receivers after finishWrite(). This is the production V2 queue-close operation.
+        queue.finish();
+        exec_context.waitFor(std::chrono::seconds(10));
+        EXPECT_EQ(wakes.load(), 1);
+        EXPECT_FALSE(sender->forcePush(std::move(packet)));
+        EXPECT_FALSE(exec_context.isCancelled());
+    }
 }
 
 TEST_F(PipelineInputStopTest, FiniteWindowLimitPlan)
@@ -390,7 +583,8 @@ TEST_F(PipelineInputStopTest, PlannerLimitLeavesExchangeReceiverOpen)
         Settings settings;
         settings.recv_queue_size = 1;
         // No RPCs are started: this unit test isolates receiver wait registration and queue state.
-        auto receiver = std::make_shared<ExchangeReceiver>(rpc_context, 0, 2, "", "", fine_grained ? 2 : 0, settings);
+        auto receiver
+            = std::make_shared<DB::ExchangeReceiver>(rpc_context, 0, 2, "", "", fine_grained ? 2 : 0, settings);
         auto request = context.scan("test", "input").limit(1).build(context);
         auto builders = buildPlan(request, exec_context, 3, [&](auto & group, const auto & header) {
             group.addConcurrency(std::make_unique<FiniteSource>(exec_context, header, 1));
@@ -401,8 +595,8 @@ TEST_F(PipelineInputStopTest, PlannerLimitLeavesExchangeReceiverOpen)
                 auto & builder = group.getCurBuilder(i + 1);
                 auto receiver_header = builder.getCurrentHeader();
                 auto rename = std::make_shared<ExpressionActions>(receiver_header.getNamesAndTypesList());
-                rename->add(
-                    ExpressionAction::project({{receiver_header.getByPosition(0).name, header.getByPosition(0).name}}));
+                rename->add(ExpressionAction::project(
+                    NamesWithAliases{{receiver_header.getByPosition(0).name, header.getByPosition(0).name}}));
                 builder.appendTransformOp(std::make_unique<ExpressionTransformOp>(exec_context, "", rename));
             }
         });

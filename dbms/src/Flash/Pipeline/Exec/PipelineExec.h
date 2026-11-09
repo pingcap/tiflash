@@ -28,6 +28,8 @@ struct PipelineInputStop
     // Transforms at or after this boundary, including the sink, must still deliver buffered output and EOF.
     size_t first_required_transform = 0;
     bool whole_pipeline = false;
+    // A retained downstream wait must only be interrupted once for this stop signal.
+    bool applied = false;
 };
 using PipelineInputStops = std::vector<PipelineInputStop>;
 
@@ -68,10 +70,8 @@ private:
 
     inline OperatorStatus fetchBlock(Block & block, size_t & start_transform_op_index);
 
-    bool isWholePipelineStopped() const;
+    void applyInputStops();
     bool isOperatorStopped(const Operator * op) const;
-    bool discardsOperator(const PipelineInputStop & stop, const Operator * op) const;
-    std::optional<size_t> getStoppedInputBoundary() const;
 
     ALWAYS_INLINE void fillAwaitable(Operator * op)
     {
@@ -98,7 +98,9 @@ private:
     SourceOpPtr source_op;
     TransformOps transform_ops;
     SinkOpPtr sink_op;
-    const PipelineInputStops input_stops;
+    PipelineInputStops input_stops;
+    std::optional<size_t> stopped_input_boundary;
+    bool whole_pipeline_stopped = false;
     bool has_pipeline_breaker_wait_time = false;
     bool source_prefix_executed = false;
 

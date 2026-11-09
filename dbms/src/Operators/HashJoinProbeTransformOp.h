@@ -33,6 +33,8 @@ public:
         const Block & input_header,
         const TaskStopSourcePtr & input_stop_ = nullptr);
 
+    void onEarlyStop() override;
+
     String getName() const override { return "HashJoinProbeTransformOp"; }
 
     bool shouldSkipSource() const override { return probe_transform->shouldSkipProbe(); }

@@ -207,6 +207,12 @@ struct LocalExchangePacketReader : public ExchangePacketReader
         return success;
     }
 
+    ExchangeReadInterrupt getReadInterrupt() const override
+    {
+        // Only finish the queue here. The read thread owns consumerFinish() and resetting its sender pointer.
+        return std::make_shared<std::function<void()>>([sender = local_tunnel_sender] { sender->finish(); });
+    }
+
     void cancel(const String & reason) override
     {
         if (local_tunnel_sender)

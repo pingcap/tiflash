@@ -285,10 +285,13 @@ void executeLocalSort(
         // For order by const col and has limit, we will generate LimitOperator directly.
         if (limit)
         {
+            // All sort keys are constant, so any N rows suffice across the entire concurrent group.
+            // Sharing the limit also lets every probe/input stop together, rather than abandoning one stream.
+            auto global_limit = std::make_shared<GlobalLimitTransformAction>(input_header, *limit);
+            auto input_stop = group_builder.addInputStop();
             group_builder.transform([&](auto & builder) {
-                auto local_limit = std::make_shared<LocalLimitTransformAction>(input_header, *limit);
                 builder.appendTransformOp(
-                    std::make_unique<LimitTransformOp<LocalLimitPtr>>(exec_context, log->identifier(), local_limit));
+                    std::make_unique<LimitTransformOp>(exec_context, log->identifier(), global_limit, input_stop));
             });
         }
         // For order by const and doesn't has limit, do nothing here.
@@ -349,11 +352,8 @@ void executeFinalSort(
             auto global_limit = std::make_shared<GlobalLimitTransformAction>(input_header, *limit);
             auto input_stop = group_builder.addInputStop();
             group_builder.transform([&](auto & builder) {
-                builder.appendTransformOp(std::make_unique<LimitTransformOp<GlobalLimitPtr>>(
-                    exec_context,
-                    log->identifier(),
-                    global_limit,
-                    input_stop));
+                builder.appendTransformOp(
+                    std::make_unique<LimitTransformOp>(exec_context, log->identifier(), global_limit, input_stop));
             });
         }
         // For order by const and doesn't has limit, do nothing here.

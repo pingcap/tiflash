@@ -65,10 +65,15 @@ void TaskStopSource::registerWaiter(const TaskWaiterPtr & waiter)
         std::lock_guard lock(mutex);
         if (!isStopped())
         {
-            // Bound the registration list by concurrent waits, rather than the number of blocks read.
-            waiters.erase(
-                std::remove_if(waiters.begin(), waiters.end(), [](const auto & old) { return old.expired(); }),
-                waiters.end());
+            // Amortize pruning across registrations. A cohort of N live waiters takes O(N) work,
+            // while repeated waits keep at most roughly twice the last observed live cohort plus 64 entries.
+            if (waiters.size() >= prune_at)
+            {
+                waiters.erase(
+                    std::remove_if(waiters.begin(), waiters.end(), [](const auto & old) { return old.expired(); }),
+                    waiters.end());
+                prune_at = std::max<size_t>(64, waiters.size() * 2);
+            }
             waiters.emplace_back(waiter);
             return;
         }
