@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
 #include <Debug/MockStorage.h>
 #include <Flash/Coprocessor/DAGContext.h>
@@ -338,11 +339,11 @@ void PhysicalPlan::addRootFinalProjectionIfNeed()
 PhysicalPlanNodePtr PhysicalPlan::outputAndOptimize()
 {
     RUNTIME_ASSERT(!root_node, log, "root_node should be nullptr before `outputAndOptimize`");
-    RUNTIME_ASSERT(
-        cur_plan_nodes.size() == 1,
-        log,
-        "There can only be one plan node output, but here are {}",
-        cur_plan_nodes.size());
+    if (unlikely(cur_plan_nodes.size() != 1))
+        throw TiFlashException(
+            Errors::Coprocessor::BadRequest,
+            "DAG request must produce exactly one plan node, got {}",
+            cur_plan_nodes.size());
     root_node = popBack();
     addRootFinalProjectionIfNeed();
 

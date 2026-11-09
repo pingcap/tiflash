@@ -26,6 +26,35 @@ void check(bool condition, const String & err_msg)
         throw TiFlashException(err_msg, Errors::Coprocessor::BadRequest);
 }
 
+void checkExecutorList(const tipb::DAGRequest & request)
+{
+    size_t nodeCount = 0;
+    for (int i = 0; i < request.executors_size(); ++i)
+    {
+        const auto & executor = request.executors(i);
+        size_t inputCount = 0;
+        // List-based DAGs encode inputs by position, so a Join need not embed its children.
+        if (executor.tp() == tipb::ExecType::TypeJoin)
+            inputCount = 2;
+        else
+            getChildren(executor).forEach([&](const tipb::Executor &) { ++inputCount; });
+
+        if (unlikely(nodeCount < inputCount))
+            throw TiFlashException(
+                Errors::Coprocessor::BadRequest,
+                "Invalid list-based DAG: executor {} requires {} inputs, but only {} are available",
+                i,
+                inputCount,
+                nodeCount);
+        nodeCount = nodeCount - inputCount + 1;
+    }
+    if (unlikely(nodeCount != 1))
+        throw TiFlashException(
+            Errors::Coprocessor::BadRequest,
+            "Invalid list-based DAG: expected one output, got {}",
+            nodeCount);
+}
+
 class ListBasedExecutorIdGenerator
 {
 public:
@@ -127,6 +156,8 @@ DAGRequest::DAGRequest(tipb::DAGRequest * dag_request_)
         "dagrequest must be one of list based and tree based");
     is_tree_based = dag_request->has_root_executor();
 
+    if (!is_tree_based)
+        checkExecutorList(*dag_request);
     checkOrSetExecutorId();
 }
 
