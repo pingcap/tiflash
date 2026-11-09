@@ -16,19 +16,14 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Interpreters/Context.h>
+#include <Server/RaftConfigParser.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <TestUtils/TiFlashTestBasic.h>
-<<<<<<< HEAD
 #include <TestUtils/TiFlashTestEnv.h>
-#include <gtest/gtest.h>
-
-#include "Server/RaftConfigParser.h"
-=======
 #include <TiDB/Schema/TiDB.h>
 #include <gtest/gtest.h>
 
 #include <ext/scope_guard.h>
->>>>>>> a6cd8bb97c (Flash: validate DAG expressions, sizes, and concurrency (#11233))
 
 namespace DB
 {
