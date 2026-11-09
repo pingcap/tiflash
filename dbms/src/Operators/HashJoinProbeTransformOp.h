@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Flash/Pipeline/Schedule/Tasks/TaskWaiter.h>
 #include <Interpreters/Join.h>
 #include <Operators/HashProbeTransformExec.h>
 #include <Operators/Operator.h>
@@ -29,16 +30,10 @@ public:
         const JoinPtr & join_,
         size_t op_index_,
         size_t max_block_size,
-        const Block & input_header);
+        const Block & input_header,
+        const TaskStopSourcePtr & input_stop_ = nullptr);
 
     String getName() const override { return "HashJoinProbeTransformOp"; }
-
-    std::function<void()> getStopCallback() const override
-    {
-        return [join = origin_join] {
-            join->stopProbePhase();
-        };
-    }
 
     bool shouldSkipSource() const override { return probe_transform->shouldSkipProbe(); }
 
@@ -129,6 +124,7 @@ private:
 
 private:
     JoinPtr origin_join;
+    const TaskStopSourcePtr input_stop;
 
     HashProbeTransformExecPtr probe_transform;
 

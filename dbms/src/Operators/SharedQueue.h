@@ -149,13 +149,6 @@ public:
 
     String getName() const override { return "SharedQueueSourceOp"; }
 
-    std::function<void()> getStopCallback() const override
-    {
-        return [queue = shared_queue->getQueue()] {
-            queue->cancel();
-        };
-    }
-
     OperatorStatus readImpl(Block & block) override;
 
 private:

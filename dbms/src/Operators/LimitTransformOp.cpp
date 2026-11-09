@@ -15,13 +15,36 @@
 #include <DataStreams/LimitTransformAction.h>
 #include <Operators/LimitTransformOp.h>
 
+#include <type_traits>
+
 namespace DB
 {
+template <typename LimitActionPtr>
+OperatorStatus LimitTransformOp<LimitActionPtr>::tryOutputImpl(Block & block)
+{
+    if constexpr (std::is_same_v<LimitActionPtr, GlobalLimitPtr>)
+    {
+        if (input_stop && action->isLimitReached())
+        {
+            input_stop->stop();
+            block = {};
+            return OperatorStatus::HAS_OUTPUT;
+        }
+    }
+    return OperatorStatus::NEED_INPUT;
+}
+
 template <typename LimitActionPtr>
 OperatorStatus LimitTransformOp<LimitActionPtr>::transformImpl(Block & block)
 {
     if (!action->transform(block))
         block = {};
+    if constexpr (std::is_same_v<LimitActionPtr, GlobalLimitPtr>)
+    {
+        // Stop only the input: the block which satisfies LIMIT must still reach the downstream operators.
+        if (input_stop && action->isLimitReached())
+            input_stop->stop();
+    }
     return OperatorStatus::HAS_OUTPUT;
 }
 
