@@ -13,12 +13,7 @@
 // limitations under the License.
 
 #include <Columns/ColumnNullable.h>
-<<<<<<< HEAD
-=======
 #include <Common/TiFlashException.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <TestUtils/ColumnsToTiPBExpr.h>
->>>>>>> 0b175149ac (coprocessor: handle invalid ELT, join, and sort inputs safely (#11242))
 #include <TestUtils/ExecutorTestUtils.h>
 
 #include <Flash/Coprocessor/JoinInterpreterHelper.cpp>
@@ -46,35 +41,6 @@ bool invalidParams(tipb::JoinType tipb_join_type, size_t inner_index, bool is_nu
     }
 }
 
-<<<<<<< HEAD
-=======
-String getErrorMessage(tipb::JoinType tipb_join_type, size_t inner_index, bool is_null_aware, size_t join_keys_size)
-{
-    try
-    {
-        JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb_join_type, inner_index, is_null_aware, join_keys_size);
-        return "";
-    }
-    catch (Exception & e)
-    {
-        return e.message();
-    }
-}
-
-String getTiFlashJoinErrorMessage(const tipb::Join & join)
-{
-    try
-    {
-        JoinInterpreterHelper::TiFlashJoin tiflash_join(join, false);
-        static_cast<void>(tiflash_join);
-        return "";
-    }
-    catch (Exception & e)
-    {
-        return e.message();
-    }
-}
-
 TEST(JoinKindAndBuildIndexTestRunner, TestInvalidInnerIndex)
 {
     for (const auto inner_index :
@@ -95,7 +61,6 @@ TEST(JoinKindAndBuildIndexTestRunner, TestInvalidInnerIndex)
     }
 }
 
->>>>>>> 0b175149ac (coprocessor: handle invalid ELT, join, and sort inputs safely (#11242))
 TEST(JoinKindAndBuildIndexTestRunner, TestNullAwareJoins)
 {
     auto result = JoinInterpreterHelper::getJoinKindAndBuildSideIndex(tipb::JoinType::TypeAntiSemiJoin, 1, true, 1);

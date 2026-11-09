@@ -102,17 +102,11 @@ std::pair<ASTTableJoin::Kind, size_t> getJoinKindAndBuildSideIndex(
             {{tipb::JoinType::TypeLeftOuterSemiJoin, 1}, {ASTTableJoin::Kind::NullAware_LeftOuterSemi, 1}},
             {{tipb::JoinType::TypeAntiLeftOuterSemiJoin, 1}, {ASTTableJoin::Kind::NullAware_LeftOuterAnti, 1}}};
 
-<<<<<<< HEAD
-    RUNTIME_ASSERT(inner_index == 0 || inner_index == 1);
-=======
     if (unlikely(inner_index > 1))
         throw TiFlashException(
             Errors::Coprocessor::BadRequest,
             "Invalid join inner_idx in DAG request: {}, expected 0 or 1",
             inner_index);
-    if (unlikely(tipb_join_type == tipb::JoinType::TypeFullOuterJoin && join_keys_size == 0))
-        throw TiFlashException("Cartesian full outer join is not supported yet", Errors::Coprocessor::BadRequest);
->>>>>>> 0b175149ac (coprocessor: handle invalid ELT, join, and sort inputs safely (#11242))
     const auto & join_type_map = [is_null_aware, join_keys_size]() {
         if (is_null_aware)
         {
