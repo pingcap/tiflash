@@ -338,6 +338,95 @@ try
 }
 CATCH
 
+TEST_F(SchemaSyncTest, MViewRefreshOutOfPlaceMLogSchemaDiffs)
+try
+{
+    auto pdClient = global_ctx.getTMTContext().getPDClient();
+    const auto columns = ColumnsDescription({{"a", typeFromString("Int64")}});
+
+    for (bool oldMLogHasStorage : {true, false})
+    {
+        SCOPED_TRACE(oldMLogHasStorage);
+        const String dbName = fmt::format("mock_mv_cutover_{}", oldMLogHasStorage);
+        MockTiDB::instance().newDataBase(dbName);
+        const auto [dbExists, dbId] = MockTiDB::instance().getDBIDByName(dbName);
+        ASSERT_TRUE(dbExists);
+
+        MockSchemaGetter getter;
+        DatabaseInfoCache databases;
+        TableIDMap tableIdMap(Logger::get("SchemaSyncTest"));
+        SchemaBuilder<MockSchemaGetter, SchemaNameMapper> builder(getter, global_ctx, databases, tableIdMap);
+        const auto createTable = [&](const String & tableName) {
+            const auto tableId = MockTiDB::instance().newTable(dbName, tableName, columns, pdClient->getTS(), "");
+            SchemaDiff createDiff{};
+            createDiff.type = SchemaActionType::CreateTable;
+            createDiff.schema_id = dbId;
+            createDiff.table_id = tableId;
+            builder.applyDiff(createDiff);
+            return tableId;
+        };
+
+        const auto oldMVId = createTable("mv");
+        const auto shadowId = createTable("__mv_shadow");
+        const auto oldMLogId = createTable("$mlog$mv");
+        const auto baseId = createTable("base");
+        const auto inputMLogId = createTable("$mlog$base");
+        const auto childId = createTable("child_mv");
+        const std::vector<TableID> metadataOnlyIds{baseId, inputMLogId, childId};
+        for (auto tableId : {oldMVId, shadowId, baseId, inputMLogId, childId})
+            ASSERT_TRUE(builder.applyTable(dbId, tableId, tableId, true));
+        if (oldMLogHasStorage)
+            ASSERT_TRUE(builder.applyTable(dbId, oldMLogId, oldMLogId, true));
+
+        MockTiDB::instance().dropTable(global_ctx, dbName, "mv", /*drop_regions=*/false);
+        MockTiDB::instance().renameTable(dbName, "__mv_shadow", "mv");
+        MockTiDB::instance().dropTable(global_ctx, dbName, "$mlog$mv", /*drop_regions=*/false);
+        const auto newMLogId = MockTiDB::instance().newTable(dbName, "$mlog$mv", columns, pdClient->getTS(), "");
+        ASSERT_FALSE(tableIdMap.tableIDInDatabaseIdMap(newMLogId));
+
+        SchemaDiff cutoverDiff{};
+        cutoverDiff.type = SchemaActionType::ActionMViewRefreshOutOfPlaceCutover;
+        cutoverDiff.schema_id = dbId;
+        cutoverDiff.table_id = shadowId;
+        cutoverDiff.old_table_id = oldMVId;
+        // The MLog replacement is mixed with metadata-only updates for upstream tables and direct children.
+        for (const auto & [oldId, newId] : std::vector<std::pair<TableID, TableID>>{
+                 {baseId, baseId},
+                 {oldMLogId, newMLogId},
+                 {inputMLogId, inputMLogId},
+                 {childId, childId}})
+        {
+            AffectedOption option{};
+            option.schema_id = dbId;
+            option.old_schema_id = dbId;
+            option.table_id = newId;
+            option.old_table_id = oldId;
+            cutoverDiff.affected_opts.push_back(option);
+        }
+        builder.applyDiff(cutoverDiff);
+
+        ASSERT_TRUE(mustGetSyncedTable(oldMVId)->isTombstone());
+        ASSERT_FALSE(mustGetSyncedTable(shadowId)->isTombstone());
+        ASSERT_EQ(mustGetSyncedTable(shadowId)->getTableInfo().name, "mv");
+        for (auto tableId : metadataOnlyIds)
+            ASSERT_FALSE(mustGetSyncedTable(tableId)->isTombstone());
+        // Keep the retired ID mapping for late Raft commands until the tombstoned storage is GC-ed.
+        ASSERT_TRUE(tableIdMap.tableIDInDatabaseIdMap(oldMLogId));
+        if (oldMLogHasStorage)
+            EXPECT_TRUE(mustGetSyncedTable(oldMLogId)->isTombstone());
+        else
+            EXPECT_EQ(global_ctx.getTMTContext().getStorages().get(NullspaceID, oldMLogId), nullptr);
+
+        ASSERT_EQ(tableIdMap.findTableIDInDatabaseMap(newMLogId), dbId);
+        // A non-partitioned MLog is materialized lazily after its new ID has been registered.
+        ASSERT_EQ(global_ctx.getTMTContext().getStorages().get(NullspaceID, newMLogId), nullptr);
+        ASSERT_TRUE(builder.applyTable(dbId, newMLogId, newMLogId, true));
+        ASSERT_FALSE(mustGetSyncedTable(newMLogId)->isTombstone());
+        ASSERT_EQ(mustGetSyncedTable(newMLogId)->getTableInfo().name, "$mlog$mv");
+    }
+}
+CATCH
+
 TEST_F(SchemaSyncTest, CreateMaterializedViewRollbackSchemaDiffs)
 try
 {
