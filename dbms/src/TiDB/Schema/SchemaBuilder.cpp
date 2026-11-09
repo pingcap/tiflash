@@ -348,6 +348,16 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         // Tombstone the old local storage and update the shadow storage's local display name.
         applyDropTable(diff.schema_id, diff.old_table_id, magic_enum::enum_name(diff.type));
         applyRenameTable(diff.schema_id, diff.table_id);
+
+        // Cutover may also replace the MV's output MLog. Other affected entries only
+        // update dependency metadata and retain their physical table IDs.
+        for (const auto & opt : diff.affected_opts)
+        {
+            if (opt.old_table_id == opt.table_id)
+                continue;
+            applyCreateTable(opt.schema_id, opt.table_id, magic_enum::enum_name(diff.type));
+            applyDropTable(opt.old_schema_id, opt.old_table_id, magic_enum::enum_name(diff.type));
+        }
         break;
     }
     case SchemaActionType::TruncateTable:
