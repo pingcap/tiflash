@@ -21,6 +21,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Debug/TiFlashTestEnv.h>
 #include <Flash/Executor/PipelineExecutorContext.h>
+#include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/registerFunctions.h>
 #include <Interpreters/Join.h>
