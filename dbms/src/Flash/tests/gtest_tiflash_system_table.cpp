@@ -95,6 +95,15 @@ TEST(TiFlashSystemTableQueryTest, RejectsTablesOutsideSystem)
     expectError("SELECT 1 FROM system.one WHERE 1 NOT IN ks_1_db_2.t_3", ErrorCodes::READONLY);
     expectError("SELECT 1 FROM system.one WHERE 1 GLOBAL IN ks_1_db_2.t_3", ErrorCodes::READONLY);
     expectError("SELECT 1 FROM system.one WHERE 1 IN t_3", ErrorCodes::READONLY);
+    expectError(
+        "SELECT hasColumnInTable('other_db', 't', 'secret') FROM system.dt_tables LIMIT 1",
+        ErrorCodes::READONLY);
+    expectError(
+        "SELECT HASCOLUMNINTABLE('other_db', 't', 'secret') FROM system.dt_tables LIMIT 1",
+        ErrorCodes::READONLY);
+    expectError(
+        "SELECT hasColumnInTable('system', 'dt_tables', 'name') FROM system.dt_tables LIMIT 1",
+        ErrorCodes::READONLY);
 }
 
 TEST(TiFlashSystemTableQueryTest, RejectsIntoOutfile)

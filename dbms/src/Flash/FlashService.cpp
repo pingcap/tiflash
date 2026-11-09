@@ -48,6 +48,7 @@
 #include <Parsers/ParserQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Poco/Message.h>
+#include <Poco/String.h>
 #include <Server/IServer.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
@@ -1272,6 +1273,10 @@ void ensureSelectFromSystemDatabase(const IAST & node)
     }
     else if (const auto * function = typeid_cast<const ASTFunction *>(&node))
     {
+        // Arguments are strings, then execution calls getTable on the global context.
+        if (Poco::icompare(function->name, "hasColumnInTable") == 0)
+            throw Exception("GetTiFlashSystemTable only allows SELECT from system", ErrorCodes::READONLY);
+
         // `x IN other_db.t` is an identifier, not a table expression. Execution rewrites it to SELECT FROM that table.
         if (isInOperator(function->name) && function->arguments && function->arguments->children.size() >= 2)
         {
