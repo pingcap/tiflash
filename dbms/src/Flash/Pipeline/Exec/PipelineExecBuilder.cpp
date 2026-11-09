@@ -154,9 +154,10 @@ IOProfileInfos PipelineExecGroupBuilder::getCurIOProfileInfos() const
     return ret;
 }
 
-TaskStopSourcePtr PipelineExecGroupBuilder::addInputStop()
+TaskStopSourcePtr PipelineExecGroupBuilder::addInputStop(TaskStopSourcePtr source)
 {
-    auto source = std::make_shared<TaskStopSource>();
+    if (!source)
+        source = std::make_shared<TaskStopSource>();
     for (size_t i = 0; i < groups.size(); ++i)
         for (auto & builder : groups[i])
             builder.input_stops.push_back({source, builder.transform_ops.size(), i + 1 < groups.size()});

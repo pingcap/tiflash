@@ -48,6 +48,9 @@ void PhysicalJoinProbe::buildPipelineExecGroupImpl(
     join_ptr->initProbe(input_header, group_builder.concurrency());
     size_t probe_index = 0;
     const auto & max_block_size = context.getSettingsRef().max_block_size;
+    // Probe stop wakes tasks even when they are parked on input rather than on a Join future.
+    group_builder.addInputStop(join_ptr->getProbeStopSource());
+    // Skipping an empty build's input still requires the Join's normal completion state machine.
     auto input_stop = group_builder.addInputStop();
     group_builder.transform([&](auto & builder) {
         builder.appendTransformOp(std::make_unique<HashJoinProbeTransformOp>(

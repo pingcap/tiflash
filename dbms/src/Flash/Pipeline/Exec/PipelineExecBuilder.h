@@ -87,7 +87,7 @@ public:
     IOProfileInfos getCurIOProfileInfos() const;
 
     // Capture only the input built so far. Later transforms and groups remain outside this stop scope.
-    TaskStopSourcePtr addInputStop();
+    TaskStopSourcePtr addInputStop(TaskStopSourcePtr source = {});
 
 private:
     BuilderGroup & getCurGroup()
