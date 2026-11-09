@@ -15,45 +15,33 @@
 #include <DataStreams/LimitTransformAction.h>
 #include <Operators/LimitTransformOp.h>
 
-#include <type_traits>
-
 namespace DB
 {
-template <typename LimitActionPtr>
-OperatorStatus LimitTransformOp<LimitActionPtr>::tryOutputImpl(Block & block)
+OperatorStatus LimitTransformOp::tryOutputImpl(Block & block)
 {
-    if constexpr (std::is_same_v<LimitActionPtr, GlobalLimitPtr>)
+    if (action->isLimitReached())
     {
-        if (input_stop && action->isLimitReached())
-        {
+        if (input_stop)
             input_stop->stop();
-            block = {};
-            return OperatorStatus::HAS_OUTPUT;
-        }
+        block = {};
+        return OperatorStatus::HAS_OUTPUT;
     }
     return OperatorStatus::NEED_INPUT;
 }
 
-template <typename LimitActionPtr>
-OperatorStatus LimitTransformOp<LimitActionPtr>::transformImpl(Block & block)
+OperatorStatus LimitTransformOp::transformImpl(Block & block)
 {
     if (!action->transform(block))
         block = {};
-    if constexpr (std::is_same_v<LimitActionPtr, GlobalLimitPtr>)
-    {
-        // Stop only the input: the block which satisfies LIMIT must still reach the downstream operators.
-        if (input_stop && action->isLimitReached())
-            input_stop->stop();
-    }
+    // Keep the block which satisfies LIMIT: downstream operators must still deliver it.
+    if (input_stop && action->isLimitReached())
+        input_stop->stop();
     return OperatorStatus::HAS_OUTPUT;
 }
 
-template <typename LimitActionPtr>
-void LimitTransformOp<LimitActionPtr>::transformHeaderImpl(Block & header_)
+void LimitTransformOp::transformHeaderImpl(Block & header_)
 {
     header_ = action->getHeader();
 }
 
-template class LimitTransformOp<GlobalLimitPtr>;
-template class LimitTransformOp<LocalLimitPtr>;
 } // namespace DB

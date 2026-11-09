@@ -15,19 +15,19 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <DataStreams/LimitTransformAction.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskWaiter.h>
 #include <Operators/Operator.h>
 
 namespace DB
 {
-template <typename LimitActionPtr>
 class LimitTransformOp : public TransformOp
 {
 public:
     LimitTransformOp(
         PipelineExecutorContext & exec_context_,
         const String & req_id,
-        const LimitActionPtr & action_,
+        const GlobalLimitPtr & action_,
         const TaskStopSourcePtr & input_stop_ = nullptr)
         : TransformOp(exec_context_, req_id)
         , action(action_)
@@ -43,7 +43,7 @@ protected:
     void transformHeaderImpl(Block & header_) override;
 
 private:
-    LimitActionPtr action;
+    GlobalLimitPtr action;
     const TaskStopSourcePtr input_stop;
 };
 } // namespace DB

@@ -29,6 +29,8 @@
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.cpp>
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.cpp>
 #include <Flash/Mpp/ExchangeReceiver.cpp>
+#include <chrono>
+#include <future>
 #include <memory>
 #include <utility>
 
@@ -178,14 +180,17 @@ struct MockReceiverContext
 
     struct Reader
     {
-        explicit Reader(const PacketQueuePtr & queue_)
+        explicit Reader(const PacketQueuePtr & queue_, std::function<void()> before_read_ = {})
             : queue(queue_)
+            , before_read(std::move(before_read_))
         {}
 
         void initialize() const {}
 
         bool read(PacketPtr & packet [[maybe_unused]]) const
         {
+            if (before_read)
+                before_read();
             PacketPtr res;
             if (queue->pop(res) == MPMCQueueResult::OK)
             {
@@ -199,7 +204,13 @@ struct MockReceiverContext
 
         void cancel(const String &) {}
 
+        ExchangeReadInterrupt getReadInterrupt() const
+        {
+            return std::make_shared<std::function<void()>>([queue = queue] { queue->finish(); });
+        }
+
         PacketQueuePtr queue;
+        std::function<void()> before_read;
     };
 
     struct MockAsyncGrpcExchangePacketReader
@@ -242,7 +253,12 @@ struct MockReceiverContext
         return nullptr;
     }
 
-    std::shared_ptr<Reader> makeReader(const Request &) { return std::make_shared<Reader>(queue); }
+    std::shared_ptr<Reader> makeReader(const Request &)
+    {
+        if (before_make_reader)
+            before_make_reader();
+        return std::make_shared<Reader>(queue, before_read);
+    }
 
     static std::tuple<MPPTunnelPtr, grpc::Status> establishMPPConnectionLocalV1(
         const ::mpp::EstablishMPPConnectionRequest *,
@@ -256,10 +272,52 @@ struct MockReceiverContext
 
     PacketQueuePtr queue;
     std::vector<tipb::FieldType> field_types{};
+    std::function<void()> before_make_reader;
+    std::function<void()> before_read;
 };
 using MockExchangeReceiver = ExchangeReceiverBase<MockReceiverContext>;
 using MockWriterPtr = std::shared_ptr<MockWriter>;
 using MockExchangeReceiverInputStream = TiRemoteBlockInputStream<MockExchangeReceiver>;
+
+TEST(ExchangeReceiverCloseTest, InterruptsIdleAndLateRegisteredReaders)
+{
+    for (bool late_registration : {false, true})
+    {
+        for (bool cancel : {false, true})
+        {
+            auto queue = std::make_shared<PacketQueue>(1);
+            auto rpc_context = std::make_shared<MockReceiverContext>(queue, std::vector<tipb::FieldType>{});
+            std::promise<void> entered;
+            auto entered_future = entered.get_future();
+            std::promise<void> release;
+            auto release_future = release.get_future().share();
+            if (late_registration)
+                rpc_context->before_make_reader = [&] {
+                    entered.set_value();
+                    release_future.wait();
+                };
+            else
+                rpc_context->before_read = [&] {
+                    entered.set_value();
+                };
+            auto receiver = std::make_unique<MockExchangeReceiver>(rpc_context, 1, 1, "", "", 0, Settings{});
+            auto entered_status = entered_future.wait_for(std::chrono::seconds(10));
+            if (cancel)
+                receiver->cancel();
+            else
+                receiver->close();
+            release.set_value();
+            // Neither data nor EOF is sent by the producer. Receiver shutdown must interrupt the reader itself.
+            auto closing = std::async(std::launch::async, [&] { receiver.reset(); });
+            auto closed_status = closing.wait_for(std::chrono::seconds(10));
+            if (closed_status != std::future_status::ready)
+                queue->finish(); // Watchdog cleanup must not hide a failed shutdown assertion.
+            closing.get();
+            EXPECT_EQ(entered_status, std::future_status::ready);
+            EXPECT_EQ(closed_status, std::future_status::ready);
+        }
+    }
+}
 
 class TestTiRemoteBlockInputStream : public testing::Test
 {

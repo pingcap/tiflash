@@ -28,12 +28,12 @@
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Flash/Pipeline/Schedule/Tasks/OneTimeNotifyFuture.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskTimer.h>
+#include <Flash/Pipeline/Schedule/Tasks/TaskWaiter.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/CrossJoinProbeHelper.h>
 #include <Interpreters/Join.h>
 #include <Interpreters/NullAwareSemiJoinHelper.h>
 #include <Interpreters/NullableUtils.h>
-#include <Operators/SharedQueue.h>
 #include <common/logger_useful.h>
 
 #include <exception>
@@ -155,62 +155,6 @@ const DataTypePtr Join::flag_mapped_entry_helper_type = std::make_shared<Pointer
 const size_t MAX_RESTORE_ROUND_IN_GTEST = 2;
 #endif
 
-void ProbeStopContext::registerJoinWaitFutures(
-    const OneTimeNotifyFuturePtr & build_finished_future,
-    const OneTimeNotifyFuturePtr & probe_finished_future)
-{
-    bool should_finish = false;
-    {
-        std::lock_guard lock(mutex);
-        should_finish = stopped.load(std::memory_order_acquire);
-        if (!should_finish)
-        {
-            wait_futures.emplace_back(build_finished_future);
-            wait_futures.emplace_back(probe_finished_future);
-        }
-    }
-    if (should_finish)
-    {
-        build_finished_future->finish();
-        probe_finished_future->finish();
-    }
-}
-
-void ProbeStopContext::addRestoreProbeQueue(const SharedQueuePtr & queue)
-{
-    bool should_cancel = false;
-    {
-        std::lock_guard lock(mutex);
-        should_cancel = stopped.load(std::memory_order_acquire);
-        if (!should_cancel)
-            restore_probe_queues.emplace_back(queue);
-    }
-    if (should_cancel)
-        queue->cancel();
-}
-
-void ProbeStopContext::stop()
-{
-    if (stopped.exchange(true, std::memory_order_acq_rel))
-        return;
-
-    std::vector<OneTimeNotifyFuturePtr> futures_to_finish;
-    std::vector<SharedQueuePtr> queues_to_cancel;
-    {
-        std::lock_guard lock(mutex);
-        futures_to_finish = std::move(wait_futures);
-        queues_to_cancel = std::move(restore_probe_queues);
-    }
-
-    // Stopping does not make a restore build complete. It only wakes waiters so they can observe the shared stop
-    // state and leave the pipeline.
-    for (const auto & future : futures_to_finish)
-        future->finish();
-    for (const auto & queue : queues_to_cancel)
-        queue->cancel();
-}
-
-
 Join::Join(
     const Names & key_names_left_,
     const Names & key_names_right_,
@@ -234,7 +178,7 @@ Join::Join(
     size_t probe_cache_column_threshold_,
     bool is_test_,
     const std::vector<RuntimeFilterPtr> & runtime_filter_list_,
-    const ProbeStopContextPtr & probe_stop_context_)
+    const TaskStopSourcePtr & probe_stop_source_)
     : restore_config(restore_config_)
     , match_helper_name(match_helper_name_)
     , flag_mapped_entry_helper_name(flag_mapped_entry_helper_name_)
@@ -250,7 +194,7 @@ Join::Join(
     , active_build_threads(0)
     , probe_concurrency(0)
     , pending_probe_streams(0)
-    , probe_stop_context(probe_stop_context_ ? probe_stop_context_ : std::make_shared<ProbeStopContext>())
+    , probe_stop_source(probe_stop_source_ ? probe_stop_source_ : std::make_shared<TaskStopSource>())
     , collators(collators_)
     , non_equal_conditions(non_equal_conditions_)
     , max_block_size(max_block_size_)
@@ -273,7 +217,6 @@ Join::Join(
     , enable_fine_grained_shuffle(fine_grained_shuffle_count_ > 0)
     , fine_grained_shuffle_count(fine_grained_shuffle_count_)
 {
-    probe_stop_context->registerJoinWaitFutures(wait_build_finished_future, wait_probe_finished_future);
     RUNTIME_CHECK_MSG(
         key_names_left_.size() == key_names_right_.size(),
         "Left and right join key sizes must be equal, left={}, right={}",
@@ -524,7 +467,7 @@ std::shared_ptr<Join> Join::createRestoreJoin(size_t max_bytes_before_external_j
         probe_cache_column_threshold,
         is_test,
         dummy_runtime_filter_list,
-        probe_stop_context);
+        probe_stop_source);
     /// init output names after finalize, the restored join don't need to finalize
     ret->output_columns_after_finalize = output_columns_after_finalize;
     ret->output_column_names_set_after_finalize = output_column_names_set_after_finalize;
@@ -2121,23 +2064,10 @@ bool Join::finishOneProbe(size_t stream_index)
 
 void Join::stopProbePhase()
 {
-    bool notify_probe_finished = false;
-    {
-        std::unique_lock lock(build_probe_mutex);
-        if (probe_phase_state.exchange(ProbePhaseState::Stopped, std::memory_order_acq_rel) != ProbePhaseState::Stopped)
-            notify_probe_finished = true;
-    }
-    probe_stop_context->stop();
-    if (notify_probe_finished)
-    {
-        probe_cv.notify_all();
-        wait_probe_finished_future->finish();
-    }
-}
-
-void Join::addRestoreProbeQueue(const SharedQueuePtr & queue)
-{
-    probe_stop_context->addRestoreProbeQueue(queue);
+    // Pipeline tasks subscribe to this source directly. Do not finish normal-completion futures or cancel
+    // restore queues to wake them: stopping work is distinct from completing build/probe input.
+    probe_stop_source->stop();
+    probe_cv.notify_all();
 }
 
 void Join::finalizeProbe()
@@ -2149,7 +2079,7 @@ void Join::finalizeProbe()
         if (hash_join_spill_context->getProbeSpiller())
             hash_join_spill_context->getProbeSpiller()->finishSpill();
         assert(pending_probe_streams == 0);
-        probe_phase_state.store(ProbePhaseState::NormallyFinished, std::memory_order_release);
+        probe_finished.store(true, std::memory_order_release);
     }
     probe_cv.notify_all();
     wait_probe_finished_future->finish();
@@ -2159,8 +2089,7 @@ void Join::waitUntilAllProbeFinished() const
 {
     std::unique_lock lock(build_probe_mutex);
     probe_cv.wait(lock, [&]() {
-        return isProbeStopped() || probe_phase_state.load(std::memory_order_acquire) != ProbePhaseState::Active
-            || meet_error || skip_wait;
+        return isProbeStopped() || probe_finished.load(std::memory_order_acquire) || meet_error || skip_wait;
     });
     if (meet_error)
         throw Exception(error_message);
@@ -2168,7 +2097,7 @@ void Join::waitUntilAllProbeFinished() const
 
 bool Join::isProbeFinishedForPipeline() const
 {
-    if (!isProbeStopped() && probe_phase_state.load(std::memory_order_acquire) == ProbePhaseState::Active)
+    if (!isProbeStopped() && !probe_finished.load(std::memory_order_acquire))
     {
         setNotifyFuture(wait_probe_finished_future.get());
         return false;
@@ -2178,8 +2107,7 @@ bool Join::isProbeFinishedForPipeline() const
 
 bool Join::isProbeStopped() const
 {
-    return probe_stop_context->isStopped()
-        || probe_phase_state.load(std::memory_order_acquire) == ProbePhaseState::Stopped;
+    return probe_stop_source->isStopped();
 }
 
 bool Join::isBuildFinishedForPipeline() const
@@ -2198,8 +2126,7 @@ void Join::finishOneNonJoin(size_t partition_index)
     // When spill is not enabled, all build data blocks are stored in the same partition, so the join partition cannot be released.
     if (isEnableSpill())
     {
-        if likely (
-            build_finished && probe_phase_state.load(std::memory_order_acquire) == ProbePhaseState::NormallyFinished)
+        if likely (build_finished && probe_finished.load(std::memory_order_acquire) && !isProbeStopped())
         {
             /// only clear hash table if not active build/probe threads
             while (partition_index < build_concurrency)

@@ -155,6 +155,7 @@ private:
 
     void setUpConnection();
     bool setEndState(ExchangeReceiverState new_state);
+    void registerReadInterrupt(const ExchangeReadInterrupt & interrupt);
     String getStatusString();
 
     ExchangeReceiverResult handleUnnormalChannel(
@@ -225,6 +226,8 @@ private:
     bool collected = false;
     int thread_count = 0;
     Int32 local_tunnel_version;
+    // Weak entries do not retain connections after their read loops finish. Protected by mu.
+    std::vector<std::weak_ptr<std::function<void()>>> read_interrupts;
     Int32 async_recv_version;
 
     std::atomic<Int64> data_size_in_queue;

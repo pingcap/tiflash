@@ -72,6 +72,10 @@ public:
     void operatePrefix();
     void operateSuffix();
 
+    // Called once by PipelineExec when this operator's output is abandoned. Only publish stop signals here;
+    // blocking cleanup belongs in operateSuffixImpl. The call is serialized with this operator's execution.
+    virtual void onEarlyStop() {}
+
     virtual String getName() const = 0;
 
     /** Get data structure of the operator in a form of "header" block (it is also called "sample block").

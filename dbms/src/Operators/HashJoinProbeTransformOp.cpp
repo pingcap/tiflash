@@ -71,13 +71,16 @@ void HashJoinProbeTransformOp::transformHeaderImpl(Block & header_)
     header_ = origin_join->getOutputBlock();
 }
 
+void HashJoinProbeTransformOp::onEarlyStop()
+{
+    probe_transform->stopProbePhase();
+}
+
 void HashJoinProbeTransformOp::operateSuffixImpl()
 {
     if (status != ProbeStatus::FINISHED)
     {
         probe_transform->stopProbePhase();
-        if (input_stop)
-            input_stop->stop();
         SYNC_FOR("after_hash_join_probe_stop");
         if (status == ProbeStatus::READ_SCAN_HASH_MAP_DATA)
             probe_transform->abortScanHashMapAfterProbe();
@@ -96,12 +99,6 @@ bool HashJoinProbeTransformOp::finishIfProbeStopped()
     if (!probe_transform->isProbePhaseStopped())
         return false;
 
-    if (input_stop)
-        input_stop->stop();
-
-    // The stop can originate from an ancestor restore join. Mark this join stopped too, which cancels its restore
-    // probe queues before this pipeline task exits.
-    probe_transform->stopProbePhase();
     if (status == ProbeStatus::READ_SCAN_HASH_MAP_DATA)
         probe_transform->abortScanHashMapAfterProbe();
     switchStatus(ProbeStatus::FINISHED);

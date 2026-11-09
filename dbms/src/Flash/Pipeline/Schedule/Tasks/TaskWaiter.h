@@ -48,5 +48,6 @@ private:
     std::atomic_bool stopped{false};
     std::mutex mutex;
     std::vector<std::weak_ptr<TaskWaiter>> waiters;
+    size_t prune_at = 64;
 };
 } // namespace DB
