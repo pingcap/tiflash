@@ -33,9 +33,13 @@ namespace DB
   */
 class Tokens
 {
+    friend class TokenIterator;
+
 private:
     std::vector<Token> data;
     Lexer lexer;
+    // Shared by all iterator copies so parser backtracking cannot reset the active depth.
+    size_t parser_depth = 0;
 
 public:
     Tokens(const char * begin, const char * end, size_t max_query_size = 0)
@@ -104,6 +108,8 @@ public:
 
     /// Rightmost token we had looked.
     const Token & max() { return tokens->max(); }
+
+    size_t & getParserDepth() { return tokens->parser_depth; }
 };
 
 
