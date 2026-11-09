@@ -80,6 +80,17 @@ TEST(TiFlashSystemTableQueryTest, RejectsMultiStatement)
     expectError("SELECT 1; DROP TABLE t", ErrorCodes::SYNTAX_ERROR);
 }
 
+TEST(TiFlashSystemTableQueryTest, RejectsTablesOutsideSystem)
+{
+    expectError("SELECT * FROM ks_1_db_2.t_3", ErrorCodes::READONLY);
+    expectError("SELECT * FROM dt_tables", ErrorCodes::READONLY);
+    expectError("SELECT * FROM system.dt_tables, ks_1_db_2.t_3", ErrorCodes::READONLY);
+    expectError(
+        "SELECT * FROM system.dt_tables WHERE tidb_table_id IN (SELECT 1 FROM ks_1_db_2.t_3)",
+        ErrorCodes::READONLY);
+    expectError("SELECT * FROM numbers(1)", ErrorCodes::READONLY);
+}
+
 TEST(TiFlashSystemTableQueryTest, RejectsIntoOutfile)
 {
     expectError("SELECT 1 INTO OUTFILE '/tmp/tiflash-system-table'", ErrorCodes::INTO_OUTFILE_NOT_ALLOWED);

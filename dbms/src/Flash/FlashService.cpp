@@ -40,8 +40,10 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Interpreters/executeQuery.h>
+#include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
+#include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Poco/Message.h>
@@ -1242,6 +1244,32 @@ grpc::Status FlashService::GetDisaggConfig(
     return grpc::Status::OK;
 }
 
+void ensureSelectFromSystemDatabase(const IAST & node)
+{
+    if (const auto * table_expression = typeid_cast<const ASTTableExpression *>(&node))
+    {
+        if (table_expression->table_function)
+            throw Exception("GetTiFlashSystemTable only allows SELECT from system", ErrorCodes::READONLY);
+
+        if (table_expression->database_and_table_name)
+        {
+            // Unqualified names use the current database, which is not system.
+            const auto * identifier = typeid_cast<const ASTIdentifier *>(table_expression->database_and_table_name.get());
+            const auto * database = identifier && identifier->children.size() == 2
+                ? typeid_cast<const ASTIdentifier *>(identifier->children[0].get())
+                : nullptr;
+            if (!database || database->name != "system")
+                throw Exception("GetTiFlashSystemTable only allows SELECT from system", ErrorCodes::READONLY);
+        }
+    }
+
+    for (const auto & child : node.children)
+    {
+        if (child)
+            ensureSelectFromSystemDatabase(*child);
+    }
+}
+
 void restrictTiFlashSystemTableQuery(Context & context, const String & sql)
 {
     // Set before parsing so a later SELECT ... SETTINGS cannot clear readonly.
@@ -1253,8 +1281,11 @@ void restrictTiFlashSystemTableQuery(Context & context, const String & sql)
     const auto * select = typeid_cast<const ASTSelectWithUnionQuery *>(ast.get());
     if (!select)
     {
-        if (typeid_cast<const ASTSelectQuery *>(ast.get()))
+        if (const auto * plain_select = typeid_cast<const ASTSelectQuery *>(ast.get()))
+        {
+            ensureSelectFromSystemDatabase(*plain_select);
             return;
+        }
         throw Exception("GetTiFlashSystemTable only allows SELECT", ErrorCodes::READONLY);
     }
 
@@ -1268,6 +1299,9 @@ void restrictTiFlashSystemTableQuery(Context & context, const String & sql)
         if (!typeid_cast<const ASTSelectQuery *>(child.get()))
             throw Exception("GetTiFlashSystemTable only allows SELECT", ErrorCodes::READONLY);
     }
+
+    // Walk JOIN and subquery table expressions as well as the top-level FROM.
+    ensureSelectFromSystemDatabase(*ast);
 }
 
 grpc::Status FlashService::GetTiFlashSystemTable(
