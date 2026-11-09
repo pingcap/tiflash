@@ -48,8 +48,7 @@ void PhysicalJoinProbe::buildPipelineExecGroupImpl(
     join_ptr->initProbe(input_header, group_builder.concurrency());
     size_t probe_index = 0;
     const auto & max_block_size = context.getSettingsRef().max_block_size;
-    // Capture only the upstream operators, before appending this join to avoid retaining itself.
-    join_ptr->addProbeInputStopCallback(group_builder.getInputStopCallback());
+    auto input_stop = group_builder.addInputStop();
     group_builder.transform([&](auto & builder) {
         builder.appendTransformOp(std::make_unique<HashJoinProbeTransformOp>(
             exec_context,
@@ -57,7 +56,8 @@ void PhysicalJoinProbe::buildPipelineExecGroupImpl(
             join_ptr,
             probe_index++,
             max_block_size,
-            input_header));
+            input_header,
+            input_stop));
     });
     // The `join_ptr->wait_build_finished_future` does not need to be added to exec_context here;
     // it is only necessary to add it during the "restore build stage."

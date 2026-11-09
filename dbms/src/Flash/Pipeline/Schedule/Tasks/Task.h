@@ -21,6 +21,9 @@
 #include <Flash/Pipeline/Schedule/Tasks/TaskTimer.h>
 #include <memory.h>
 
+#include <memory>
+#include <vector>
+
 namespace DB
 {
 /**
@@ -62,6 +65,11 @@ enum class NotifyType
 };
 
 class PipelineExecutorContext;
+class TaskWaiter;
+class TaskStopSource;
+using TaskWaiterPtr = std::shared_ptr<TaskWaiter>;
+using TaskStopSourcePtr = std::shared_ptr<TaskStopSource>;
+using TaskStopSources = std::vector<TaskStopSourcePtr>;
 
 class Task
 {
@@ -126,6 +134,11 @@ public:
     void setNotifyType(NotifyType type) { notify_type = type; }
     NotifyType getNotifyType() const { return notify_type; }
 
+    // Only the stop sources which discard the currently waiting operator may interrupt this wait.
+    virtual TaskStopSources getNotifyStopSources() const { return {}; }
+    TaskWaiterPtr getWaiter() const { return waiter.lock(); }
+    void setWaiter(const TaskWaiterPtr & waiter_) { waiter = waiter_; }
+
 public:
     LoggerPtr log;
 
@@ -161,6 +174,7 @@ private:
     NotifyType notify_type{NotifyType::WAIT_ON_NOTHING};
 
     bool is_finalized = false;
+    std::weak_ptr<TaskWaiter> waiter;
 };
 using TaskPtr = std::unique_ptr<Task>;
 } // namespace DB

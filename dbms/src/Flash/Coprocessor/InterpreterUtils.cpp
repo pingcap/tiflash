@@ -347,9 +347,13 @@ void executeFinalSort(
         if (limit)
         {
             auto global_limit = std::make_shared<GlobalLimitTransformAction>(input_header, *limit);
+            auto input_stop = group_builder.addInputStop();
             group_builder.transform([&](auto & builder) {
-                builder.appendTransformOp(
-                    std::make_unique<LimitTransformOp<GlobalLimitPtr>>(exec_context, log->identifier(), global_limit));
+                builder.appendTransformOp(std::make_unique<LimitTransformOp<GlobalLimitPtr>>(
+                    exec_context,
+                    log->identifier(),
+                    global_limit,
+                    input_stop));
             });
         }
         // For order by const and doesn't has limit, do nothing here.

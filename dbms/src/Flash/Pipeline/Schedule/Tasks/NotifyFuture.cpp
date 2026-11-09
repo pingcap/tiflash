@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
+#include <Flash/Pipeline/Schedule/Tasks/TaskWaiter.h>
 
 namespace DB
 {
@@ -32,7 +33,15 @@ void clearNotifyFuture()
 void registerTaskToFuture(TaskPtr && task)
 {
     assert(current_notify_future != nullptr);
-    current_notify_future->registerTask(std::move(task));
+    auto stop_sources = task->getNotifyStopSources();
+    auto waiter = std::make_shared<TaskWaiter>();
+    task->setWaiter(waiter);
+    auto * future = current_notify_future;
     current_notify_future = nullptr;
+    future->registerTask(std::move(task));
+    // Register stop notifications only after releasing the resource's registration lock. A resource
+    // may already have notified the task; in that case the waiter is empty and stop is a no-op.
+    for (const auto & stop_source : stop_sources)
+        stop_source->registerWaiter(waiter);
 }
 } // namespace DB

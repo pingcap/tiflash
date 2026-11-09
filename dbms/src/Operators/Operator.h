@@ -19,7 +19,6 @@
 #include <Operators/IOProfileInfo.h>
 #include <Operators/OperatorProfileInfo.h>
 
-#include <functional>
 #include <memory>
 
 namespace DB
@@ -74,10 +73,6 @@ public:
     void operateSuffix();
 
     virtual String getName() const = 0;
-
-    /// Stop input resources that may park a pipeline task or block its producers.
-    /// The callback may run on another task and must own its resources rather than capture this operator.
-    virtual std::function<void()> getStopCallback() const { return {}; }
 
     /** Get data structure of the operator in a form of "header" block (it is also called "sample block").
       * Header block contains column names, data types, columns of size 0. Constant columns must have corresponding values.

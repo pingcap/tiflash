@@ -456,13 +456,6 @@ void ExchangeReceiverBase<RPCContext>::close()
 }
 
 template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::stopReading()
-{
-    if (!stopped_reading.exchange(true, std::memory_order_acq_rel))
-        close();
-}
-
-template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::addLocalConnectionNum()
 {
     std::lock_guard lock(mu);
@@ -817,8 +810,6 @@ template <typename RPCContext>
 ReceiveStatus ExchangeReceiverBase<RPCContext>::tryReceive(size_t stream_id, ReceivedMessagePtr & recv_msg)
 {
     // verifyStreamId has been called in `ExchangeReceiverSourceOp`.
-    if (unlikely(stopped_reading.load(std::memory_order_acquire)))
-        return ReceiveStatus::eof;
     return toReceiveStatus(received_message_queue.pop<false>(stream_id, recv_msg));
 }
 
@@ -880,9 +871,6 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::handleUnnormalChannel(
 {
     std::optional<Block> last_block = decoder_ptr->flush();
     std::lock_guard lock(mu);
-    // A concurrent stop may close the queue while a source is inside readImpl(). It is normal EOF for this input.
-    if (state == ExchangeReceiverState::CLOSED && stopped_reading.load(std::memory_order_acquire))
-        return ExchangeReceiverResult::newEOF(name);
     if (this->state != DB::ExchangeReceiverState::NORMAL)
     {
         return DB::ExchangeReceiverResult::newError(

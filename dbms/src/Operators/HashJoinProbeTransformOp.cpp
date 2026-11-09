@@ -39,9 +39,11 @@ HashJoinProbeTransformOp::HashJoinProbeTransformOp(
     const JoinPtr & join_,
     size_t op_index_,
     size_t max_block_size,
-    const Block & input_header)
+    const Block & input_header,
+    const TaskStopSourcePtr & input_stop_)
     : TransformOp(exec_context_, req_id)
     , origin_join(join_)
+    , input_stop(input_stop_)
     , probe_process_info(max_block_size, join_->getProbeCacheColumnThreshold())
 {
     RUNTIME_CHECK_MSG(origin_join != nullptr, "join ptr should not be null.");
@@ -74,6 +76,8 @@ void HashJoinProbeTransformOp::operateSuffixImpl()
     if (status != ProbeStatus::FINISHED)
     {
         probe_transform->stopProbePhase();
+        if (input_stop)
+            input_stop->stop();
         SYNC_FOR("after_hash_join_probe_stop");
         if (status == ProbeStatus::READ_SCAN_HASH_MAP_DATA)
             probe_transform->abortScanHashMapAfterProbe();
@@ -91,6 +95,9 @@ bool HashJoinProbeTransformOp::finishIfProbeStopped()
 {
     if (!probe_transform->isProbePhaseStopped())
         return false;
+
+    if (input_stop)
+        input_stop->stop();
 
     // The stop can originate from an ancestor restore join. Mark this join stopped too, which cancels its restore
     // probe queues before this pipeline task exits.
@@ -224,6 +231,11 @@ OperatorStatus HashJoinProbeTransformOp::tryOutputImpl(Block & block)
             if (auto ret = probe_transform->tryFillProcessInfoInProbeStage(probe_process_info);
                 ret != OperatorStatus::HAS_OUTPUT)
                 return ret;
+        }
+        else if (input_stop)
+        {
+            // An empty build discards its input, but the Join still completes its normal probe state machine.
+            input_stop->stop();
         }
     }
 
