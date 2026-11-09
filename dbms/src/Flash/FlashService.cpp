@@ -40,6 +40,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Interpreters/executeQuery.h>
+#include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
@@ -1244,6 +1245,20 @@ grpc::Status FlashService::GetDisaggConfig(
     return grpc::Status::OK;
 }
 
+void ensureSystemTableIdentifier(const ASTIdentifier & identifier)
+{
+    // Unqualified names use the current database, which is not system.
+    const auto * database
+        = identifier.children.size() == 2 ? typeid_cast<const ASTIdentifier *>(identifier.children[0].get()) : nullptr;
+    if (!database || database->name != "system")
+        throw Exception("GetTiFlashSystemTable only allows SELECT from system", ErrorCodes::READONLY);
+}
+
+bool isInOperator(const String & name)
+{
+    return name == "in" || name == "notIn" || name == "globalIn" || name == "globalNotIn";
+}
+
 void ensureSelectFromSystemDatabase(const IAST & node)
 {
     if (const auto * table_expression = typeid_cast<const ASTTableExpression *>(&node))
@@ -1251,15 +1266,17 @@ void ensureSelectFromSystemDatabase(const IAST & node)
         if (table_expression->table_function)
             throw Exception("GetTiFlashSystemTable only allows SELECT from system", ErrorCodes::READONLY);
 
-        if (table_expression->database_and_table_name)
+        if (const auto * identifier
+            = typeid_cast<const ASTIdentifier *>(table_expression->database_and_table_name.get()))
+            ensureSystemTableIdentifier(*identifier);
+    }
+    else if (const auto * function = typeid_cast<const ASTFunction *>(&node))
+    {
+        // `x IN other_db.t` is an identifier, not a table expression. Execution rewrites it to SELECT FROM that table.
+        if (isInOperator(function->name) && function->arguments && function->arguments->children.size() >= 2)
         {
-            // Unqualified names use the current database, which is not system.
-            const auto * identifier = typeid_cast<const ASTIdentifier *>(table_expression->database_and_table_name.get());
-            const auto * database = identifier && identifier->children.size() == 2
-                ? typeid_cast<const ASTIdentifier *>(identifier->children[0].get())
-                : nullptr;
-            if (!database || database->name != "system")
-                throw Exception("GetTiFlashSystemTable only allows SELECT from system", ErrorCodes::READONLY);
+            if (const auto * identifier = typeid_cast<const ASTIdentifier *>(function->arguments->children[1].get()))
+                ensureSystemTableIdentifier(*identifier);
         }
     }
 
