@@ -62,8 +62,8 @@ void checkExecutorList(const tipb::DAGRequest & request)
         default:
             throw TiFlashException(
                 Errors::Coprocessor::Unimplemented,
-                "Unsupported executor type {} in a list-based DAG",
-                static_cast<Int32>(type));
+                "Unsupported executor in list based DAG request: {}",
+                request.executors(i).DebugString());
         }
 
         if (unlikely(is_source != (i == 0)))

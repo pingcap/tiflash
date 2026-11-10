@@ -62,11 +62,14 @@ public:
         };
     }
 
-    ColumnWithTypeAndName executeCase(const FunctionCase & test_case, const ColumnWithTypeAndName & json)
+    ColumnWithTypeAndName executeCase(
+        const FunctionCase & test_case,
+        const ColumnWithTypeAndName & json,
+        bool raw_function_test = false)
     {
         ColumnsWithTypeAndName arguments{json};
         arguments.insert(arguments.end(), test_case.extra_arguments.begin(), test_case.extra_arguments.end());
-        return executeFunction(test_case.function, arguments);
+        return executeFunction(test_case.function, arguments, nullptr, raw_function_test);
     }
 };
 
@@ -98,6 +101,26 @@ try
             {
                 EXPECT_EQ(e.code(), ErrorCodes::BAD_ARGUMENTS) << e.displayText();
             }
+        }
+    }
+}
+CATCH
+
+TEST_F(TestJsonBinaryInput, RejectsEmptyNullableConstantInput)
+try
+{
+    const auto json = createConstColumn<Nullable<String>>(rows, String{});
+    for (const auto & test_case : functionCases())
+    {
+        SCOPED_TRACE(test_case.function);
+        try
+        {
+            executeCase(test_case, json, true);
+            FAIL() << "Expected empty nullable constant binary JSON input to be rejected";
+        }
+        catch (const Exception & e)
+        {
+            EXPECT_EQ(e.code(), ErrorCodes::BAD_ARGUMENTS) << e.displayText();
         }
     }
 }
