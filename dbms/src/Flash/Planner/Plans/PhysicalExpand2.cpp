@@ -39,16 +39,31 @@ PhysicalPlanNodePtr PhysicalExpand2::build(
     assert(child);
 
     if (unlikely(expand.proj_exprs().empty()))
+        throw TiFlashException(Errors::Planner::BadRequest, "Expand2 executor requires at least one projection");
+
+    const auto projection_column_count = expand.proj_exprs().Get(0).exprs_size();
+    for (const auto & projection : expand.proj_exprs())
     {
-        // should not reach here
-        throw TiFlashException(
-            "Expand executor without projections indicated by grouping sets",
-            Errors::Planner::BadRequest);
+        if (unlikely(projection.exprs_size() != projection_column_count))
+            throw TiFlashException(
+                Errors::Planner::BadRequest,
+                "Expand2 projection column count mismatch: expected {}, got {}",
+                projection_column_count,
+                projection.exprs_size());
     }
+
+    auto input_col_size = child->getSchema().size();
+    const auto output_column_count = static_cast<size_t>(projection_column_count);
+    const auto generated_column_count = output_column_count > input_col_size ? output_column_count - input_col_size : 0;
+    if (unlikely(generated_column_count > static_cast<size_t>(expand.generated_output_names_size())))
+        throw TiFlashException(
+            Errors::Planner::BadRequest,
+            "Expand2 requires {} generated output names, got {}",
+            generated_column_count,
+            expand.generated_output_names_size());
 
     DAGExpressionAnalyzer analyzer{child->getSchema(), context};
 
-    auto input_col_size = child->getSchema().size();
     NamesAndTypes schema;
     NamesAndTypes gen_schema;
     NamesWithAliasesVec project_cols_vec;
@@ -137,7 +152,7 @@ PhysicalPlanNodePtr PhysicalExpand2::build(
             // link the current projected block column name with unified output column name.
             auto output_name = static_cast<size_t>(j) < input_col_size
                 ? analyzer.getCurrentInputColumns()[j].name
-                : expand.generated_output_names().Get(j - input_col_size);
+                : expand.generated_output_names().Get(static_cast<int>(j - input_col_size));
             project_cols.emplace_back(col.name, output_name);
             // for N level projection, collecting the first level's projected col's type is enough.
             if (i == 0)
