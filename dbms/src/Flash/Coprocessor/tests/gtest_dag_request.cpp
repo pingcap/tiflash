@@ -44,10 +44,6 @@ TEST(DAGRequestTest, RejectsUnbalancedExecutorLists)
         {tipb::TypeTableScan, tipb::TypeTableScan},
         {tipb::TypeTableScan, tipb::TypeLimit, tipb::TypeTableScan, tipb::TypeLimit},
         {tipb::TypeLimit, tipb::TypeTableScan},
-        {tipb::TypeTableScan, tipb::TypeJoin},
-        {tipb::TypeJoin, tipb::TypeTableScan, tipb::TypeTableScan},
-        {tipb::TypeTableScan, tipb::TypeTableScan, tipb::TypeJoin, tipb::TypeJoin},
-        {tipb::TypeTableScan, tipb::TypeTableScan, tipb::TypeTableScan, tipb::TypeJoin},
         {tipb::TypeExchangeReceiver, tipb::TypeTableScan, tipb::TypeProjection},
     };
     for (bool withIds : {false, true})
@@ -79,13 +75,6 @@ TEST(DAGRequestTest, AcceptsBalancedExecutorLists)
          tipb::TypeAggregation,
          tipb::TypeTopN,
          tipb::TypeExchangeSender},
-        {tipb::TypeTableScan, tipb::TypeTableScan, tipb::TypeJoin},
-        {tipb::TypeTableScan,
-         tipb::TypeTableScan,
-         tipb::TypeJoin,
-         tipb::TypeTableScan,
-         tipb::TypeJoin,
-         tipb::TypeLimit},
     };
     for (bool withIds : {false, true})
     {
@@ -96,5 +85,69 @@ TEST(DAGRequestTest, AcceptsBalancedExecutorLists)
             EXPECT_NO_THROW((void)DAGRequest{&request});
         }
     }
+}
+
+TEST(DAGRequestTest, RejectsJoinInExecutorLists)
+{
+    const std::vector<std::vector<tipb::ExecType>> joinLists{
+        {tipb::TypeJoin},
+        {tipb::TypeTableScan, tipb::TypeJoin},
+        {tipb::TypeJoin, tipb::TypeTableScan, tipb::TypeTableScan},
+        {tipb::TypeTableScan, tipb::TypeTableScan, tipb::TypeJoin},
+        {tipb::TypeTableScan, tipb::TypeTableScan, tipb::TypeJoin, tipb::TypeJoin},
+        {tipb::TypeTableScan, tipb::TypeTableScan, tipb::TypeTableScan, tipb::TypeJoin},
+        {tipb::TypeTableScan,
+         tipb::TypeTableScan,
+         tipb::TypeJoin,
+         tipb::TypeTableScan,
+         tipb::TypeJoin,
+         tipb::TypeLimit},
+    };
+    for (bool withIds : {false, true})
+    {
+        for (bool withChildren : {false, true})
+        {
+            for (const auto & types : joinLists)
+            {
+                auto request = makeListRequest(types, withIds);
+                if (withChildren)
+                {
+                    for (auto & executor : *request.mutable_executors())
+                    {
+                        if (executor.tp() == tipb::TypeJoin)
+                        {
+                            executor.mutable_join()->add_children()->set_tp(tipb::TypeTableScan);
+                            executor.mutable_join()->add_children()->set_tp(tipb::TypeTableScan);
+                        }
+                    }
+                }
+                SCOPED_TRACE(request.ShortDebugString());
+                try
+                {
+                    (void)DAGRequest{&request};
+                    ADD_FAILURE() << "Expected a list-based Join to be rejected";
+                }
+                catch (const TiFlashException & e)
+                {
+                    EXPECT_TRUE(e.getError().is(Errors::Coprocessor::BadRequest)) << e.standardText();
+                }
+            }
+        }
+    }
+}
+
+TEST(DAGRequestTest, AcceptsTreeBasedJoin)
+{
+    tipb::DAGRequest request;
+    auto * root = request.mutable_root_executor();
+    root->set_tp(tipb::TypeJoin);
+    root->set_executor_id("join");
+    for (const auto * id : {"left", "right"})
+    {
+        auto * child = root->mutable_join()->add_children();
+        child->set_tp(tipb::TypeTableScan);
+        child->set_executor_id(id);
+    }
+    EXPECT_NO_THROW((void)DAGRequest{&request});
 }
 } // namespace DB::tests

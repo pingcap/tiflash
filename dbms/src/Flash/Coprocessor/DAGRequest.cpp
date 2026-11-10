@@ -32,12 +32,13 @@ void checkExecutorList(const tipb::DAGRequest & request)
     for (int i = 0; i < request.executors_size(); ++i)
     {
         const auto & executor = request.executors(i);
-        size_t inputCount = 0;
-        // List-based DAGs encode inputs by position, so a Join need not embed its children.
         if (executor.tp() == tipb::ExecType::TypeJoin)
-            inputCount = 2;
-        else
-            getChildren(executor).forEach([&](const tipb::Executor &) { ++inputCount; });
+            throw TiFlashException(
+                Errors::Coprocessor::BadRequest,
+                "Join executor is not supported in a list-based DAG");
+
+        size_t inputCount = 0;
+        getChildren(executor).forEach([&](const tipb::Executor &) { ++inputCount; });
 
         if (unlikely(nodeCount < inputCount))
             throw TiFlashException(
@@ -127,8 +128,6 @@ private:
             return fmt::format("sort_{}", current_id++);
         case tipb::ExecType::TypeWindow:
             return fmt::format("window_{}", current_id++);
-        case tipb::ExecType::TypeJoin:
-            return fmt::format("join_{}", current_id++);
         case tipb::ExecType::TypeExpand:
             return fmt::format("expand_{}", current_id++);
         default:
