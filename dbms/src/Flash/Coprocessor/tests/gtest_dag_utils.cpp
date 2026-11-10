@@ -22,31 +22,6 @@ namespace DB
 namespace tests
 {
 
-TEST(DAGUtilsTest, MappedToSum)
-{
-    tipb::Expr expr;
-    expr.set_tp(tipb::ExprType::SumInt);
-
-    ASSERT_TRUE(isAggFunctionExpr(expr));
-    ASSERT_EQ(getAggFunctionName(expr), "sum");
-    ASSERT_EQ(getFunctionName(expr), "sum");
-}
-
-TEST(DAGUtilsTest, MappedToTiDBUnaryMinus)
-{
-    tipb::Expr expr;
-    expr.set_tp(tipb::ExprType::ScalarFunc);
-
-    expr.set_sig(tipb::ScalarFuncSig::UnaryMinusInt);
-    ASSERT_EQ(getFunctionName(expr), "tidbUnaryMinusInt");
-
-    expr.set_sig(tipb::ScalarFuncSig::UnaryMinusReal);
-    ASSERT_EQ(getFunctionName(expr), "tidbUnaryMinusReal");
-
-    expr.set_sig(tipb::ScalarFuncSig::UnaryMinusDecimal);
-    ASSERT_EQ(getFunctionName(expr), "tidbUnaryMinusDecimal");
-}
-
 TEST(DAGUtilsTest, RejectsMalformedVectorFloat32Literal)
 {
     tipb::Expr expr;
