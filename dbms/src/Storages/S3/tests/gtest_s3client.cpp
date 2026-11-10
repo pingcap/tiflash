@@ -50,8 +50,11 @@ public:
     void SetUp() override
     {
         client = ClientFactory::instance().sharedTiFlashClient();
-        ::DB::tests::TiFlashTestEnv::deleteBucket(*client);
-        ::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*client);
+        if (DB::tests::TiFlashTestEnv::isMockedS3Client())
+        {
+            ::DB::tests::TiFlashTestEnv::deleteBucket(*client);
+            ::DB::tests::TiFlashTestEnv::createBucketIfNotExist(*client);
+        }
     }
 
     std::shared_ptr<TiFlashS3Client> client;
@@ -201,6 +204,20 @@ try
 
         ASSERT_TRUE(ensureLifecycleRuleExist(*client, 1));
     }
+}
+CATCH
+
+TEST_F(S3ClientTest, SetGetTagging)
+try
+{
+    uploadEmptyFile(*client, "s999/abcd");
+
+    rewriteObjectWithTagging(*client, "s999/abcd", "jjj=abcd");
+    auto tagging_res = getObjectTagging(*client, "s999/abcd");
+    auto tag_set = tagging_res.GetTagSet();
+    ASSERT_EQ(tag_set.size(), 1) << tag_set.size();
+    EXPECT_EQ(tag_set[0].GetKey(), "jjj") << tag_set[0].GetKey() << "=" << tag_set[0].GetValue();
+    EXPECT_EQ(tag_set[0].GetValue(), "abcd") << tag_set[0].GetKey() << "=" << tag_set[0].GetValue();
 }
 CATCH
 
