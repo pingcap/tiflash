@@ -25,9 +25,9 @@ namespace DB
 struct PipelineInputStop
 {
     TaskStopSourcePtr source;
-    // Transforms at or after this boundary, including the sink, must still deliver buffered output and EOF.
-    size_t first_required_transform = 0;
-    bool whole_pipeline = false;
+    // nullopt stops the whole PipelineExec, including its sink. Otherwise, transforms at or after
+    // this boundary and the sink must still deliver buffered output and EOF.
+    std::optional<size_t> first_required_transform;
     // A retained downstream wait must only be interrupted once for this stop signal.
     bool applied = false;
 };
