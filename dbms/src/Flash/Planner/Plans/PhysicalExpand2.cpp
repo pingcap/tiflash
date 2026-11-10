@@ -41,25 +41,25 @@ PhysicalPlanNodePtr PhysicalExpand2::build(
     if (unlikely(expand.proj_exprs().empty()))
         throw TiFlashException(Errors::Planner::BadRequest, "Expand2 executor requires at least one projection");
 
-    const auto projectionColumnCount = expand.proj_exprs().Get(0).exprs_size();
+    const auto projection_column_count = expand.proj_exprs().Get(0).exprs_size();
     for (const auto & projection : expand.proj_exprs())
     {
-        if (unlikely(projection.exprs_size() != projectionColumnCount))
+        if (unlikely(projection.exprs_size() != projection_column_count))
             throw TiFlashException(
                 Errors::Planner::BadRequest,
                 "Expand2 projection column count mismatch: expected {}, got {}",
-                projectionColumnCount,
+                projection_column_count,
                 projection.exprs_size());
     }
 
     auto input_col_size = child->getSchema().size();
-    const auto outputColumnCount = static_cast<size_t>(projectionColumnCount);
-    const auto generatedColumnCount = outputColumnCount > input_col_size ? outputColumnCount - input_col_size : 0;
-    if (unlikely(generatedColumnCount > static_cast<size_t>(expand.generated_output_names_size())))
+    const auto output_column_count = static_cast<size_t>(projection_column_count);
+    const auto generated_column_count = output_column_count > input_col_size ? output_column_count - input_col_size : 0;
+    if (unlikely(generated_column_count > static_cast<size_t>(expand.generated_output_names_size())))
         throw TiFlashException(
             Errors::Planner::BadRequest,
             "Expand2 requires {} generated output names, got {}",
-            generatedColumnCount,
+            generated_column_count,
             expand.generated_output_names_size());
 
     DAGExpressionAnalyzer analyzer{child->getSchema(), context};
