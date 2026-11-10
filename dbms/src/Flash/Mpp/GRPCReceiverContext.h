@@ -25,7 +25,6 @@
 #include <pingcap/kv/Cluster.h>
 #include <tipb/executor.pb.h>
 
-#include <functional>
 #include <memory>
 
 namespace DB
@@ -33,7 +32,6 @@ namespace DB
 using MPPDataPacket = mpp::MPPDataPacket;
 using TrackedMppDataPacketPtr = std::shared_ptr<DB::TrackedMppDataPacket>;
 using TrackedMPPDataPacketPtrs = std::vector<TrackedMppDataPacketPtr>;
-using ExchangeReadInterrupt = std::shared_ptr<std::function<void()>>;
 
 class ExchangePacketReader
 {
@@ -42,8 +40,6 @@ public:
     virtual bool read(TrackedMppDataPacketPtr & packet) = 0;
     virtual grpc::Status finish() = 0;
     virtual void cancel(const String & reason) = 0;
-    // Independent of the reader's lifetime and safe to invoke concurrently with read().
-    virtual ExchangeReadInterrupt getReadInterrupt() const { return {}; }
 };
 using ExchangePacketReaderPtr = std::unique_ptr<ExchangePacketReader>;
 

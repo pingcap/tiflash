@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
@@ -71,8 +72,7 @@ public:
     {
         assert(task && task->getStatus() == ExecTaskStatus::WAIT_FOR_NOTIFY);
         auto waiter = task->getWaiter();
-        if (!waiter)
-            waiter = std::make_shared<TaskWaiter>();
+        RUNTIME_CHECK_MSG(waiter, "Task waiter must be initialized by registerTaskToFuture before registration");
         std::lock_guard lock(mu);
         tasks.push_back(std::move(waiter));
         // Account for the task only after enqueueing succeeds, while notification is still excluded.

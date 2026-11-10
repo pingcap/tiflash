@@ -39,8 +39,10 @@ void registerTaskToFuture(TaskPtr && task)
     auto * future = current_notify_future;
     current_notify_future = nullptr;
     future->registerTask(std::move(task));
-    // Register stop notifications only after releasing the resource's registration lock. A resource
-    // may already have notified the task; in that case the waiter is empty and stop is a no-op.
+    // The resource may already have woken the task.
+    if (!waiter->hasTask())
+        return;
+    // Register stop notifications only after releasing the resource's registration lock.
     for (const auto & stop_source : stop_sources)
         stop_source->registerWaiter(waiter);
 }
