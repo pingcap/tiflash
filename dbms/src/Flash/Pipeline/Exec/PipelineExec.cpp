@@ -148,10 +148,10 @@ void PipelineExec::applyInputStops()
         if (stop.applied || !stop.source->isStopped())
             continue;
         stop.applied = true;
-        if (stop.whole_pipeline)
+        if (!stop.first_required_transform)
             whole_pipeline_stopped = true;
         else
-            stopped_input_boundary = std::max(stopped_input_boundary.value_or(0), stop.first_required_transform);
+            stopped_input_boundary = std::max(stopped_input_boundary.value_or(0), *stop.first_required_transform);
     }
     if (previously_whole || (previous_boundary == stopped_input_boundary && !whole_pipeline_stopped))
         return;

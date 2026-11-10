@@ -89,7 +89,7 @@ HashProbeTransformExecPtr HashProbeTransformExec::tryGetRestoreExec()
             ///             HashProbeTransformExec
             PipelineExecBuilder build_builder;
             // Late-created restore work observes the same persistent stop as the original probe.
-            build_builder.input_stops.push_back({join->getProbeStopSource(), 0, true});
+            build_builder.input_stops.push_back({join->getProbeStopSource(), std::nullopt});
             auto req_id = fmt::format("{} restore_build_{}", log->identifier(), restore_info->stream_index);
             build_builder.setSourceOp(
                 std::make_unique<IOBlockInputStreamSourceOp>(exec_context, req_id, restore_info->build_stream));
