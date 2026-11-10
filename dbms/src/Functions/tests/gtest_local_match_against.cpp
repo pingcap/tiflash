@@ -1976,6 +1976,40 @@ tipb::LocalMatchAgainstBooleanQuery exactQuery(size_t terms, bool duplicate = fa
 }
 } // namespace
 
+TEST_F(TestLocalMatchAgainst, FilteredPhraseAnalyzesRawColumnOnDemand)
+try
+{
+    const auto * collator = TiDB::ITiDBCollator::getCollator("utf8mb4_bin");
+    for (const auto parser : {tipb::LocalMatchAgainstParserStandard, tipb::LocalMatchAgainstParserNgram})
+    {
+        SCOPED_TRACE(parser);
+        tipb::LocalMatchAgainstBooleanQuery query;
+        query.set_parser(parser);
+        query.set_ngram_token_size(3);
+        for (const auto * text : {"foo the zoo", "red the qux"})
+        {
+            auto * phrase = query.add_nodes();
+            phrase->set_occur(tipb::LocalMatchAgainstBooleanOccurMust);
+            phrase->set_term_type(tipb::LocalMatchAgainstBooleanTermPhrase);
+            phrase->set_text(text);
+        }
+        const ColumnsWithTypeAndName columns{
+            createConstColumn<String>(6, "+\"foo the zoo\" +\"red the qux\""),
+            createColumn<Nullable<String>>(
+                {"unrelated", "foo the zoo red the qux", "foo xyz zoo red the qux", "foo xyz zoo", "foo the zoo", {}}),
+            createColumn<Nullable<String>>(
+                {"filler", "filler", "foo the zoo", "filler", "red the qux", "foo the zoo red the qux"}),
+            createConstColumn<String>(6, serializeLocalMatchAgainstBooleanQuery(query))};
+        LocalMatchAgainstTest::Work work;
+        ASSERT_COLUMN_EQ(
+            createColumn<Nullable<Float64>>({0, 1, 1, 0, 1, 1}),
+            runMatcher(columns, collator, LocalMatchAgainstTest::Matcher::Automatic, work));
+        // Raw scans by row: 0, 1 (two clauses share a scan), 2, 1, 2, 1.
+        EXPECT_EQ(work.unfiltered_column_analyses, 7);
+    }
+}
+CATCH
+
 TEST_F(TestLocalMatchAgainst, ExactRouteWorkAndBucketDeduplication)
 {
     using namespace LocalMatchAgainstTest;
