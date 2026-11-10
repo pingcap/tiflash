@@ -396,6 +396,10 @@ public:
     JoinProfileInfoPtr profile_info = std::make_shared<JoinProfileInfo>();
     /// Keep this flag per Join object so every completed restore hash table is merged exactly once.
     bool hash_table_stats_finalized = false;
+    /// Total number of (probe row, build row) pairs matched by the equi-join keys, accumulated by all
+    /// concurrent probe streams of this join and reported via profile_info when the last stream
+    /// finishes. Restore joins count their own re-probing and merge into the same profile.
+    mutable std::atomic<UInt64> joined_rows{0};
     HashJoinSpillContextPtr hash_join_spill_context;
     const Block & getOutputBlock() const { return finalized ? output_block_after_finalize : output_block; }
     const Names & getRequiredColumns() const { return required_columns; }

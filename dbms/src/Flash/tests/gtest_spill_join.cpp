@@ -316,6 +316,12 @@ try
     ASSERT_EQ(hash_table_stats->size, 10);
     ASSERT_EQ(hash_table_stats->size_kind, HashTableSizeKind::DistinctKeyCount);
     ASSERT_GT(hash_table_stats->memory_bytes, 0);
+    // Every probe key matches exactly 3 build rows, so the 10 probe rows produce 30 matched pairs
+    // in total. The count stays complete across spilling because each restore join contributes
+    // the pairs of the partitions it re-probes.
+    const auto joined_rows = join_execute_info.join_profile_info->getJoinedRows();
+    ASSERT_TRUE(joined_rows.has_value());
+    ASSERT_EQ(*joined_rows, 30);
 }
 CATCH
 
