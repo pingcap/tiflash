@@ -158,9 +158,11 @@ TaskStopSourcePtr PipelineExecGroupBuilder::addInputStop(TaskStopSourcePtr sourc
 {
     if (!source)
         source = std::make_shared<TaskStopSource>();
+    // Earlier groups stop entirely; the current group retains operators appended after this boundary.
     for (size_t i = 0; i < groups.size(); ++i)
         for (auto & builder : groups[i])
-            builder.input_stops.push_back({source, builder.transform_ops.size(), i + 1 < groups.size()});
+            builder.input_stops.push_back(
+                {source, i + 1 < groups.size() ? std::nullopt : std::make_optional(builder.transform_ops.size())});
     return source;
 }
 } // namespace DB
