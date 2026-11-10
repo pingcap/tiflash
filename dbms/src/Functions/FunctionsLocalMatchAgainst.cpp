@@ -246,7 +246,6 @@ struct CompiledBooleanQuery
     size_t must_clause_count = 0;
     bool has_must_not = false;
     bool matches_nothing = false;
-    bool needs_verification = false;
     std::unique_ptr<ExactTermRoute> exact_route;
 };
 
@@ -842,10 +841,11 @@ ALWAYS_INLINE ColumnMatchResult markTermMatched(
     return ColumnMatchResult::Continue;
 }
 
+template <typename GetUnfilteredColumn>
 ALWAYS_INLINE ColumnMatchResult updateBooleanMatchStatesForColumn(
     const CompiledBooleanQuery & query,
     const FullTextColumn & column,
-    const FullTextColumn & unfiltered_column,
+    GetUnfilteredColumn && get_unfiltered_column,
     const TiDB::TiDBCollatorPtr & collator,
     std::vector<ClauseMatchState> & states,
     BooleanMatchProgress & progress)
@@ -877,13 +877,16 @@ ALWAYS_INLINE ColumnMatchResult updateBooleanMatchStatesForColumn(
             {
                 if (matchesPhraseEndingAt(clause, column, token, collator))
                 {
-                    if (clause.verification
-                        && !std::any_of(unfiltered_column.begin(), unfiltered_column.end(), [&](const auto & end) {
-                               return matchesPhraseEndingAt(*clause.verification, unfiltered_column, end, collator);
-                           }))
+                    if (clause.verification)
                     {
-                        state.phrase_verification_failed = true;
-                        continue;
+                        const auto & unfiltered_column = get_unfiltered_column();
+                        if (!std::any_of(unfiltered_column.begin(), unfiltered_column.end(), [&](const auto & end) {
+                                return matchesPhraseEndingAt(*clause.verification, unfiltered_column, end, collator);
+                            }))
+                        {
+                            state.phrase_verification_failed = true;
+                            continue;
+                        }
                     }
                     const auto result = markClauseMatched(query, clause_index, states, progress);
                     if (result != ColumnMatchResult::Continue)
@@ -1142,7 +1145,6 @@ CompiledBooleanQuery compileBooleanQuery(
                 clause.verification = std::make_unique<BooleanClause>();
                 clause.verification->phrase = true;
                 collectClauseTerms(*clause.verification, raw_terms);
-                compiled.needs_verification = true;
             }
         }
 
@@ -1553,8 +1555,9 @@ public:
                         analyzed_column.clear();
                         continue;
                     }
+                    const auto document = document_column.getString(row);
                     analyzeColumnInto(
-                        document_column.getString(row),
+                        document,
                         analyzed_column,
                         analyzer_scratch,
                         use_ngram,
@@ -1585,18 +1588,29 @@ public:
                             }
                         }
                     }
-                    if (compiled_query.needs_verification)
-                        analyzeColumnInto(
-                            document_column.getString(row),
-                            unfiltered_column,
-                            analyzer_scratch,
-                            use_ngram,
-                            ngram_token_size,
-                            collator,
-                            nullptr,
-                            0,
-                            std::numeric_limits<size_t>::max(),
-                            false);
+                    // A filtered phrase hit is the first point that needs the
+                    // raw tokens. Share the stream across clauses in this column.
+                    bool unfiltered_ready = false;
+                    const auto get_unfiltered_column = [&]() -> const FullTextColumn & {
+                        if (!unfiltered_ready)
+                        {
+                            analyzeColumnInto(
+                                document,
+                                unfiltered_column,
+                                analyzer_scratch,
+                                use_ngram,
+                                ngram_token_size,
+                                collator,
+                                nullptr,
+                                0,
+                                std::numeric_limits<size_t>::max(),
+                                false);
+                            unfiltered_ready = true;
+                            if constexpr (count_work)
+                                ++work->unfiltered_column_analyses;
+                        }
+                        return unfiltered_column;
+                    };
                     ColumnMatchResult match_result;
                     if constexpr (enable_index)
                     {
@@ -1632,7 +1646,7 @@ public:
                                                : updateBooleanMatchStatesForColumn(
                                                    compiled_query,
                                                    analyzed_column,
-                                                   unfiltered_column,
+                                                   get_unfiltered_column,
                                                    collator,
                                                    clause_states,
                                                    match_progress);
@@ -1644,7 +1658,7 @@ public:
                         match_result = updateBooleanMatchStatesForColumn(
                             compiled_query,
                             analyzed_column,
-                            unfiltered_column,
+                            get_unfiltered_column,
                             collator,
                             clause_states,
                             match_progress);
