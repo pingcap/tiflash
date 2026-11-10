@@ -181,6 +181,7 @@ try
         Block({createColumn<Int64>({3}, "a")}),
         Block({createColumn<Int64>({4}, "a"), createColumn<Int64>({5}, "b"), createColumn<Int64>({6}, "c")}),
         Block({createColumn<UInt64>({7}, "a"), createColumn<Int64>({8}, "b")}),
+        Block({createColumn<UInt64>({}, "a"), createColumn<Int64>({}, "b")}),
     };
     const auto encode = [](const Block & block, MPPDataPacketVersion version, CompressionMethod compression) {
         if (version != MPPDataPacketV0)
@@ -206,11 +207,15 @@ try
                 continue;
             for (const auto & invalidBlock : invalidBlocks)
             {
+                // V1/V2 encode zero-row blocks as empty flush chunks without column metadata.
+                if (version != MPPDataPacketV0 && invalidBlock.rows() == 0)
+                    continue;
                 SCOPED_TRACE(fmt::format(
-                    "version={} compression={} columns={}",
+                    "version={} compression={} columns={} rows={}",
                     static_cast<int>(version),
                     static_cast<int>(compression),
-                    invalidBlock.columns()));
+                    invalidBlock.columns(),
+                    invalidBlock.rows()));
                 CHBlockChunkDecodeAndSquash decoder(firstBlock.cloneEmpty(), 8192);
                 const auto decode = [&](const String & chunk) {
                     return version == MPPDataPacketV0 ? decoder.decodeAndSquash(chunk)
@@ -219,6 +224,12 @@ try
                 ASSERT_FALSE(decode(encode(firstBlock, version, compression)));
                 const auto invalidChunk = encode(invalidBlock, version, compression);
                 EXPECT_THROW(decode(invalidChunk), Exception);
+
+                CHBlockChunkDecodeAndSquash firstChunkDecoder(firstBlock.cloneEmpty(), 8192);
+                EXPECT_THROW(
+                    version == MPPDataPacketV0 ? firstChunkDecoder.decodeAndSquash(invalidChunk)
+                                               : firstChunkDecoder.decodeAndSquashV1(invalidChunk),
+                    Exception);
             }
         }
     }

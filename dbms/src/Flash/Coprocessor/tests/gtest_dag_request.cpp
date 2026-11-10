@@ -132,6 +132,27 @@ TEST(DAGRequestTest, AcceptsIndexScanAsFirstExecutor)
     EXPECT_NO_THROW((void)DAGRequest{&request});
 }
 
+TEST(DAGRequestTest, PreservesUnsupportedExecutorError)
+{
+    for (bool withIds : {false, true})
+    {
+        auto request = makeListRequest({tipb::TypeIndexLookUp}, withIds);
+        SCOPED_TRACE(request.ShortDebugString());
+        try
+        {
+            (void)DAGRequest{&request};
+            ADD_FAILURE() << "Expected an unsupported executor to be rejected";
+        }
+        catch (const TiFlashException & e)
+        {
+            EXPECT_TRUE(e.getError().is(Errors::Coprocessor::Unimplemented)) << e.standardText();
+            EXPECT_NE(e.standardText().find("TypeIndexLookUp"), String::npos) << e.standardText();
+            if (withIds)
+                EXPECT_NE(e.standardText().find("executor_0"), String::npos) << e.standardText();
+        }
+    }
+}
+
 TEST(DAGRequestTest, RejectsJoinInExecutorLists)
 {
     const std::vector<std::vector<tipb::ExecType>> joinLists{
