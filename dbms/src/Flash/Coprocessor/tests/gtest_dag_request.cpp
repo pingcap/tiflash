@@ -36,12 +36,18 @@ tipb::DAGRequest makeListRequest(const std::vector<tipb::ExecType> & types, bool
 }
 } // namespace
 
-TEST(DAGRequestTest, RejectsUnbalancedExecutorLists)
+TEST(DAGRequestTest, RejectsInvalidExecutorOrder)
 {
     const std::vector<std::vector<tipb::ExecType>> invalidLists{
         {},
         {tipb::TypeLimit},
+        {tipb::TypeProjection},
+        {tipb::TypeSelection, tipb::TypeTableScan},
         {tipb::TypeTableScan, tipb::TypeTableScan},
+        {tipb::TypeTableScan, tipb::TypePartitionTableScan},
+        {tipb::TypeTableScan, tipb::TypeIndexScan},
+        {tipb::TypeTableScan, tipb::TypeExchangeReceiver},
+        {tipb::TypeTableScan, tipb::TypeLimit, tipb::TypeCTESource},
         {tipb::TypeTableScan, tipb::TypeLimit, tipb::TypeTableScan, tipb::TypeLimit},
         {tipb::TypeLimit, tipb::TypeTableScan},
         {tipb::TypeExchangeReceiver, tipb::TypeTableScan, tipb::TypeProjection},
@@ -55,7 +61,7 @@ TEST(DAGRequestTest, RejectsUnbalancedExecutorLists)
             try
             {
                 (void)DAGRequest{&request};
-                ADD_FAILURE() << "Expected an unbalanced executor list to be rejected";
+                ADD_FAILURE() << "Expected an invalid executor order to be rejected";
             }
             catch (const TiFlashException & e)
             {
@@ -65,7 +71,7 @@ TEST(DAGRequestTest, RejectsUnbalancedExecutorLists)
     }
 }
 
-TEST(DAGRequestTest, AcceptsBalancedExecutorLists)
+TEST(DAGRequestTest, AcceptsLeafToRootExecutorLists)
 {
     const std::vector<std::vector<tipb::ExecType>> validLists{
         {tipb::TypeTableScan},
@@ -74,6 +80,17 @@ TEST(DAGRequestTest, AcceptsBalancedExecutorLists)
          tipb::TypeProjection,
          tipb::TypeAggregation,
          tipb::TypeTopN,
+         tipb::TypeExchangeSender},
+        {tipb::TypeTableScan,
+         tipb::TypeSelection,
+         tipb::TypeProjection,
+         tipb::TypeAggregation,
+         tipb::TypeStreamAgg,
+         tipb::TypeTopN,
+         tipb::TypeLimit,
+         tipb::TypeSort,
+         tipb::TypeWindow,
+         tipb::TypeExpand,
          tipb::TypeExchangeSender},
     };
     for (bool withIds : {false, true})
@@ -85,6 +102,34 @@ TEST(DAGRequestTest, AcceptsBalancedExecutorLists)
             EXPECT_NO_THROW((void)DAGRequest{&request});
         }
     }
+}
+
+TEST(DAGRequestTest, AcceptsListWithOmittedChildren)
+{
+    for (bool withIds : {false, true})
+    {
+        auto request = makeListRequest(
+            {tipb::TypeTableScan, tipb::TypeSelection, tipb::TypeProjection, tipb::TypeLimit},
+            withIds);
+        request.mutable_executors(0)->mutable_tbl_scan();
+        request.mutable_executors(1)->mutable_selection();
+        request.mutable_executors(2)->mutable_projection();
+        request.mutable_executors(3)->mutable_limit()->set_limit(10);
+
+        tipb::DAGRequest decoded;
+        ASSERT_TRUE(decoded.ParseFromString(request.SerializeAsString()));
+        ASSERT_FALSE(decoded.executors(1).selection().has_child());
+        ASSERT_FALSE(decoded.executors(2).projection().has_child());
+        ASSERT_FALSE(decoded.executors(3).limit().has_child());
+        EXPECT_NO_THROW((void)DAGRequest{&decoded});
+    }
+}
+
+TEST(DAGRequestTest, AcceptsIndexScanAsFirstExecutor)
+{
+    // Supply IDs to test list order independently of executor ID generation and execution support.
+    auto request = makeListRequest({tipb::TypeIndexScan, tipb::TypeSelection, tipb::TypeLimit}, true);
+    EXPECT_NO_THROW((void)DAGRequest{&request});
 }
 
 TEST(DAGRequestTest, RejectsJoinInExecutorLists)
