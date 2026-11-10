@@ -36,6 +36,7 @@ struct Work
     size_t linear_columns = 0;
     size_t key_lookups = 0;
     size_t term_references = 0;
+    size_t unfiltered_column_analyses = 0;
 };
 FunctionPtr create(Matcher matcher, Work & work, size_t budget = 4 * 1024 * 1024, UInt32 generation = 0);
 } // namespace LocalMatchAgainstTest
