@@ -28,6 +28,7 @@ class TaskWaiter
 {
 public:
     void setTask(TaskPtr && task_);
+    bool hasTask();
     bool notify();
 
 private:
