@@ -25,7 +25,8 @@ void TaskWaiter::setTask(TaskPtr && task_)
     const auto type = task_->getNotifyType();
     std::lock_guard lock(mutex);
     assert(!task);
-    GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count).Increment();
+    thread_local auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
+    metrics.Increment();
     PipeConditionVariable::updateTaskNotifyWaitMetrics(type, 1);
     task = std::move(task_);
 }
@@ -39,7 +40,8 @@ bool TaskWaiter::notify()
             return false;
         ready_task = std::move(task);
     }
-    GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count).Decrement();
+    thread_local auto & metrics = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
+    metrics.Decrement();
     PipeConditionVariable::updateTaskNotifyWaitMetrics(ready_task->getNotifyType(), -1);
     PipeConditionVariable::notifyTaskDirectly(std::move(ready_task));
     return true;
