@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TiFlashException.h>
+#include <Flash/Planner/PhysicalPlan.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
@@ -80,7 +82,7 @@ public:
     std::shared_ptr<tipb::DAGRequest> buildDAGRequest(T param)
     {
         return context.scan(db_name, table_name).project(param).build(context);
-    };
+    }
 
     /// Prepare column data
     const ColumnWithNullableString col0{"col0-0", "col0-1", "", "col0-2", {}, "col0-3", ""};
@@ -106,6 +108,34 @@ public:
     const String db_name{"test_db"};
     const String table_name{"projection_test_table"};
 };
+
+TEST_F(ProjectionExecutorTestRunner, RejectsFinalProjectionSchemaMismatch)
+{
+    auto request = context.scan(db_name, table_name)
+                       .project(MockColumnNameVec{col_names[4]})
+                       .exchangeSender(tipb::PassThrough)
+                       .build(context);
+    auto * sender = request->mutable_root_executor()->mutable_exchange_sender();
+    const auto field_type = sender->all_field_types(0);
+    *sender->add_all_field_types() = field_type;
+    request->clear_output_offsets();
+    request->add_output_offsets(1);
+
+    // Request-level validation accepts this plan despite its one-column child.
+    DAGContext dag_context(*request, "invalid_final_projection", 1);
+    ASSERT_EQ(dag_context.output_field_types.size(), 2);
+    TiFlashTestEnv::setUpTestContext(*context.context, &dag_context, context.mockStorage(), TestType::EXECUTOR_TEST);
+    PhysicalPlan plan(*context.context, "invalid_final_projection");
+    try
+    {
+        plan.build(request.get());
+        FAIL() << "Expected a final projection schema mismatch to be rejected";
+    }
+    catch (const TiFlashException & e)
+    {
+        EXPECT_TRUE(e.getError().is(Errors::Coprocessor::BadRequest)) << e.standardText();
+    }
+}
 
 TEST_F(ProjectionExecutorTestRunner, Projection)
 try
