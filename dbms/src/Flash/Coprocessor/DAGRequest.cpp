@@ -28,32 +28,51 @@ void check(bool condition, const String & err_msg)
 
 void checkExecutorList(const tipb::DAGRequest & request)
 {
-    size_t nodeCount = 0;
+    // List-based executors are ordered from the leaf to the root. Child fields are not used.
     for (int i = 0; i < request.executors_size(); ++i)
     {
-        const auto & executor = request.executors(i);
-        if (executor.tp() == tipb::ExecType::TypeJoin)
+        const auto type = request.executors(i).tp();
+        bool is_source = false;
+        switch (type)
+        {
+        case tipb::ExecType::TypeTableScan:
+        case tipb::ExecType::TypePartitionTableScan:
+        case tipb::ExecType::TypeIndexScan:
+        case tipb::ExecType::TypeExchangeReceiver:
+        case tipb::ExecType::TypeCTESource:
+            is_source = true;
+            break;
+        case tipb::ExecType::TypeSelection:
+        case tipb::ExecType::TypeProjection:
+        case tipb::ExecType::TypeAggregation:
+        case tipb::ExecType::TypeStreamAgg:
+        case tipb::ExecType::TypeTopN:
+        case tipb::ExecType::TypeLimit:
+        case tipb::ExecType::TypeSort:
+        case tipb::ExecType::TypeWindow:
+        case tipb::ExecType::TypeExpand:
+        case tipb::ExecType::TypeExpand2:
+        case tipb::ExecType::TypeExchangeSender:
+        case tipb::ExecType::TypeCTESink:
+            break;
+        case tipb::ExecType::TypeJoin:
             throw TiFlashException(
                 Errors::Coprocessor::BadRequest,
                 "Join executor is not supported in a list-based DAG");
+        default:
+            throw TiFlashException(
+                Errors::Coprocessor::Unimplemented,
+                "Unsupported executor type {} in a list-based DAG",
+                static_cast<Int32>(type));
+        }
 
-        size_t inputCount = 0;
-        getChildren(executor).forEach([&](const tipb::Executor &) { ++inputCount; });
-
-        if (unlikely(nodeCount < inputCount))
+        if (unlikely(is_source != (i == 0)))
             throw TiFlashException(
                 Errors::Coprocessor::BadRequest,
-                "Invalid list-based DAG: executor {} requires {} inputs, but only {} are available",
+                "Invalid list-based DAG: executor {} must be {}",
                 i,
-                inputCount,
-                nodeCount);
-        nodeCount = nodeCount - inputCount + 1;
+                i == 0 ? "a data source" : "a unary executor");
     }
-    if (unlikely(nodeCount != 1))
-        throw TiFlashException(
-            Errors::Coprocessor::BadRequest,
-            "Invalid list-based DAG: expected one output, got {}",
-            nodeCount);
 }
 
 class ListBasedExecutorIdGenerator
