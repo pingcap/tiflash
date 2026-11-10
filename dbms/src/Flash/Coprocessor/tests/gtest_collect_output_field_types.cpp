@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/collectOutputFieldTypes.h>
 #include <IO/Buffer/WriteBufferFromString.h>
@@ -107,5 +108,19 @@ TEST(CollectOutputFieldTypesTest, ExpandGroupingExpressionType)
                               ->mutable_grouping_expr(0);
     grouping_col->set_tp(tipb::ExprType::Int64);
     EXPECT_THROW(collectOutputFieldTypes(request), DB::Exception);
+}
+
+TEST(CollectOutputFieldTypesTest, Expand2RejectsEmptyProjectionList)
+{
+    for (bool withExpand2 : {false, true})
+    {
+        SCOPED_TRACE(withExpand2);
+        tipb::DAGRequest request;
+        auto * root = request.mutable_root_executor();
+        root->set_tp(tipb::ExecType::TypeExpand2);
+        if (withExpand2)
+            root->mutable_expand2();
+        EXPECT_THROW(collectOutputFieldTypes(request), TiFlashException);
+    }
 }
 } // namespace DB::tests

@@ -296,9 +296,8 @@ void MPPTunnel::connectAsync(IAsyncCallData * call_data)
             statusToString());
 
         LOG_TRACE(log, "ready to connect async");
-        RUNTIME_ASSERT(
+        RUNTIME_CHECK_MSG(
             mode == TunnelSenderMode::ASYNC_GRPC,
-            log,
             "mode {} is not async grpc in connectAsync",
             magic_enum::enum_name(mode));
         RUNTIME_ASSERT(call_data != nullptr, log, "Async writer shouldn't be null");
