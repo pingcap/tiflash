@@ -92,8 +92,6 @@ CoverageReport
 # installation and sysroot path
 release-linux-llvm/tiflash
 release-linux-llvm/build-release
-<<<<<<< HEAD
-=======
 release-linux-llvm/build-release-columnar
 release-linux-llvm/.cargo/
 
@@ -102,4 +100,3 @@ gtest_10x_workdir/
 second_opinion*
 
 license-eye
->>>>>>> 63bb1abcf5 (test: cover dropped table schema sync race (#10924))
