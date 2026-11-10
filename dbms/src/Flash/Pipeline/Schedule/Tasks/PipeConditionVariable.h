@@ -73,9 +73,10 @@ public:
         auto waiter = task->getWaiter();
         if (!waiter)
             waiter = std::make_shared<TaskWaiter>();
-        waiter->setTask(std::move(task));
         std::lock_guard lock(mu);
         tasks.push_back(std::move(waiter));
+        // Account for the task only after enqueueing succeeds, while notification is still excluded.
+        tasks.back()->setTask(std::move(task));
     }
 
     inline void notifyOne()

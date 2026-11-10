@@ -775,6 +775,10 @@ TEST_F(PipelineInputStopTest, StopRacesWithResourceNotification)
     MemoryTrackerSetter tracker(true, nullptr);
     PipelineExecutorContext exec_context;
     std::atomic_size_t wakes{0};
+    auto & waiting = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
+    auto & queue_read_waiting = GET_METRIC(tiflash_pipeline_wait_on_notify_tasks, type_wait_on_shared_queue_read);
+    const auto initial_waiting = waiting.Value();
+    const auto initial_queue_read_waiting = queue_read_waiting.Value();
     // Keep the context alive while constructing subsequent tasks.
     exec_context.incActiveRefCount();
     SCOPE_EXIT({
@@ -789,9 +793,13 @@ TEST_F(PipelineInputStopTest, StopRacesWithResourceNotification)
         auto stop = std::make_shared<TaskStopSource>();
         setNotifyFuture(&future);
         registerTaskToFuture(std::make_unique<WakeTask>(exec_context, stop, wakes));
+        EXPECT_EQ(waiting.Value(), initial_waiting + 1);
+        EXPECT_EQ(queue_read_waiting.Value(), initial_queue_read_waiting + 1);
         std::thread notifier([&] { future.finish(); });
         stop->stop();
         notifier.join();
+        EXPECT_EQ(waiting.Value(), initial_waiting);
+        EXPECT_EQ(queue_read_waiting.Value(), initial_queue_read_waiting);
     }
     // notifyImpl runs synchronously, so completion of both callers establishes exactly-once notification.
     EXPECT_EQ(wakes.load(), 32);
@@ -803,6 +811,10 @@ TEST_F(PipelineInputStopTest, NotifyOneSkipsAnAlreadyStoppedWaiter)
     MemoryTrackerSetter tracker(true, nullptr);
     PipelineExecutorContext exec_context;
     std::atomic_size_t wakes{0};
+    auto & waiting = GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count);
+    auto & queue_read_waiting = GET_METRIC(tiflash_pipeline_wait_on_notify_tasks, type_wait_on_shared_queue_read);
+    const auto initial_waiting = waiting.Value();
+    const auto initial_queue_read_waiting = queue_read_waiting.Value();
     QueueFuture future;
     auto first_stop = std::make_shared<TaskStopSource>();
     auto second_stop = std::make_shared<TaskStopSource>();
@@ -816,9 +828,15 @@ TEST_F(PipelineInputStopTest, NotifyOneSkipsAnAlreadyStoppedWaiter)
     setNotifyFuture(&future);
     registerTaskToFuture(std::make_unique<WakeTask>(exec_context, first_stop, wakes));
     first_stop->stop();
+    EXPECT_EQ(waiting.Value(), initial_waiting);
+    EXPECT_EQ(queue_read_waiting.Value(), initial_queue_read_waiting);
     setNotifyFuture(&future);
     registerTaskToFuture(std::make_unique<WakeTask>(exec_context, second_stop, wakes));
+    EXPECT_EQ(waiting.Value(), initial_waiting + 1);
+    EXPECT_EQ(queue_read_waiting.Value(), initial_queue_read_waiting + 1);
     ASSERT_EQ(future.queue.tryPush(1), MPMCQueueResult::OK);
     EXPECT_EQ(wakes.load(), 2);
+    EXPECT_EQ(waiting.Value(), initial_waiting);
+    EXPECT_EQ(queue_read_waiting.Value(), initial_queue_read_waiting);
 }
 } // namespace DB::tests
