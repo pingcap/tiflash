@@ -31,6 +31,12 @@ void TaskWaiter::setTask(TaskPtr && task_)
     task = std::move(task_);
 }
 
+bool TaskWaiter::hasTask()
+{
+    std::lock_guard lock(mutex);
+    return task != nullptr;
+}
+
 bool TaskWaiter::notify()
 {
     TaskPtr ready_task;

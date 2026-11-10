@@ -644,9 +644,6 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
         for (int i = 0; i < max_retry_times; ++i)
         {
             auto reader = rpc_context->makeReader(req);
-            auto read_interrupt = reader->getReadInterrupt();
-            if (read_interrupt)
-                registerReadInterrupt(read_interrupt);
             waiting_task_time = watch.elapsedMilliseconds();
             bool has_data = false;
             for (;;)
@@ -948,36 +945,13 @@ template <typename RPCContext>
 bool ExchangeReceiverBase<RPCContext>::setEndState(ExchangeReceiverState new_state)
 {
     assert(new_state == ExchangeReceiverState::CANCELED || new_state == ExchangeReceiverState::CLOSED);
-    std::vector<ExchangeReadInterrupt> interrupts;
+    std::lock_guard lock(mu);
+    if (state == ExchangeReceiverState::CANCELED || state == ExchangeReceiverState::CLOSED)
     {
-        std::lock_guard lock(mu);
-        if (state == ExchangeReceiverState::CANCELED || state == ExchangeReceiverState::CLOSED)
-            return false;
-        state = new_state;
-        for (const auto & weak_interrupt : read_interrupts)
-            if (auto interrupt = weak_interrupt.lock())
-                interrupts.push_back(std::move(interrupt));
-        read_interrupts.clear();
+        return false;
     }
-    // The woken read loop calls connectionDone(), which also takes mu.
-    for (const auto & interrupt : interrupts)
-        (*interrupt)();
+    state = new_state;
     return true;
-}
-
-template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::registerReadInterrupt(const ExchangeReadInterrupt & interrupt)
-{
-    {
-        std::lock_guard lock(mu);
-        if (state != ExchangeReceiverState::CANCELED && state != ExchangeReceiverState::CLOSED)
-        {
-            read_interrupts.emplace_back(interrupt);
-            return;
-        }
-    }
-    // A local V1 connection can finish establishing after close/cancel has already run.
-    (*interrupt)();
 }
 
 template <typename RPCContext>

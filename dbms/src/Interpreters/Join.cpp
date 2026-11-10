@@ -2067,7 +2067,6 @@ void Join::stopProbePhase()
     // Pipeline tasks subscribe to this source directly. Do not finish normal-completion futures or cancel
     // restore queues to wake them: stopping work is distinct from completing build/probe input.
     probe_stop_source->stop();
-    probe_cv.notify_all();
 }
 
 void Join::finalizeProbe()
