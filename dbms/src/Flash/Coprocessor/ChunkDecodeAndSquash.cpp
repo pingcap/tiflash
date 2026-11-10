@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Flash/Coprocessor/CHBlockChunkCodecV1.h>
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <IO/Buffer/ReadBufferFromString.h>
@@ -22,7 +23,10 @@ namespace DB
 CHBlockChunkDecodeAndSquash::CHBlockChunkDecodeAndSquash(const Block & header, size_t rows_limit_)
     : codec(header)
     , rows_limit(rows_limit_)
-{}
+{
+    // Both decoding formats rely on the header to validate incoming schemas.
+    RUNTIME_CHECK_MSG(header.columns() > 0, "CH block squashing requires a non-empty header");
+}
 
 std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashV1(std::string_view sv)
 {
@@ -120,17 +124,17 @@ std::optional<Block> CHBlockChunkDecodeAndSquash::doDecodeAndSquash(const String
         size_t rows = 0;
         codec.readBlockMeta(istr, columns, rows);
 
-        if (rows)
+        auto mutable_columns = rows ? accumulated_block->mutateColumns() : MutableColumns{};
+        // Zero-row blocks still carry column metadata that must match the header.
+        for (size_t i = 0; i < columns; ++i)
         {
-            auto mutable_columns = accumulated_block->mutateColumns();
-            for (size_t i = 0; i < columns; ++i)
-            {
-                ColumnWithTypeAndName column;
-                codec.readColumnMeta(i, istr, column);
+            ColumnWithTypeAndName column;
+            codec.readColumnMeta(i, istr, column);
+            if (rows)
                 CHBlockChunkCodec::readData(*column.type, *(mutable_columns[i]), istr, rows);
-            }
-            accumulated_block->setColumns(std::move(mutable_columns));
         }
+        if (rows)
+            accumulated_block->setColumns(std::move(mutable_columns));
     }
 
     if (accumulated_block && accumulated_block->rows() >= rows_limit)
