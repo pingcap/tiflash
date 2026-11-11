@@ -89,6 +89,8 @@ public:
     {
         return inner->sortKey(s, size, buffer);
     }
+    size_t sortKeyReservedSpaceMultipler() const override { return inner->sortKeyReservedSpaceMultipler(); }
+    bool isTrivialCollator() const override { return inner->isTrivialCollator(); }
     std::unique_ptr<IPattern> pattern() const override { return inner->pattern(); }
 
     mutable size_t comparisons = 0;
