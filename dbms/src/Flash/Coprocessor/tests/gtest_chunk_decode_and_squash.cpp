@@ -17,6 +17,7 @@
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodecV1.h>
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
+#include <Flash/Mpp/MppVersion.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -167,6 +168,74 @@ try
 {
     doTestWork(true);
     doTestWork(false);
+}
+CATCH
+
+TEST_F(TestChunkDecodeAndSquash, RejectEmptyHeader)
+{
+    EXPECT_THROW(CHBlockChunkDecodeAndSquash(Block{}, 8192), Exception);
+}
+
+TEST_F(TestChunkDecodeAndSquash, RejectSchemaChangesWhileSquashing)
+try
+{
+    const Block firstBlock({createColumn<Int64>({1}, "a"), createColumn<Int64>({2}, "b")});
+    const Blocks invalidBlocks{
+        Block({createColumn<Int64>({3}, "a")}),
+        Block({createColumn<Int64>({4}, "a"), createColumn<Int64>({5}, "b"), createColumn<Int64>({6}, "c")}),
+        Block({createColumn<UInt64>({7}, "a"), createColumn<Int64>({8}, "b")}),
+        Block({createColumn<UInt64>({}, "a"), createColumn<Int64>({}, "b")}),
+    };
+    const auto encode = [](const Block & block, MPPDataPacketVersion version, CompressionMethod compression) {
+        if (version != MPPDataPacketV0)
+            return CHBlockChunkCodecV1{block}.encode(block, compression);
+
+        std::vector<tipb::FieldType> fields;
+        for (const auto & column : block)
+        {
+            auto & field = fields.emplace_back();
+            field.set_tp(TiDB::TypeLongLong);
+            field.set_flag(TiDB::ColumnFlagNotNull | (column.type->isUnsignedInteger() ? TiDB::ColumnFlagUnsigned : 0));
+        }
+        auto stream = CHBlockChunkCodec{}.newCodecStream(fields);
+        stream->encode(block, 0, block.rows());
+        return stream->getString();
+    };
+
+    for (const auto version : {MPPDataPacketV0, MPPDataPacketV1})
+    {
+        for (const auto compression : {CompressionMethod::NONE, CompressionMethod::LZ4, CompressionMethod::ZSTD})
+        {
+            if (version == MPPDataPacketV0 && compression != CompressionMethod::NONE)
+                continue;
+            for (const auto & invalidBlock : invalidBlocks)
+            {
+                // V1 encodes zero-row blocks as empty flush chunks without column metadata.
+                if (version != MPPDataPacketV0 && invalidBlock.rows() == 0)
+                    continue;
+                SCOPED_TRACE(fmt::format(
+                    "version={} compression={} columns={} rows={}",
+                    static_cast<int>(version),
+                    static_cast<int>(compression),
+                    invalidBlock.columns(),
+                    invalidBlock.rows()));
+                CHBlockChunkDecodeAndSquash decoder(firstBlock.cloneEmpty(), 8192);
+                const auto decode = [&](const String & chunk) {
+                    return version == MPPDataPacketV0 ? decoder.decodeAndSquash(chunk)
+                                                      : decoder.decodeAndSquashV1(chunk);
+                };
+                ASSERT_FALSE(decode(encode(firstBlock, version, compression)));
+                const auto invalidChunk = encode(invalidBlock, version, compression);
+                EXPECT_THROW(decode(invalidChunk), Exception);
+
+                CHBlockChunkDecodeAndSquash firstChunkDecoder(firstBlock.cloneEmpty(), 8192);
+                EXPECT_THROW(
+                    version == MPPDataPacketV0 ? firstChunkDecoder.decodeAndSquash(invalidChunk)
+                                               : firstChunkDecoder.decodeAndSquashV1(invalidChunk),
+                    Exception);
+            }
+        }
+    }
 }
 CATCH
 

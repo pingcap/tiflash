@@ -26,6 +26,53 @@ void check(bool condition, const String & err_msg)
         throw TiFlashException(err_msg, Errors::Coprocessor::BadRequest);
 }
 
+void checkExecutorList(const tipb::DAGRequest & request)
+{
+    // List-based executors are ordered from the leaf to the root. Child fields are not used.
+    for (int i = 0; i < request.executors_size(); ++i)
+    {
+        const auto type = request.executors(i).tp();
+        bool is_source = false;
+        switch (type)
+        {
+        case tipb::ExecType::TypeTableScan:
+        case tipb::ExecType::TypePartitionTableScan:
+        case tipb::ExecType::TypeIndexScan:
+        case tipb::ExecType::TypeExchangeReceiver:
+            is_source = true;
+            break;
+        case tipb::ExecType::TypeSelection:
+        case tipb::ExecType::TypeProjection:
+        case tipb::ExecType::TypeAggregation:
+        case tipb::ExecType::TypeStreamAgg:
+        case tipb::ExecType::TypeTopN:
+        case tipb::ExecType::TypeLimit:
+        case tipb::ExecType::TypeSort:
+        case tipb::ExecType::TypeWindow:
+        case tipb::ExecType::TypeExpand:
+        case tipb::ExecType::TypeExpand2:
+        case tipb::ExecType::TypeExchangeSender:
+            break;
+        case tipb::ExecType::TypeJoin:
+            throw TiFlashException(
+                Errors::Coprocessor::BadRequest,
+                "Join executor is not supported in a list-based DAG");
+        default:
+            throw TiFlashException(
+                Errors::Coprocessor::Unimplemented,
+                "Unsupported executor in list based DAG request: {}",
+                request.executors(i).DebugString());
+        }
+
+        if (unlikely(is_source != (i == 0)))
+            throw TiFlashException(
+                Errors::Coprocessor::BadRequest,
+                "Invalid list-based DAG: executor {} must be {}",
+                i,
+                i == 0 ? "a data source" : "a unary executor");
+    }
+}
+
 class ListBasedExecutorIdGenerator
 {
 public:
@@ -98,8 +145,6 @@ private:
             return fmt::format("sort_{}", current_id++);
         case tipb::ExecType::TypeWindow:
             return fmt::format("window_{}", current_id++);
-        case tipb::ExecType::TypeJoin:
-            return fmt::format("join_{}", current_id++);
         case tipb::ExecType::TypeExpand:
             return fmt::format("expand_{}", current_id++);
         default:
@@ -127,6 +172,8 @@ DAGRequest::DAGRequest(tipb::DAGRequest * dag_request_)
         "dagrequest must be one of list based and tree based");
     is_tree_based = dag_request->has_root_executor();
 
+    if (!is_tree_based)
+        checkExecutorList(*dag_request);
     checkOrSetExecutorId();
 }
 

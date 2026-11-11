@@ -105,6 +105,8 @@ bool collectForTableScan(std::vector<tipb::FieldType> & output_field_types, cons
 
 bool collectForExpand2(std::vector<tipb::FieldType> & output_field_types, const tipb::Expand2 & expand2)
 {
+    if (unlikely(expand2.proj_exprs().empty()))
+        throw TiFlashException(Errors::Coprocessor::BadRequest, "Expand2 executor requires at least one projection");
     // just collect from the level one.
     for (const auto & expr : expand2.proj_exprs().Get(0).exprs())
         output_field_types.push_back(expr.field_type());
