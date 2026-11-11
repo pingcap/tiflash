@@ -1863,7 +1863,8 @@ try
          "foo𝟙bar",
          "foo\U0002EBF0bar",
          "foo\xff"
-         "bar"});
+         "bar",
+         "foo\u088Fbar"});
     for (const auto size : {0U, 2U, 3U})
     {
         tipb::LocalMatchAgainstBooleanQuery query;
@@ -1875,13 +1876,13 @@ try
         node->set_term_type(tipb::LocalMatchAgainstBooleanTermWord);
         node->set_text(size == 0 ? "foo" : "foob");
         ASSERT_COLUMN_EQ(
-            size == 0 ? createColumn<Float64>({1, 1, 1, 0, 1, 1, 1, 1})
-                      : createColumn<Float64>({0, 0, 0, 1, 0, 0, 0, 0}),
+            size == 0 ? createColumn<Float64>({1, 1, 1, 0, 1, 1, 1, 1, 0})
+                      : createColumn<Float64>({0, 0, 0, 1, 0, 0, 0, 0, 0}),
             executeFunction(
                 "local_match_against_boolean",
-                {createConstColumn<String>(8, node->text()),
+                {createConstColumn<String>(documents.column->size(), node->text()),
                  documents,
-                 createConstColumn<String>(8, serializeLocalMatchAgainstBooleanQuery(query))},
+                 createConstColumn<String>(documents.column->size(), serializeLocalMatchAgainstBooleanQuery(query))},
                 collator,
                 true));
         // TiDB's version-2 NGRAM Boolean lexer emits "bar" for this search.
@@ -1899,11 +1900,11 @@ try
 }
 CATCH
 
-TEST(LocalMatchAgainstTokenChars, ProtocolV1Classification)
+TEST(LocalMatchAgainstTokenChars, Unicode17Classification)
 {
-    for (const UInt32 code_point : {0x1F643U, 0x1F441U, 0x301U, 0xFFFDU, 0x2EBF0U, 0x110000U})
+    for (const UInt32 code_point : {0x1F643U, 0x1F441U, 0x301U, 0xFFFDU, 0x110000U})
         EXPECT_FALSE(LocalMatchAgainst::isTokenChar(code_point)) << code_point;
-    for (const UInt32 code_point : {0x5FU, 0x4E2DU, 0xE9U, 0x1D7D9U, 0x1E900U})
+    for (const UInt32 code_point : {0x5FU, 0x88FU, 0x4E2DU, 0xE9U, 0x1D7D9U, 0x1E900U, 0x2EBF0U})
         EXPECT_TRUE(LocalMatchAgainst::isTokenChar(code_point)) << code_point;
     UInt32 previous = 127;
     for (const auto & span : LocalMatchAgainst::token_char_ranges)
@@ -1920,16 +1921,15 @@ TEST(LocalMatchAgainstTokenChars, ProtocolV1Classification)
         ASSERT_FALSE(LocalMatchAgainst::isTokenChar(code_point)) << code_point;
 
     // FNV-1a over one 0/1 byte per code point, U+0000..U+10FFFF. The paired
-    // TiDB tests hash Go's Unicode 15.0.0 IsLetter/IsNumber/'_' classification
-    // identically. This fixed regression checksum must not change in v1,
-    // even when the header is regenerated or either toolchain is upgraded.
+    // TiDB tests hash Go's Unicode 17.0.0 IsLetter/IsNumber/'_' classification
+    // identically. The fingerprint catches changes to the shared classification.
     std::uint64_t fingerprint = 14695981039346656037ULL;
     for (UInt32 code_point = 0; code_point <= 0x10FFFFU; ++code_point)
     {
         fingerprint ^= static_cast<std::uint64_t>(LocalMatchAgainst::isTokenChar(code_point));
         fingerprint *= 1099511628211ULL;
     }
-    EXPECT_EQ(0x71f51f3810b3b529ULL, fingerprint);
+    EXPECT_EQ(0x0b93995fa724afa0ULL, fingerprint);
 }
 
 namespace

@@ -57,11 +57,8 @@ namespace
 constexpr size_t default_min_token_size = 3;
 constexpr size_t default_max_token_size = 84;
 constexpr size_t default_ngram_token_size = 2;
-// This is the Local MATCH semantic protocol version, not the TiDB/TiFlash
-// product version. Version 2 fixes the Boolean AST interpretation, analyzer
-// behavior, and built-in stopword set. TiFlash must support a version before
-// TiDB emits it; unknown versions are rejected, and existing versions must
-// never be reinterpreted with changed semantics.
+// Local MATCH protocol version. TiFlash rejects unknown versions. TiDB and
+// TiFlash must use the same Unicode classification when evaluating a query.
 // Version 2 returns zero for NULL searches and uses MySQL's multibyte NGRAM
 // document scanner. STANDARD and the NGRAM Boolean lexer use BMP word
 // characters; filtered phrases also verify the unfiltered document stream.
