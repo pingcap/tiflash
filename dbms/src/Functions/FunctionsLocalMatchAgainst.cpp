@@ -16,6 +16,10 @@
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnVector.h>
+#include <Common/Arena.h>
+#include <Common/HashTable/HashMap.h>
+#include <Common/MemoryTracker.h>
+#include <Common/PODArray.h>
 #include <Common/UTF8Helpers.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -160,6 +164,82 @@ struct AnalyzerScratch
     String lowercase_run;
 };
 
+// Short first-character misses and long UCA expansions can make key creation
+// costlier than a small linear scan, even above the document token threshold.
+// Reserve automatic routing for large queries; forced routing stays test-only.
+constexpr size_t exact_route_min_terms = 100;
+constexpr size_t exact_route_min_tokens = 32;
+constexpr size_t exact_route_budget = 4 * 1024 * 1024;
+constexpr size_t exact_route_max_token_bytes = 4096;
+
+// sortKey's reusable std::string is not allocated through DB::Allocator.
+// Account its heap capacity separately; all persistent route storage below
+// uses the existing tracked Arena/HashMap/PODArray allocators.
+class MatchKeyBuffer
+{
+public:
+    MatchKeyBuffer() = default;
+    MatchKeyBuffer(const MatchKeyBuffer &) = delete;
+    MatchKeyBuffer & operator=(const MatchKeyBuffer &) = delete;
+    ~MatchKeyBuffer() { CurrentMemoryTracker::free(charged); }
+    StringRef key(std::string_view text, const TiDB::TiDBCollatorPtr & collator)
+    {
+        const auto result = collator->sortKeyFastPath(text.data(), text.size(), buffer);
+        const size_t bytes = buffer.capacity() > String{}.capacity() ? buffer.capacity() + 1 : 0;
+        if (bytes > charged)
+        {
+            CurrentMemoryTracker::alloc(bytes - charged);
+            charged = bytes;
+        }
+        return result;
+    }
+
+private:
+    String buffer;
+    size_t charged = 0;
+};
+
+struct ExactTermRoute
+{
+    struct Reference
+    {
+        size_t bucket;
+        size_t clause;
+        size_t term;
+    };
+    struct Bucket
+    {
+        size_t offset;
+        size_t count;
+    };
+    // Keys own their bytes, including empty keys and embedded zero weights.
+    Arena keys;
+    HashMap<StringRef, size_t, StringRefHash> dictionary;
+    PODArray<Bucket> buckets;
+    PODArray<Reference> references;
+};
+
+struct ExactMatchScratch
+{
+    PODArray<UInt32> seen;
+    UInt32 generation;
+    MatchKeyBuffer keys;
+
+    ExactMatchScratch(size_t buckets, UInt32 initial_generation)
+        : generation(initial_generation)
+    {
+        seen.resize_fill(buckets, 0);
+    }
+    void nextRow()
+    {
+        if (++generation == 0)
+        {
+            std::fill(seen.begin(), seen.end(), 0);
+            generation = 1;
+        }
+    }
+};
+
 struct CompiledBooleanQuery
 {
     std::vector<BooleanClause> clauses;
@@ -167,6 +247,7 @@ struct CompiledBooleanQuery
     bool has_must_not = false;
     bool matches_nothing = false;
     bool needs_verification = false;
+    std::unique_ptr<ExactTermRoute> exact_route;
 };
 
 // Normalize the already validated wire configuration once per block. Keep
@@ -611,7 +692,8 @@ bool textStartsWith(std::string_view value, std::string_view prefix, const TiDB:
     return matcher->match(value.data(), value.size());
 }
 
-bool matchesTermAt(
+// This call is per unmatched term/token, including small-query fallbacks.
+ALWAYS_INLINE bool matchesTermAt(
     const BooleanClause & clause,
     size_t term_index,
     const FullTextToken & token,
@@ -644,7 +726,8 @@ void initializeClauseMatchStates(const std::vector<BooleanClause> & clauses, std
         }
 }
 
-bool matchesPhraseEndingAt(
+// Preserve the baseline's inlining after adding indexed/test call sites.
+ALWAYS_INLINE bool matchesPhraseEndingAt(
     const BooleanClause & clause,
     const FullTextColumn & column,
     const FullTextToken & end,
@@ -715,7 +798,51 @@ enum class ColumnMatchResult
     Rejected,
 };
 
-ColumnMatchResult updateBooleanMatchStatesForColumn(
+ALWAYS_INLINE ColumnMatchResult markClauseMatched(
+    const CompiledBooleanQuery & query,
+    size_t index,
+    std::vector<ClauseMatchState> & states,
+    BooleanMatchProgress & progress)
+{
+    states[index].matched = true;
+    switch (query.clauses[index].modifier)
+    {
+    case BooleanClause::Modifier::Must:
+        ++progress.matched_must_clauses;
+        break;
+    case BooleanClause::Modifier::Should:
+        progress.matched_should_clause = true;
+        break;
+    case BooleanClause::Modifier::MustNot:
+        return ColumnMatchResult::Rejected;
+    }
+    if (!query.has_must_not
+        && (query.must_clause_count != 0 ? progress.matched_must_clauses == query.must_clause_count
+                                         : progress.matched_should_clause))
+        return ColumnMatchResult::Accepted;
+    return ColumnMatchResult::Continue;
+}
+
+ALWAYS_INLINE ColumnMatchResult markTermMatched(
+    const CompiledBooleanQuery & query,
+    size_t clause,
+    size_t term,
+    std::vector<ClauseMatchState> & states,
+    BooleanMatchProgress & progress)
+{
+    auto & state = states[clause];
+    if (state.matched || state.matched_terms[term])
+        return ColumnMatchResult::Continue;
+    state.matched_terms[term] = 1;
+    --state.remaining_terms;
+    // A STANDARD SQL word may split into several terms: MUST intersects them,
+    // while SHOULD/MUST NOT use their union. Both matchers share this rule.
+    if (query.clauses[clause].modifier != BooleanClause::Modifier::Must || state.remaining_terms == 0)
+        return markClauseMatched(query, clause, states, progress);
+    return ColumnMatchResult::Continue;
+}
+
+ALWAYS_INLINE ColumnMatchResult updateBooleanMatchStatesForColumn(
     const CompiledBooleanQuery & query,
     const FullTextColumn & column,
     const FullTextColumn & unfiltered_column,
@@ -732,26 +859,6 @@ ColumnMatchResult updateBooleanMatchStatesForColumn(
     // negative cache belongs only to this column, not other MATCH columns.
     for (auto & state : states)
         state.phrase_verification_failed = false;
-
-    const auto mark_clause_matched = [&](size_t clause_index) {
-        states[clause_index].matched = true;
-        switch (clauses[clause_index].modifier)
-        {
-        case BooleanClause::Modifier::Must:
-            ++progress.matched_must_clauses;
-            break;
-        case BooleanClause::Modifier::Should:
-            progress.matched_should_clause = true;
-            break;
-        case BooleanClause::Modifier::MustNot:
-            return ColumnMatchResult::Rejected;
-        }
-        if (!query.has_must_not
-            && (query.must_clause_count != 0 ? progress.matched_must_clauses == query.must_clause_count
-                                             : progress.matched_should_clause))
-            return ColumnMatchResult::Accepted;
-        return ColumnMatchResult::Continue;
-    };
 
     // Walk this MATCH column's analyzed tokens once and update every clause's
     // state. Phrase clauses are checked only when their final term is
@@ -778,7 +885,7 @@ ColumnMatchResult updateBooleanMatchStatesForColumn(
                         state.phrase_verification_failed = true;
                         continue;
                     }
-                    const auto result = mark_clause_matched(clause_index);
+                    const auto result = markClauseMatched(query, clause_index, states, progress);
                     if (result != ColumnMatchResult::Continue)
                         return result;
                 }
@@ -791,18 +898,53 @@ ColumnMatchResult updateBooleanMatchStatesForColumn(
                     state.matched_terms[term_index] = 1;
                     --state.remaining_terms;
                 }
-            // STANDARD may split one SQL term into several words. Required
-            // terms intersect those words, but optional/prohibited terms use
-            // their union, exactly like TiDB's combineBooleanTermNodes.
             state.matched = clause.modifier == BooleanClause::Modifier::Must
                 ? state.remaining_terms == 0
                 : state.remaining_terms < clause.terms.size();
             if (state.matched)
             {
-                const auto result = mark_clause_matched(clause_index);
+                const auto result = markClauseMatched(query, clause_index, states, progress);
                 if (result != ColumnMatchResult::Continue)
                     return result;
             }
+        }
+    }
+    return ColumnMatchResult::Continue;
+}
+
+template <bool count_work>
+ColumnMatchResult updateExactMatchStatesForColumn(
+    const CompiledBooleanQuery & query,
+    const FullTextColumn & column,
+    const TiDB::TiDBCollatorPtr & collator,
+    std::vector<ClauseMatchState> & states,
+    BooleanMatchProgress & progress,
+    ExactMatchScratch & scratch,
+    LocalMatchAgainstTest::Work * work)
+{
+    const auto & route = *query.exact_route;
+    for (const auto & token : column)
+    {
+        if constexpr (count_work)
+            ++work->key_lookups;
+        const auto * const it = route.dictionary.find(scratch.keys.key(token.value(), collator));
+        if (!it)
+            continue;
+        const auto bucket_id = it->getMapped();
+        if (scratch.seen[bucket_id] == scratch.generation)
+            continue;
+        scratch.seen[bucket_id] = scratch.generation;
+        const auto & bucket = route.buckets[bucket_id];
+        for (size_t i = bucket.offset; i < bucket.offset + bucket.count; ++i)
+        {
+            if constexpr (count_work)
+                ++work->term_references;
+            const auto & ref = route.references[i];
+            const auto result = markTermMatched(query, ref.clause, ref.term, states, progress);
+            // has_must_not prevents accepting before a later prohibited
+            // association in this same bucket (e.g. +apple -APPLE).
+            if (result != ColumnMatchResult::Continue)
+                return result;
         }
     }
     return ColumnMatchResult::Continue;
@@ -1044,6 +1186,109 @@ CompiledBooleanQuery compileBooleanQuery(
     return compiled;
 }
 
+size_t eligibleExactRouteTermCount(
+    const CompiledBooleanQuery & query,
+    const LocalMatchAnalyzerConfig & config,
+    const TiDB::TiDBCollatorPtr & collator,
+    LocalMatchAgainstTest::Matcher matcher,
+    size_t budget)
+{
+    if (matcher == LocalMatchAgainstTest::Matcher::Linear || config.use_ngram || !collator)
+        return {};
+    // Compare and sortKey in these implementations encode the same weight
+    // stream and use identical PAD/NO PAD preprocessing. GeneralCI emits one
+    // 16-bit weight per rune; UCA emits the same expansion/ignorable-weight
+    // stream consumed by compare. Binary keys preserve byte equality.
+    using Type = TiDB::ITiDBCollator::CollatorType;
+    switch (collator->getCollatorType())
+    {
+    case Type::UTF8_GENERAL_CI:
+    case Type::UTF8MB4_GENERAL_CI:
+    case Type::UTF8_UNICODE_CI:
+    case Type::UTF8MB4_UNICODE_CI:
+    case Type::UTF8MB4_0900_AI_CI:
+    case Type::UTF8MB4_BIN:
+    case Type::UTF8_BIN:
+    case Type::UTF8MB4_0900_BIN:
+    case Type::BINARY:
+    case Type::LATIN1_BIN:
+    case Type::ASCII_BIN:
+        break;
+    default:
+        return {};
+    }
+
+    size_t terms = 0;
+    // UCA may resize a document key buffer to 16 bytes per input byte;
+    // allow string capacity growth independently of the query term sizes.
+    size_t estimate = 32 * 1024 + 2 * 16 * exact_route_max_token_bytes;
+    if (estimate > budget)
+        return {};
+    for (const auto & clause : query.clauses)
+    {
+        if (clause.phrase || clause.prefix || clause.verification)
+            return {};
+        for (const auto & term : clause.terms)
+        {
+            if (term.size() > exact_route_max_token_bytes)
+                return {};
+            // Conservative bound for power-of-two hash/POD capacities,
+            // Arena growth and up to 16 key bytes per input byte. Charge
+            // scratch growth too. Check before constructing any route.
+            const size_t cost = 256 + 96 * term.size();
+            if (cost > budget - estimate)
+                return {};
+            estimate += cost;
+            ++terms;
+        }
+    }
+    if (terms == 0 || (matcher == LocalMatchAgainstTest::Matcher::Automatic && terms < exact_route_min_terms))
+        return {};
+
+    return terms;
+}
+
+std::unique_ptr<ExactTermRoute> buildExactTermRoute(
+    const CompiledBooleanQuery & query,
+    const TiDB::TiDBCollatorPtr & collator,
+    size_t terms)
+{
+    auto route = std::make_unique<ExactTermRoute>();
+    route->references.reserve(terms);
+    route->buckets.reserve(terms);
+    MatchKeyBuffer keys;
+    for (size_t clause = 0; clause < query.clauses.size(); ++clause)
+        for (size_t term = 0; term < query.clauses[clause].terms.size(); ++term)
+        {
+            const auto key = keys.key(query.clauses[clause].terms[term], collator);
+            auto * it = route->dictionary.find(key);
+            size_t bucket;
+            if (it)
+                bucket = it->getMapped();
+            else
+            {
+                bucket = route->buckets.size();
+                const StringRef owned(route->keys.insert(key.data, key.size), key.size);
+                bool inserted;
+                route->dictionary.emplace(owned, it, inserted);
+                it->getMapped() = bucket;
+                route->buckets.push_back(ExactTermRoute::Bucket{0, 0});
+            }
+            route->references.push_back(ExactTermRoute::Reference{bucket, clause, term});
+        }
+    std::sort(route->references.begin(), route->references.end(), [](const auto & a, const auto & b) {
+        return a.bucket < b.bucket;
+    });
+    for (size_t i = 0; i < route->references.size(); ++i)
+    {
+        auto & bucket = route->buckets[route->references[i].bucket];
+        if (bucket.count == 0)
+            bucket.offset = i;
+        ++bucket.count;
+    }
+    return route;
+}
+
 Float64 matchBooleanValue(const CompiledBooleanQuery & query, const std::vector<ClauseMatchState> & states)
 {
     // Local MATCH returns a Boolean 0/1 value, not a relevance score.
@@ -1133,6 +1378,16 @@ bool decodeLocalMatchAgainstBooleanQuery(const IColumn & column, tipb::LocalMatc
 class FunctionLocalMatchAgainstBoolean final : public IFunction
 {
 public:
+    explicit FunctionLocalMatchAgainstBoolean(
+        LocalMatchAgainstTest::Matcher matcher_ = LocalMatchAgainstTest::Matcher::Automatic,
+        LocalMatchAgainstTest::Work * work_ = nullptr,
+        size_t budget_ = exact_route_budget,
+        UInt32 generation_ = 0)
+        : matcher(matcher_)
+        , work(work_)
+        , budget(budget_)
+        , generation(generation_)
+    {}
     static constexpr auto name = "local_match_against_boolean";
     static FunctionPtr create(const Context &) { return std::make_shared<FunctionLocalMatchAgainstBoolean>(); }
 
@@ -1170,6 +1425,15 @@ public:
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        if (work)
+            executeInternal<true>(block, arguments, result);
+        else
+            executeInternal<false>(block, arguments, result);
+    }
+
+    template <bool count_work>
+    void executeInternal(Block & block, const ColumnNumbers & arguments, size_t result) const
     {
         const auto * query_column = typeid_cast<const ColumnConst *>(&*block.getByPosition(arguments[0]).column);
         if (query_column == nullptr)
@@ -1223,8 +1487,7 @@ public:
         if (enable_stopword)
             stopword_lookup.emplace(stopword_collator);
         const auto * stopwords = stopword_lookup ? &*stopword_lookup : nullptr;
-        const CompiledBooleanQuery compiled_query
-            = compileBooleanQuery(protocol_boolean_query, config, collator, stopwords);
+        CompiledBooleanQuery compiled_query = compileBooleanQuery(protocol_boolean_query, config, collator, stopwords);
         if (compiled_query.matches_nothing)
         {
             finish_result();
@@ -1234,79 +1497,194 @@ public:
         document_columns.reserve(document_argument_end - 1);
         for (size_t arg = 1; arg < document_argument_end; ++arg)
             document_columns.emplace_back(*block.getByPosition(arguments[arg]).column);
-        std::vector<ClauseMatchState> clause_states;
-        initializeClauseMatchStates(compiled_query.clauses, clause_states);
-        FullTextColumn analyzed_column;
-        FullTextColumn unfiltered_column;
-        AnalyzerScratch analyzer_scratch;
-
-        for (size_t row = 0; row < rows; ++row)
+        const size_t route_terms = eligibleExactRouteTermCount(compiled_query, config, collator, matcher, budget);
+        bool may_use_index = matcher == LocalMatchAgainstTest::Matcher::Indexed;
+        if (route_terms && !may_use_index)
         {
-            resetClauseMatchStates(clause_states);
-            BooleanMatchProgress match_progress;
-            bool result_known = false;
-            bool row_matches = false;
-            for (const auto & document_column : document_columns)
+            // A STANDARD token consumes at least one raw byte, and consecutive
+            // tokens need a separator. This cheap lower bound bypasses the
+            // routing row loop for wholly short blocks without tokenizing twice.
+            // Use one byte even for unusual analyzer bounds to avoid overflow.
+            constexpr size_t min_document_bytes = exact_route_min_tokens * 2 - 1;
+            for (const auto & column : document_columns)
             {
-                // A NULL MATCH column contributes no tokens. This is
-                // intentional: #70485 relies on a row with a NULL body
-                // still matching a required term from another MATCH column.
-                if (document_column.isNull(row))
+                for (size_t row = 0; row < rows; ++row)
+                    if (!column.isNull(row) && column.getString(row).size() >= min_document_bytes)
+                    {
+                        may_use_index = true;
+                        break;
+                    }
+                if (may_use_index)
+                    break;
+            }
+        }
+        // Compile separate row paths so ineligible queries discard optional
+        // scratch and routing branches from their analyzer/matcher hot loop.
+        const auto execute_rows = [&,
+                                   use_ngram,
+                                   ngram_token_size,
+                                   min_token_size,
+                                   max_token_size,
+                                   enable_stopword]<bool enable_index>() ALWAYS_INLINE {
+            std::vector<ClauseMatchState> clause_states;
+            initializeClauseMatchStates(compiled_query.clauses, clause_states);
+            FullTextColumn analyzed_column;
+            FullTextColumn unfiltered_column;
+            AnalyzerScratch analyzer_scratch;
+
+            std::optional<ExactMatchScratch> exact_scratch;
+            bool route_attempted = false;
+            for (size_t row = 0; row < rows; ++row)
+            {
+                if constexpr (enable_index)
+                    if (exact_scratch)
+                        exact_scratch->nextRow();
+                resetClauseMatchStates(clause_states);
+                BooleanMatchProgress match_progress;
+                bool result_known = false;
+                bool row_matches = false;
+                for (const auto & document_column : document_columns)
                 {
-                    analyzed_column.clear();
-                    continue;
-                }
-                analyzeColumnInto(
-                    document_column.getString(row),
-                    analyzed_column,
-                    analyzer_scratch,
-                    use_ngram,
-                    ngram_token_size,
-                    collator,
-                    stopwords,
-                    min_token_size,
-                    max_token_size,
-                    enable_stopword);
-                if (compiled_query.needs_verification)
+                    // A NULL MATCH column contributes no tokens. This is
+                    // intentional: #70485 relies on a row with a NULL body
+                    // still matching a required term from another MATCH column.
+                    if (document_column.isNull(row))
+                    {
+                        analyzed_column.clear();
+                        continue;
+                    }
                     analyzeColumnInto(
                         document_column.getString(row),
-                        unfiltered_column,
+                        analyzed_column,
                         analyzer_scratch,
                         use_ngram,
                         ngram_token_size,
                         collator,
-                        nullptr,
-                        0,
-                        std::numeric_limits<size_t>::max(),
-                        false);
-                const auto match_result = updateBooleanMatchStatesForColumn(
-                    compiled_query,
-                    analyzed_column,
-                    unfiltered_column,
-                    collator,
-                    clause_states,
-                    match_progress);
-                if (match_result == ColumnMatchResult::Rejected)
-                {
-                    result_known = true;
-                    break;
+                        stopwords,
+                        min_token_size,
+                        max_token_size,
+                        enable_stopword);
+                    if constexpr (enable_index)
+                    {
+                        // Do not allocate a query dictionary for blocks containing
+                        // only short documents. Build at most once, after metadata
+                        // validation and complete clause compilation. Earlier short
+                        // columns may already have contributed to this row's state.
+                        if (!route_attempted
+                            && (matcher == LocalMatchAgainstTest::Matcher::Indexed
+                                || analyzed_column.size() >= exact_route_min_tokens))
+                        {
+                            route_attempted = true;
+                            compiled_query.exact_route = buildExactTermRoute(compiled_query, collator, route_terms);
+                            if (compiled_query.exact_route)
+                            {
+                                exact_scratch.emplace(compiled_query.exact_route->buckets.size(), generation);
+                                exact_scratch->nextRow();
+                                if constexpr (count_work)
+                                    ++work->route_builds;
+                            }
+                        }
+                    }
+                    if (compiled_query.needs_verification)
+                        analyzeColumnInto(
+                            document_column.getString(row),
+                            unfiltered_column,
+                            analyzer_scratch,
+                            use_ngram,
+                            ngram_token_size,
+                            collator,
+                            nullptr,
+                            0,
+                            std::numeric_limits<size_t>::max(),
+                            false);
+                    ColumnMatchResult match_result;
+                    if constexpr (enable_index)
+                    {
+                        // STANDARD only emits valid UTF-8 BMP word tokens: malformed
+                        // bytes become RuneError separators. Do not re-interpret the
+                        // raw document. An oversized analyzed token falls back for
+                        // this whole column before any state is modified.
+                        const bool indexed = exact_scratch
+                            && (matcher == LocalMatchAgainstTest::Matcher::Indexed
+                                || analyzed_column.size() >= exact_route_min_tokens)
+                            // Valid BMP tokens use at most three bytes per code
+                            // point. The usual analyzer bound proves this without
+                            // another column pass, including early-hit OR queries.
+                            && (max_token_size <= exact_route_max_token_bytes / 3
+                                || std::all_of(analyzed_column.begin(), analyzed_column.end(), [](const auto & token) {
+                                       return token.value().size() <= exact_route_max_token_bytes;
+                                   }));
+                        if constexpr (count_work)
+                        {
+                            if (indexed)
+                                ++work->indexed_columns;
+                            else
+                                ++work->linear_columns;
+                        }
+                        match_result = indexed ? updateExactMatchStatesForColumn<count_work>(
+                                           compiled_query,
+                                           analyzed_column,
+                                           collator,
+                                           clause_states,
+                                           match_progress,
+                                           *exact_scratch,
+                                           work)
+                                               : updateBooleanMatchStatesForColumn(
+                                                   compiled_query,
+                                                   analyzed_column,
+                                                   unfiltered_column,
+                                                   collator,
+                                                   clause_states,
+                                                   match_progress);
+                    }
+                    else
+                    {
+                        if constexpr (count_work)
+                            ++work->linear_columns;
+                        match_result = updateBooleanMatchStatesForColumn(
+                            compiled_query,
+                            analyzed_column,
+                            unfiltered_column,
+                            collator,
+                            clause_states,
+                            match_progress);
+                    }
+                    if (match_result == ColumnMatchResult::Rejected)
+                    {
+                        result_known = true;
+                        break;
+                    }
+                    if (match_result == ColumnMatchResult::Accepted)
+                    {
+                        result_known = true;
+                        row_matches = true;
+                        break;
+                    }
                 }
-                if (match_result == ColumnMatchResult::Accepted)
-                {
-                    result_known = true;
-                    row_matches = true;
-                    break;
-                }
+                output_data[row]
+                    = result_known ? (row_matches ? 1 : 0) : matchBooleanValue(compiled_query, clause_states);
             }
-            output_data[row] = result_known ? (row_matches ? 1 : 0) : matchBooleanValue(compiled_query, clause_states);
-        }
+        };
+        if (route_terms && may_use_index)
+            execute_rows.template operator()<true>();
+        else
+            execute_rows.template operator()<false>();
         finish_result();
     }
 
 private:
     TiDB::TiDBCollatorPtr collator = nullptr;
+    LocalMatchAgainstTest::Matcher matcher;
+    LocalMatchAgainstTest::Work * work;
+    size_t budget;
+    UInt32 generation;
 };
 } // namespace
+
+FunctionPtr LocalMatchAgainstTest::create(Matcher matcher, Work & work, size_t budget, UInt32 generation)
+{
+    return std::make_shared<FunctionLocalMatchAgainstBoolean>(matcher, &work, budget, generation);
+}
 
 void registerFunctionsLocalMatchAgainst(FunctionFactory & factory)
 {
