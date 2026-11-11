@@ -1018,6 +1018,10 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
     // build function expr
     if (functionIsInOrGlobalInOperator(func_name))
     {
+        if (expr.children().empty())
+        {
+            throw TiFlashException("IN function requires a left operand", Errors::Coprocessor::BadRequest);
+        }
         // for in, we could not represent the function expr using func_name(param1, param2, ...)
         fmt_buf.fmtAppend("{} {} (", exprToString(expr.children(0), input_col), func_name);
         fmt_buf.joinStr(

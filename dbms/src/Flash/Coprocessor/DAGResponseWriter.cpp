@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Core/Defines.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 
@@ -24,6 +25,10 @@ DAGResponseWriter::DAGResponseWriter(Int64 records_per_chunk_, DAGContext & dag_
     if (dag_context.encode_type == tipb::EncodeType::TypeCHBlock)
     {
         records_per_chunk = -1;
+    }
+    else if (records_per_chunk == 0 || records_per_chunk < -1)
+    {
+        records_per_chunk = DEFAULT_DAG_RECORDS_PER_CHUNK;
     }
     if (dag_context.encode_type != tipb::EncodeType::TypeCHBlock
         && dag_context.encode_type != tipb::EncodeType::TypeChunk
