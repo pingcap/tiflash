@@ -53,6 +53,8 @@ public:
 
     IOProfileInfoPtr getIOProfileInfo() const override { return io_profile_info; }
 
+    void onEarlyStop() override { early_stopped = true; }
+
     // only for unit test
     // The logic order of unit test is error, it will build source_op firstly and register rf secondly.
     // It causes source_op could not get RF list in constructor.
@@ -78,6 +80,7 @@ private:
     int max_wait_time_ms;
 
     bool done = false;
+    bool early_stopped = false;
     IOProfileInfoPtr io_profile_info;
 };
 } // namespace DB
