@@ -247,16 +247,9 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(
                     context.getSettingsRef().auto_spill_check_min_interval_ms.get());
             if (gather_task_set == nullptr)
                 gather_task_set = query->addMPPGatherTaskSet(id.gather_id);
-<<<<<<< HEAD
-            auto & alarm = gather_task_set->alarms[sender_task_id][receiver_task_id];
-            call_data->setToWaitingTunnelState();
-=======
             auto & alarm = call_data->getAlarm();
-            call_data->setCallStateAndUpdateMetrics(
-                EstablishCallData::WAIT_TUNNEL,
-                GET_METRIC(tiflash_establish_calldata_count, type_wait_tunnel_calldata));
+            call_data->setToWaitingTunnelState();
             gather_task_set->alarms[sender_task_id].emplace(receiver_task_id, std::ref(alarm));
->>>>>>> 262b942077 (Avoid data race in grpc alarm (#10124))
             if likely (cq != nullptr)
             {
                 alarm.Set(cq, Clock::now() + std::chrono::seconds(10), call_data->asGRPCKickTag());
