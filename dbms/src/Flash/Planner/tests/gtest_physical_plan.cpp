@@ -138,13 +138,6 @@ public:
     LoggerPtr log = Logger::get("PhysicalPlanTestRunner", "test_physical_plan");
 };
 
-<<<<<<< HEAD
-=======
-String replaceStringName(String s)
-{
-    return boost::replace_all_copy(s, "{StringName}", DataTypeString::getDefaultName());
-}
-
 TEST_F(PhysicalPlanTestRunner, RejectsInvalidRootCount)
 try
 {
@@ -175,7 +168,6 @@ try
 }
 CATCH
 
->>>>>>> 78a622876d (fix: improve execution input validation (#11283))
 TEST_F(PhysicalPlanTestRunner, Filter)
 try
 {
