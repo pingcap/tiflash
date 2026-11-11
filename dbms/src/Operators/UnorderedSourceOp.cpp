@@ -118,6 +118,11 @@ void UnorderedSourceOp::operateSuffixImpl()
     // like CoprocessorReader or read delta data from WN.
     if (!io_profile_info->is_local)
     {
+        // Input stop can finish this source before the first remote fetch records connection info.
+        // Leave the shared once_flag available so another source can collect it after the fetch completes.
+        if (early_stopped && !task_pool->getRemoteConnectionInfo())
+            return;
+
         std::call_once(task_pool->getRemoteConnectionInfoFlag(), [&]() {
             auto pool_connection_info_opt = task_pool->getRemoteConnectionInfo();
             RUNTIME_CHECK(
