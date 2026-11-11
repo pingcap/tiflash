@@ -183,7 +183,6 @@ Block CHBlockChunkCodec::decodeImpl(ReadBuffer & istr, size_t reserve_size)
     size_t columns = 0;
     size_t rows = 0;
     readBlockMeta(istr, columns, rows);
-    reserve_size = std::min(reserve_size, CodecUtils::MAX_DECODED_BLOCK_ROWS);
 
     for (size_t i = 0; i < columns; ++i)
     {
