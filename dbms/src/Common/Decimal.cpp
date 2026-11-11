@@ -91,7 +91,7 @@ inline std::optional<std::tuple<Int256, PrecType, ScaleType>> parseDecimal(const
         }
         else if (c <= '9' && c >= '0')
         {
-            value = value * 10 + int(c - '0');
+            value = value * 10 + (c - '0');
             if (frac)
                 ++scale;
             if (frac || value > 0)
