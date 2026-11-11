@@ -158,6 +158,7 @@ public:
     }
 
     std::once_flag & getRemoteConnectionInfoFlag() { return get_remote_connection_flag; }
+    bool hasRemoteConnectionInfo() const;
     std::optional<std::pair<ConnectionProfileInfo, ConnectionProfileInfo>> getRemoteConnectionInfo() const;
     void recordRemoteConnectionInfoIfNecessary(const SegmentReadTaskPtr & task)
     {

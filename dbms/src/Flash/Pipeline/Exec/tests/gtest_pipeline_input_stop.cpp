@@ -24,6 +24,7 @@
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
 #include <Flash/Planner/Plans/PhysicalJoinProbe.h>
+#include <Flash/Planner/Plans/PhysicalLimit.h>
 #include <Interpreters/Context.h>
 #include <Operators/ExchangeReceiverSourceOp.h>
 #include <Operators/ExpressionTransformOp.h>
@@ -231,6 +232,40 @@ public:
         for (auto & pipeline : builders.build(false))
             tasks.push_back(std::make_unique<SimplePipelineTask>(context, "", std::move(pipeline)));
         return tasks;
+    }
+
+    static JoinPtr createJoin(const Block & header, ASTTableJoin::Kind kind)
+    {
+        const auto & key = header.getByPosition(0);
+        NamesAndTypes schema{{key.name, key.type}};
+        SpillConfig spill_config("/tmp", "input_stop_test", 0, 0, 0, nullptr);
+        auto join = std::make_shared<Join>(
+            Names{key.name},
+            Names{key.name},
+            std::vector<UInt8>{0},
+            kind,
+            "input_stop_test",
+            0,
+            0,
+            spill_config,
+            spill_config,
+            RestoreConfig{1, 0, 0},
+            schema,
+            RegisterOperatorSpillContext{},
+            nullptr,
+            TiDB::TiDBCollators{},
+            JoinNonEqualConditions{},
+            1,
+            0,
+            "",
+            "",
+            0,
+            true);
+        join->initBuild(header, 1);
+        join->finalize(Names{key.name});
+        join->setLocalProbeSource(true);
+        join->setInitActiveBuildThreads();
+        return join;
     }
 
 protected:
@@ -629,6 +664,76 @@ TEST_F(PipelineInputStopTest, PlannerLimitLeavesExchangeReceiverOpen)
     }
 }
 
+TEST_F(PipelineInputStopTest, PlannerLimitStopsJoinWaitingForProbeInput)
+{
+    MemoryTrackerSetter tracker(true, nullptr);
+    PipelineExecutorContext exec_context;
+    std::atomic_size_t rows{0};
+    auto [active_sink, active_source] = SharedQueue::build(exec_context, 1, 1, -1, 1);
+    auto [idle_sink, idle_source] = SharedQueue::build(exec_context, 1, 1, -1, 1);
+    auto request = context.scan("test", "input").build(context);
+    auto builders = buildPlan(request, exec_context, 2, [&](auto & group, const auto & header) {
+        group.addConcurrency(std::make_unique<FiniteSource>(exec_context, header, 100));
+        group.getCurBuilder(0).setSinkOp(std::make_unique<SharedQueueSinkOp>(exec_context, "", active_sink));
+        group.addGroup();
+        for (const auto & source : {active_source, idle_source})
+            group.addConcurrency(std::make_unique<SharedQueueSourceOp>(exec_context, "", header, source));
+    });
+    auto header = builders.getCurrentHeader();
+    auto join = createJoin(header, ASTTableJoin::Kind::Inner);
+    Block build_block = header.cloneEmpty();
+    auto column = header.getByPosition(0).type->createColumn();
+    column->insert(Field(Int64(1)));
+    build_block.getByPosition(0).column = std::move(column);
+    join->insertFromBlock(build_block, 0);
+    ASSERT_TRUE(join->finishOneBuild(0));
+    join->finalizeBuild();
+    ASSERT_FALSE(join->shouldSkipProbe());
+
+    NamesAndTypes schema{{header.getByPosition(0).name, header.getByPosition(0).type}};
+    auto probe = std::make_shared<PhysicalJoinProbe>("join_probe", schema, "", plan_tree, join, nullptr);
+    probe->buildPipelineExecGroup(exec_context, builders, *context.context, 2);
+    PhysicalLimit limit("limit", schema, FineGrainedShuffle{}, "", probe, 1);
+    limit.buildPipelineExecGroup(exec_context, builders, *context.context, 2);
+    auto tasks = makeTasks(builders, exec_context, rows);
+    SCOPE_EXIT({
+        clearNotifyFuture();
+        exec_context.cancel();
+        for (auto & task : tasks)
+            finishTask(task);
+        exec_context.wait();
+    });
+    ASSERT_EQ(tasks.size(), 3);
+
+    // Park the producer on a full queue before either Join probe runs.
+    ASSERT_EQ(tasks[0]->execute(), ExecTaskStatus::RUNNING);
+    ASSERT_EQ(tasks[0]->execute(), ExecTaskStatus::WAIT_FOR_NOTIFY);
+    ASSERT_EQ(current_notify_future, active_sink.get());
+    registerTaskToFuture(std::move(tasks[0]));
+
+    // The peer has neither data nor EOF: it must wait on its input, not on probe completion.
+    ASSERT_EQ(tasks[2]->execute(), ExecTaskStatus::WAIT_FOR_NOTIFY);
+    ASSERT_EQ(current_notify_future, idle_source.get());
+    registerTaskToFuture(std::move(tasks[2]));
+    EXPECT_FALSE(join->isProbeStopped());
+    EXPECT_EQ(rows.load(), 0);
+
+    // The active probe produces a match and reaches LIMIT through the real planner wiring.
+    ASSERT_EQ(tasks[1]->execute(), ExecTaskStatus::RUNNING);
+    ASSERT_EQ(rows.load(), 1);
+    ASSERT_EQ(tasks[1]->execute(), ExecTaskStatus::FINISHED);
+    finishTask(tasks[1]);
+    ASSERT_NO_THROW(exec_context.waitFor(std::chrono::seconds(10)));
+    EXPECT_TRUE(exec_context.toExecutionResult().is_success) << exec_context.getExceptionMsg();
+    EXPECT_FALSE(exec_context.isCancelled());
+    EXPECT_TRUE(join->isProbeStopped());
+    EXPECT_EQ(rows.load(), 1);
+
+    // No packet, EOF, or queue cancellation was needed to release the idle probe.
+    Block unused;
+    EXPECT_EQ(idle_source->tryPop(unused), MPMCQueueResult::EMPTY);
+}
+
 TEST_F(PipelineInputStopTest, PlannerEmptyBuildStopsBackpressuredProducer)
 {
     for (auto kind : {ASTTableJoin::Kind::Inner, ASTTableJoin::Kind::RightSemi})
@@ -648,33 +753,7 @@ TEST_F(PipelineInputStopTest, PlannerEmptyBuildStopsBackpressuredProducer)
         auto header = builders.getCurrentHeader();
         auto key = header.getByPosition(0).name;
         NamesAndTypes schema{{key, header.getByPosition(0).type}};
-        SpillConfig spill_config("/tmp", "input_stop_test", 0, 0, 0, nullptr);
-        auto join = std::make_shared<Join>(
-            Names{key},
-            Names{key},
-            std::vector<UInt8>{0},
-            kind,
-            "input_stop_test",
-            0,
-            0,
-            spill_config,
-            spill_config,
-            RestoreConfig{1, 0, 0},
-            schema,
-            RegisterOperatorSpillContext{},
-            nullptr,
-            TiDB::TiDBCollators{},
-            JoinNonEqualConditions{},
-            1,
-            0,
-            "",
-            "",
-            0,
-            true);
-        join->initBuild(header, 1);
-        join->finalize(Names{key});
-        join->setLocalProbeSource(true);
-        join->setInitActiveBuildThreads();
+        auto join = createJoin(header, kind);
         ASSERT_TRUE(join->finishOneBuild(0));
         join->finalizeBuild();
         ASSERT_TRUE(join->shouldSkipProbe());
