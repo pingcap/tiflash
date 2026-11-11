@@ -21,7 +21,7 @@ template <typename T>
 String Decimal<T>::toString(ScaleType scale) const
 {
     constexpr PrecType precision = maxDecimalPrecision<Decimal<T>>();
-    if (scale > precision)
+    if (unlikely(scale > precision))
         throw TiFlashException(
             Errors::Decimal::Overflow,
             "Decimal scale {} exceeds maximum precision {}",

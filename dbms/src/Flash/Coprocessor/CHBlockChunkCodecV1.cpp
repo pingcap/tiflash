@@ -101,7 +101,6 @@ static inline void decodeColumnsByBlock(ReadBuffer & istr, Block & res, size_t r
     if (!rows_to_read)
         return;
 
-    reserve_size = std::min(reserve_size, CodecUtils::MAX_DECODED_BLOCK_ROWS);
     auto && mutable_columns = res.mutateColumns();
     const auto & name_and_type_list = res.getColumnsWithTypeAndName();
     size_t column_size = mutable_columns.size();
