@@ -47,7 +47,6 @@ TEST(DAGRequestTest, RejectsInvalidExecutorOrder)
         {tipb::TypeTableScan, tipb::TypePartitionTableScan},
         {tipb::TypeTableScan, tipb::TypeIndexScan},
         {tipb::TypeTableScan, tipb::TypeExchangeReceiver},
-        {tipb::TypeTableScan, tipb::TypeLimit, tipb::TypeCTESource},
         {tipb::TypeTableScan, tipb::TypeLimit, tipb::TypeTableScan, tipb::TypeLimit},
         {tipb::TypeLimit, tipb::TypeTableScan},
         {tipb::TypeExchangeReceiver, tipb::TypeTableScan, tipb::TypeProjection},
@@ -136,7 +135,7 @@ TEST(DAGRequestTest, PreservesUnsupportedExecutorError)
 {
     for (bool withIds : {false, true})
     {
-        auto request = makeListRequest({tipb::TypeIndexLookUp}, withIds);
+        auto request = makeListRequest({tipb::TypeKill}, withIds);
         SCOPED_TRACE(request.ShortDebugString());
         try
         {
@@ -146,7 +145,7 @@ TEST(DAGRequestTest, PreservesUnsupportedExecutorError)
         catch (const TiFlashException & e)
         {
             EXPECT_TRUE(e.getError().is(Errors::Coprocessor::Unimplemented)) << e.standardText();
-            EXPECT_NE(e.standardText().find("TypeIndexLookUp"), String::npos) << e.standardText();
+            EXPECT_NE(e.standardText().find("TypeKill"), String::npos) << e.standardText();
             if (withIds)
                 EXPECT_NE(e.standardText().find("executor_0"), String::npos) << e.standardText();
         }

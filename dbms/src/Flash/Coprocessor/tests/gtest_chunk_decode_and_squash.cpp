@@ -17,6 +17,7 @@
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodecV1.h>
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
+#include <Flash/Mpp/MppVersion.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -187,7 +188,7 @@ try
     };
     const auto encode = [](const Block & block, MPPDataPacketVersion version, CompressionMethod compression) {
         if (version != MPPDataPacketV0)
-            return CHBlockChunkCodecV1{block, version}.encode(block, compression);
+            return CHBlockChunkCodecV1{block}.encode(block, compression);
 
         std::vector<tipb::FieldType> fields;
         for (const auto & column : block)
@@ -201,7 +202,7 @@ try
         return stream->getString();
     };
 
-    for (const auto version : {MPPDataPacketV0, MPPDataPacketV1, MPPDataPacketV2})
+    for (const auto version : {MPPDataPacketV0, MPPDataPacketV1})
     {
         for (const auto compression : {CompressionMethod::NONE, CompressionMethod::LZ4, CompressionMethod::ZSTD})
         {
@@ -209,7 +210,7 @@ try
                 continue;
             for (const auto & invalidBlock : invalidBlocks)
             {
-                // V1/V2 encode zero-row blocks as empty flush chunks without column metadata.
+                // V1 encodes zero-row blocks as empty flush chunks without column metadata.
                 if (version != MPPDataPacketV0 && invalidBlock.rows() == 0)
                     continue;
                 SCOPED_TRACE(fmt::format(

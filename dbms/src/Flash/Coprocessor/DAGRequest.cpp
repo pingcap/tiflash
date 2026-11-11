@@ -39,7 +39,6 @@ void checkExecutorList(const tipb::DAGRequest & request)
         case tipb::ExecType::TypePartitionTableScan:
         case tipb::ExecType::TypeIndexScan:
         case tipb::ExecType::TypeExchangeReceiver:
-        case tipb::ExecType::TypeCTESource:
             is_source = true;
             break;
         case tipb::ExecType::TypeSelection:
@@ -53,7 +52,6 @@ void checkExecutorList(const tipb::DAGRequest & request)
         case tipb::ExecType::TypeExpand:
         case tipb::ExecType::TypeExpand2:
         case tipb::ExecType::TypeExchangeSender:
-        case tipb::ExecType::TypeCTESink:
             break;
         case tipb::ExecType::TypeJoin:
             throw TiFlashException(
