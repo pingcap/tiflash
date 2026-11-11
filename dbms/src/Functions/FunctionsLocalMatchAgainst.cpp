@@ -398,6 +398,7 @@ class BuiltinStopwordLookup
 public:
     explicit BuiltinStopwordLookup(TiDB::TiDBCollatorPtr collator_)
         : collator(collator_)
+        , standard_length_limit(standardLengthLimit(collator_->getCollatorType()))
     {
         for (const auto stopword : builtin_stopwords)
         {
@@ -416,9 +417,13 @@ public:
         }
     }
 
-    bool contains(std::string_view token) const { return matchingLengths(token) != 0; }
+    bool containsStandard(std::string_view token, size_t code_points) const
+    {
+        const size_t length = standard_length_limit.count_code_points ? code_points : token.size();
+        return length <= standard_length_limit.maximum && matchingLengths(token) != 0;
+    }
 
-    bool contains(std::string_view token, size_t code_points) const
+    bool containsNgram(std::string_view token, size_t code_points) const
     {
         // NGRAM also requires the original code-point count, even when a
         // collation makes words of different lengths share a key.
@@ -426,6 +431,35 @@ public:
     }
 
 private:
+    struct StandardLengthLimit
+    {
+        size_t maximum;
+        bool count_code_points;
+    };
+
+    static StandardLengthLimit standardLengthLimit(TiDB::ITiDBCollator::CollatorType type)
+    {
+        using Type = TiDB::ITiDBCollator::CollatorType;
+        switch (type)
+        {
+        case Type::UTF8MB4_BIN:
+        case Type::UTF8_BIN:
+        case Type::LATIN1_BIN:
+        case Type::ASCII_BIN:
+        case Type::BINARY:
+        case Type::UTF8MB4_0900_BIN:
+            // STANDARD tokens have no trailing spaces, so PAD SPACE cannot shorten them.
+            return {max_builtin_stopword_length, false};
+        case Type::UTF8_GENERAL_CI:
+        case Type::UTF8MB4_GENERAL_CI:
+            // General CI emits exactly one weight per code point.
+            return {max_builtin_stopword_length, true};
+        default:
+            // Collations with ignorable weights can match longer source tokens.
+            return {std::numeric_limits<size_t>::max(), false};
+        }
+    }
+
     static UInt8 lengthBit(size_t length) { return static_cast<UInt8>(1U << length); }
 
     struct CacheEntry
@@ -475,6 +509,7 @@ private:
     }
 
     TiDB::TiDBCollatorPtr collator;
+    const StandardLengthLimit standard_length_limit;
     Arena key_storage;
     HashMap<StringRef, UInt8, StringRefHash, HashTableGrower<7>> keys;
     size_t max_key_size = 0;
@@ -489,9 +524,10 @@ private:
     mutable size_t cache_token_bytes = sizeof(UInt64);
 };
 
-bool isDefaultStopword(std::string_view token, const BuiltinStopwordLookup * stopwords)
+bool isDefaultStopword(std::string_view token, size_t code_points, const BuiltinStopwordLookup * stopwords)
 {
-    return stopwords ? stopwords->contains(token) : defaultStopwords().contains(Poco::UTF8::toLower(String(token)));
+    return stopwords ? stopwords->containsStandard(token, code_points)
+                     : defaultStopwords().contains(Poco::UTF8::toLower(String(token)));
 }
 
 bool containsNgramStopword(
@@ -509,7 +545,7 @@ bool containsNgramStopword(
             const auto candidate = token.substr(char_boundaries[start], char_boundaries[end] - char_boundaries[start]);
             if (!stopwords && defaultStopwords().contains(Poco::UTF8::toLower(String(candidate))))
                 return true;
-            if (stopwords && stopwords->contains(candidate, end - start))
+            if (stopwords && stopwords->containsNgram(candidate, end - start))
                 return true;
         }
     }
@@ -531,7 +567,7 @@ void analyzeTextInto(
         // Filter before materializing. Stopwords use the source spelling and
         // server collation, independently of the MATCH column collation.
         if (code_points < min_token_size || code_points > max_token_size
-            || (enable_stopword && isDefaultStopword(token, stopwords)))
+            || (enable_stopword && isDefaultStopword(token, code_points, stopwords)))
             return;
         result.append(token, position, code_points, borrow_document && collator);
         if (!collator)
@@ -669,7 +705,7 @@ void analyzeNgramTextInto(
                         char_boundaries[candidate_start],
                         char_boundaries[stopword_end] - char_boundaries[candidate_start]);
                     const bool matched = stopwords
-                        ? stopwords->contains(candidate, length)
+                        ? stopwords->containsNgram(candidate, length)
                         : defaultStopwords().contains(Poco::UTF8::toLower(String(candidate)));
                     if (matched)
                     {
