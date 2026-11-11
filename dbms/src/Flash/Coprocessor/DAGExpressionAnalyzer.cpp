@@ -1633,6 +1633,22 @@ NamesWithAliases DAGExpressionAnalyzer::buildFinalProjection(
     if (unlikely(output_offsets.empty()))
         throw Exception("DAGRequest without output_offsets", ErrorCodes::LOGICAL_ERROR);
 
+    // The requested schema and offsets may not match the actual child schema.
+    const auto & current_columns = getCurrentInputColumns();
+    for (Int32 offset : output_offsets)
+    {
+        if (unlikely(
+                offset < 0 || static_cast<size_t>(offset) >= current_columns.size()
+                || static_cast<size_t>(offset) >= schema.size()))
+            throw TiFlashException(
+                Errors::Coprocessor::BadRequest,
+                "Invalid root final projection output offset {} (child schema has {} columns, required schema has {} "
+                "columns)",
+                offset,
+                current_columns.size(),
+                schema.size());
+    }
+
     bool need_append_timezone_cast = !keep_session_timezone_info && !context.getTimezoneInfo().is_utc_timezone;
     auto [need_append_type_cast, need_append_type_cast_vec]
         = isCastRequiredForRootFinalProjection(schema, output_offsets);

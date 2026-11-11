@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Parsers/IParserBase.h>
+
+#include <ext/scope_guard.h>
 
 
 namespace DB
@@ -20,12 +23,18 @@ namespace DB
 
 namespace ErrorCodes
 {
-extern const int LOGICAL_ERROR;
+extern const int TOO_DEEP_RECURSION;
 }
 
 
 bool IParserBase::parse(Pos & pos, ASTPtr & node, Expected & expected)
 {
+    auto & depth = pos.getParserDepth();
+    if (depth >= maxParserDepth)
+        throw Exception(ErrorCodes::TOO_DEEP_RECURSION, "Maximum parser depth exceeded ({} calls)", maxParserDepth);
+    ++depth;
+    SCOPE_EXIT({ --depth; });
+
     Pos begin = pos;
     expected.add(pos, getName());
 
