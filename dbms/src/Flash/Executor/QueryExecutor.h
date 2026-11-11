@@ -56,6 +56,7 @@ public:
     virtual BaseRuntimeStatistics getRuntimeStatistics() const = 0;
 
     virtual String getExtraJsonInfo() const { return "{}"; }
+    virtual String dumpActiveTasks() { return "executor task diagnostics unavailable"; }
 
 protected:
     virtual ExecutionResult execute(ResultHandler &&) = 0;

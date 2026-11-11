@@ -31,7 +31,9 @@ public:
         PipelineExecPtr && pipeline_exec_)
         : Task(exec_context_, req_id, ExecTaskStatus::RUNNING)
         , PipelineTaskBase(std::move(pipeline_exec_))
-    {}
+    {
+        describeOperators(describePipelineOperators());
+    }
 
 protected:
     ExecTaskStatus executeImpl() override { return runExecute(); }

@@ -160,6 +160,11 @@ public:
 
     bool useDeltaMerge() const;
 
+    // Override the mock scan to exercise storage IO inside a real MPP lifecycle.
+    // Set before dispatch, and keep unchanged until all tasks have drained.
+    std::function<SourceOpPtr(PipelineExecutorContext &, const Block &)> source_factory;
+    std::function<void(Context &, const TiDBTableScan &)> before_scan_build;
+
 private:
     /// for mock table scan
     std::unordered_map<String, Int64> name_to_id_map; /// <table_name, table_id>

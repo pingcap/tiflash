@@ -27,6 +27,70 @@ use crate::{
     RawRustPtrType,
 };
 
+// Keep in sync with DB::ColumnarCancellationInterfaces. This extension does not
+// alter the proxy-helper ABI used by older/non-columnar proxies.
+#[repr(C)]
+pub struct ColumnarCancellationInterfaces {
+    version: u32,
+    size: u32,
+    create: unsafe extern "C" fn() -> *mut std::ffi::c_void,
+    cancel: unsafe extern "C" fn(*mut std::ffi::c_void),
+    destroy: unsafe extern "C" fn(*mut std::ffi::c_void),
+    enter: unsafe extern "C" fn(*mut std::ffi::c_void) -> *mut std::ffi::c_void,
+    leave: unsafe extern "C" fn(*mut std::ffi::c_void),
+    child: unsafe extern "C" fn(*mut std::ffi::c_void) -> *mut std::ffi::c_void,
+}
+
+unsafe extern "C" fn cancellation_create() -> *mut std::ffi::c_void {
+    Box::into_raw(Box::new(kvengine::columnar_cancel::Cancellation::default())).cast()
+}
+
+unsafe extern "C" fn cancellation_cancel(token: *mut std::ffi::c_void) {
+    (&*token.cast::<kvengine::columnar_cancel::Cancellation>()).cancel();
+}
+
+unsafe extern "C" fn cancellation_destroy(token: *mut std::ffi::c_void) {
+    drop(Box::from_raw(
+        token.cast::<kvengine::columnar_cancel::Cancellation>(),
+    ));
+}
+
+unsafe extern "C" fn cancellation_enter(token: *mut std::ffi::c_void) -> *mut std::ffi::c_void {
+    Box::into_raw(Box::new(
+        (&*token.cast::<kvengine::columnar_cancel::Cancellation>()).enter(),
+    ))
+    .cast()
+}
+
+unsafe extern "C" fn cancellation_leave(scope: *mut std::ffi::c_void) {
+    drop(Box::from_raw(
+        scope.cast::<kvengine::columnar_cancel::Scope>(),
+    ));
+}
+
+unsafe extern "C" fn cancellation_child(token: *mut std::ffi::c_void) -> *mut std::ffi::c_void {
+    Box::into_raw(Box::new(
+        (&*token.cast::<kvengine::columnar_cancel::Cancellation>()).child(),
+    ))
+    .cast()
+}
+
+#[no_mangle]
+pub extern "C" fn tiflash_columnar_get_cancellation_interfaces(
+) -> *const ColumnarCancellationInterfaces {
+    static INTERFACES: ColumnarCancellationInterfaces = ColumnarCancellationInterfaces {
+        version: 1,
+        size: std::mem::size_of::<ColumnarCancellationInterfaces>() as u32,
+        create: cancellation_create,
+        cancel: cancellation_cancel,
+        destroy: cancellation_destroy,
+        enter: cancellation_enter,
+        leave: cancellation_leave,
+        child: cancellation_child,
+    };
+    &INTERFACES
+}
+
 impl ColumnarReaderPtr {
     unsafe fn as_mut(&mut self) -> &mut CloudColumnarReaders {
         &mut *(self.inner.ptr as *mut CloudColumnarReaders)

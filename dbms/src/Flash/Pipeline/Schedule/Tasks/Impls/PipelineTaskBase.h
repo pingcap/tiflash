@@ -70,6 +70,8 @@ public:
     }
 
 protected:
+    String describePipelineOperators() const { return pipeline_exec->describeOperators(); }
+
     ExecTaskStatus runExecute()
     {
         assert(pipeline_exec);

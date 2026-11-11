@@ -317,9 +317,9 @@ impl PdClientWithCache {
             }
         }
 
-        let Ok(Some(bucket_stat)) =
-            futures::executor::block_on(self.pd_client.get_buckets_async(region_id))
-        else {
+        let Ok(Ok(Some(bucket_stat))) = futures::executor::block_on(
+            kvengine::columnar_cancel::cancellable(self.pd_client.get_buckets_async(region_id)),
+        ) else {
             self.region_bucket_cache.remove(&region_id);
             return Vec::new();
         };
@@ -543,7 +543,6 @@ impl CloudHelper {
             tables.len()
         );
         let scan_ctx = TableScanCtx::new(table_scan, filter_conditions);
-        let (tx, rx) = tikv_util::mpsc::bounded(1);
         let start = Instant::now_coarse();
         let vector_index_cache = self.vector_index_cache.clone();
         let snap_cache = self.snapshot_cache.clone();
@@ -557,36 +556,37 @@ impl CloudHelper {
         let block_cache = self.block_cache.clone();
         let tables_clone = tables.clone();
         let fts_query_info_clone = fts_query_info.clone();
-        self.runtime.spawn(async move {
-            let snap = get_or_request_shared_snapshot(
-                shared_snap_access_cache,
-                pd_client,
-                http_client,
-                dfs,
-                ia_ctx,
-                vector_index_cache,
-                columnar_file_cache,
-                columnar_meta_cache,
-                snap_cache,
-                snap_cache_capable_stores,
-                meta_file_cache,
-                schema_files,
-                schema_file_cache_state,
-                txn_mgr,
-                block_cache,
-                fts_cache,
-                fts_delta_cache,
-                shard_id,
-                shard_ver,
-                start_ts,
-                tables_clone,
-                &master_key,
-                fts_query_info_clone,
-            )
-            .await;
-            tx.send(snap).unwrap();
-        });
-        match rx.recv() {
+        let snapshot = self
+            .runtime
+            .block_on(kvengine::columnar_cancel::cancellable(async move {
+                get_or_request_shared_snapshot(
+                    shared_snap_access_cache,
+                    pd_client,
+                    http_client,
+                    dfs,
+                    ia_ctx,
+                    vector_index_cache,
+                    columnar_file_cache,
+                    columnar_meta_cache,
+                    snap_cache,
+                    snap_cache_capable_stores,
+                    meta_file_cache,
+                    schema_files,
+                    schema_file_cache_state,
+                    txn_mgr,
+                    block_cache,
+                    fts_cache,
+                    fts_delta_cache,
+                    shard_id,
+                    shard_ver,
+                    start_ts,
+                    tables_clone,
+                    &master_key,
+                    fts_query_info_clone,
+                )
+                .await
+            }));
+        match snapshot {
             Ok(Ok(snap)) => {
                 info!(
                     "begin to make columnar reader, elapsed: {:?}",
@@ -620,7 +620,7 @@ impl CloudHelper {
                 Err(e)
             }
             Err(e) => {
-                error!("failed to recv"; "err" => e.to_string());
+                error!("columnar snapshot request interrupted"; "err" => e.to_string());
                 Err(Error::Other(e.to_string()))
             }
         }

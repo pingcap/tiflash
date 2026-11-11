@@ -138,6 +138,9 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     , mpp_task_statistics(id, meta.address())
 {
     assert(manager != nullptr);
+    // Publish the cancellation source before the task can be aborted. Executor
+    // construction can already be waiting in a Columnar RPC.
+    context->setCancellationSource(cancellation);
     current_memory_tracker = nullptr;
     mpp_task_monitor_helper.initAndAddself(manager, id.toString());
 }
@@ -147,6 +150,16 @@ void MPPTask::initForTest()
     dag_context = std::make_unique<DAGContext>(100);
     context->setDAGContext(dag_context.get());
     schedule_entry.setNeededThreads(10);
+}
+
+String MPPTask::dumpExecutionState()
+{
+    auto executor = query_executor_holder.tryGet();
+    return fmt::format(
+        "mpp_task={} status={} {}",
+        id.toString(),
+        magic_enum::enum_name(status.load()),
+        executor ? (*executor)->dumpActiveTasks() : "executor not initialized");
 }
 
 MPPTask::~MPPTask()
@@ -630,9 +643,6 @@ void MPPTask::runImpl()
         GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_run_mpp_task).Observe(stopwatch.elapsedSeconds());
     });
 
-    // set cancellation hook
-    context->setCancellationHook([this] { return is_cancelled.load(); });
-
     String err_msg;
     try
     {
@@ -922,7 +932,7 @@ void MPPTask::abort(const String & message, AbortType abort_type)
             break;
         }
     }
-    is_cancelled = true;
+    cancellation->cancel();
 }
 
 bool MPPTask::switchStatus(TaskStatus from, TaskStatus to)

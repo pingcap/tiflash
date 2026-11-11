@@ -267,6 +267,7 @@ public:
     void abortMPPGather(const MPPGatherId & gather_id, const String & reason, AbortType abort_type);
 
     String toString();
+    Strings dumpTasks();
 
     MPPQueryPtr getMPPQueryWithoutLock(const MPPQueryId & query_id);
 

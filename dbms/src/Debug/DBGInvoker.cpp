@@ -27,7 +27,10 @@
 #include <Debug/dbgKVStore/dbgFuncInvestigator.h>
 #include <Debug/dbgKVStore/dbgFuncMockRaftCommand.h>
 #include <Debug/dbgKVStore/dbgFuncRegion.h>
+#include <Flash/Mpp/MPPTaskManager.h>
+#include <Interpreters/Context.h>
 #include <Parsers/ASTLiteral.h>
+#include <Storages/KVStore/TMTContext.h>
 
 #include <thread>
 
@@ -49,6 +52,10 @@ void dbgFuncSleep(Context &, const ASTs & args, DBGInvoker::Printer output)
 DBGInvoker::DBGInvoker()
 {
     regSchemalessFunc("echo", dbgFuncEcho);
+    regSchemalessFunc("dump_mpp_tasks", [](Context & context, const ASTs &, Printer output) {
+        for (const auto & task : context.getTMTContext().getMPPTaskManager()->dumpTasks())
+            output(task);
+    });
     // TODO: remove this, use sleep in bash script
     regSchemalessFunc("sleep", dbgFuncSleep);
 
