@@ -20,7 +20,16 @@ namespace DB
 template <typename T>
 String Decimal<T>::toString(ScaleType scale) const
 {
-    PrecType precision = maxDecimalPrecision<Decimal<T>>();
+    constexpr PrecType precision = maxDecimalPrecision<Decimal<T>>();
+    if (unlikely(scale > precision))
+        throw TiFlashException(
+            Errors::Decimal::Overflow,
+            "Decimal scale {} exceeds maximum precision {}",
+            scale,
+            precision);
+    // The native integer can hold more digits than the buffer reserves for this decimal type.
+    checkDecimalOverflow(*this, precision);
+
     char str[decimal_max_prec + 5];
     size_t len = precision;
     if (value < 0)
@@ -82,7 +91,7 @@ inline std::optional<std::tuple<Int256, PrecType, ScaleType>> parseDecimal(const
         }
         else if (c <= '9' && c >= '0')
         {
-            value = value * 10 + int(c - '0');
+            value = value * 10 + (c - '0');
             if (frac)
                 ++scale;
             if (frac || value > 0)

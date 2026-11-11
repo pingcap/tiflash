@@ -25,6 +25,18 @@ extern const int LOGICAL_ERROR;
 
 namespace CodecUtils
 {
+void checkRowCount(std::string_view identifier, size_t rows, size_t existing_rows)
+{
+    if (unlikely(existing_rows > MAX_DECODED_BLOCK_ROWS || rows > MAX_DECODED_BLOCK_ROWS - existing_rows))
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "{} row count exceeds limit {}, existing {}, incoming {}",
+            identifier,
+            MAX_DECODED_BLOCK_ROWS,
+            existing_rows,
+            rows);
+}
+
 void checkColumnSize(const String & identifier, size_t expected, size_t actual)
 {
     if unlikely (expected != actual)

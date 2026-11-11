@@ -16,10 +16,15 @@
 
 #include <DataTypes/IDataType.h>
 
+#include <string_view>
+
 namespace DB
 {
 namespace CodecUtils
 {
+// Safety limit for decoded CH blocks, including rows accumulated across chunks.
+constexpr size_t MAX_DECODED_BLOCK_ROWS = 1ULL << 24;
+
 struct DataTypeWithTypeName
 {
     DataTypeWithTypeName(const DataTypePtr & t, const String & n)
@@ -32,6 +37,7 @@ struct DataTypeWithTypeName
 };
 
 void checkColumnSize(const String & identifier, size_t expected, size_t actual);
+void checkRowCount(std::string_view identifier, size_t rows, size_t existing_rows = 0);
 void checkDataTypeName(const String & identifier, size_t column_index, const String & expected, const String & actual);
 } // namespace CodecUtils
 } // namespace DB

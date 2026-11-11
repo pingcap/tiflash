@@ -18,12 +18,16 @@
 #include <Flash/Coprocessor/CHBlockChunkCodecV1.h>
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <IO/Buffer/ReadBufferFromString.h>
+#include <IO/Buffer/WriteBufferFromString.h>
+#include <IO/Compression/CompressionInfo.h>
 #include <IO/Compression/CompressionMethod.h>
+#include <IO/WriteHelpers.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>
 
+#include <initializer_list>
 #include <random>
 
 
@@ -368,4 +372,260 @@ try
 }
 CATCH
 
+<<<<<<< HEAD
+=======
+
+TEST(CHBlockChunkCodecTest, StringCompatibilityV1)
+try
+{
+    static constexpr auto compression_mode = CompressionMethod::LZ4;
+    static const auto legacy_string_type_names
+        = std::vector{DataTypeString::LegacyName, DataTypeString::NullableLegacyName};
+    static const auto new_string_type_names = std::vector{DataTypeString::NameV2, DataTypeString::NullableNameV2};
+
+    auto header = prepareBlockWithString(0, new_string_type_names);
+    auto block = prepareBlockWithString(100, new_string_type_names);
+    auto codec = CHBlockChunkCodecV1{header, GetMPPDataPacketVersion(MppVersion::MppVersionV2)};
+    auto str = codec.encode(block, compression_mode);
+
+    auto legacy_header = prepareBlockWithString(0, legacy_string_type_names);
+    auto decoded_block = CHBlockChunkCodecV1::decode(legacy_header, str);
+
+    block.checkNumberOfRows();
+    decoded_block.checkNumberOfRows();
+    ASSERT_EQ(block.rows(), decoded_block.rows());
+    ASSERT_EQ(block.columns(), new_string_type_names.size());
+    ASSERT_EQ(decoded_block.columns(), new_string_type_names.size());
+
+    for (size_t i = 0; i < decoded_block.columns(); ++i)
+    {
+        const auto & column = block.getByPosition(i);
+        const auto & decoded_column = decoded_block.getByPosition(i);
+        ASSERT_EQ(column.name, decoded_column.name);
+        ASSERT_EQ(column.type->getName(), new_string_type_names[i]);
+        ASSERT_EQ(decoded_column.type->getName(), legacy_string_type_names[i]);
+        for (size_t j = 0; j < column.column->size(); ++j)
+        {
+            ASSERT_EQ((*column.column)[j], (*decoded_column.column)[j]);
+        }
+    }
+}
+CATCH
+
+TEST(CHBlockChunkCodecTest, StringCompatibility)
+try
+{
+    static const auto legacy_string_type_names
+        = std::vector{DataTypeString::LegacyName, DataTypeString::NullableLegacyName};
+    static const auto new_string_type_names = std::vector{DataTypeString::NameV2, DataTypeString::NullableNameV2};
+    static const auto string_field_types = []() {
+        std::vector<tipb::FieldType> fields(2);
+        fields[0].set_tp(TiDB::TypeString);
+        fields[0].set_flag(TiDB::ColumnFlagNotNull);
+
+        fields[1].set_tp(TiDB::TypeString); // Nullable by default.
+        return fields;
+    }();
+
+    auto header = prepareBlockWithString(0, new_string_type_names);
+    auto block = prepareBlockWithString(100, new_string_type_names);
+    auto codec_stream = CHBlockChunkCodec{}.newCodecStream(string_field_types);
+    codec_stream->encode(block, 0, block.rows());
+    auto str = codec_stream->getString();
+
+    auto legacy_header = prepareBlockWithString(0, legacy_string_type_names);
+    auto codec = CHBlockChunkCodec{legacy_header};
+    auto decoded_block = codec.decode(str);
+
+    block.checkNumberOfRows();
+    decoded_block.checkNumberOfRows();
+    ASSERT_EQ(block.rows(), decoded_block.rows());
+    ASSERT_EQ(block.columns(), new_string_type_names.size());
+    ASSERT_EQ(decoded_block.columns(), new_string_type_names.size());
+    for (size_t i = 0; i < decoded_block.columns(); ++i)
+    {
+        const auto & column = block.getByPosition(i);
+        const auto & decoded_column = decoded_block.getByPosition(i);
+        ASSERT_EQ(column.name, decoded_column.name);
+        ASSERT_EQ(column.type->getName(), new_string_type_names[i]);
+        ASSERT_EQ(decoded_column.type->getName(), legacy_string_type_names[i]);
+        for (size_t j = 0; j < column.column->size(); ++j)
+        {
+            ASSERT_EQ((*column.column)[j], (*decoded_column.column)[j]);
+        }
+    }
+}
+CATCH
+
+TEST(CHBlockChunkCodecTest, DecodeAndSquashMixedStringFormats)
+try
+{
+    static constexpr auto compression_mode = CompressionMethod::NONE;
+    static const auto legacy_type_names = std::vector{DataTypeString::LegacyName, DataTypeString::NullableLegacyName};
+    static const auto v2_type_names = std::vector{DataTypeString::NameV2, DataTypeString::NullableNameV2};
+    auto legacy_block = prepareBlockWithString(4, legacy_type_names);
+    auto v2_block = prepareBlockWithString(5, v2_type_names);
+    auto legacy_chunk
+        = CHBlockChunkCodecV1{legacy_block.cloneEmpty(), MPPDataPacketV2}.encode(legacy_block, compression_mode);
+    auto v2_chunk = CHBlockChunkCodecV1{v2_block.cloneEmpty(), MPPDataPacketV2}.encode(v2_block, compression_mode);
+
+    CHBlockChunkDecodeAndSquash decoder(v2_block.cloneEmpty(), 8);
+    ASSERT_FALSE(decoder.decodeAndSquashV1(legacy_chunk));
+    auto result = decoder.decodeAndSquashV1(v2_chunk);
+    ASSERT_TRUE(result);
+    ASSERT_EQ(result->rows(), legacy_block.rows() + v2_block.rows());
+    ASSERT_EQ(result->getByPosition(0).type->getName(), DataTypeString::NameV2);
+    ASSERT_EQ(result->getByPosition(1).type->getName(), DataTypeString::NullableNameV2);
+    for (size_t i = 0; i < result->columns(); ++i)
+    {
+        for (size_t row = 0; row < legacy_block.rows(); ++row)
+            ASSERT_EQ(
+                legacy_block.getByPosition(i).column->operator[](row),
+                result->getByPosition(i).column->operator[](row));
+        for (size_t row = 0; row < v2_block.rows(); ++row)
+            ASSERT_EQ(
+                v2_block.getByPosition(i).column->operator[](row),
+                result->getByPosition(i).column->operator[](legacy_block.rows() + row));
+    }
+}
+CATCH
+
+namespace
+{
+void writeRowCountHeader(WriteBuffer & output, const Block & header, size_t rows)
+{
+    writeVarUInt(header.columns(), output);
+    writeVarUInt(rows, output);
+    for (const auto & column : header)
+    {
+        writeStringBinary(column.name, output);
+        writeStringBinary(column.type->getName(), output);
+    }
+}
+
+String encodeRowCountChunk(
+    const Block & header,
+    size_t rows,
+    MPPDataPacketVersion version,
+    CompressionMethod compression,
+    std::initializer_list<size_t> sub_block_rows = {})
+{
+    WriteBufferFromOwnString output;
+    writeRowCountHeader(output, header, rows);
+    if (version == MPPDataPacketV0)
+    {
+        if (rows == 1)
+            writeBinary(UInt64{42}, output);
+        return output.releaseStr();
+    }
+    for (const auto sub_rows : sub_block_rows)
+    {
+        writeVarUInt(sub_rows, output);
+        // Only one-row sub-blocks carry data; other sizes exercise validation before reading data.
+        if (sub_rows == 1)
+            writeBinary(UInt64{42}, output);
+    }
+    auto raw = output.releaseStr();
+    if (compression == CompressionMethod::NONE)
+        return String(1, static_cast<char>(CompressionMethodByte::NONE)) + raw;
+    return CHBlockChunkCodecV1::encode(raw, compression);
+}
+
+template <typename Decode>
+void expectRowCountError(Decode && decode)
+{
+    try
+    {
+        decode();
+        FAIL() << "Expected invalid row counts to be rejected";
+    }
+    catch (const Exception & e)
+    {
+        EXPECT_NE(e.message().find("row count"), String::npos) << e.displayText();
+    }
+}
+} // namespace
+
+TEST(CHBlockChunkCodecTest, RejectOversizedRowCounts)
+try
+{
+    const Block header({createColumn<UInt64>({}, "value")});
+    for (const auto version : {MPPDataPacketV0, MPPDataPacketV1, MPPDataPacketV2})
+    {
+        for (const auto compression : {CompressionMethod::NONE, CompressionMethod::LZ4, CompressionMethod::ZSTD})
+        {
+            if (version == MPPDataPacketV0 && compression != CompressionMethod::NONE)
+                continue;
+            for (const auto rows : {CodecUtils::MAX_DECODED_BLOCK_ROWS + 1, size_t{1} << 60})
+            {
+                SCOPED_TRACE(fmt::format(
+                    "version={} compression={} rows={}",
+                    static_cast<int>(version),
+                    static_cast<int>(compression),
+                    rows));
+                const auto chunk = encodeRowCountChunk(header, rows, version, compression);
+                expectRowCountError([&] {
+                    return version == MPPDataPacketV0 ? CHBlockChunkCodec::decode(chunk, header)
+                                                      : CHBlockChunkCodecV1::decode(header, chunk);
+                });
+                CHBlockChunkDecodeAndSquash decoder(header, 8192);
+                expectRowCountError([&] {
+                    return version == MPPDataPacketV0 ? decoder.decodeAndSquash(chunk)
+                                                      : decoder.decodeAndSquashV1(chunk);
+                });
+            }
+
+            // Each chunk is within the limit, but appending the second would exceed it.
+            CHBlockChunkDecodeAndSquash decoder(header, 8192);
+            const auto decode = [&](const String & chunk) {
+                return version == MPPDataPacketV0 ? decoder.decodeAndSquash(chunk) : decoder.decodeAndSquashV1(chunk);
+            };
+            ASSERT_FALSE(decode(encodeRowCountChunk(header, 1, version, compression, {1})));
+            const auto chunk = encodeRowCountChunk(header, CodecUtils::MAX_DECODED_BLOCK_ROWS, version, compression);
+            expectRowCountError([&] { return decode(chunk); });
+        }
+    }
+}
+CATCH
+
+TEST(CHBlockChunkCodecTest, RejectInvalidSubBlockRowCounts)
+try
+{
+    const Block header({createColumn<UInt64>({}, "value")});
+    for (const auto compression : {CompressionMethod::NONE, CompressionMethod::LZ4, CompressionMethod::ZSTD})
+    {
+        for (const auto sub_rows : {size_t{0}, size_t{2}, size_t{1} << 60})
+        {
+            const auto chunk = encodeRowCountChunk(header, 1, MPPDataPacketV1, compression, {sub_rows});
+            expectRowCountError([&] { return CHBlockChunkCodecV1::decode(header, chunk); });
+        }
+        // The second sub-block must fit the remaining rows, not just the chunk total.
+        const auto chunk = encodeRowCountChunk(header, 2, MPPDataPacketV1, compression, {1, 2});
+        expectRowCountError([&] { return CHBlockChunkCodecV1::decode(header, chunk); });
+        const auto valid = encodeRowCountChunk(header, 2, MPPDataPacketV1, compression, {1, 1});
+        const auto decoded = CHBlockChunkCodecV1::decode(header, valid);
+        ASSERT_EQ(decoded.rows(), 2);
+        EXPECT_EQ(decoded.getByPosition(0).column->getUInt(0), 42);
+        EXPECT_EQ(decoded.getByPosition(0).column->getUInt(1), 42);
+    }
+}
+CATCH
+
+TEST(CHBlockChunkCodecTest, AcceptRowCountHeaderBoundaries)
+try
+{
+    const Block header({createColumn<UInt64>({}, "value")});
+    for (const auto rows : {size_t{0}, CodecUtils::MAX_DECODED_BLOCK_ROWS})
+    {
+        WriteBufferFromOwnString output;
+        writeRowCountHeader(output, header, rows);
+        ReadBufferFromString input(output.str());
+        size_t decoded_rows = 0;
+        const auto decoded_header = DecodeHeader(input, header, decoded_rows);
+        EXPECT_EQ(decoded_rows, rows);
+        EXPECT_EQ(decoded_header.columns(), header.columns());
+    }
+}
+CATCH
+>>>>>>> f048477c77 (fix: guard CHBlock row counts and decimal string conversion (#11298))
 } // namespace DB::tests

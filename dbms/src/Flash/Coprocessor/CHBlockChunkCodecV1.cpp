@@ -66,6 +66,7 @@ Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & total_rows)
         readVarUInt(columns, istr);
         readVarUInt(total_rows, istr);
     }
+    CodecUtils::checkRowCount("CHBlockChunkCodecV1", total_rows);
     if (header)
         CodecUtils::checkColumnSize("CHBlockChunkCodecV1", header.columns(), columns);
 
@@ -101,6 +102,7 @@ Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & total_rows)
 
 static inline void decodeColumnsByBlock(ReadBuffer & istr, Block & res, size_t rows_to_read, size_t reserve_size)
 {
+    CodecUtils::checkRowCount("CHBlockChunkCodecV1", rows_to_read, res.rows());
     if (!rows_to_read)
         return;
 
@@ -125,7 +127,11 @@ static inline void decodeColumnsByBlock(ReadBuffer & istr, Block & res, size_t r
     {
         readVarUInt(sz, istr);
 
-        assert(sz > 0);
+        RUNTIME_CHECK_MSG(
+            sz > 0 && sz <= rows_to_read - decode_rows,
+            "CHBlockChunkCodecV1 invalid sub-block row count {}, remaining {}",
+            sz,
+            rows_to_read - decode_rows);
 
         // Decode columns of one block
         for (size_t i = 0; i < res.columns(); ++i)
