@@ -114,6 +114,7 @@ void CHBlockChunkCodec::WriteColumnData(
 
 void CHBlockChunkCodec::readData(const IDataType & type, IColumn & column, ReadBuffer & istr, size_t rows)
 {
+    CodecUtils::checkRowCount("CHBlockChunkCodec", rows, column.size());
     IDataType::InputStreamGetter input_stream_getter = [&](const IDataType::SubstreamPath &) {
         return &istr;
     };
@@ -182,6 +183,7 @@ Block CHBlockChunkCodec::decodeImpl(ReadBuffer & istr, size_t reserve_size)
     size_t columns = 0;
     size_t rows = 0;
     readBlockMeta(istr, columns, rows);
+    reserve_size = std::min(reserve_size, CodecUtils::MAX_DECODED_BLOCK_ROWS);
 
     for (size_t i = 0; i < columns; ++i)
     {
@@ -211,6 +213,7 @@ void CHBlockChunkCodec::readBlockMeta(ReadBuffer & istr, size_t & columns, size_
 {
     readVarUInt(columns, istr);
     readVarUInt(rows, istr);
+    CodecUtils::checkRowCount("CHBlockChunkCodec", rows);
 
     if (header)
         CodecUtils::checkColumnSize("CHBlockChunkCodec", header.columns(), columns);
