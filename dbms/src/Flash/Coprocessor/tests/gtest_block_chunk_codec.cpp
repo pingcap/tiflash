@@ -17,13 +17,18 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/CHBlockChunkCodecV1.h>
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
+#include <Flash/Mpp/MppVersion.h>
 #include <IO/Buffer/ReadBufferFromString.h>
+#include <IO/Buffer/WriteBufferFromString.h>
+#include <IO/Compression/CompressionInfo.h>
 #include <IO/Compression/CompressionMethod.h>
+#include <IO/WriteHelpers.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>
 
+#include <initializer_list>
 #include <random>
 
 
@@ -368,4 +373,141 @@ try
 }
 CATCH
 
+namespace
+{
+void writeRowCountHeader(WriteBuffer & output, const Block & header, size_t rows)
+{
+    writeVarUInt(header.columns(), output);
+    writeVarUInt(rows, output);
+    for (const auto & column : header)
+    {
+        writeStringBinary(column.name, output);
+        writeStringBinary(column.type->getName(), output);
+    }
+}
+
+String encodeRowCountChunk(
+    const Block & header,
+    size_t rows,
+    MPPDataPacketVersion version,
+    CompressionMethod compression,
+    std::initializer_list<size_t> sub_block_rows = {})
+{
+    WriteBufferFromOwnString output;
+    writeRowCountHeader(output, header, rows);
+    if (version == MPPDataPacketV0)
+    {
+        if (rows == 1)
+            writeBinary(UInt64{42}, output);
+        return output.releaseStr();
+    }
+    for (const auto sub_rows : sub_block_rows)
+    {
+        writeVarUInt(sub_rows, output);
+        // Only one-row sub-blocks carry data; other sizes exercise validation before reading data.
+        if (sub_rows == 1)
+            writeBinary(UInt64{42}, output);
+    }
+    auto raw = output.releaseStr();
+    if (compression == CompressionMethod::NONE)
+        return String(1, static_cast<char>(CompressionMethodByte::NONE)) + raw;
+    return CHBlockChunkCodecV1::encode(raw, compression);
+}
+
+template <typename Decode>
+void expectRowCountError(Decode && decode)
+{
+    try
+    {
+        decode();
+        FAIL() << "Expected invalid row counts to be rejected";
+    }
+    catch (const Exception & e)
+    {
+        EXPECT_NE(e.message().find("row count"), String::npos) << e.displayText();
+    }
+}
+} // namespace
+
+TEST(CHBlockChunkCodecTest, RejectOversizedRowCounts)
+try
+{
+    const Block header({createColumn<UInt64>({}, "value")});
+    for (const auto version : {MPPDataPacketV0, MPPDataPacketV1})
+    {
+        for (const auto compression : {CompressionMethod::NONE, CompressionMethod::LZ4, CompressionMethod::ZSTD})
+        {
+            if (version == MPPDataPacketV0 && compression != CompressionMethod::NONE)
+                continue;
+            for (const auto rows : {CodecUtils::MAX_DECODED_BLOCK_ROWS + 1, size_t{1} << 60})
+            {
+                SCOPED_TRACE(fmt::format(
+                    "version={} compression={} rows={}",
+                    static_cast<int>(version),
+                    static_cast<int>(compression),
+                    rows));
+                const auto chunk = encodeRowCountChunk(header, rows, version, compression);
+                expectRowCountError([&] {
+                    return version == MPPDataPacketV0 ? CHBlockChunkCodec::decode(chunk, header)
+                                                      : CHBlockChunkCodecV1::decode(header, chunk);
+                });
+                CHBlockChunkDecodeAndSquash decoder(header, 8192);
+                expectRowCountError([&] {
+                    return version == MPPDataPacketV0 ? decoder.decodeAndSquash(chunk)
+                                                      : decoder.decodeAndSquashV1(chunk);
+                });
+            }
+
+            // Each chunk is within the limit, but appending the second would exceed it.
+            CHBlockChunkDecodeAndSquash decoder(header, 8192);
+            const auto decode = [&](const String & chunk) {
+                return version == MPPDataPacketV0 ? decoder.decodeAndSquash(chunk) : decoder.decodeAndSquashV1(chunk);
+            };
+            ASSERT_FALSE(decode(encodeRowCountChunk(header, 1, version, compression, {1})));
+            const auto chunk = encodeRowCountChunk(header, CodecUtils::MAX_DECODED_BLOCK_ROWS, version, compression);
+            expectRowCountError([&] { return decode(chunk); });
+        }
+    }
+}
+CATCH
+
+TEST(CHBlockChunkCodecTest, RejectInvalidSubBlockRowCounts)
+try
+{
+    const Block header({createColumn<UInt64>({}, "value")});
+    for (const auto compression : {CompressionMethod::NONE, CompressionMethod::LZ4, CompressionMethod::ZSTD})
+    {
+        for (const auto sub_rows : {size_t{0}, size_t{2}, size_t{1} << 60})
+        {
+            const auto chunk = encodeRowCountChunk(header, 1, MPPDataPacketV1, compression, {sub_rows});
+            expectRowCountError([&] { return CHBlockChunkCodecV1::decode(header, chunk); });
+        }
+        // The second sub-block must fit the remaining rows, not just the chunk total.
+        const auto chunk = encodeRowCountChunk(header, 2, MPPDataPacketV1, compression, {1, 2});
+        expectRowCountError([&] { return CHBlockChunkCodecV1::decode(header, chunk); });
+        const auto valid = encodeRowCountChunk(header, 2, MPPDataPacketV1, compression, {1, 1});
+        const auto decoded = CHBlockChunkCodecV1::decode(header, valid);
+        ASSERT_EQ(decoded.rows(), 2);
+        EXPECT_EQ(decoded.getByPosition(0).column->getUInt(0), 42);
+        EXPECT_EQ(decoded.getByPosition(0).column->getUInt(1), 42);
+    }
+}
+CATCH
+
+TEST(CHBlockChunkCodecTest, AcceptRowCountHeaderBoundaries)
+try
+{
+    const Block header({createColumn<UInt64>({}, "value")});
+    for (const auto rows : {size_t{0}, CodecUtils::MAX_DECODED_BLOCK_ROWS})
+    {
+        WriteBufferFromOwnString output;
+        writeRowCountHeader(output, header, rows);
+        ReadBufferFromString input(output.str());
+        size_t decoded_rows = 0;
+        const auto decoded_header = DecodeHeader(input, header, decoded_rows);
+        EXPECT_EQ(decoded_rows, rows);
+        EXPECT_EQ(decoded_header.columns(), header.columns());
+    }
+}
+CATCH
 } // namespace DB::tests
