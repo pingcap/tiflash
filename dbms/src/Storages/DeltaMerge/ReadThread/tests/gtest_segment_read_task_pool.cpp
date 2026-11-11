@@ -333,6 +333,7 @@ TEST_F(SegmentReadTasksPoolTest, PipelineStopBeforeRemoteReadInitialization)
         builder.input_stops.push_back({stop, whole_pipeline ? std::nullopt : std::make_optional(size_t{0})});
         SimplePipelineTask task(exec_context, "", builder.build(false));
         ASSERT_GT(pool->getTotalReadTasks(), 0);
+        ASSERT_FALSE(pool->hasRemoteConnectionInfo());
         ASSERT_FALSE(pool->getRemoteConnectionInfo().has_value());
 
         stop->stop();
@@ -345,6 +346,7 @@ TEST_F(SegmentReadTasksPoolTest, PipelineStopBeforeRemoteReadInitialization)
 
         // An early suffix without statistics must not consume the pool's shared once_flag.
         recordRemoteConnectionInfo(pool);
+        ASSERT_TRUE(pool->hasRemoteConnectionInfo());
         ASSERT_NO_THROW(remaining_source->operateSuffix());
         EXPECT_EQ(remaining_source->getIOProfileInfo()->connection_profile_infos[0].bytes, 123);
     }
