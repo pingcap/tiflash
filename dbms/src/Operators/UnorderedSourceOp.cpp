@@ -120,7 +120,7 @@ void UnorderedSourceOp::operateSuffixImpl()
     {
         // Input stop can finish this source before the first remote fetch records connection info.
         // Leave the shared once_flag available so another source can collect it after the fetch completes.
-        if (early_stopped && !task_pool->getRemoteConnectionInfo())
+        if (early_stopped && !task_pool->hasRemoteConnectionInfo())
             return;
 
         std::call_once(task_pool->getRemoteConnectionInfoFlag(), [&]() {
