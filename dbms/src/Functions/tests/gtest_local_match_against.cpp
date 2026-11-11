@@ -1469,8 +1469,9 @@ try
     for (const auto word : stopwords)
         candidates.emplace_back(word);
     for (const String & word :
-         {"ABOUT", "The", "THE", "WWW", "WITH", "ábout", "thé", "tĥe", "ｗｉｔｈ", "ｗｗｗ", "aß",    "ß",
-          "xá",    "áx",  "xＡ", "Ａx", "xáy",  "aaa",   "AAA", "xy",  "xyz",      "foo",    "数据库"})
+         {"ABOUT",  "The", "THE", "WWW", "WITH",   "ábout",  "thé",        "tĥe",         "ｗｉｔｈ",
+          "ｗｗｗ", "aß",  "ß",   "xá",  "áx",     "xＡ",    "Ａx",        "xáy",         "aaa",
+          "AAA",    "xy",  "xyz", "foo", "数据库", "aboutx", "ａｂｏｕｔ", "ab\u0640out", "ab\uFC5Eout"})
         candidates.push_back(word);
     for (const auto collation :
          {"binary",
