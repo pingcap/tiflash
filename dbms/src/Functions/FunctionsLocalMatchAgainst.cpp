@@ -35,12 +35,12 @@
 #include <tipb/executor.pb.h>
 
 #include <algorithm>
+#include <array>
 #include <limits>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
-#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -368,83 +368,133 @@ FullTextColumn tokenizeText(std::string_view text, const TiDB::TiDBCollatorPtr &
     return result;
 }
 
+constexpr auto builtin_stopwords = std::to_array<std::string_view>(
+    {"a",    "about", "an",  "are",  "as",   "at",    "be",  "by",   "com",  "de",  "en",   "for",
+     "from", "how",   "i",   "in",   "is",   "it",    "la",  "of",   "on",   "or",  "that", "the",
+     "this", "to",    "was", "what", "when", "where", "who", "will", "with", "und", "www"});
+
+// The built-in list is ASCII, so byte and code-point lengths agree.
+constexpr size_t max_builtin_stopword_length = [] {
+    size_t result = 0;
+    for (const auto word : builtin_stopwords)
+        result = std::max(result, word.size());
+    return result;
+}();
+static_assert(max_builtin_stopword_length < std::numeric_limits<UInt8>::digits);
+
 const std::unordered_set<String> & defaultStopwords()
 {
-    static const std::unordered_set<String> stopwords{
-        "a",    "about", "an",  "are",  "as",   "at",    "be",  "by",   "com",  "de",  "en",   "for",
-        "from", "how",   "i",   "in",   "is",   "it",    "la",  "of",   "on",   "or",  "that", "the",
-        "this", "to",    "was", "what", "when", "where", "who", "will", "with", "und", "www"};
+    static const auto stopwords = [] {
+        std::unordered_set<String> result;
+        result.reserve(builtin_stopwords.size());
+        for (const auto word : builtin_stopwords)
+            result.emplace(word);
+        return result;
+    }();
     return stopwords;
 }
 
-// Owned collation keys are compiled once per executeImpl, then reused by
-// query analysis and every document in the block. The scratch key is local
-// to that execution, never shared across concurrent calls. Use the stopword
-// (server) collation, not the MATCH column collation.
+// Collation keys own their bytes and are reused across the block. Use the
+// stopword (server) collation independently of the MATCH column collation.
 class BuiltinStopwordLookup
 {
 public:
     explicit BuiltinStopwordLookup(TiDB::TiDBCollatorPtr collator_)
         : collator(collator_)
     {
-        for (const auto & stopword : defaultStopwords())
+        for (const auto stopword : builtin_stopwords)
         {
             const auto key = collator->sortKeyFastPath(stopword.data(), stopword.size(), key_buffer);
-            // sortKeyFastPath may reference its input or key_buffer; copy it.
-            String owned_key(key.data, key.size);
-            keys.insert(owned_key);
-            // The built-in list is ASCII. Preserve NGRAM's code-point length
-            // buckets even for collations with expansions/ignorable weights.
-            keys_by_length[stopword.size()].insert(std::move(owned_key));
+            max_key_size = std::max(max_key_size, key.size);
+            auto * entry = keys.find(key);
+            if (!entry)
+            {
+                // The sort key may reference the reusable buffer.
+                const StringRef owned(key_storage.insert(key.data, key.size), key.size);
+                bool inserted;
+                keys.emplace(owned, entry, inserted);
+                entry->getMapped() = 0;
+            }
+            entry->getMapped() |= lengthBit(stopword.size());
         }
     }
 
-    bool contains(std::string_view token) const { return contains(token, keys); }
+    bool contains(std::string_view token) const { return matchingLengths(token) != 0; }
 
     bool contains(std::string_view token, size_t code_points) const
     {
-        const auto bucket = keys_by_length.find(code_points);
-        return bucket != keys_by_length.end() && contains(token, bucket->second);
+        // NGRAM also requires the original code-point count, even when a
+        // collation makes words of different lengths share a key.
+        return code_points <= max_builtin_stopword_length && (matchingLengths(token) & lengthBit(code_points)) != 0;
     }
 
 private:
-    struct KeyHash
-    {
-        using is_transparent = void;
-        size_t operator()(std::string_view key) const { return std::hash<std::string_view>{}(key); }
-    };
-    using Keys = std::unordered_set<String, KeyHash, std::equal_to<>>;
+    static UInt8 lengthBit(size_t length) { return static_cast<UInt8>(1U << length); }
 
-    bool contains(std::string_view token, const Keys & lookup) const
+    struct CacheEntry
     {
-        // sortKey (rather than sortKeyNoTrim) preserves PAD SPACE/NO PAD
-        // equality, as well as the collator's case/accent semantics.
+        UInt64 bytes = 0;
+        UInt8 size = 0;
+        UInt8 lengths = 0;
+    };
+
+    UInt8 matchingLengths(std::string_view token) const
+    {
+        const size_t size = token.size();
+        if (size == 0 || size > cache_token_bytes)
+            return lookupMatchingLengths(token);
+
+        // The first and last loads cover the complete token. The size
+        // disambiguates equal packed values from tokens of different lengths.
+        const char * data = token.data();
+        UInt64 bytes;
+        if (size >= 4)
+            bytes = (static_cast<UInt64>(unalignedLoad<UInt32>(data)) << 32) | unalignedLoad<UInt32>(data + size - 4);
+        else if (size >= 2)
+            bytes = (static_cast<UInt64>(unalignedLoad<UInt16>(data)) << 16) | unalignedLoad<UInt16>(data + size - 2);
+        else
+            bytes = static_cast<UInt8>(*data);
+
+        auto & entry = cache[intHashCRC32(bytes) & (cache.size() - 1)];
+        const bool hit = entry.size == size && entry.bytes == bytes;
+        if (unlikely(cache_samples_remaining != 0))
+        {
+            cache_sample_hits += hit;
+            if (--cache_samples_remaining == 0 && cache_sample_hits < cache.size() / 4)
+                cache_token_bytes = 0;
+        }
+        if (!hit)
+            entry = {bytes, static_cast<UInt8>(size), lookupMatchingLengths(token)};
+        return entry.lengths;
+    }
+
+    UInt8 lookupMatchingLengths(std::string_view token) const
+    {
         const auto key = collator->sortKeyFastPath(token.data(), token.size(), key_buffer);
-        return lookup.contains(std::string_view(key.data, key.size));
+        if (key.size > max_key_size)
+            return 0;
+        const auto * entry = keys.find(key);
+        return entry ? entry->getMapped() : 0;
     }
 
     TiDB::TiDBCollatorPtr collator;
-    Keys keys;
-    std::unordered_map<size_t, Keys> keys_by_length;
+    Arena key_storage;
+    HashMap<StringRef, UInt8, StringRefHash, HashTableGrower<7>> keys;
+    size_t max_key_size = 0;
     mutable String key_buffer;
+    // A lookup and its collation are local to one block. Cache exact source
+    // bytes, including misses, without keeping references to document data.
+    mutable std::array<CacheEntry, 256> cache;
+    // Sample the first cache-sized batch of short tokens. Avoid the cost of
+    // probing the cache for the rest of the block when most probes miss.
+    mutable size_t cache_samples_remaining = cache.size();
+    mutable size_t cache_sample_hits = 0;
+    mutable size_t cache_token_bytes = sizeof(UInt64);
 };
 
 bool isDefaultStopword(std::string_view token, const BuiltinStopwordLookup * stopwords)
 {
     return stopwords ? stopwords->contains(token) : defaultStopwords().contains(Poco::UTF8::toLower(String(token)));
-}
-
-size_t maxBuiltinStopwordLength()
-{
-    // The supported built-in list is ASCII: byte and code-point lengths are
-    // identical. Do not examine lengths which cannot match any stopword.
-    static const size_t max_length = [] {
-        size_t result = 0;
-        for (const auto & word : defaultStopwords())
-            result = std::max(result, word.size());
-        return result;
-    }();
-    return max_length;
 }
 
 bool containsNgramStopword(
@@ -520,7 +570,7 @@ void analyzeNgramTextInto(
         return;
 
     const bool preserve_case = enable_stopword && stopwords;
-    const size_t max_stopword_length = enable_stopword ? std::min(ngram_token_size, maxBuiltinStopwordLength()) : 0;
+    const size_t max_stopword_length = enable_stopword ? std::min(ngram_token_size, max_builtin_stopword_length) : 0;
     size_t next_position_base = 0;
     auto & char_boundaries = scratch.char_boundaries;
     for (size_t offset = 0; offset < text.size();)
