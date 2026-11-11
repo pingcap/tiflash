@@ -97,6 +97,11 @@ public:
         const tipb::Expr & expr,
         const ExpressionActionsPtr & actions);
 
+    static String buildLocalMatchAgainstBoolean(
+        DAGExpressionAnalyzer * analyzer,
+        const tipb::Expr & expr,
+        const ExpressionActionsPtr & actions);
+
     static String buildDefaultFunction(
         DAGExpressionAnalyzer * analyzer,
         const tipb::Expr & expr,
