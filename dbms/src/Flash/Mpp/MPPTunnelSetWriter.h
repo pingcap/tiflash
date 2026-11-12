@@ -40,12 +40,12 @@ public:
     void passThroughWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method);
     // this is a partition writing.
     // data codec version V0
-    void partitionWrite(Blocks & blocks, int16_t partition_id);
+    void partitionWrite(Blocks & blocks, size_t partition_id);
     // data codec version > V0
     void partitionWrite(
         const Block & header,
         std::vector<MutableColumns> && part_columns,
-        int16_t partition_id,
+        size_t partition_id,
         MPPDataPacketVersion version,
         CompressionMethod compression_method);
     // this is a fine grained shuffle writing.
@@ -56,18 +56,18 @@ public:
         size_t bucket_idx,
         UInt64 fine_grained_shuffle_stream_count,
         size_t num_columns,
-        int16_t partition_id);
+        size_t partition_id);
     void fineGrainedShuffleWrite(
         const Block & header,
         std::vector<IColumn::ScatterColumns> & scattered,
         size_t bucket_idx,
         UInt64 fine_grained_shuffle_stream_count,
         size_t num_columns,
-        int16_t partition_id,
+        size_t partition_id,
         MPPDataPacketVersion version,
         CompressionMethod compression_method);
 
-    uint16_t getPartitionNum() const { return mpp_tunnel_set->getPartitionNum(); }
+    uint32_t getPartitionNum() const { return mpp_tunnel_set->getPartitionNum(); }
 
     virtual WaitResult waitForWritable() const = 0;
 

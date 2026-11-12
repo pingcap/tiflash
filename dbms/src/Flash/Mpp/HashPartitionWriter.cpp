@@ -59,7 +59,7 @@ HashPartitionWriter<ExchangeWriterPtr>::HashPartitionWriter(
         if (max_buffered_rows_ <= 0)
         {
             // set upper limit if not specified
-            max_buffered_rows_ = 8 * 1024 * partition_num /* 8K * partition-num */;
+            max_buffered_rows_ = UInt64{8} * 1024 * partition_num /* 8K * partition-num */;
         }
         for (const auto & field_type : dag_context.result_field_types)
         {
