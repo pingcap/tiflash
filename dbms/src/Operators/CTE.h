@@ -17,6 +17,9 @@
 #include <Common/Exception.h>
 #include <Common/RWLock.h>
 #include <Core/Block.h>
+#include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
+#include <Interpreters/CTESpillContext.h>
 #include <Operators/CTEPartition.h>
 #include <tipb/select.pb.h>
 
@@ -38,10 +41,11 @@ public:
     {
         for (size_t i = 0; i < this->partition_num; i++)
         {
-            this->partitions.push_back(CTEPartition());
-            this->partitions.back().fetch_block_idxs.resize(this->expected_source_num, 0);
-            this->partitions.back().mu = std::make_unique<std::mutex>();
-            this->partitions.back().pipe_cv = std::make_unique<PipeConditionVariable>();
+            this->partitions.push_back(std::make_shared<CTEPartition>(i, expected_source_num_));
+            for (size_t cte_reader_id = 0; cte_reader_id < expected_source_num_; cte_reader_id++)
+                this->partitions.back()->fetch_block_idxs.insert(std::make_pair(cte_reader_id, 0));
+            this->partitions.back()->mu = std::make_unique<std::mutex>();
+            this->partitions.back()->pipe_cv = std::make_unique<PipeConditionVariable>();
         }
     }
 
@@ -49,10 +53,23 @@ public:
     {
 #ifndef NDEBUG
         for (size_t i = 0; i < this->partition_num; i++)
-        {
-            this->partitions[i].cv_for_test = std::make_unique<std::condition_variable>();
-        }
+            this->partitions[i]->cv_for_test = std::make_unique<std::condition_variable>();
 #endif
+    }
+
+    void initCTESpillContextAndPartitionConfig(
+        const SpillConfig & spill_config,
+        const Block & spill_block_schema,
+        UInt64 operator_spill_threshold,
+        Context & context);
+
+    void checkPartitionNum(size_t partition_num) const
+    {
+        RUNTIME_CHECK_MSG(
+            this->partition_num == partition_num,
+            "expect partition num: {}, actual: {}",
+            this->partition_num,
+            partition_num);
     }
 
     size_t getCTEReaderID()
@@ -63,15 +80,12 @@ public:
             "next_cte_reader_id: {}, expected_source_num: {}",
             this->next_cte_reader_id,
             this->expected_source_num);
-        auto cte_reader_id = this->next_cte_reader_id;
-        this->next_cte_reader_id++;
-        return cte_reader_id;
+        return this->next_cte_reader_id++;
     }
 
     CTEOpStatus tryGetBlockAt(size_t cte_reader_id, size_t partition_id, Block & block);
-
     template <bool for_test>
-    bool pushBlock(size_t partition_id, const Block & block);
+    CTEOpStatus pushBlock(size_t partition_id, const Block & block);
     template <bool for_test>
     void notifyEOF()
     {
@@ -89,15 +103,26 @@ public:
         return this->err_msg;
     }
 
-    void checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_id, size_t partition_id);
 #ifndef NDEBUG
     CTEOpStatus checkBlockAvailableForTest(size_t cte_reader_id, size_t partition_id);
 #endif
 
-    void registerTask(size_t partition_id, TaskPtr && task, NotifyType type);
+    void checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_id, size_t partition_id);
+    void checkInSpillingAndRegisterTask(TaskPtr && task, size_t partition_id);
+
+    CTEOpStatus getBlockFromDisk(size_t cte_reader_id, size_t partition_id, Block & block);
+    CTEOpStatus spillBlocks(size_t partition_id);
+    bool needSpill(size_t partition_id, bool try_mark_need_spill = false);
+
+    void registerTask(size_t partition_id, TaskPtr && task, NotifyType type)
+    {
+        task->setNotifyType(type);
+        this->partitions[partition_id]->pipe_cv->registerTask(std::move(task));
+    }
+
     void notifyTaskDirectly(size_t partition_id, TaskPtr && task)
     {
-        this->partitions[partition_id].pipe_cv->notifyTaskDirectly(std::move(task));
+        this->partitions[partition_id]->pipe_cv->notifyTaskDirectly(std::move(task));
     }
 
     void addResp(const tipb::SelectResponse & resp)
@@ -135,6 +160,8 @@ public:
             return this->registered_sink_num == this->expected_sink_num;
         }
     }
+
+    LoggerPtr getLog() const { return this->partition_config->log; }
 
     void checkSourceConcurrency(size_t concurrency) const
     {
@@ -186,17 +213,27 @@ public:
     }
 
 #ifndef NDEBUG
-    CTEPartition & getPartitionForTest(size_t partition_idx) { return this->partitions[partition_idx]; }
-#endif
+    std::shared_ptr<CTEPartition> & getPartitionForTest(size_t partition_idx)
+    {
+        return this->partitions[partition_idx];
+    }
 
     std::shared_mutex & getRWLockForTest() { return this->rw_lock; }
+#endif
 
 private:
+    /// The caller must hold rw_lock in shared or exclusive mode.
+    void throwIfCancelledNoLock() const
+    {
+        if unlikely (this->is_cancelled)
+            throw Exception(this->err_msg);
+    }
+
     template <bool need_lock>
     CTEOpStatus checkBlockAvailableImpl(size_t cte_reader_id, size_t partition_id)
     {
         std::shared_lock<std::shared_mutex> cte_lock(this->rw_lock, std::defer_lock);
-        std::unique_lock<std::mutex> partition_lock(*(this->partitions[partition_id].mu), std::defer_lock);
+        std::unique_lock<std::mutex> partition_lock(*(this->partitions[partition_id]->mu), std::defer_lock);
 
         if constexpr (need_lock)
         {
@@ -204,14 +241,13 @@ private:
             partition_lock.lock();
         }
 
-        if unlikely (this->is_cancelled)
-            return CTEOpStatus::CANCELLED;
+        this->throwIfCancelledNoLock();
 
-        if (this->partitions[partition_id].blocks.size()
-            <= this->partitions[partition_id].fetch_block_idxs[cte_reader_id])
-            return this->is_eof ? CTEOpStatus::END_OF_FILE : CTEOpStatus::BLOCK_NOT_AVAILABLE;
+        if (this->partitions[partition_id]->isBlockAvailableInDiskNoLock(cte_reader_id)
+            || this->partitions[partition_id]->isBlockAvailableInMemoryNoLock(cte_reader_id))
+            return CTEOpStatus::OK;
 
-        return CTEOpStatus::OK;
+        return this->is_eof ? CTEOpStatus::END_OF_FILE : CTEOpStatus::BLOCK_NOT_AVAILABLE;
     }
 
     Int32 getTotalExitNumNoLock() const noexcept { return this->sink_exit_num + this->source_exit_num; }
@@ -239,16 +275,16 @@ private:
             if constexpr (for_test)
             {
 #ifndef NDEBUG
-                partition.cv_for_test->notify_all();
+                partition->cv_for_test->notify_all();
 #endif
             }
             else
-                partition.pipe_cv->notifyAll();
+                partition->pipe_cv->notifyAll();
         }
     }
 
     const size_t partition_num;
-    std::vector<CTEPartition> partitions;
+    std::vector<std::shared_ptr<CTEPartition>> partitions;
 
     // Protect fields:
     //   next_cte_reader_id, is_eof, is_cancelled, get_resp, resp, err_msg,
@@ -269,5 +305,26 @@ private:
 
     Int32 sink_exit_num = 0;
     Int32 source_exit_num = 0;
+
+    std::shared_ptr<CTESpillContext> cte_spill_context;
+    std::shared_ptr<CTEPartitionSharedConfig> partition_config;
+};
+
+class CTEIONotifier : public NotifyFuture
+{
+public:
+    CTEIONotifier(std::shared_ptr<CTE> cte_, size_t partition_id_)
+        : cte(cte_)
+        , partition_id(partition_id_)
+    {}
+
+    void registerTask(TaskPtr && task) override
+    {
+        this->cte->checkInSpillingAndRegisterTask(std::move(task), this->partition_id);
+    }
+
+private:
+    std::shared_ptr<CTE> cte;
+    size_t partition_id;
 };
 } // namespace DB
