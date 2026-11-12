@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Logger.h>
+#include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
@@ -35,7 +36,10 @@ PhysicalPlanNodePtr PhysicalWindowSort::build(
 {
     RUNTIME_CHECK(child);
 
-    RUNTIME_ASSERT(window_sort.ispartialsort(), log, "for window sort, ispartialsort must be true");
+    if (unlikely(!window_sort.ispartialsort()))
+        throw TiFlashException(
+            Errors::Coprocessor::BadRequest,
+            "Window sort requires isPartialSort to be true in DAG request");
 
     DAGExpressionAnalyzer analyzer(child->getSchema(), context);
     const auto & order_columns = analyzer.buildWindowOrderColumns(window_sort);

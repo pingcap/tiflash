@@ -199,11 +199,14 @@ protected:
         }
     }
 
-    bool decodeAndCheckColumns(DecodingStorageSchemaSnapshotConstPtr decoding_schema, bool force_decode) const
+    bool decodeAndCheckColumns(
+        DecodingStorageSchemaSnapshotConstPtr decoding_schema,
+        bool force_decode,
+        bool skip_extra_columns = false) const
     {
         RegionBlockReader reader{decoding_schema};
         Block block = createBlockSortByColumnID(decoding_schema);
-        if (!reader.read(block, data_list_read, force_decode))
+        if (!reader.read(block, data_list_read, force_decode, skip_extra_columns))
             return false;
 
         checkBlock(decoding_schema, block);
@@ -346,6 +349,76 @@ TEST_F(RegionBlockReaderTest, CommonHandle)
     encodeColumns(table_info, fields, RowEncodeVersion::RowV2);
     auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
     ASSERT_TRUE(decodeAndCheckColumns(decoding_schema, true));
+}
+
+TEST_F(RegionBlockReaderTest, PrimaryKeyOnlyRowEncoding)
+{
+    for (auto codec : {RowV1, RowV2})
+        for (auto pk_type : {TMTPKType::INT64, TMTPKType::UINT64, TMTPKType::STRING})
+        {
+            SCOPED_TRACE(fmt::format("codec={} pk_type={}", int(codec), int(pk_type)));
+            data_list_read.clear();
+            fields_map.clear();
+            auto [table_info, fields] = pk_type == TMTPKType::STRING ? getTableInfoAndFields(
+                                            ColumnIDs{1, 2},
+                                            true,
+                                            ColumnIDValue<Int64>(1, handle_value),
+                                            ColumnIDValue<Int64>(2, 222))
+                : pk_type == TMTPKType::UINT64
+                ? getTableInfoAndFields(ColumnIDs{1}, false, ColumnIDValue<UInt64>(1, handle_value))
+                : getTableInfoAndFields(ColumnIDs{1}, false, ColumnIDValue<Int64>(1, handle_value));
+            encodeColumns(table_info, fields, codec);
+            const auto & value = data_list_read.front().value->getStr();
+            ASSERT_FALSE(value.empty());
+            if (codec == RowV1)
+                EXPECT_EQ(value, String(1, char(TiDB::CodecFlagNil)));
+            auto schema = getDecodingStorageSchemaSnapshot(table_info, version_value);
+            for (bool force_decode : {false, true})
+                for (bool skip_extra_columns : {false, true})
+                    EXPECT_TRUE(decodeAndCheckColumns(schema, force_decode, skip_extra_columns));
+        }
+}
+
+TEST_F(RegionBlockReaderTest, MockPrimaryKeyOnlyRowEncoding)
+{
+    for (bool common_handle : {false, true})
+    {
+        SCOPED_TRACE(common_handle);
+        data_list_read.clear();
+        fields_map.clear();
+        auto [table_info, fields] = common_handle
+            ? getTableInfoAndFields(
+                ColumnIDs{1, 2},
+                true,
+                ColumnIDValue<Int64>(1, handle_value),
+                ColumnIDValue<Int64>(2, 222))
+            : getTableInfoAndFields(ColumnIDs{1}, false, ColumnIDValue<Int64>(1, handle_value));
+        if (common_handle)
+            for (auto & index_column : table_info.index_infos.front().idx_cols)
+                index_column.name = table_info.columns[index_column.offset].name;
+        encodeColumns(table_info, fields, RowV1);
+        auto schema = getDecodingStorageSchemaSnapshot(table_info, version_value);
+        size_t row_v1_count = 0;
+        // MockUtils::insert uses this encoder, which alternates RowV1/RowV2.
+        for (size_t attempt = 0; attempt < 2; ++attempt)
+        {
+            WriteBufferFromOwnString encoded;
+            RegionBench::encodeRow(table_info, common_handle ? fields : std::vector<Field>{}, encoded);
+            auto value = std::make_shared<const TiKVValue>(encoded.releaseStr());
+            ASSERT_FALSE(value->empty());
+            if (UInt8((*value)[0]) == TiDB::CodecFlagNil)
+            {
+                EXPECT_EQ(value->dataSize(), 1);
+                ++row_v1_count;
+            }
+            for (auto & row : data_list_read)
+                row.value = value;
+            for (bool force_decode : {false, true})
+                for (bool skip_extra_columns : {false, true})
+                    EXPECT_TRUE(decodeAndCheckColumns(schema, force_decode, skip_extra_columns));
+        }
+        EXPECT_EQ(row_v1_count, 1);
+    }
 }
 
 TEST_F(RegionBlockReaderTest, MissingColumnRowV2)
@@ -865,5 +938,229 @@ try
     }
 }
 CATCH
+
+
+TEST_F(RegionBlockReaderTest, HistoricalExtraColumns)
+{
+    // Exercise both ID widths, both row codecs, gaps/tails and NULL values.
+    for (auto codec : {RowV1, RowV2})
+        for (ColumnID tail : {4, 400})
+            for (bool null_extra : {false, true})
+            {
+                data_list_read.clear();
+                fields_map.clear();
+                auto [table_info, fields] = getTableInfoAndFields(
+                    ColumnIDs{1},
+                    false,
+                    ColumnIDValue(1, handle_value),
+                    ColumnIDValue<UInt64>(2, 222),
+                    ColumnIDValue<UInt64>(3, 333),
+                    ColumnIDValue<UInt64>(tail, 444));
+                if (null_extra)
+                {
+                    table_info.columns[1].clearNotNullFlag();
+                    table_info.columns[3].clearNotNullFlag();
+                    fields[1] = Null();
+                    fields[3] = Null();
+                }
+                encodeColumns(table_info, fields, codec);
+                table_info.columns.erase(table_info.columns.begin() + 3);
+                table_info.columns.erase(table_info.columns.begin() + 1);
+                auto schema = getDecodingStorageSchemaSnapshot(table_info, version_value);
+                EXPECT_FALSE(decodeAndCheckColumns(schema, false));
+                EXPECT_TRUE(decodeAndCheckColumns(schema, false, true));
+                // The existing forced retry remains available.
+                EXPECT_TRUE(decodeAndCheckColumns(schema, true));
+            }
+}
+
+TEST_F(RegionBlockReaderTest, HistoricalColumnBatchWatermark)
+{
+    auto [table_info, fields] = getTableInfoAndFields(
+        ColumnIDs{1},
+        false,
+        ColumnIDValue(1, handle_value),
+        ColumnIDValue<UInt64>(2, 222),
+        ColumnIDValue<UInt64>(3, 333));
+    encodeColumns(table_info, fields, RowV2);
+    table_info.columns.erase(table_info.columns.begin() + 1);
+    auto schema = getDecodingStorageSchemaSnapshot(table_info, version_value);
+    using Decision = SchemaReadWatermarkDecision;
+    for (UInt64 watermark : {version_value, version_value + 1})
+    {
+        auto decision = SchemaReadWatermarkDecision(watermark, data_list_read);
+        ASSERT_EQ(decision.result, Decision::Covered);
+        EXPECT_TRUE(decodeAndCheckColumns(schema, false, decision.shouldSkipExtraColumns()));
+    }
+    const auto no_watermark = SchemaReadWatermarkDecision(0, data_list_read);
+    EXPECT_EQ(no_watermark.result, Decision::NoWatermark);
+    EXPECT_EQ(no_watermark.max_commit_ts, 0);
+    EXPECT_EQ(SchemaReadWatermarkDecision(version_value - 1, data_list_read).result, Decision::BeyondWatermark);
+    data_list_read.back().commit_ts = version_value + 1;
+    auto mixed = SchemaReadWatermarkDecision(schema->schema_read_tso, data_list_read);
+    EXPECT_EQ(mixed.max_commit_ts, version_value + 1);
+    EXPECT_EQ(mixed.result, Decision::BeyondWatermark);
+    EXPECT_FALSE(decodeAndCheckColumns(schema, false, mixed.shouldSkipExtraColumns()));
+}
+
+TEST_F(RegionBlockReaderTest, NewColumnBeyondWatermarkIsPreserved)
+{
+    for (auto codec : {RowV1, RowV2})
+    {
+        data_list_read.clear();
+        fields_map.clear();
+        auto [table_info, fields] = getTableInfoAndFields(
+            ColumnIDs{1},
+            false,
+            ColumnIDValue(1, handle_value),
+            ColumnIDValue<UInt64>(3, 333),
+            ColumnIDValue<UInt64>(4, 444));
+        encodeColumns(table_info, fields, codec);
+        auto old_info = table_info;
+        old_info.columns.pop_back();
+        auto old_schema = getDecodingStorageSchemaSnapshot(old_info, version_value - 1);
+        const auto decision = SchemaReadWatermarkDecision(old_schema->schema_read_tso, data_list_read);
+        EXPECT_EQ(decision.result, SchemaReadWatermarkDecision::BeyondWatermark);
+        EXPECT_FALSE(decodeAndCheckColumns(old_schema, false, false));
+        // Sync supplies the new column, whose non-NULL value is checked by checkBlock.
+        EXPECT_TRUE(decodeAndCheckColumns(getDecodingStorageSchemaSnapshot(table_info, version_value), false));
+    }
+}
+
+TEST_F(RegionBlockReaderTest, ExtraColumnPermissionKeepsKnownColumnChecks)
+{
+    for (auto codec : {RowV1, RowV2})
+    {
+        data_list_read.clear();
+        fields_map.clear();
+        auto [table_info, fields] = getTableInfoAndFields(
+            ColumnIDs{1},
+            false,
+            ColumnIDValue(1, handle_value),
+            ColumnIDValue<UInt64>(2, 222),
+            ColumnIDValue<UInt64>(3, 300));
+        encodeColumns(table_info, fields, codec);
+        auto read_info = table_info;
+        read_info.columns.erase(read_info.columns.begin() + 1);
+        read_info.columns.back().tp = TiDB::TypeTiny;
+        EXPECT_FALSE(decodeAndCheckColumns(getDecodingStorageSchemaSnapshot(read_info), false, true));
+        read_info = table_info;
+        read_info.columns.erase(read_info.columns.begin() + 1);
+        auto missing = getColumnInfo<UInt64>(4);
+        missing.setNoDefaultValueFlag();
+        read_info.columns.push_back(missing);
+        EXPECT_FALSE(decodeAndCheckColumns(getDecodingStorageSchemaSnapshot(read_info), false, true));
+
+        data_list_read.clear();
+        fields_map.clear();
+        table_info.columns.back().clearNotNullFlag();
+        fields.back() = Null();
+        encodeColumns(table_info, fields, codec);
+        read_info = table_info;
+        read_info.columns.erase(read_info.columns.begin() + 1);
+        read_info.columns.back().setNotNullFlag();
+        EXPECT_FALSE(decodeAndCheckColumns(getDecodingStorageSchemaSnapshot(read_info), false, true));
+    }
+}
+
+TEST_F(RegionBlockReaderTest, ExtraColumnPermissionRejectsMalformedRowV1)
+{
+    for (ColumnID extra_id : {2, 4})
+    {
+        SCOPED_TRACE(extra_id);
+        data_list_read.clear();
+        fields_map.clear();
+        auto [table_info, fields] = getTableInfoAndFields(
+            ColumnIDs{1},
+            false,
+            ColumnIDValue(1, handle_value),
+            ColumnIDValue<UInt64>(3, 333),
+            ColumnIDValue<UInt64>(extra_id, std::numeric_limits<UInt64>::max()));
+        if (extra_id == 2)
+        {
+            // V1 permits unordered datums. Put the gap column last so that
+            // truncation damages the extra datum rather than a known column.
+            std::swap(table_info.columns[1], table_info.columns.back());
+            std::swap(fields[1], fields.back());
+        }
+        encodeColumns(table_info, fields, RowV1);
+        table_info.columns.pop_back();
+        auto schema = getDecodingStorageSchemaSnapshot(table_info, version_value);
+        ASSERT_TRUE(decodeAndCheckColumns(schema, false, true));
+        auto malformed = data_list_read.front().value->getStr();
+        // Encode an incomplete varint only for the unknown column. Leave the
+        // known datums and its column ID intact.
+        ASSERT_EQ(UInt8(malformed[malformed.size() - 9]), TiDB::CodecFlagUInt);
+        malformed.resize(malformed.size() - 9);
+        malformed.push_back(char(TiDB::CodecFlagVarUInt));
+        malformed.push_back(char(0x80));
+        data_list_read.front().value = std::make_shared<const TiKVValue>(TiKVValue::copyFrom(malformed));
+        EXPECT_THROW(decodeAndCheckColumns(schema, false, true), DB::Exception);
+        malformed[malformed.size() - 2] = char(0xff); // Unknown datum flag.
+        data_list_read.front().value = std::make_shared<const TiKVValue>(std::move(malformed));
+        EXPECT_THROW(decodeAndCheckColumns(schema, false, true), DB::Exception);
+    }
+}
+
+TEST_F(RegionBlockReaderTest, ReadWithoutApplyPermissionKeepsExtraColumnChecks)
+{
+    for (auto codec : {RowV1, RowV2})
+    {
+        data_list_read.clear();
+        fields_map.clear();
+        auto [table_info, fields] = getTableInfoAndFields(
+            ColumnIDs{1},
+            false,
+            ColumnIDValue(1, handle_value),
+            ColumnIDValue<UInt64>(2, 222),
+            ColumnIDValue<UInt64>(3, 333));
+        encodeColumns(table_info, fields, codec);
+        table_info.columns.erase(table_info.columns.begin() + 1);
+        auto schema = getDecodingStorageSchemaSnapshot(table_info, version_value + 1);
+        ASSERT_EQ(
+            SchemaReadWatermarkDecision(schema->schema_read_tso, data_list_read).result,
+            SchemaReadWatermarkDecision::Covered);
+        // A valid certificate alone must not change the ordinary reader API.
+        RegionBlockReader reader(schema);
+        auto block = createBlockSortByColumnID(schema);
+        EXPECT_FALSE(reader.read(block, data_list_read, false));
+        EXPECT_EQ(reader.firstSkippedColumnID(), 0);
+        EXPECT_TRUE(decodeAndCheckColumns(schema, false, true));
+    }
+}
+
+
+TEST_F(RegionBlockReaderTest, ExtraColumnPermissionKeepsPrimaryKeyChecks)
+{
+    handle_value = 300;
+    for (auto codec : {RowV1, RowV2})
+    {
+        data_list_read.clear();
+        fields_map.clear();
+        auto [table_info, fields] = getTableInfoAndFields(
+            ColumnIDs{1},
+            false,
+            ColumnIDValue<UInt64>(1, 300),
+            ColumnIDValue<UInt64>(2, 222),
+            ColumnIDValue<UInt64>(3, 333));
+        encodeColumns(table_info, fields, codec);
+        table_info.columns.erase(table_info.columns.begin() + 1);
+        table_info.columns.front().tp = TiDB::TypeTiny;
+        EXPECT_FALSE(decodeAndCheckColumns(getDecodingStorageSchemaSnapshot(table_info), false, true));
+    }
+}
+
+TEST_F(RegionBlockReaderTest, ExtraColumnPermissionRejectsNonBusinessIDs)
+{
+    auto [table_info, fields] = getTableInfoAndFields(
+        ColumnIDs{1},
+        false,
+        ColumnIDValue<Int64>(-100, 999),
+        ColumnIDValue(1, handle_value),
+        ColumnIDValue<UInt64>(3, 333));
+    encodeColumns(table_info, fields, RowV1);
+    table_info.columns.erase(table_info.columns.begin());
+    EXPECT_FALSE(decodeAndCheckColumns(getDecodingStorageSchemaSnapshot(table_info), false, true));
+}
 
 } // namespace DB::tests

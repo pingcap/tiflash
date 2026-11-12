@@ -18,32 +18,34 @@
 
 #include <Interpreters/Users.h>
 
+namespace Poco
+{
+namespace Util
+{
+class AbstractConfiguration;
+}
+} // namespace Poco
+
 namespace DB
 {
-/** Duties of security manager:
-  * 1) Authenticate users
-  * 2) Provide user settings (profile, quota, ACLs)
-  * 3) Grant access to databases
+/** Duties of security manager in TiFlash:
+  * Resolve the built-in "default" user (profile, quota). Legacy users / users.*
+  * entries in users config are not loaded.
+  *
+  * Password / client-IP authentication and allow_databases gating from ClickHouse
+  * were removed as unused for TiFlash. Callers that still pass a password for
+  * protocol compatibility (Context::setUser) do not go through SecurityManager.
   */
 class ISecurityManager
 {
 public:
     using UserPtr = std::shared_ptr<const User>;
 
+    /// Install / refresh known users. Config may still carry legacy users.*; ignored.
     virtual void loadFromConfig(Poco::Util::AbstractConfiguration & config) = 0;
 
-    /// Find user and make authorize checks
-    virtual UserPtr authorizeAndGetUser(
-        const String & user_name,
-        const String & password,
-        const Poco::Net::IPAddress & address) const
-        = 0;
-
-    /// Just find user
+    /// Look up a user by name (profile / quota); no auth checks.
     virtual UserPtr getUser(const String & user_name) const = 0;
-
-    /// Check if the user has access to the database.
-    virtual bool hasAccessToDatabase(const String & user_name, const String & database_name) const = 0;
 
     virtual ~ISecurityManager() {}
 };

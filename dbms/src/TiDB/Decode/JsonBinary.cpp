@@ -381,7 +381,7 @@ char JsonBinary::getChar(size_t offset) const
 
 StringRef JsonBinary::getSubRef(size_t offset, size_t length) const
 {
-    RUNTIME_CHECK(offset + length <= data.size);
+    RUNTIME_CHECK(offset <= data.size && length <= data.size - offset);
     return StringRef(data.data + offset, length);
 }
 
@@ -401,7 +401,7 @@ StringRef JsonBinary::getObjectKey(size_t index) const
     size_t cursor = HEADER_SIZE + index * KEY_ENTRY_SIZE;
     auto key_offset = decodeNumeric<UInt32>(cursor, data);
     auto key_length = decodeNumeric<UInt16>(cursor, data);
-    return {data.data + key_offset, key_length};
+    return getSubRef(key_offset, key_length);
 }
 
 JsonBinary JsonBinary::getObjectValue(size_t index) const
@@ -423,22 +423,23 @@ JsonBinary JsonBinary::getValueEntry(size_t value_entry_offset) const
     case JsonBinary::TYPE_CODE_INT64:
     case JsonBinary::TYPE_CODE_UINT64:
     case JsonBinary::TYPE_CODE_FLOAT64:
-        return JsonBinary(entry_type, StringRef(data.data + value_offset, 8));
+        return JsonBinary(entry_type, getSubRef(value_offset, 8));
     case JsonBinary::TYPE_CODE_STRING:
     {
         cursor = value_offset;
         auto str_length = DecodeVarUInt(cursor, data);
-        auto str_length_length = cursor - value_offset;
-        return JsonBinary(entry_type, getSubRef(value_offset, str_length_length + str_length));
+        // Validate the payload before adding the length prefix.
+        RUNTIME_CHECK(str_length <= data.size - cursor);
+        return JsonBinary(entry_type, getSubRef(value_offset, cursor - value_offset + str_length));
     }
     case JsonBinary::TYPE_CODE_OPAQUE:
     {
         cursor = value_offset + 1;
         auto data_length = DecodeVarUInt(cursor, data);
-        auto data_length_length = cursor - value_offset - 1;
+        RUNTIME_CHECK(data_length <= data.size - cursor);
         return JsonBinary(
             entry_type,
-            getSubRef(value_offset, data_length_length + data_length + 1)); /// one more byte for type
+            getSubRef(value_offset, cursor - value_offset + data_length)); /// includes type and length prefix
     }
     case JsonBinary::TYPE_CODE_DATE:
     case JsonBinary::TYPE_CODE_DATETIME:

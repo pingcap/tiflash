@@ -12,11 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TiFlashMetrics.h>
+#include <Common/setThreadName.h>
+#include <Debug/MockTiDB.h>
 #include <Debug/dbgTools.h>
+#include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/MultiRaft/ApplySnapshot.h>
 #include <Storages/KVStore/MultiRaft/RegionsRangeIndex.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/tests/kvstore_helper.h>
+#include <TiDB/Decode/RowCodec.h>
+#include <TiDB/Schema/SchemaSyncService.h>
+#include <TiDB/Schema/TiDBSchemaManager.h>
 
 #include <regex>
 
@@ -1500,6 +1508,168 @@ TEST_F(RegionKVStoreOldTest, Restore)
         kvs.getRegion(3);
     }
 }
+
+class SchemaWatermarkImportTest : public RegionKVStoreOldTest
+{
+protected:
+    enum class Source
+    {
+        Snapshot,
+        IngestSST,
+        Recovery,
+    };
+
+    void checkResidualAfterWatermarkRebuild(Source source)
+    {
+        auto & ctx = TiFlashTestEnv::getGlobalContext();
+        auto & tmt = ctx.getTMTContext();
+        if (source == Source::Snapshot)
+            createDefaultRegions();
+        initStorages();
+        ctx.getSchemaSyncService().reset();
+        SCOPE_EXIT({ ctx.initializeSchemaSyncService(); });
+        SCOPE_EXIT({ MockSSTReader::getMockSSTData().clear(); });
+        const auto table_id = proxy_instance->bootstrapTable(ctx, getKVS(), tmt);
+        tmt.getSchemaSyncerManager()->syncTableSchema(ctx, NullspaceID, table_id);
+        auto storage = std::dynamic_pointer_cast<StorageDeltaMerge>(tmt.getStorages().get(NullspaceID, table_id));
+        ASSERT_NE(storage, nullptr);
+        auto table_info = storage->getTableInfo();
+        // Keep artificial timestamps newer than the mock PD GC safepoint.
+        constexpr UInt64 base = 100000000;
+        auto certify = [&](UInt64 tso) {
+            auto lock = storage->lockForAlter(getThreadNameAndID());
+            storage->alterSchemaChange(lock, table_info, storage->getDatabaseName(), storage->getTableName(), ctx, tso);
+        };
+        certify(base + 100);
+        const RegionID region_id = 19;
+        const auto region_id_str = std::to_string(region_id);
+        auto write_value = RecordKVFormat::encodeWriteCfValue(RecordKVFormat::CFModifyFlag::PutFlag, base + 140);
+        auto write_key = RecordKVFormat::genKey(table_id, 1, base + 150);
+        auto apply_normal_write = [&](const RegionPtr & region, HandleID handle, UInt64 index) {
+            auto key = RecordKVFormat::genKey(table_id, handle, base + 150);
+            const BaseBuffView key_view{key.data(), key.dataSize()};
+            const BaseBuffView value_view{write_value.data(), write_value.dataSize()};
+            const auto type = WriteCmdType::Put;
+            const auto cf = ColumnFamilyType::Write;
+            EXPECT_THROW(region->handleWriteRaftCmd({&key_view, &value_view, &type, &cf, 1}, index, 5, tmt), Exception);
+        };
+
+        if (source != Source::Snapshot)
+            proxy_instance->bootstrapWithRegion(
+                getKVS(),
+                tmt,
+                region_id,
+                std::make_optional(
+                    std::make_pair(RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 100))));
+
+        if (source == Source::Recovery)
+        {
+            apply_normal_write(getKVS().getRegion(region_id), 1, 6);
+            tryPersistRegion(getKVS(), region_id);
+            reloadKVSFromDisk();
+        }
+        else
+        {
+            auto & sst_data = MockSSTReader::getMockSSTData();
+            sst_data.clear();
+            MockSSTReader::Data writes;
+            writes.emplace_back(write_key.getStr(), write_value.getStr());
+            sst_data[{region_id_str, ColumnFamilyType::Write}] = std::move(writes);
+            const SSTView view{ColumnFamilyType::Write, BaseBuffView{region_id_str.data(), region_id_str.size()}};
+            if (source == Source::Snapshot)
+            {
+                auto region = makeRegionForTable(region_id, table_id, 0, 100, getKVS().getProxyHelper());
+                RegionBench::handleApplySnapshot(
+                    getKVS(),
+                    region->cloneMetaRegion(),
+                    2,
+                    {&view, 1},
+                    8,
+                    5,
+                    std::nullopt,
+                    tmt);
+            }
+            else
+                getKVS().handleIngestSST(region_id, {&view, 1}, 8, 5, tmt);
+        }
+        auto region = getKVS().getRegion(region_id);
+        ASSERT_NE(region, nullptr);
+        ASSERT_EQ(region->writeCFCount(), 1);
+        // Mix a real ordinary Raft write with the imported/recovered residue.
+        // Both writes remain cached until their default-CF values arrive.
+        apply_normal_write(region, 2, 9);
+        ASSERT_EQ(region->writeCFCount(), 2);
+        certify(base + 300);
+        auto write_info = table_info;
+        auto extra_column = table_info.columns.front();
+        extra_column.id = 2;
+        extra_column.name = "old_extra";
+        write_info.columns.push_back(extra_column);
+        for (HandleID handle : {1, 2})
+        {
+            WriteBufferFromOwnString row;
+            encodeRowV2(write_info, {Int64(110 + handle), Int64(222)}, row);
+            region->insertFromSnap(
+                tmt,
+                "default",
+                RecordKVFormat::genKey(table_id, handle, base + 140),
+                TiKVValue(row.releaseStr()));
+        }
+        auto cached = ReadRegionCommitCache(region, true);
+        ASSERT_TRUE(cached.has_value());
+        ASSERT_EQ(cached->size(), 2);
+        EXPECT_EQ(SchemaReadWatermarkDecision(base + 300, *cached).result, SchemaReadWatermarkDecision::Covered);
+        {
+            auto lock = storage->lockStructureForShare(getThreadNameAndID());
+            auto schema = storage->getSchemaSnapshotAndBlockForDecoding(lock, false, true).first;
+            ASSERT_EQ(schema->schema_read_tso, base + 300);
+        }
+        const auto sync_before = GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Value();
+        const auto skip_before = GET_METRIC(tiflash_schema_watermark_decode_count, type_skipped_extra_columns).Value();
+        RegionDataReadInfoList removed;
+        RegionTable::writeCommittedByRegion(ctx, region, removed, log);
+        EXPECT_EQ(removed.size(), 2);
+        EXPECT_EQ(region->writeCFCount(), 0);
+        EXPECT_EQ(GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Value(), sync_before);
+        EXPECT_EQ(
+            GET_METRIC(tiflash_schema_watermark_decode_count, type_skipped_extra_columns).Value(),
+            skip_before + 1);
+        auto streams
+            = storage->getStore()->readRaw(ctx, ctx.getSettingsRef(), storage->getStore()->getTableColumns(), 1, true);
+        std::vector<Int64> values;
+        for (auto & stream : streams)
+        {
+            stream->readPrefix();
+            while (auto block = stream->read())
+                for (size_t row = 0; row < block.rows(); ++row)
+                    values.push_back((*block.getByName("a").column)[row].safeGet<Int64>());
+            stream->readSuffix();
+        }
+        std::sort(values.begin(), values.end());
+        EXPECT_EQ(values, (std::vector<Int64>{111, 112}));
+    }
+};
+
+TEST_F(SchemaWatermarkImportTest, SnapshotResidueUsesWatermarkAfterRebuild)
+try
+{
+    checkResidualAfterWatermarkRebuild(Source::Snapshot);
+}
+CATCH
+
+TEST_F(SchemaWatermarkImportTest, IngestSSTResidueUsesWatermarkAfterRebuild)
+try
+{
+    checkResidualAfterWatermarkRebuild(Source::IngestSST);
+}
+CATCH
+
+TEST_F(SchemaWatermarkImportTest, RecoveredCacheUsesWatermarkAfterRebuild)
+try
+{
+    checkResidualAfterWatermarkRebuild(Source::Recovery);
+}
+CATCH
 
 TEST_F(RegionKVStoreOldTest, RegionRange)
 {

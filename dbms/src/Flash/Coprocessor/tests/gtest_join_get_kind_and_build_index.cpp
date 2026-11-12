@@ -13,11 +13,13 @@
 // limitations under the License.
 
 #include <Columns/ColumnNullable.h>
+#include <Common/TiFlashException.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <TestUtils/ColumnsToTiPBExpr.h>
 #include <TestUtils/ExecutorTestUtils.h>
 
 #include <Flash/Coprocessor/JoinInterpreterHelper.cpp>
+#include <limits>
 #include <tuple>
 
 namespace DB
@@ -97,6 +99,26 @@ String getTiFlashJoinErrorMessage(const tipb::Join & join)
     catch (Exception & e)
     {
         return e.message();
+    }
+}
+
+TEST(JoinKindAndBuildIndexTestRunner, TestInvalidInnerIndex)
+{
+    for (const auto inner_index :
+         {Int64{-1}, Int64{2}, std::numeric_limits<Int64>::min(), std::numeric_limits<Int64>::max()})
+    {
+        tipb::Join join;
+        join.set_join_type(tipb::JoinType::TypeInnerJoin);
+        join.set_inner_idx(inner_index);
+        try
+        {
+            JoinInterpreterHelper::TiFlashJoin tiflash_join(join, false);
+            FAIL() << "Expected BadRequest for inner_idx=" << inner_index;
+        }
+        catch (const TiFlashException & e)
+        {
+            EXPECT_TRUE(e.getError().is(Errors::Coprocessor::BadRequest)) << e.standardText();
+        }
     }
 }
 

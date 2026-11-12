@@ -139,12 +139,16 @@ protected:
         size_t size;
     };
 
-    std::vector<ObjectInfo> genDMFile(const DMFileOID & oid, const std::vector<String> & names)
+    std::vector<ObjectInfo> genDMFile(
+        const DMFileOID & oid,
+        const std::vector<String> & names,
+        size_t min_size = 1024 * 1024 * 15,
+        size_t max_size = 1024 * 1024 * 25)
     {
         auto dmfile_name = S3Filename::fromDMFileOID(oid).toFullKey();
         std::random_device dev;
         std::mt19937 rng(dev());
-        std::uniform_int_distribution<std::mt19937::result_type> rnd_size(1024 * 1024 * 15, 1024 * 1024 * 25);
+        std::uniform_int_distribution<std::mt19937::result_type> rnd_size(min_size, max_size);
         std::uniform_int_distribution<std::mt19937::result_type> rnd_value(0, 255);
         std::vector<ObjectInfo> objects;
         std::vector<std::future<void>> upload_results;
@@ -172,7 +176,9 @@ protected:
         UInt32 store_count,
         UInt32 table_count,
         UInt32 file_count,
-        const std::vector<String> & names)
+        const std::vector<String> & names,
+        size_t min_size = 1024 * 1024 * 15,
+        size_t max_size = 1024 * 1024 * 25)
     {
         std::vector<ObjectInfo> objects;
         for (UInt32 i = 1; i <= store_count; ++i)
@@ -183,7 +189,9 @@ protected:
                 {
                     auto objs = genDMFile(
                         DMFileOID{.store_id = nextId(), .table_id = static_cast<Int64>(nextId()), .file_id = nextId()},
-                        names);
+                        names,
+                        min_size,
+                        max_size);
                     objects.insert(objects.end(), objs.begin(), objs.end());
                 }
             }
@@ -1361,7 +1369,14 @@ TEST_F(FileCacheTest, GetWaitOnDownloadingSupportsColDataAndOther)
     settings.dt_filecache_wait_on_downloading_ms = 200;
     file_cache.updateConfig(settings);
 
-    auto objects = genObjects(/*store_count*/ 1, /*table_count*/ 1, /*file_count*/ 1, {"1.dat", "meta"});
+    constexpr size_t test_object_size = 64 * 1024;
+    auto objects = genObjects(
+        /*store_count*/ 1,
+        /*table_count*/ 1,
+        /*file_count*/ 1,
+        {"1.dat", "meta"},
+        test_object_size,
+        test_object_size);
     auto sp_download = SyncPointCtl::enableInScope("before_FileCache::downloadImpl_download_to_local");
     auto sp_wait = SyncPointCtl::enableInScope("before_FileSegment::waitForNotEmpty_wait");
 

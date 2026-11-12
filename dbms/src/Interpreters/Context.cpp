@@ -98,7 +98,6 @@ namespace DB
 {
 namespace ErrorCodes
 {
-extern const int DATABASE_ACCESS_DENIED;
 extern const int UNKNOWN_DATABASE;
 extern const int UNKNOWN_TABLE;
 extern const int TABLE_ALREADY_EXISTS;
@@ -641,7 +640,7 @@ void Context::setUsersConfig(const ConfigurationPtr & config)
 {
     auto lock = getLock();
     shared->users_config = config;
-    // parse "users.*"
+    // Install built-in "default" user (legacy users / users.* are ignored).
     shared->security_manager->loadFromConfig(*shared->users_config);
     // parse "quotas.*"
     shared->quotas.loadFromConfig(*shared->users_config);
@@ -716,17 +715,19 @@ void Context::calculateUserSettings()
 
 void Context::setUser(
     const String & name,
-    const String & password,
+    const String & /*password*/,
     const Poco::Net::SocketAddress & address,
     const String & quota_key)
 {
     auto lock = getLock();
 
-    auto user_props = shared->security_manager->authorizeAndGetUser(name, password, address.host());
+    // password / peer address are accepted for API / protocol compatibility;
+    // SecurityManager only resolves the named user (profile / quota).
+    // Transport auth is TiFlashSecurityConfig (TLS/mTLS).
+    auto user_props = shared->security_manager->getUser(name);
 
     client_info.current_user = name;
     client_info.current_address = address;
-    client_info.current_password = password;
 
     if (!quota_key.empty())
         client_info.quota_key = quota_key;
@@ -754,31 +755,11 @@ QuotaForIntervals & Context::getQuota()
     return *quota;
 }
 
-void Context::checkDatabaseAccessRights(const std::string & database_name) const
-{
-    auto lock = getLock();
-    checkDatabaseAccessRightsImpl(database_name);
-}
-
-void Context::checkDatabaseAccessRightsImpl(const std::string & database_name) const
-{
-    if (client_info.current_user.empty() || (database_name == "system"))
-    {
-        /// An unnamed user, i.e. server, has access to all databases.
-        /// All users have access to the database system.
-        return;
-    }
-    if (!shared->security_manager->hasAccessToDatabase(client_info.current_user, database_name))
-        throw Exception(fmt::format("Access denied to database {}", database_name), ErrorCodes::DATABASE_ACCESS_DENIED);
-}
-
 bool Context::isTableExist(const String & database_name, const String & table_name) const
 {
     auto lock = getLock();
 
     String db = resolveDatabase(database_name, current_database);
-    checkDatabaseAccessRightsImpl(db);
-
     auto it = shared->databases.find(db);
     return shared->databases.end() != it && it->second->isTableExist(*this, table_name);
 }
@@ -787,7 +768,6 @@ bool Context::isDatabaseExist(const String & database_name) const
 {
     auto lock = getLock();
     String db = resolveDatabase(database_name, current_database);
-    checkDatabaseAccessRightsImpl(db);
     return shared->databases.end() != shared->databases.find(db);
 }
 
@@ -796,8 +776,6 @@ void Context::assertTableExists(const String & database_name, const String & tab
     auto lock = getLock();
 
     String db = resolveDatabase(database_name, current_database);
-    checkDatabaseAccessRightsImpl(db);
-
     auto it = shared->databases.find(db);
     if (shared->databases.end() == it)
         throw Exception(fmt::format("Database {} doesn't exist", backQuoteIfNeed(db)), ErrorCodes::UNKNOWN_DATABASE);
@@ -809,17 +787,11 @@ void Context::assertTableExists(const String & database_name, const String & tab
 }
 
 
-void Context::assertTableDoesntExist(
-    const String & database_name,
-    const String & table_name,
-    bool check_database_access_rights) const
+void Context::assertTableDoesntExist(const String & database_name, const String & table_name) const
 {
     auto lock = getLock();
 
     String db = resolveDatabase(database_name, current_database);
-    if (check_database_access_rights)
-        checkDatabaseAccessRightsImpl(db);
-
     auto it = shared->databases.find(db);
     if (shared->databases.end() != it && it->second->isTableExist(*this, table_name))
         throw Exception(
@@ -828,14 +800,11 @@ void Context::assertTableDoesntExist(
 }
 
 
-void Context::assertDatabaseExists(const String & database_name, bool check_database_access_rights) const
+void Context::assertDatabaseExists(const String & database_name) const
 {
     auto lock = getLock();
 
     String db = resolveDatabase(database_name, current_database);
-    if (check_database_access_rights)
-        checkDatabaseAccessRightsImpl(db);
-
     if (shared->databases.end() == shared->databases.find(db))
         throw Exception(fmt::format("Database {} doesn't exist", backQuoteIfNeed(db)), ErrorCodes::UNKNOWN_DATABASE);
 }
@@ -846,8 +815,6 @@ void Context::assertDatabaseDoesntExist(const String & database_name) const
     auto lock = getLock();
 
     String db = resolveDatabase(database_name, current_database);
-    checkDatabaseAccessRightsImpl(db);
-
     if (shared->databases.end() != shared->databases.find(db))
         throw Exception(
             fmt::format("Database {} already exists.", backQuoteIfNeed(db)),
@@ -875,8 +842,6 @@ StoragePtr Context::getTableImpl(const String & database_name, const String & ta
     auto lock = getLock();
 
     String db = resolveDatabase(database_name, current_database);
-    checkDatabaseAccessRightsImpl(db);
-
     auto it = shared->databases.find(db);
     if (shared->databases.end() == it)
     {

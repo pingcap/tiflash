@@ -60,6 +60,29 @@ TEST(RedactLogTest, Basic)
     Redact::setRedactLog(RedactMode::Disable); // restore flags
 }
 
+TEST(RedactLogTest, StringToDebugString)
+{
+    for (const auto & [input, marked] : std::vector<std::pair<String, String>>{
+             {"", "‹›"},
+             {"/tiflash/remote/cache/evict/size/1024", "‹/tiflash/remote/cache/evict/size/1024›"},
+             {"age=123&token=secret", "‹age=123&token=secret›"},
+             {"{err_msg=invalid request: /secret}", "‹{err_msg=invalid request: /secret}›"},
+             {"中文", "‹中文›"},
+             {"abc‹›de‹github›fg", "‹abc‹‹››de‹‹github››fg›"},
+         })
+    {
+        Redact::setRedactLog(RedactMode::Disable);
+        EXPECT_EQ(Redact::stringToDebugString(input), input);
+
+        Redact::setRedactLog(RedactMode::Enable);
+        EXPECT_EQ(Redact::stringToDebugString(input), "?");
+
+        Redact::setRedactLog(RedactMode::Marker);
+        EXPECT_EQ(Redact::stringToDebugString(input), marked);
+    }
+    Redact::setRedactLog(RedactMode::Disable);
+}
+
 TEST(RedactLogTest, ToMarkerString)
 {
     for (const auto & [input, expect] : //

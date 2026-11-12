@@ -169,10 +169,13 @@ struct SchemaGetter
 
     LoggerPtr log;
 
+    const UInt64 read_tso;
+
     SchemaGetter(pingcap::kv::Cluster * cluster_, UInt64 tso_, KeyspaceID keyspace_id_)
         : snap(keyspace_id_, cluster_, tso_)
         , keyspace_id(keyspace_id_)
         , log(Logger::get())
+        , read_tso(tso_)
     {}
 
     Int64 getVersion();

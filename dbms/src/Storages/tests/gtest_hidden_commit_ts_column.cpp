@@ -12,12 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/config.h>
 #include <Flash/Coprocessor/DAGCodec.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Functions/registerFunctions.h>
+#include <IO/Buffer/ReadBufferFromMemory.h>
 #include <IO/Buffer/WriteBufferFromString.h>
+#include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
@@ -29,6 +34,20 @@
 #include <common/logger_useful.h>
 #include <gtest/gtest.h>
 #include <tipb/executor.pb.h>
+
+#if ENABLE_NEXT_GEN_COLUMNAR
+namespace DB
+{
+// Test the columnar implementation without exposing its helpers in a public header.
+tipb::TableInfo genTableInfoForColumnarRead(const TiDBTableScan & table_scan);
+std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedReadThroughColumnar(
+    const TiDBTableScan & table_scan);
+google::protobuf::RepeatedPtrField<tipb::Expr> remapColumnarFilterConditions(
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & filter_conditions,
+    size_t scan_column_count,
+    const Block & early_block);
+} // namespace DB
+#endif
 
 namespace DB::tests
 {
@@ -51,6 +70,397 @@ protected:
     LoggerPtr log = Logger::get();
     ContextPtr ctx = TiFlashTestEnv::getContext();
 };
+
+TEST_F(HiddenCommitTSColumnTest, DisaggregatedReadCommitTSRequiresOptIn)
+try
+{
+    for (bool partition_scan : {false, true})
+    {
+        for (UInt32 flags :
+             {static_cast<UInt32>(0), static_cast<UInt32>(TiDB::ColumnFlagNotNull | TiDB::ColumnFlagUnsigned)})
+        {
+            SCOPED_TRACE(fmt::format("partition_scan={} flags={}", partition_scan, flags));
+            tipb::Executor executor;
+            executor.set_tp(partition_scan ? tipb::TypePartitionTableScan : tipb::TypeTableScan);
+            auto * columns = partition_scan ? executor.mutable_partition_table_scan()->mutable_columns()
+                                            : executor.mutable_tbl_scan()->mutable_columns();
+            if (partition_scan)
+                executor.mutable_partition_table_scan()->set_table_id(100);
+            else
+                executor.mutable_tbl_scan()->set_table_id(100);
+            auto * handle = columns->Add();
+            handle->set_column_id(MutSup::extra_handle_id);
+            handle->set_tp(TiDB::TypeLongLong);
+            handle->set_flag(TiDB::ColumnFlagNotNull);
+            auto * commit_ts = columns->Add();
+            commit_ts->set_column_id(MutSup::extra_commit_ts_col_id);
+            commit_ts->set_tp(TiDB::TypeLongLong);
+            commit_ts->set_flag(flags);
+            auto * table_id = columns->Add();
+            table_id->set_column_id(MutSup::extra_table_id_col_id);
+            table_id->set_tp(TiDB::TypeLongLong);
+            table_id->set_flag(TiDB::ColumnFlagNotNull);
+
+            DAGContext dag_context(1024);
+            TiDBTableScan table_scan(&executor, "table_scan", dag_context);
+            // Ordinary next-gen reads must keep rejecting the hidden commit-ts column.
+            EXPECT_THROW(genColumnDefinesForDisaggregatedRead(table_scan), DB::Exception);
+            auto [column_defines, extra_table_id_index, generated_columns]
+                = genColumnDefinesForDisaggregatedRead(table_scan, /*support_commit_ts=*/true);
+            ASSERT_EQ(column_defines->size(), 2);
+            EXPECT_EQ(extra_table_id_index, 2);
+            EXPECT_TRUE(generated_columns.empty());
+            const auto & version = column_defines->at(1);
+            EXPECT_EQ(version.id, MutSup::extra_commit_ts_col_id);
+            EXPECT_EQ(version.name, genNameForExchangeReceiver(1));
+            EXPECT_EQ(version.type->getName(), "Nullable(UInt64)");
+
+            // Both normal scans and late materialization must preserve the values
+            // returned by CSE while converting the exchange receiver column type.
+            const auto & commit_ts_info = table_scan.getColumns()[1];
+            const auto expected_type = getDataTypeByColumnInfoForComputingLayer(commit_ts_info);
+            for (bool pushed_down : {false, true})
+            {
+                SCOPED_TRACE(pushed_down);
+                Block block{
+                    createNullableColumn<UInt64>({1, 123456789, 456789012}, {0, 0, 0}, version.name, version.id)};
+                ExpressionActionsPtr cast;
+                if (pushed_down)
+                {
+                    google::protobuf::RepeatedPtrField<tipb::Expr> filters;
+                    auto * condition = filters.Add();
+                    condition->set_tp(tipb::ExprType::ColumnRef);
+                    WriteBufferFromOwnString buffer;
+                    encodeDAGInt64(0, buffer);
+                    condition->set_val(buffer.releaseStr());
+                    condition->mutable_field_type()->set_tp(TiDB::TypeLongLong);
+                    condition->mutable_field_type()->set_flag(flags);
+                    auto push_down = DM::PushDownExecutor::build(
+                        DM::EMPTY_RS_OPERATOR,
+                        nullptr,
+#if ENABLE_CLARA
+                        nullptr,
+#endif
+                        {commit_ts_info},
+                        filters,
+                        {version},
+                        nullptr,
+                        *ctx,
+                        log);
+                    ASSERT_TRUE(push_down->filter_columns);
+                    ASSERT_EQ(push_down->filter_columns->size(), 1);
+                    EXPECT_EQ(push_down->filter_columns->at(0).id, MutSup::extra_commit_ts_col_id);
+                    EXPECT_EQ(push_down->filter_columns->at(0).name, version.name);
+                    cast = push_down->extra_cast;
+                }
+                else
+                {
+                    DAGExpressionAnalyzer analyzer{block, *ctx};
+                    ExpressionActionsChain chain;
+                    auto & step = analyzer.initAndGetLastStep(chain);
+                    auto [has_cast, casted_columns]
+                        = analyzer.buildExtraCastsAfterTS(step.actions, {1}, {commit_ts_info});
+                    if (has_cast)
+                    {
+                        step.actions->add(
+                            ExpressionAction::project(NamesWithAliases{{casted_columns[0], version.name}}));
+                        step.required_output.push_back(version.name);
+                        cast = chain.getLastActions();
+                        chain.finalize();
+                    }
+                }
+                EXPECT_EQ(bool(cast), !version.type->equals(*expected_type));
+                if (cast)
+                    cast->execute(block);
+                const auto & result = block.getByName(version.name);
+                EXPECT_TRUE(result.type->equals(*expected_type));
+                ASSERT_EQ(result.column->size(), 3);
+                for (size_t i = 0; i < 3; ++i)
+                {
+                    const auto value = (*result.column)[i];
+                    const Int64 actual = flags == 0 ? value.safeGet<Int64>() : value.safeGet<UInt64>();
+                    EXPECT_EQ(actual, (std::vector<Int64>{1, 123456789, 456789012})[i]);
+                }
+            }
+        }
+    }
+}
+CATCH
+
+#if ENABLE_NEXT_GEN_COLUMNAR
+TEST_F(HiddenCommitTSColumnTest, ColumnarCommitTSRequestAndWireFormat)
+try
+{
+    for (bool partition_scan : {false, true})
+    {
+        for (UInt32 flags :
+             {static_cast<UInt32>(0),
+              static_cast<UInt32>(TiDB::ColumnFlagUnsigned),
+              static_cast<UInt32>(TiDB::ColumnFlagNotNull),
+              static_cast<UInt32>(TiDB::ColumnFlagNotNull | TiDB::ColumnFlagUnsigned)})
+        {
+            SCOPED_TRACE(fmt::format("partition_scan={} flags={}", partition_scan, flags));
+            tipb::Executor executor;
+            executor.set_tp(partition_scan ? tipb::TypePartitionTableScan : tipb::TypeTableScan);
+            auto * columns = partition_scan ? executor.mutable_partition_table_scan()->mutable_columns()
+                                            : executor.mutable_tbl_scan()->mutable_columns();
+            if (partition_scan)
+                executor.mutable_partition_table_scan()->set_table_id(100);
+            else
+                executor.mutable_tbl_scan()->set_table_id(100);
+            auto * commit_ts = columns->Add();
+            commit_ts->set_column_id(MutSup::extra_commit_ts_col_id);
+            commit_ts->set_tp(TiDB::TypeLongLong);
+            commit_ts->set_flag(flags);
+            DAGContext dag_context(1024);
+            TiDBTableScan scan(&executor, "scan", dag_context);
+            auto [defines, table_id_index] = genColumnDefinesForDisaggregatedReadThroughColumnar(scan);
+            ASSERT_EQ(defines->size(), 1);
+            EXPECT_EQ(table_id_index, MutSup::invalid_col_id);
+            const auto & version = defines->front();
+            EXPECT_EQ(version.id, MutSup::extra_commit_ts_col_id);
+            EXPECT_EQ(version.name, genNameForExchangeReceiver(0));
+            EXPECT_EQ(version.type->getName(), "Nullable(UInt64)");
+
+            const auto table_info = genTableInfoForColumnarRead(scan);
+            // A version-only projection must still request real MVCC buffers.
+            // Requesting the handle disables CSE's dummy-version pack clean read.
+            ASSERT_EQ(table_info.columns_size(), 1);
+            EXPECT_EQ(table_info.columns(0).column_id(), MutSup::extra_handle_id);
+            EXPECT_EQ(scan.getColumns()[0].id, MutSup::extra_commit_ts_col_id);
+
+            // ffi_read_version serializes one UInt8 null-map entry per row, followed by UInt64 values.
+            // Visible versions are never null, but their null-map bytes remain.
+            const std::vector<UInt64> timestamps{1, 123456789, 456789012};
+            WriteBufferFromOwnString output;
+            for (size_t i = 0; i < timestamps.size(); ++i)
+                writeBinary(static_cast<UInt8>(0), output);
+            for (auto ts : timestamps)
+                writeBinary(ts, output);
+            const auto bytes = output.releaseStr();
+            ReadBufferFromMemory input(bytes.data(), bytes.size());
+            auto column = version.type->createColumn();
+            version.type->deserializeBinaryBulkWithMultipleStreams(
+                *column,
+                [&](const IDataType::SubstreamPath &) { return &input; },
+                timestamps.size(),
+                -1.0,
+                true,
+                {});
+            EXPECT_TRUE(input.eof());
+            Block block{{std::move(column), version.type, version.name, version.id}};
+            DAGExpressionAnalyzer analyzer{block, *ctx};
+            ExpressionActionsChain chain;
+            if (analyzer.appendExtraCastsAfterTS(chain, {1}, scan))
+            {
+                auto actions = chain.getLastActions();
+                chain.finalize();
+                actions->execute(block);
+            }
+            const auto & result = block.getByName(version.name);
+            EXPECT_TRUE(result.type->equals(*getDataTypeByColumnInfoForComputingLayer(scan.getColumns()[0])));
+            ASSERT_EQ(result.column->size(), timestamps.size());
+            for (size_t i = 0; i < timestamps.size(); ++i)
+            {
+                const auto value = (*result.column)[i];
+                const UInt64 actual
+                    = flags & TiDB::ColumnFlagUnsigned ? value.safeGet<UInt64>() : value.safeGet<Int64>();
+                EXPECT_EQ(actual, timestamps[i]);
+            }
+        }
+    }
+}
+CATCH
+
+TEST_F(HiddenCommitTSColumnTest, ColumnarFilterRemappingPreservesScanNamesAfterCast)
+try
+{
+    for (UInt32 flags :
+         {static_cast<UInt32>(0), static_cast<UInt32>(TiDB::ColumnFlagNotNull | TiDB::ColumnFlagUnsigned)})
+    {
+        SCOPED_TRACE(flags);
+        TiDB::ColumnInfo commit_ts;
+        commit_ts.id = MutSup::extra_commit_ts_col_id;
+        commit_ts.tp = TiDB::TypeLongLong;
+        commit_ts.flag = flags;
+        const auto name = genNameForExchangeReceiver(1);
+        Block early_block{{createNullableColumn<UInt64>({0, 11, 22}, {0, 0, 0}, name, MutSup::extra_commit_ts_col_id)}};
+
+        google::protobuf::RepeatedPtrField<tipb::Expr> filters;
+        auto * condition = filters.Add();
+        condition->set_tp(tipb::ExprType::ColumnRef);
+        WriteBufferFromOwnString buffer;
+        encodeDAGInt64(1, buffer); // Original scan: business column, commit_ts.
+        condition->set_val(buffer.releaseStr());
+        condition->mutable_field_type()->set_tp(TiDB::TypeLongLong);
+        condition->mutable_field_type()->set_flag(flags);
+
+        DAGExpressionAnalyzer analyzer{early_block, *ctx};
+        ExpressionActionsChain chain;
+        auto & step = analyzer.initAndGetLastStep(chain);
+        auto [has_cast, casted_columns] = analyzer.buildExtraCastsAfterTS(step.actions, {1}, {commit_ts});
+        ASSERT_TRUE(has_cast);
+        step.actions->add(ExpressionAction::project(NamesWithAliases{{casted_columns[0], name}}));
+        step.required_output.push_back(name);
+        auto cast = chain.getLastActions();
+        chain.finalize();
+        Block filter_header = early_block.cloneEmpty();
+        cast->execute(filter_header);
+        ASSERT_EQ(filter_header.getByName(name).column_id, 0);
+        const auto remapped_after_cast = remapColumnarFilterConditions(filters, 2, filter_header);
+        EXPECT_EQ(decodeDAGInt64(remapped_after_cast[0].val()), 0);
+
+        // Both projections retain the original scan names, independent of column IDs.
+        const auto remapped = remapColumnarFilterConditions(filters, 2, early_block);
+        EXPECT_EQ(decodeDAGInt64(remapped[0].val()), 0);
+        auto [before_where, filter_name, project] = analyzer.buildPushDownFilter(remapped, true);
+        Block evaluation_block = early_block;
+        cast->execute(evaluation_block);
+        before_where->execute(evaluation_block);
+        const auto & mask = evaluation_block.getByName(filter_name).column;
+        ASSERT_EQ(mask->size(), 3);
+        EXPECT_EQ((*mask)[0].safeGet<UInt64>(), 0);
+        EXPECT_EQ((*mask)[1].safeGet<UInt64>(), 1);
+        EXPECT_EQ((*mask)[2].safeGet<UInt64>(), 1);
+        EXPECT_EQ(early_block.getByName(name).column_id, MutSup::extra_commit_ts_col_id);
+        EXPECT_EQ(early_block.getByName(name).type->getName(), "Nullable(UInt64)");
+    }
+}
+CATCH
+
+TEST_F(HiddenCommitTSColumnTest, ColumnarExchangeReceiverNamesAreConsistent)
+try
+{
+    tipb::Executor executor;
+    executor.set_tp(tipb::TypeTableScan);
+    auto * scan_pb = executor.mutable_tbl_scan();
+    scan_pb->set_table_id(100);
+    for (auto id : {10, 11})
+    {
+        auto * column = scan_pb->add_columns();
+        column->set_column_id(id);
+        column->set_tp(TiDB::TypeLongLong);
+        column->set_flag(TiDB::ColumnFlagNotNull);
+    }
+    DAGContext dag_context(1024);
+    TiDBTableScan scan(&executor, "scan", dag_context);
+    auto [defines, table_id_index] = genColumnDefinesForDisaggregatedReadThroughColumnar(scan);
+    ASSERT_EQ(table_id_index, MutSup::invalid_col_id);
+    ASSERT_EQ(defines->size(), 2);
+
+    // Build the early block with the names produced by the column-definition path
+    // (GenSchemaAndColumn.cpp), then resolve a predicate through the remapping path
+    // (StorageDisaggregatedColumnar.cpp). A mismatch between the two naming paths
+    // would make the predicate column unavailable.
+    Block early_block{
+        toVec<UInt64>(defines->at(1).name, {11}),
+        toVec<UInt64>(defines->at(0).name, {10}),
+    };
+    google::protobuf::RepeatedPtrField<tipb::Expr> filters;
+    auto * condition = filters.Add();
+    condition->set_tp(tipb::ExprType::ColumnRef);
+    WriteBufferFromOwnString buffer;
+    encodeDAGInt64(0, buffer);
+    condition->set_val(buffer.releaseStr());
+    const auto remapped = remapColumnarFilterConditions(filters, scan.getColumnSize(), early_block);
+    EXPECT_EQ(decodeDAGInt64(remapped[0].val()), 1);
+    EXPECT_EQ(defines->at(0).name, genNameForExchangeReceiver(0));
+    EXPECT_EQ(defines->at(1).name, genNameForExchangeReceiver(1));
+}
+CATCH
+
+TEST_F(HiddenCommitTSColumnTest, ColumnarFilterRemappingOffsetsAndInvalidReferences)
+try
+{
+    // IDs deliberately carry no useful identity. Names retain the original scan offsets,
+    // while the early projection omits offset 0 and reverses offsets 1 and 2.
+    Block early_block{
+        toVec<UInt64>(genNameForExchangeReceiver(2), {22}),
+        toVec<UInt64>(genNameForExchangeReceiver(1), {11}),
+    };
+    const auto make_ref = [](Int64 offset) {
+        tipb::Expr expr;
+        expr.set_tp(tipb::ExprType::ColumnRef);
+        WriteBufferFromOwnString buffer;
+        encodeDAGInt64(offset, buffer);
+        expr.set_val(buffer.releaseStr());
+        return expr;
+    };
+    google::protobuf::RepeatedPtrField<tipb::Expr> filters;
+    auto * root = filters.Add();
+    root->set_tp(tipb::ExprType::ScalarFunc);
+    root->set_sig(tipb::ScalarFuncSig::LogicalAnd);
+    *root->add_children() = make_ref(1);
+    auto * nested = root->add_children();
+    nested->set_tp(tipb::ExprType::ScalarFunc);
+    nested->set_sig(tipb::ScalarFuncSig::LogicalOr);
+    *nested->add_children() = make_ref(2);
+    *nested->add_children() = make_ref(1);
+
+    const auto remapped = remapColumnarFilterConditions(filters, 3, early_block);
+    EXPECT_EQ(decodeDAGInt64(remapped[0].children(0).val()), 1);
+    EXPECT_EQ(decodeDAGInt64(remapped[0].children(1).children(0).val()), 0);
+    EXPECT_EQ(decodeDAGInt64(remapped[0].children(1).children(1).val()), 1);
+    EXPECT_EQ(decodeDAGInt64(filters[0].children(1).children(0).val()), 2);
+
+    for (Int64 offset : {-1, 0, 3})
+    {
+        SCOPED_TRACE(offset);
+        google::protobuf::RepeatedPtrField<tipb::Expr> invalid_filters;
+        *invalid_filters.Add() = make_ref(offset);
+        EXPECT_THROW(remapColumnarFilterConditions(invalid_filters, 3, early_block), DB::Exception);
+    }
+
+    // Distinct storage IDs must not hide duplicate projection names.
+    Block duplicate_names{
+        toVec<UInt64>(genNameForExchangeReceiver(1), {11}),
+        toVec<UInt64>(genNameForExchangeReceiver(1), {22}),
+    };
+    duplicate_names.getByPosition(0).column_id = 10;
+    duplicate_names.getByPosition(1).column_id = 20;
+    EXPECT_THROW(remapColumnarFilterConditions(filters, 3, duplicate_names), DB::Exception);
+}
+CATCH
+
+TEST_F(HiddenCommitTSColumnTest, ColumnarCommitTSMixedProjection)
+try
+{
+    for (bool common_handle : {false, true})
+    {
+        tipb::Executor executor;
+        executor.set_tp(tipb::TypeTableScan);
+        auto * scan_pb = executor.mutable_tbl_scan();
+        scan_pb->set_table_id(100);
+        const std::vector<ColumnID>
+            ids{10, MutSup::extra_commit_ts_col_id, MutSup::extra_table_id_col_id, MutSup::extra_handle_id, 11};
+        for (auto id : ids)
+        {
+            auto * column = scan_pb->add_columns();
+            column->set_column_id(id);
+            column->set_tp(id == MutSup::extra_handle_id && common_handle ? TiDB::TypeVarString : TiDB::TypeLongLong);
+            column->set_flag(TiDB::ColumnFlagNotNull | (id == 10 ? TiDB::ColumnFlagGeneratedColumn : 0));
+        }
+        DAGContext dag_context(1024);
+        TiDBTableScan scan(&executor, "scan", dag_context);
+        const auto table_info = genTableInfoForColumnarRead(scan);
+        ASSERT_EQ(table_info.columns_size(), 2);
+        EXPECT_EQ(table_info.columns(0).column_id(), MutSup::extra_handle_id);
+        EXPECT_EQ(table_info.columns(0).tp(), common_handle ? TiDB::TypeVarString : TiDB::TypeLongLong);
+        EXPECT_EQ(table_info.columns(1).column_id(), 11);
+        auto [defines, table_id_index] = genColumnDefinesForDisaggregatedReadThroughColumnar(scan);
+        ASSERT_EQ(defines->size(), 3);
+        EXPECT_EQ(table_id_index, 2);
+        EXPECT_EQ(defines->at(0).id, MutSup::extra_commit_ts_col_id);
+        EXPECT_EQ(defines->at(0).name, genNameForExchangeReceiver(1));
+        EXPECT_EQ(defines->at(1).id, MutSup::extra_handle_id);
+        EXPECT_EQ(defines->at(1).name, genNameForExchangeReceiver(3));
+        EXPECT_EQ(defines->at(2).id, 11);
+        EXPECT_EQ(defines->at(2).name, genNameForExchangeReceiver(4));
+    }
+}
+CATCH
+
+#endif
 
 TEST_F(HiddenCommitTSColumnTest, PushDownFilterAliasAndCast)
 try

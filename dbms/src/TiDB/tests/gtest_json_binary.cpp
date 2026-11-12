@@ -15,6 +15,7 @@
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <TiDB/Decode/JsonBinary.cpp>
+#include <limits>
 
 namespace DB
 {
@@ -23,6 +24,19 @@ namespace tests
 class TestJsonBinary : public ::testing::Test
 {
 public:
+    static String makeVariableLengthValue(JsonBinary::JsonType type, UInt64 length, const String & payload = {})
+    {
+        String value;
+        {
+            VectorWriter<String> write_buffer(value);
+            if (type == JsonBinary::TYPE_CODE_OPAQUE)
+                write_buffer.write(static_cast<char>(0xe9));
+            writeVarUInt(length, write_buffer);
+            write_buffer.write(payload.data(), payload.size());
+        }
+        return value;
+    }
+
     static void checkJsonPathKeyCacheDisable(std::shared_ptr<JsonPathExpr> path_expr)
     {
         for (const auto & leg_ptr : path_expr->getLegs())
@@ -177,6 +191,25 @@ try
 }
 CATCH
 
+TEST_F(TestJsonBinary, TestObjectKeyBounds)
+try
+{
+    // Leave a byte between the entries and the key to also test an offset past the end.
+    UInt8 jsonObject[] = {0x1, 0x0, 0x0, 0x0, 0x16, 0x0, 0x0, 0x0, 0x14, 0x0,  0x0,
+                          0x0, 0x2, 0x0, 0x4, 0x0,  0x0, 0x0, 0x0, 0x0,  0x61, 0x62};
+    JsonBinary jsonBinary(JsonBinary::TYPE_CODE_OBJECT, StringRef(jsonObject, sizeof(jsonObject)));
+    ASSERT_EQ(jsonBinary.toString(), R"({"ab": null})");
+
+    // Keep the entries intact while shortening the view to exclude some or all key bytes.
+    for (size_t size = HEADER_SIZE + KEY_ENTRY_SIZE + VALUE_ENTRY_SIZE; size < sizeof(jsonObject); ++size)
+    {
+        SCOPED_TRACE(size);
+        JsonBinary truncated(JsonBinary::TYPE_CODE_OBJECT, StringRef(jsonObject, size));
+        EXPECT_THROW(truncated.toString(), Exception);
+    }
+}
+CATCH
+
 TEST_F(TestJsonBinary, TestUnquoteArray)
 try
 {
@@ -208,6 +241,36 @@ try
         JsonBinary json_binary(JsonBinary::TYPE_CODE_ARRAY, StringRef(json_array, sizeof(json_array) / sizeof(UInt8)));
         auto str = JsonBinary::unquoteString(json_binary.toString());
         ASSERT_TRUE(str == "[3]");
+    }
+}
+CATCH
+
+TEST_F(TestJsonBinary, TestNumericValueBounds)
+try
+{
+    const auto checkBounds = [](JsonBinary::JsonType containerType, const auto & rawValue, const String & expected) {
+        SCOPED_TRACE(containerType);
+        JsonBinary jsonBinary(containerType, StringRef(rawValue, sizeof(rawValue)));
+        ASSERT_EQ(jsonBinary.toString(), expected);
+
+        // Each container has a padding byte followed by an eight-byte numeric value.
+        for (size_t size = sizeof(rawValue) - 9; size < sizeof(rawValue); ++size)
+        {
+            SCOPED_TRACE(size);
+            JsonBinary truncated(containerType, StringRef(rawValue, size));
+            EXPECT_THROW(truncated.toString(), Exception);
+        }
+    };
+
+    for (auto valueType : {JsonBinary::TYPE_CODE_INT64, JsonBinary::TYPE_CODE_UINT64, JsonBinary::TYPE_CODE_FLOAT64})
+    {
+        SCOPED_TRACE(valueType);
+        UInt8 jsonArray[22] = {0x1, 0x0, 0x0, 0x0, 0x16, 0x0, 0x0, 0x0, valueType, 0xe};
+        checkBounds(JsonBinary::TYPE_CODE_ARRAY, jsonArray, "[0]");
+
+        UInt8 jsonObject[29] = {0x1, 0x0, 0x0, 0x0, 0x1d,      0x0,  0x0, 0x0, 0x13, 0x0,
+                                0x0, 0x0, 0x1, 0x0, valueType, 0x15, 0x0, 0x0, 0x0,  0x61};
+        checkBounds(JsonBinary::TYPE_CODE_OBJECT, jsonObject, R"({"a": 0})");
     }
 }
 CATCH
@@ -472,6 +535,83 @@ try
             StringRef(json_string, sizeof(json_string) / sizeof(UInt8)));
         auto str = JsonBinary::unquoteString(json_binary.toString());
         ASSERT_TRUE(str == expected);
+    }
+}
+CATCH
+
+TEST_F(TestJsonBinary, TestVariableLengthBounds)
+try
+{
+    const auto max_length = std::numeric_limits<UInt64>::max();
+    for (auto type : {JsonBinary::TYPE_CODE_STRING, JsonBinary::TYPE_CODE_OPAQUE})
+    {
+        SCOPED_TRACE(type);
+        for (UInt64 length : {UInt64(0), UInt64(1), UInt64(128)})
+        {
+            SCOPED_TRACE(length);
+            auto value = makeVariableLengthValue(type, length, String(length, 'a'));
+            JsonBinary json_binary(type, StringRef(value.data(), value.size()));
+            EXPECT_NO_THROW(json_binary.toString());
+        }
+
+        // No payload follows the varint. Large lengths also exercise addition overflow.
+        for (UInt64 length : {UInt64(1), UInt64(128), max_length - 11, max_length - 10, max_length - 9, max_length})
+        {
+            SCOPED_TRACE(length);
+            auto value = makeVariableLengthValue(type, length);
+            JsonBinary json_binary(type, StringRef(value.data(), value.size()));
+            EXPECT_THROW(json_binary.toString(), Exception);
+        }
+    }
+}
+CATCH
+
+TEST_F(TestJsonBinary, TestVariableLengthEntryBounds)
+try
+{
+    auto path_expr = JsonPathExpr::parseJsonPathExpr("$[0]");
+    ASSERT_TRUE(path_expr);
+    std::vector<JsonPathExprRefContainerPtr> paths;
+    paths.push_back(std::make_unique<JsonPathExprRefContainer>(path_expr));
+
+    const auto max_length = std::numeric_limits<UInt64>::max();
+    for (auto type : {JsonBinary::TYPE_CODE_STRING, JsonBinary::TYPE_CODE_OPAQUE})
+    {
+        SCOPED_TRACE(type);
+        for (UInt64 length :
+             {UInt64(0), UInt64(1), UInt64(128), max_length - 11, max_length - 10, max_length - 9, max_length})
+        {
+            SCOPED_TRACE(length);
+            const bool valid = length <= 128;
+            auto value = makeVariableLengthValue(type, length, valid ? String(length, 'a') : String{});
+            ColumnString::Chars_t array;
+            {
+                JsonBinary::JsonBinaryWriteBuffer write_buffer(array);
+                encodeNumeric<UInt32>(write_buffer, 1);
+                encodeNumeric<UInt32>(write_buffer, HEADER_SIZE + VALUE_ENTRY_SIZE + value.size());
+                write_buffer.write(type);
+                encodeNumeric<UInt32>(write_buffer, HEADER_SIZE + VALUE_ENTRY_SIZE);
+                write_buffer.write(value.data(), value.size());
+            }
+            JsonBinary json_binary(JsonBinary::TYPE_CODE_ARRAY, StringRef(array.data(), array.size()));
+            if (valid)
+            {
+                auto extracted = json_binary.extract(paths);
+                ASSERT_EQ(extracted.size(), 1);
+                JsonBinary expected(type, StringRef(value.data(), value.size()));
+                EXPECT_EQ(extracted[0].toString(), expected.toString());
+                if (length > 0)
+                {
+                    JsonBinary truncated(JsonBinary::TYPE_CODE_ARRAY, StringRef(array.data(), array.size() - 1));
+                    EXPECT_THROW(truncated.extract(paths), Exception);
+                }
+            }
+            else
+            {
+                // Extraction must reject the length before constructing a child view.
+                EXPECT_THROW(json_binary.extract(paths), Exception);
+            }
+        }
     }
 }
 CATCH

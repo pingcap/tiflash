@@ -14,6 +14,7 @@
 
 #include <Columns/ColumnsNumber.h>
 #include <Common/Exception.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/typeid_cast.h>
 #include <Core/Names.h>
 #include <Storages/ColumnsDescription.h>
@@ -40,20 +41,21 @@ RegionBlockReader::RegionBlockReader(DecodingStorageSchemaSnapshotConstPtr schem
 {}
 
 template <typename ReadList>
-bool RegionBlockReader::read(Block & block, const ReadList & data_list, bool force_decode)
+bool RegionBlockReader::read(Block & block, const ReadList & data_list, bool force_decode, bool skip_extra_columns)
 {
+    first_skipped_column_id = 0;
     try
     {
         switch (schema_snapshot->pk_type)
         {
         case TMTPKType::INT64:
-            return readImpl<TMTPKType::INT64>(block, data_list, force_decode);
+            return readImpl<TMTPKType::INT64>(block, data_list, force_decode, skip_extra_columns);
         case TMTPKType::UINT64:
-            return readImpl<TMTPKType::UINT64>(block, data_list, force_decode);
+            return readImpl<TMTPKType::UINT64>(block, data_list, force_decode, skip_extra_columns);
         case TMTPKType::STRING:
-            return readImpl<TMTPKType::STRING>(block, data_list, force_decode);
+            return readImpl<TMTPKType::STRING>(block, data_list, force_decode, skip_extra_columns);
         default:
-            return readImpl<TMTPKType::UNSPECIFIED>(block, data_list, force_decode);
+            return readImpl<TMTPKType::UNSPECIFIED>(block, data_list, force_decode, skip_extra_columns);
         }
     }
     catch (DB::Exception & exc)
@@ -111,12 +113,14 @@ bool RegionBlockReader::read(Block & block, const ReadList & data_list, bool for
 template bool RegionBlockReader::read<RegionDataReadInfoList>(
     Block & block,
     const RegionDataReadInfoList & data_list,
-    bool force_decode);
+    bool force_decode,
+    bool skip_extra_columns);
 
 template bool RegionBlockReader::read<RegionUncommittedDataList>(
     Block & block,
     const RegionUncommittedDataList & data_list,
-    bool force_decode);
+    bool force_decode,
+    bool skip_extra_columns);
 
 template <typename ReadList>
 struct VersionColResolver
@@ -175,7 +179,7 @@ private:
 };
 
 template <TMTPKType pk_type, typename ReadList>
-bool RegionBlockReader::readImpl(Block & block, const ReadList & data_list, bool force_decode)
+bool RegionBlockReader::readImpl(Block & block, const ReadList & data_list, bool force_decode, bool skip_extra_columns)
 {
     VersionColResolver<ReadList> version_col_resolver;
     version_col_resolver.check(block, schema_snapshot->column_defines->size());
@@ -279,7 +283,8 @@ bool RegionBlockReader::readImpl(Block & block, const ReadList & data_list, bool
                         block,
                         next_column_pos,
                         schema_snapshot,
-                        force_decode))
+                        force_decode,
+                        {skip_extra_columns, &first_skipped_column_id}))
                     return false;
             }
         }
@@ -312,6 +317,7 @@ bool RegionBlockReader::readImpl(Block & block, const ReadList & data_list, bool
                     {
                         if (!force_decode)
                         {
+                            GET_METRIC(tiflash_row_decode_reject_count, reason_pk_handle_overflow).Increment();
                             return false;
                         }
                         else
