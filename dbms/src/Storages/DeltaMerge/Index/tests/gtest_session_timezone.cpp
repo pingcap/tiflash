@@ -55,11 +55,11 @@ TEST(SessionTimezoneTest, ConvertsBoundsAndKeepsFold)
     const auto param = packs(
         attr,
         {
-            {"2021-11-07 04:00:00", "2021-11-07 04:10:00"},
+            {"2021-11-05 04:00:00", "2021-11-05 04:10:00"},
             {"2021-11-07 05:20:00", "2021-11-07 05:40:00"},
             {"2021-11-07 06:20:00", "2021-11-07 06:40:00"},
             {"2021-11-07 04:00:00", "2021-11-07 08:00:00"},
-            {"2021-11-07 08:00:00", "2021-11-07 08:10:00"},
+            {"2021-11-09 08:00:00", "2021-11-09 08:10:00"},
         });
     TimezoneInfo tz;
     tz.resetByTimezoneName("America/New_York");
@@ -74,10 +74,10 @@ TEST(SessionTimezoneTest, ConvertsBoundsAndKeepsFold)
         (RSResults{RSResult::None, RSResult::NoneNull, RSResult::NoneNull, RSResult::NoneNull, RSResult::None}));
 
     tz.resetByTimezoneOffset(8 * 3600);
-    SessionTimezone fixed(createEqual(attr, Field(packed("2021-11-07 12:05:00"))), attr, tz);
+    SessionTimezone fixed(createEqual(attr, Field(packed("2021-11-05 12:05:00"))), attr, tz);
     EXPECT_EQ(fixed.roughCheck(0, 1, param), RSResults(1, RSResult::Some));
     EXPECT_EQ(fixed.roughCheck(1, 1, param), RSResults(1, RSResult::None));
-    EXPECT_EQ(param.indexes.at(1).minmax->getUInt64MinMax(0).first, packed("2021-11-07 04:00:00"));
+    EXPECT_EQ(param.indexes.at(1).minmax->getUInt64MinMax(0).first, packed("2021-11-05 04:00:00"));
 }
 
 TEST(SessionTimezoneTest, RetainsTransitionsZeroAndNullableBounds)
@@ -90,6 +90,8 @@ TEST(SessionTimezoneTest, RetainsTransitionsZeroAndNullableBounds)
             {"2021-01-01 00:00:00", "2021-12-31 00:00:00"},
             {"0000-00-00 00:00:00", "2021-12-31 00:00:00"},
             {"2039-01-01 00:00:00", "2039-01-02 00:00:00"},
+            // The DateLUT proof also checks neighboring transition days.
+            {"2021-11-08 12:00:00", "2021-11-08 12:00:00"},
         });
     auto nulls = attr.type->createColumn();
     nulls->insert(Field());
@@ -97,13 +99,37 @@ TEST(SessionTimezoneTest, RetainsTransitionsZeroAndNullableBounds)
     TimezoneInfo tz;
     tz.resetByTimezoneName("America/New_York");
     SessionTimezone op(createGreater(attr, Field(packed("2022-01-01 00:00:00"))), attr, tz);
-    EXPECT_EQ(op.roughCheck(0, 5, param), RSResults(5, RSResult::SomeNull));
+    EXPECT_EQ(op.roughCheck(0, 6, param), RSResults(6, RSResult::SomeNull));
+}
+
+TEST(SessionTimezoneTest, RetainsUnprovedNamedRangesAndPrunesFixedOffsetRanges)
+{
+    const Attr attr{"ts", 1, std::make_shared<DataTypeMyDateTime>(6)};
+    const auto param = packs(
+        attr,
+        {
+            {"2024-01-01 00:00:00.123456", "2024-01-02 00:00:00.123456"},
+            {"2024-01-01 00:00:00.123456", "2024-03-01 00:00:00.123456"},
+        });
+    TimezoneInfo tz;
+    const auto check = [&] {
+        SessionTimezone op(createEqual(attr, Field(packed("2024-04-01 00:00:00"))), attr, tz);
+        return op.roughCheck(0, 2, param);
+    };
+    // Named zones require a bounded DateLUT proof, even without a transition.
+    tz.resetByTimezoneName("Asia/Shanghai");
+    EXPECT_EQ(check(), (RSResults{RSResult::None, RSResult::SomeNull}));
+    // Fixed offsets and UTC reuse the full UTC proof and can prune wide packs.
+    tz.resetByTimezoneOffset(8 * 3600);
+    EXPECT_EQ(check(), RSResults(2, RSResult::None));
+    tz.resetByTimezoneName("UTC");
+    EXPECT_EQ(check(), RSResults(2, RSResult::None));
 }
 
 TEST(SessionTimezoneTest, ParserProjectsTimestampLiteralsToSessionTime)
 {
     const Attr attr{"ts", 1, std::make_shared<DataTypeMyDateTime>(6)};
-    const auto param = packs(attr, {{"2021-11-08 12:00:00", "2021-11-08 12:00:00"}});
+    const auto param = packs(attr, {{"2021-11-09 12:00:00", "2021-11-09 12:00:00"}});
     TiDB::ColumnInfos columns(1);
     columns[0].id = 1;
     google::protobuf::RepeatedPtrField<tipb::Expr> filters;
@@ -117,7 +143,7 @@ TEST(SessionTimezoneTest, ParserProjectsTimestampLiteralsToSessionTime)
     column->set_val(offset.releaseStr());
     column->mutable_field_type()->set_tp(TiDB::TypeTimestamp);
     auto * literal = expr->add_children();
-    *literal = constructDateTimeLiteralTiExpr(packed("2021-11-08 07:00:00"));
+    *literal = constructDateTimeLiteralTiExpr(packed("2021-11-09 07:00:00"));
     TimezoneInfo tz;
     tz.resetByTimezoneName("America/New_York");
     const tipb::ANNQueryInfo ann;
@@ -130,7 +156,7 @@ TEST(SessionTimezoneTest, ParserProjectsTimestampLiteralsToSessionTime)
         return FilterParser::parseDAGQuery(dag, columns, {{1, attr}}, Logger::get())->roughCheck(0, 1, param);
     };
     EXPECT_EQ(check(), RSResults(1, RSResult::All));
-    *literal = constructDateTimeLiteralTiExpr(packed("2021-11-08 12:00:00"));
+    *literal = constructDateTimeLiteralTiExpr(packed("2021-11-09 12:00:00"));
     literal->mutable_field_type()->set_tp(TiDB::TypeTimestamp);
     EXPECT_EQ(check(), RSResults(1, RSResult::All));
     *literal = constructDateTimeLiteralTiExpr(packed("1969-12-31 23:59:59"));
@@ -143,7 +169,7 @@ TEST(SessionTimezoneTest, RuntimeInRetainsBothFoldOccurrences)
     const Attr attr{"ts", 1, std::make_shared<DataTypeNullable>(std::make_shared<DataTypeMyDateTime>(6))};
     auto param = packs(
         attr,
-        {{"2026-11-01 04:30:00", "2026-11-01 04:30:00"},
+        {{"2026-10-30 04:30:00", "2026-10-30 04:30:00"},
          {"2026-11-01 05:30:00", "2026-11-01 05:30:00"},
          {"2026-11-01 06:30:00", "2026-11-01 06:30:00"}});
     auto nulls = attr.type->createColumn();
@@ -177,7 +203,7 @@ TEST(SessionTimezoneTest, RuntimeInPrunesSafeTimezoneBounds)
 {
     const Attr attr{"ts", 1, std::make_shared<DataTypeMyDateTime>(6)};
     const auto param
-        = packs(attr, {{"2026-11-02 12:00:00", "2026-11-02 12:00:00"}, {"2026-11-02 13:00:00", "2026-11-02 13:00:00"}});
+        = packs(attr, {{"2026-11-03 12:00:00", "2026-11-03 12:00:00"}, {"2026-11-03 13:00:00", "2026-11-03 13:00:00"}});
     tipb::Expr target;
     target.set_tp(tipb::ExprType::ColumnRef);
     target.mutable_field_type()->set_tp(TiDB::TypeTimestamp);
@@ -189,14 +215,14 @@ TEST(SessionTimezoneTest, RuntimeInPrunesSafeTimezoneBounds)
         EXPECT_FALSE(result[1].isUse());
     };
     tz.resetByTimezoneName("America/New_York");
-    check("2026-11-02 07:00:00");
+    check("2026-11-03 07:00:00");
     tz.resetByTimezoneOffset(8 * 3600);
-    check("2026-11-02 20:00:00");
+    check("2026-11-03 20:00:00");
     tz.resetByTimezoneName("UTC");
-    check("2026-11-02 12:00:00");
+    check("2026-11-03 12:00:00");
     // DATETIME values must not be shifted even in a non-UTC session.
     target.mutable_field_type()->set_tp(TiDB::TypeDatetime);
     tz.resetByTimezoneName("America/New_York");
-    check("2026-11-02 12:00:00");
+    check("2026-11-03 12:00:00");
 }
 } // namespace DB::DM::tests

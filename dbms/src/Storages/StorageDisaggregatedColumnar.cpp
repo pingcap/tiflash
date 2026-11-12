@@ -691,7 +691,10 @@ ColumnarReaderPtr createColumnarReader(
     auto * cluster = global_ctx.getTMTContext().getKVCluster();
     const TiFlashRaftProxyHelper * proxy_helper = global_ctx.getSharedContextDisagg()->getColumnarProxyHelper();
     RUNTIME_CHECK_MSG(proxy_helper != nullptr, "columnar proxy helper is not initialized");
-    // Pass session timezone separately; rough-filter literals keep their TiDB domain.
+    // TiDB sends DATETIME literals in session time and TIMESTAMP literals in UTC.
+    // Forward these literals unchanged and pass the session timezone separately.
+    // The reader converts TIMESTAMP literals and pack bounds from UTC to session time
+    // through the callback so rough filtering agrees with TiFlash's row conversion.
     tipb::DAGRequest timezone_request;
     const auto & timezone_info = context.getTimezoneInfo();
     if (timezone_info.is_name_based)

@@ -282,10 +282,10 @@ inline UInt8 getLastDay(UInt16 year, UInt8 month)
     return last_day;
 }
 
-/// C ABI projection proof for columnar rough filtering. The name is borrowed
-/// only for this call; an empty name selects a fixed offset. Returns 1 only
-/// when both inclusive packed bounds agree with the actual row evaluator.
-/// Failure, including exceptions, returns 0 and must retain the pack.
+/// Shared UTC-to-session range projection for rough filtering, with a C ABI.
+/// The name is borrowed only for this call; an empty name selects a fixed offset.
+/// Returns 1 only when both inclusive packed bounds agree with the actual row
+/// evaluator. Failure, including exceptions, returns 0 and must retain the pack.
 extern "C" UInt8 projectTimestampRange(
     const char * timezone_name,
     UInt64 timezone_name_size,
