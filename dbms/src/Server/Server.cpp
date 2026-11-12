@@ -629,11 +629,6 @@ try
     {
         storage_config.s3_config.enable(/*check_requirements*/ true, log);
     }
-    else if (disagg_opt.mode == DisaggregatedMode::Compute && disagg_opt.use_autoscaler)
-    {
-        // compute node with auto scaler, the requirements will be initted later.
-        storage_config.s3_config.enable(/*check_requirements*/ false, log);
-    }
 
     if (storage_config.format_version != 0)
     {
@@ -1059,12 +1054,6 @@ try
         proxy_machine.initKVStore(global_context->getTMTContext(), store_ident, kvs_watermark);
 
         global_context->getTMTContext().reloadConfig(config());
-        // setup the kv cluster for disagg compute node fetching config
-        if (S3::ClientFactory::instance().isEnabled())
-        {
-            auto & tmt = global_context->getTMTContext();
-            S3::ClientFactory::instance().setKVCluster(tmt.getKVCluster());
-        }
     }
     LOG_INFO(log, "Init S3 GC Manager");
     global_context->getTMTContext().initS3GCManager(proxy_machine.getProxyHelper());

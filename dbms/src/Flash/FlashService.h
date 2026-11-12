@@ -125,6 +125,8 @@ public:
         const disaggregated::FetchDisaggPagesRequest * request,
         grpc::ServerWriter<disaggregated::PagesPacket> * sync_writer) override;
 
+    // Obsolete. Compute nodes used to learn S3 settings from a write node through
+    // this RPC when joining a cluster. S3 settings now come only from the local config.
     grpc::Status GetDisaggConfig(
         grpc::ServerContext * grpc_context,
         const disaggregated::GetDisaggConfigRequest * request,
