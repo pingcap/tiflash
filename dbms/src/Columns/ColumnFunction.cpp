@@ -15,9 +15,9 @@
 // limitations under the License.
 
 #include <Columns/ColumnFunction.h>
+#include <Columns/ShortCircuitExecution.h>
 #include <Columns/countBytesInFilter.h>
 #include <Columns/filterColumn.h>
-#include <Common/typeid_cast.h>
 #include <Functions/IFunction.h>
 #include <Interpreters/ExpressionActions.h>
 #include <fmt/format.h>
@@ -265,6 +265,12 @@ ColumnWithTypeAndName ColumnFunction::reduce() const
     auto columns = captured_columns;
     if (is_short_circuit_argument)
     {
+        /// A short-circuit function consumes its deferred non-first arguments
+        /// itself (executeShortCircuit walks them under a mask), so only its
+        /// first argument - which is always eager and starts the short-circuit
+        /// loop - has to be materialized here. Any other function has no mask
+        /// consumer of its own, so every deferred column captured as its
+        /// argument must be materialized before execution.
         const size_t required_arguments = function->isShortCircuit() ? 1 : columns.size();
         for (size_t i = 0; i < required_arguments; ++i)
             if (const auto * deferred = checkAndGetShortCircuitArgument(columns[i].column))
@@ -283,13 +289,7 @@ ColumnWithTypeAndName ColumnFunction::reduce() const
     return block.getByPosition(captured_columns.size());
 }
 
-const ColumnFunction * checkAndGetShortCircuitArgument(const ColumnPtr & column)
-{
-    const auto * function = typeid_cast<const ColumnFunction *>(column.get());
-    return function && function->isShortCircuitArgument() ? function : nullptr;
-}
-
-ColumnPtr ColumnFunction::executeMaskedIntoBlock(Block && block, const IColumn::Filter & mask) const
+ColumnPtr ColumnFunction::executeWithMask(Block && block, const IColumn::Filter & mask) const
 {
     block.insert({nullptr, function->getReturnType(), ""});
 
@@ -341,36 +341,10 @@ ColumnPtr ColumnFunction::reduceWithMask(const IColumn::Filter & mask) const
             maskedExecute(captured, mask);
             block.insert(std::move(captured));
         }
-        return executeMaskedIntoBlock(std::move(block), mask);
+        return executeWithMask(std::move(block), mask);
     }
 
-    return executeMaskedIntoBlock(Block(captured_columns), mask);
-}
-
-void maskedExecute(ColumnWithTypeAndName & column, const IColumn::Filter & mask)
-{
-    const auto * deferred = checkAndGetShortCircuitArgument(column.column);
-    if (!deferred)
-        return;
-
-    RUNTIME_CHECK(column.column->size() == mask.size());
-    const size_t selected = countBytesInFilter(mask);
-    if (selected == 0)
-    {
-        column.column = column.type->createColumnConstWithDefaultValue(mask.size());
-        return;
-    }
-    if (selected == mask.size())
-    {
-        column.column = deferred->reduce().column;
-        return;
-    }
-
-    /// Let the function consume the mask itself (IFunctionBase::
-    /// executeWithMask): it decides how to treat the masked-off rows and
-    /// returns a full-size column, so no filter/expand copies are needed at
-    /// this level.
-    column.column = deferred->reduceWithMask(mask);
+    return executeWithMask(Block(captured_columns), mask);
 }
 
 } // namespace DB

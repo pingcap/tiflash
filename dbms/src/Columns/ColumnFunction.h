@@ -90,7 +90,7 @@ public:
     /// Shared tail of reduceWithMask: append the result slot to `block`
     /// and run function->executeWithMask on it, checking the row-count
     /// contract.
-    ColumnPtr executeMaskedIntoBlock(Block && block, const IColumn::Filter & mask) const;
+    ColumnPtr executeWithMask(Block && block, const IColumn::Filter & mask) const;
 
     Field operator[](size_t) const override
     {
@@ -308,12 +308,5 @@ private:
 
     void appendArgument(const ColumnWithTypeAndName & column);
 };
-
-const ColumnFunction * checkAndGetShortCircuitArgument(const ColumnPtr & column);
-
-/// Materialize a deferred (short-circuit argument) column in place for the
-/// rows selected by `mask`: the result is a full-size column whose masked-off
-/// rows hold values the consumer will never propagate.
-void maskedExecute(ColumnWithTypeAndName & column, const IColumn::Filter & mask);
 
 } // namespace DB
