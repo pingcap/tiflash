@@ -115,9 +115,17 @@ TEST(ColumnRangeMergeTest, NullColumnTypeDoesNotBuildIntegerSet)
     ASSERT_EQ(missing_range->type, ColumnRangeType::Unsupported);
 
     auto merged = createAnd({createEqual(stored, value), createEqual(missing, value)})->buildSets(used_indexes);
-    const auto * single = dynamic_cast<const SingleColumnRange *>(merged.get());
-    ASSERT_NE(single, nullptr);
-    ASSERT_EQ(single->column_id, stored_column_id);
-    ASSERT_EQ(single->index_id, index_id);
+    size_t searches = 0;
+    const auto search = [&](const SingleColumnRangePtr & single) {
+        ++searches;
+        EXPECT_EQ(single->column_id, stored_column_id);
+        EXPECT_EQ(single->index_id, index_id);
+        return std::make_shared<BitmapFilter>(std::initializer_list<UInt8>{1, 0});
+    };
+    // The indexed column still prunes, while the unsupported predicate is retained for inversion.
+    EXPECT_EQ(merged->check(search, 2)->toDebugString(), "10");
+    EXPECT_EQ(searches, 1);
+    EXPECT_EQ(merged->invert()->check(search, 2)->toDebugString(), "11");
+    EXPECT_EQ(searches, 1);
 }
 } // namespace DB::DM::tests
