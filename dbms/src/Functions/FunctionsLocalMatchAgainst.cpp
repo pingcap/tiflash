@@ -167,7 +167,7 @@ struct AnalyzerScratch
 constexpr size_t exact_route_min_terms = 100;
 constexpr size_t exact_route_min_tokens = 32;
 constexpr size_t exact_route_min_tokens_large_block = 16;
-constexpr size_t exact_route_large_block_min_rows = 256;
+constexpr size_t exact_route_large_block_min_rows = 128;
 constexpr size_t exact_route_budget = 4 * 1024 * 1024;
 constexpr size_t exact_route_max_token_bytes = 4096;
 
