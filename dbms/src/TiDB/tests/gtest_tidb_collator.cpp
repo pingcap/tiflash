@@ -19,6 +19,9 @@
 #include <TiDB/Collation/CollatorUtils.h>
 #include <gtest/gtest.h>
 
+#include <cstring>
+#include <string_view>
+
 namespace DB::tests
 {
 
@@ -599,6 +602,68 @@ TEST(CollatorSuite, PatternRejectTruncatedUTF8)
                     pattern->compile(text, ESCAPE);
                     EXPECT_THROW(pattern->match(character.data(), length), DB::Exception);
                 }
+            }
+        }
+    }
+}
+
+TEST(CollatorSuite, OptimizedPatternRejectTruncatedUTF8)
+{
+    for (const String character : {"©", "中", "😃"})
+    {
+        SCOPED_TRACE(character);
+        for (const String prefix : {"", "prefix"})
+        {
+            SCOPED_TRACE(prefix);
+            const auto input = prefix + character;
+            for (const String pattern : {"_", "_a", "_%a", "%_a%"})
+            {
+                SCOPED_TRACE(pattern);
+                const auto full_pattern = prefix + pattern;
+                BinStrPattern<true> matcher;
+                matcher.compile(full_pattern, ESCAPE);
+                EXPECT_TRUE(matcher.match(input + (pattern == "_" ? "" : "a")));
+                for (size_t length = 1; length < character.size(); ++length)
+                {
+                    SCOPED_TRACE(length);
+                    // Keep the complete character in memory, but expose only a truncated view.
+                    EXPECT_THROW(matcher.match(std::string_view(input.data(), prefix.size() + length)), DB::Exception);
+                }
+            }
+        }
+    }
+
+    BinStrPattern<false> binary_matcher;
+    binary_matcher.compile("_", ESCAPE);
+    EXPECT_TRUE(binary_matcher.match(std::string_view("\xF0", 1)));
+}
+
+TEST(CollatorSuite, OptimizedLikeRejectTruncatedUTF8)
+{
+    for (const auto collator_id : {
+             ITiDBCollator::UTF8_BIN,
+             ITiDBCollator::UTF8MB4_BIN,
+             ITiDBCollator::UTF8MB4_0900_BIN,
+         })
+    {
+        SCOPED_TRACE(collator_id);
+        const auto collator = ITiDBCollator::getCollator(collator_id);
+        for (const String character : {"©", "中", "😃"})
+        {
+            SCOPED_TRACE(character);
+            for (size_t length = 1; length < character.size(); ++length)
+            {
+                SCOPED_TRACE(length);
+                ColumnString::Chars_t data;
+                data.resize(length + 1);
+                std::memcpy(data.data(), character.data(), length);
+                data[length] = 0;
+                ColumnString::Offsets offsets;
+                offsets.push_back(length + 1);
+                PaddedPODArray<UInt8> result;
+                result.resize(1);
+                EXPECT_THROW(StringPatternMatch<false>(data, offsets, "%_a%", ESCAPE, collator, result), DB::Exception);
+                EXPECT_THROW(StringPatternMatch<true>(data, offsets, "%_a%", ESCAPE, collator, result), DB::Exception);
             }
         }
     }

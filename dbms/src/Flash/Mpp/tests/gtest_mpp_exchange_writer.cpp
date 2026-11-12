@@ -54,11 +54,11 @@ namespace tests
 {
 static CompressionMethodByte GetCompressionMethodByte(CompressionMethod m);
 
-using MockExchangeWriterChecker = std::function<void(const TrackedMppDataPacketPtr &, uint16_t)>;
+using MockExchangeWriterChecker = std::function<void(const TrackedMppDataPacketPtr &, size_t)>;
 
 struct MockExchangeWriter
 {
-    MockExchangeWriter(MockExchangeWriterChecker checker_, uint16_t part_num_, DAGContext & dag_context)
+    MockExchangeWriter(MockExchangeWriterChecker checker_, uint32_t part_num_, DAGContext & dag_context)
         : checker(checker_)
         , part_num(part_num_)
         , result_field_types(dag_context.result_field_types)
@@ -67,7 +67,7 @@ struct MockExchangeWriter
     void partitionWrite(
         const Block & header,
         std::vector<MutableColumns> && part_columns,
-        int16_t part_id,
+        size_t part_id,
         MPPDataPacketVersion version,
         CompressionMethod method)
     {
@@ -84,7 +84,7 @@ struct MockExchangeWriter
         size_t bucket_idx,
         UInt64 fine_grained_shuffle_stream_count,
         size_t num_columns,
-        int16_t part_id,
+        size_t part_id,
         MPPDataPacketVersion version,
         CompressionMethod method)
     {
@@ -141,7 +141,7 @@ struct MockExchangeWriter
         return broadcastOrPassThroughWrite(blocks, version, compression_method);
     }
 
-    void partitionWrite(Blocks & blocks, uint16_t part_id)
+    void partitionWrite(Blocks & blocks, size_t part_id)
     {
         checker(MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types), part_id);
     }
@@ -151,7 +151,7 @@ struct MockExchangeWriter
         size_t bucket_idx,
         uint16_t fine_grained_shuffle_stream_count,
         size_t num_columns,
-        int16_t part_id)
+        size_t part_id)
     {
         auto tracked_packet = MPPTunnelSetHelper::ToFineGrainedPacketV0(
             header,
@@ -164,7 +164,7 @@ struct MockExchangeWriter
     }
 
     static void write(tipb::SelectResponse &) { FAIL() << "cannot reach here, only consider CH Block format"; }
-    uint16_t getPartitionNum() const { return part_num; }
+    uint32_t getPartitionNum() const { return part_num; }
     bool isLocal(size_t index) const
     {
         assert(getPartitionNum() > index);
@@ -175,7 +175,7 @@ struct MockExchangeWriter
 
 private:
     MockExchangeWriterChecker checker;
-    uint16_t part_num;
+    uint32_t part_num;
     std::vector<tipb::FieldType> result_field_types;
     std::random_device rd;
     std::mt19937_64 gen;
@@ -250,7 +250,7 @@ public:
 
     static std::vector<std::vector<Block>> decodeWriteReportsV0(
         const Block & header,
-        const std::unordered_map<uint16_t, TrackedMppDataPacketPtr> & write_reports)
+        const std::unordered_map<size_t, TrackedMppDataPacketPtr> & write_reports)
     {
         std::vector<std::vector<Block>> decoded_blocks;
         decoded_blocks.reserve(write_reports.size());
@@ -273,7 +273,7 @@ public:
         const tipb::CompressionMode & mode,
         const std::shared_ptr<MockExchangeWriter> & mock_writer,
         const Block & header,
-        const std::unordered_map<uint16_t, TrackedMppDataPacketPtr> & write_reports)
+        const std::unordered_map<size_t, TrackedMppDataPacketPtr> & write_reports)
     {
         CHBlockChunkDecodeAndSquash decoder(header, 512);
         std::vector<std::vector<Block>> decoded_blocks;
@@ -356,7 +356,7 @@ public:
         size_t expect_selective_rows,
         tipb::CompressionMode mode,
         std::shared_ptr<MockExchangeWriter> mock_writer,
-        const std::unordered_map<uint16_t, TrackedMppDataPacketPtr> & write_records)
+        const std::unordered_map<size_t, TrackedMppDataPacketPtr> & write_records)
     {
         std::vector<std::vector<Block>> decoded_blocks;
         ASSERT_EQ(write_records.size(), expect_part_num);
@@ -392,7 +392,7 @@ TEST_F(TestMPPExchangeWriter, testBatchWriteFineGrainedShuffle)
 try
 {
     const size_t block_rows = 1024;
-    const uint16_t part_num = 4;
+    const uint32_t part_num = 4;
     const uint32_t fine_grained_shuffle_stream_count = 8;
     const Int64 fine_grained_shuffle_batch_size = 4096;
 
@@ -400,8 +400,8 @@ try
     auto block = prepareUniformBlock(block_rows);
 
     // 2. Build MockExchangeWriter.
-    std::unordered_map<uint16_t, TrackedMppDataPacketPtr> write_report;
-    auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
+    std::unordered_map<size_t, TrackedMppDataPacketPtr> write_report;
+    auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, size_t part_id) {
         auto res = write_report.insert({part_id, packet});
         // Should always insert succeed.
         // Because block.rows(1024) < fine_grained_shuffle_batch_size(4096),
@@ -453,7 +453,7 @@ try
 {
     const size_t block_rows = 64;
     const size_t block_num = 64;
-    const uint16_t part_num = 4;
+    const uint32_t part_num = 4;
     const uint32_t fine_grained_shuffle_stream_count = 8;
     const Int64 fine_grained_shuffle_batch_size = 108;
 
@@ -470,8 +470,8 @@ try
          {tipb::CompressionMode::NONE, tipb::CompressionMode::FAST, tipb::CompressionMode::HIGH_COMPRESSION})
     {
         // 2. Build MockExchangeWriter.
-        std::unordered_map<uint16_t, TrackedMppDataPacketPtrs> write_report;
-        auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
+        std::unordered_map<size_t, TrackedMppDataPacketPtrs> write_report;
+        auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, size_t part_id) {
             write_report[part_id].emplace_back(packet);
         };
         auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num, *dag_context_ptr);
@@ -544,7 +544,7 @@ try
 {
     const size_t block_rows = 64;
     const size_t block_num = 64;
-    const uint16_t part_num = 4;
+    const uint32_t part_num = 4;
     const uint32_t fine_grained_shuffle_stream_count = 8;
     const Int64 fine_grained_shuffle_batch_size = 108;
 
@@ -558,8 +558,8 @@ try
     Block header = blocks.back();
 
     // 2. Build MockExchangeWriter.
-    std::unordered_map<uint16_t, TrackedMppDataPacketPtrs> write_report;
-    auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
+    std::unordered_map<size_t, TrackedMppDataPacketPtrs> write_report;
+    auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, size_t part_id) {
         write_report[part_id].emplace_back(packet);
     };
     auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num, *dag_context_ptr);
@@ -610,7 +610,7 @@ try
 {
     const size_t block_rows = 64;
     const size_t block_num = 64;
-    const uint16_t part_num = 4;
+    const uint32_t part_num = 4;
     const uint32_t fine_grained_shuffle_stream_count = 8;
     const Int64 fine_grained_shuffle_batch_size = 108;
     const std::vector<UInt64> max_buffered_bytes_vec = {1, 1024 * 1024 * 1024};
@@ -628,8 +628,8 @@ try
         Block header = blocks.back();
 
         // 2. Build MockExchangeWriter.
-        std::unordered_map<uint16_t, TrackedMppDataPacketPtrs> write_report;
-        auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
+        std::unordered_map<size_t, TrackedMppDataPacketPtrs> write_report;
+        auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, size_t part_id) {
             write_report[part_id].emplace_back(packet);
         };
         auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num, *dag_context_ptr);
@@ -666,7 +666,7 @@ try
     const size_t block_rows = 64;
     const size_t block_num = 64;
     const size_t batch_send_min_limit = 108;
-    const uint16_t part_num = 4;
+    const uint32_t part_num = 4;
 
     // 1. Build Blocks.
     std::vector<Block> blocks;
@@ -678,8 +678,8 @@ try
     Block header = blocks.back();
 
     // 2. Build MockExchangeWriter.
-    std::unordered_map<uint16_t, TrackedMppDataPacketPtrs> write_report;
-    auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
+    std::unordered_map<size_t, TrackedMppDataPacketPtrs> write_report;
+    auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, size_t part_id) {
         write_report[part_id].emplace_back(packet);
     };
     auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num, *dag_context_ptr);
@@ -723,7 +723,7 @@ try
     const size_t block_rows = 64;
     const size_t block_num = 64;
     const size_t batch_send_min_limit = block_rows * block_num / 2;
-    const uint16_t part_num = 4;
+    const uint32_t part_num = 4;
     const std::vector<UInt64> max_buffered_bytes_vec = {1, 1024 * 1024 * 1024};
     const std::vector<size_t> expected_response_num = {block_num, 2};
 
@@ -739,8 +739,8 @@ try
         Block header = blocks.back();
 
         // 2. Build MockExchangeWriter.
-        std::unordered_map<uint16_t, TrackedMppDataPacketPtrs> write_report;
-        auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
+        std::unordered_map<size_t, TrackedMppDataPacketPtrs> write_report;
+        auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, size_t part_id) {
             write_report[part_id].emplace_back(packet);
         };
         auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num, *dag_context_ptr);
@@ -787,7 +787,7 @@ try
 
     // 2. Build MockExchangeWriter.
     TrackedMppDataPacketPtrs write_report;
-    auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
+    auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, size_t part_id) {
         ASSERT_EQ(part_id, 0);
         write_report.emplace_back(packet);
     };
@@ -844,7 +844,7 @@ try
 
         // 2. Build MockExchangeWriter.
         TrackedMppDataPacketPtrs write_report;
-        auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
+        auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, size_t part_id) {
             ASSERT_EQ(part_id, 0);
             write_report.emplace_back(packet);
         };
@@ -889,7 +889,7 @@ try
     {
         // 2. Build MockExchangeWriter.
         TrackedMppDataPacketPtrs write_report;
-        auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
+        auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, size_t part_id) {
             ASSERT_EQ(part_id, 0);
             write_report.emplace_back(packet);
         };
@@ -947,7 +947,7 @@ try
     const size_t block_rows = 64;
     const size_t block_num = 64;
     const size_t batch_send_min_limit = 1024 * 1024 * 1024;
-    const uint16_t part_num = 4;
+    const uint32_t part_num = 4;
 
     // 1. Build Blocks.
     std::vector<Block> blocks;
@@ -962,8 +962,8 @@ try
          {tipb::CompressionMode::NONE, tipb::CompressionMode::FAST, tipb::CompressionMode::HIGH_COMPRESSION})
     {
         // 2. Build MockExchangeWriter.
-        std::unordered_map<uint16_t, TrackedMppDataPacketPtrs> write_report;
-        auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
+        std::unordered_map<size_t, TrackedMppDataPacketPtrs> write_report;
+        auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, size_t part_id) {
             write_report[part_id].emplace_back(packet);
         };
         auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num, *dag_context_ptr);
@@ -1043,8 +1043,8 @@ try
     for (const auto & mpp_version : mpp_version_vec)
     {
         // Construct checker.
-        std::unordered_map<uint16_t, TrackedMppDataPacketPtr> write_records;
-        MockExchangeWriterChecker checker = [&](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
+        std::unordered_map<size_t, TrackedMppDataPacketPtr> write_records;
+        MockExchangeWriterChecker checker = [&](const TrackedMppDataPacketPtr & packet, size_t part_id) {
             auto res = write_records.insert({part_id, packet});
             ASSERT_TRUE(res.second);
         };
@@ -1103,8 +1103,8 @@ try
     for (const auto & mpp_version : mpp_version_vec)
     {
         // Construct checker.
-        std::unordered_map<uint16_t, TrackedMppDataPacketPtr> write_records;
-        MockExchangeWriterChecker checker = [&](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
+        std::unordered_map<size_t, TrackedMppDataPacketPtr> write_records;
+        MockExchangeWriterChecker checker = [&](const TrackedMppDataPacketPtr & packet, size_t part_id) {
             auto res = write_records.insert({part_id, packet});
             ASSERT_TRUE(res.second);
         };
