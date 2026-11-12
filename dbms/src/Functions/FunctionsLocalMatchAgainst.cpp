@@ -166,6 +166,8 @@ struct AnalyzerScratch
 // Reserve automatic routing for large queries; forced routing stays test-only.
 constexpr size_t exact_route_min_terms = 100;
 constexpr size_t exact_route_min_tokens = 32;
+constexpr size_t exact_route_min_tokens_large_block = 16;
+constexpr size_t exact_route_large_block_min_rows = 256;
 constexpr size_t exact_route_budget = 4 * 1024 * 1024;
 constexpr size_t exact_route_max_token_bytes = 4096;
 
@@ -1583,6 +1585,8 @@ public:
         for (size_t arg = 1; arg < document_argument_end; ++arg)
             document_columns.emplace_back(*block.getByPosition(arguments[arg]).column);
         const size_t route_terms = eligibleExactRouteTermCount(compiled_query, config, collator, matcher, budget);
+        const size_t min_route_tokens
+            = rows >= exact_route_large_block_min_rows ? exact_route_min_tokens_large_block : exact_route_min_tokens;
         bool may_use_index = matcher == LocalMatchAgainstTest::Matcher::Indexed;
         if (route_terms && !may_use_index)
         {
@@ -1590,7 +1594,7 @@ public:
             // tokens need a separator. This cheap lower bound bypasses the
             // routing row loop for wholly short blocks without tokenizing twice.
             // Use one byte even for unusual analyzer bounds to avoid overflow.
-            constexpr size_t min_document_bytes = exact_route_min_tokens * 2 - 1;
+            const size_t min_document_bytes = min_route_tokens * 2 - 1;
             for (const auto & column : document_columns)
             {
                 for (size_t row = 0; row < rows; ++row)
@@ -1658,7 +1662,7 @@ public:
                         // columns may already have contributed to this row's state.
                         if (!route_attempted
                             && (matcher == LocalMatchAgainstTest::Matcher::Indexed
-                                || analyzed_column.size() >= exact_route_min_tokens))
+                                || analyzed_column.size() >= min_route_tokens))
                         {
                             route_attempted = true;
                             compiled_query.exact_route = buildExactTermRoute(compiled_query, collator, route_terms);
@@ -1703,7 +1707,7 @@ public:
                         // this whole column before any state is modified.
                         const bool indexed = exact_scratch
                             && (matcher == LocalMatchAgainstTest::Matcher::Indexed
-                                || analyzed_column.size() >= exact_route_min_tokens)
+                                || analyzed_column.size() >= min_route_tokens)
                             // Valid BMP tokens use at most three bytes per code
                             // point. The usual analyzer bound proves this without
                             // another column pass, including early-hit OR queries.
