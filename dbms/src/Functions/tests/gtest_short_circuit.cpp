@@ -493,7 +493,11 @@ TEST_F(ShortCircuit, JsonObjectConstNullKeyAndValue)
             createConstColumn<UInt8>(2, 0, "guard"),
         });
         ExpressionActions actions = build(input);
-        ASSERT_EQ(lazyCount(actions), 3);
+        /// cast_string_as_json is a pure constant expression here, so plan-time
+        /// constant folding turns it into ADD_COLUMN before the short-circuit
+        /// analysis; only json_object (whose sample evaluation throws on the
+        /// const-NULL key, keeping it a function action) and isNotNull defer.
+        ASSERT_EQ(lazyCount(actions), 2);
         actions.execute(input);
         ASSERT_COLUMN_EQ(createColumn<UInt8>({0, 0}), input.getByName("result"));
     }
