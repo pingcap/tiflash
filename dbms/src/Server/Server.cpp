@@ -669,6 +669,19 @@ try
             throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, message);
         }
     }
+#if !(ENABLE_NEXT_GEN == 1 && ENABLE_NEXT_GEN_COLUMNAR == 1)
+    // Prevent tiflash-compute from starting without a proper S3 configuration.
+    // ENABLE_NEXT_GEN together with ENABLE_NEXT_GEN_COLUMNAR does not run this check.
+    // Under ENABLE_NEXT_GEN_COLUMNAR, S3 access does not use TiFlash's storage.s3
+    // config; it is configured through tiflash-columnar-hub.
+    if (disagg_opt.mode == DisaggregatedMode::Compute && !storage_config.s3_config.isS3Enabled())
+    {
+        const String message = "'storage.s3.bucket', 'storage.s3.endpoint' and 'storage.s3.root' must be set "
+                               "when 'flash.disaggregated_mode' is 'tiflash_compute'!";
+        LOG_ERROR(log, message);
+        throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, message);
+    }
+#endif
 
     // Safe point v2 is deprecated and replaced by keyspace-based safe point.
     // config().getBool("enable_safe_point_v2", false);
