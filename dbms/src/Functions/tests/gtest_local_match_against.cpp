@@ -2198,7 +2198,7 @@ TEST_F(TestLocalMatchAgainst, ExactRouteTokenThresholdForLargeBlocks)
             String document = "a";
             for (size_t i = 1; i < tokens; ++i)
                 document += " a";
-            for (size_t terms : {99, 100})
+            for (size_t terms : {63, 64, 99, 100})
             {
                 SCOPED_TRACE(::testing::Message() << "rows=" << rows << " tokens=" << tokens << " terms=" << terms);
                 auto query = exactQuery(terms, true);
@@ -2212,7 +2212,7 @@ TEST_F(TestLocalMatchAgainst, ExactRouteTokenThresholdForLargeBlocks)
                 ASSERT_COLUMN_EQ(
                     runMatcher(columns, collator, Matcher::Linear, linear),
                     runMatcher(columns, collator, Matcher::Automatic, automatic));
-                const bool indexed = terms == 100 && (tokens == 32 || (rows == 128 && tokens >= 16));
+                const bool indexed = rows == 128 ? terms >= 64 && tokens >= 16 : terms >= 100 && tokens >= 32;
                 EXPECT_EQ(indexed ? 1 : 0, automatic.route_builds);
                 EXPECT_EQ(indexed ? rows : 0, automatic.indexed_columns);
                 EXPECT_EQ(indexed ? 0 : rows, automatic.linear_columns);

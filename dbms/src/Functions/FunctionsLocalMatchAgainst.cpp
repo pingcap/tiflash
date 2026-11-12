@@ -165,6 +165,7 @@ struct AnalyzerScratch
 // costlier than a small linear scan, even above the document token threshold.
 // Reserve automatic routing for large queries; forced routing stays test-only.
 constexpr size_t exact_route_min_terms = 100;
+constexpr size_t exact_route_min_terms_large_block = 64;
 constexpr size_t exact_route_min_tokens = 32;
 constexpr size_t exact_route_min_tokens_large_block = 16;
 constexpr size_t exact_route_large_block_min_rows = 128;
@@ -1278,6 +1279,7 @@ size_t eligibleExactRouteTermCount(
     const LocalMatchAnalyzerConfig & config,
     const TiDB::TiDBCollatorPtr & collator,
     LocalMatchAgainstTest::Matcher matcher,
+    size_t min_terms,
     size_t budget)
 {
     if (matcher == LocalMatchAgainstTest::Matcher::Linear || config.use_ngram || !collator)
@@ -1329,7 +1331,7 @@ size_t eligibleExactRouteTermCount(
             ++terms;
         }
     }
-    if (terms == 0 || (matcher == LocalMatchAgainstTest::Matcher::Automatic && terms < exact_route_min_terms))
+    if (terms == 0 || (matcher == LocalMatchAgainstTest::Matcher::Automatic && terms < min_terms))
         return {};
 
     return terms;
@@ -1584,9 +1586,11 @@ public:
         document_columns.reserve(document_argument_end - 1);
         for (size_t arg = 1; arg < document_argument_end; ++arg)
             document_columns.emplace_back(*block.getByPosition(arguments[arg]).column);
-        const size_t route_terms = eligibleExactRouteTermCount(compiled_query, config, collator, matcher, budget);
-        const size_t min_route_tokens
-            = rows >= exact_route_large_block_min_rows ? exact_route_min_tokens_large_block : exact_route_min_tokens;
+        const bool large_block = rows >= exact_route_large_block_min_rows;
+        const size_t min_route_terms = large_block ? exact_route_min_terms_large_block : exact_route_min_terms;
+        const size_t route_terms
+            = eligibleExactRouteTermCount(compiled_query, config, collator, matcher, min_route_terms, budget);
+        const size_t min_route_tokens = large_block ? exact_route_min_tokens_large_block : exact_route_min_tokens;
         bool may_use_index = matcher == LocalMatchAgainstTest::Matcher::Indexed;
         if (route_terms && !may_use_index)
         {
