@@ -248,8 +248,11 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(
             if (gather_task_set == nullptr)
                 gather_task_set = query->addMPPGatherTaskSet(id.gather_id);
             auto & alarm = call_data->getAlarm();
+            const bool inserted
+                = gather_task_set->alarms[sender_task_id].emplace(receiver_task_id, std::ref(alarm)).second;
+            if (unlikely(!inserted))
+                return {nullptr, fmt::format("{}: Duplicate establish connection request", req_info)};
             call_data->setToWaitingTunnelState();
-            gather_task_set->alarms[sender_task_id].emplace(receiver_task_id, std::ref(alarm));
             if likely (cq != nullptr)
             {
                 alarm.Set(cq, Clock::now() + std::chrono::seconds(10), call_data->asGRPCKickTag());
