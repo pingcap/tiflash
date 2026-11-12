@@ -67,7 +67,7 @@ public:
         MPPDataPacketVersion version,
         CompressionMethod compression_method);
 
-    uint32_t getPartitionNum() const { return mpp_tunnel_set->getPartitionNum(); }
+    size_t getPartitionNum() const { return mpp_tunnel_set->getPartitionNum(); }
 
     virtual WaitResult waitForWritable() const = 0;
 

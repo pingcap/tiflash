@@ -58,7 +58,7 @@ using MockExchangeWriterChecker = std::function<void(const TrackedMppDataPacketP
 
 struct MockExchangeWriter
 {
-    MockExchangeWriter(MockExchangeWriterChecker checker_, uint32_t part_num_, DAGContext & dag_context)
+    MockExchangeWriter(MockExchangeWriterChecker checker_, size_t part_num_, DAGContext & dag_context)
         : checker(checker_)
         , part_num(part_num_)
         , result_field_types(dag_context.result_field_types)
@@ -164,7 +164,7 @@ struct MockExchangeWriter
     }
 
     static void write(tipb::SelectResponse &) { FAIL() << "cannot reach here, only consider CH Block format"; }
-    uint32_t getPartitionNum() const { return part_num; }
+    size_t getPartitionNum() const { return part_num; }
     bool isLocal(size_t index) const
     {
         assert(getPartitionNum() > index);
@@ -175,7 +175,7 @@ struct MockExchangeWriter
 
 private:
     MockExchangeWriterChecker checker;
-    uint32_t part_num;
+    size_t part_num;
     std::vector<tipb::FieldType> result_field_types;
     std::random_device rd;
     std::mt19937_64 gen;
@@ -392,7 +392,7 @@ TEST_F(TestMPPExchangeWriter, testBatchWriteFineGrainedShuffle)
 try
 {
     const size_t block_rows = 1024;
-    const uint32_t part_num = 4;
+    const size_t part_num = 4;
     const uint32_t fine_grained_shuffle_stream_count = 8;
     const Int64 fine_grained_shuffle_batch_size = 4096;
 
@@ -453,7 +453,7 @@ try
 {
     const size_t block_rows = 64;
     const size_t block_num = 64;
-    const uint32_t part_num = 4;
+    const size_t part_num = 4;
     const uint32_t fine_grained_shuffle_stream_count = 8;
     const Int64 fine_grained_shuffle_batch_size = 108;
 
@@ -544,7 +544,7 @@ try
 {
     const size_t block_rows = 64;
     const size_t block_num = 64;
-    const uint32_t part_num = 4;
+    const size_t part_num = 4;
     const uint32_t fine_grained_shuffle_stream_count = 8;
     const Int64 fine_grained_shuffle_batch_size = 108;
 
@@ -610,7 +610,7 @@ try
 {
     const size_t block_rows = 64;
     const size_t block_num = 64;
-    const uint32_t part_num = 4;
+    const size_t part_num = 4;
     const uint32_t fine_grained_shuffle_stream_count = 8;
     const Int64 fine_grained_shuffle_batch_size = 108;
     const std::vector<UInt64> max_buffered_bytes_vec = {1, 1024 * 1024 * 1024};
@@ -666,7 +666,7 @@ try
     const size_t block_rows = 64;
     const size_t block_num = 64;
     const size_t batch_send_min_limit = 108;
-    const uint32_t part_num = 4;
+    const size_t part_num = 4;
 
     // 1. Build Blocks.
     std::vector<Block> blocks;
@@ -723,7 +723,7 @@ try
     const size_t block_rows = 64;
     const size_t block_num = 64;
     const size_t batch_send_min_limit = block_rows * block_num / 2;
-    const uint32_t part_num = 4;
+    const size_t part_num = 4;
     const std::vector<UInt64> max_buffered_bytes_vec = {1, 1024 * 1024 * 1024};
     const std::vector<size_t> expected_response_num = {block_num, 2};
 
@@ -947,7 +947,7 @@ try
     const size_t block_rows = 64;
     const size_t block_num = 64;
     const size_t batch_send_min_limit = 1024 * 1024 * 1024;
-    const uint32_t part_num = 4;
+    const size_t part_num = 4;
 
     // 1. Build Blocks.
     std::vector<Block> blocks;

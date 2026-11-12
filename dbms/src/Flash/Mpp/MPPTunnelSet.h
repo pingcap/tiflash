@@ -14,13 +14,9 @@
 
 #pragma once
 
-#include <Common/TiFlashException.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/MppVersion.h>
-#include <common/likely.h>
-
-#include <limits>
 
 namespace DB
 {
@@ -57,16 +53,7 @@ public:
 
     TunnelPtr getTunnelByReceiverTaskId(const MPPTaskId & id);
 
-    uint32_t getPartitionNum() const
-    {
-        if (unlikely(tunnels.size() > std::numeric_limits<uint32_t>::max()))
-            throw TiFlashException(
-                Errors::Coprocessor::BadRequest,
-                "Too many MPP partitions: {}, maximum supported is {}",
-                tunnels.size(),
-                std::numeric_limits<uint32_t>::max());
-        return static_cast<uint32_t>(tunnels.size());
-    }
+    size_t getPartitionNum() const { return tunnels.size(); }
 
     int getExternalThreadCnt() { return external_thread_cnt; }
     size_t getLocalTunnelCnt() { return local_tunnel_cnt; }
