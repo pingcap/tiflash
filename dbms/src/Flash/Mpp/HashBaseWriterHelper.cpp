@@ -12,9 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Mpp/HashBaseWriterHelper.h>
 #include <TiDB/Decode/TypeMapping.h>
+#include <common/likely.h>
+
+#include <limits>
 
 namespace DB::HashBaseWriterHelper
 {
@@ -45,6 +49,12 @@ std::vector<MutableColumns> createDestColumns(const Block & sample_block, size_t
 
 void fillSelector(size_t rows, const WeakHash32 & hash, size_t part_num, IColumn::Selector & selector)
 {
+    if (unlikely(part_num > std::numeric_limits<UInt64>::max() / std::numeric_limits<UInt32>::max()))
+        throw TiFlashException(
+            Errors::Coprocessor::BadRequest,
+            "MPP partition count {} is too large for 64-bit hash scaling",
+            part_num);
+
     // fill selector array with most significant bits of hash values
     const auto & hash_data = hash.getData();
     RUNTIME_CHECK(rows == hash_data.size());
@@ -53,8 +63,9 @@ void fillSelector(size_t rows, const WeakHash32 & hash, size_t part_num, IColumn
     for (size_t i = 0; i < rows; ++i)
     {
         /// Row from interval [(2^32 / part_num) * i, (2^32 / part_num) * (i + 1)) goes to partition with number i.
-        // Use a wider intermediate so a size_t partition count does not overflow the product.
-        selector[i] = static_cast<UInt64>((static_cast<BuiltinUInt128>(hash_data[i]) * part_num) >> 32u);
+        selector[i] = hash_data[i]; /// [0, 2^32)
+        selector[i] *= part_num; /// [0, part_num * 2^32), selector stores 64 bit values.
+        selector[i] >>= 32u; /// [0, part_num)
     }
 }
 
@@ -67,14 +78,21 @@ void fillSelectorForFineGrainedShuffle(
     uint32_t fine_grained_shuffle_stream_count,
     IColumn::Selector & selector)
 {
+    if (unlikely(part_num > std::numeric_limits<UInt64>::max() / std::numeric_limits<UInt32>::max()))
+        throw TiFlashException(
+            Errors::Coprocessor::BadRequest,
+            "MPP partition count {} is too large for 64-bit hash scaling",
+            part_num);
+
     // fill selector array with most significant bits of hash values
     const auto & hash_data = hash.getData();
     selector.resize(rows);
     for (size_t i = 0; i < rows; ++i)
     {
         /// Row from interval [(2^32 / part_num) * i, (2^32 / part_num) * (i + 1)) goes to partition with number i.
-        // Use a wider intermediate so a size_t partition count does not overflow the product.
-        selector[i] = static_cast<UInt64>((static_cast<BuiltinUInt128>(hash_data[i]) * part_num) >> 32u);
+        selector[i] = hash_data[i]; /// [0, 2^32)
+        selector[i] *= part_num; /// [0, part_num * 2^32), selector stores 64 bit values.
+        selector[i] >>= 32u; /// [0, part_num)
         selector[i] = selector[i] * fine_grained_shuffle_stream_count
             + hash_data[i]
                 % fine_grained_shuffle_stream_count; /// map to [0, part_num * fine_grained_shuffle_stream_count)
