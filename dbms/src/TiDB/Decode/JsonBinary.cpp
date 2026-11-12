@@ -378,7 +378,7 @@ char JsonBinary::getChar(size_t offset) const
 
 StringRef JsonBinary::getSubRef(size_t offset, size_t length) const
 {
-    RUNTIME_CHECK(offset + length <= data.size);
+    RUNTIME_CHECK(offset <= data.size && length <= data.size - offset);
     return StringRef(data.data + offset, length);
 }
 
@@ -425,17 +425,18 @@ JsonBinary JsonBinary::getValueEntry(size_t value_entry_offset) const
     {
         cursor = value_offset;
         auto str_length = DecodeVarUInt(cursor, data);
-        auto str_length_length = cursor - value_offset;
-        return JsonBinary(entry_type, getSubRef(value_offset, str_length_length + str_length));
+        // Validate the payload before adding the length prefix.
+        RUNTIME_CHECK(str_length <= data.size - cursor);
+        return JsonBinary(entry_type, getSubRef(value_offset, cursor - value_offset + str_length));
     }
     case JsonBinary::TYPE_CODE_OPAQUE:
     {
         cursor = value_offset + 1;
         auto data_length = DecodeVarUInt(cursor, data);
-        auto data_length_length = cursor - value_offset - 1;
+        RUNTIME_CHECK(data_length <= data.size - cursor);
         return JsonBinary(
             entry_type,
-            getSubRef(value_offset, data_length_length + data_length + 1)); /// one more byte for type
+            getSubRef(value_offset, cursor - value_offset + data_length)); /// includes type and length prefix
     }
     case JsonBinary::TYPE_CODE_DATE:
     case JsonBinary::TYPE_CODE_DATETIME:

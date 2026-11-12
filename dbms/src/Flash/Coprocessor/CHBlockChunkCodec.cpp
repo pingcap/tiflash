@@ -109,6 +109,7 @@ void WriteColumnData(const IDataType & type, const ColumnPtr & column, WriteBuff
 
 void CHBlockChunkCodec::readData(const IDataType & type, IColumn & column, ReadBuffer & istr, size_t rows)
 {
+    CodecUtils::checkRowCount("CHBlockChunkCodec", rows, column.size());
     IDataType::InputStreamGetter input_stream_getter = [&](const IDataType::SubstreamPath &) {
         return &istr;
     };
@@ -204,6 +205,7 @@ void CHBlockChunkCodec::readBlockMeta(ReadBuffer & istr, size_t & columns, size_
 {
     readVarUInt(columns, istr);
     readVarUInt(rows, istr);
+    CodecUtils::checkRowCount("CHBlockChunkCodec", rows);
 
     if (header)
         CodecUtils::checkColumnSize("CHBlockChunkCodec", header.columns(), columns);
