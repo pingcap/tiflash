@@ -17,11 +17,11 @@
 #pragma once
 
 #include <Columns/ColumnConst.h>
-#include <Columns/ColumnFunction.h>
 #include <Columns/ColumnNothing.h>
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnsNumber.h>
 #include <Columns/IColumn.h>
+#include <Columns/ShortCircuitExecution.h>
 #include <Common/Exception.h>
 #include <Common/FieldVisitors.h>
 #include <Common/typeid_cast.h>
@@ -1013,9 +1013,12 @@ public:
         const size_t rows = block.getByPosition(arguments.front()).column->size();
         const bool nullable = block.getByPosition(result).type->isNullable();
         auto values = ColumnUInt8::create(rows, static_cast<UInt8>(!Impl::isSaturatedValue(true)));
-        auto nulls = ColumnUInt8::create(rows, 0);
+        /// The null map is only materialized for a nullable result: a
+        /// non-nullable result has no nullable input columns, so no row can
+        /// ever hold a NULL state.
+        auto nulls = nullable ? ColumnUInt8::create(rows, 0) : nullptr;
         auto & data = values->getData();
-        auto & null_map = nulls->getData();
+        auto * null_map = nullable ? &nulls->getData() : nullptr;
         IColumn::Filter mask(rows, 1);
         if (initial_mask)
             mask.assign(*initial_mask);
@@ -1058,11 +1061,23 @@ public:
                 const bool is_null = argument.column->onlyNull() || (argument_nulls && (*argument_nulls)[index]);
                 const bool value = (*argument_values)[index] != 0;
                 if constexpr (null_as_false)
+                {
                     data[row] = Impl::apply(data[row], !is_null && value);
+                    mask[row] = !Impl::isSaturatedValue(data[row]);
+                }
+                else if (nullable)
+                {
+                    std::tie(data[row], (*null_map)[row])
+                        = Impl::applyTwoNullable(data[row], (*null_map)[row], value, is_null);
+                    mask[row] = !Impl::isSaturatedValue(data[row], (*null_map)[row]);
+                }
                 else
-                    std::tie(data[row], null_map[row])
-                        = Impl::applyTwoNullable(data[row], null_map[row], value, is_null);
-                mask[row] = !Impl::isSaturatedValue(data[row], null_map[row]);
+                {
+                    /// No nullable input columns reach here, so is_null is
+                    /// always false and no NULL state needs to be tracked.
+                    data[row] = Impl::apply(data[row], value);
+                    mask[row] = !Impl::isSaturatedValue(data[row]);
+                }
                 remaining += mask[row];
             }
             if (remaining == 0)

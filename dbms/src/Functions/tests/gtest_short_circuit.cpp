@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Columns/ColumnFunction.h>
+#include <Columns/ShortCircuitExecution.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/ExpressionActions.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -466,6 +466,105 @@ TEST_F(ShortCircuit, FullEvaluationReadsPlaceholdersSafely)
     /// cast_string_as_json marks masked-off rows as NULL, and the nullability
     /// propagates through the chain into and()'s result
     ASSERT_COLUMN_EQ(createColumn<Nullable<UInt8>>({0, 1, 1, 0}), input.getByName("result"));
+}
+
+TEST_F(ShortCircuit, JsonObjectConstNullKeyAndValue)
+{
+    /// The masked json_object kernel sees raw ColumnConst wrappers, not the
+    /// one-row columns constant adaptation hands to the unmasked entry, so it
+    /// must recognize const-NULL arguments itself: a NULL key throws
+    /// BAD_ARGUMENTS and a NULL value yields JSON null instead of
+    /// dereferencing a null source.
+    const auto build = [&](const Block & input) {
+        ExpressionActions actions(input.getColumnsWithTypeAndName());
+        add(actions, "cast_string_as_json", {"value_text"}, "value");
+        add(actions, "json_object", {"key", "value"}, "object");
+        add(actions, "isNotNull", {"object"}, "present");
+        add(actions, "and", {"guard", "present"}, "result");
+        actions.finalize({"result"});
+        return actions;
+    };
+
+    /// Const-NULL key behind a guard that is fully off: nothing evaluates.
+    {
+        Block input({
+            createConstColumn<Nullable<String>>(2, {}, "key"),
+            createConstColumn<String>(2, R"("v")", "value_text"),
+            createConstColumn<UInt8>(2, 0, "guard"),
+        });
+        ExpressionActions actions = build(input);
+        ASSERT_EQ(lazyCount(actions), 3);
+        actions.execute(input);
+        ASSERT_COLUMN_EQ(createColumn<UInt8>({0, 0}), input.getByName("result"));
+    }
+    /// Const-NULL key with a partially-on guard: a selected row evaluates
+    /// the NULL key and sees the regular error, not a null-source crash.
+    {
+        Block input({
+            createConstColumn<Nullable<String>>(2, {}, "key"),
+            createConstColumn<String>(2, R"("v")", "value_text"),
+            createColumn<UInt8>({0, 1}, "guard"),
+        });
+        ExpressionActions actions = build(input);
+        ASSERT_THROW(actions.execute(input), Exception);
+    }
+    /// Const-NULL key with a fully-on guard: the whole mask is selected, so
+    /// the deferred subtree materializes through the plain entry, which
+    /// reports the same error after constant adaptation.
+    {
+        Block input({
+            createConstColumn<Nullable<String>>(2, {}, "key"),
+            createConstColumn<String>(2, R"("v")", "value_text"),
+            createConstColumn<UInt8>(2, 1, "guard"),
+        });
+        ExpressionActions actions = build(input);
+        ASSERT_THROW(actions.execute(input), Exception);
+    }
+    /// Const-NULL value with a partially-on guard: selected rows get an
+    /// object holding JSON null.
+    {
+        Block input({
+            createConstColumn<String>(2, "k", "key"),
+            createConstColumn<Nullable<String>>(2, {}, "value_text"),
+            createColumn<UInt8>({0, 1}, "guard"),
+        });
+        ExpressionActions actions = build(input);
+        actions.execute(input);
+        ASSERT_COLUMN_EQ(createColumn<UInt8>({0, 1}), input.getByName("result"));
+    }
+}
+
+TEST_F(ShortCircuit, RegexpLikeEmptyPatternUnderMask)
+{
+    /// regexp_like can throw on an empty pattern, so it joins the deferred
+    /// subtree: rows the guard turned off never evaluate their pattern,
+    /// while selected rows still see the regular error.
+    {
+        Block input({
+            createColumn<String>({"abc", "abc"}, "text"),
+            createColumn<String>({"", "a"}, "pattern"),
+            createColumn<UInt8>({0, 1}, "guard"),
+        });
+        ExpressionActions actions(input.getColumnsWithTypeAndName());
+        add(actions, "regexp_like", {"text", "pattern"}, "matched");
+        add(actions, "and", {"guard", "matched"}, "result");
+        actions.finalize({"result"});
+        ASSERT_EQ(lazyCount(actions), 1);
+        actions.execute(input);
+        ASSERT_COLUMN_EQ(createColumn<UInt8>({0, 1}), input.getByName("result"));
+    }
+    {
+        Block input({
+            createColumn<String>({"abc", "abc"}, "text"),
+            createColumn<String>({"", "a"}, "pattern"),
+            createColumn<UInt8>({1, 0}, "guard"),
+        });
+        ExpressionActions actions(input.getColumnsWithTypeAndName());
+        add(actions, "regexp_like", {"text", "pattern"}, "matched");
+        add(actions, "and", {"guard", "matched"}, "result");
+        actions.finalize({"result"});
+        ASSERT_THROW(actions.execute(input), Exception);
+    }
 }
 
 TEST_F(ShortCircuit, RowDependentFunctionRemainsEager)

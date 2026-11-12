@@ -1042,7 +1042,6 @@ public:
 
         std::vector<const NullMap *> nullmaps;
         nullmaps.reserve(sources.size());
-        bool is_input_nullable = false;
         for (auto column_number : arguments)
         {
             const auto & col = block.getByPosition(column_number).column;
@@ -1050,7 +1049,6 @@ public:
             {
                 const auto & column_nullable = static_cast<const ColumnNullable &>(*col);
                 nullmaps.push_back(&(column_nullable.getNullMapData()));
-                is_input_nullable = true;
             }
             else
             {
@@ -1058,16 +1056,15 @@ public:
             }
         }
 
-        if (is_input_nullable)
-            doExecuteImpl<true>(sources, rows, data_to, offsets_to, nullmaps);
-        else
-            doExecuteImpl<false>(sources, rows, data_to, offsets_to, nullmaps);
+        doExecuteImpl(sources, rows, data_to, offsets_to, nullmaps);
 
         block.getByPosition(result).column = std::move(col_to);
     }
 
 private:
-    template <bool is_input_nullable>
+    /// A null source means the argument is a const NULL column: it yields a
+    /// JSON null element, matching the unmasked execution, which sees the
+    /// NULL after constant adaptation.
     static void doExecuteImpl(
         StringSources & sources,
         size_t rows,
@@ -1089,22 +1086,13 @@ private:
         {
             for (size_t col = 0; col < sources.size(); ++col)
             {
-                if constexpr (is_input_nullable)
+                const auto * nullmap = nullmaps[col];
+                if (!sources[col] || (nullmap && (*nullmap)[i]))
                 {
-                    const auto * nullmap = nullmaps[col];
-                    if (!sources[col] || (nullmap && (*nullmap)[i]))
-                    {
-                        jsons.emplace_back(JsonBinary::TYPE_CODE_LITERAL, StringRef(&JsonBinary::LITERAL_NIL, 1));
-                    }
-                    else
-                    {
-                        const auto & data_from = sources[col]->getWhole();
-                        jsons.emplace_back(data_from.data[0], StringRef(&data_from.data[1], data_from.size - 1));
-                    }
+                    jsons.emplace_back(JsonBinary::TYPE_CODE_LITERAL, StringRef(&JsonBinary::LITERAL_NIL, 1));
                 }
                 else
                 {
-                    assert(sources[col]);
                     const auto & data_from = sources[col]->getWhole();
                     jsons.emplace_back(data_from.data[0], StringRef(&data_from.data[1], data_from.size - 1));
                 }
@@ -1115,16 +1103,8 @@ private:
             offsets_to[i] = write_buffer.count();
             for (const auto & source : sources)
             {
-                if constexpr (is_input_nullable)
-                {
-                    if (source)
-                        source->next();
-                }
-                else
-                {
-                    assert(source);
+                if (source)
                     source->next();
-                }
             }
         }
     }
@@ -1229,7 +1209,6 @@ public:
 
         std::vector<const NullMap *> nullmaps;
         nullmaps.reserve(sources.size());
-        bool is_input_nullable = false;
         for (auto column_number : arguments)
         {
             const auto & col = block.getByPosition(column_number).column;
@@ -1237,7 +1216,6 @@ public:
             {
                 const auto & column_nullable = static_cast<const ColumnNullable &>(*col);
                 nullmaps.push_back(&(column_nullable.getNullMapData()));
-                is_input_nullable = true;
             }
             else
             {
@@ -1245,16 +1223,15 @@ public:
             }
         }
 
-        if (is_input_nullable)
-            doExecuteImpl<true>(sources, rows, data_to, offsets_to, nullmaps, mask);
-        else
-            doExecuteImpl<false>(sources, rows, data_to, offsets_to, nullmaps, mask);
+        doExecuteImpl(sources, rows, data_to, offsets_to, nullmaps, mask);
 
         block.getByPosition(result).column = std::move(col_to);
     }
 
 private:
-    template <bool is_input_nullable>
+    /// A null source means the argument is a const NULL column: for keys that
+    /// throws BAD_ARGUMENTS, for values it yields JSON null - both matching
+    /// the unmasked execution, which sees the NULL after constant adaptation.
     static void doExecuteImpl(
         StringSources & sources,
         size_t rows,
@@ -1301,14 +1278,10 @@ private:
             entries.clear();
             for (size_t col = 0; col < sources.size(); col += 2)
             {
-                if constexpr (is_input_nullable)
-                {
-                    const auto * key_nullmap = nullmaps[col];
-                    if (!sources[col] || (key_nullmap && (*key_nullmap)[i]))
-                        throw Exception("JSON documents may not contain NULL member names.", ErrorCodes::BAD_ARGUMENTS);
-                }
+                const auto * key_nullmap = nullmaps[col];
+                if (!sources[col] || (key_nullmap && (*key_nullmap)[i]))
+                    throw Exception("JSON documents may not contain NULL member names.", ErrorCodes::BAD_ARGUMENTS);
 
-                assert(sources[col]);
                 const auto & key_from = sources[col]->getWhole();
                 if (unlikely(key_from.size > std::numeric_limits<UInt16>::max()))
                     throw Exception(
@@ -1317,18 +1290,9 @@ private:
                 StringRef key{key_from.data, key_from.size};
 
                 JsonBinary value(JsonBinary::TYPE_CODE_LITERAL, StringRef(&JsonBinary::LITERAL_NIL, 1));
-                if constexpr (is_input_nullable)
+                const auto * value_nullmap = nullmaps[col + 1];
+                if (sources[col + 1] && !(value_nullmap && (*value_nullmap)[i]))
                 {
-                    const auto * value_nullmap = nullmaps[col + 1];
-                    if (sources[col + 1] && !(value_nullmap && (*value_nullmap)[i]))
-                    {
-                        const auto & data_from = sources[col + 1]->getWhole();
-                        value = JsonBinary(data_from.data[0], StringRef(&data_from.data[1], data_from.size - 1));
-                    }
-                }
-                else
-                {
-                    assert(sources[col + 1]);
                     const auto & data_from = sources[col + 1]->getWhole();
                     value = JsonBinary(data_from.data[0], StringRef(&data_from.data[1], data_from.size - 1));
                 }

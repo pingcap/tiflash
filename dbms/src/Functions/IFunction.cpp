@@ -127,11 +127,12 @@ bool allArgumentsAreConstants(const Block & block, const ColumnNumbers & args)
 
 /// Shared default of IFunctionBase::executeWithMask and IFunction::executeWithMask.
 /// Functions that cannot throw are simply evaluated on all rows through
-/// `entry` (the normal execution path): that is cheaper than copying the
-/// argument columns and the result for a partial mask, and the masked-off
-/// rows then hold real values that the consumer ignores. Functions that can
-/// throw keep the filter/expand treatment instead, so those rows are not
-/// evaluated at all.
+/// `entry` (the normal execution path) without counting the selected rows:
+/// that is cheaper than copying the argument columns and the result for a
+/// partial mask, and the masked-off rows then hold real values that the
+/// consumer ignores. Functions that can throw count instead: an empty mask
+/// skips evaluation entirely, and a partial mask keeps the filter/expand
+/// treatment below so those rows are not evaluated at all.
 template <typename ExecuteEntry>
 void executeWithMaskDefault(
     const String & name,
@@ -142,6 +143,12 @@ void executeWithMaskDefault(
     const IColumn::Filter & mask,
     ExecuteEntry && entry)
 {
+    if (!can_throw)
+    {
+        entry(block, arguments, result);
+        return;
+    }
+
     auto & result_column = block.getByPosition(result);
     const size_t rows = mask.size();
     const size_t selected = countBytesInFilter(mask);
@@ -152,7 +159,7 @@ void executeWithMaskDefault(
         return;
     }
 
-    if (!can_throw || selected == rows)
+    if (selected == rows)
     {
         entry(block, arguments, result);
         return;
