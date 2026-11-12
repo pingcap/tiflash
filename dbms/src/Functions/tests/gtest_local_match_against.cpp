@@ -2185,6 +2185,40 @@ TEST_F(TestLocalMatchAgainst, ExactRouteEquivalentProhibitedAndColumnFallback)
     EXPECT_EQ(2, fallback.linear_columns);
 }
 
+TEST_F(TestLocalMatchAgainst, ExactRouteTokenThresholdForLargeBlocks)
+{
+    using namespace LocalMatchAgainstTest;
+    const auto * const collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI);
+    for (size_t rows : {255, 256})
+    {
+        for (size_t tokens : {15, 16, 31, 32})
+        {
+            String document = "a";
+            for (size_t i = 1; i < tokens; ++i)
+                document += " a";
+            for (size_t terms : {99, 100})
+            {
+                SCOPED_TRACE(::testing::Message() << "rows=" << rows << " tokens=" << tokens << " terms=" << terms);
+                auto query = exactQuery(terms, true);
+                query.set_innodb_ft_min_token_size(1);
+                query.set_innodb_ft_max_token_size(84);
+                const ColumnsWithTypeAndName columns{
+                    createConstColumn<String>(rows, "query"),
+                    createColumn<String>(std::vector<String>(rows, document)),
+                    createConstColumn<String>(rows, serializeLocalMatchAgainstBooleanQuery(query))};
+                Work linear, automatic;
+                ASSERT_COLUMN_EQ(
+                    runMatcher(columns, collator, Matcher::Linear, linear),
+                    runMatcher(columns, collator, Matcher::Automatic, automatic));
+                const bool indexed = terms == 100 && (tokens == 32 || (rows == 256 && tokens >= 16));
+                EXPECT_EQ(indexed ? 1 : 0, automatic.route_builds);
+                EXPECT_EQ(indexed ? rows : 0, automatic.indexed_columns);
+                EXPECT_EQ(indexed ? 0 : rows, automatic.linear_columns);
+            }
+        }
+    }
+}
+
 TEST_F(TestLocalMatchAgainst, ExactRouteThresholdNullableAndReusedBlocks)
 {
     using namespace LocalMatchAgainstTest;
