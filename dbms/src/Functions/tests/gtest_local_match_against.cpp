@@ -2189,7 +2189,7 @@ TEST_F(TestLocalMatchAgainst, ExactRouteTokenThresholdForLargeBlocks)
 {
     using namespace LocalMatchAgainstTest;
     const auto * const collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI);
-    for (size_t rows : {255, 256})
+    for (size_t rows : {127, 128})
     {
         for (size_t tokens : {15, 16, 31, 32})
         {
@@ -2210,7 +2210,7 @@ TEST_F(TestLocalMatchAgainst, ExactRouteTokenThresholdForLargeBlocks)
                 ASSERT_COLUMN_EQ(
                     runMatcher(columns, collator, Matcher::Linear, linear),
                     runMatcher(columns, collator, Matcher::Automatic, automatic));
-                const bool indexed = terms == 100 && (tokens == 32 || (rows == 256 && tokens >= 16));
+                const bool indexed = terms == 100 && (tokens == 32 || (rows == 128 && tokens >= 16));
                 EXPECT_EQ(indexed ? 1 : 0, automatic.route_builds);
                 EXPECT_EQ(indexed ? rows : 0, automatic.indexed_columns);
                 EXPECT_EQ(indexed ? 0 : rows, automatic.linear_columns);
