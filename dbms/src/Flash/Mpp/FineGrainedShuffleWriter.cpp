@@ -66,7 +66,7 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::prepare(const Block & sample_b
         header.insert(new_column);
     }
     num_columns = header.columns();
-    // fine_grained_shuffle_stream_count is in (0, 1024], and partition_num is uint16_t, so will not overflow.
+    // The product fits in UInt64: partition_num is uint32_t and fine_grained_shuffle_stream_count is in (0, 1024].
     num_bucket = partition_num * fine_grained_shuffle_stream_count;
     partition_key_containers_for_reuse.resize(collators.size());
     initScatterColumns();

@@ -118,6 +118,18 @@ TEST(DecimalType_test, ConvertToDecimal)
     ASSERT_EQ(d32_2.toString(2), "1234.57");
 }
 
+TEST(DecimalType_test, ScaleMultiplierBounds)
+{
+    EXPECT_EQ(getScaleMultiplier<Decimal256>(0), Int256(1));
+    EXPECT_EQ(getScaleMultiplier<Decimal256>(decimal_max_prec), DecimalMaxValue::maxValue() + 1);
+    for (const ScaleType scale : {decimal_max_prec + 1, std::numeric_limits<ScaleType>::max()})
+    {
+        SCOPED_TRACE(scale);
+        EXPECT_THROW(DecimalMaxValue::get(scale), TiFlashException);
+        EXPECT_THROW(getScaleMultiplier<Decimal256>(scale), TiFlashException);
+    }
+}
+
 template <typename T>
 class DecimalToStringTest : public ::testing::Test
 {
