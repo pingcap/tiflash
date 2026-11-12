@@ -56,7 +56,7 @@ void MPPGatherTaskSet::cancelAlarmsBySenderTaskId(const MPPTaskId & task_id)
     if (alarm_it != alarms.end())
     {
         for (auto & alarm : alarm_it->second)
-            alarm.second.Cancel();
+            alarm.second.get().Cancel();
         alarms.erase(alarm_it);
     }
 }
@@ -247,7 +247,11 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(
                     context.getSettingsRef().auto_spill_check_min_interval_ms.get());
             if (gather_task_set == nullptr)
                 gather_task_set = query->addMPPGatherTaskSet(id.gather_id);
-            auto & alarm = gather_task_set->alarms[sender_task_id][receiver_task_id];
+            auto & alarm = call_data->getAlarm();
+            const bool inserted
+                = gather_task_set->alarms[sender_task_id].emplace(receiver_task_id, std::ref(alarm)).second;
+            if (unlikely(!inserted))
+                return {nullptr, fmt::format("{}: Duplicate establish connection request", req_info)};
             call_data->setToWaitingTunnelState();
             if likely (cq != nullptr)
             {
@@ -280,7 +284,6 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(
         }
     }
     /// don't need to delete the alarm here because registerMPPTask will delete all the related alarm
-
     return task->getTunnel(request);
 }
 
@@ -375,7 +378,7 @@ void MPPTaskManager::abortMPPGather(const MPPGatherId & gather_id, const String 
         for (auto & alarms_per_task : gather_task_set->alarms)
         {
             for (auto & alarm : alarms_per_task.second)
-                alarm.second.Cancel();
+                alarm.second.get().Cancel();
         }
         gather_task_set->alarms.clear();
         if (!gather_task_set->hasMPPTask())
