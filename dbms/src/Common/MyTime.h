@@ -282,6 +282,19 @@ inline UInt8 getLastDay(UInt16 year, UInt8 month)
     return last_day;
 }
 
+/// Shared UTC-to-session range projection for rough filtering, with a C ABI.
+/// The name is borrowed only for this call; an empty name selects a fixed offset.
+/// Returns 1 only when both inclusive packed bounds agree with the actual row
+/// evaluator. Failure, including exceptions, returns 0 and must retain the pack.
+extern "C" UInt8 projectTimestampRange(
+    const char * timezone_name,
+    UInt64 timezone_name_size,
+    Int64 timezone_offset,
+    UInt64 min,
+    UInt64 max,
+    UInt64 * session_min,
+    UInt64 * session_max) noexcept;
+
 UInt64 addSeconds(UInt64 t, Int64 delta);
 void addDays(MyDateTime & t, Int64 days);
 void addMonths(MyDateTime & t, Int64 months);

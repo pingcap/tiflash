@@ -671,5 +671,173 @@ catch (Exception & e)
     GTEST_FAIL();
 }
 
+TEST_F(TestMyTime, TimestampProjectionProof)
+{
+    const auto packed = [](const String & text) {
+        return parseMyDateTime(text, 6).safeGet<UInt64>();
+    };
+    const auto lo = packed("2024-07-01 00:00:00.123456");
+    const auto hi = packed("2024-07-02 23:59:59.999999");
+    for (const auto & [name, offset] : std::vector<std::pair<String, Int64>>{
+             {"Asia/Shanghai", 0},
+             {"America/New_York", 0},
+             {"America/Mexico_City", 0},
+             {"Australia/Lord_Howe", 0},
+             {"", -3600},
+             {"", 0},
+             {"", 3600},
+             {"", 30}})
+    {
+        SCOPED_TRACE(name + " offset=" + std::to_string(offset));
+        UInt64 lower = 0;
+        UInt64 upper = 0;
+        ASSERT_EQ(projectTimestampRange(name.data(), name.size(), offset, lo, hi, &lower, &upper), 1);
+        const auto row_value = [&](UInt64 value) {
+            if (name.empty())
+                convertTimeZoneByOffset(value, value, true, offset);
+            else
+                convertTimeZone(value, value, DateLUT::instance("UTC"), DateLUT::instance(name));
+            return value;
+        };
+        EXPECT_EQ(lower, row_value(lo));
+        EXPECT_EQ(upper, row_value(hi));
+        const auto midnight = row_value(packed("2024-07-02 00:00:00.123456"));
+        EXPECT_GE(midnight, lower);
+        EXPECT_LE(midnight, upper);
+    }
+    for (const auto & text : {"1970-01-01 00:00:01", "2038-01-19 03:14:07.999999"})
+    {
+        UInt64 lower = 0;
+        UInt64 upper = 0;
+        const auto value = packed(text);
+        ASSERT_EQ(projectTimestampRange("Asia/Shanghai", 13, 0, value, value, &lower, &upper), 1);
+        EXPECT_EQ(lower, upper);
+    }
+}
+
+TEST_F(TestMyTime, TimestampProjectionPreservesWideStableOffsetRanges)
+{
+    const auto lo = parseMyDateTime("2024-01-01 00:00:00.123456", 6).safeGet<UInt64>();
+    for (const auto & [name, offset, max_days] : std::vector<std::tuple<String, Int64, Int64>>{
+             {"UTC", 0, 365},
+             {"", 0, 365},
+             {"", 28800, 365},
+             {"Asia/Shanghai", 0, 365},
+             {"Asia/Kolkata", 0, 365},
+             {"America/New_York", 0, 60},
+             {"Australia/Lord_Howe", 0, 60}})
+    {
+        const auto row_value = [&](UInt64 value) {
+            if (name.empty())
+                convertTimeZoneByOffset(value, value, true, offset);
+            else
+                convertTimeZone(value, value, DateLUT::instance("UTC"), DateLUT::instance(name));
+            return value;
+        };
+        for (const Int64 days : {Int64{31}, Int64{33}, max_days})
+        {
+            const auto hi = addSeconds(lo, days * 86400 - 1);
+            UInt64 lower = 0;
+            UInt64 upper = 0;
+            ASSERT_EQ(projectTimestampRange(name.data(), name.size(), offset, lo, hi, &lower, &upper), 1)
+                << name << " " << offset << " " << days;
+            EXPECT_EQ(row_value(lo), lower);
+            EXPECT_EQ(row_value(hi), upper);
+            for (Int64 day = 0; day < days; ++day)
+            {
+                const auto actual = row_value(addSeconds(lo, day * 86400 + 43200));
+                EXPECT_GE(actual, lower);
+                EXPECT_LE(actual, upper);
+            }
+        }
+    }
+    UInt64 lower = 0;
+    UInt64 upper = 0;
+    const auto first = parseMyDateTime("1970-01-01 00:00:01", 6).safeGet<UInt64>();
+    const auto last = parseMyDateTime("2038-01-19 03:14:07.999999", 6).safeGet<UInt64>();
+    EXPECT_EQ(projectTimestampRange("UTC", 3, 0, first, last, &lower, &upper), 1);
+    EXPECT_EQ(lower, first);
+    EXPECT_EQ(upper, last);
+}
+
+TEST_F(TestMyTime, DateLUTExactOffsetRanges)
+{
+    const auto & utc = DateLUT::instance("UTC");
+    const auto epoch = [&](const String & text) {
+        return getEpochSecond(MyDateTime(parseMyDateTime(text, 6).safeGet<UInt64>()), utc);
+    };
+    const auto & shanghai = DateLUT::instance("Asia/Shanghai");
+    EXPECT_TRUE(shanghai.isExactOffsetRange(epoch("2024-01-01 00:00:00"), epoch("2024-12-31 23:59:59"), 28800));
+    EXPECT_FALSE(shanghai.isExactOffsetRange(epoch("2024-01-01 00:00:00"), epoch("2024-12-31 23:59:59"), 0));
+    const auto & new_york = DateLUT::instance("America/New_York");
+    EXPECT_TRUE(new_york.isExactOffsetRange(epoch("2024-01-01 00:00:00"), epoch("2024-03-01 00:00:00"), -18000));
+    // Equal offsets at the endpoints do not prove the interior of the range.
+    EXPECT_FALSE(new_york.isExactOffsetRange(epoch("2024-01-01 00:00:00"), epoch("2024-12-31 23:59:59"), -18000));
+    EXPECT_FALSE(new_york.isExactOffsetRange(epoch("2024-03-10 06:59:59"), epoch("2024-03-10 07:00:01"), -18000));
+    EXPECT_FALSE(new_york.isExactOffsetRange(epoch("2024-11-03 05:59:59"), epoch("2024-11-03 06:00:01"), -14400));
+    // findIndex can inspect neighboring days, so a nearby transition still prevents proof.
+    EXPECT_FALSE(new_york.isExactOffsetRange(epoch("2024-11-04 12:00:00"), epoch("2024-11-04 12:00:00"), -18000));
+    EXPECT_TRUE(utc.isExactOffsetRange(1, 2147483647, 0));
+}
+
+TEST_F(TestMyTime, TimestampProjectionFixedOffsets)
+{
+    const auto packed = [](const String & text) {
+        return parseMyDateTime(text, 6).safeGet<UInt64>();
+    };
+    const auto lo = packed("2024-02-28 23:59:45.123456");
+    const auto hi = packed("2024-02-29 00:00:15.999999");
+    for (const auto & [offset, expected_min, expected_max] : std::vector<std::tuple<Int64, String, String>>{
+             {-30, "2024-02-28 23:59:15.123456", "2024-02-28 23:59:45.999999"},
+             {30, "2024-02-29 00:00:15.123456", "2024-02-29 00:00:45.999999"},
+             {19800, "2024-02-29 05:29:45.123456", "2024-02-29 05:30:15.999999"},
+             {-86399, "2024-02-27 23:59:46.123456", "2024-02-28 00:00:16.999999"},
+             {86399, "2024-02-29 23:59:44.123456", "2024-03-01 00:00:14.999999"}})
+    {
+        SCOPED_TRACE(offset);
+        UInt64 lower = 0;
+        UInt64 upper = 0;
+        ASSERT_EQ(projectTimestampRange(nullptr, 0, offset, lo, hi, &lower, &upper), 1);
+        EXPECT_EQ(lower, packed(expected_min));
+        EXPECT_EQ(upper, packed(expected_max));
+    }
+}
+
+TEST_F(TestMyTime, TimestampProjectionRejectsUnprovedRanges)
+{
+    const auto packed = [](const String & text) {
+        return parseMyDateTime(text, 6).safeGet<UInt64>();
+    };
+    for (const auto & [name, lo, hi] : std::vector<std::tuple<String, String, String>>{
+             {"America/New_York", "2021-11-07 05:30:00", "2021-11-07 05:30:00"},
+             {"America/New_York", "2021-11-07 06:30:00", "2021-11-07 06:30:00"},
+             {"America/New_York", "2021-03-14 06:59:59", "2021-03-14 07:00:00"},
+             {"America/New_York", "2021-01-01 00:00:00", "2022-01-01 00:00:00"},
+             {"Africa/Monrovia", "1971-01-01 12:00:00", "1971-01-01 12:00:00"},
+             {"Africa/Monrovia", "1972-01-07 00:44:30", "1972-01-07 00:44:30"},
+             {"Asia/Shanghai", "1970-01-01 00:00:00", "1970-01-01 00:00:00"},
+             {"Asia/Shanghai", "2038-01-19 03:14:08", "2038-01-19 03:14:08"},
+             {"invalid/timezone", "2024-01-01 00:00:00", "2024-01-01 00:00:00"}})
+    {
+        UInt64 lower = 0;
+        UInt64 upper = 0;
+        EXPECT_EQ(projectTimestampRange(name.data(), name.size(), 0, packed(lo), packed(hi), &lower, &upper), 0)
+            << name << " " << lo;
+    }
+    UInt64 lower = 0;
+    UInt64 upper = 0;
+    const auto value = packed("2024-07-01 00:00:00");
+    for (const auto invalid : {UInt64{0}, UInt64{1}, UInt64{0xffffffffffffffff}})
+        EXPECT_EQ(projectTimestampRange(nullptr, 0, 0, invalid, value, &lower, &upper), 0);
+    for (const Int64 offset : {-86401, -86400, 86400, 86401})
+        EXPECT_EQ(projectTimestampRange(nullptr, 0, offset, value, value, &lower, &upper), 0);
+    const auto epoch = packed("1970-01-01 00:00:01");
+    EXPECT_EQ(projectTimestampRange(nullptr, 0, -3600, epoch, epoch, &lower, &upper), 0);
+    const auto limit = packed("2038-01-19 03:14:07");
+    EXPECT_EQ(projectTimestampRange(nullptr, 0, 3600, limit, limit, &lower, &upper), 0);
+    EXPECT_EQ(projectTimestampRange(nullptr, 0, 0, value + 1, value, &lower, &upper), 0);
+    EXPECT_EQ(projectTimestampRange(nullptr, 0, 0, value, value, nullptr, &upper), 0);
+}
+
 } // namespace tests
 } // namespace DB

@@ -16,10 +16,12 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cassert>
 #include <ctime>
 #include <string>
 #include <type_traits>
+#include <vector>
 
 #include "DayNum.h"
 #include "defines.h"
@@ -209,6 +211,10 @@ private:
     /// Time zone name.
     std::string time_zone;
 
+    /// Inclusive ends of consecutive days with the same midnight offset.
+    /// Transition days are isolated so range proofs never skip their adjustments.
+    std::vector<UInt32> constant_offset_range_ends;
+
     inline LUTIndex findIndex(time_t t) const
     {
         /// First guess.
@@ -270,6 +276,28 @@ private:
 
 public:
     const std::string & getTimeZone() const { return time_zone; }
+
+    /// Prove that the actual row accessors implement t + offset on this range.
+    /// Check all entries findIndex can inspect, including the neighboring days.
+    /// Precomputed boundaries make the proof independent of the number of days.
+    bool isExactOffsetRange(time_t begin, time_t end, Int64 offset) const
+    {
+        if (begin <= 0 || end < begin || end > 2147483647 || offset <= -86400 || offset >= 86400 || offset % 60 != 0
+            || (offset_is_whole_number_of_hours_during_epoch && offset % 3600 != 0))
+            return false;
+        const Int64 first_day = begin / 86400 - 1;
+        const Int64 last_day = end / 86400 + 1;
+        const auto & entry = lut[first_day + daynum_offset_epoch];
+        if (entry.date != first_day * 86400 - offset || entry.amount_of_offset_change() != 0)
+            return false;
+        const auto range_end = std::lower_bound(
+            constant_offset_range_ends.begin(),
+            constant_offset_range_ends.end(),
+            first_day + daynum_offset_epoch);
+        // On these ordinary days toHour/toMinute use t - midnight, and
+        // toSecond uses t % 60. Minute-aligned offsets make them agree exactly.
+        return *range_end >= last_day + daynum_offset_epoch;
+    }
 
     // Methods only for unit-testing, it makes very little sense to use it from user code.
     auto getOffsetAtStartOfEpoch() const { return offset_at_start_of_epoch; }

@@ -412,6 +412,18 @@ pub mod root {
                 ) -> u8,
             >,
         }
+        pub type TimestampProjection = ::std::option::Option<
+            unsafe extern "C" fn(
+                *const ::std::os::raw::c_char,
+                u64,
+                i64,
+                u64,
+                u64,
+                *mut u64,
+                *mut u64,
+            ) -> u8,
+        >;
+
         #[repr(C)]
         #[derive(Debug)]
         pub struct CloudStorageEngineInterfaces {
@@ -444,7 +456,9 @@ pub mod root {
                     arg7: root::DB::BaseBuffView,
                     arg8: root::DB::BaseBuffView,
                     arg9: root::DB::BaseBuffView,
-                    arg10: root::DB::RaftStoreProxyPtr,
+                    arg10: root::DB::BaseBuffView,
+                    arg11: root::DB::TimestampProjection,
+                    arg12: root::DB::RaftStoreProxyPtr,
                 ) -> root::DB::ColumnarReaderPtr,
             >,
             pub fn_read_block: ::std::option::Option<
@@ -949,7 +963,7 @@ pub mod root {
                 arg3: root::DB::RawVoidPtr,
             ) -> u32;
         }
-        pub const RAFT_STORE_PROXY_VERSION: u64 = 5429784359048998305;
+        pub const RAFT_STORE_PROXY_VERSION: u64 = 14258800410269017668;
         pub const RAFT_STORE_PROXY_MAGIC_NUMBER: u32 = 324508639;
     }
 }
