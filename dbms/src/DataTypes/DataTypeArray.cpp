@@ -306,11 +306,12 @@ void DataTypeArray::deserializeBinaryBulkWithMultipleStreams(
 
     /// Number of values corresponding with `offset_values` must be read.
     const size_t last_offset = (offset_values.empty() ? 0 : offset_values.back());
-    RUNTIME_CHECK_MSG(
-        last_offset >= nested_column.size(),
-        "Nested column is longer than last offset, last_offset={} nest_column_size={}",
-        last_offset,
-        nested_column.size());
+    if (last_offset < nested_column.size())
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Nested column is longer than last offset, last_offset={} nest_column_size={}",
+            last_offset,
+            nested_column.size());
     size_t nested_limit = last_offset - nested_column.size();
     nested->deserializeBinaryBulkWithMultipleStreams(
         nested_column,
