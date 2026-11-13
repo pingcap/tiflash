@@ -263,8 +263,8 @@ impl PdClientWithCache {
     // Get the leader store by region id.
     pub async fn get_leader_store_by_region_id(&self, region_id: u64) -> Result<Store, Error> {
         // First check if we have the peer in cache
-        if let Some(peer) = self.region_cache.get(&region_id) {
-            let peer = peer.clone();
+        let peer = self.region_cache.get(&region_id).map(|peer| peer.clone());
+        if let Some(peer) = peer {
             let store_id = peer.get_store_id();
 
             // Check if we have the store in cache
@@ -273,7 +273,7 @@ impl PdClientWithCache {
             }
 
             // Get store and update cache
-            let store = self.pd_client.get_store(store_id)?;
+            let store = self.pd_client.get_store_async(store_id).await?;
             self.store_cache.insert(store_id, store.clone());
             return Ok(store);
         }
@@ -293,7 +293,7 @@ impl PdClientWithCache {
         self.region_cache.insert(region_id, peer.clone());
 
         let store_id = peer.get_store_id();
-        let store = self.pd_client.get_store(store_id)?;
+        let store = self.pd_client.get_store_async(store_id).await?;
         self.store_cache.insert(store_id, store.clone());
 
         Ok(store)
@@ -317,9 +317,9 @@ impl PdClientWithCache {
             }
         }
 
-        let Ok(Some(bucket_stat)) =
-            futures::executor::block_on(self.pd_client.get_buckets_async(region_id))
-        else {
+        let Ok(Ok(Some(bucket_stat))) = futures::executor::block_on(
+            kvengine::columnar_cancel::cancellable(self.pd_client.get_buckets_async(region_id)),
+        ) else {
             self.region_bucket_cache.remove(&region_id);
             return Vec::new();
         };
@@ -543,7 +543,6 @@ impl CloudHelper {
             tables.len()
         );
         let scan_ctx = TableScanCtx::new(table_scan, filter_conditions);
-        let (tx, rx) = tikv_util::mpsc::bounded(1);
         let start = Instant::now_coarse();
         let vector_index_cache = self.vector_index_cache.clone();
         let snap_cache = self.snapshot_cache.clone();
@@ -557,36 +556,37 @@ impl CloudHelper {
         let block_cache = self.block_cache.clone();
         let tables_clone = tables.clone();
         let fts_query_info_clone = fts_query_info.clone();
-        self.runtime.spawn(async move {
-            let snap = get_or_request_shared_snapshot(
-                shared_snap_access_cache,
-                pd_client,
-                http_client,
-                dfs,
-                ia_ctx,
-                vector_index_cache,
-                columnar_file_cache,
-                columnar_meta_cache,
-                snap_cache,
-                snap_cache_capable_stores,
-                meta_file_cache,
-                schema_files,
-                schema_file_cache_state,
-                txn_mgr,
-                block_cache,
-                fts_cache,
-                fts_delta_cache,
-                shard_id,
-                shard_ver,
-                start_ts,
-                tables_clone,
-                &master_key,
-                fts_query_info_clone,
-            )
-            .await;
-            tx.send(snap).unwrap();
-        });
-        match rx.recv() {
+        let snapshot = self
+            .runtime
+            .block_on(kvengine::columnar_cancel::cancellable(async move {
+                get_or_request_shared_snapshot(
+                    shared_snap_access_cache,
+                    pd_client,
+                    http_client,
+                    dfs,
+                    ia_ctx,
+                    vector_index_cache,
+                    columnar_file_cache,
+                    columnar_meta_cache,
+                    snap_cache,
+                    snap_cache_capable_stores,
+                    meta_file_cache,
+                    schema_files,
+                    schema_file_cache_state,
+                    txn_mgr,
+                    block_cache,
+                    fts_cache,
+                    fts_delta_cache,
+                    shard_id,
+                    shard_ver,
+                    start_ts,
+                    tables_clone,
+                    &master_key,
+                    fts_query_info_clone,
+                )
+                .await
+            }));
+        match snapshot {
             Ok(Ok(snap)) => {
                 info!(
                     "begin to make columnar reader, elapsed: {:?}",
@@ -620,7 +620,7 @@ impl CloudHelper {
                 Err(e)
             }
             Err(e) => {
-                error!("failed to recv"; "err" => e.to_string());
+                error!("columnar snapshot request interrupted"; "err" => e.to_string());
                 Err(Error::Other(e.to_string()))
             }
         }
@@ -1492,6 +1492,68 @@ mod tests {
     use bytes::Bytes;
     use kvengine::table::{file::InMemFile, schema_file::build_schema_file};
     use security::SecurityConfig;
+
+    struct PendingStorePdClient {
+        lookup_lifetime: Arc<()>,
+    }
+
+    impl security::GetSecurityManager for PendingStorePdClient {
+        fn get_security_mgr(&self) -> Arc<SecurityManager> {
+            unreachable!()
+        }
+    }
+
+    impl PdClient for PendingStorePdClient {
+        fn get_region_leader_by_id(
+            &self,
+            _region_id: u64,
+        ) -> pd_client::PdFuture<Option<(kvproto::metapb::Region, Peer)>> {
+            let mut peer = Peer::default();
+            peer.set_store_id(2);
+            Box::pin(async move { Ok(Some((Default::default(), peer))) })
+        }
+
+        fn get_store_async(&self, store_id: u64) -> pd_client::PdFuture<Store> {
+            assert_eq!(store_id, 2);
+            let lifetime = self.lookup_lifetime.clone();
+            Box::pin(async move {
+                let _guard = lifetime;
+                std::future::pending().await
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn pd_store_discovery_is_cancellable() {
+        use kvengine::columnar_cancel::{cancellable, Cancellation};
+
+        for cached_region in [false, true] {
+            let lifetime = Arc::new(());
+            let client = PdClientWithCache::new(Arc::new(PendingStorePdClient {
+                lookup_lifetime: lifetime.clone(),
+            }));
+            if cached_region {
+                let mut peer = Peer::default();
+                peer.set_store_id(2);
+                client.region_cache.insert(1, peer);
+            }
+            let token = Cancellation::default();
+            let _scope = token.enter();
+            let mut lookup = Box::pin(cancellable(client.get_leader_store_by_region_id(1)));
+            assert!(futures::poll!(&mut lookup).is_pending());
+            assert_eq!(Arc::strong_count(&lifetime), 3);
+            // Store IO must not hold the region cache lock across an await.
+            assert!(client.region_cache.try_get_mut(&1).is_present());
+
+            token.cancel();
+            assert!(matches!(
+                futures::poll!(&mut lookup),
+                std::task::Poll::Ready(Err(_))
+            ));
+            assert_eq!(Arc::strong_count(&lifetime), 2);
+            assert!(client.store_cache.is_empty());
+        }
+    }
 
     fn new_test_schema_file(file_id: u64, keyspace_id: u32, version: i64) -> SchemaFile {
         let schema_file_data = build_schema_file(keyspace_id, version, Vec::new(), 0);

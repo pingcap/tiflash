@@ -16,6 +16,7 @@
 #include <Common/ThreadManager.h>
 #include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Executor/ResultQueue.h>
+#include <Interpreters/Context.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/FailPointUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -23,6 +24,43 @@
 
 namespace DB::tests
 {
+TEST(PipelineCancellationTest, RequestCancellationSurvivesContextCopyAndLateRegistration)
+{
+    auto context = TiFlashTestEnv::getContext();
+    auto cancellation = std::make_shared<CancellationSource>();
+    context->setCancellationSource(cancellation);
+    Context copy(*context);
+    size_t calls = 0;
+    copy.addCancellationCallback([&] {
+        EXPECT_TRUE(copy.isCancelled());
+        // Reentrant registration must run immediately, outside the source mutex.
+        context->addCancellationCallback([&] { ++calls; });
+        ++calls;
+    });
+    cancellation->cancel();
+    cancellation->cancel();
+    EXPECT_EQ(calls, 2);
+    copy.addCancellationCallback([&] { ++calls; });
+    EXPECT_EQ(calls, 3);
+}
+
+TEST(PipelineCancellationTest, CallbackRegistrationAndRepeatedCancel)
+{
+    PipelineExecutorContext context;
+    size_t calls = 0;
+    context.addCancellationCallback([&] {
+        ++calls;
+        // Callbacks must run outside the context mutex.
+        EXPECT_TRUE(context.isCancelled());
+        EXPECT_FALSE(context.dumpActiveTasks().empty());
+    });
+    context.cancel();
+    context.cancel();
+    EXPECT_EQ(calls, 1);
+    context.addCancellationCallback([&] { ++calls; });
+    EXPECT_EQ(calls, 2);
+}
+
 class PipelineExecutorContextTestRunner : public ExecutorTest
 {
 public:

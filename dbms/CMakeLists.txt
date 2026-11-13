@@ -352,6 +352,10 @@ if (ENABLE_TESTS)
     target_compile_definitions(dbms PUBLIC MULTIPLE_CONTEXT_GTEST)
 
     target_link_libraries(gtests_dbms test_util_gtest_main tiflash_functions tiflash-dttool-lib delta_merge kvstore)
+    if (ENABLE_NEXT_GEN_COLUMNAR)
+        # Exercise the same Rust-owned cancellation tokens used by Columnar IO.
+        target_link_libraries(gtests_dbms ${TIFLASH_PROXY_LIBRARY})
+    endif ()
 
     install (TARGETS gtests_dbms
             COMPONENT tiflash-gtest

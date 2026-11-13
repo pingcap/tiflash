@@ -19,6 +19,7 @@
 #include <Common/MyTime.h>
 #include <Common/RedactHelpers.h>
 #include <Common/Stopwatch.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashException.h>
 #include <Core/NamesAndTypes.h>
 #include <DataStreams/AddExtraTableIDColumnTransformAction.h>
@@ -39,6 +40,7 @@
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/RequestUtils.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <IO/Buffer/ReadBufferFromMemory.h>
 #include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/IOThreadPools.h>
@@ -178,6 +180,8 @@ struct RNColumnarReaderSharedContext
     }
 
     LoggerPtr log;
+    ColumnarCancellationPtr cancellation;
+    PipelineExecutorContext * exec_context = nullptr;
     const Context * context = nullptr;
     UInt64 start_ts = 0;
     DM::ColumnDefinesPtr column_defines;
@@ -400,7 +404,8 @@ std::vector<String> getRegionBucketKeysFromColumnar(const Context & context, Reg
 std::vector<RegionReaderPlan> buildRegionReaderPlansFromPhysicalTableRanges(
     const LoggerPtr & log,
     const Context & context,
-    const ColumnarPhysicalTableRanges & physical_table_ranges)
+    const ColumnarPhysicalTableRanges & physical_table_ranges,
+    const ColumnarCancellationPtr & cancellation)
 {
     std::vector<RegionReaderPlan> region_reader_plans;
     if (physical_table_ranges.empty())
@@ -415,9 +420,11 @@ std::vector<RegionReaderPlan> buildRegionReaderPlansFromPhysicalTableRanges(
 
     for (const auto & [physical_table_id, ranges] : physical_table_ranges)
     {
+        cancellation->check();
         const auto locations = pingcap::coprocessor::details::splitKeyRangesByLocations(region_cache, bo, ranges);
         for (const auto & location : locations)
         {
+            cancellation->check();
             const auto & region = location.location.region;
             auto it = plan_index_by_region_id.find(region.id);
             if (it == plan_index_by_region_id.end())
@@ -765,7 +772,8 @@ void StorageDisaggregated::readThroughColumnar(
         table_scan,
         filter_conditions,
         remote_table_ranges,
-        num_streams);
+        num_streams,
+        &exec_context);
     const auto generated_column_infos = genGeneratedColumnInfosForDisaggregatedRead(table_scan);
     if (!read_columnar_tasks.empty())
     {
@@ -802,8 +810,11 @@ void StorageDisaggregated::readThroughColumnar(
 
 ColumnarReaderPtr createColumnarReader(
     const RNColumnarReaderSharedContext & shared_context,
-    const RNColumnarReaderPlan & reader_plan)
+    const RNColumnarReaderPlan & reader_plan,
+    const ColumnarCancellationPtr & cancellation)
 {
+    cancellation->check();
+    ColumnarCancellation::Scope cancellation_scope(*cancellation);
     const auto & log = shared_context.log;
     const auto & context = *shared_context.context;
     String tables_range_data;
@@ -860,6 +871,7 @@ ColumnarReaderPtr createColumnarReader(
             && columnar_reader.error.inner.ptr != nullptr)
             RustGcHelper::instance().gcRustPtr(columnar_reader.error.inner.ptr, columnar_reader.error.inner.type);
     });
+    cancellation->check();
     if (columnar_reader.error_type == ColumnarReaderErrorType::RegionError)
     {
         auto error_msg = String(columnar_reader.error.buff.data, columnar_reader.error.buff.len);
@@ -969,6 +981,7 @@ RNColumnarReadTask::RNColumnarReadTask(
     std::shared_ptr<RNColumnarReaderSharedContext> shared_reader_context_)
     : reader_count(reader_plans.size())
     , source_num(source_num_)
+    , remaining_sources(source_num_)
     , has_multi_table_reader_plan(std::any_of(
           reader_plans.begin(),
           reader_plans.end(),
@@ -1196,6 +1209,20 @@ void RNColumnarReadTask::replaceReaderWork(
 }
 
 #ifdef DBMS_PUBLIC_GTEST
+RNColumnarReadTaskPtr RNColumnarReadTask::createForCancellationTest(
+    ColumnarCancellationPtr cancellation,
+    PipelineExecutorContext * exec_context)
+{
+    auto shared = std::make_shared<RNColumnarReaderSharedContext>();
+    shared->log = Logger::get("columnar_cancel_test");
+    shared->cancellation = std::move(cancellation);
+    shared->exec_context = exec_context;
+    return std::make_shared<RNColumnarReadTask>(
+        std::vector<RNColumnarReaderPlan>{{1, 1, 1, {}}, {2, 1, 1, {}}},
+        1,
+        shared);
+}
+
 void RNColumnarReadTask::replaceReaderWorkForTest(
     const RNColumnarReaderWorkPtr & reader_work,
     std::vector<RNColumnarReaderPlan> replanned_reader_plans)
@@ -1204,12 +1231,22 @@ void RNColumnarReadTask::replaceReaderWorkForTest(
 }
 #endif
 
-ColumnarReaderPtr RNColumnarReadTask::createColumnarReaderWithBackoff(const RNColumnarReaderWorkPtr & reader_work)
+const ColumnarCancellationPtr & RNColumnarReadTask::getCancellation() const
 {
+    return shared_reader_context->cancellation;
+}
+
+ColumnarReaderPtr RNColumnarReadTask::createColumnarReaderWithBackoff(
+    const RNColumnarReaderWorkPtr & reader_work,
+    const ColumnarCancellationPtr & cancellation_)
+{
+    const auto & cancellation = cancellation_ ? cancellation_ : getCancellation();
     RUNTIME_CHECK(reader_work != nullptr);
     pingcap::kv::Backoffer bo(pingcap::kv::copNextMaxBackoff);
     while (true)
     {
+        SYNC_FOR("columnar_reader_create");
+        cancellation->check();
         try
         {
             const auto & reader_plan = reader_work->plan;
@@ -1218,10 +1255,11 @@ ColumnarReaderPtr RNColumnarReadTask::createColumnarReaderWithBackoff(const RNCo
                 "materialize columnar reader for tables in region, region_id={}, table_num={}",
                 reader_plan.region_id,
                 reader_plan.physical_table_ranges.size());
-            return createColumnarReader(*shared_reader_context, reader_plan);
+            return createColumnarReader(*shared_reader_context, reader_plan, cancellation);
         }
         catch (RegionException & e)
         {
+            cancellation->check();
             if (e.status == RegionException::RegionReadStatus::EPOCH_NOT_MATCH
                 || e.status == RegionException::RegionReadStatus::NOT_FOUND)
             {
@@ -1233,7 +1271,8 @@ ColumnarReaderPtr RNColumnarReadTask::createColumnarReaderWithBackoff(const RNCo
                     auto replanned_region_reader_plans = buildRegionReaderPlansFromPhysicalTableRanges(
                         getLog(),
                         getContext(),
-                        reader_work->plan.physical_table_ranges);
+                        reader_work->plan.physical_table_ranges,
+                        cancellation);
                     auto replanned_reader_plans = buildReaderPlansFromRegionReaderPlans(replanned_region_reader_plans);
                     const auto replanned_reader_plan_count = replanned_reader_plans.size();
                     replaceReaderWork(reader_work, std::move(replanned_reader_plans));
@@ -1251,6 +1290,7 @@ ColumnarReaderPtr RNColumnarReadTask::createColumnarReaderWithBackoff(const RNCo
                 }
             }
             LOG_WARNING(getLog(), "create columnar reader failed, backoff and retry, {}", e.message());
+            cancellation->check();
             bo.backoff(pingcap::kv::boRegionMiss, pingcap::Exception(e.message(), e.code()));
         }
         catch (Exception & e)
@@ -1258,18 +1298,23 @@ ColumnarReaderPtr RNColumnarReadTask::createColumnarReaderWithBackoff(const RNCo
             if (e.code() != ErrorCodes::COLUMNAR_SNAPSHOT_ERROR)
                 throw;
             LOG_WARNING(getLog(), "create proxy reader failed, backoff and retry, {}", e.message());
+            cancellation->check();
             bo.backoff(pingcap::kv::boRegionMiss, pingcap::Exception(e.message(), e.code()));
         }
     }
 }
 
-ColumnarReaderPtr RNColumnarReadTask::getOrCreateReader(const RNColumnarReaderWorkPtr & reader_work)
+ColumnarReaderPtr RNColumnarReadTask::getOrCreateReader(
+    const RNColumnarReaderWorkPtr & reader_work,
+    const ColumnarCancellationPtr & cancellation_)
 {
+    const auto & cancellation = cancellation_ ? cancellation_ : getCancellation();
     RUNTIME_CHECK(reader_work != nullptr);
 
     bool should_create_inline = false;
     while (true)
     {
+        cancellation->check();
         {
             std::unique_lock lock(reader_work->mutex);
             switch (reader_work->state)
@@ -1290,8 +1335,10 @@ ColumnarReaderPtr RNColumnarReadTask::getOrCreateReader(const RNColumnarReaderWo
                     "columnar reader work for region {} is already consumed",
                     reader_work->plan.region_id);
             case RNColumnarReaderMaterializeState::Creating:
-                reader_work->cv.wait(lock, [&] {
-                    return reader_work->state != RNColumnarReaderMaterializeState::Creating;
+                SYNC_FOR("columnar_reader_wait");
+                reader_work->cv.wait_for(lock, std::chrono::milliseconds(50), [&] {
+                    return cancellation->isCancelled()
+                        || reader_work->state != RNColumnarReaderMaterializeState::Creating;
                 });
                 continue;
             case RNColumnarReaderMaterializeState::NotStarted:
@@ -1306,7 +1353,7 @@ ColumnarReaderPtr RNColumnarReadTask::getOrCreateReader(const RNColumnarReaderWo
     RUNTIME_CHECK(should_create_inline);
     try
     {
-        auto reader = createColumnarReaderWithBackoff(reader_work);
+        auto reader = createColumnarReaderWithBackoff(reader_work, cancellation);
         {
             auto guard = std::lock_guard(reader_work->mutex);
             reader_work->reader.reset();
@@ -1329,6 +1376,14 @@ ColumnarReaderPtr RNColumnarReadTask::getOrCreateReader(const RNColumnarReaderWo
     }
 }
 
+void RNColumnarReadTask::finishSource()
+{
+    // LIMIT can finish all sources without cancelling the executor. Unused
+    // prefetch must stop too, or its active reference would prevent drain.
+    if (remaining_sources.fetch_sub(1) == 1)
+        getCancellation()->cancel();
+}
+
 void RNColumnarReadTask::prefetchPendingWork()
 {
     RNColumnarReaderWorkPtr reader_work;
@@ -1345,6 +1400,11 @@ void RNColumnarReadTask::prefetchPendingWork()
 void RNColumnarReadTask::prefetchReaderWork(const RNColumnarReaderWorkPtr & reader_work)
 {
     RUNTIME_CHECK(reader_work != nullptr);
+    getCancellation()->check();
+    // The stream executor does not have an active-reference drain. Keep its
+    // materialization inline so no detached work can outlive Context.
+    if (!shared_reader_context->exec_context)
+        return;
 
     {
         auto guard = std::lock_guard(reader_work->mutex);
@@ -1354,7 +1414,31 @@ void RNColumnarReadTask::prefetchReaderWork(const RNColumnarReaderWorkPtr & read
     }
 
     LOG_INFO(getLog(), "materialize columnar reader asynchronously, region_id={}", reader_work->plan.region_id);
-    newThreadManager()->scheduleThenDetach(true, "PrefetchRNColumnarReader", [self = shared_from_this(), reader_work] {
+    struct PrefetchLifetime
+    {
+        RNColumnarReadTaskPtr task;
+        RNColumnarReaderWorkPtr work;
+        PipelineExecutorContext & exec_context;
+        PrefetchLifetime(RNColumnarReadTaskPtr task_, RNColumnarReaderWorkPtr work_, PipelineExecutorContext & context_)
+            : task(std::move(task_))
+            , work(std::move(work_))
+            , exec_context(context_)
+        {
+            exec_context.incActiveRefCount();
+        }
+        ~PrefetchLifetime()
+        {
+            // Release Rust readers and Context users before allowing MPPTask to drain.
+            work.reset();
+            task.reset();
+            exec_context.decActiveRefCount();
+        }
+    };
+    auto lifetime
+        = std::make_shared<PrefetchLifetime>(shared_from_this(), reader_work, *shared_reader_context->exec_context);
+    newThreadManager()->scheduleThenDetach(true, "PrefetchRNColumnarReader", [lifetime] {
+        const auto & self = lifetime->task;
+        const auto & reader_work = lifetime->work;
         try
         {
             auto reader = self->createColumnarReaderWithBackoff(reader_work);
@@ -1384,6 +1468,7 @@ void RNColumnarReadTask::prefetchReaderWork(const RNColumnarReaderWorkPtr & read
 
 std::optional<RNColumnarReaderWorkPtr> RNColumnarReadTask::tryAcquireReaderWork()
 {
+    getCancellation()->check();
     RNColumnarReaderWorkPtr reader_work;
     {
         auto guard = std::lock_guard(pending_reader_works_mutex);
@@ -1432,12 +1517,24 @@ std::vector<RNColumnarReadTaskPtr> RNColumnarReadTask::buildColumnarReadTaskWith
     const TiDBTableScan & table_scan,
     const FilterConditions & filter_conditions,
     const std::vector<RemoteTableRange> & remote_table_ranges,
-    unsigned num_streams)
+    unsigned num_streams,
+    PipelineExecutorContext * exec_context,
+    ColumnarCancellationPtr cancellation)
 {
+    if (!cancellation)
+        cancellation = std::make_shared<ColumnarCancellation>();
+    if (exec_context)
+        exec_context->addCancellationCallback([cancellation] { cancellation->cancel(); });
+    context.addCancellationCallback([cancellation] { cancellation->cancel(); });
+    SYNC_FOR("columnar_build_registered");
     std::vector<RNColumnarReadTaskPtr> tasks;
     pingcap::kv::Backoffer bo(pingcap::kv::copNextMaxBackoff);
     while (true)
     {
+        cancellation->check();
+        if (context.isCancelled())
+            cancellation->cancel();
+        cancellation->check();
         try
         {
             tasks = RNColumnarReadTask::buildColumnarReadTask(
@@ -1447,12 +1544,15 @@ std::vector<RNColumnarReadTaskPtr> RNColumnarReadTask::buildColumnarReadTaskWith
                 table_scan,
                 filter_conditions,
                 remote_table_ranges,
-                num_streams);
+                num_streams,
+                exec_context,
+                cancellation);
             break;
         }
         catch (RegionException & e)
         {
             LOG_WARNING(log, "buildColumnarReadTask failed, backoff and retry, {}", e.message());
+            cancellation->check();
             bo.backoff(pingcap::kv::boRegionMiss, pingcap::Exception(e.message(), e.code()));
         }
         catch (Exception & e)
@@ -1460,6 +1560,7 @@ std::vector<RNColumnarReadTaskPtr> RNColumnarReadTask::buildColumnarReadTaskWith
             if (e.code() != ErrorCodes::COLUMNAR_SNAPSHOT_ERROR)
                 throw;
             LOG_WARNING(log, "buildColumnarReadTask failed, backoff and retry, {}", e.message());
+            cancellation->check();
             bo.backoff(pingcap::kv::boRegionMiss, pingcap::Exception(e.message(), e.code()));
         }
     }
@@ -1473,7 +1574,9 @@ std::vector<RNColumnarReadTaskPtr> RNColumnarReadTask::buildColumnarReadTask(
     const TiDBTableScan & table_scan,
     const FilterConditions & filter_conditions,
     const std::vector<RemoteTableRange> & remote_table_ranges,
-    unsigned num_streams)
+    unsigned num_streams,
+    PipelineExecutorContext * exec_context,
+    ColumnarCancellationPtr cancellation)
 {
     auto * dag_context = context.getDAGContext();
     auto scan_context
@@ -1481,6 +1584,10 @@ std::vector<RNColumnarReadTaskPtr> RNColumnarReadTask::buildColumnarReadTask(
     dag_context->scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
     auto shared_reader_context
         = buildColumnarReaderSharedContext(log, context, start_ts, table_scan, filter_conditions);
+    shared_reader_context->cancellation
+        = cancellation ? std::move(cancellation) : std::make_shared<ColumnarCancellation>();
+    shared_reader_context->exec_context = exec_context;
+    shared_reader_context->cancellation->check();
 
     std::vector<RNColumnarReadTaskPtr> tasks;
     ColumnarPhysicalTableRanges physical_table_ranges;
@@ -1488,16 +1595,23 @@ std::vector<RNColumnarReadTaskPtr> RNColumnarReadTask::buildColumnarReadTask(
     for (const auto & remote_table_range : remote_table_ranges)
         physical_table_ranges.emplace_back(remote_table_range.first, remote_table_range.second);
 
-    auto region_reader_plans = buildRegionReaderPlansFromPhysicalTableRanges(log, context, physical_table_ranges);
+    auto region_reader_plans = buildRegionReaderPlansFromPhysicalTableRanges(
+        log,
+        context,
+        physical_table_ranges,
+        shared_reader_context->cancellation);
     const auto region_num = static_cast<unsigned>(region_reader_plans.size());
     const auto physical_table_num = static_cast<unsigned>(physical_table_ranges.size());
     const bool enable_bucket_parallel = !table_scan.keepOrder() && num_streams > region_num;
     size_t total_max_reader_num = region_num;
     for (auto & plan : region_reader_plans)
     {
+        shared_reader_context->cancellation->check();
         if (enable_bucket_parallel)
         {
+            ColumnarCancellation::Scope scope(*shared_reader_context->cancellation);
             auto bucket_keys = getRegionBucketKeysFromColumnar(context, plan.region_id, plan.region_ver_id.ver);
+            shared_reader_context->cancellation->check();
             auto split_result = splitRangesByBucketKeys(plan.physical_table_ranges, bucket_keys);
             if (split_result.has_bucket_split && split_result.units.size() > 1)
             {
@@ -1574,6 +1688,14 @@ BlockInputStreams RNColumnarReadTask::getInputStreams()
 }
 
 // RNColumnarInputStream
+void RNColumnarInputStream::cancel(bool kill)
+{
+    // Publish soft/hard cancellation before waking an in-flight native read.
+    IProfilingBlockInputStream::cancel(kill);
+    if (cancellation)
+        cancellation->cancel();
+}
+
 bool RNColumnarInputStream::ensureReader()
 {
     if (reader.has_value())
@@ -1582,7 +1704,7 @@ bool RNColumnarInputStream::ensureReader()
     if (fixed_reader_work != nullptr)
     {
         current_reader_work = fixed_reader_work;
-        reader.emplace(task->getOrCreateReader(fixed_reader_work));
+        reader.emplace(task->getOrCreateReader(fixed_reader_work, cancellation));
         initializeLateMaterialization();
         return true;
     }
@@ -1592,7 +1714,7 @@ bool RNColumnarInputStream::ensureReader()
         return false;
 
     current_reader_work = next_reader_work.value();
-    reader.emplace(task->getOrCreateReader(next_reader_work.value()));
+    reader.emplace(task->getOrCreateReader(next_reader_work.value(), cancellation));
     initializeLateMaterialization();
     return true;
 }
@@ -1887,6 +2009,7 @@ Block RNColumnarInputStream::readLateMaterializedBlock()
         if (pending_late_materialization)
             late_materialization_interfaces->fn_discard_late_materialization_batch(reader.value(), batch_id);
     });
+    cancellation->check();
     duration_read_sec += w.elapsedSecondsFromLastTime();
     LOG_DEBUG(log, "Read {} rows from columnar", rows);
     if (rows == std::numeric_limits<UInt64>::max())
@@ -1919,6 +2042,7 @@ Block RNColumnarInputStream::readLateMaterializedBlock()
             = late_materialization_interfaces->fn_read_early_column(reader.value(), batch_id, column.column_id);
         duration_read_sec += w.elapsedSecondsFromLastTime();
         SCOPE_EXIT({ RustGcHelper::instance().gcRustPtr(col_data.inner.ptr, col_data.inner.type); });
+        cancellation->check();
         checkRustStrWithView(col_data, "fn_read_early_column");
         ReadBufferFromMemory buf(col_data.buff.data, static_cast<size_t>(col_data.buff.len));
         auto mutable_column = column.type->createColumn();
@@ -1980,6 +2104,7 @@ Block RNColumnarInputStream::readLateMaterializedBlock()
         batch_id,
         selection_kind,
         BaseBuffView{selection_data, selection_size});
+    cancellation->check();
     if (selected_rows == std::numeric_limits<UInt64>::max())
         throw Exception(ErrorCodes::LOGICAL_ERROR, "materialize selected rows for batch {} failed", batch_id);
 
@@ -2071,6 +2196,7 @@ Block RNColumnarInputStream::readLateMaterializedBlock()
             = late_materialization_interfaces->fn_read_late_column(reader.value(), batch_id, column.column_id);
         duration_read_sec += w.elapsedSecondsFromLastTime();
         SCOPE_EXIT({ RustGcHelper::instance().gcRustPtr(col_data.inner.ptr, col_data.inner.type); });
+        cancellation->check();
         checkRustStrWithView(col_data, "fn_read_late_column");
         ReadBufferFromMemory buf(col_data.buff.data, static_cast<size_t>(col_data.buff.len));
         column.type->deserializeBinaryBulkWithMultipleStreams(
@@ -2100,7 +2226,9 @@ Block RNColumnarInputStream::readLegacyBlock(const TiFlashRaftProxyHelper * prox
 {
     Stopwatch w{CLOCK_MONOTONIC_COARSE};
     TableID physical_table_id = -1;
+    cancellation->check();
     const UInt64 rows = proxy_helper->cloud_storage_engine_interfaces.fn_read_block(reader.value(), batch_size);
+    cancellation->check();
     duration_read_sec += w.elapsedSecondsFromLastTime();
     LOG_DEBUG(log, "Read {} rows from columnar", rows);
     if (rows == std::numeric_limits<UInt64>::max())
@@ -2141,6 +2269,7 @@ Block RNColumnarInputStream::readLegacyBlock(const TiFlashRaftProxyHelper * prox
             RustStrWithView col_data = proxy_helper->cloud_storage_engine_interfaces.fn_read_handle(reader.value());
             duration_read_sec += w.elapsedSecondsFromLastTime();
             SCOPE_EXIT({ RustGcHelper::instance().gcRustPtr(col_data.inner.ptr, col_data.inner.type); });
+            cancellation->check();
             physical_table_id = proxy_helper->cloud_storage_engine_interfaces.fn_physical_table_id(reader.value());
             ReadBufferFromMemory buf(col_data.buff.data, static_cast<size_t>(col_data.buff.len));
             auto & col = *columns[i];
@@ -2168,6 +2297,7 @@ Block RNColumnarInputStream::readLegacyBlock(const TiFlashRaftProxyHelper * prox
                 : interfaces.fn_read_column(reader.value(), col_id);
             duration_read_sec += w.elapsedSecondsFromLastTime();
             SCOPE_EXIT({ RustGcHelper::instance().gcRustPtr(col_data.inner.ptr, col_data.inner.type); });
+            cancellation->check();
             physical_table_id = proxy_helper->cloud_storage_engine_interfaces.fn_physical_table_id(reader.value());
             ReadBufferFromMemory buf(col_data.buff.data, static_cast<size_t>(col_data.buff.len));
             auto & col = *columns[i];
@@ -2201,15 +2331,33 @@ Block RNColumnarInputStream::readLegacyBlock(const TiFlashRaftProxyHelper * prox
 }
 
 Block RNColumnarInputStream::readImpl([[maybe_unused]] FilterPtr & res_filter, [[maybe_unused]] bool return_filter)
+try
 {
+    // Query cancellation takes precedence over stream-local LIMIT/EOF.
+    task->getCancellation()->check();
+    if (context.isCancelled())
+    {
+        cancellation->cancel();
+        throw Exception("columnar query cancelled", ErrorCodes::QUERY_WAS_CANCELLED);
+    }
+    if (isCancelledOrThrowIfKilled())
+    {
+        res_filter = nullptr;
+        return {};
+    }
     if (done)
         return {};
+    cancellation->check();
+    ColumnarCancellation::Scope cancellation_scope(*cancellation);
+    SYNC_FOR("columnar_stream_read");
+    cancellation->check();
     const Context & global_ctx = context.getGlobalContext();
     const TiFlashRaftProxyHelper * proxy_helper = global_ctx.getSharedContextDisagg()->getColumnarProxyHelper();
     RUNTIME_CHECK_MSG(proxy_helper != nullptr, "columnar helper is not initialized");
 
     while (true)
     {
+        cancellation->check();
         if (!ensureReader())
         {
             done = true;
@@ -2219,15 +2367,28 @@ Block RNColumnarInputStream::readImpl([[maybe_unused]] FilterPtr & res_filter, [
         if (late_materialization_interfaces != nullptr)
         {
             Block block = readLateMaterializedBlock();
+            cancellation->check();
             if (block || done)
                 return block;
             continue;
         }
 
         Block block = readLegacyBlock(proxy_helper);
+        cancellation->check();
         if (block || done)
             return block;
     }
+}
+catch (const Exception & e)
+{
+    // A cancelled FFI read is also the wakeup mechanism for normal LIMIT.
+    // Only translate that specific exception; preserve unrelated read errors.
+    if (e.code() != ErrorCodes::QUERY_WAS_CANCELLED || !is_cancelled || is_killed || context.isCancelled()
+        || task->getCancellation()->isCancelled())
+        throw;
+    done = true;
+    res_filter = nullptr;
+    return {};
 }
 
 // RNColumnarSourceOp
@@ -2292,6 +2453,8 @@ OperatorStatus RNColumnarSourceOp::awaitImpl()
 
 OperatorStatus RNColumnarSourceOp::executeIOImpl()
 {
+    if (exec_context.isCancelled())
+        return OperatorStatus::CANCELLED;
     if (unlikely(done || t_block.has_value()))
     {
         return OperatorStatus::HAS_OUTPUT;

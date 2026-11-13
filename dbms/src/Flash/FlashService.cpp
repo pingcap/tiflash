@@ -735,7 +735,7 @@ grpc::Status FlashService::CancelMPPTask(
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // CancelMPPTask cancels the query of the task.
-    LOG_INFO(log, "cancel mpp task request: {}", request->DebugString());
+    LOG_INFO(log, "cancel mpp task request, peer={}: {}", grpc_context->peer(), request->DebugString());
 
     auto check_result = checkGrpcContext(grpc_context);
     if (!check_result.ok())
@@ -769,6 +769,13 @@ grpc::Status FlashService::CancelMPPTask(
         MPPGatherId(request->meta()),
         "Receive cancel request from TiDB",
         AbortType::ONCANCELLATION);
+    LOG_INFO(
+        log,
+        "CancelMPPTask accepted, peer={} target={} gather={} elapsed_ms={}, executor drain is asynchronous",
+        grpc_context->peer(),
+        request->meta().address(),
+        MPPGatherId(request->meta()).toString(),
+        watch.elapsedMilliseconds());
     return grpc::Status::OK;
 }
 

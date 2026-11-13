@@ -21,6 +21,14 @@
 
 namespace DB
 {
+String PipelineExec::describeOperators() const
+{
+    String description = source_op->getName();
+    for (const auto & op : transform_ops)
+        description += " -> " + op->getName();
+    return description + " -> " + sink_op->getName();
+}
+
 namespace FailPoints
 {
 extern const char random_pipeline_model_execute_prefix_failpoint[];

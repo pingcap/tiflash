@@ -27,6 +27,7 @@
 #include <atomic>
 #include <exception>
 #include <mutex>
+#include <unordered_map>
 
 namespace DB
 {
@@ -39,6 +40,7 @@ using SharedQueuePtr = std::shared_ptr<SharedQueue>;
 class OneTimeNotifyFuture;
 using OneTimeNotifyFuturePtr = std::shared_ptr<OneTimeNotifyFuture>;
 class DAGContext;
+class Task;
 
 class PipelineExecutorContext : private boost::noncopyable
 {
@@ -82,6 +84,11 @@ public:
 
     void decActiveRefCount();
 
+    void registerTask(const Task * task);
+    void unregisterTask(const Task * task);
+    void describeTask(const Task * task, String operators);
+    String dumpActiveTasks();
+
     void onErrorOccurred(const String & err_msg);
     void onErrorOccurred(const std::exception_ptr & exception_ptr_);
 
@@ -108,6 +115,10 @@ public:
     void consume(ResultHandler & result_handler);
 
     void cancel();
+
+    // Callbacks must be non-blocking and must not throw. Registration racing
+    // with cancellation runs the callback immediately, outside mu.
+    void addCancellationCallback(std::function<void()> callback);
 
     ALWAYS_INLINE bool isCancelled() const { return is_cancelled.load(std::memory_order_acquire); }
 
@@ -161,6 +172,8 @@ private:
     void cancelOneTimeFutures();
 
     void cancelResultQueueIfNeed();
+    void waitForDrain(std::unique_lock<std::mutex> & lock);
+    String dumpActiveTasksLocked(size_t limit);
 
 private:
     const String query_id;
@@ -196,5 +209,8 @@ private:
     std::vector<SharedQueuePtr> shared_queues;
 
     std::vector<OneTimeNotifyFuturePtr> one_time_futures;
+    std::vector<std::function<void()>> cancellation_callbacks;
+    std::unordered_map<const Task *, String> active_tasks;
+    std::chrono::steady_clock::time_point cancelled_at;
 };
 } // namespace DB
