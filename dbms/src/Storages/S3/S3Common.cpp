@@ -64,11 +64,6 @@
 #include <aws/sts/model/GetCallerIdentityRequest.h>
 #include <aws/sts/model/GetCallerIdentityResult.h>
 #include <common/logger_useful.h>
-#include <kvproto/disaggregated.pb.h>
-#include <pingcap/kv/Cluster.h>
-#include <pingcap/kv/RegionCache.h>
-#include <pingcap/kv/Rpc.h>
-#include <pingcap/kv/internal/type_traits.h>
 #include <re2/re2.h>
 
 #include <any>
@@ -80,7 +75,6 @@
 #include <memory>
 #include <mutex>
 #include <string_view>
-#include <thread>
 
 
 namespace ProfileEvents
@@ -216,6 +210,7 @@ bool ClientFactory::isEnabled() const
     return config.isS3Enabled();
 }
 
+<<<<<<< HEAD
 disaggregated::GetDisaggConfigResponse getDisaggConfigFromDisaggWriteNodes(
     pingcap::kv::Cluster * kv_cluster,
     const LoggerPtr & log)
@@ -289,6 +284,27 @@ disaggregated::GetDisaggConfigResponse getDisaggConfigFromDisaggWriteNodes(
         LOG_WARNING(log, "failed to get disagg config from all tiflash stores, retry");
         std::this_thread::sleep_for(2s);
     }
+=======
+// Returns <aws_client_config, use_virtual_addressing>
+std::pair<Aws::Client::ClientConfiguration, CloudVendor> ClientFactory::initAwsClientConfig(
+    const StorageS3Config & storage_config,
+    const LoggerPtr & log)
+{
+    // disable IMDS when creating ClientConfig, the region will be updated by endpoint later if possible
+    Aws::Client::ClientConfiguration cfg(
+        /*useSmartDefaults*/ true,
+        /*defaultMode*/ "standard",
+        /*shouldDisableIMDS*/ true);
+    cfg.maxConnections = storage_config.max_connections;
+    cfg.requestTimeoutMs = storage_config.request_timeout_ms;
+    cfg.connectTimeoutMs = storage_config.connection_timeout_ms;
+    if (!storage_config.endpoint.empty())
+    {
+        cfg.endpointOverride = storage_config.endpoint;
+    }
+    auto vendor = updateRegionByEndpoint(cfg, log);
+    return {cfg, vendor};
+>>>>>>> 62f49cf4c0 (fix: stop bootstrapping S3 config from write nodes (#11312))
 }
 
 void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
@@ -322,12 +338,7 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
     config = config_;
     RUNTIME_CHECK(!config.root.starts_with("//"), config.root);
     config.root = normalizedRoot(config.root);
-
-    if (config.bucket.empty())
-    {
-        LOG_INFO(log, "bucket is not specified, S3 client will be inited later");
-        return;
-    }
+    RUNTIME_CHECK_MSG(!config.bucket.empty(), "storage.s3.bucket must be set before initializing the S3 client");
 
     if (!mock_s3_)
     {
@@ -342,6 +353,7 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
     client_is_inited = true; // init finish
 }
 
+<<<<<<< HEAD
 std::shared_ptr<TiFlashS3Client> ClientFactory::initClientFromWriteNode()
 {
     std::unique_lock lock_init(mtx_init);
@@ -370,6 +382,8 @@ std::shared_ptr<TiFlashS3Client> ClientFactory::initClientFromWriteNode()
     return shared_tiflash_client;
 }
 
+=======
+>>>>>>> 62f49cf4c0 (fix: stop bootstrapping S3 config from write nodes (#11312))
 void ClientFactory::shutdown()
 {
     {
@@ -396,10 +410,8 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create() const
 
 std::shared_ptr<TiFlashS3Client> ClientFactory::sharedTiFlashClient()
 {
-    if (client_is_inited)
-        return shared_tiflash_client;
-
-    return initClientFromWriteNode();
+    RUNTIME_CHECK_MSG(client_is_inited.load(), "S3 client is not initialized; set storage.s3 in the config file");
+    return shared_tiflash_client;
 }
 
 namespace
