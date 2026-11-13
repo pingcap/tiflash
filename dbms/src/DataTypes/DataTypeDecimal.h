@@ -16,6 +16,7 @@
 
 #include <Columns/ColumnDecimal.h>
 #include <Common/Exception.h>
+#include <Common/TiFlashException.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/IDataType.h>
 #include <IO/WriteHelpers.h>
@@ -111,7 +112,14 @@ public:
         }
         else if (is_div)
         {
-            ScaleType left_result_scale = right_scale - left_scale + scale;
+            if (unlikely(right_scale + scale < left_scale))
+                throw TiFlashException(
+                    Errors::Decimal::Overflow,
+                    "Invalid decimal division scales: left {}, right {}, result {}",
+                    left_scale,
+                    right_scale,
+                    scale);
+            ScaleType left_result_scale = right_scale + scale - left_scale;
             return std::make_tuple(getScaleMultiplier(left_result_scale), T(1), T(1));
         }
         else
