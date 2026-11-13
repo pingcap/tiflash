@@ -134,12 +134,6 @@ private:
     mutable std::mutex mtx_init; // protect `config` and `shared_tiflash_client`
     StorageS3Config config;
     std::shared_ptr<TiFlashS3Client> shared_tiflash_client;
-<<<<<<< HEAD
-    pingcap::kv::Cluster * kv_cluster = nullptr;
-=======
-    std::shared_ptr<S3ReadLimiter> shared_s3_read_limiter;
-    std::shared_ptr<S3ReadMetricsRecorder> shared_s3_read_metrics_recorder;
->>>>>>> 62f49cf4c0 (fix: stop bootstrapping S3 config from write nodes (#11312))
 
     LoggerPtr log;
 };
