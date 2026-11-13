@@ -12,14 +12,61 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/FieldToDataType.h>
 #include <TestUtils/TiFlashTestBasic.h>
+
+#include <limits>
 
 namespace DB
 {
 namespace tests
 {
+template <typename T>
+class DecimalScaleMultiplierTest : public ::testing::Test
+{
+};
+
+using DecimalScaleTypes = ::testing::Types<Decimal32, Decimal64, Decimal128, Decimal256>;
+TYPED_TEST_CASE(DecimalScaleMultiplierTest, DecimalScaleTypes);
+
+TYPED_TEST(DecimalScaleMultiplierTest, Bounds)
+{
+    constexpr auto precision = maxDecimalPrecision<TypeParam>();
+    const DataTypeDecimal<TypeParam> type(precision, 0);
+    EXPECT_EQ(type.getScaleMultiplier(0).value, 1);
+    EXPECT_EQ(type.getScaleMultiplier(precision).value, getScaleMultiplier<TypeParam>(precision));
+    for (const ScaleType scale : {precision + 1, std::numeric_limits<ScaleType>::max()})
+    {
+        SCOPED_TRACE(scale);
+        EXPECT_THROW(type.getScaleMultiplier(scale), TiFlashException);
+    }
+}
+
+TEST(DecimalLiteralDataTypeTest, DivisionScaleUnderflow)
+{
+    const DataTypeDecimal64 left(10, 2);
+    const DataTypeDecimal64 right(10, 0);
+    const DataTypeDecimal32 invalid_result(9, 1);
+    EXPECT_THROW(invalid_result.getScales(left, right, false, true), TiFlashException);
+
+    // A negative intermediate difference is valid when the result scale compensates for it.
+    const DataTypeDecimal64 valid_result(14, 6);
+    const auto [left_multiplier, right_multiplier, result_multiplier]
+        = valid_result.getScales(left, right, false, true);
+    EXPECT_EQ(left_multiplier.value, 10000);
+    EXPECT_EQ(right_multiplier.value, 1);
+    EXPECT_EQ(result_multiplier.value, 1);
+
+    // Clamping the result scale to 30 can still require a multiplier with an exponent above 30.
+    const DataTypeDecimal32 integer_left(1, 0);
+    const DataTypeDecimal256 fractional_right(65, 30);
+    const DataTypeDecimal256 clamped_result(61, 30);
+    const auto clamped_scales = clamped_result.getScales(integer_left, fractional_right, false, true);
+    EXPECT_EQ(std::get<0>(clamped_scales).value, getScaleMultiplier<Decimal256>(60));
+}
+
 TEST(DecimalLiteralDataTypeTest, getPrec)
 try
 {
