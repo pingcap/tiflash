@@ -1218,32 +1218,18 @@ grpc::Status FlashService::FetchDisaggPages(
     }
 }
 
+// A running compute node used to call this RPC to copy endpoint, bucket, and root
+// from a write node when joining another cluster. Disaggregated deployment no longer
+// does that: each node's S3 settings are fixed in its config file. Keep the method so
+// callers get an explicit rejection instead of the generated empty UNIMPLEMENTED status.
 grpc::Status FlashService::GetDisaggConfig(
-    grpc::ServerContext * grpc_context,
+    grpc::ServerContext *,
     const disaggregated::GetDisaggConfigRequest *,
-    disaggregated::GetDisaggConfigResponse * response)
+    disaggregated::GetDisaggConfigResponse *)
 {
-    if (!context->getSharedContextDisagg()->isDisaggregatedStorageMode())
-    {
-        return grpc::Status(
-            grpc::StatusCode::UNIMPLEMENTED,
-            fmt::format(
-                "can not handle GetDisaggConfig with mode={}",
-                magic_enum::enum_name(context->getSharedContextDisagg()->disaggregated_mode)));
-    }
-
-    CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    auto check_result = checkGrpcContext(grpc_context);
-    if (!check_result.ok())
-        return check_result;
-
-    const auto local_s3config = S3::ClientFactory::instance().getConfigCopy();
-    auto * s3_config = response->mutable_s3_config();
-    s3_config->set_endpoint(local_s3config.endpoint);
-    s3_config->set_bucket(local_s3config.bucket);
-    s3_config->set_root(local_s3config.root);
-
-    return grpc::Status::OK;
+    return grpc::Status(
+        grpc::StatusCode::UNIMPLEMENTED,
+        "GetDisaggConfig is no longer supported; S3 settings come from the local config");
 }
 
 void ensureSystemTableIdentifier(const ASTIdentifier & identifier)
