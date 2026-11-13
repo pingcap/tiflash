@@ -270,6 +270,47 @@ try
 }
 CATCH
 
+TEST(DataTypeArrayTest, ReadsPositionIndependentSizesUntilEof)
+try
+{
+    const DataTypeArray type(std::make_shared<DataTypeFloat32>());
+    auto column = type.createColumn();
+    deserializeSplit(type, *column, podBytes<UInt64>({2, 0}), podBytes<Float32>({1.0F, 2.0F}), 5, true);
+    assertArrayEqual(*column, *makeFloat32Array({{1.0F, 2.0F}, {}}));
+
+    // A short batch appended to existing rows must also shrink to the number of sizes read.
+    deserializeSplit(type, *column, podBytes<UInt64>({1}), podBytes<Float32>({3.0F}), 5, true);
+    const auto expected = makeFloat32Array({{1.0F, 2.0F}, {}, {3.0F}});
+    assertArrayEqual(*column, *expected);
+
+    deserializeSplit(type, *column, {}, {}, 5, true);
+    assertArrayEqual(*column, *expected);
+}
+CATCH
+
+TEST(DataTypeArrayTest, RejectsOffsetCountOverflowWhenAppending)
+try
+{
+    const DataTypeArray type(std::make_shared<DataTypeFloat32>());
+    for (const size_t limit : {std::numeric_limits<size_t>::max(), std::numeric_limits<size_t>::max() - 1})
+    {
+        auto column = type.createColumn();
+        deserializeSplit(type, *column, podBytes<UInt64>({1, 0}), podBytes<Float32>({7.0F}), 2, true);
+
+        try
+        {
+            deserializeSplit(type, *column, podBytes<UInt64>({0}), {}, limit, true);
+            ADD_FAILURE() << "overflowing array offset count was accepted, limit=" << limit;
+        }
+        catch (const Exception & e)
+        {
+            EXPECT_EQ(e.code(), ErrorCodes::LOGICAL_ERROR) << e.displayText();
+            EXPECT_NE(e.displayText().find("overflows offset count"), std::string::npos) << e.displayText();
+        }
+    }
+}
+CATCH
+
 TEST(DataTypeArrayTest, RejectsWrappedSizesBeforeNestedColumnIsIndexed)
 try
 {
