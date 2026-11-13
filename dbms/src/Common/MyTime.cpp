@@ -1591,14 +1591,26 @@ extern "C" UInt8 projectTimestampRange(
         const auto end = cctz::convert(civil(hi), cctz::utc_time_zone());
         if (begin.time_since_epoch().count() <= 0 || end.time_since_epoch().count() > 2147483647)
             return false;
-        cctz::time_zone zone;
+        const auto & utc = DateLUT::instance("UTC");
+        if (!utc.isExactOffsetRange(begin.time_since_epoch().count(), end.time_since_epoch().count(), 0))
+            return false;
         if (timezone_name.empty())
         {
             if (timezone_offset <= -86400 || timezone_offset >= 86400)
                 return false;
-            zone = cctz::fixed_time_zone(std::chrono::seconds(timezone_offset));
+            // Fixed offsets preserve order and have no transitions or ambiguous local times.
+            // Prove the UTC LUT at the shifted seconds used by the row evaluator.
+            if (!utc.isExactOffsetRange(
+                    begin.time_since_epoch().count() + timezone_offset,
+                    end.time_since_epoch().count() + timezone_offset,
+                    0))
+                return false;
+            convertTimeZoneByOffset(min, session_min, true, timezone_offset);
+            convertTimeZoneByOffset(max, session_max, true, timezone_offset);
+            return true;
         }
-        else if (!cctz::load_time_zone(timezone_name, &zone))
+        cctz::time_zone zone;
+        if (!cctz::load_time_zone(timezone_name, &zone))
             return false;
         const auto local_min = zone.lookup(begin);
         const auto local_max = zone.lookup(end);
@@ -1608,46 +1620,11 @@ extern "C" UInt8 projectTimestampRange(
             || (zone.next_transition(begin - std::chrono::seconds(1), &transition)
                 && cctz::convert(transition.to, zone) <= end))
             return false;
-        const auto & utc = DateLUT::instance("UTC");
-        // Prove the actual UTC LUT once, not by its name. Reuse that proof for
-        // wide UTC/fixed-offset packs without a day walk on every comparison.
-        // Function-local static initialization is shared safely by all readers.
-        static const bool exact_utc = [&utc] {
-            constexpr Int64 last = 2147483647;
-            constexpr Int64 span = 31 * 86400;
-            for (Int64 first = 1; first <= last; first += span)
-                if (!utc.isExactOffsetRange(first, std::min(first + span - 1, last), 0))
-                    return false;
-            return true;
-        }();
-        const auto exact_utc_range = [&](time_t first, time_t last) {
-            return first > 0 && first <= last && last <= 2147483647
-                && (exact_utc || utc.isExactOffsetRange(first, last, 0));
-        };
-        if (!exact_utc_range(begin.time_since_epoch().count(), end.time_since_epoch().count()))
+        const auto & lut = DateLUT::instance(timezone_name);
+        if (!lut.isExactOffsetRange(begin.time_since_epoch().count(), end.time_since_epoch().count(), local_min.offset))
             return false;
-        if (!timezone_name.empty())
-        {
-            const auto & lut = DateLUT::instance(timezone_name);
-            if ((!exact_utc || &lut != &utc)
-                && !lut.isExactOffsetRange(
-                    begin.time_since_epoch().count(),
-                    end.time_since_epoch().count(),
-                    local_min.offset))
-                return false;
-            convertTimeZone(min, session_min, utc, lut);
-            convertTimeZone(max, session_max, utc, lut);
-        }
-        else
-        {
-            // Fixed offsets read the UTC LUT at shifted seconds as well.
-            if (!exact_utc_range(
-                    begin.time_since_epoch().count() + timezone_offset,
-                    end.time_since_epoch().count() + timezone_offset))
-                return false;
-            convertTimeZoneByOffset(min, session_min, true, timezone_offset);
-            convertTimeZoneByOffset(max, session_max, true, timezone_offset);
-        }
+        convertTimeZone(min, session_min, utc, lut);
+        convertTimeZone(max, session_max, utc, lut);
         const auto pack = [](const cctz::civil_second & t, UInt32 micro) {
             return MyDateTime(t.year(), t.month(), t.day(), t.hour(), t.minute(), t.second(), micro).toPackedUInt();
         };

@@ -168,6 +168,11 @@ DateLUTImpl::DateLUTImpl(const std::string & time_zone_)
     {
         const Values & values = lut[day];
 
+        if (day != 0
+            && (values.date != lut[day - 1].date + 86400 || values.amount_of_offset_change() != 0
+                || lut[day - 1].amount_of_offset_change() != 0))
+            constant_offset_range_ends.push_back(static_cast<UInt32>(day - 1));
+
         if (values.day_of_month == 1)
         {
             if (values.month == 1)
@@ -178,6 +183,7 @@ DateLUTImpl::DateLUTImpl(const std::string & time_zone_)
             first_day_of_last_month = day;
         }
     }
+    constant_offset_range_ends.push_back(DATE_LUT_SIZE - 1);
 
     /// Fill the rest of lookup table with the same last month (2106-02-01).
     for (; year_months_lut_index < DATE_LUT_YEARS * 12; ++year_months_lut_index)

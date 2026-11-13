@@ -102,7 +102,7 @@ TEST(SessionTimezoneTest, RetainsTransitionsZeroAndNullableBounds)
     EXPECT_EQ(op.roughCheck(0, 6, param), RSResults(6, RSResult::SomeNull));
 }
 
-TEST(SessionTimezoneTest, RetainsUnprovedNamedRangesAndPrunesFixedOffsetRanges)
+TEST(SessionTimezoneTest, PrunesWideRangesWithoutTransitions)
 {
     const Attr attr{"ts", 1, std::make_shared<DataTypeMyDateTime>(6)};
     const auto param = packs(
@@ -110,20 +110,22 @@ TEST(SessionTimezoneTest, RetainsUnprovedNamedRangesAndPrunesFixedOffsetRanges)
         {
             {"2024-01-01 00:00:00.123456", "2024-01-02 00:00:00.123456"},
             {"2024-01-01 00:00:00.123456", "2024-03-01 00:00:00.123456"},
+            {"2024-01-01 00:00:00.123456", "2024-12-01 00:00:00.123456"},
         });
     TimezoneInfo tz;
     const auto check = [&] {
-        SessionTimezone op(createEqual(attr, Field(packed("2024-04-01 00:00:00"))), attr, tz);
-        return op.roughCheck(0, 2, param);
+        SessionTimezone op(createEqual(attr, Field(packed("2025-01-01 00:00:00"))), attr, tz);
+        return op.roughCheck(0, 3, param);
     };
-    // Named zones require a bounded DateLUT proof, even without a transition.
     tz.resetByTimezoneName("Asia/Shanghai");
-    EXPECT_EQ(check(), (RSResults{RSResult::None, RSResult::SomeNull}));
-    // Fixed offsets and UTC reuse the full UTC proof and can prune wide packs.
+    EXPECT_EQ(check(), RSResults(3, RSResult::None));
+    // A DST zone can prune a wide winter range, but must retain a range crossing transitions.
+    tz.resetByTimezoneName("America/New_York");
+    EXPECT_EQ(check(), (RSResults{RSResult::None, RSResult::None, RSResult::SomeNull}));
     tz.resetByTimezoneOffset(8 * 3600);
-    EXPECT_EQ(check(), RSResults(2, RSResult::None));
+    EXPECT_EQ(check(), RSResults(3, RSResult::None));
     tz.resetByTimezoneName("UTC");
-    EXPECT_EQ(check(), RSResults(2, RSResult::None));
+    EXPECT_EQ(check(), RSResults(3, RSResult::None));
 }
 
 TEST(SessionTimezoneTest, ParserProjectsTimestampLiteralsToSessionTime)
