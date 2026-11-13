@@ -193,6 +193,13 @@ MutableColumnPtr DataTypeDecimal<T>::createColumn() const
 template <typename T>
 T DataTypeDecimal<T>::getScaleMultiplier(UInt32 scale_) const
 {
+    if (unlikely(scale_ > maxPrecision()))
+        throw TiFlashException(
+            Errors::Decimal::Overflow,
+            "Decimal multiplier exponent {} exceeds maximum precision {} for {}",
+            scale_,
+            maxPrecision(),
+            getName());
     typename T::NativeType v = 1;
     for (UInt32 i = 0; i < scale_; i++)
     {

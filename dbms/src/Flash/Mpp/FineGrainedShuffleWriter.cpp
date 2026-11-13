@@ -20,6 +20,9 @@
 #include <Flash/Mpp/HashBaseWriterHelper.h>
 #include <Flash/Mpp/MPPTunnelSetWriter.h>
 #include <TiDB/Decode/TypeMapping.h>
+#include <common/likely.h>
+
+#include <limits>
 
 namespace DB
 {
@@ -66,7 +69,14 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::prepare(const Block & sample_b
         header.insert(new_column);
     }
     num_columns = header.columns();
-    // fine_grained_shuffle_stream_count is in (0, 1024], and partition_num is uint16_t, so will not overflow.
+    if (unlikely(
+            fine_grained_shuffle_stream_count == 0
+            || partition_num > std::numeric_limits<size_t>::max() / fine_grained_shuffle_stream_count))
+        throw TiFlashException(
+            Errors::Coprocessor::BadRequest,
+            "Invalid fine-grained shuffle bucket count: {} partitions with {} streams per partition",
+            partition_num,
+            fine_grained_shuffle_stream_count);
     num_bucket = partition_num * fine_grained_shuffle_stream_count;
     partition_key_containers_for_reuse.resize(collators.size());
     initScatterColumns();
