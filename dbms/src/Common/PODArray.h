@@ -44,7 +44,8 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int CANNOT_MPROTECT;
-}
+extern const int TOO_LARGE_ARRAY_SIZE;
+} // namespace ErrorCodes
 
 inline constexpr size_t integerRoundUp(size_t value, size_t dividend)
 {
@@ -121,12 +122,30 @@ protected:
     /// The amount of memory occupied by the num_elements of the elements.
     static size_t byte_size(size_t num_elements) { return num_elements * ELEMENT_SIZE; }
 
-    /// Minimum amount of memory to allocate for num_elements, including padding.
-    static size_t minimum_memory_for_elements(size_t num_elements)
+    [[noreturn]] static void throwTooLarge(size_t num_elements)
     {
-        auto res = byte_size(num_elements) + pad_right + pad_left;
-        return res;
+        throw Exception(
+            ErrorCodes::TOO_LARGE_ARRAY_SIZE,
+            "Array of {} elements of {} bytes is too large to allocate",
+            num_elements,
+            ELEMENT_SIZE);
     }
+
+    /// Bytes to allocate for num_elements, including padding.
+    /// reserve() rounds that size up to a power of two. The product, the padding sum, or that
+    /// rounding can wrap size_t and yield a tiny allocation for an enormous element count.
+    static size_t memoryForElements(size_t num_elements, bool round_up)
+    {
+        const size_t max_elements = round_up ? maxReserveSize() : maxAllocSize();
+        if (unlikely(num_elements > max_elements))
+            throwTooLarge(num_elements);
+
+        const size_t bytes = byte_size(num_elements) + pad_right + pad_left;
+        return round_up ? roundUpToPowerOfTwoOrZero(bytes) : bytes;
+    }
+
+    /// Minimum amount of memory to allocate for num_elements, including padding.
+    static size_t minimum_memory_for_elements(size_t num_elements) { return memoryForElements(num_elements, false); }
 
     void alloc_for_num_elements(size_t num_elements)
     {
@@ -137,7 +156,7 @@ protected:
         //in push_back or emplace_back will do the reserveForNextSize to alloc extra memory.
         //Thus, we don't need do roundUpToPowerOfTwoOrZero here, and it can cut down extra memory usage,
         //and will not have bad affact on performance.
-        alloc(minimum_memory_for_elements(num_elements));
+        alloc(memoryForElements(num_elements, false));
     }
 
     template <typename... TAllocatorParams>
@@ -238,6 +257,24 @@ protected:
 #endif
 
 public:
+    /// `PODArray(n)` allocates `n * ELEMENT_SIZE + padding` bytes with no further rounding.
+    static constexpr size_t maxAllocSize()
+    {
+        constexpr size_t padding = pad_left + pad_right;
+        static_assert(padding >= pad_left && padding >= pad_right);
+        return (std::numeric_limits<size_t>::max() - padding) / ELEMENT_SIZE;
+    }
+
+    /// `resize`/`reserve` round that padded byte count up to a power of two. The rounding
+    /// yields 0 once the high bit is set, so the largest safe byte count is 2^(bitwidth-1).
+    static constexpr size_t maxReserveSize()
+    {
+        constexpr size_t max_bytes = size_t{1} << (sizeof(size_t) * 8 - 1);
+        constexpr size_t padding = pad_left + pad_right;
+        static_assert(padding <= max_bytes);
+        return (max_bytes - padding) / ELEMENT_SIZE;
+    }
+
     bool empty() const { return c_end == c_start; }
     size_t size() const { return (c_end - c_start) / ELEMENT_SIZE; }
     size_t capacity() const { return (c_end_of_storage - c_start) / ELEMENT_SIZE; }
@@ -251,9 +288,7 @@ public:
     void reserve(size_t n, TAllocatorParams &&... allocator_params)
     {
         if (n > capacity())
-            realloc(
-                roundUpToPowerOfTwoOrZero(minimum_memory_for_elements(n)),
-                std::forward<TAllocatorParams>(allocator_params)...);
+            realloc(memoryForElements(n, true), std::forward<TAllocatorParams>(allocator_params)...);
     }
 
     template <typename... TAllocatorParams>
@@ -328,20 +363,6 @@ protected:
 
 public:
     using value_type = T;
-
-    /// `PODArray(n)` allocates `n * sizeof(T) + padding` bytes with no further rounding.
-    static constexpr size_t maxAllocSize()
-    {
-        return (std::numeric_limits<size_t>::max() - (Base::pad_left + Base::pad_right)) / sizeof(T);
-    }
-
-    /// `resize`/`reserve` round that padded byte count up to a power of two. The rounding
-    /// yields 0 once the high bit is set, so the largest safe byte count is 2^(bitwidth-1).
-    static constexpr size_t maxReserveSize()
-    {
-        constexpr size_t max_bytes = size_t{1} << (sizeof(size_t) * 8 - 1);
-        return (max_bytes - (Base::pad_left + Base::pad_right)) / sizeof(T);
-    }
 
     /// You can not just use `typedef`, because there is ambiguity for the constructors and `assign` functions.
     struct iterator : public boost::iterator_adaptor<iterator, T *>
