@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
 #include <TiDB/Decode/DatumCodec.h>
+
+#include <cstring>
 
 namespace DB
 {
@@ -60,13 +63,29 @@ void encodeDAGVectorFloat32(const Array & v, WriteBuffer & ss)
 
 Int64 decodeDAGInt64(const String & s)
 {
-    auto u = *(reinterpret_cast<const UInt64 *>(s.data()));
+    if (unlikely(s.size() != sizeof(UInt64)))
+        throw TiFlashException(
+            Errors::Coprocessor::BadRequest,
+            "Invalid Int64 literal encoding: expected {} bytes, got {}",
+            sizeof(UInt64),
+            s.size());
+    // Use memcpy instead of dereferencing `reinterpret_cast<const UInt64 *>` to
+    // avoid potentially unaligned loads and strict aliasing issues.
+    UInt64 u;
+    memcpy(&u, s.data(), sizeof(u));
     return RecordKVFormat::decodeInt64(u);
 }
 
 UInt64 decodeDAGUInt64(const String & s)
 {
-    auto u = *(reinterpret_cast<const UInt64 *>(s.data()));
+    if (unlikely(s.size() != sizeof(UInt64)))
+        throw TiFlashException(
+            Errors::Coprocessor::BadRequest,
+            "Invalid UInt64 literal encoding: expected {} bytes, got {}",
+            sizeof(UInt64),
+            s.size());
+    UInt64 u;
+    memcpy(&u, s.data(), sizeof(u));
     return RecordKVFormat::decodeUInt64(u);
 }
 
