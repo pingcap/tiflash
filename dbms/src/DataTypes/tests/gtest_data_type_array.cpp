@@ -647,11 +647,13 @@ TEST(DataTypeArrayTest, RejectsElementCountThatOverflowsAllocation)
 try
 {
     const DataTypeArray type(std::make_shared<DataTypeFloat32>());
-    // Float32 is 4 bytes and PaddedPODArray adds 80 bytes of alignment padding.
-    // 2^62 makes the element-byte multiplication wrap to 0.
-    // 2^62 - 1 occupies 2^64 - 4 bytes, so the padding wraps the allocation to 128.
-    // 2^62 - 20 makes that padded size wrap to 0.
-    // 2^61 - 19 keeps the padded size above 2^63, so power-of-two rounding wraps to 0.
+    // Float32 elements are 4 bytes. PaddedPODArray rounds its right padding from 15 to 16 bytes
+    // and its left padding from 16 to 64 bytes, for 80 bytes in total.
+    // These counts would overflow the previous unchecked allocation arithmetic as follows:
+    // 2^62: the element-byte multiplication wraps to 0.
+    // 2^62 - 1: adding padding wraps 2^64 - 4 to 76, then power-of-two rounding yields 128.
+    // 2^62 - 20: adding padding wraps 2^64 - 80 to 0.
+    // 2^61 - 19: adding padding yields 2^63 + 4, then power-of-two rounding wraps to 0.
     const UInt64 counts[] = {1ULL << 62, (1ULL << 62) - 1, (1ULL << 62) - 20, (1ULL << 61) - 19};
 
     for (const bool position_independent : {true, false})
