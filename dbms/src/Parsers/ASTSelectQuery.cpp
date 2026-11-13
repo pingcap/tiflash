@@ -110,7 +110,7 @@ void ASTSelectQuery::formatImpl(const FormatSettings & s, FormatState & state, F
         partition_expression_list->formatImpl(s, state, frame);
     }
 
-    if (partition_expression_list)
+    if (segment_expression_list)
     {
         s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "SEGMENT "
                << (s.hilite ? hilite_none : "");
