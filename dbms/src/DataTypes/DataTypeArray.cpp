@@ -131,12 +131,21 @@ void serializeArraySizesPositionIndependent(const IColumn & column, WriteBuffer 
     }
 }
 
-/// Sizes are deltas. Check each sum before appending the corresponding offset.
+/// Sizes are deltas. Check each sum before storing the corresponding offset.
 void deserializeArraySizesPositionIndependent(ColumnArray::Offsets & offsets, ReadBuffer & istr, size_t limit)
 {
+    const size_t initial_size = offsets.size();
+    RUNTIME_CHECK_MSG(
+        limit <= std::numeric_limits<size_t>::max() - initial_size,
+        "Corrupt array data: row count {} plus {} overflows offset count",
+        initial_size,
+        limit);
+    const size_t end = initial_size + limit;
     ColumnArray::Offset current_offset = offsets.empty() ? 0 : offsets.back();
+    offsets.resize(end);
 
-    for (size_t rows_read = 0; rows_read < limit && !istr.eof(); ++rows_read)
+    size_t i = initial_size;
+    while (i < end && !istr.eof())
     {
         ColumnArray::Offset current_size = 0;
         readIntBinary(current_size, istr);
@@ -144,11 +153,14 @@ void deserializeArraySizesPositionIndependent(ColumnArray::Offsets & offsets, Re
             current_offset <= std::numeric_limits<ColumnArray::Offset>::max() - current_size,
             "Corrupt array data: array size {} at row {} overflows offset {}",
             current_size,
-            offsets.size(),
+            i,
             current_offset);
         current_offset += current_size;
-        offsets.push_back(current_offset);
+        offsets[i] = current_offset;
+        ++i;
     }
+
+    offsets.resize(i);
 }
 
 /// Absolute offsets are stored as-is and must be non-decreasing.
