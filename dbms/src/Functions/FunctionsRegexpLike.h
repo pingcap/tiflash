@@ -89,6 +89,9 @@ public:
     bool useDefaultImplementationForNulls() const override { return false; }
     size_t getNumberOfArguments() const override { return 0; }
 
+    /// Row-dependent throw: an empty pattern throws EMPTY_PAT_ERR_MSG.
+    bool canThrow() const override { return true; }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         size_t args_max_num;
